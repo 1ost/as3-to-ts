@@ -178,6 +178,10 @@ function objectLiteral(properties) {
     ])));
 }
 
+function lambda(parameters, returnType, body) {
+    return n("LAMBDA", null, [n("PARAMETER_LIST", null, parameters), type(returnType), n("BLOCK", null, body)]);
+}
+
 function constructor(body) {
     return n("FUNCTION", "function", [
         mods("public"), n("NAME", "Demo"), n("PARAMETER_LIST"), type(null), n("BLOCK", null, body),
@@ -455,6 +459,20 @@ function buildTree(options = {}) {
                 binary("EQUALITY", n("IDENTIFIER", "maybeEvent"), "===", n("LITERAL", "null"))),
             localDeclaration("VAR_LIST", "selected", "Event",
                 conditional(n("LITERAL", "true"), n("IDENTIFIER", "maybeEvent"), n("LITERAL", "null"))),
+            n("RETURN"),
+        ];
+    }
+    if (options.lambdaWorkpack || options.badLambdaThis || options.badLambdaArity || options.badLambdaReturn) {
+        const lambdaBody = options.badLambdaReturn ? [] : [n("RETURN", null, [
+            options.badLambdaThis ? n("IDENTIFIER", "a")
+                : binary("ADD", n("IDENTIFIER", "value"), "+", n("IDENTIFIER", "offset")),
+        ])];
+        onEventBody = [
+            localDeclaration("VAR_LIST", "offset", "Number", n("LITERAL", "1")),
+            localDeclaration("VAR_LIST", "handler", "Function",
+                lambda([parameter("value", "Number")], "Number", lambdaBody)),
+            localDeclaration("VAR_LIST", "result", "Number",
+                call(n("IDENTIFIER", "handler"), options.badLambdaArity ? [] : [n("LITERAL", "2")])),
             n("RETURN"),
         ];
     }
@@ -983,6 +1001,15 @@ function main() {
     assert.match(nullableOutput.code, /acceptNullable\(value: Event \| null = null\): void/);
     assertErrorCode(() => adapt(api, buildTree({ badPrimitiveNull: true }), authority), "HARDENED_ASSIGNMENT_TYPE");
     assertErrorCode(() => adapt(api, buildTree({ badPrimitiveNullDefault: true }), authority), "HARDENED_ASSIGNMENT_TYPE");
+    const lambdaProgram = adapt(api, buildTree({ lambdaWorkpack: true }), authority);
+    const lambdaOutput = api.emitSemanticProgram(lambdaProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(lambdaOutput.code,
+        /var handler: Function \| null = function \(value: number\): number \{[\s\S]*return value \+ offset;[\s\S]*\};/);
+    assert.match(lambdaOutput.code, /var result: number = handler!\(2\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badLambdaThis: true }), authority), "HARDENED_LAMBDA_THIS");
+    assertErrorCode(() => adapt(api, buildTree({ badLambdaArity: true }), authority), "HARDENED_LAMBDA_CALL_ARITY");
+    assertErrorCode(() => adapt(api, buildTree({ badLambdaReturn: true }), authority), "HARDENED_LAMBDA_RETURN_PATH");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -995,7 +1022,7 @@ function main() {
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
         labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code,
-        nullableOutput.code]);
+        nullableOutput.code, lambdaOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

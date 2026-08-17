@@ -188,6 +188,7 @@ try {
         "        public function labelled():void { outer: while (true) { break outer; } }",
         "        ResourcesSpace function namespaced():void { status = \"namespace\"; }",
         "        public function enumerate():void { var values:Object = {\"a\":1}; for (var key:String in values) { if (key === \"done\") { continue; } } }",
+        "        public function closures():void { var offset:Number = 1; var handler:Function = function(value:Number):Number { return value + offset; }; var result:Number = handler(2); }",
         "    }",
         "}",
         "",
@@ -245,7 +246,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -313,6 +314,11 @@ try {
     assert.equal(semantic.declaration.members[14].parameters[1].type.sourceName, "*");
     assert.equal(semantic.declaration.members[15].body[0].kind, "label");
     assert.equal(semantic.declaration.members[15].body[0].statement.kind, "while");
+    assert.ok(normalized.nodes.some(node => node.kind === "LAMBDA"), "real parser preserves anonymous functions");
+    const closureMethod = semantic.declaration.members[18];
+    assert.equal(closureMethod.name, "closures");
+    assert.equal(closureMethod.body[1].declarations[0].initializer.kind, "lambda");
+    assert.equal(closureMethod.body[2].declarations[0].initializer.kind, "call");
     assert.equal(semantic.declaration.members[15].body[0].statement.statements[0].label, "outer");
     assert.equal(semantic.declaration.members[16].name, "namespaced");
     assert.equal(semantic.declaration.members[16].namespaceName, "ResourcesSpace");

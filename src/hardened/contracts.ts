@@ -129,10 +129,18 @@ export interface MethodClosureExpression extends SemanticIdentity {
 export interface CallExpression extends SemanticIdentity {
     kind: "call";
     callee: SemanticExpression;
+    calleeNullable: boolean;
     arguments: SemanticExpression[];
     capabilitySource: string | null;
     capabilityMember: string | null;
     resultType: SemanticType | null;
+}
+
+export interface LambdaExpression extends SemanticIdentity {
+    kind: "lambda";
+    parameters: SemanticParameter[];
+    returnType: SemanticType;
+    statements: SemanticStatement[];
 }
 
 export interface ArrayExpression extends SemanticIdentity {
@@ -258,7 +266,7 @@ export interface UpdateExpression extends SemanticIdentity {
 }
 
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
-    SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression |
+    SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
     ConditionalExpression | UpdateExpression | ArrayExpression | ObjectExpression | IndexExpression | VectorConversionExpression |
     RuntimeTypeExpression | CoercionExpression;

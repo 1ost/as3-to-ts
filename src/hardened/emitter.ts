@@ -169,7 +169,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
     }
     if (expression.kind === "call") {
-        return ts.factory.createCallExpression(expressionNode(expression.callee, ts), undefined,
+        const callee = expressionNode(expression.callee, ts);
+        return ts.factory.createCallExpression(
+            expression.calleeNullable ? ts.factory.createNonNullExpression(callee) : callee, undefined,
             expression.arguments.map((argument) => expressionNode(argument, ts)));
     }
     if (expression.kind === "array") {
@@ -290,6 +292,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return expression.prefix
             ? ts.factory.createPrefixUnaryExpression(token, expressionNode(expression.target, ts))
             : ts.factory.createPostfixUnaryExpression(expressionNode(expression.target, ts), token);
+    }
+    if (expression.kind === "lambda") {
+        return ts.factory.createFunctionExpression(undefined, undefined, undefined, undefined,
+            expression.parameters.map(parameter => parameterNode(parameter, ts)),
+            typeNode(expression.returnType, ts),
+            ts.factory.createBlock(expression.statements.map(statement => statementNode(statement, ts)), true));
     }
     throw new HardenedSemanticError("HARDENED_EMIT_EXPRESSION", "semantic IR contains an unsupported expression");
 }
@@ -468,6 +476,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.whenFalse);
         } else if (expression.kind === "update") {
             inspectExpression(expression.target);
+        } else if (expression.kind === "lambda") {
+            expression.statements.forEach(inspectStatement);
         }
     };
     const inspectStatement = (statement: SemanticStatement): void => {
@@ -631,6 +641,10 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "conditional") return visitExpression(expression.condition)
             || visitExpression(expression.whenTrue) || visitExpression(expression.whenFalse);
         if (expression.kind === "update") return visitExpression(expression.target);
+        if (expression.kind === "lambda") return visitType(expression.returnType)
+            || expression.parameters.some(parameter => visitType(parameter.type)
+                || (parameter.defaultValue !== null && visitExpression(parameter.defaultValue)))
+            || expression.statements.some(visitStatement);
         return false;
     };
     const visitStatement = (statement: SemanticStatement): boolean => {

@@ -56,6 +56,7 @@ interface LocalHeader {
     name: string;
     readonly: boolean;
     type: SemanticType;
+    lambdaSignature: { parameters: SemanticParameter[]; returnType: SemanticType } | null;
 }
 
 interface AdapterContext {
@@ -75,6 +76,7 @@ interface AdapterContext {
     breakableDepth: number;
     labels: Array<{ name: string; continuable: boolean }>;
     namespaceNames: { [name: string]: true };
+    lambdaDepth: number;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -622,6 +624,9 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "methodClosure") {
         return semanticType(node, "Function", "Function", [], false);
     }
+    if (expression.kind === "lambda") {
+        return semanticType(node, "Function", "Function", [], false);
+    }
     if (expression.kind === "object") return semanticType(node, "Object", "unknown", [], false);
     if (expression.kind === "new") {
         return withNullability(expression.sourceType, false);
@@ -987,12 +992,51 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             resultType,
         });
     }
+    if (node.kind === "LAMBDA") {
+        onlyKinds(node, ["BLOCK", "PARAMETER_LIST", "TYPE", "VECTOR"]);
+        const parameters = parseParameters(one(node, "PARAMETER_LIST")!, context);
+        const returnType = parseType(oneType(node), context, true);
+        const block = one(node, "BLOCK")!;
+        const priorParameters = context.parameters;
+        const priorLocals = context.locals;
+        const priorLoopDepth = context.loopDepth;
+        const priorBreakableDepth = context.breakableDepth;
+        const priorLabels = context.labels;
+        context.parameters = Object.assign(Object.create(null), priorParameters);
+        parameters.forEach(parameter => { context.parameters[parameter.name] = parameter; });
+        context.locals = Object.assign(Object.create(null), priorLocals);
+        context.loopDepth = 0;
+        context.breakableDepth = 0;
+        context.labels = [];
+        context.lambdaDepth += 1;
+        let statements: SemanticStatement[];
+        try {
+            predeclareLocals(block, context);
+            statements = parseBlock(block, context, false, false, returnType, false);
+        } finally {
+            context.lambdaDepth -= 1;
+            context.parameters = priorParameters;
+            context.locals = priorLocals;
+            context.loopDepth = priorLoopDepth;
+            context.breakableDepth = priorBreakableDepth;
+            context.labels = priorLabels;
+        }
+        if (returnType.sourceName !== "void" && !statementsAlwaysReturn(statements)) {
+            fail("HARDENED_LAMBDA_RETURN_PATH", "non-void lambda must return a proven value on every admitted path", node);
+        }
+        return Object.assign(identity(node), {
+            kind: "lambda" as "lambda", parameters, returnType, statements,
+        });
+    }
     if (node.kind === "IDENTIFIER") {
         const name = requiredText(node, "identifier");
         if (name === "true" || name === "false" || name === "null") {
             return parseLiteral(Object.assign({}, node, { kind: "LITERAL", text: name }));
         }
         if (name === "this") {
+            if (context.lambdaDepth > 0) {
+                fail("HARDENED_LAMBDA_THIS", "anonymous functions using dynamic AS3 this remain held", node);
+            }
             return Object.assign(identity(node), { kind: "this" as "this" });
         }
         if (name === "super") {
@@ -1002,9 +1046,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name });
         }
         if (context.fields[name]) {
+            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             return implicitThisMember(node, name);
         }
         if (context.accessors[name]) {
+            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             const accessor = context.accessors[name]!;
             if (valuePosition && !accessor.getter) {
                 fail("HARDENED_ACCESSOR_WRITE_ONLY", "write-only accessor cannot be read", node);
@@ -1016,6 +1062,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return implicitThisMember(node, name);
         }
         if (context.methods[name]) {
+            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             const method = context.methods[name]!;
             if (valuePosition) {
                 if (!allowMethodClosure) {
@@ -1198,10 +1245,23 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         let capabilitySource: string | null = null;
         let capabilityMember: string | null = null;
         let resultType: SemanticType | null = null;
+        let calleeNullable = false;
         if (callee.kind === "super") {
             if (args.length !== 0) {
                 fail("HARDENED_SUPER_ARITY", "minimal derived constructor admits only zero-argument super", node);
             }
+        } else if (callee.kind === "identifier" && context.locals[callee.name]?.lambdaSignature) {
+            const signature = context.locals[callee.name]!.lambdaSignature!;
+            calleeNullable = context.locals[callee.name]!.type.nullable;
+            if (!admittedArity(signature.parameters, args.length)) {
+                fail("HARDENED_LAMBDA_CALL_ARITY", "lambda call does not match its exact local declaration", node);
+            }
+            const restIndex = signature.parameters.findIndex(parameter => parameter.rest);
+            args.slice(0, restIndex < 0 ? signature.parameters.length : restIndex)
+                .forEach((argument, index) => assertAssignmentCompatible(signature.parameters[index]!.type,
+                    assignmentType(argument, context, node.children[1]!.children[index]!),
+                    node.children[1]!.children[index]!));
+            resultType = signature.returnType;
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {
             const parameters = context.methods[callee.name]!.parameters;
             if (!admittedArity(parameters, args.length)) {
@@ -1249,7 +1309,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_CALL_TARGET", "call target is not a proven local method or super", node);
         }
         const result: CallExpression = Object.assign(identity(node), {
-            kind: "call" as "call", callee, arguments: args, capabilitySource, capabilityMember, resultType,
+            kind: "call" as "call", callee, calleeNullable, arguments: args,
+            capabilitySource, capabilityMember, resultType,
         });
         return result;
     }
@@ -1602,6 +1663,12 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 }
                 const initializer = parseExpression(init.children[0]!, context, true);
                 assertAssignmentCompatible(header.type, assignmentType(initializer, context, init.children[0]!), declaration);
+                if (initializer.kind === "lambda") {
+                    if (header.type.sourceName !== "Function") {
+                        fail("HARDENED_LAMBDA_TARGET", "anonymous function initializer requires an exact Function local", declaration);
+                    }
+                    header.lambdaSignature = { parameters: initializer.parameters, returnType: initializer.returnType };
+                }
                 return Object.assign(identity(declaration), {
                     name, readonly: header.readonly, type: header.type, initializer,
                 });
@@ -1633,6 +1700,7 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
                     name,
                     readonly: node.kind === "CONST_LIST",
                     type: parseType(oneType(declaration), context, false),
+                    lambdaSignature: null,
                 };
             });
             return;
@@ -1644,7 +1712,10 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
             const name = validateIdentifier(requiredText(nameNode, "for each local name"), nameNode);
             if (context.parameters[name]) fail("HARDENED_LOCAL_PARAMETER_COLLISION", "for each local duplicates a parameter", nameNode);
             if (context.locals[name]) fail("HARDENED_LOCAL_DUPLICATE", "function-scoped local identity is duplicated", nameNode);
-            context.locals[name] = { node: declaration, name, readonly: false, type: parseType(oneType(declaration), context, false) };
+            context.locals[name] = {
+                node: declaration, name, readonly: false,
+                type: parseType(oneType(declaration), context, false), lambdaSignature: null,
+            };
             return;
         }
         if (node.kind === "BLOCK") {
@@ -1743,7 +1814,7 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
                 fail("HARDENED_CATCH_TEMPORARY", "generated catch identity collides with source identity", catchNode);
             }
             const previous = context.locals[name];
-            context.locals[name] = { node: nameNode, name, readonly: true, type };
+            context.locals[name] = { node: nameNode, name, readonly: true, type, lambdaSignature: null };
             let catchStatements: SemanticStatement[];
             try {
                 catchStatements = parseBlock(catchBlock, context, constructor, derived, expectedReturn, false);
@@ -1981,6 +2052,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         breakableDepth: 0,
         labels: [],
         namespaceNames,
+        lambdaDepth: 0,
     };
     if (classNode.kind === "INTERFACE") {
         const modifiers = parseModifiers(classNode, true);
