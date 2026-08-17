@@ -7,6 +7,7 @@ interface ParserRequest {
     sourcePath: string;
     content: string;
     maxAstBytes: number;
+    format: "legacy" | "normalized";
 }
 
 interface ParserSuccess {
@@ -55,6 +56,7 @@ export function parseIsolated(
     sourcePath: string,
     content: string,
     limits: Limits,
+    format: "legacy" | "normalized" = "legacy",
 ): Promise<ParserSuccess> {
     return new Promise((resolve, reject) => {
         const child = fork(join(__dirname, "parser-worker.js"), [], {
@@ -129,7 +131,7 @@ export function parseIsolated(
             }
         });
 
-        const request: ParserRequest = { sourcePath, content, maxAstBytes: limits.maxAstBytes };
+        const request: ParserRequest = { sourcePath, content, maxAstBytes: limits.maxAstBytes, format };
         child.send(request, error => {
             if (error) {
                 fail(new CliError(`cannot send source to parser process: ${errorMessage(error)}`, 70));

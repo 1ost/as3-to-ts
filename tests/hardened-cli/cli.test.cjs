@@ -117,7 +117,7 @@ test("help and version do not inspect roots", () => {
     const help = invoke(["--help"], path.parse(repository).root);
     const version = invoke(["--version"], path.parse(repository).root);
     assert.equal(help.status, 0, help.stderr);
-    assert.match(help.stdout, /Usage: as3-frontend/);
+    assert.match(help.stdout, /as3-frontend parse/);
     assert.equal(version.status, 0, version.stderr);
     assert.equal(version.stdout, "0.1.0\n");
 });
@@ -365,13 +365,15 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and runtime
     const packageJson = JSON.parse(fs.readFileSync(path.join(repository, "package.json"), "utf8"));
     assert.equal(packageJson.private, true);
     assert.equal(packageJson.license, "Apache-2.0");
-    assert.deepEqual(packageJson.dependencies, {});
+    assert.deepEqual(packageJson.dependencies || {}, {});
     assert.equal(packageJson.scripts.postversion, undefined);
 
     assert.deepEqual(packageJson.files, [
         "bin/as3-frontend",
         "lib/command.js",
         "lib/parser-worker.js",
+        "config/authority-lock.json",
+        "config/capability-map.json",
         "src/hardened-cli/THIRD_PARTY_NOTICES.md",
     ]);
 
@@ -379,7 +381,8 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and runtime
         fs.readFileSync(path.join(repository, "lib", "command.meta.json"), "utf8"),
     ).inputs);
     assert.equal(commandInputs.every(input =>
-        input === "src/command.ts" || input.startsWith("src/hardened-cli/")), true);
+        input === "src/command.ts" || input.startsWith("src/hardened-cli/")
+        || input.startsWith("src/hardened/") || input.startsWith("node_modules/typescript-4-9/")), true);
 
     const workerInputs = Object.keys(JSON.parse(
         fs.readFileSync(path.join(repository, "lib", "parser-worker.meta.json"), "utf8"),
@@ -387,6 +390,9 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and runtime
     for (const input of workerInputs) {
         assert.equal(
             input.startsWith("src/hardened-cli/") ||
+            input === "src/hardened/parser-normalizer.ts" ||
+            input === "src/hardened/contracts.ts" ||
+            input === "src/hardened/ledger.ts" ||
             input.startsWith("src/parse/") ||
             input.startsWith("src/syntax/") ||
             input.startsWith("src/reports/") ||

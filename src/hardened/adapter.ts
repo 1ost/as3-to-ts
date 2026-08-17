@@ -128,7 +128,7 @@ function buildTree(ast: NormalizedParserAst, sourceText: string, sha256: Sha256F
             if (parentIndex >= index || !nodes[parentIndex]) {
                 throw new HardenedSemanticError("HARDENED_NORMALIZED_PARENT", "normalized parser parent must precede its child", raw.id);
             }
-            nodes[parentIndex].children.push(node);
+            nodes[parentIndex]!.children.push(node);
         }
         nodes.push(node);
     });
@@ -140,7 +140,7 @@ function buildTree(ast: NormalizedParserAst, sourceText: string, sha256: Sha256F
             }
         });
     });
-    return nodes[0];
+    return nodes[0]!;
 }
 
 function one(node: TreeNode, kind: string, optional: boolean = false): TreeNode | null {
@@ -151,7 +151,7 @@ function one(node: TreeNode, kind: string, optional: boolean = false): TreeNode 
     if (matches.length !== 1) {
         fail("HARDENED_AST_CARDINALITY", "expected exactly one " + kind + " child", node);
     }
-    return matches[0];
+    return matches[0]!;
 }
 
 function onlyKinds(node: TreeNode, allowed: string[]): void {
@@ -200,7 +200,7 @@ function parseModifiers(owner: TreeNode, classLevel: boolean): SemanticModifier[
         fail("HARDENED_MODIFIER_ACCESS", "declaration has conflicting access modifiers", owner);
     }
     const staticIndex = result.indexOf("static");
-    if (staticIndex >= 0 && accessModifiers.length === 1 && result.indexOf(accessModifiers[0]) > staticIndex) {
+    if (staticIndex >= 0 && accessModifiers.length === 1 && result.indexOf(accessModifiers[0]!) > staticIndex) {
         fail("HARDENED_MODIFIER_ORDER", "access modifier must precede static in the admitted TypeScript order", owner);
     }
     return result;
@@ -211,17 +211,18 @@ function mappingForRole(authority: LoadedCapabilityAuthority, qname: string, rol
     if (!mapping || mapping.sourceMember !== null || mapping.sourceRoles.indexOf(role) < 0) {
         fail("HARDENED_CAPABILITY_ROLE", "Flash API use lacks a double-pinned source/target mapping for role " + role, node);
     }
-    return mapping;
+    return mapping!;
 }
 
 function memberMapping(context: AdapterContext, sourceQName: string, access: string, name: string, node: TreeNode): CapabilityMapping | null {
-    const matches = Object.keys(context.memberMappingsByKey).map((key) => context.memberMappingsByKey[key]).filter((mapping) =>
+    const matches = Object.keys(context.memberMappingsByKey).map((key) => context.memberMappingsByKey[key])
+        .filter((mapping): mapping is CapabilityMapping => mapping !== undefined).filter((mapping) =>
         mapping.sourceQName === sourceQName && mapping.sourceMember !== null
         && mapping.sourceMember.access === access && mapping.sourceMember.name === name);
     if (matches.length > 1) {
         fail("HARDENED_CAPABILITY_MEMBER_OVERLOAD", "multiple member mappings require a future typed overload resolver", node);
     }
-    return matches.length === 1 ? matches[0] : null;
+    return matches.length === 1 ? matches[0]! : null;
 }
 
 function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority): {
@@ -339,16 +340,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         return Object.assign(identity(node), { kind: "identifier" as "identifier", name });
     }
     if (node.kind === "DOT") {
-        if (node.children.length !== 2 || node.children[1].kind !== "LITERAL") {
+        if (node.children.length !== 2 || node.children[1]!.kind !== "LITERAL") {
             fail("HARDENED_MEMBER_SHAPE", "member expression has the wrong normalized shape", node);
         }
-        const target = parseExpression(node.children[0], context, false);
-        const name = validateIdentifier(requiredText(node.children[1], "member name"), node.children[1]);
+        const target = parseExpression(node.children[0]!, context, false);
+        const name = validateIdentifier(requiredText(node.children[1]!, "member name"), node.children[1]!);
         if (target.kind === "this" && context.methods[name] && valuePosition) {
             if (!allowMethodClosure) {
                 fail("HARDENED_METHOD_CLOSURE_INITIALIZER", "method closures in field initializers are not admitted before per-instance binding", node);
             }
-            const method = context.methods[name];
+            const method = context.methods[name]!;
             if (method.constructor || method.modifiers.indexOf("static") >= 0) {
                 fail("HARDENED_METHOD_CLOSURE_SCOPE", "only non-static instance methods have admitted AS3 closure identity", node);
             }
@@ -376,11 +377,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         return Object.assign(identity(node), { kind: "member" as "member", target, name, capabilitySource });
     }
     if (node.kind === "CALL") {
-        if (node.children.length !== 2 || node.children[1].kind !== "ARGUMENTS") {
+        if (node.children.length !== 2 || node.children[1]!.kind !== "ARGUMENTS") {
             fail("HARDENED_CALL_SHAPE", "call expression has the wrong normalized shape", node);
         }
-        onlyKinds(node.children[1], ["ARRAY_ACCESSOR", "CALL", "DOT", "IDENTIFIER", "LITERAL"]);
-        const rawCallee = node.children[0];
+        onlyKinds(node.children[1]!, ["ARRAY_ACCESSOR", "CALL", "DOT", "IDENTIFIER", "LITERAL"]);
+        const rawCallee = node.children[0]!;
         let callee: SemanticExpression;
         if (rawCallee.kind === "IDENTIFIER" && rawCallee.text === "super") {
             if (!allowSuperCall) {
@@ -390,7 +391,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else {
             callee = parseExpression(rawCallee, context, false);
         }
-        const args = node.children[1].children.map((child) => parseExpression(child, context, true));
+        const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
         let capabilitySource: string | null = null;
         let capabilityMember: string | null = null;
         if (callee.kind === "super") {
@@ -398,7 +399,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_SUPER_ARITY", "minimal derived constructor admits only zero-argument super", node);
             }
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {
-            if (context.methods[callee.name].parameters.length !== args.length) {
+            if (context.methods[callee.name]!.parameters.length !== args.length) {
                 fail("HARDENED_LOCAL_CALL_ARITY", "local method call does not match its declared arity", node);
             }
         } else if (callee.kind === "member" && callee.target.kind === "this" && callee.capabilitySource !== null) {
@@ -463,7 +464,7 @@ function parseField(list: TreeNode, context: AdapterContext): SemanticField[] {
             if (init.children.length !== 1) {
                 fail("HARDENED_INITIALIZER_SHAPE", "field initializer has the wrong normalized shape", init);
             }
-            initializer = parseExpression(init.children[0], context, true, false, false);
+            initializer = parseExpression(init.children[0]!, context, true, false, false);
         }
         const field: SemanticField = Object.assign(identity(declaration), {
             kind: "field" as "field",
@@ -536,7 +537,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     if (classes.length !== 1 || content.children.some((child) => child.kind !== "IMPORT" && child.kind !== "CLASS")) {
         fail("HARDENED_PACKAGE_CONTENT", "minimal semantic adapter requires imports followed by exactly one class", content);
     }
-    const classNode = classes[0];
+    const classNode = classes[0]!;
     onlyKinds(classNode, ["CONTENT", "EXTENDS", "MOD_LIST", "NAME"]);
     const classNameNode = one(classNode, "NAME")!;
     const className = validateIdentifier(requiredText(classNameNode, "class name"), classNameNode);
@@ -559,7 +560,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         if (!imported) {
             fail("HARDENED_BASE_TYPE", "base type must be a double-pinned imported Flash class", extendsNode);
         }
-        mappingForRole(authority, imported.sourceQualifiedName, "base-type", extendsNode);
+        mappingForRole(authority, imported!.sourceQualifiedName, "base-type", extendsNode);
         extendsType = Object.assign(identity(extendsNode), { sourceName, emittedName: sourceName });
         placeholder.extendsType = extendsType;
         placeholder.baseSourceQName = imported.sourceQualifiedName;
@@ -584,7 +585,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             return;
         }
         if (node.kind === "FUNCTION") {
-            const header = placeholder.methods[requiredText(one(node, "NAME")!, "method name")];
+            const header = placeholder.methods[requiredText(one(node, "NAME")!, "method name")]!;
             const oldParameters = placeholder.parameters;
             placeholder.parameters = Object.create(null);
             header.parameters.forEach((parameter) => { placeholder.parameters[parameter.name] = parameter; });
@@ -592,7 +593,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             placeholder.parameters = oldParameters;
             if (header.constructor) {
                 const count = body.filter(superCall).length;
-                if ((extendsType !== null && (count !== 1 || !superCall(body[0]))) || (extendsType === null && count !== 0)) {
+                if ((extendsType !== null && (count !== 1 || !superCall(body[0]!))) || (extendsType === null && count !== 0)) {
                     fail("HARDENED_SUPER_ORDER", "derived constructor requires exactly one first-position super call and it is never reordered", node);
                 }
                 const constructor: SemanticConstructor = Object.assign(identity(node), {

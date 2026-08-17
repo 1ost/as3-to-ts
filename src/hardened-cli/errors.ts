@@ -11,5 +11,9 @@ export class CliError extends Error {
 }
 
 export function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
+    if (error instanceof Error) {
+        const code = (error as Error & { code?: unknown }).code;
+        return typeof code === "string" ? `${code}: ${error.message}` : error.message;
+    }
+    return String(error);
 }

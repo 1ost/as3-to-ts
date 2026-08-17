@@ -16,11 +16,23 @@ export interface Limits {
     maxOldSpaceMb: number;
 }
 
-export interface RunOptions {
+interface BaseRunOptions {
     sourceDirectory: string;
     outputDirectory: string;
     limits: Limits;
 }
+
+export interface ParseRunOptions extends BaseRunOptions {
+    operation: "parse";
+}
+
+export interface TranspileRunOptions extends BaseRunOptions {
+    operation: "transpile";
+    sourceCensusPath: string;
+    targetCapabilitiesPath: string;
+}
+
+export type RunOptions = ParseRunOptions | TranspileRunOptions;
 
 export type ParsedArguments =
     | { mode: "help" }
@@ -69,6 +81,8 @@ const numericOptions: Readonly<Record<string, keyof Limits>> = {
     "--max-old-space-mb": "maxOldSpaceMb",
 };
 
+const authorityOptions = new Set(["--source-census", "--target-capabilities"]);
+
 function parsePositiveInteger(option: string, value: string, ceiling: number): number {
     if (!/^[1-9][0-9]*$/.test(value)) {
         throw new CliError(`${option} requires a positive base-10 integer`, 2);
@@ -89,6 +103,7 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
     }
 
     const positional: string[] = [];
+    const authorities: Record<string, string> = Object.create(null) as Record<string, string>;
     const limits: Limits = { ...defaults };
     const seen = new Set<string>();
 
@@ -105,7 +120,7 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
         const equals = argument.indexOf("=");
         const option = equals === -1 ? argument : argument.slice(0, equals);
         const key = numericOptions[option];
-        if (key === undefined) {
+        if (key === undefined && !authorityOptions.has(option)) {
             throw new CliError(`unknown option: ${option}`, 2);
         }
         if (seen.has(option)) {
@@ -124,25 +139,60 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
             }
             value = following;
         }
-        limits[key] = parsePositiveInteger(option, value, ceilings[key]);
+        if (key !== undefined) {
+            limits[key] = parsePositiveInteger(option, value, ceilings[key]);
+        } else {
+            if (value.length === 0) throw new CliError(`${option} requires a nonempty path`, 2);
+            authorities[option] = value;
+        }
     }
 
+    let operation: "parse" | "transpile" = "parse";
+    if (positional[0] === "parse" || positional[0] === "transpile") {
+        operation = positional.shift() as "parse" | "transpile";
+    }
     if (positional.length !== 2) {
-        throw new CliError("exactly one source directory and one output directory are required", 2);
+        throw new CliError("an operation, one source directory, and one output directory are required", 2);
+    }
+    if (operation === "parse") {
+        if (Object.keys(authorities).length !== 0) {
+            throw new CliError("capability authority options are valid only for transpile", 2);
+        }
+        return {
+            mode: "run",
+            options: {
+                operation,
+                sourceDirectory: positional[0]!,
+                outputDirectory: positional[1]!,
+                limits,
+            },
+        };
+    }
+    const sourceCensusPath = authorities["--source-census"];
+    const targetCapabilitiesPath = authorities["--target-capabilities"];
+    if (sourceCensusPath === undefined || targetCapabilitiesPath === undefined) {
+        throw new CliError("transpile requires --source-census and --target-capabilities", 2);
     }
     return {
         mode: "run",
         options: {
+            operation,
             sourceDirectory: positional[0]!,
             outputDirectory: positional[1]!,
             limits,
+            sourceCensusPath,
+            targetCapabilitiesPath,
         },
     };
 }
 
-export const HELP = `Usage: as3-frontend <source-directory> <output-directory> [options]
+export const HELP = `Usage:
+  as3-frontend parse <source-directory> <output-directory> [options]
+  as3-frontend transpile <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [options]
 
-Parses rooted ActionScript sources into deterministic legacy-AST JSON artifacts.
+Parse emits deterministic legacy-AST JSON artifacts. Transpile emits only the
+closed, capability-authenticated TypeScript subset. The two-argument legacy
+form remains an alias for parse.
 The output directory must not already exist.
 
 Options:
@@ -157,6 +207,8 @@ Options:
   --max-ast-bytes <n>           Per-file serialized AST cap (default 16777216)
   --max-total-output-bytes <n>  Total serialized AST cap (default 268435456)
   --max-old-space-mb <n>        Parser worker old-generation cap (default 64)
+  --source-census <file>        Exact Bleach AS3 capability census (transpile)
+  --target-capabilities <file>  Exact Laya authored capability ledger (transpile)
   --help                        Show this help
   --version                     Show the local tool version
 `;

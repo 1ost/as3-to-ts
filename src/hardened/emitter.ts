@@ -167,9 +167,10 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, boundMeth
     if (member.kind === "constructor") {
         const original = member.body.map((statement) => statementNode(statement, ts));
         const bindings = boundMethods.map((name) => bindMethodStatement(name, ts));
-        const body = original.length > 0 && member.body[0].kind === "expression"
-            && member.body[0].expression.kind === "call" && member.body[0].expression.callee.kind === "super"
-            ? [original[0]].concat(bindings, original.slice(1)) : bindings.concat(original);
+        const first = member.body[0];
+        const beginsWithSuper = first !== undefined && first.kind === "expression"
+            && first.expression.kind === "call" && first.expression.callee.kind === "super";
+        const body = beginsWithSuper ? [original[0]!].concat(bindings, original.slice(1)) : bindings.concat(original);
         return ts.factory.createConstructorDeclaration(
             modifierTokens(member.modifiers, ts),
             member.parameters.map((parameter) => parameterNode(parameter, ts)),

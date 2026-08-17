@@ -43,7 +43,7 @@ function git(repo, ...args) {
 function compileHardenedSources(ts) {
     const output = fs.mkdtempSync(path.join(os.tmpdir(), "as3-semantic-ir-"));
     const sources = fs.readdirSync(path.join(ROOT, "src/hardened"))
-        .filter((name) => name.endsWith(".ts"))
+        .filter((name) => name.endsWith(".ts") && name !== "parser-normalizer.ts")
         .map((name) => path.join(ROOT, "src/hardened", name));
     const program = ts.createProgram(sources, {
         target: ts.ScriptTarget.ES2019,

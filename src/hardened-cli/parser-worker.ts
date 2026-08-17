@@ -1,11 +1,14 @@
 import { Buffer } from "node:buffer";
 import parse from "../parse/index";
+import { normalizeParserAst } from "../hardened/parser-normalizer";
+import { createHash } from "node:crypto";
 import { errorMessage } from "./errors";
 
 interface ParserRequest {
     sourcePath: string;
     content: string;
     maxAstBytes: number;
+    format: "legacy" | "normalized";
 }
 
 interface ParserSuccess {
@@ -30,7 +33,8 @@ function isRequest(value: unknown): value is ParserRequest {
     return typeof candidate.sourcePath === "string" &&
         typeof candidate.content === "string" &&
         Number.isSafeInteger(candidate.maxAstBytes) &&
-        (candidate.maxAstBytes as number) > 0;
+        (candidate.maxAstBytes as number) > 0 &&
+        (candidate.format === "legacy" || candidate.format === "normalized");
 }
 
 function boundedDiagnostic(error: unknown): string {
@@ -58,7 +62,11 @@ process.once("message", (message: unknown) => {
         return;
     }
     try {
-        const ast = parse(message.sourcePath, message.content);
+        const parsed = parse(message.sourcePath, message.content);
+        const ast = message.format === "normalized"
+            ? normalizeParserAst(parsed, message.content,
+                bytes => createHash("sha256").update(bytes, "utf8").digest("hex"))
+            : parsed;
         const json = `${JSON.stringify(ast, null, 2)}\n`;
         const byteLength = Buffer.byteLength(json, "utf8");
         if (byteLength > message.maxAstBytes) {
