@@ -87,7 +87,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Vector.ts"), path.join(runtime, "AS3Vector.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Coerce.ts"), path.join(runtime, "AS3Coerce.ts"));
         fs.writeFileSync(path.join(stubs, "Sprite.ts"),
-            "export class Sprite { public addEventListener(_type:string,_listener:Function):void {} }\n", "utf8");
+            "export class Sprite { public addEventListener(_type:string,_listener:Function,_capture=false,_priority=0,_weak=false):void {} }\n", "utf8");
         fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
         outputs.forEach((code, index) => fs.writeFileSync(path.join(generated, `Fixture${index}.ts`), code, "utf8"));
         const config = path.join(root, "tsconfig.json");
@@ -443,6 +443,13 @@ function buildTree(options = {}) {
             ? [restParameter("values"), parameter("suffix", "String")]
             : [parameter("prefix", "String"), restParameter("values")];
         members.push(method("collect", parameters, "void", [n("RETURN")]));
+    }
+    if (options.overrideWorkpack) {
+        members.push(method("addEventListener", [
+            parameter("type", "String"), parameter("listener", "Function"),
+            parameter("useCapture", "Boolean", "false"), parameter("priority", "int", "0"),
+            parameter("useWeakReference", "Boolean", "false"),
+        ], "void", [n("RETURN")], ["override", "public"]));
     }
     if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
         members.push(method("namespaced", [], "void", [n("RETURN")],
@@ -921,6 +928,11 @@ function main() {
     assert.doesNotMatch(namespaceOutput.code, /ResourcesSpace/);
     assertErrorCode(() => adapt(api, buildTree({ namespaceCollision: true }), authority), "HARDENED_METHOD_DUPLICATE");
     assertErrorCode(() => adapt(api, buildTree({ namespaceAccessCollision: true }), authority), "HARDENED_NAMESPACE_MODIFIER");
+    const overrideProgram = adapt(api, buildTree({ overrideWorkpack: true }), authority);
+    const overrideOutput = api.emitSemanticProgram(overrideProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(overrideOutput.code, /public override addEventListener\(type: string, listener: Function, useCapture: boolean = false, priority: number = 0, useWeakReference: boolean = false\): void/);
+    assertErrorCode(() => adapt(api, buildTree({ fieldModifiers: ["override"] }), authority), "HARDENED_OVERRIDE_TARGET");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -932,7 +944,7 @@ function main() {
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
-        labelOutput.code, interfaceOutput.code, namespaceOutput.code]);
+        labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

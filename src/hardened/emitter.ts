@@ -47,6 +47,9 @@ function modifierTokens(modifiers: SemanticModifier[], ts: TypeScriptCompilerApi
         if (modifier === "static") {
             return ts.factory.createModifier(ts.SyntaxKind.StaticKeyword);
         }
+        if (modifier === "override") {
+            return ts.factory.createModifier(ts.SyntaxKind.OverrideKeyword);
+        }
         throw new HardenedSemanticError("HARDENED_EMIT_MODIFIER", "semantic IR contains an unsupported modifier");
     });
 }

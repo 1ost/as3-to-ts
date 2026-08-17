@@ -99,7 +99,7 @@ const PRIMITIVE_TYPES: { [source: string]: string } = {
     uint: "number",
     void: "void",
 };
-const ALLOWED_MODIFIERS = new Set(["private", "protected", "public", "static"]);
+const ALLOWED_MODIFIERS = new Set(["private", "protected", "public", "static", "override"]);
 const VECTOR_METHODS = new Set([
     "concat", "every", "filter", "forEach", "indexOf", "join", "lastIndexOf", "map", "pop", "push",
     "reverse", "shift", "slice", "some", "sort", "splice", "toString", "unshift",
@@ -295,6 +295,13 @@ function parseMemberModifiers(owner: TreeNode, context: AdapterContext): {
     const staticIndex = modifiers.indexOf("static");
     if (staticIndex >= 0 && accessModifiers.length === 1 && modifiers.indexOf(accessModifiers[0]!) > staticIndex) {
         fail("HARDENED_MODIFIER_ORDER", "access modifier must precede static in the admitted TypeScript order", owner);
+    }
+    if (modifiers.indexOf("override") >= 0) {
+        const canonical: SemanticModifier[] = [];
+        if (accessModifiers.length === 1) canonical.push(accessModifiers[0]!);
+        if (staticIndex >= 0) canonical.push("static");
+        canonical.push("override");
+        return { modifiers: canonical, namespaceName };
     }
     return { modifiers, namespaceName };
 }
@@ -1686,6 +1693,9 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
     onlyKinds(list, ["MOD_LIST", "NAME_TYPE_INIT"]);
     const memberModifiers = parseMemberModifiers(list, context);
     const modifiers = memberModifiers.modifiers;
+    if (modifiers.indexOf("override") >= 0) {
+        fail("HARDENED_OVERRIDE_TARGET", "AS3 override is admitted only on instance methods and accessors", list);
+    }
     const declarations = list.children.filter((child) => child.kind === "NAME_TYPE_INIT");
     if (declarations.length === 0) {
         fail("HARDENED_FIELD_EMPTY", "field declaration must contain at least one source declarator", list);
@@ -1743,8 +1753,14 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     const parameters = parseParameters(one(node, "PARAMETER_LIST")!, context);
     const memberModifiers = parseMemberModifiers(node, context);
     const modifiers = memberModifiers.modifiers;
-    if (constructor && (modifiers.indexOf("static") >= 0 || memberModifiers.namespaceName !== null)) {
+    if (constructor && (modifiers.indexOf("static") >= 0 || modifiers.indexOf("override") >= 0
+        || memberModifiers.namespaceName !== null)) {
         fail("HARDENED_CONSTRUCTOR_STATIC", "constructor cannot be static", node);
+    }
+    if (modifiers.indexOf("override") >= 0
+        && (context.extendsType === null || modifiers.indexOf("static") >= 0
+            || memberModifiers.namespaceName !== null)) {
+        fail("HARDENED_OVERRIDE_TARGET", "override requires a derived instance method or accessor", node);
     }
     if (accessor === "getter" && (parameters.length !== 0 || returnType === null || returnType.sourceName === "void")) {
         fail("HARDENED_GETTER_SIGNATURE", "getter requires zero parameters and one non-void return type", node);
@@ -1754,6 +1770,19 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     }
     if (accessor !== null && parameters.some(parameter => parameter.defaultValue !== null || parameter.rest)) {
         fail("HARDENED_ACCESSOR_DEFAULT", "accessor parameters cannot have default or rest values", node);
+    }
+    if (modifiers.indexOf("override") >= 0) {
+        if (context.baseSourceQName === null) {
+            fail("HARDENED_OVERRIDE_AUTHORITY", "local-base override requires a future authenticated local member signature authority", node);
+        }
+        const access = accessor === "getter" ? "read" : accessor === "setter" ? "write" : "call";
+        const mapping = memberMapping(context, context.baseSourceQName, access, name, node);
+        const required = parameters.filter(parameter => parameter.defaultValue === null && !parameter.rest).length;
+        if (!mapping || !mapping.sourceMember || mapping.targetMember === null
+            || mapping.targetMember.scope !== "instance" || parameters.some(parameter => parameter.rest)
+            || mapping.sourceMember.minArgs !== required || mapping.sourceMember.maxArgs !== parameters.length) {
+            fail("HARDENED_OVERRIDE_AUTHORITY", "override lacks one exact base member signature and instance bridge mapping", node);
+        }
     }
     return { node, name, modifiers, namespaceName: memberModifiers.namespaceName,
         parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor };

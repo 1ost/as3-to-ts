@@ -318,6 +318,14 @@ try {
     assert.deepEqual(semantic.declaration.members[16].modifiers, []);
     assert.ok(normalized.nodes.some(node => node.kind === "USE" && node.text === "ResourcesSpace"));
 
+    const overrideSource = "package p { import flash.display.Sprite; public class C extends Sprite { public function C(){super();} override public function toString():String{return \"C\";} } }";
+    const overrideTree = built.parse("fixtures/Override.as", overrideSource);
+    const overrideNormalized = built.normalizer.normalizeParserAst(overrideTree, overrideSource, sha256);
+    assert.ok(overrideNormalized.nodes.some(node => node.kind === "MODIFIER" && node.text === "override"));
+    assert.throws(() => built.adapter.adaptNormalizedParserAst(
+        overrideNormalized, authority(built.ledger), overrideSource, sha256,
+    ), error => error && error.code === "HARDENED_OVERRIDE_AUTHORITY");
+
     const interfaceSource = "package p { public interface IThing { function run(value:int,...rest):String; function get name():String; function set name(value:String):void; } }";
     const interfaceTree = built.parse("fixtures/IThing.as", interfaceSource);
     const interfaceNormalized = built.normalizer.normalizeParserAst(interfaceTree, interfaceSource, sha256);
