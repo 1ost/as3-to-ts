@@ -184,8 +184,15 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     }
     if (expression.kind === "index") {
         const target = expressionNode(expression.target, ts);
+        const admittedTarget = expression.targetNullable ? ts.factory.createNonNullExpression(target) : target;
+        if (expression.accessKind === "dictionary") {
+            return ts.factory.createCallExpression(
+                ts.factory.createPropertyAccessExpression(admittedTarget, "get"), undefined,
+                [expressionNode(expression.index, ts)],
+            );
+        }
         return ts.factory.createElementAccessExpression(
-            expression.targetNullable ? ts.factory.createNonNullExpression(target) : target,
+            admittedTarget,
             expressionNode(expression.index, ts),
         );
     }
@@ -213,6 +220,15 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             expression.argument === null ? [] : [expressionNode(expression.argument, ts)]);
     }
     if (expression.kind === "assignment") {
+        if (expression.target.kind === "index" && expression.target.accessKind === "dictionary") {
+            const target = expressionNode(expression.target.target, ts);
+            const admittedTarget = expression.target.targetNullable
+                ? ts.factory.createNonNullExpression(target) : target;
+            return ts.factory.createCallExpression(
+                ts.factory.createPropertyAccessExpression(admittedTarget, "set"), undefined,
+                [expressionNode(expression.target.index, ts), expressionNode(expression.value, ts)],
+            );
+        }
         return ts.factory.createBinaryExpression(
             expressionNode(expression.target, ts),
             ts.factory.createToken(ts.SyntaxKind.EqualsToken),
@@ -299,6 +315,15 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             typeNode(expression.returnType, ts),
             ts.factory.createBlock(expression.statements.map(statement => statementNode(statement, ts)), true));
     }
+    if (expression.kind === "delete") {
+        const target = expressionNode(expression.target.target, ts);
+        const admittedTarget = expression.target.targetNullable
+            ? ts.factory.createNonNullExpression(target) : target;
+        return ts.factory.createCallExpression(
+            ts.factory.createPropertyAccessExpression(admittedTarget, "delete"), undefined,
+            [expressionNode(expression.target.index, ts)],
+        );
+    }
     throw new HardenedSemanticError("HARDENED_EMIT_EXPRESSION", "semantic IR contains an unsupported expression");
 }
 
@@ -370,15 +395,23 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
                 ts.factory.createVariableDeclaration((statement.target as any).name, undefined, undefined, undefined),
             ], ts.NodeFlags.None)
             : expressionNode(statement.target, ts);
-        let iterable = statement.iterableType.emittedName === "unknown"
+        let iterable = statement.iterableType.sourceName === "Dictionary"
+            ? ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
+                statement.iterableType.nullable
+                    ? ts.factory.createNonNullExpression(expressionNode(statement.iterable, ts))
+                    : expressionNode(statement.iterable, ts), "keys"), undefined, [])
+            : statement.iterableType.emittedName === "unknown"
             ? ts.factory.createAsExpression(expressionNode(statement.iterable, ts),
                 ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword))
             : expressionNode(statement.iterable, ts);
-        if (statement.iterableType.nullable && statement.iterableType.emittedName !== "unknown") {
+        if (statement.iterableType.nullable && statement.iterableType.emittedName !== "unknown"
+            && statement.iterableType.sourceName !== "Dictionary") {
             iterable = ts.factory.createNonNullExpression(iterable);
         }
-        return ts.factory.createForInStatement(initializer, iterable,
-            ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
+        const body = ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true);
+        return statement.iterableType.sourceName === "Dictionary"
+            ? ts.factory.createForOfStatement(undefined, initializer, iterable, body)
+            : ts.factory.createForInStatement(initializer, iterable, body);
     }
     if (statement.kind === "try") {
         let catchClause: any = undefined;
@@ -478,6 +511,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.target);
         } else if (expression.kind === "lambda") {
             expression.statements.forEach(inspectStatement);
+        } else if (expression.kind === "delete") {
+            inspectExpression(expression.target);
         }
     };
     const inspectStatement = (statement: SemanticStatement): void => {
@@ -645,6 +680,7 @@ function programUsesVector(program: SemanticProgram): boolean {
             || expression.parameters.some(parameter => visitType(parameter.type)
                 || (parameter.defaultValue !== null && visitExpression(parameter.defaultValue)))
             || expression.statements.some(visitStatement);
+        if (expression.kind === "delete") return visitExpression(expression.target);
         return false;
     };
     const visitStatement = (statement: SemanticStatement): boolean => {

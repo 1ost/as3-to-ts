@@ -86,6 +86,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Type.ts"), path.join(runtime, "AS3Type.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Vector.ts"), path.join(runtime, "AS3Vector.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Coerce.ts"), path.join(runtime, "AS3Coerce.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Dictionary.ts"), path.join(runtime, "AS3Dictionary.ts"));
         fs.writeFileSync(path.join(stubs, "Sprite.ts"),
             "export class Sprite { public addEventListener(_type:string,_listener:Function,_capture=false,_priority=0,_weak=false):void {} }\n", "utf8");
         fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
@@ -218,6 +219,13 @@ function buildTree(options = {}) {
             n("NAME", options.badPrimitiveNull ? "badNull" : "maybeSprite"),
             type(options.badPrimitiveNull ? "Number" : "Sprite"),
             n("INIT", null, [n("LITERAL", "null")]),
+        ]));
+    }
+    if (options.dictionaryWorkpack || options.badDictionaryConstructor) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "dictionary"), type("Dictionary"), n("INIT", null, [
+                construct("Dictionary", options.badDictionaryConstructor ? [n("LITERAL", "1")] : [n("LITERAL", "true")]),
+            ]),
         ]));
     }
     if (options.vectorWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack || options.badForEachType) {
@@ -476,6 +484,18 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
+    if (options.dictionaryWorkpack) {
+        const dictionaryIndex = () => n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "dictionary"), n("IDENTIFIER", "key")]);
+        onEventBody = [
+            localDeclaration("VAR_LIST", "key", "Object", objectLiteral([["id", n("LITERAL", "1")]])),
+            assignment(dictionaryIndex(), n("LITERAL", '"value"')),
+            localDeclaration("VAR_LIST", "found", "Object", dictionaryIndex()),
+            localDeclaration("VAR_LIST", "removed", "Boolean", n("DELETE", null, [dictionaryIndex()])),
+            n("FORIN", null, [n("INIT", null, [n("IDENTIFIER", "key")]),
+                n("IN", null, [n("IDENTIFIER", "dictionary")]), n("BLOCK", null, [n("CONTINUE")])]),
+            n("RETURN"),
+        ];
+    }
     const members = [
         field,
         constructor(body),
@@ -544,6 +564,9 @@ function buildTree(options = {}) {
     const imports = options.wildcardImports
         ? [n("IMPORT", "flash.display.*"), n("IMPORT", "flash.events.*")]
         : [n("IMPORT", "flash.display.Sprite"), n("IMPORT", "flash.events.Event")];
+    if (options.dictionaryWorkpack || options.badDictionaryConstructor) {
+        imports.push(n("IMPORT", "flash.utils.Dictionary"));
+    }
     if (options.unusedWildcard) imports.push(n("IMPORT", "flash.geom.*"));
     if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
         imports.push(n("USE", "ResourcesSpace"));
@@ -789,6 +812,7 @@ function main() {
     const program = adapt(api, buildTree(), authority);
     assert.ok(Object.isFrozen(authority));
     assert.ok(Object.isFrozen(authority.typeMappingsBySource));
+    assert.ok(Object.isFrozen(authority.intrinsicTypesBySource));
     assert.ok(Object.isFrozen(program));
     assert.ok(Object.isFrozen(program.declaration.members));
     assertErrorCode(
@@ -1010,6 +1034,18 @@ function main() {
     assertErrorCode(() => adapt(api, buildTree({ badLambdaThis: true }), authority), "HARDENED_LAMBDA_THIS");
     assertErrorCode(() => adapt(api, buildTree({ badLambdaArity: true }), authority), "HARDENED_LAMBDA_CALL_ARITY");
     assertErrorCode(() => adapt(api, buildTree({ badLambdaReturn: true }), authority), "HARDENED_LAMBDA_RETURN_PATH");
+    const dictionaryProgram = adapt(api, buildTree({ dictionaryWorkpack: true }), authority);
+    const dictionaryOutput = api.emitSemanticProgram(dictionaryProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(dictionaryOutput.code,
+        /import \{ AS3Dictionary as Dictionary \} from "@bleach\/as3-runtime\/AS3Dictionary";/);
+    assert.match(dictionaryOutput.code, /private dictionary: Dictionary \| null = new Dictionary\(true\);/);
+    assert.match(dictionaryOutput.code, /this\.dictionary!\.set\(key, "value"\);/);
+    assert.match(dictionaryOutput.code, /var found: unknown = this\.dictionary!\.get\(key\);/);
+    assert.match(dictionaryOutput.code, /var removed: boolean = this\.dictionary!\.delete\(key\);/);
+    assert.match(dictionaryOutput.code, /for \(key of this\.dictionary!\.keys\(\)\)/);
+    assertErrorCode(() => adapt(api, buildTree({ badDictionaryConstructor: true }), authority),
+        "HARDENED_DICTIONARY_CONSTRUCTOR");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1022,7 +1058,7 @@ function main() {
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
         labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code,
-        nullableOutput.code, lambdaOutput.code]);
+        nullableOutput.code, lambdaOutput.code, dictionaryOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);
@@ -1147,7 +1183,7 @@ function main() {
     );
     assertErrorCode(
         () => adapt(api, buildTree({ unsupportedStatement: true }), authority),
-        "HARDENED_STATEMENT_UNSUPPORTED",
+        "HARDENED_DELETE_SHAPE",
     );
     assertErrorCode(
         () => adapt(api, buildTree({ unsupportedChild: true }), authority),
@@ -1230,6 +1266,19 @@ function main() {
         mappingJson,
         mappingSha256: sha256(mappingJson),
     }, sha256), "HARDENED_SOURCE_CENSUS_HASH");
+    const weakenedIntrinsic = JSON.parse(sourceCensusJson);
+    const dictionaryApi = weakenedIntrinsic.as3SourceCapabilities.apis
+        .find(item => item.qname === "flash.utils.Dictionary");
+    dictionaryApi.roles = dictionaryApi.roles.filter(role => role !== "constructor");
+    const weakenedIntrinsicJson = JSON.stringify(weakenedIntrinsic);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson: weakenedIntrinsicJson,
+        sourceCensusSha256: sha256(weakenedIntrinsicJson),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+    }, sha256), "HARDENED_SOURCE_INTRINSIC");
 
     const internal = mappingDocument();
     internal.mappings.push({

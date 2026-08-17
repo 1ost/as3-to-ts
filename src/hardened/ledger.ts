@@ -14,6 +14,14 @@ const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const TARGET_MODULE_PREFIX = "src/layaAir/";
 const PUBLIC_MODULE_SEGMENT = /^[A-Za-z$][A-Za-z0-9_$]*$/;
 const LOADED_AUTHORITIES = new WeakSet<object>();
+const INTRINSIC_TYPES = Object.freeze([Object.freeze({
+    sourceQName: "flash.utils.Dictionary",
+    sourceRoles: Object.freeze(["constructor", "import", "instance-member", "wildcard-resolution"]),
+    targetModule: "@bleach/as3-runtime/AS3Dictionary",
+    targetExport: "AS3Dictionary",
+    targetKind: "class" as "class",
+    targetSignature: "new (weakKeys?: boolean): AS3Dictionary",
+})]);
 
 function isObject(value: unknown): value is { [key: string]: unknown } {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -197,6 +205,31 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
     }
 }
 
+function intrinsicTypes(source: { [key: string]: unknown }): LoadedCapabilityAuthority["intrinsicTypesBySource"] {
+    const section = source.as3SourceCapabilities;
+    if (!isObject(section) || !Array.isArray(section.apis)) {
+        throw new HardenedSemanticError("HARDENED_SOURCE_CENSUS_SCHEMA", "source census lacks intrinsic API authority");
+    }
+    const apis = section.apis as unknown[];
+    const result: LoadedCapabilityAuthority["intrinsicTypesBySource"] = Object.create(null);
+    INTRINSIC_TYPES.forEach(intrinsic => {
+        const api = apis.find((value: unknown) => isObject(value) && value.qname === intrinsic.sourceQName);
+        if (!isObject(api)) return;
+        if (api.classification !== "layaair-flash-api-bridge" || !Array.isArray(api.roles)
+            || !intrinsic.sourceRoles.every(role => (api.roles as unknown[]).indexOf(role) >= 0)
+            || !isObject(api.preserve) || api.preserve.apiName !== true || api.preserve.signature !== true) {
+            throw new HardenedSemanticError("HARDENED_SOURCE_INTRINSIC",
+                "source intrinsic API is present without the exact bridge contract");
+        }
+        result[intrinsic.sourceQName] = Object.freeze({
+            sourceRoles: Object.freeze(intrinsic.sourceRoles.slice()) as unknown as string[],
+            targetModule: intrinsic.targetModule, targetExport: intrinsic.targetExport,
+            targetKind: intrinsic.targetKind, targetSignature: intrinsic.targetSignature,
+        });
+    });
+    return Object.freeze(result);
+}
+
 function findTargetCapability(target: { [key: string]: unknown }, mapping: CapabilityMapping): void {
     if (target.schema !== "laya-authored-content-capabilities@1" || !Array.isArray(target.capabilities)) {
         throw new HardenedSemanticError("HARDENED_TARGET_CAPABILITIES_SCHEMA", "target Laya capability document has the wrong schema");
@@ -269,6 +302,7 @@ export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256:
         mappingSha256: input.mappingSha256,
         typeMappingsBySource,
         memberMappingsByKey,
+        intrinsicTypesBySource: intrinsicTypes(source),
     });
     LOADED_AUTHORITIES.add(authority);
     return authority;

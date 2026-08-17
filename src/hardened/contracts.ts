@@ -66,6 +66,13 @@ export interface LoadedCapabilityAuthority {
     mappingSha256: string;
     typeMappingsBySource: { [qualifiedName: string]: CapabilityMapping };
     memberMappingsByKey: { [memberKey: string]: CapabilityMapping };
+    intrinsicTypesBySource: { [qualifiedName: string]: {
+        sourceRoles: string[];
+        targetModule: string;
+        targetExport: string;
+        targetKind: "class";
+        targetSignature: string;
+    } };
 }
 
 export interface SemanticIdentity {
@@ -83,7 +90,7 @@ export interface SemanticType extends SemanticIdentity {
 export type SemanticModifier = "public" | "private" | "protected" | "static" | "override";
 
 export interface SemanticImport extends SemanticIdentity {
-    authorityKind: "flash" | "local";
+    authorityKind: "flash" | "local" | "intrinsic";
     localNodeId: string | null;
     runtimeConstructible: boolean;
     runtimeInterface: boolean;
@@ -160,9 +167,16 @@ export interface ObjectExpression extends SemanticIdentity {
 
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
+    accessKind: "vector" | "dictionary";
     target: SemanticExpression;
     targetNullable: boolean;
     index: SemanticExpression;
+    resultType: SemanticType;
+}
+
+export interface DeleteExpression extends SemanticIdentity {
+    kind: "delete";
+    target: IndexExpression;
     resultType: SemanticType;
 }
 
@@ -268,7 +282,7 @@ export interface UpdateExpression extends SemanticIdentity {
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
-    ConditionalExpression | UpdateExpression | ArrayExpression | ObjectExpression | IndexExpression | VectorConversionExpression |
+    ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | IndexExpression | VectorConversionExpression |
     RuntimeTypeExpression | CoercionExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {

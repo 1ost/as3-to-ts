@@ -374,6 +374,19 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
             targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
         });
     };
+    const intrinsicImport = (qname: string, node: TreeNode): SemanticImport => {
+        const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
+        const mapping = authority.intrinsicTypesBySource[qname];
+        if (!mapping || mapping.sourceRoles.indexOf("import") < 0) {
+            fail("HARDENED_INTRINSIC_IMPORT", "intrinsic import lacks exact source-census authority", node);
+        }
+        return Object.assign(identity(node), {
+            authorityKind: "intrinsic" as "intrinsic", localNodeId: null,
+            runtimeConstructible: true, runtimeInterface: false,
+            sourceQualifiedName: qname, sourceLocalName: localName,
+            targetModule: mapping.targetModule, targetExport: mapping.targetExport,
+        });
+    };
     const localImport = (target: LocalTypeMapping, currentLocal: CurrentLocalType,
         node: TreeNode): SemanticImport => {
         const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
@@ -391,8 +404,12 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
             const flashMatches = Object.keys(authority.typeMappingsBySource)
                 .filter(candidate => candidate.startsWith(prefix) && !candidate.slice(prefix.length).includes("."))
                 .sort(compareUtf8);
-            if (flashMatches.length > 0) {
+            const intrinsicMatches = Object.keys(authority.intrinsicTypesBySource)
+                .filter(candidate => candidate.startsWith(prefix) && !candidate.slice(prefix.length).includes("."))
+                .sort(compareUtf8);
+            if (flashMatches.length > 0 || intrinsicMatches.length > 0) {
                 flashMatches.forEach(candidate => append(flashImport(candidate, node), node));
+                intrinsicMatches.forEach(candidate => append(intrinsicImport(candidate, node), node));
                 return;
             }
             if (qname.startsWith("flash.")) return;
@@ -415,6 +432,8 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         let item: SemanticImport;
         if (authority.typeMappingsBySource[qname]) {
             item = flashImport(qname, node);
+        } else if (authority.intrinsicTypesBySource[qname]) {
+            item = intrinsicImport(qname, node);
         } else {
             if (!localAuthority || !resolveCurrentLocal) {
                 fail("HARDENED_LOCAL_IMPORT_AUTHORITY", "project-local import requires the authenticated dependency type map", node);
@@ -459,6 +478,10 @@ function withNullability(type: SemanticType, nullable: boolean): SemanticType {
 
 function vectorElement(type: SemanticType): SemanticType | null {
     return type.emittedName === "AS3Vector" && type.typeArguments.length === 1 ? type.typeArguments[0]! : null;
+}
+
+function isDictionaryType(type: SemanticType): boolean {
+    return type.sourceName === "Dictionary" && type.emittedName === "Dictionary";
 }
 
 function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean): SemanticType {
@@ -643,6 +666,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index") {
         return expression.resultType;
     }
+    if (expression.kind === "delete") return expression.resultType;
     if (expression.kind === "vectorConversion") return expression.vectorType;
     if (expression.kind === "runtimeType") return expression.resultType;
     if (expression.kind === "coercion") return expression.targetType;
@@ -694,7 +718,7 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
 function assertAssignmentCompatible(target: SemanticType, value: SemanticType, node: TreeNode): void {
     if ((value.sourceName === "null" && target.nullable)
         || (sameUnderlyingType(target, value) && (target.nullable || !value.nullable))
-        || target.sourceName === "Object" || sameType(target, value)
+        || target.sourceName === "Object" || target.sourceName === "*" || sameType(target, value)
         || (["Number", "int", "uint"].includes(target.sourceName)
             && ["Number", "int", "uint"].includes(value.sourceName))) {
         return;
@@ -785,6 +809,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             sourceType = semanticType(nameNode, name, name);
         } else {
             const imported = context.importsByLocal[name];
+            if (imported?.authorityKind === "intrinsic"
+                && imported.sourceQualifiedName === "flash.utils.Dictionary") {
+                if (args.length > 1 || (args[0]
+                    && assignmentType(args[0], context, call.children[1]!.children[0]!).sourceName !== "Boolean")) {
+                    fail("HARDENED_DICTIONARY_CONSTRUCTOR",
+                        "Dictionary constructor accepts only one optional proven Boolean weakKeys flag", call);
+                }
+                sourceType = semanticType(nameNode, name, name);
+                return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
+            }
             const typeMapping = imported ? context.mappingsBySource[imported.sourceQualifiedName] : undefined;
             if (!imported || !typeMapping || typeMapping.sourceRoles.indexOf("constructor") < 0) {
                 fail("HARDENED_NEW_AUTHORITY", "constructor target lacks a double-pinned source and target constructor", nameNode);
@@ -1028,6 +1062,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             kind: "lambda" as "lambda", parameters, returnType, statements,
         });
     }
+    if (node.kind === "DELETE") {
+        if (node.children.length !== 1) {
+            fail("HARDENED_DELETE_SHAPE", "delete requires exactly one indexed target", node);
+        }
+        const target = parseExpression(node.children[0]!, context, false);
+        if (target.kind !== "index" || target.accessKind !== "dictionary") {
+            fail("HARDENED_DELETE_TARGET", "delete is admitted only for an authenticated Dictionary index", node.children[0]!);
+        }
+        return Object.assign(identity(node), {
+            kind: "delete" as "delete", target, resultType: semanticType(node, "Boolean", "boolean"),
+        });
+    }
     if (node.kind === "IDENTIFIER") {
         const name = requiredText(node, "identifier");
         if (name === "true" || name === "false" || name === "null") {
@@ -1138,14 +1184,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const target = parseExpression(node.children[0]!, context, true);
         const ownerType = assignmentType(target, context, node.children[0]!);
         const element = vectorElement(ownerType);
-        if (!element) fail("HARDENED_INDEX_TARGET", "indexed access currently requires a proven Vector", node);
+        const dictionary = isDictionaryType(ownerType);
+        if (!element && !dictionary) {
+            fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Vector or intrinsic Dictionary", node);
+        }
         const index = parseExpression(node.children[1]!, context, true);
         const indexType = assignmentType(index, context, node.children[1]!);
-        if (!["Number", "int", "uint"].includes(indexType.sourceName)) {
+        if (element && !["Number", "int", "uint"].includes(indexType.sourceName)) {
             fail("HARDENED_INDEX_TYPE", "Vector index must be a proven numeric value", node.children[1]!);
         }
+        if (dictionary && indexType.sourceName === "void") {
+            fail("HARDENED_DICTIONARY_KEY", "Dictionary key must be a proven value", node.children[1]!);
+        }
         return Object.assign(identity(node), {
-            kind: "index" as "index", target, targetNullable: ownerType.nullable, index, resultType: element,
+            kind: "index" as "index", accessKind: dictionary ? "dictionary" as "dictionary" : "vector" as "vector",
+            target, targetNullable: ownerType.nullable, index,
+            resultType: element || semanticType(node, "*", "unknown"),
         });
     }
     if (node.kind === "DOT") {
@@ -1319,7 +1373,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
 
 function parseStatementNode(node: TreeNode, context: AdapterContext, constructor: boolean,
     derived: boolean, expectedReturn: SemanticType | null, allowSuperCall: boolean): SemanticStatement {
-        if (node.kind === "CALL" || node.kind === "ASSIGN" || node.kind === "PRE_INC"
+        if (node.kind === "CALL" || node.kind === "ASSIGN" || node.kind === "DELETE" || node.kind === "PRE_INC"
             || node.kind === "PRE_DEC" || node.kind === "POST_INC" || node.kind === "POST_DEC") {
             return Object.assign(identity(node), {
                 kind: "expression" as "expression",
@@ -1583,14 +1637,14 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 }
                 targetType = assignmentType(target, context, targetOwner);
             }
-            if (targetType.sourceName !== "String" && targetType.sourceName !== "*") {
-                fail("HARDENED_FORIN_KEY", "for-in property keys require a String or dynamic binding", targetOwner);
-            }
             const iterableOwner = node.children[1]!.children[0]!;
             const iterable = parseExpression(iterableOwner, context, true);
             const iterableType = assignmentType(iterable, context, iterableOwner);
             if (["Boolean", "Number", "int", "uint", "String", "void"].includes(iterableType.sourceName)) {
                 fail("HARDENED_FORIN_ITERABLE", "for-in requires a proven object/reference enumerable", iterableOwner);
+            }
+            if (!isDictionaryType(iterableType) && targetType.sourceName !== "String" && targetType.sourceName !== "*") {
+                fail("HARDENED_FORIN_KEY", "ordinary for-in property keys require a String or dynamic binding", targetOwner);
             }
             const body = node.children[2]!;
             context.loopDepth += 1;

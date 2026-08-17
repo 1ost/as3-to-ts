@@ -115,6 +115,11 @@ function authority(api) {
                     qname: "flash.events.Event", classification: "layaair-flash-api-bridge",
                     roles: ["import"], preserve: { apiName: true, signature: true },
                 },
+                {
+                    qname: "flash.utils.Dictionary", classification: "layaair-flash-api-bridge",
+                    roles: ["constructor", "import", "instance-member", "wildcard-resolution"],
+                    preserve: { apiName: true, signature: true },
+                },
             ],
             memberUses: [{
                 qname: "flash.display.Sprite", member: "Sprite", access: "call",
@@ -168,6 +173,7 @@ try {
         "    /* preserved comment trivia */",
         "    import flash.display.Sprite;",
         "    import flash.events.Event;",
+        "    import flash.utils.Dictionary;",
         "    use namespace ResourcesSpace;",
         "    public class Demo extends Sprite {",
         "        private const label:String = \"ok\";",
@@ -189,6 +195,7 @@ try {
         "        ResourcesSpace function namespaced():void { status = \"namespace\"; }",
         "        public function enumerate():void { var values:Object = {\"a\":1}; for (var key:String in values) { if (key === \"done\") { continue; } } }",
         "        public function closures():void { var offset:Number = 1; var handler:Function = function(value:Number):Number { return value + offset; }; var result:Number = handler(2); }",
+        "        public function dictionaries():void { var dictionary:Dictionary = new Dictionary(true); var key:Object = {\"id\":1}; dictionary[key] = \"value\"; var removed:Boolean = delete dictionary[key]; }",
         "    }",
         "}",
         "",
@@ -243,10 +250,10 @@ try {
     assert.equal(semantic.packageName, "lobby.ui");
     assert.equal(semantic.outputModulePath, "lobby/ui/Demo.ts");
     assert.deepEqual(semantic.imports.map((item) => item.sourceQualifiedName),
-        ["flash.display.Sprite", "flash.events.Event"]);
+        ["flash.display.Sprite", "flash.events.Event", "flash.utils.Dictionary"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -319,6 +326,11 @@ try {
     assert.equal(closureMethod.name, "closures");
     assert.equal(closureMethod.body[1].declarations[0].initializer.kind, "lambda");
     assert.equal(closureMethod.body[2].declarations[0].initializer.kind, "call");
+    const dictionaryMethod = semantic.declaration.members[19];
+    assert.equal(dictionaryMethod.name, "dictionaries");
+    assert.equal(dictionaryMethod.body[2].expression.target.accessKind, "dictionary");
+    assert.equal(dictionaryMethod.body[3].declarations[0].initializer.kind, "delete");
+    assert.ok(normalized.nodes.some(node => node.kind === "DELETE"), "real parser preserves Dictionary delete");
     assert.equal(semantic.declaration.members[15].body[0].statement.statements[0].label, "outer");
     assert.equal(semantic.declaration.members[16].name, "namespaced");
     assert.equal(semantic.declaration.members[16].namespaceName, "ResourcesSpace");
