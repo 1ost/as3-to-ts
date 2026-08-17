@@ -78,6 +78,10 @@ function vectorType(name) {
     return n("VECTOR", null, [type(name)]);
 }
 
+function nestedVectorType(name) {
+    return n("VECTOR", null, [vectorType(name)]);
+}
+
 function dot(target, name) {
     return n("DOT", null, [target, n("LITERAL", name)]);
 }
@@ -162,6 +166,12 @@ function buildTree(options = {}) {
                 call(dot(n("IDENTIFIER", "values"), "push"), [n("LITERAL", "5")]),
             );
         }
+    }
+    if (options.nestedVectorWorkpack) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "matrix"), nestedVectorType("int"),
+            n("INIT", null, [n("NEW", null, [call(nestedVectorType("int"), [n("LITERAL", "1")])])]),
+        ]));
     }
     let onEventBody = options.returnValue ? [n("RETURN", null, [n("LITERAL", "1")])] : [n("RETURN")];
     if (options.assignment) {
@@ -562,6 +572,10 @@ function main() {
     const vectorRuntimeOutput = api.emitSemanticProgram(vectorRuntimeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(vectorRuntimeOutput.code, /__as3As\(this\.values, __as3VectorType\(__as3VectorPolicies\.int\)\)/);
     assert.match(vectorRuntimeOutput.code, /__as3Is\(this\.values, __as3VectorType\(__as3VectorPolicies\.int\)\)/);
+    const nestedVectorProgram = adapt(api, buildTree({ nestedVectorWorkpack: true }), authority);
+    const nestedVectorOutput = api.emitSemanticProgram(nestedVectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(nestedVectorOutput.code,
+        /private matrix: __as3Vector<__as3Vector<number> \| null> = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), 1\);/);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

@@ -20,7 +20,7 @@ fs.writeFileSync(CONFIG, JSON.stringify({
 childProcess.execFileSync(process.execPath,
     [path.join(ROOT, "node_modules/typescript-4-9/bin/tsc"), "-p", CONFIG], { cwd: ROOT, stdio: "inherit" });
 const runtime = require(path.join(OUTPUT, "hardened-runtime/AS3Vector.js"));
-const { AS3Vector, AS3VectorPolicies, as3VectorReference, as3VectorType } = runtime;
+const { AS3Vector, AS3VectorPolicies, as3VectorNested, as3VectorReference, as3VectorType } = runtime;
 const { as3As, as3Is } = require(path.join(OUTPUT, "hardened-runtime/AS3Type.js"));
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
@@ -91,4 +91,15 @@ test("specialized Vector runtime types preserve element policy identity", () => 
     assert.equal(as3Is(uints, intType), false);
     assert.equal(as3As(ints, intType), ints);
     assert.equal(as3As([], intType), null);
+});
+
+test("nested vectors preserve their complete recursive element specialization", () => {
+    const nestedPolicy = as3VectorNested(AS3VectorPolicies.int);
+    const nested = new AS3Vector(nestedPolicy, 1);
+    assert.equal(nested[0], null);
+    const ints = AS3Vector.from(AS3VectorPolicies.int, [1]);
+    nested[0] = ints;
+    assert.equal(nested[0], ints);
+    assert.throws(() => { nested[0] = AS3Vector.from(AS3VectorPolicies.uint, [1]); }, /incompatible/);
+    assert.equal(as3VectorNested(AS3VectorPolicies.int), nestedPolicy);
 });

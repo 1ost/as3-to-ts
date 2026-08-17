@@ -97,8 +97,8 @@ function vectorPolicyNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3VectorPolicies"), policy);
     }
     if (element.emittedName === "AS3Vector") {
-        throw new HardenedSemanticError("HARDENED_EMIT_VECTOR_NESTED",
-            "nested Vector requires a specialized runtime element policy");
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3VectorNested"), undefined,
+            [vectorPolicyNode(element, ts)]);
     }
     return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3VectorReference"), undefined, [
         ts.factory.createStringLiteral(element.sourceName), ts.factory.createIdentifier(element.emittedName),
@@ -466,6 +466,7 @@ function vectorRuntimeImport(ts: TypeScriptCompilerApi): any {
     const names = [
         ["AS3Vector", "__as3Vector"], ["AS3VectorPolicies", "__as3VectorPolicies"],
         ["as3VectorReference", "__as3VectorReference"], ["as3VectorType", "__as3VectorType"],
+        ["as3VectorNested", "__as3VectorNested"],
     ].map(([exported, local]) => ts.factory.createImportSpecifier(false,
         ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!)));
     return ts.factory.createImportDeclaration(undefined,

@@ -11,6 +11,7 @@ type MutableVector<T> = AS3Vector<T> & { [index: number]: T };
 const MAX_VECTOR_LENGTH = 0x00ffffff;
 const ARRAY_INDEX = /^(?:0|[1-9][0-9]*)$/;
 const REFERENCE_POLICIES = new WeakMap<Function, AS3VectorElementPolicy<object | null>>();
+const NESTED_POLICIES = new WeakMap<object, AS3VectorElementPolicy<AS3Vector<unknown> | null>>();
 const VECTOR_TYPES = new WeakMap<object, AS3TypeToken<AS3Vector<unknown>>>();
 
 function range(message: string): never {
@@ -75,6 +76,25 @@ export function as3VectorType<T>(policy: AS3VectorElementPolicy<T>): AS3TypeToke
     const created = as3PredicateType<AS3Vector<T>>(`Vector.<${policy.name}>`,
         (value): value is AS3Vector<T> => value instanceof AS3Vector && value.elementPolicy === policy);
     VECTOR_TYPES.set(policy as object, created as AS3TypeToken<AS3Vector<unknown>>);
+    return created;
+}
+
+export function as3VectorNested<T>(elementPolicy: AS3VectorElementPolicy<T>):
+    AS3VectorElementPolicy<AS3Vector<T> | null> {
+    const cached = NESTED_POLICIES.get(elementPolicy as object);
+    if (cached) return cached as AS3VectorElementPolicy<AS3Vector<T> | null>;
+    const created = Object.freeze({
+        name: `Vector.<${elementPolicy.name}>`,
+        defaultValue: () => null,
+        coerce(value: unknown): AS3Vector<T> | null {
+            if (value === null || value === undefined) return null;
+            if (!(value instanceof AS3Vector) || value.elementPolicy !== elementPolicy) {
+                throw new TypeError(`AS3 Vector.<Vector.<${elementPolicy.name}>> rejected an incompatible value`);
+            }
+            return value as AS3Vector<T>;
+        },
+    });
+    NESTED_POLICIES.set(elementPolicy as object, created as AS3VectorElementPolicy<AS3Vector<unknown> | null>);
     return created;
 }
 
