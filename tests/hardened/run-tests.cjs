@@ -117,6 +117,10 @@ function localDeclaration(kind, name, typeName, initializer) {
     return n(kind, null, [n("NAME_TYPE_INIT", null, children)]);
 }
 
+function conditional(condition, whenTrue, whenFalse) {
+    return n("CONDITIONAL", null, [condition, whenTrue, whenFalse]);
+}
+
 function constructor(body) {
     return n("FUNCTION", "function", [
         mods("public"), n("NAME", "Demo"), n("PARAMETER_LIST"), type(null), n("BLOCK", null, body),
@@ -174,6 +178,27 @@ function buildTree(options = {}) {
             onEventBody.push(localDeclaration("VAR_LIST", "total", "Number", n("LITERAL", "3")));
         }
         onEventBody.push(active, loop, n("RETURN"));
+    }
+    if (options.controlWorkpack || options.conditionalNonBoolean || options.conditionalTypeMismatch
+        || options.updateNonNumber || options.breakOutsideLoop) {
+        const active = localDeclaration("VAR_LIST", "active", "Boolean", n("LITERAL", "true"));
+        const total = localDeclaration("VAR_LIST", "total", "Number", n("LITERAL", "2"));
+        const choiceCondition = options.conditionalNonBoolean ? n("IDENTIFIER", "total") : n("IDENTIFIER", "active");
+        const falseChoice = options.conditionalTypeMismatch ? n("LITERAL", '"none"') : n("LITERAL", "0");
+        const chosen = localDeclaration("VAR_LIST", "chosen", "Number",
+            conditional(choiceCondition, n("IDENTIFIER", "total"), falseChoice));
+        const updateTarget = options.updateNonNumber ? n("IDENTIFIER", "b") : n("IDENTIFIER", "total");
+        const loop = n("WHILE", null, [n("CONDITION", null, [n("IDENTIFIER", "active")]), n("BLOCK", null, [
+            n("POST_DEC", null, [updateTarget]),
+            n("IF", null, [
+                n("CONDITION", null, [binary("EQUALITY", n("IDENTIFIER", "total"), "===", n("LITERAL", "1"))]),
+                n("BLOCK", null, [n("CONTINUE")]),
+            ]),
+            n("BREAK"),
+        ])]);
+        onEventBody = options.breakOutsideLoop
+            ? [active, total, chosen, n("BREAK"), n("RETURN")]
+            : [active, total, chosen, loop, n("RETURN")];
     }
     const members = [
         field,
@@ -477,6 +502,28 @@ function main() {
     assertErrorCode(
         () => adapt(api, buildTree({ localParameterCollision: true }), authority),
         "HARDENED_LOCAL_PARAMETER_COLLISION",
+    );
+    const controlProgram = adapt(api, buildTree({ controlWorkpack: true }), authority);
+    const controlOutput = api.emitSemanticProgram(controlProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(controlOutput.code, /var chosen: number = active \? total : 0;/);
+    assert.match(controlOutput.code, /total--;/);
+    assert.match(controlOutput.code, /continue;/);
+    assert.match(controlOutput.code, /break;/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ conditionalNonBoolean: true }), authority),
+        "HARDENED_CONDITIONAL_BOOLEAN",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ conditionalTypeMismatch: true }), authority),
+        "HARDENED_CONDITIONAL_TYPE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ updateNonNumber: true }), authority),
+        "HARDENED_UPDATE_NUMBER",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ breakOutsideLoop: true }), authority),
+        "HARDENED_LOOP_CONTEXT",
     );
     const runnable = ts.transpileModule(emitted.code, {
         compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },

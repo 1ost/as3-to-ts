@@ -63,6 +63,7 @@ interface AdapterContext {
     accessors: { [name: string]: AccessorPair };
     parameters: { [name: string]: SemanticParameter };
     locals: { [name: string]: LocalHeader };
+    loopDepth: number;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -383,6 +384,9 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "parenthesized") {
         return expression.resultType;
     }
+    if (expression.kind === "conditional" || expression.kind === "update") {
+        return expression.resultType;
+    }
     if (expression.kind === "assignment") {
         return assignmentTargetType(expression.target, context, node);
     }
@@ -556,6 +560,46 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             resultType: assignmentType(expression, context, node.children[0]!),
         });
     }
+    if (node.kind === "CONDITIONAL") {
+        if (node.children.length !== 3) {
+            fail("HARDENED_CONDITIONAL_SHAPE", "conditional expression requires condition, true, and false branches", node);
+        }
+        const condition = parseExpression(node.children[0]!, context, true);
+        const conditionType = assignmentType(condition, context, node.children[0]!);
+        if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
+            fail("HARDENED_CONDITIONAL_BOOLEAN", "conditional expression requires an exact Boolean condition", node.children[0]!);
+        }
+        const whenTrue = parseExpression(node.children[1]!, context, true);
+        const whenFalse = parseExpression(node.children[2]!, context, true);
+        const trueType = assignmentType(whenTrue, context, node.children[1]!);
+        const falseType = assignmentType(whenFalse, context, node.children[2]!);
+        if (trueType.sourceName !== falseType.sourceName || trueType.emittedName !== falseType.emittedName) {
+            fail("HARDENED_CONDITIONAL_TYPE", "conditional branches require the exact same proven source type", node);
+        }
+        return Object.assign(identity(node), {
+            kind: "conditional" as "conditional", condition, whenTrue, whenFalse, resultType: trueType,
+        });
+    }
+    if (node.kind === "PRE_INC" || node.kind === "PRE_DEC" || node.kind === "POST_INC" || node.kind === "POST_DEC") {
+        if (node.children.length !== 1) {
+            fail("HARDENED_UPDATE_SHAPE", "update expression requires exactly one writable target", node);
+        }
+        const parsedTarget = parseExpression(node.children[0]!, context, false);
+        if (parsedTarget.kind !== "identifier" && parsedTarget.kind !== "member") {
+            fail("HARDENED_UPDATE_TARGET", "update target must be a proven writable identity", node.children[0]!);
+        }
+        const resultType = assignmentTargetType(parsedTarget, context, node.children[0]!);
+        if (resultType.sourceName !== "Number" || resultType.emittedName !== "number") {
+            fail("HARDENED_UPDATE_NUMBER", "increment and decrement require an exact writable Number", node);
+        }
+        return Object.assign(identity(node), {
+            kind: "update" as "update",
+            operator: (node.kind === "PRE_INC" || node.kind === "POST_INC" ? "++" : "--") as "++" | "--",
+            prefix: node.kind === "PRE_INC" || node.kind === "PRE_DEC",
+            target: parsedTarget,
+            resultType,
+        });
+    }
     if (node.kind === "IDENTIFIER") {
         const name = requiredText(node, "identifier");
         if (name === "this") {
@@ -717,7 +761,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
 
 function parseStatementNode(node: TreeNode, context: AdapterContext, constructor: boolean,
     derived: boolean, expectedReturn: SemanticType | null, allowSuperCall: boolean): SemanticStatement {
-        if (node.kind === "CALL" || node.kind === "ASSIGN") {
+        if (node.kind === "CALL" || node.kind === "ASSIGN" || node.kind === "PRE_INC"
+            || node.kind === "PRE_DEC" || node.kind === "POST_INC" || node.kind === "POST_DEC") {
             return Object.assign(identity(node), {
                 kind: "expression" as "expression",
                 expression: parseExpression(node, context, false,
@@ -777,12 +822,26 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 fail("HARDENED_WHILE_BOOLEAN", "while condition requires an exact Boolean expression", conditionOwner);
             }
             const branch = node.children[1]!;
-            return Object.assign(identity(node), {
-                kind: "while" as "while", condition,
-                statements: branch.kind === "BLOCK"
-                    ? parseBlock(branch, context, constructor, derived, expectedReturn, false)
-                    : [parseStatementNode(branch, context, constructor, derived, expectedReturn, false)],
-            });
+            context.loopDepth += 1;
+            try {
+                return Object.assign(identity(node), {
+                    kind: "while" as "while", condition,
+                    statements: branch.kind === "BLOCK"
+                        ? parseBlock(branch, context, constructor, derived, expectedReturn, false)
+                        : [parseStatementNode(branch, context, constructor, derived, expectedReturn, false)],
+                });
+            } finally {
+                context.loopDepth -= 1;
+            }
+        }
+        if (node.kind === "BREAK" || node.kind === "CONTINUE") {
+            if (node.children.length !== 0) {
+                fail("HARDENED_LOOP_LABEL", "labelled loop control remains held", node);
+            }
+            if (context.loopDepth === 0) {
+                fail("HARDENED_LOOP_CONTEXT", "break and continue require an admitted enclosing loop", node);
+            }
+            return Object.assign(identity(node), { kind: node.kind === "BREAK" ? "break" as "break" : "continue" as "continue" });
         }
         if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {
             onlyKinds(node, ["NAME_TYPE_INIT"]);
@@ -992,6 +1051,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         accessors: Object.create(null),
         parameters: Object.create(null),
         locals: Object.create(null),
+        loopDepth: 0,
     };
     const extendsNode = one(classNode, "EXTENDS", true);
     let extendsType: SemanticType | null = null;

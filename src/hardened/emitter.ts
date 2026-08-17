@@ -155,6 +155,21 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "parenthesized") {
         return ts.factory.createParenthesizedExpression(expressionNode(expression.expression, ts));
     }
+    if (expression.kind === "conditional") {
+        return ts.factory.createConditionalExpression(
+            expressionNode(expression.condition, ts),
+            ts.factory.createToken(ts.SyntaxKind.QuestionToken),
+            expressionNode(expression.whenTrue, ts),
+            ts.factory.createToken(ts.SyntaxKind.ColonToken),
+            expressionNode(expression.whenFalse, ts),
+        );
+    }
+    if (expression.kind === "update") {
+        const token = expression.operator === "++" ? ts.SyntaxKind.PlusPlusToken : ts.SyntaxKind.MinusMinusToken;
+        return expression.prefix
+            ? ts.factory.createPrefixUnaryExpression(token, expressionNode(expression.target, ts))
+            : ts.factory.createPostfixUnaryExpression(expressionNode(expression.target, ts), token);
+    }
     throw new HardenedSemanticError("HARDENED_EMIT_EXPRESSION", "semantic IR contains an unsupported expression");
 }
 
@@ -188,6 +203,8 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             ts.factory.createVariableDeclarationList(declarations,
                 readonly ? ts.NodeFlags.Const : ts.NodeFlags.None));
     }
+    if (statement.kind === "break") return ts.factory.createBreakStatement();
+    if (statement.kind === "continue") return ts.factory.createContinueStatement();
     throw new HardenedSemanticError("HARDENED_EMIT_STATEMENT", "semantic IR contains an unsupported statement");
 }
 
@@ -217,6 +234,12 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.operand);
         } else if (expression.kind === "parenthesized") {
             inspectExpression(expression.expression);
+        } else if (expression.kind === "conditional") {
+            inspectExpression(expression.condition);
+            inspectExpression(expression.whenTrue);
+            inspectExpression(expression.whenFalse);
+        } else if (expression.kind === "update") {
+            inspectExpression(expression.target);
         }
     };
     const inspectStatement = (statement: SemanticStatement): void => {
@@ -231,7 +254,7 @@ function boundMethodNames(program: SemanticProgram): string[] {
         } else if (statement.kind === "while") {
             inspectExpression(statement.condition);
             statement.statements.forEach(inspectStatement);
-        } else {
+        } else if (statement.kind === "local") {
             statement.declarations.forEach((local) => inspectExpression(local.initializer));
         }
     };

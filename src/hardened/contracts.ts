@@ -162,9 +162,26 @@ export interface ParenthesizedExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
+export interface ConditionalExpression extends SemanticIdentity {
+    kind: "conditional";
+    condition: SemanticExpression;
+    whenTrue: SemanticExpression;
+    whenFalse: SemanticExpression;
+    resultType: SemanticType;
+}
+
+export interface UpdateExpression extends SemanticIdentity {
+    kind: "update";
+    operator: "++" | "--";
+    prefix: boolean;
+    target: IdentifierExpression | MemberExpression;
+    resultType: SemanticType;
+}
+
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression |
-    NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression;
+    NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
+    ConditionalExpression | UpdateExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";
@@ -201,8 +218,12 @@ export interface LocalDeclarationStatement extends SemanticIdentity {
     declarations: SemanticLocal[];
 }
 
+export interface LoopControlStatement extends SemanticIdentity {
+    kind: "break" | "continue";
+}
+
 export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement |
-    WhileStatement | LocalDeclarationStatement;
+    WhileStatement | LocalDeclarationStatement | LoopControlStatement;
 
 export interface SemanticParameter extends SemanticIdentity {
     name: string;

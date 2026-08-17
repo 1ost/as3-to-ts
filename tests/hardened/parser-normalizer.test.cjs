@@ -176,7 +176,7 @@ try {
         "        public function get value():Number { if (_value > 0) { return _value; } else { return 0; } }",
         "        public function set value(input:Number):void { _value = input; }",
         "        public function Demo() { super(); }",
-        "        public function onEvent(event:Event):void { var total:Number = 1 + 2; var active:Boolean = !(total === 0); while (total > 0) { total = total - 1; } status = \"changed\"; return; }",
+        "        public function onEvent(event:Event):void { var total:Number = 1 + 2; var active:Boolean = !(total === 0); var chosen:Number = active ? total : 0; var reduced:Number = total - 1; while (total > 0) { total--; if (total === 1) { continue; } break; } status = \"changed\"; return; }",
         "    }",
         "}",
         "",
@@ -258,12 +258,17 @@ try {
     assert.equal(semantic.declaration.members[7].body[1].declarations[0].initializer.kind, "unary");
     assert.equal(semantic.declaration.members[7].body[1].declarations[0].initializer.operand.kind, "parenthesized");
     assert.equal(semantic.declaration.members[7].body[1].declarations[0].initializer.operand.expression.kind, "binary");
-    assert.equal(semantic.declaration.members[7].body[2].kind, "while");
-    assert.equal(semantic.declaration.members[7].body[2].condition.kind, "binary");
-    assert.equal(semantic.declaration.members[7].body[2].statements[0].expression.value.kind, "binary");
-    assert.equal(semantic.declaration.members[7].body[3].expression.kind, "assignment");
-    assert.equal(semantic.declaration.members[7].body[3].expression.target.kind, "member");
-    assert.equal(semantic.declaration.members[7].body[3].expression.target.name, "status");
+    assert.equal(semantic.declaration.members[7].body[2].kind, "local");
+    assert.equal(semantic.declaration.members[7].body[2].declarations[0].initializer.kind, "conditional");
+    assert.equal(semantic.declaration.members[7].body[3].declarations[0].initializer.kind, "binary");
+    assert.equal(semantic.declaration.members[7].body[4].kind, "while");
+    assert.equal(semantic.declaration.members[7].body[4].condition.kind, "binary");
+    assert.equal(semantic.declaration.members[7].body[4].statements[0].expression.kind, "update");
+    assert.equal(semantic.declaration.members[7].body[4].statements[1].thenStatements[0].kind, "continue");
+    assert.equal(semantic.declaration.members[7].body[4].statements[2].kind, "break");
+    assert.equal(semantic.declaration.members[7].body[5].expression.kind, "assignment");
+    assert.equal(semantic.declaration.members[7].body[5].expression.target.kind, "member");
+    assert.equal(semantic.declaration.members[7].body[5].expression.target.name, "status");
 
     const repeat = built.normalizer.normalizeParserAst(built.parse("fixtures/Demo.as", source), source, sha256);
     assert.deepEqual(repeat, normalized, "real parser normalization is byte-for-byte deterministic");

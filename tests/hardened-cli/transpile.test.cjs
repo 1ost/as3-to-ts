@@ -49,7 +49,7 @@ const admittedSource = [
     "        public function get value():Number { if (_value > 0) { return _value; } else { return 0; } }",
     "        public function set value(input:Number):void { _value = input; }",
     "        public function Demo() { super(); addEventListener(\"ready\", onEvent); }",
-    "        public function onEvent(event:Event):void { var total:Number = 1 + 2; var active:Boolean = !(total === 0); while (total > 0) { total = total - 1; } label = \"changed\"; return; }",
+    "        public function onEvent(event:Event):void { var total:Number = 1 + 2; var active:Boolean = !(total === 0); var chosen:Number = active ? total : 0; var reduced:Number = total - 1; while (total > 0) { total--; if (total === 1) { continue; } break; } label = \"changed\"; return; }",
     "    }",
     "}",
     "",
@@ -81,8 +81,12 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     assert.match(firstCode, /public set value\(input: number\)/);
     assert.match(firstCode, /var total: number = 1 \+ 2;/);
     assert.match(firstCode, /var active: boolean = !\(total === 0\);/);
+    assert.match(firstCode, /var chosen: number = active \? total : 0;/);
+    assert.match(firstCode, /var reduced: number = total - 1;/);
     assert.match(firstCode, /while \(total > 0\)/);
-    assert.match(firstCode, /total = total - 1;/);
+    assert.match(firstCode, /total--;/);
+    assert.match(firstCode, /continue;/);
+    assert.match(firstCode, /break;/);
     const manifest = JSON.parse(fs.readFileSync(path.join(first, "manifest.json"), "utf8"));
     assert.equal(manifest.schema, "bleach.as3.transpile-manifest.v1");
     assert.equal(manifest.typeScriptVersion, "4.9.5");

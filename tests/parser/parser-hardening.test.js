@@ -117,6 +117,22 @@ assert.strictEqual(conjunction.children[0].kind, NodeKind.NOT,
 assert.strictEqual(conjunction.children[0].children[0].text, 'a');
 assert.strictEqual(conjunction.children[2].text, 'b');
 
+const updateSource = 'package p { class C { function f(flag:Boolean):void { var i:Number = 0; var j:Number = flag ? i : 1; ++i; i++; --i; i--; } } }';
+const updateAst = parse('updates.as', updateSource);
+assertMonotoneSpans(updateAst, updateSource, 'updates');
+[
+    [NodeKind.PRE_INC, '++i'],
+    [NodeKind.POST_INC, 'i++'],
+    [NodeKind.PRE_DEC, '--i'],
+    [NodeKind.POST_DEC, 'i--'],
+].forEach(([kind, spelling]) => {
+    const node = all(updateAst, kind)[0];
+    assert.strictEqual(updateSource.slice(node.start, node.end), spelling,
+        `${spelling} retains its exact source span`);
+});
+const conditionalNode = all(updateAst, NodeKind.CONDITIONAL)[0];
+assert.strictEqual(conditionalNode.children.length, 3, 'conditional retains all three ordered expressions');
+
 const emptySource = 'package p { class C {} interface I {} }';
 const emptyAst = parse('empty-bodies.as', emptySource);
 assertMonotoneSpans(emptyAst, emptySource, 'empty bodies');
