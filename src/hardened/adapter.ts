@@ -68,6 +68,7 @@ interface AdapterContext {
     parameters: { [name: string]: SemanticParameter };
     locals: { [name: string]: LocalHeader };
     loopDepth: number;
+    breakableDepth: number;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -1058,6 +1059,7 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             }
             const branch = node.children[1]!;
             context.loopDepth += 1;
+            context.breakableDepth += 1;
             try {
                 return Object.assign(identity(node), {
                     kind: "while" as "while", condition,
@@ -1067,14 +1069,89 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 });
             } finally {
                 context.loopDepth -= 1;
+                context.breakableDepth -= 1;
             }
+        }
+        if (node.kind === "DO") {
+            if (node.children.length !== 2 || node.children[1]!.kind !== "CONDITION") {
+                fail("HARDENED_DO_SHAPE", "do-while statement has the wrong normalized shape", node);
+            }
+            const conditionOwner = node.children[1]!;
+            if (conditionOwner.children.length !== 1) {
+                fail("HARDENED_DO_CONDITION", "do-while statement requires exactly one condition expression", conditionOwner);
+            }
+            const condition = parseExpression(conditionOwner.children[0]!, context, true);
+            const conditionType = assignmentType(condition, context, conditionOwner.children[0]!);
+            if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
+                fail("HARDENED_DO_BOOLEAN", "do-while condition requires an exact Boolean expression", conditionOwner);
+            }
+            const branch = node.children[0]!;
+            context.loopDepth += 1;
+            context.breakableDepth += 1;
+            try {
+                return Object.assign(identity(node), {
+                    kind: "doWhile" as "doWhile", condition,
+                    statements: branch.kind === "BLOCK"
+                        ? parseBlock(branch, context, constructor, derived, expectedReturn, false)
+                        : [parseStatementNode(branch, context, constructor, derived, expectedReturn, false)],
+                });
+            } finally {
+                context.loopDepth -= 1;
+                context.breakableDepth -= 1;
+            }
+        }
+        if (node.kind === "SWITCH") {
+            if (node.children.length !== 2 || node.children[0]!.kind !== "CONDITION"
+                || node.children[1]!.kind !== "CASES" || node.children[0]!.children.length !== 1) {
+                fail("HARDENED_SWITCH_SHAPE", "switch statement has the wrong normalized shape", node);
+            }
+            const expressionNode = node.children[0]!.children[0]!;
+            const expression = parseExpression(expressionNode, context, true);
+            const expressionType = assignmentType(expression, context, expressionNode);
+            let defaultSeen = false;
+            context.breakableDepth += 1;
+            try {
+                const cases = node.children[1]!.children.map((caseNode) => {
+                    if (caseNode.kind !== "CASE" || caseNode.children.length !== 2
+                        || caseNode.children[1]!.kind !== "SWITCH_BLOCK") {
+                        fail("HARDENED_SWITCH_CASE_SHAPE", "switch case has the wrong normalized shape", caseNode);
+                    }
+                    const rawTest = caseNode.children[0]!;
+                    let test: SemanticExpression | null;
+                    if (rawTest.kind === "DEFAULT") {
+                        if (rawTest.children.length !== 0 || defaultSeen) {
+                            fail("HARDENED_SWITCH_DEFAULT", "switch admits exactly one default clause", rawTest);
+                        }
+                        defaultSeen = true;
+                        test = null;
+                    } else {
+                        test = parseExpression(rawTest, context, true);
+                        assertAssignmentCompatible(expressionType, assignmentType(test, context, rawTest), rawTest);
+                    }
+                    return Object.assign(identity(caseNode), {
+                        test,
+                        statements: parseBlock(caseNode.children[1]!, context, constructor, derived, expectedReturn, false),
+                    });
+                });
+                return Object.assign(identity(node), { kind: "switch" as "switch", expression, cases });
+            } finally {
+                context.breakableDepth -= 1;
+            }
+        }
+        if (node.kind === "THROW") {
+            if (node.children.length !== 1) {
+                fail("HARDENED_THROW_SHAPE", "throw statement requires exactly one admitted expression", node);
+            }
+            return Object.assign(identity(node), {
+                kind: "throw" as "throw", expression: parseExpression(node.children[0]!, context, true),
+            });
         }
         if (node.kind === "BREAK" || node.kind === "CONTINUE") {
             if (node.children.length !== 0) {
                 fail("HARDENED_LOOP_LABEL", "labelled loop control remains held", node);
             }
-            if (context.loopDepth === 0) {
-                fail("HARDENED_LOOP_CONTEXT", "break and continue require an admitted enclosing loop", node);
+            if ((node.kind === "BREAK" ? context.breakableDepth : context.loopDepth) === 0) {
+                fail("HARDENED_LOOP_CONTEXT", "break requires a loop or switch and continue requires a loop", node);
             }
             return Object.assign(identity(node), { kind: node.kind === "BREAK" ? "break" as "break" : "continue" as "continue" });
         }
@@ -1142,6 +1219,17 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
         }
         if (node.kind === "WHILE" && node.children.length >= 2) {
             visit(node.children[1]!);
+            return;
+        }
+        if (node.kind === "DO" && node.children.length >= 1) {
+            visit(node.children[0]!);
+            return;
+        }
+        if (node.kind === "SWITCH" && node.children.length >= 2) {
+            node.children[1]!.children.forEach((caseNode) => {
+                const block = caseNode.children.find((child) => child.kind === "SWITCH_BLOCK");
+                if (block) visit(block);
+            });
         }
     };
     visit(block);
@@ -1312,6 +1400,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         parameters: Object.create(null),
         locals: Object.create(null),
         loopDepth: 0,
+        breakableDepth: 0,
     };
     const extendsNode = one(classNode, "EXTENDS", true);
     let extendsType: SemanticType | null = null;

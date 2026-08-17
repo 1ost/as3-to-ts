@@ -280,6 +280,22 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             ts.factory.createBlock(statement.statements.map((item) => statementNode(item, ts)), true),
         );
     }
+    if (statement.kind === "doWhile") {
+        return ts.factory.createDoStatement(
+            ts.factory.createBlock(statement.statements.map((item) => statementNode(item, ts)), true),
+            expressionNode(statement.condition, ts),
+        );
+    }
+    if (statement.kind === "switch") {
+        const clauses = statement.cases.map((item) => item.test === null
+            ? ts.factory.createDefaultClause(item.statements.map((statement) => statementNode(statement, ts)))
+            : ts.factory.createCaseClause(expressionNode(item.test, ts),
+                item.statements.map((statement) => statementNode(statement, ts))));
+        return ts.factory.createSwitchStatement(expressionNode(statement.expression, ts), ts.factory.createCaseBlock(clauses));
+    }
+    if (statement.kind === "throw") {
+        return ts.factory.createThrowStatement(expressionNode(statement.expression, ts));
+    }
     if (statement.kind === "local") {
         const declarations = statement.declarations.map((local) => ts.factory.createVariableDeclaration(
             local.name, undefined, typeNode(local.type, ts), expressionNode(local.initializer, ts),
@@ -351,6 +367,17 @@ function boundMethodNames(program: SemanticProgram): string[] {
         } else if (statement.kind === "while") {
             inspectExpression(statement.condition);
             statement.statements.forEach(inspectStatement);
+        } else if (statement.kind === "doWhile") {
+            inspectExpression(statement.condition);
+            statement.statements.forEach(inspectStatement);
+        } else if (statement.kind === "switch") {
+            inspectExpression(statement.expression);
+            statement.cases.forEach((item) => {
+                if (item.test !== null) inspectExpression(item.test);
+                item.statements.forEach(inspectStatement);
+            });
+        } else if (statement.kind === "throw") {
+            inspectExpression(statement.expression);
         } else if (statement.kind === "local") {
             statement.declarations.forEach((local) => inspectExpression(local.initializer));
         }
@@ -460,6 +487,10 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (statement.kind === "return") return statement.expression !== null && visitExpression(statement.expression);
         if (statement.kind === "local") return statement.declarations.some(local => visitType(local.type) || visitExpression(local.initializer));
         if (statement.kind === "while") return visitExpression(statement.condition) || statement.statements.some(visitStatement);
+        if (statement.kind === "doWhile") return visitExpression(statement.condition) || statement.statements.some(visitStatement);
+        if (statement.kind === "switch") return visitExpression(statement.expression)
+            || statement.cases.some(item => (item.test !== null && visitExpression(item.test)) || item.statements.some(visitStatement));
+        if (statement.kind === "throw") return visitExpression(statement.expression);
         if (statement.kind === "if") return visitExpression(statement.condition) || statement.thenStatements.some(visitStatement)
             || (statement.elseStatements !== null && statement.elseStatements.some(visitStatement));
         return false;

@@ -271,6 +271,28 @@ export interface WhileStatement extends SemanticIdentity {
     statements: SemanticStatement[];
 }
 
+export interface DoWhileStatement extends SemanticIdentity {
+    kind: "doWhile";
+    condition: SemanticExpression;
+    statements: SemanticStatement[];
+}
+
+export interface SemanticSwitchCase extends SemanticIdentity {
+    test: SemanticExpression | null;
+    statements: SemanticStatement[];
+}
+
+export interface SwitchStatement extends SemanticIdentity {
+    kind: "switch";
+    expression: SemanticExpression;
+    cases: SemanticSwitchCase[];
+}
+
+export interface ThrowStatement extends SemanticIdentity {
+    kind: "throw";
+    expression: SemanticExpression;
+}
+
 export interface SemanticLocal extends SemanticIdentity {
     name: string;
     readonly: boolean;
@@ -288,7 +310,8 @@ export interface LoopControlStatement extends SemanticIdentity {
 }
 
 export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement |
-    WhileStatement | LocalDeclarationStatement | LoopControlStatement;
+    WhileStatement | DoWhileStatement | SwitchStatement | ThrowStatement |
+    LocalDeclarationStatement | LoopControlStatement;
 
 export interface SemanticParameter extends SemanticIdentity {
     name: string;

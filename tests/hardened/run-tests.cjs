@@ -179,7 +179,7 @@ function buildTree(options = {}) {
     ]);
     const body = options.badSuperOrder ? [closureStatement, superStatement] : [superStatement, closureStatement];
     if (options.unsupportedStatement) {
-        body.push(n("SWITCH"));
+        body.push(n("FOR"));
     }
     const field = n(options.constFields ? "CONST_LIST" : "VAR_LIST", null, [
         mods(...(options.fieldModifiers || ["private"])),
@@ -300,6 +300,31 @@ function buildTree(options = {}) {
             localDeclaration("VAR_LIST", "unsigned", "uint", call(n("IDENTIFIER", "uint"), [n("LITERAL", "-1")])),
             localDeclaration("VAR_LIST", "message", "String", call(n("IDENTIFIER", "String"), [n("IDENTIFIER", "event")])),
             n("RETURN"),
+        ];
+    }
+    if (options.statementWorkpack || options.duplicateSwitchDefault || options.continueInSwitch) {
+        const total = localDeclaration("VAR_LIST", "total", "Number", n("LITERAL", "2"));
+        const active = localDeclaration("VAR_LIST", "active", "Boolean", n("LITERAL", "true"));
+        const firstCase = n("CASE", null, [n("LITERAL", "1"), n("SWITCH_BLOCK", null, [
+            assignment(n("IDENTIFIER", "total"), n("LITERAL", "4")),
+            options.continueInSwitch ? n("CONTINUE") : n("BREAK"),
+        ])]);
+        const defaultCase = n("CASE", null, [n("DEFAULT", "default"), n("SWITCH_BLOCK", null, [
+            assignment(n("IDENTIFIER", "total"), n("LITERAL", "3")),
+        ])]);
+        const cases = [firstCase, defaultCase];
+        if (options.duplicateSwitchDefault) cases.push(n("CASE", null, [
+            n("DEFAULT", "default"), n("SWITCH_BLOCK"),
+        ]));
+        onEventBody = [
+            total,
+            active,
+            n("SWITCH", null, [n("CONDITION", null, [n("IDENTIFIER", "total")]), n("CASES", null, cases)]),
+            n("DO", null, [
+                n("BLOCK", null, [assignment(n("IDENTIFIER", "active"), n("LITERAL", "false"))]),
+                n("CONDITION", null, [n("IDENTIFIER", "active")]),
+            ]),
+            n("THROW", null, [n("LITERAL", '"done"')]),
         ];
     }
     const members = [
@@ -627,8 +652,20 @@ function main() {
     assert.match(coercionOutput.code, /var signed: number = __as3Int\(4294967295\);/);
     assert.match(coercionOutput.code, /var unsigned: number = __as3Uint\(-1\);/);
     assert.match(coercionOutput.code, /var message: string = __as3String\(event\);/);
+    const statementProgram = adapt(api, buildTree({ statementWorkpack: true }), authority);
+    const statementOutput = api.emitSemanticProgram(statementProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(statementOutput.code, /switch \(total\)/);
+    assert.match(statementOutput.code, /case 1:/);
+    assert.match(statementOutput.code, /default:/);
+    assert.match(statementOutput.code, /do \{/);
+    assert.match(statementOutput.code, /while \(active\);/);
+    assert.match(statementOutput.code, /throw "done";/);
+    assertErrorCode(() => adapt(api, buildTree({ duplicateSwitchDefault: true }), authority),
+        "HARDENED_SWITCH_DEFAULT");
+    assertErrorCode(() => adapt(api, buildTree({ continueInSwitch: true }), authority),
+        "HARDENED_LOOP_CONTEXT");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
-        nestedVectorOutput.code, coercionOutput.code]);
+        nestedVectorOutput.code, coercionOutput.code, statementOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

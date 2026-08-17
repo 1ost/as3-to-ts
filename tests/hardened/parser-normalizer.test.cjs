@@ -177,6 +177,7 @@ try {
         "        public function set value(input:Number):void { _value = input; }",
         "        public function Demo() { super(); }",
         "        public function onEvent(event:Event):void { var total:Number = 1 + 2; var active:Boolean = !(total === 0); var chosen:Number = active ? total : 0; var reduced:Number = total - 1; while (total > 0) { total--; if (total === 1) { continue; } break; } status = \"changed\"; return; }",
+        "        public function flow(value:Number):void { var active:Boolean = true; switch (value) { case 1: value = 2; break; default: value = 3; } do { active = false; } while (active); throw \"done\"; }",
         "    }",
         "}",
         "",
@@ -234,7 +235,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -268,6 +269,11 @@ try {
     assert.equal(semantic.declaration.members[7].body[4].statements[2].kind, "break");
     assert.equal(semantic.declaration.members[7].body[5].expression.kind, "assignment");
     assert.equal(semantic.declaration.members[7].body[5].expression.target.kind, "member");
+    assert.equal(semantic.declaration.members[8].body[1].kind, "switch");
+    assert.equal(semantic.declaration.members[8].body[1].cases.length, 2);
+    assert.equal(semantic.declaration.members[8].body[1].cases[0].statements[1].kind, "break");
+    assert.equal(semantic.declaration.members[8].body[2].kind, "doWhile");
+    assert.equal(semantic.declaration.members[8].body[3].kind, "throw");
 
     const vectorSource = "package vectors { public class VectorFixture { public var values:Vector.<int> = new Vector.<int>(2,true); public function VectorFixture(){ values[0] = 3; values.push(4); var copy:Vector.<int> = Vector.<int>([1,2]); var objectValue:Object = values as Object; var matches:Boolean = values is Vector.<int>; } } }";
     const vectorTree = built.parse("fixtures/VectorFixture.as", vectorSource);
@@ -290,7 +296,6 @@ try {
     [
         "package p { public interface I {} }",
         "package p { [Bindable] public class C {} }",
-        "package p { public class C { public function f():void { switch (1) {} } } }",
     ].forEach((unsupported) => {
         const tree = built.parse("fixtures/Unsupported.as", unsupported);
         expectNormalizationCode(
