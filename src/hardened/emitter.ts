@@ -116,6 +116,25 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             expression.arguments.map((argument) => expressionNode(argument, ts)),
         );
     }
+    if (expression.kind === "binary") {
+        const tokens: { [operator: string]: any } = {
+            "<": ts.SyntaxKind.LessThanToken,
+            "<=": ts.SyntaxKind.LessThanEqualsToken,
+            ">": ts.SyntaxKind.GreaterThanToken,
+            ">=": ts.SyntaxKind.GreaterThanEqualsToken,
+            "===": ts.SyntaxKind.EqualsEqualsEqualsToken,
+            "!==": ts.SyntaxKind.ExclamationEqualsEqualsToken,
+            "&&": ts.SyntaxKind.AmpersandAmpersandToken,
+            "||": ts.SyntaxKind.BarBarToken,
+        };
+        const token = tokens[expression.operator];
+        if (token === undefined) {
+            throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "semantic IR contains an unsupported binary operator");
+        }
+        return ts.factory.createBinaryExpression(
+            expressionNode(expression.left, ts), ts.factory.createToken(token), expressionNode(expression.right, ts),
+        );
+    }
     throw new HardenedSemanticError("HARDENED_EMIT_EXPRESSION", "semantic IR contains an unsupported expression");
 }
 
@@ -125,6 +144,14 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
     }
     if (statement.kind === "return") {
         return ts.factory.createReturnStatement(statement.expression === null ? undefined : expressionNode(statement.expression, ts));
+    }
+    if (statement.kind === "if") {
+        return ts.factory.createIfStatement(
+            expressionNode(statement.condition, ts),
+            ts.factory.createBlock(statement.thenStatements.map((item) => statementNode(item, ts)), true),
+            statement.elseStatements === null ? undefined
+                : ts.factory.createBlock(statement.elseStatements.map((item) => statementNode(item, ts)), true),
+        );
     }
     throw new HardenedSemanticError("HARDENED_EMIT_STATEMENT", "semantic IR contains an unsupported statement");
 }
@@ -148,19 +175,27 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.value);
         } else if (expression.kind === "new") {
             expression.arguments.forEach(inspectExpression);
+        } else if (expression.kind === "binary") {
+            inspectExpression(expression.left);
+            inspectExpression(expression.right);
+        }
+    };
+    const inspectStatement = (statement: SemanticStatement): void => {
+        if (statement.kind === "expression") {
+            inspectExpression(statement.expression);
+        } else if (statement.kind === "return") {
+            if (statement.expression !== null) inspectExpression(statement.expression);
+        } else {
+            inspectExpression(statement.condition);
+            statement.thenStatements.forEach(inspectStatement);
+            if (statement.elseStatements !== null) statement.elseStatements.forEach(inspectStatement);
         }
     };
     program.declaration.members.forEach((member) => {
         if (member.kind === "field" && member.initializer !== null) {
             inspectExpression(member.initializer);
-        } else if (member.kind === "constructor" || member.kind === "method") {
-            member.body.forEach((statement) => {
-                if (statement.kind === "expression") {
-                    inspectExpression(statement.expression);
-                } else if (statement.expression !== null) {
-                    inspectExpression(statement.expression);
-                }
-            });
+        } else if (member.kind !== "field") {
+            member.body.forEach(inspectStatement);
         }
     });
     return Object.keys(names).sort();
@@ -202,6 +237,18 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, boundMeth
         return ts.factory.createMethodDeclaration(
             modifierTokens(member.modifiers, ts), undefined, member.name, undefined, undefined,
             member.parameters.map((parameter) => parameterNode(parameter, ts)), typeNode(member.returnType, ts),
+            ts.factory.createBlock(member.body.map((statement) => statementNode(statement, ts)), true),
+        );
+    }
+    if (member.kind === "getter") {
+        return ts.factory.createGetAccessorDeclaration(
+            modifierTokens(member.modifiers, ts), member.name, [], typeNode(member.returnType, ts),
+            ts.factory.createBlock(member.body.map((statement) => statementNode(statement, ts)), true),
+        );
+    }
+    if (member.kind === "setter") {
+        return ts.factory.createSetAccessorDeclaration(
+            modifierTokens(member.modifiers, ts), member.name, [parameterNode(member.parameter, ts)],
             ts.factory.createBlock(member.body.map((statement) => statementNode(statement, ts)), true),
         );
     }

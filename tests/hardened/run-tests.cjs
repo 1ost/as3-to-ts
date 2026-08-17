@@ -100,6 +100,17 @@ function method(name, parameters, returnType, body, modifierValues = ["public"])
     ]);
 }
 
+function accessor(kind, name, parameters, returnType, body, modifierValues = ["public"]) {
+    return n(kind, name, [
+        mods(...modifierValues), n("NAME", name), n("PARAMETER_LIST", null, parameters),
+        type(returnType), n("BLOCK", null, body),
+    ]);
+}
+
+function binary(kind, left, operator, right) {
+    return n(kind, null, [left, n("OP", operator), right]);
+}
+
 function constructor(body) {
     return n("FUNCTION", "function", [
         mods("public"), n("NAME", "Demo"), n("PARAMETER_LIST"), type(null), n("BLOCK", null, body),
@@ -139,8 +150,29 @@ function buildTree(options = {}) {
             options.superInMethod ? [call(n("IDENTIFIER", "super"))] : onEventBody,
             options.staticMethod ? ["public", "static"] : ["public"]),
     ];
+    if (options.accessors) {
+        const getterBody = options.getterNoReturn ? [] : options.accessorIf
+            ? [n("IF", null, [
+                n("CONDITION", null, [binary("RELATION", n("IDENTIFIER", "a"), options.relationOperator || ">", n("LITERAL", "0"))]),
+                n("BLOCK", null, [n("RETURN", null, [n("IDENTIFIER", "a")])]),
+                n("BLOCK", null, [n("RETURN", null, [n("LITERAL", "0")])]),
+            ])]
+            : [n("RETURN", null, [n("IDENTIFIER", "a")])];
+        members.splice(1, 0,
+            accessor("GET", "value", [], "Number", getterBody),
+            accessor("SET", "value", [parameter("input", options.setterType || "Number")], "void", [
+                assignment(n("IDENTIFIER", "a"), n("IDENTIFIER", "input")),
+            ]));
+    }
+    if (options.nonBooleanIf) {
+        members[members.length - 1].children[4].children.unshift(n("IF", null, [
+            n("CONDITION", null, [n("LITERAL", "1")]), n("BLOCK"),
+        ]));
+    }
     if (options.noConstructor) {
-        members.splice(1, 1);
+        const constructorIndex = members.findIndex((member) => member.kind === "FUNCTION"
+            && member.children.some((child) => child.kind === "NAME" && child.text === "Demo"));
+        members.splice(constructorIndex, 1);
     }
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Sprite")];
     if (options.unsupportedChild) {
@@ -358,6 +390,28 @@ function main() {
         () => adapt(api, buildTree({ newField: true, newArguments: [n("LITERAL", "1")] }), authority),
         "HARDENED_NEW_ARGUMENT_TYPES",
     );
+    const accessorProgram = adapt(api, buildTree({ accessors: true, accessorIf: true }), authority);
+    const accessorOutput = api.emitSemanticProgram(accessorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(accessorOutput.code, /public get value\(\): number/);
+    assert.match(accessorOutput.code, /if \(this\.a > 0\)/);
+    assert.match(accessorOutput.code, /public set value\(input: number\)/);
+    assert.match(accessorOutput.code, /this\.a = input;/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ accessors: true, getterNoReturn: true }), authority),
+        "HARDENED_RETURN_PATH",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ accessors: true, setterType: "String" }), authority),
+        "HARDENED_ACCESSOR_PAIR",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ accessors: true, accessorIf: true, relationOperator: "==" }), authority),
+        "HARDENED_BINARY_OPERATOR",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ nonBooleanIf: true }), authority),
+        "HARDENED_IF_BOOLEAN",
+    );
     const runnable = ts.transpileModule(emitted.code, {
         compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },
     }).outputText;
@@ -391,7 +445,7 @@ function main() {
     );
     assertErrorCode(
         () => adapt(api, buildTree({ returnValue: true }), authority),
-        "HARDENED_RETURN_VALUE",
+        "HARDENED_RETURN_VOID",
     );
     assertErrorCode(
         () => adapt(api, buildTree({ noConstructor: true }), authority),

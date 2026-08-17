@@ -8,6 +8,7 @@ import {
     SemanticConstructor,
     SemanticExpression,
     SemanticField,
+    SemanticGetter,
     SemanticIdentity,
     SemanticImport,
     SemanticMember,
@@ -15,6 +16,7 @@ import {
     SemanticModifier,
     SemanticParameter,
     SemanticProgram,
+    SemanticSetter,
     SemanticStatement,
     SemanticType,
     HardenedSemanticError,
@@ -33,6 +35,12 @@ interface MethodHeader {
     returnType: SemanticType | null;
     block: TreeNode;
     constructor: boolean;
+    accessor: "getter" | "setter" | null;
+}
+
+interface AccessorPair {
+    getter?: MethodHeader;
+    setter?: MethodHeader;
 }
 
 interface AdapterContext {
@@ -44,6 +52,7 @@ interface AdapterContext {
     baseSourceQName: string | null;
     fields: { [name: string]: SemanticField };
     methods: { [name: string]: MethodHeader };
+    accessors: { [name: string]: AccessorPair };
     parameters: { [name: string]: SemanticParameter };
 }
 
@@ -335,6 +344,10 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "member" && expression.target.kind === "this" && context.fields[expression.name]) {
         return context.fields[expression.name]!.type;
     }
+    if (expression.kind === "member" && expression.target.kind === "this"
+        && context.accessors[expression.name]?.getter) {
+        return context.accessors[expression.name]!.getter!.returnType!;
+    }
     if (expression.kind === "literal") {
         if (expression.value === null) {
             fail("HARDENED_ASSIGNMENT_NULL", "null assignment requires an explicit nullable source-to-target type policy", node);
@@ -348,6 +361,17 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     }
     if (expression.kind === "new") {
         return expression.sourceType;
+    }
+    if (expression.kind === "binary") {
+        return expression.resultType;
+    }
+    if (expression.kind === "assignment") {
+        return assignmentTargetType(expression.target, context, node);
+    }
+    if (expression.kind === "call" && expression.callee.kind === "member"
+        && expression.callee.target.kind === "this" && context.methods[expression.callee.name]
+        && !context.methods[expression.callee.name]!.constructor) {
+        return context.methods[expression.callee.name]!.returnType!;
     }
     fail("HARDENED_ASSIGNMENT_TYPE", "assignment value type is not statically proven in the admitted subset", node);
 }
@@ -365,6 +389,14 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
             fail("HARDENED_ASSIGNMENT_STATIC", "static fields require class-qualified lowering", node);
         }
         return field.type;
+    }
+    if (expression.kind === "member" && expression.target.kind === "this"
+        && context.accessors[expression.name]?.setter) {
+        const setter = context.accessors[expression.name]!.setter!;
+        if (setter.modifiers.indexOf("static") >= 0) {
+            fail("HARDENED_ASSIGNMENT_STATIC", "static accessors require class-qualified lowering", node);
+        }
+        return setter.parameters[0]!.type;
     }
     fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable parameter or instance field", node);
 }
@@ -432,6 +464,36 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
     }
+    if (node.kind === "RELATION" || node.kind === "EQUALITY" || node.kind === "AND" || node.kind === "OR") {
+        if (node.children.length !== 3 || node.children[1]!.kind !== "OP") {
+            fail("HARDENED_BINARY_SHAPE", "binary expression must contain exactly one operator and two operands", node);
+        }
+        const operator = requiredText(node.children[1]!, "binary operator");
+        const admitted = new Set(["<", "<=", ">", ">=", "===", "!==", "&&", "||"]);
+        if (!admitted.has(operator)) {
+            fail("HARDENED_BINARY_OPERATOR", "coercive or runtime-dependent binary operator remains held", node.children[1]!);
+        }
+        const left = parseExpression(node.children[0]!, context, true);
+        const right = parseExpression(node.children[2]!, context, true);
+        const leftType = assignmentType(left, context, node.children[0]!);
+        const rightType = assignmentType(right, context, node.children[2]!);
+        if (leftType.sourceName !== rightType.sourceName || leftType.emittedName !== rightType.emittedName) {
+            fail("HARDENED_BINARY_TYPE", "binary operands require the exact same proven source type", node);
+        }
+        if ((operator === "&&" || operator === "||") && leftType.sourceName !== "Boolean") {
+            fail("HARDENED_BINARY_BOOLEAN", "logical operators require exact Boolean operands", node);
+        }
+        if (["<", "<=", ">", ">="].indexOf(operator) >= 0
+            && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
+            fail("HARDENED_BINARY_RELATION", "ordered relations require exact Number or String operands", node);
+        }
+        const resultType = Object.assign(identity(node), { sourceName: "Boolean", emittedName: "boolean" });
+        return Object.assign(identity(node), {
+            kind: "binary" as "binary",
+            operator: operator as "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||",
+            left, right, resultType,
+        });
+    }
     if (node.kind === "IDENTIFIER") {
         const name = requiredText(node, "identifier");
         if (name === "this") {
@@ -444,6 +506,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name });
         }
         if (context.fields[name]) {
+            return implicitThisMember(node, name);
+        }
+        if (context.accessors[name]) {
+            const accessor = context.accessors[name]!;
+            if (valuePosition && !accessor.getter) {
+                fail("HARDENED_ACCESSOR_WRITE_ONLY", "write-only accessor cannot be read", node);
+            }
+            if ((accessor.getter?.modifiers.indexOf("static") ?? -1) >= 0
+                || (accessor.setter?.modifiers.indexOf("static") ?? -1) >= 0) {
+                fail("HARDENED_ACCESSOR_STATIC", "static accessors require class-qualified lowering", node);
+            }
             return implicitThisMember(node, name);
         }
         if (context.methods[name]) {
@@ -510,7 +583,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 || context.methods[name].modifiers.indexOf("static") >= 0)) {
                 fail("HARDENED_METHOD_INSTANCE_SCOPE", "constructor or static method cannot be resolved through this", node);
             }
-            if (!context.methods[name] && !context.fields[name]) {
+            if (!context.methods[name] && !context.fields[name] && !context.accessors[name]) {
                 const mapping = context.baseSourceQName === null ? null
                     : memberMapping(context, context.baseSourceQName, "call", name, node);
                 if (mapping === null) {
@@ -529,7 +602,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children.length !== 2 || node.children[1]!.kind !== "ARGUMENTS") {
             fail("HARDENED_CALL_SHAPE", "call expression has the wrong normalized shape", node);
         }
-        onlyKinds(node.children[1]!, ["ARRAY_ACCESSOR", "CALL", "DOT", "IDENTIFIER", "LITERAL"]);
+        onlyKinds(node.children[1]!, ["AND", "ARRAY_ACCESSOR", "CALL", "DOT", "EQUALITY", "IDENTIFIER",
+            "LITERAL", "NEW", "OR", "RELATION"]);
         const rawCallee = node.children[0]!;
         let callee: SemanticExpression;
         if (rawCallee.kind === "IDENTIFIER" && rawCallee.text === "super") {
@@ -579,27 +653,70 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
     fail("HARDENED_EXPRESSION_UNSUPPORTED", "normalized expression kind is unsupported: " + node.kind, node);
 }
 
-function parseBlock(block: TreeNode, context: AdapterContext, constructor: boolean,
-    derived: boolean): SemanticStatement[] {
-    return block.children.map((node, statementIndex): SemanticStatement => {
+function parseStatementNode(node: TreeNode, context: AdapterContext, constructor: boolean,
+    derived: boolean, expectedReturn: SemanticType | null, allowSuperCall: boolean): SemanticStatement {
         if (node.kind === "CALL" || node.kind === "ASSIGN") {
             return Object.assign(identity(node), {
                 kind: "expression" as "expression",
                 expression: parseExpression(node, context, false,
-                    constructor && derived && statementIndex === 0, true, node.kind === "ASSIGN"),
+                    allowSuperCall, true, node.kind === "ASSIGN"),
             });
         }
         if (node.kind === "RETURN") {
-            if (node.children.length !== 0) {
-                fail("HARDENED_RETURN_VALUE", "expression returns remain blocked because the pinned parser historically aliases throw as RETURN", node);
+            if (constructor || expectedReturn === null || expectedReturn.sourceName === "void") {
+                if (node.children.length !== 0) {
+                    fail("HARDENED_RETURN_VOID", "constructor or void callable cannot return a value", node);
+                }
+                return Object.assign(identity(node), { kind: "return" as "return", expression: null });
             }
+            if (node.children.length !== 1) {
+                fail("HARDENED_RETURN_REQUIRED", "non-void callable must return one proven expression", node);
+            }
+            const expression = parseExpression(node.children[0]!, context, true);
+            assertAssignmentCompatible(expectedReturn, assignmentType(expression, context, node.children[0]!), node);
             return Object.assign(identity(node), {
                 kind: "return" as "return",
-                expression: null,
+                expression,
+            });
+        }
+        if (node.kind === "IF") {
+            if (node.children.length < 2 || node.children.length > 3 || node.children[0]!.kind !== "CONDITION") {
+                fail("HARDENED_IF_SHAPE", "if statement has the wrong normalized shape", node);
+            }
+            const conditionOwner = node.children[0]!;
+            if (conditionOwner.children.length !== 1) {
+                fail("HARDENED_IF_CONDITION", "if statement requires exactly one condition expression", conditionOwner);
+            }
+            const condition = parseExpression(conditionOwner.children[0]!, context, true);
+            const conditionType = assignmentType(condition, context, conditionOwner.children[0]!);
+            if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
+                fail("HARDENED_IF_BOOLEAN", "if condition requires an exact Boolean expression", conditionOwner);
+            }
+            const parseBranch = (branch: TreeNode): SemanticStatement[] => branch.kind === "BLOCK"
+                ? parseBlock(branch, context, constructor, derived, expectedReturn, false)
+                : [parseStatementNode(branch, context, constructor, derived, expectedReturn, false)];
+            return Object.assign(identity(node), {
+                kind: "if" as "if", condition,
+                thenStatements: parseBranch(node.children[1]!),
+                elseStatements: node.children.length === 3 ? parseBranch(node.children[2]!) : null,
             });
         }
         fail("HARDENED_STATEMENT_UNSUPPORTED", "normalized statement kind is unsupported: " + node.kind, node);
-    });
+}
+
+function parseBlock(block: TreeNode, context: AdapterContext, constructor: boolean,
+    derived: boolean, expectedReturn: SemanticType | null, allowLeadingSuper: boolean = true): SemanticStatement[] {
+    return block.children.map((node, statementIndex): SemanticStatement => parseStatementNode(
+        node, context, constructor, derived, expectedReturn,
+        allowLeadingSuper && constructor && derived && statementIndex === 0,
+    ));
+}
+
+function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {
+    if (statements.length === 0) return false;
+    const last = statements[statements.length - 1]!;
+    return last.kind === "return" || (last.kind === "if" && last.elseStatements !== null
+        && statementsAlwaysReturn(last.thenStatements) && statementsAlwaysReturn(last.elseStatements));
 }
 
 function parseField(list: TreeNode, context: AdapterContext, readonly: boolean): SemanticField[] {
@@ -613,7 +730,7 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
         onlyKinds(declaration, ["INIT", "NAME", "TYPE"]);
         const nameNode = one(declaration, "NAME")!;
         const name = validateIdentifier(requiredText(nameNode, "field name"), nameNode);
-        if (context.fields[name] || context.methods[name]) {
+        if (context.fields[name] || context.methods[name] || context.accessors[name]) {
             fail("HARDENED_MEMBER_DUPLICATE", "class member identity is duplicated", nameNode);
         }
         const init = one(declaration, "INIT", true);
@@ -646,13 +763,14 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
 }
 
 function parseMethodHeader(node: TreeNode, className: string, context: AdapterContext): MethodHeader {
-    if (node.kind !== "FUNCTION") {
-        fail("HARDENED_METHOD_KIND", "getters, setters, and other callable forms are not admitted yet", node);
+    if (node.kind !== "FUNCTION" && node.kind !== "GET" && node.kind !== "SET") {
+        fail("HARDENED_METHOD_KIND", "callable form is unsupported", node);
     }
     onlyKinds(node, ["BLOCK", "MOD_LIST", "NAME", "PARAMETER_LIST", "TYPE"]);
     const nameNode = one(node, "NAME")!;
     const name = validateIdentifier(requiredText(nameNode, "method name"), nameNode);
-    const constructor = name === className;
+    const accessor = node.kind === "GET" ? "getter" : node.kind === "SET" ? "setter" : null;
+    const constructor = accessor === null && name === className;
     const returnNode = one(node, "TYPE")!;
     const returnType = constructor ? null : parseType(returnNode, context, true);
     if (constructor && (returnNode.text !== null && returnNode.text !== "")) {
@@ -663,7 +781,13 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     if (constructor && modifiers.indexOf("static") >= 0) {
         fail("HARDENED_CONSTRUCTOR_STATIC", "constructor cannot be static", node);
     }
-    return { node, name, modifiers, parameters, returnType, block: one(node, "BLOCK")!, constructor };
+    if (accessor === "getter" && (parameters.length !== 0 || returnType === null || returnType.sourceName === "void")) {
+        fail("HARDENED_GETTER_SIGNATURE", "getter requires zero parameters and one non-void return type", node);
+    }
+    if (accessor === "setter" && (parameters.length !== 1 || returnType === null || returnType.sourceName !== "void")) {
+        fail("HARDENED_SETTER_SIGNATURE", "setter requires exactly one parameter and an explicit void return type", node);
+    }
+    return { node, name, modifiers, parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor };
 }
 
 function superCall(statement: SemanticStatement): boolean {
@@ -716,6 +840,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         baseSourceQName: null,
         fields: Object.create(null),
         methods: Object.create(null),
+        accessors: Object.create(null),
         parameters: Object.create(null),
     };
     const extendsNode = one(classNode, "EXTENDS", true);
@@ -732,16 +857,43 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         placeholder.baseSourceQName = imported.sourceQualifiedName;
     }
     const classContent = one(classNode, "CONTENT")!;
-    const functionNodes = classContent.children.filter((child) => child.kind === "FUNCTION");
+    const functionNodes = classContent.children.filter((child) =>
+        child.kind === "FUNCTION" || child.kind === "GET" || child.kind === "SET");
     functionNodes.forEach((node) => {
         const header = parseMethodHeader(node, className, placeholder);
-        if (placeholder.methods[header.name]) {
-            fail("HARDENED_METHOD_DUPLICATE", "method identity is duplicated", node);
+        if (header.accessor === null) {
+            if (placeholder.methods[header.name] || placeholder.accessors[header.name]) {
+                fail("HARDENED_METHOD_DUPLICATE", "callable identity is duplicated", node);
+            }
+            placeholder.methods[header.name] = header;
+        } else {
+            if (placeholder.methods[header.name]) {
+                fail("HARDENED_METHOD_DUPLICATE", "accessor conflicts with a method", node);
+            }
+            const pair = placeholder.accessors[header.name] || {};
+            if (header.accessor === "getter") {
+                if (pair.getter) fail("HARDENED_ACCESSOR_DUPLICATE", "getter identity is duplicated", node);
+                pair.getter = header;
+            } else {
+                if (pair.setter) fail("HARDENED_ACCESSOR_DUPLICATE", "setter identity is duplicated", node);
+                pair.setter = header;
+            }
+            placeholder.accessors[header.name] = pair;
         }
-        placeholder.methods[header.name] = header;
+    });
+    Object.keys(placeholder.accessors).forEach((name) => {
+        const pair = placeholder.accessors[name]!;
+        if (pair.getter && pair.setter) {
+            const getterType = pair.getter.returnType!;
+            const setterType = pair.setter.parameters[0]!.type;
+            if (getterType.sourceName !== setterType.sourceName || getterType.emittedName !== setterType.emittedName
+                || pair.getter.modifiers.join("\u0000") !== pair.setter.modifiers.join("\u0000")) {
+                fail("HARDENED_ACCESSOR_PAIR", "paired getter/setter type and modifiers must match exactly", pair.setter.node);
+            }
+        }
     });
     if (extendsType !== null && !functionNodes.some((node) =>
-        requiredText(one(node, "NAME")!, "method name") === className)) {
+        node.kind === "FUNCTION" && requiredText(one(node, "NAME")!, "method name") === className)) {
         fail("HARDENED_DERIVED_CONSTRUCTOR", "minimal derived classes require an explicit constructor with proven zero-argument super semantics", classNode);
     }
     const members: SemanticMember[] = [];
@@ -750,12 +902,15 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             members.push.apply(members, parseField(node, placeholder, node.kind === "CONST_LIST"));
             return;
         }
-        if (node.kind === "FUNCTION") {
-            const header = placeholder.methods[requiredText(one(node, "NAME")!, "method name")]!;
+        if (node.kind === "FUNCTION" || node.kind === "GET" || node.kind === "SET") {
+            const callableName = requiredText(one(node, "NAME")!, "method name");
+            const header = node.kind === "GET" ? placeholder.accessors[callableName]!.getter!
+                : node.kind === "SET" ? placeholder.accessors[callableName]!.setter!
+                : placeholder.methods[callableName]!;
             const oldParameters = placeholder.parameters;
             placeholder.parameters = Object.create(null);
             header.parameters.forEach((parameter) => { placeholder.parameters[parameter.name] = parameter; });
-            const body = parseBlock(header.block, placeholder, header.constructor, extendsType !== null);
+            const body = parseBlock(header.block, placeholder, header.constructor, extendsType !== null, header.returnType);
             placeholder.parameters = oldParameters;
             if (header.constructor) {
                 const count = body.filter(superCall).length;
@@ -767,7 +922,25 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                     parameters: header.parameters, body,
                 });
                 members.push(constructor);
+            } else if (header.accessor === "getter") {
+                if (!statementsAlwaysReturn(body)) {
+                    fail("HARDENED_RETURN_PATH", "getter must return a proven value on every admitted path", node);
+                }
+                const getter: SemanticGetter = Object.assign(identity(node), {
+                    kind: "getter" as "getter", name: header.name, modifiers: header.modifiers,
+                    returnType: header.returnType!, body,
+                });
+                members.push(getter);
+            } else if (header.accessor === "setter") {
+                const setter: SemanticSetter = Object.assign(identity(node), {
+                    kind: "setter" as "setter", name: header.name, modifiers: header.modifiers,
+                    parameter: header.parameters[0]!, body,
+                });
+                members.push(setter);
             } else {
+                if (header.returnType!.sourceName !== "void" && !statementsAlwaysReturn(body)) {
+                    fail("HARDENED_RETURN_PATH", "non-void method must return a proven value on every admitted path", node);
+                }
                 const method: SemanticMethod = Object.assign(identity(node), {
                     kind: "method" as "method", name: header.name, modifiers: header.modifiers,
                     parameters: header.parameters, returnType: header.returnType!, body,

@@ -140,8 +140,17 @@ export interface NewExpression extends SemanticIdentity {
     arguments: SemanticExpression[];
 }
 
+export interface BinaryExpression extends SemanticIdentity {
+    kind: "binary";
+    operator: "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||";
+    left: SemanticExpression;
+    right: SemanticExpression;
+    resultType: SemanticType;
+}
+
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
-    SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression | NewExpression;
+    SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression |
+    NewExpression | BinaryExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";
@@ -153,7 +162,14 @@ export interface ReturnStatement extends SemanticIdentity {
     expression: SemanticExpression | null;
 }
 
-export type SemanticStatement = ExpressionStatement | ReturnStatement;
+export interface IfStatement extends SemanticIdentity {
+    kind: "if";
+    condition: SemanticExpression;
+    thenStatements: SemanticStatement[];
+    elseStatements: SemanticStatement[] | null;
+}
+
+export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement;
 
 export interface SemanticParameter extends SemanticIdentity {
     name: string;
@@ -179,6 +195,22 @@ export interface SemanticMethod extends SemanticIdentity {
     body: SemanticStatement[];
 }
 
+export interface SemanticGetter extends SemanticIdentity {
+    kind: "getter";
+    name: string;
+    modifiers: SemanticModifier[];
+    returnType: SemanticType;
+    body: SemanticStatement[];
+}
+
+export interface SemanticSetter extends SemanticIdentity {
+    kind: "setter";
+    name: string;
+    modifiers: SemanticModifier[];
+    parameter: SemanticParameter;
+    body: SemanticStatement[];
+}
+
 export interface SemanticConstructor extends SemanticIdentity {
     kind: "constructor";
     modifiers: SemanticModifier[];
@@ -186,7 +218,7 @@ export interface SemanticConstructor extends SemanticIdentity {
     body: SemanticStatement[];
 }
 
-export type SemanticMember = SemanticField | SemanticMethod | SemanticConstructor;
+export type SemanticMember = SemanticField | SemanticMethod | SemanticConstructor | SemanticGetter | SemanticSetter;
 
 export interface SemanticClass extends SemanticIdentity {
     name: string;

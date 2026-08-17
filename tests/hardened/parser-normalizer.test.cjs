@@ -172,6 +172,9 @@ try {
         "        private const label:String = \"ok\";",
         "        private var status:String = \"old\";",
         "        private var child:Sprite = new Sprite();",
+        "        private var _value:Number = 1;",
+        "        public function get value():Number { if (_value > 0) { return _value; } else { return 0; } }",
+        "        public function set value(input:Number):void { _value = input; }",
         "        public function Demo() { super(); }",
         "        public function onEvent(event:Event):void { status = \"changed\"; return; }",
         "    }",
@@ -231,7 +234,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "constructor", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -239,12 +242,18 @@ try {
     assert.equal(semantic.declaration.members[2].name, "child");
     assert.equal(semantic.declaration.members[2].initializer.kind, "new");
     assert.equal(semantic.declaration.members[2].initializer.sourceType.sourceName, "Sprite");
-    assert.equal(semantic.declaration.members[3].body[0].expression.callee.kind, "super");
-    assert.equal(semantic.declaration.members[4].name, "onEvent");
-    assert.equal(semantic.declaration.members[4].parameters[0].name, "event");
-    assert.equal(semantic.declaration.members[4].body[0].expression.kind, "assignment");
-    assert.equal(semantic.declaration.members[4].body[0].expression.target.kind, "member");
-    assert.equal(semantic.declaration.members[4].body[0].expression.target.name, "status");
+    assert.equal(semantic.declaration.members[3].name, "_value");
+    assert.equal(semantic.declaration.members[4].kind, "getter");
+    assert.equal(semantic.declaration.members[4].body[0].kind, "if");
+    assert.equal(semantic.declaration.members[4].body[0].condition.kind, "binary");
+    assert.equal(semantic.declaration.members[5].kind, "setter");
+    assert.equal(semantic.declaration.members[5].parameter.name, "input");
+    assert.equal(semantic.declaration.members[6].body[0].expression.callee.kind, "super");
+    assert.equal(semantic.declaration.members[7].name, "onEvent");
+    assert.equal(semantic.declaration.members[7].parameters[0].name, "event");
+    assert.equal(semantic.declaration.members[7].body[0].expression.kind, "assignment");
+    assert.equal(semantic.declaration.members[7].body[0].expression.target.kind, "member");
+    assert.equal(semantic.declaration.members[7].body[0].expression.target.name, "status");
 
     const repeat = built.normalizer.normalizeParserAst(built.parse("fixtures/Demo.as", source), source, sha256);
     assert.deepEqual(repeat, normalized, "real parser normalization is byte-for-byte deterministic");
