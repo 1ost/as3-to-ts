@@ -1588,7 +1588,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry)
                 .filter(entry => entry.sourcePath === (entry.module === "application"
                     ? `game-client/tapplication_main/src/${sourceLogicalPath}` : `game-client/tmain/src/${sourceLogicalPath}`)
-                    && entry.sourceSha256 === sha256(sourceText.replace(/\r\n?/g, "\n")) && entry.typeKind === "class");
+                    && entry.sourceContentSha256 === sha256(sourceText.replace(/\r\n?/g, "\n"))
+                    && entry.typeKind === "class");
             if (candidates.length !== 1) {
                 fail("HARDENED_LOCAL_SOURCE_AUTHORITY", "current class path, hash, module, kind, and qname lack one exact graph identity", classNode);
             }

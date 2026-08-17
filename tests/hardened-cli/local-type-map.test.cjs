@@ -14,6 +14,8 @@ const repository = path.resolve(__dirname, "../..");
 const generator = path.join(repository, "tools", "generate-local-type-map.cjs");
 const graph = process.env.HARDENED_DEPENDENCY_GRAPH
     || "C:/Users/admin/Desktop/GITHUB REPO/bleach-services/as3-to-layaair-porting-kit/generated/dependency-graph/bleach-as3-dependency-graph.json";
+const sourceRepository = process.env.HARDENED_SOURCE_REPO
+    || path.resolve(path.dirname(graph), "../../..");
 
 function sha256(bytes) {
     return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -24,14 +26,16 @@ test("derives the complete local type map deterministically from the authenticat
     t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const first = path.join(root, "first.json");
     const second = path.join(root, "second.json");
-    childProcess.execFileSync(process.execPath, [generator, graph, first], { cwd: repository, stdio: "pipe" });
-    childProcess.execFileSync(process.execPath, [generator, graph, second], { cwd: os.tmpdir(), stdio: "pipe" });
+    childProcess.execFileSync(process.execPath, [generator, graph, first, sourceRepository],
+        { cwd: repository, stdio: "pipe" });
+    childProcess.execFileSync(process.execPath, [generator, graph, second, sourceRepository],
+        { cwd: os.tmpdir(), stdio: "pipe" });
     const firstBytes = fs.readFileSync(first);
     assert.equal(firstBytes.compare(fs.readFileSync(second)), 0);
     assert.equal(firstBytes.compare(fs.readFileSync(path.join(repository, "config", "local-type-map.json"))), 0,
         "checked local type authority is exactly regenerated from the authenticated graph");
     const value = JSON.parse(firstBytes.toString("utf8"));
-    assert.equal(value.schema, "bleach-local-as3-type-map@1");
+    assert.equal(value.schema, "bleach-local-as3-type-map@2");
     assert.equal(value.entryCount, 2923);
     assert.equal(value.entries.length, 2923);
     assert.equal(value.dependencyGraphSemanticSha256,
@@ -46,16 +50,20 @@ test("derives the complete local type map deterministically from the authenticat
         "application/bootstrap duplicate qnames remain distinct authenticated module identities");
     value.entries.forEach(entry => {
         assert.deepEqual(Object.keys(entry).sort(), [
-            "componentId", "importable", "module", "nodeId", "prerequisites", "qname", "sourcePath", "sourceSha256",
-            "targetPath", "topologicalLevel", "typeKind",
+            "componentId", "graphSourceSha256", "importable", "module", "nodeId", "prerequisites", "qname",
+            "sourceContentSha256", "sourcePath", "targetPath", "topologicalLevel", "typeKind",
         ]);
-        assert.match(entry.sourceSha256, /^[0-9a-f]{64}$/);
+        assert.match(entry.graphSourceSha256, /^[0-9a-f]{64}$/);
+        assert.match(entry.sourceContentSha256, /^[0-9a-f]{64}$/);
         assert.ok(entry.module === "application" || entry.module === "bootstrap");
         assert.ok(entry.typeKind === "class" || entry.typeKind === "interface" || entry.typeKind === "package");
     });
     assert.equal(value.entries.filter(entry => !entry.importable).length, 2,
         "script-private identities remain authenticated but cannot be imported");
-    assert.equal(sha256(firstBytes), "031826165af0ad5ed20ba8de28f487fe3cf0b283729ec875b4b9615f80d5bbdb");
+    const comboBox = value.entries.find(entry => entry.qname === "Components.ComboBox.TComboBox");
+    assert.ok(comboBox);
+    assert.notEqual(comboBox.graphSourceSha256, comboBox.sourceContentSha256,
+        "graph evidence digest and canonical source-byte digest remain distinct authorities");
 
     const bundle = path.join(root, "local-types.cjs");
     esbuild.buildSync({
@@ -93,7 +101,8 @@ test("derives the complete local type map deterministically from the authenticat
     [
         document => { document.extra = true; },
         document => { document.entryCount -= 1; },
-        document => { document.entries[0].sourceSha256 = "not-a-sha"; },
+        document => { document.entries[0].graphSourceSha256 = "not-a-sha"; },
+        document => { document.entries[0].sourceContentSha256 = "not-a-sha"; },
         document => { document.entries[0].topologicalLevel = -1; },
         document => { document.entries[0].importable = !document.entries[0].importable; },
         document => { document.entries[1].qname = document.entries[0].qname; document.entries[1].module = document.entries[0].module; },

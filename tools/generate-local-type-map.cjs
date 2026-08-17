@@ -7,10 +7,41 @@ const { authenticateDependencyGraph } = require("./hardened-corpus/manifest");
 const { compareUtf8, stringify } = require("./hardened-corpus/canonical");
 
 const MAX_GRAPH_BYTES = 64 * 1024 * 1024;
-const [graphArgument, outputArgument] = process.argv.slice(2);
-if (!graphArgument || !outputArgument) {
-    process.stderr.write("usage: node tools/generate-local-type-map.cjs <dependency-graph> <output>\n");
+const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
+const [graphArgument, outputArgument, sourceRepositoryArgument] = process.argv.slice(2);
+if (!graphArgument || !outputArgument || !sourceRepositoryArgument) {
+    process.stderr.write("usage: node tools/generate-local-type-map.cjs <dependency-graph> <output> <source-repository>\n");
     process.exit(2);
+}
+
+const sourceRepository = path.resolve(sourceRepositoryArgument);
+const sourceRepositoryStat = fs.lstatSync(sourceRepository);
+if (!sourceRepositoryStat.isDirectory() || sourceRepositoryStat.isSymbolicLink()
+    || fs.realpathSync.native(sourceRepository) !== sourceRepository) {
+    throw new Error("source repository must be one canonical ordinary directory");
+}
+
+function canonicalSourceSha256(repository, portablePath) {
+    const lexical = path.resolve(repository, ...portablePath.split("/"));
+    const root = repository;
+    if (!lexical.startsWith(`${root}${path.sep}`) || fs.realpathSync.native(lexical) !== lexical) {
+        throw new Error(`source path is not a canonical descendant: ${portablePath}`);
+    }
+    const before = fs.lstatSync(lexical, { bigint: true });
+    if (!before.isFile() || before.isSymbolicLink() || before.size > BigInt(MAX_SOURCE_BYTES)) {
+        throw new Error(`source must be one canonical ordinary bounded file: ${portablePath}`);
+    }
+    const bytes = fs.readFileSync(lexical);
+    const after = fs.lstatSync(lexical, { bigint: true });
+    if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size
+        || before.mtimeNs !== after.mtimeNs || BigInt(bytes.length) !== before.size) {
+        throw new Error(`source changed while it was read: ${portablePath}`);
+    }
+    const text = bytes.toString("utf8");
+    if (Buffer.from(text, "utf8").compare(bytes) !== 0) {
+        throw new Error(`source must be exact UTF-8: ${portablePath}`);
+    }
+    return sha256(Buffer.from(text.replace(/\r\n?/g, "\n"), "utf8"));
 }
 
 function sha256(bytes) {
@@ -56,13 +87,15 @@ const entries = authenticated.semanticGraph.nodes
         }
         return {
             componentId: requireString(node.component_id, `${qname} componentId`),
+            graphSourceSha256: requireString(node.source_sha256, `${qname} graphSourceSha256`),
             importable,
             module: node.module,
             nodeId: requireString(node.node_id, `${qname} nodeId`),
             prerequisites: node.prerequisites.slice(),
             qname,
             sourcePath: requireString(node.source_path, `${qname} sourcePath`),
-            sourceSha256: requireString(node.source_sha256, `${qname} sourceSha256`),
+            sourceContentSha256: canonicalSourceSha256(sourceRepository,
+                requireString(node.source_path, `${qname} sourcePath`)),
             targetPath: requireString(node.target_path, `${qname} targetPath`),
             topologicalLevel: node.topological_level,
             typeKind: node.type_kind,
@@ -75,7 +108,7 @@ const output = {
     dependencyGraphSemanticSha256: authenticated.sha256,
     entries,
     entryCount: entries.length,
-    schema: "bleach-local-as3-type-map@1",
+    schema: "bleach-local-as3-type-map@2",
     sourceManifestSha256: authenticated.semanticGraph.sourceManifestSha256,
 };
 const bytes = `${stringify(output)}\n`;

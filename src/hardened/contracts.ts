@@ -172,13 +172,14 @@ export type LocalTypeKind = "class" | "interface" | "package";
 
 export interface LocalTypeMapping {
     componentId: string;
+    graphSourceSha256: string;
     importable: boolean;
     module: LocalTypeModule;
     nodeId: string;
     prerequisites: string[];
     qname: string;
     sourcePath: string;
-    sourceSha256: string;
+    sourceContentSha256: string;
     targetPath: string;
     topologicalLevel: number;
     typeKind: LocalTypeKind;

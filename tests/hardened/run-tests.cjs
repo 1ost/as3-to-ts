@@ -481,29 +481,33 @@ function localAuthority(api, normalized, options = {}) {
     const entries = [
         {
             componentId: "scc-00001", importable: options.baseImportable !== false, module: options.baseModule || "application",
-            nodeId: baseNodeId, prerequisites: [], qname: options.baseQName || "lobby.base.Base",
-            sourcePath: "game-client/tapplication_main/src/lobby/base/Base.as", sourceSha256: "1".repeat(64),
+            graphSourceSha256: "1".repeat(64), nodeId: baseNodeId, prerequisites: [],
+            qname: options.baseQName || "lobby.base.Base",
+            sourceContentSha256: "5".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/Base.as",
             targetPath: "game-client/layaair/src/application/lobby/base/Base.ts", topologicalLevel: 0,
             typeKind: options.baseKind || "class",
         },
         ...(options.withInterface ? [{
             componentId: "scc-00001", importable: true, module: "application",
-            nodeId: "0000000000000003", prerequisites: [], qname: "lobby.base.IReady",
-            sourcePath: "game-client/tapplication_main/src/lobby/base/IReady.as", sourceSha256: "6".repeat(64),
+            graphSourceSha256: "6".repeat(64), nodeId: "0000000000000003", prerequisites: [],
+            qname: "lobby.base.IReady", sourceContentSha256: "7".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/IReady.as",
             targetPath: "game-client/layaair/src/application/lobby/base/IReady.ts", topologicalLevel: 0,
             typeKind: "interface",
         }] : []),
         {
-            componentId: "scc-00002", importable: true, module: "application", nodeId: currentNodeId,
+            componentId: "scc-00002", graphSourceSha256: "8".repeat(64), importable: true,
+            module: "application", nodeId: currentNodeId,
             prerequisites: options.withEdge === false ? [] : [baseNodeId].concat(options.withInterface ? ["0000000000000003"] : []), qname: "lobby.ui.Demo",
             sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
-            sourceSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
+            sourceContentSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
             targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
         },
     ].sort((left, right) => `${left.module}\u0000${left.qname}`.localeCompare(`${right.module}\u0000${right.qname}`));
     const document = {
         dependencyGraphRawSha256: "2".repeat(64), dependencyGraphSemanticSha256: "3".repeat(64), entries,
-        entryCount: entries.length, schema: "bleach-local-as3-type-map@1", sourceManifestSha256: "4".repeat(64),
+        entryCount: entries.length, schema: "bleach-local-as3-type-map@2", sourceManifestSha256: "4".repeat(64),
     };
     const json = `${canonicalJson(document)}\n`;
     return api.loadLocalTypeAuthority({

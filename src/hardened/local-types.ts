@@ -78,7 +78,7 @@ export function loadLocalTypeAuthority(input: LocalTypeAuthorityInput, sha256: L
     if (!object(document) || !exactKeys(document, [
         "dependencyGraphRawSha256", "dependencyGraphSemanticSha256", "entries", "entryCount", "schema",
         "sourceManifestSha256",
-    ]) || document.schema !== "bleach-local-as3-type-map@1" || !Array.isArray(document.entries)
+    ]) || document.schema !== "bleach-local-as3-type-map@2" || !Array.isArray(document.entries)
         || document.entryCount !== input.expectedEntryCount || document.entries.length !== input.expectedEntryCount
         || document.dependencyGraphRawSha256 !== input.expectedDependencyGraphRawSha256
         || document.dependencyGraphSemanticSha256 !== input.expectedDependencyGraphSemanticSha256
@@ -91,8 +91,8 @@ export function loadLocalTypeAuthority(input: LocalTypeAuthorityInput, sha256: L
     let previous = "";
     document.entries.forEach((raw, index) => {
         if (!object(raw) || !exactKeys(raw, [
-            "componentId", "importable", "module", "nodeId", "prerequisites", "qname", "sourcePath", "sourceSha256",
-            "targetPath", "topologicalLevel", "typeKind",
+            "componentId", "graphSourceSha256", "importable", "module", "nodeId", "prerequisites", "qname",
+            "sourceContentSha256", "sourcePath", "targetPath", "topologicalLevel", "typeKind",
         ])) fail("HARDENED_LOCAL_AUTHORITY_ENTRY", `local type entry ${index} has the wrong shape`);
         const entry = raw as unknown as LocalTypeMapping;
         const identity = `${entry.module}\u0000${entry.qname}`;
@@ -103,7 +103,8 @@ export function loadLocalTypeAuthority(input: LocalTypeAuthorityInput, sha256: L
             || typeof entry.qname !== "string" || /[\u0000-\u001f\u007f]/.test(entry.qname)
             || entry.importable !== QNAME.test(entry.qname)
             || !safePath(entry.sourcePath, sourcePrefix, ".as") || !safePath(entry.targetPath, targetPrefix, ".ts")
-            || !SHA256.test(entry.sourceSha256) || !Number.isInteger(entry.topologicalLevel) || entry.topologicalLevel < 0
+            || !SHA256.test(entry.graphSourceSha256) || !SHA256.test(entry.sourceContentSha256)
+            || !Number.isInteger(entry.topologicalLevel) || entry.topologicalLevel < 0
             || (entry.typeKind !== "class" && entry.typeKind !== "interface" && entry.typeKind !== "package")
             || !Array.isArray(entry.prerequisites) || entry.prerequisites.some(item => !PREREQUISITE.test(item))
             || entry.prerequisites.some((item, itemIndex) => itemIndex > 0 && compareUtf8(entry.prerequisites[itemIndex - 1]!, item) >= 0)
@@ -112,9 +113,11 @@ export function loadLocalTypeAuthority(input: LocalTypeAuthorityInput, sha256: L
         }
         previous = identity;
         const copy: LocalTypeMapping = {
-            componentId: entry.componentId, importable: entry.importable, module: entry.module, nodeId: entry.nodeId,
+            componentId: entry.componentId, graphSourceSha256: entry.graphSourceSha256,
+            importable: entry.importable, module: entry.module, nodeId: entry.nodeId,
             prerequisites: entry.prerequisites.slice(), qname: entry.qname, sourcePath: entry.sourcePath,
-            sourceSha256: entry.sourceSha256, targetPath: entry.targetPath, topologicalLevel: entry.topologicalLevel,
+            sourceContentSha256: entry.sourceContentSha256, targetPath: entry.targetPath,
+            topologicalLevel: entry.topologicalLevel,
             typeKind: entry.typeKind,
         };
         entries.push(copy);
