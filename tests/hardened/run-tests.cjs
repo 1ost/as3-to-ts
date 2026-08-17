@@ -111,6 +111,12 @@ function binary(kind, left, operator, right) {
     return n(kind, null, [left, n("OP", operator), right]);
 }
 
+function localDeclaration(kind, name, typeName, initializer) {
+    const children = [n("NAME", name), type(typeName)];
+    if (initializer !== undefined) children.push(n("INIT", null, [initializer]));
+    return n(kind, null, [n("NAME_TYPE_INIT", null, children)]);
+}
+
 function constructor(body) {
     return n("FUNCTION", "function", [
         mods("public"), n("NAME", "Demo"), n("PARAMETER_LIST"), type(null), n("BLOCK", null, body),
@@ -124,7 +130,7 @@ function buildTree(options = {}) {
     ]);
     const body = options.badSuperOrder ? [closureStatement, superStatement] : [superStatement, closureStatement];
     if (options.unsupportedStatement) {
-        body.push(n("WHILE"));
+        body.push(n("SWITCH"));
     }
     const field = n(options.constFields ? "CONST_LIST" : "VAR_LIST", null, [
         mods(...(options.fieldModifiers || ["private"])),
@@ -142,6 +148,32 @@ function buildTree(options = {}) {
         const target = n("IDENTIFIER", options.assignmentTarget || "b");
         const value = n("LITERAL", options.assignmentValue || '"changed"');
         onEventBody = [assignment(target, value, options.assignmentOperator || "="), n("RETURN")];
+    }
+    if (options.localWorkpack || options.localNoInitializer || options.localMixedAdd
+        || options.localBadNot || options.localNonBooleanWhile || options.localConstWrite
+        || options.localDuplicate || options.localParameterCollision) {
+        const declarationKind = options.localConstWrite ? "CONST_LIST" : "VAR_LIST";
+        let initializer = binary("ADD", n("LITERAL", "1"), "+", n("LITERAL", "2"));
+        if (options.localMixedAdd) initializer = binary("ADD", n("LITERAL", '"x"'), "+", n("LITERAL", "1"));
+        if (options.localBadNot) initializer = n("NOT", null, [n("LITERAL", "1")]);
+        const localName = options.localParameterCollision ? "event" : "total";
+        const declaration = localDeclaration(declarationKind, localName, "Number",
+            options.localNoInitializer ? undefined : initializer);
+        const condition = options.localNonBooleanWhile
+            ? n("IDENTIFIER", "total")
+            : binary("RELATION", n("IDENTIFIER", "total"), ">", n("LITERAL", "0"));
+        const loop = n("WHILE", null, [
+            n("CONDITION", null, [condition]),
+            n("BLOCK", null, [assignment(n("IDENTIFIER", "total"),
+                binary("ADD", n("IDENTIFIER", "total"), "-", n("LITERAL", "1")))]),
+        ]);
+        const active = localDeclaration("VAR_LIST", "active", "Boolean",
+            n("NOT", null, [binary("EQUALITY", n("IDENTIFIER", "total"), "===", n("LITERAL", "0"))]));
+        onEventBody = [declaration];
+        if (options.localDuplicate) {
+            onEventBody.push(localDeclaration("VAR_LIST", "total", "Number", n("LITERAL", "3")));
+        }
+        onEventBody.push(active, loop, n("RETURN"));
     }
     const members = [
         field,
@@ -411,6 +443,40 @@ function main() {
     assertErrorCode(
         () => adapt(api, buildTree({ nonBooleanIf: true }), authority),
         "HARDENED_IF_BOOLEAN",
+    );
+    const localProgram = adapt(api, buildTree({ localWorkpack: true }), authority);
+    const localOutput = api.emitSemanticProgram(localProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localOutput.code, /var total: number = 1 \+ 2;/);
+    assert.match(localOutput.code, /var active: boolean = !\(total === 0\);/);
+    assert.match(localOutput.code, /while \(total > 0\)/);
+    assert.match(localOutput.code, /total = total - 1;/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ localNoInitializer: true }), authority),
+        "HARDENED_LOCAL_INITIALIZER",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localMixedAdd: true }), authority),
+        "HARDENED_BINARY_TYPE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localBadNot: true }), authority),
+        "HARDENED_UNARY_BOOLEAN",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localNonBooleanWhile: true }), authority),
+        "HARDENED_WHILE_BOOLEAN",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localConstWrite: true }), authority),
+        "HARDENED_ASSIGNMENT_READONLY",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localDuplicate: true }), authority),
+        "HARDENED_LOCAL_DUPLICATE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localParameterCollision: true }), authority),
+        "HARDENED_LOCAL_PARAMETER_COLLISION",
     );
     const runnable = ts.transpileModule(emitted.code, {
         compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },

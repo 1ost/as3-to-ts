@@ -49,7 +49,7 @@ const admittedSource = [
     "        public function get value():Number { if (_value > 0) { return _value; } else { return 0; } }",
     "        public function set value(input:Number):void { _value = input; }",
     "        public function Demo() { super(); addEventListener(\"ready\", onEvent); }",
-    "        public function onEvent(event:Event):void { label = \"changed\"; return; }",
+    "        public function onEvent(event:Event):void { var total:Number = 1 + 2; var active:Boolean = !(total === 0); while (total > 0) { total = total - 1; } label = \"changed\"; return; }",
     "    }",
     "}",
     "",
@@ -79,6 +79,10 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     assert.match(firstCode, /public get value\(\): number/);
     assert.match(firstCode, /if \(this\._value > 0\)/);
     assert.match(firstCode, /public set value\(input: number\)/);
+    assert.match(firstCode, /var total: number = 1 \+ 2;/);
+    assert.match(firstCode, /var active: boolean = !\(total === 0\);/);
+    assert.match(firstCode, /while \(total > 0\)/);
+    assert.match(firstCode, /total = total - 1;/);
     const manifest = JSON.parse(fs.readFileSync(path.join(first, "manifest.json"), "utf8"));
     assert.equal(manifest.schema, "bleach.as3.transpile-manifest.v1");
     assert.equal(manifest.typeScriptVersion, "4.9.5");
@@ -119,7 +123,7 @@ test("unsupported syntax fails closed without publishing", t => {
     const output = path.join(root, "output");
     fs.mkdirSync(source);
     write(source, "Unsupported.as",
-        "package p { public class Unsupported { public function f():void { while (true) {} } } }\n");
+        "package p { public class Unsupported { public function f():void { switch (1) {} } } }\n");
     const result = invoke(source, output, root);
     assert.equal(result.status, 4, result.stderr);
     assert.match(result.stderr, /PARSER_NORMALIZER_UNSUPPORTED_KIND/);
@@ -150,7 +154,7 @@ test("qualification records holds without materializing TypeScript", t => {
     fs.mkdirSync(source);
     write(source, "Demo.as", admittedSource);
     write(source, "Unsupported.as",
-        "package p { public class Unsupported { public function f():void { while (true) {} } } }\n");
+        "package p { public class Unsupported { public function f():void { switch (1) {} } } }\n");
     const result = spawnSync(process.execPath, [executable, "qualify", source, output,
         "--source-census", sourceCensus, "--target-capabilities", targetCapabilities], {
         cwd: root, encoding: "utf8", timeout: 20_000, windowsHide: true,

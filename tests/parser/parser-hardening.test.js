@@ -108,6 +108,15 @@ assert.strictEqual(all(ast, NodeKind.BREAK).length, 1);
 assert.strictEqual(all(ast, NodeKind.CONTINUE).length, 1);
 assert.strictEqual(all(ast, NodeKind.THROW).length, 1, 'throw is not represented as return');
 
+const negationSource = 'package p { class C { function f(a:Boolean,b:Boolean):void { var x:Boolean = !a && b; } } }';
+const negationAst = parse('negation-precedence.as', negationSource);
+assertMonotoneSpans(negationAst, negationSource, 'negation precedence');
+const conjunction = all(negationAst, NodeKind.AND)[0];
+assert.strictEqual(conjunction.children[0].kind, NodeKind.NOT,
+    'unary negation binds before logical conjunction');
+assert.strictEqual(conjunction.children[0].children[0].text, 'a');
+assert.strictEqual(conjunction.children[2].text, 'b');
+
 const emptySource = 'package p { class C {} interface I {} }';
 const emptyAst = parse('empty-bodies.as', emptySource);
 assertMonotoneSpans(emptyAst, emptySource, 'empty bodies');

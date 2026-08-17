@@ -142,15 +142,29 @@ export interface NewExpression extends SemanticIdentity {
 
 export interface BinaryExpression extends SemanticIdentity {
     kind: "binary";
-    operator: "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||";
+    operator: "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||" |
+        "+" | "-" | "*" | "/" | "%";
     left: SemanticExpression;
     right: SemanticExpression;
     resultType: SemanticType;
 }
 
+export interface UnaryExpression extends SemanticIdentity {
+    kind: "unary";
+    operator: "+" | "-" | "!";
+    operand: SemanticExpression;
+    resultType: SemanticType;
+}
+
+export interface ParenthesizedExpression extends SemanticIdentity {
+    kind: "parenthesized";
+    expression: SemanticExpression;
+    resultType: SemanticType;
+}
+
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression |
-    NewExpression | BinaryExpression;
+    NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";
@@ -169,7 +183,26 @@ export interface IfStatement extends SemanticIdentity {
     elseStatements: SemanticStatement[] | null;
 }
 
-export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement;
+export interface WhileStatement extends SemanticIdentity {
+    kind: "while";
+    condition: SemanticExpression;
+    statements: SemanticStatement[];
+}
+
+export interface SemanticLocal extends SemanticIdentity {
+    name: string;
+    readonly: boolean;
+    type: SemanticType;
+    initializer: SemanticExpression;
+}
+
+export interface LocalDeclarationStatement extends SemanticIdentity {
+    kind: "local";
+    declarations: SemanticLocal[];
+}
+
+export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement |
+    WhileStatement | LocalDeclarationStatement;
 
 export interface SemanticParameter extends SemanticIdentity {
     name: string;

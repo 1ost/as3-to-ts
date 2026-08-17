@@ -374,7 +374,9 @@ function parseUnaryExpressionNotPlusMinus(parser:AS3Parser):Node {
         result = createNode(NodeKind.TYPEOF, {start: index, end: expr.end}, expr);
     } else if (tokIs(parser, '!') || tokIs(parser, 'not')) {
         nextToken(parser, true);
-        let expr = parseExpression(parser);
+        // Unary negation binds to the next unary operand. Parsing a complete
+        // expression here changed `!a && b` into `!(a && b)`.
+        let expr = parseUnaryExpression(parser);
         result = createNode(NodeKind.NOT, {start: index, end: expr.end}, expr);
     } else if (tokIs(parser, '~')) {
         nextToken(parser, true);

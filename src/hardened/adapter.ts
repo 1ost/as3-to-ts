@@ -11,6 +11,7 @@ import {
     SemanticGetter,
     SemanticIdentity,
     SemanticImport,
+    SemanticLocal,
     SemanticMember,
     SemanticMethod,
     SemanticModifier,
@@ -43,6 +44,13 @@ interface AccessorPair {
     setter?: MethodHeader;
 }
 
+interface LocalHeader {
+    node: TreeNode;
+    name: string;
+    readonly: boolean;
+    type: SemanticType;
+}
+
 interface AdapterContext {
     className: string;
     extendsType: SemanticType | null;
@@ -54,6 +62,7 @@ interface AdapterContext {
     methods: { [name: string]: MethodHeader };
     accessors: { [name: string]: AccessorPair };
     parameters: { [name: string]: SemanticParameter };
+    locals: { [name: string]: LocalHeader };
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -338,6 +347,9 @@ function implicitThisMember(node: TreeNode, name: string, capabilitySource: stri
 }
 
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "identifier" && context.locals[expression.name]) {
+        return context.locals[expression.name]!.type;
+    }
     if (expression.kind === "identifier" && context.parameters[expression.name]) {
         return context.parameters[expression.name]!.type;
     }
@@ -365,6 +377,12 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "binary") {
         return expression.resultType;
     }
+    if (expression.kind === "unary") {
+        return expression.resultType;
+    }
+    if (expression.kind === "parenthesized") {
+        return expression.resultType;
+    }
     if (expression.kind === "assignment") {
         return assignmentTargetType(expression.target, context, node);
     }
@@ -377,6 +395,11 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
 }
 
 function assignmentTargetType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "identifier" && context.locals[expression.name]) {
+        const local = context.locals[expression.name]!;
+        if (local.readonly) fail("HARDENED_ASSIGNMENT_READONLY", "local const is not writable", node);
+        return local.type;
+    }
     if (expression.kind === "identifier" && context.parameters[expression.name]) {
         return context.parameters[expression.name]!.type;
     }
@@ -464,12 +487,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
     }
-    if (node.kind === "RELATION" || node.kind === "EQUALITY" || node.kind === "AND" || node.kind === "OR") {
+    if (node.kind === "RELATION" || node.kind === "EQUALITY" || node.kind === "AND" || node.kind === "OR"
+        || node.kind === "ADD" || node.kind === "MULTIPLICATION") {
         if (node.children.length !== 3 || node.children[1]!.kind !== "OP") {
             fail("HARDENED_BINARY_SHAPE", "binary expression must contain exactly one operator and two operands", node);
         }
         const operator = requiredText(node.children[1]!, "binary operator");
-        const admitted = new Set(["<", "<=", ">", ">=", "===", "!==", "&&", "||"]);
+        const admitted = new Set(["<", "<=", ">", ">=", "===", "!==", "&&", "||", "+", "-", "*", "/", "%"]);
         if (!admitted.has(operator)) {
             fail("HARDENED_BINARY_OPERATOR", "coercive or runtime-dependent binary operator remains held", node.children[1]!);
         }
@@ -487,11 +511,49 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
             fail("HARDENED_BINARY_RELATION", "ordered relations require exact Number or String operands", node);
         }
-        const resultType = Object.assign(identity(node), { sourceName: "Boolean", emittedName: "boolean" });
+        if (["-", "*", "/", "%"].indexOf(operator) >= 0 && leftType.sourceName !== "Number") {
+            fail("HARDENED_BINARY_NUMBER", "numeric operators require exact Number operands", node);
+        }
+        if (operator === "+" && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
+            fail("HARDENED_BINARY_ADD", "addition requires exact Number or exact String operands", node);
+        }
+        const booleanResult = ["<", "<=", ">", ">=", "===", "!==", "&&", "||"].indexOf(operator) >= 0;
+        const resultType = booleanResult
+            ? Object.assign(identity(node), { sourceName: "Boolean", emittedName: "boolean" })
+            : leftType;
         return Object.assign(identity(node), {
             kind: "binary" as "binary",
-            operator: operator as "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||",
+            operator: operator as "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||" |
+                "+" | "-" | "*" | "/" | "%",
             left, right, resultType,
+        });
+    }
+    if (node.kind === "PLUS" || node.kind === "MINUS" || node.kind === "NOT") {
+        if (node.children.length !== 1) {
+            fail("HARDENED_UNARY_SHAPE", "unary expression requires exactly one operand", node);
+        }
+        const operand = parseExpression(node.children[0]!, context, true);
+        const operandType = assignmentType(operand, context, node.children[0]!);
+        const operator = node.kind === "PLUS" ? "+" : node.kind === "MINUS" ? "-" : "!";
+        if (operator === "!" && operandType.sourceName !== "Boolean") {
+            fail("HARDENED_UNARY_BOOLEAN", "logical negation requires exact Boolean input", node);
+        }
+        if (operator !== "!" && operandType.sourceName !== "Number") {
+            fail("HARDENED_UNARY_NUMBER", "numeric unary operators require exact Number input", node);
+        }
+        return Object.assign(identity(node), {
+            kind: "unary" as "unary", operator: operator as "+" | "-" | "!", operand,
+            resultType: operandType,
+        });
+    }
+    if (node.kind === "ENCAPSULATED") {
+        if (node.children.length !== 1) {
+            fail("HARDENED_PARENTHESIZED_SHAPE", "parenthesized expression requires exactly one expression", node);
+        }
+        const expression = parseExpression(node.children[0]!, context, true);
+        return Object.assign(identity(node), {
+            kind: "parenthesized" as "parenthesized", expression,
+            resultType: assignmentType(expression, context, node.children[0]!),
         });
     }
     if (node.kind === "IDENTIFIER") {
@@ -502,7 +564,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (name === "super") {
             fail("HARDENED_SUPER_CONTEXT", "super is admitted only as the first zero-argument statement of a derived constructor", node);
         }
-        if (context.parameters[name] || context.importsByLocal[name]) {
+        if (context.locals[name] || context.parameters[name] || context.importsByLocal[name]) {
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name });
         }
         if (context.fields[name]) {
@@ -614,7 +676,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else {
             if (rawCallee.kind === "IDENTIFIER" && typeof rawCallee.text === "string"
                 && !context.parameters[rawCallee.text] && !context.importsByLocal[rawCallee.text]
-                && !context.fields[rawCallee.text] && !context.methods[rawCallee.text]
+                && !context.locals[rawCallee.text] && !context.fields[rawCallee.text] && !context.methods[rawCallee.text]
                 && context.baseSourceQName !== null) {
                 const mapping = memberMapping(context, context.baseSourceQName, "call", rawCallee.text, rawCallee);
                 callee = mapping === null ? parseExpression(rawCallee, context, false)
@@ -701,7 +763,94 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 elseStatements: node.children.length === 3 ? parseBranch(node.children[2]!) : null,
             });
         }
+        if (node.kind === "WHILE") {
+            if (node.children.length !== 2 || node.children[0]!.kind !== "CONDITION") {
+                fail("HARDENED_WHILE_SHAPE", "while statement has the wrong normalized shape", node);
+            }
+            const conditionOwner = node.children[0]!;
+            if (conditionOwner.children.length !== 1) {
+                fail("HARDENED_WHILE_CONDITION", "while statement requires exactly one condition expression", conditionOwner);
+            }
+            const condition = parseExpression(conditionOwner.children[0]!, context, true);
+            const conditionType = assignmentType(condition, context, conditionOwner.children[0]!);
+            if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
+                fail("HARDENED_WHILE_BOOLEAN", "while condition requires an exact Boolean expression", conditionOwner);
+            }
+            const branch = node.children[1]!;
+            return Object.assign(identity(node), {
+                kind: "while" as "while", condition,
+                statements: branch.kind === "BLOCK"
+                    ? parseBlock(branch, context, constructor, derived, expectedReturn, false)
+                    : [parseStatementNode(branch, context, constructor, derived, expectedReturn, false)],
+            });
+        }
+        if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {
+            onlyKinds(node, ["NAME_TYPE_INIT"]);
+            if (node.children.length === 0) {
+                fail("HARDENED_LOCAL_EMPTY", "local declaration must contain at least one declarator", node);
+            }
+            const declarations = node.children.map((declaration): SemanticLocal => {
+                onlyKinds(declaration, ["INIT", "NAME", "TYPE"]);
+                const nameNode = one(declaration, "NAME")!;
+                const name = validateIdentifier(requiredText(nameNode, "local name"), nameNode);
+                const header = context.locals[name];
+                if (!header || header.node !== declaration || header.readonly !== (node.kind === "CONST_LIST")) {
+                    fail("HARDENED_LOCAL_AUTHORITY", "local declaration does not match its predeclared function identity", declaration);
+                }
+                const init = one(declaration, "INIT", true);
+                if (init === null || init.children.length !== 1) {
+                    fail("HARDENED_LOCAL_INITIALIZER", "locals require exactly one explicit admitted initializer", declaration);
+                }
+                const initializer = parseExpression(init.children[0]!, context, true);
+                assertAssignmentCompatible(header.type, assignmentType(initializer, context, init.children[0]!), declaration);
+                return Object.assign(identity(declaration), {
+                    name, readonly: header.readonly, type: header.type, initializer,
+                });
+            });
+            return Object.assign(identity(node), { kind: "local" as "local", declarations });
+        }
         fail("HARDENED_STATEMENT_UNSUPPORTED", "normalized statement kind is unsupported: " + node.kind, node);
+}
+
+function predeclareLocals(block: TreeNode, context: AdapterContext): void {
+    const visit = (node: TreeNode): void => {
+        if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {
+            onlyKinds(node, ["NAME_TYPE_INIT"]);
+            if (node.children.length === 0) {
+                fail("HARDENED_LOCAL_EMPTY", "local declaration must contain at least one declarator", node);
+            }
+            node.children.forEach((declaration) => {
+                onlyKinds(declaration, ["INIT", "NAME", "TYPE"]);
+                const nameNode = one(declaration, "NAME")!;
+                const name = validateIdentifier(requiredText(nameNode, "local name"), nameNode);
+                if (context.parameters[name]) {
+                    fail("HARDENED_LOCAL_PARAMETER_COLLISION", "local identity duplicates a parameter", nameNode);
+                }
+                if (context.locals[name]) {
+                    fail("HARDENED_LOCAL_DUPLICATE", "function-scoped local identity is duplicated", nameNode);
+                }
+                context.locals[name] = {
+                    node: declaration,
+                    name,
+                    readonly: node.kind === "CONST_LIST",
+                    type: parseType(one(declaration, "TYPE")!, context, false),
+                };
+            });
+            return;
+        }
+        if (node.kind === "BLOCK") {
+            node.children.forEach(visit);
+            return;
+        }
+        if (node.kind === "IF") {
+            node.children.slice(1).forEach(visit);
+            return;
+        }
+        if (node.kind === "WHILE" && node.children.length >= 2) {
+            visit(node.children[1]!);
+        }
+    };
+    visit(block);
 }
 
 function parseBlock(block: TreeNode, context: AdapterContext, constructor: boolean,
@@ -842,6 +991,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         methods: Object.create(null),
         accessors: Object.create(null),
         parameters: Object.create(null),
+        locals: Object.create(null),
     };
     const extendsNode = one(classNode, "EXTENDS", true);
     let extendsType: SemanticType | null = null;
@@ -908,10 +1058,14 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 : node.kind === "SET" ? placeholder.accessors[callableName]!.setter!
                 : placeholder.methods[callableName]!;
             const oldParameters = placeholder.parameters;
+            const oldLocals = placeholder.locals;
             placeholder.parameters = Object.create(null);
+            placeholder.locals = Object.create(null);
             header.parameters.forEach((parameter) => { placeholder.parameters[parameter.name] = parameter; });
+            predeclareLocals(header.block, placeholder);
             const body = parseBlock(header.block, placeholder, header.constructor, extendsType !== null, header.returnType);
             placeholder.parameters = oldParameters;
+            placeholder.locals = oldLocals;
             if (header.constructor) {
                 const count = body.filter(superCall).length;
                 if ((extendsType !== null && (count !== 1 || !superCall(body[0]!))) || (extendsType === null && count !== 0)) {

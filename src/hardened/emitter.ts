@@ -126,6 +126,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             "!==": ts.SyntaxKind.ExclamationEqualsEqualsToken,
             "&&": ts.SyntaxKind.AmpersandAmpersandToken,
             "||": ts.SyntaxKind.BarBarToken,
+            "+": ts.SyntaxKind.PlusToken,
+            "-": ts.SyntaxKind.MinusToken,
+            "*": ts.SyntaxKind.AsteriskToken,
+            "/": ts.SyntaxKind.SlashToken,
+            "%": ts.SyntaxKind.PercentToken,
         };
         const token = tokens[expression.operator];
         if (token === undefined) {
@@ -134,6 +139,21 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createBinaryExpression(
             expressionNode(expression.left, ts), ts.factory.createToken(token), expressionNode(expression.right, ts),
         );
+    }
+    if (expression.kind === "unary") {
+        const tokens: { [operator: string]: any } = {
+            "+": ts.SyntaxKind.PlusToken,
+            "-": ts.SyntaxKind.MinusToken,
+            "!": ts.SyntaxKind.ExclamationToken,
+        };
+        const token = tokens[expression.operator];
+        if (token === undefined) {
+            throw new HardenedSemanticError("HARDENED_EMIT_UNARY", "semantic IR contains an unsupported unary operator");
+        }
+        return ts.factory.createPrefixUnaryExpression(token, expressionNode(expression.operand, ts));
+    }
+    if (expression.kind === "parenthesized") {
+        return ts.factory.createParenthesizedExpression(expressionNode(expression.expression, ts));
     }
     throw new HardenedSemanticError("HARDENED_EMIT_EXPRESSION", "semantic IR contains an unsupported expression");
 }
@@ -152,6 +172,21 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             statement.elseStatements === null ? undefined
                 : ts.factory.createBlock(statement.elseStatements.map((item) => statementNode(item, ts)), true),
         );
+    }
+    if (statement.kind === "while") {
+        return ts.factory.createWhileStatement(
+            expressionNode(statement.condition, ts),
+            ts.factory.createBlock(statement.statements.map((item) => statementNode(item, ts)), true),
+        );
+    }
+    if (statement.kind === "local") {
+        const declarations = statement.declarations.map((local) => ts.factory.createVariableDeclaration(
+            local.name, undefined, typeNode(local.type, ts), expressionNode(local.initializer, ts),
+        ));
+        const readonly = statement.declarations.every((local) => local.readonly);
+        return ts.factory.createVariableStatement(undefined,
+            ts.factory.createVariableDeclarationList(declarations,
+                readonly ? ts.NodeFlags.Const : ts.NodeFlags.None));
     }
     throw new HardenedSemanticError("HARDENED_EMIT_STATEMENT", "semantic IR contains an unsupported statement");
 }
@@ -178,6 +213,10 @@ function boundMethodNames(program: SemanticProgram): string[] {
         } else if (expression.kind === "binary") {
             inspectExpression(expression.left);
             inspectExpression(expression.right);
+        } else if (expression.kind === "unary") {
+            inspectExpression(expression.operand);
+        } else if (expression.kind === "parenthesized") {
+            inspectExpression(expression.expression);
         }
     };
     const inspectStatement = (statement: SemanticStatement): void => {
@@ -185,10 +224,15 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(statement.expression);
         } else if (statement.kind === "return") {
             if (statement.expression !== null) inspectExpression(statement.expression);
-        } else {
+        } else if (statement.kind === "if") {
             inspectExpression(statement.condition);
             statement.thenStatements.forEach(inspectStatement);
             if (statement.elseStatements !== null) statement.elseStatements.forEach(inspectStatement);
+        } else if (statement.kind === "while") {
+            inspectExpression(statement.condition);
+            statement.statements.forEach(inspectStatement);
+        } else {
+            statement.declarations.forEach((local) => inspectExpression(local.initializer));
         }
     };
     program.declaration.members.forEach((member) => {
