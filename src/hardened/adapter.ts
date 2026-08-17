@@ -738,6 +738,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             elements: node.children.map(child => parseExpression(child, context, true)),
         });
     }
+    if (node.kind === "SHORT_VECTOR") {
+        if (node.children.length !== 2 || node.children[0]!.kind !== "VECTOR" || node.children[1]!.kind !== "ARRAY") {
+            fail("HARDENED_SHORT_VECTOR_SHAPE", "short Vector literal requires one type and one array payload", node);
+        }
+        const vectorType = parseType(node.children[0]!, context, false);
+        const source = parseExpression(node.children[1]!, context, true);
+        return Object.assign(identity(node), {
+            kind: "vectorConversion" as "vectorConversion", vectorType, source,
+        });
+    }
     if (node.kind === "OBJECT") {
         const seen = new Set<string>();
         const properties = node.children.map(property => {
@@ -769,6 +779,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         return Object.assign(identity(node), { kind: "object" as "object", properties });
     }
     if (node.kind === "NEW") {
+        if (node.children.length === 1 && node.children[0]!.kind === "SHORT_VECTOR") {
+            const literal = node.children[0]!;
+            if (literal.children.length !== 2 || literal.children[0]!.kind !== "VECTOR"
+                || literal.children[1]!.kind !== "ARRAY") {
+                fail("HARDENED_SHORT_VECTOR_SHAPE", "short Vector literal requires one type and one array payload", literal);
+            }
+            const vectorType = parseType(literal.children[0]!, context, false);
+            const source = parseExpression(literal.children[1]!, context, true);
+            return Object.assign(identity(node), {
+                kind: "vectorConversion" as "vectorConversion", vectorType, source,
+            });
+        }
         if (node.children.length !== 1 || node.children[0]!.kind !== "CALL") {
             fail("HARDENED_NEW_SHAPE", "constructor expression must contain exactly one direct call", node);
         }

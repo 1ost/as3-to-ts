@@ -196,6 +196,7 @@ try {
         "        public function enumerate():void { var values:Object = {\"a\":1}; for (var key:String in values) { if (key === \"done\") { continue; } } }",
         "        public function closures():void { var offset:Number = 1; var handler:Function = function(value:Number):Number { return value + offset; }; var result:Number = handler(2); }",
         "        public function dictionaries():void { var dictionary:Dictionary = new Dictionary(true); var key:Object = {\"id\":1}; dictionary[key] = \"value\"; var removed:Boolean = delete dictionary[key]; }",
+        "        public function shortVectors():void { var values:Vector.<int> = new <int>[1,2]; }",
         "    }",
         "}",
         "",
@@ -253,7 +254,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event", "flash.utils.Dictionary"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -331,6 +332,11 @@ try {
     assert.equal(dictionaryMethod.body[2].expression.target.accessKind, "dictionary");
     assert.equal(dictionaryMethod.body[3].declarations[0].initializer.kind, "delete");
     assert.ok(normalized.nodes.some(node => node.kind === "DELETE"), "real parser preserves Dictionary delete");
+    const shortVectorMethod = semantic.declaration.members[20];
+    assert.equal(shortVectorMethod.name, "shortVectors");
+    assert.equal(shortVectorMethod.body[0].declarations[0].initializer.kind, "vectorConversion");
+    assert.ok(normalized.nodes.some(node => node.kind === "SHORT_VECTOR"),
+        "real parser preserves short Vector literals");
     assert.equal(semantic.declaration.members[15].body[0].statement.statements[0].label, "outer");
     assert.equal(semantic.declaration.members[16].name, "namespaced");
     assert.equal(semantic.declaration.members[16].namespaceName, "ResourcesSpace");

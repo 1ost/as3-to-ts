@@ -309,6 +309,19 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
+    if (options.shortVectorWorkpack || options.badShortVectorShape) {
+        const shortVector = options.badShortVectorShape
+            ? n("SHORT_VECTOR", null, [vectorType("int")])
+            : n("SHORT_VECTOR", null, [
+                vectorType("int"), n("ARRAY", null, [n("LITERAL", "1"), n("LITERAL", "2")]),
+            ]);
+        onEventBody = [
+            n("VAR_LIST", null, [n("NAME_TYPE_INIT", null, [
+                n("NAME", "shortValues"), vectorType("int"), n("INIT", null, [shortVector]),
+            ])]),
+            n("RETURN"),
+        ];
+    }
     if (options.runtimeTypeWorkpack) {
         onEventBody = [
             localDeclaration("VAR_LIST", "cast", "Event",
@@ -905,6 +918,13 @@ function main() {
     assert.match(vectorOutput.code, /this\.values!\[0\] = 4;/);
     assert.match(vectorOutput.code, /this\.values!\.push\(5\);/);
     assert.match(vectorOutput.code, /var copy: __as3Vector<number> \| null = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
+    const shortVectorProgram = adapt(api, buildTree({ shortVectorWorkpack: true }), authority);
+    const shortVectorOutput = api.emitSemanticProgram(shortVectorProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(shortVectorOutput.code,
+        /var shortValues: __as3Vector<number> \| null = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badShortVectorShape: true }), authority),
+        "HARDENED_SHORT_VECTOR_SHAPE");
     const runtimeTypeProgram = adapt(api, buildTree({ runtimeTypeWorkpack: true }), authority);
     const runtimeTypeOutput = api.emitSemanticProgram(runtimeTypeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(runtimeTypeOutput.code, /as3As as __as3As/);
@@ -1054,7 +1074,7 @@ function main() {
     assert.match(compoundOutput.code, /active = active && false;/);
     assertErrorCode(() => adapt(api, buildTree({ badLogicalCompound: true }), authority), "HARDENED_COMPOUND_TYPE");
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
-    assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
+    assertGeneratedRuntimeTypechecks([vectorOutput.code, shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
         labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code,
