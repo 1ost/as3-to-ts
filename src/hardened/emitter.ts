@@ -319,6 +319,32 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
         return ts.factory.createForOfStatement(undefined, declaration, expressionNode(statement.iterable, ts),
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
+    if (statement.kind === "try") {
+        let catchClause: any = undefined;
+        if (statement.catchClause !== null) {
+            const caught = ts.factory.createIdentifier(statement.catchClause.temporaryName);
+            const binding = ts.factory.createVariableStatement(undefined,
+                ts.factory.createVariableDeclarationList([
+                    ts.factory.createVariableDeclaration(statement.catchClause.name, undefined,
+                        typeNode(statement.catchClause.type, ts), caught),
+                ], ts.NodeFlags.Const));
+            const guard = ts.factory.createIfStatement(
+                ts.factory.createPrefixUnaryExpression(ts.SyntaxKind.ExclamationToken,
+                    ts.factory.createParenthesizedExpression(ts.factory.createBinaryExpression(
+                        caught, ts.factory.createToken(ts.SyntaxKind.InstanceOfKeyword),
+                        ts.factory.createIdentifier(statement.catchClause.type.emittedName)))),
+                ts.factory.createBlock([ts.factory.createThrowStatement(caught)], true), undefined);
+            catchClause = ts.factory.createCatchClause(
+                ts.factory.createVariableDeclaration(statement.catchClause.temporaryName),
+                ts.factory.createBlock([guard, binding].concat(
+                    statement.catchClause.statements.map(item => statementNode(item, ts))), true));
+        }
+        return ts.factory.createTryStatement(
+            ts.factory.createBlock(statement.tryStatements.map(item => statementNode(item, ts)), true),
+            catchClause,
+            statement.finallyStatements === null ? undefined
+                : ts.factory.createBlock(statement.finallyStatements.map(item => statementNode(item, ts)), true));
+    }
     if (statement.kind === "local") {
         const declarations = statement.declarations.map((local) => ts.factory.createVariableDeclaration(
             local.name, undefined, typeNode(local.type, ts), expressionNode(local.initializer, ts),
@@ -410,6 +436,10 @@ function boundMethodNames(program: SemanticProgram): string[] {
         } else if (statement.kind === "forEach") {
             inspectExpression(statement.iterable);
             statement.statements.forEach(inspectStatement);
+        } else if (statement.kind === "try") {
+            statement.tryStatements.forEach(inspectStatement);
+            statement.catchClause?.statements.forEach(inspectStatement);
+            statement.finallyStatements?.forEach(inspectStatement);
         } else if (statement.kind === "local") {
             statement.declarations.forEach((local) => inspectExpression(local.initializer));
         }
@@ -529,6 +559,10 @@ function programUsesVector(program: SemanticProgram): boolean {
             || (statement.update !== null && visitExpression(statement.update)) || statement.statements.some(visitStatement);
         if (statement.kind === "forEach") return visitType(statement.binding.type)
             || visitExpression(statement.iterable) || statement.statements.some(visitStatement);
+        if (statement.kind === "try") return statement.tryStatements.some(visitStatement)
+            || (statement.catchClause !== null && (visitType(statement.catchClause.type)
+                || statement.catchClause.statements.some(visitStatement)))
+            || (statement.finallyStatements !== null && statement.finallyStatements.some(visitStatement));
         if (statement.kind === "if") return visitExpression(statement.condition) || statement.thenStatements.some(visitStatement)
             || (statement.elseStatements !== null && statement.elseStatements.some(visitStatement));
         return false;

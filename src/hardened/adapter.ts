@@ -7,6 +7,7 @@ import {
     NormalizedParserAst,
     NormalizedParserNode,
     SemanticClass,
+    SemanticCatchClause,
     SemanticConstructor,
     SemanticExpression,
     SemanticField,
@@ -90,6 +91,7 @@ const PRIMITIVE_TYPES: { [source: string]: string } = {
     String: "string",
     Array: "Array",
     Class: "Function",
+    Error: "Error",
     int: "number",
     uint: "number",
     void: "void",
@@ -1231,6 +1233,9 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 context.breakableDepth -= 1;
             }
         }
+        if (node.kind === "TRY" || node.kind === "CATCH" || node.kind === "FINALLY") {
+            fail("HARDENED_TRY_SEQUENCE", "try/catch/finally must be consumed as one adjacent statement sequence", node);
+        }
         if (node.kind === "BREAK" || node.kind === "CONTINUE") {
             if (node.children.length !== 0) {
                 fail("HARDENED_LOOP_LABEL", "labelled loop control remains held", node);
@@ -1340,6 +1345,10 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
         if (node.kind === "FOREACH") {
             visit(node.children[0]!);
             if (node.children.length >= 3) visit(node.children[2]!);
+            return;
+        }
+        if (node.kind === "TRY" || node.kind === "CATCH" || node.kind === "FINALLY") {
+            node.children.filter(child => child.kind === "BLOCK").forEach(visit);
         }
     };
     visit(block);
@@ -1347,10 +1356,72 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
 
 function parseBlock(block: TreeNode, context: AdapterContext, constructor: boolean,
     derived: boolean, expectedReturn: SemanticType | null, allowLeadingSuper: boolean = true): SemanticStatement[] {
-    return block.children.map((node, statementIndex): SemanticStatement => parseStatementNode(
-        node, context, constructor, derived, expectedReturn,
-        allowLeadingSuper && constructor && derived && statementIndex === 0,
-    ));
+    const statements: SemanticStatement[] = [];
+    for (let statementIndex = 0; statementIndex < block.children.length; statementIndex += 1) {
+        const node = block.children[statementIndex]!;
+        if (node.kind !== "TRY") {
+            statements.push(parseStatementNode(node, context, constructor, derived, expectedReturn,
+                allowLeadingSuper && constructor && derived && statementIndex === 0));
+            continue;
+        }
+        if (node.children.length !== 1 || node.children[0]!.kind !== "BLOCK") {
+            fail("HARDENED_TRY_SHAPE", "try requires exactly one statement block", node);
+        }
+        const next = block.children[statementIndex + 1];
+        const afterNext = block.children[statementIndex + 2];
+        const catchNode = next?.kind === "CATCH" ? next : null;
+        const finallyNode = catchNode !== null
+            ? (afterNext?.kind === "FINALLY" ? afterNext : null)
+            : (next?.kind === "FINALLY" ? next : null);
+        if (catchNode === null && finallyNode === null) {
+            fail("HARDENED_TRY_HANDLER", "try requires one adjacent catch or finally clause", node);
+        }
+        if (catchNode !== null && afterNext?.kind === "CATCH") {
+            fail("HARDENED_TRY_MULTICATCH", "multiple typed catch clauses remain held", afterNext);
+        }
+        let catchClause: SemanticCatchClause | null = null;
+        if (catchNode !== null) {
+            onlyKinds(catchNode, ["BLOCK", "NAME", "TYPE"]);
+            const nameNode = one(catchNode, "NAME")!;
+            const typeNode = one(catchNode, "TYPE")!;
+            const catchBlock = one(catchNode, "BLOCK")!;
+            const name = validateIdentifier(requiredText(nameNode, "catch binding"), nameNode);
+            const type = parseType(typeNode, context, false);
+            if (type.sourceName !== "Error" || type.emittedName !== "Error") {
+                fail("HARDENED_CATCH_TYPE", "this wave admits only the canonical AS3 Error catch type", typeNode);
+            }
+            const temporaryName = `__as3Caught${catchNode.id.slice(1)}`;
+            if (context.locals[temporaryName] || context.parameters[temporaryName] || context.fields[temporaryName]
+                || context.methods[temporaryName] || context.accessors[temporaryName] || temporaryName === context.className) {
+                fail("HARDENED_CATCH_TEMPORARY", "generated catch identity collides with source identity", catchNode);
+            }
+            const previous = context.locals[name];
+            context.locals[name] = { node: nameNode, name, readonly: true, type };
+            let catchStatements: SemanticStatement[];
+            try {
+                catchStatements = parseBlock(catchBlock, context, constructor, derived, expectedReturn, false);
+            } finally {
+                if (previous) context.locals[name] = previous;
+                else delete context.locals[name];
+            }
+            catchClause = Object.assign(identity(catchNode), { name, temporaryName, type, statements: catchStatements });
+        }
+        let finallyStatements: SemanticStatement[] | null = null;
+        if (finallyNode !== null) {
+            if (finallyNode.children.length !== 1 || finallyNode.children[0]!.kind !== "BLOCK") {
+                fail("HARDENED_FINALLY_SHAPE", "finally requires exactly one statement block", finallyNode);
+            }
+            finallyStatements = parseBlock(finallyNode.children[0]!, context, constructor, derived, expectedReturn, false);
+        }
+        statements.push(Object.assign(identity(node), {
+            kind: "try" as "try",
+            tryStatements: parseBlock(node.children[0]!, context, constructor, derived, expectedReturn, false),
+            catchClause,
+            finallyStatements,
+        }));
+        statementIndex += (catchNode === null ? 0 : 1) + (finallyNode === null ? 0 : 1);
+    }
+    return statements;
 }
 
 function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {

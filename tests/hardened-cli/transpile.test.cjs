@@ -127,7 +127,7 @@ test("unsupported syntax fails closed without publishing", t => {
     const output = path.join(root, "output");
     fs.mkdirSync(source);
     write(source, "Unsupported.as",
-        "package p { public class Unsupported { public function f():void { try {} } } }\n");
+        "package p { public interface Unsupported {} }\n");
     const result = invoke(source, output, root);
     assert.equal(result.status, 4, result.stderr);
     assert.match(result.stderr, /PARSER_NORMALIZER_UNSUPPORTED_KIND/);
@@ -158,7 +158,7 @@ test("qualification records holds without materializing TypeScript", t => {
     fs.mkdirSync(source);
     write(source, "Demo.as", admittedSource);
     write(source, "Unsupported.as",
-        "package p { public class Unsupported { public function f():void { try {} } } }\n");
+        "package p { public interface Unsupported {} }\n");
     const result = spawnSync(process.execPath, [executable, "qualify", source, output,
         "--source-census", sourceCensus, "--target-capabilities", targetCapabilities], {
         cwd: root, encoding: "utf8", timeout: 20_000, windowsHide: true,

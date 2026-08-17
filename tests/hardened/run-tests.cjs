@@ -179,7 +179,7 @@ function buildTree(options = {}) {
     ]);
     const body = options.badSuperOrder ? [closureStatement, superStatement] : [superStatement, closureStatement];
     if (options.unsupportedStatement) {
-        body.push(n("FOR"));
+        body.push(n("FORIN"));
     }
     const field = n(options.constFields ? "CONST_LIST" : "VAR_LIST", null, [
         mods(...(options.fieldModifiers || ["private"])),
@@ -342,6 +342,18 @@ function buildTree(options = {}) {
                 n("BLOCK", null, [call(dot(n("IDENTIFIER", "values"), "indexOf"), [n("IDENTIFIER", "item")])]),
             ]),
             n("RETURN"),
+        ];
+    }
+    if (options.tryWorkpack || options.badCatchType || options.strayCatch) {
+        const catchType = options.badCatchType ? "String" : "Error";
+        onEventBody = options.strayCatch ? [n("CATCH", null, [
+            n("NAME", "error"), type(catchType), n("BLOCK"),
+        ])] : [
+            n("TRY", null, [n("BLOCK", null, [n("THROW", null, [n("LITERAL", '"bad"')])])]),
+            n("CATCH", null, [n("NAME", "error"), type(catchType), n("BLOCK", null, [
+                n("THROW", null, [n("IDENTIFIER", "error")]),
+            ])]),
+            n("FINALLY", null, [n("BLOCK", null, [assignment(n("IDENTIFIER", "b"), n("LITERAL", '"done"'))])]),
         ];
     }
     const members = [
@@ -688,8 +700,17 @@ function main() {
     assert.match(iterationOutput.code, /this\.values\.indexOf\(item\);/);
     assertErrorCode(() => adapt(api, buildTree({ badForEachType: true }), authority),
         "HARDENED_ASSIGNMENT_TYPE");
+    const tryProgram = adapt(api, buildTree({ tryWorkpack: true }), authority);
+    const tryOutput = api.emitSemanticProgram(tryProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(tryOutput.code, /try \{/);
+    assert.match(tryOutput.code, /catch \(__as3Caught/);
+    assert.match(tryOutput.code, /instanceof Error/);
+    assert.match(tryOutput.code, /const error: Error = __as3Caught/);
+    assert.match(tryOutput.code, /finally \{/);
+    assertErrorCode(() => adapt(api, buildTree({ badCatchType: true }), authority), "HARDENED_CATCH_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ strayCatch: true }), authority), "HARDENED_TRY_SEQUENCE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
-        nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code]);
+        nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);
