@@ -342,6 +342,17 @@ function relativeLocalModule(currentModulePath: string, target: LocalTypeMapping
     return relative.startsWith(".") ? relative : `./${relative}`;
 }
 
+function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLocalType,
+    node: TreeNode): SemanticImport {
+    const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
+    return Object.assign(identity(node), {
+        authorityKind: "local" as "local", localNodeId: target.nodeId,
+        runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
+        sourceQualifiedName: target.qname, sourceLocalName: localName,
+        targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
+    });
+}
+
 function oneType(node: TreeNode): TreeNode {
     const matches = node.children.filter(child => child.kind === "TYPE" || child.kind === "VECTOR");
     if (matches.length !== 1) fail("HARDENED_TYPE_CARDINALITY", "declaration requires exactly one type", node);
@@ -389,13 +400,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
     };
     const localImport = (target: LocalTypeMapping, currentLocal: CurrentLocalType,
         node: TreeNode): SemanticImport => {
-        const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
-        return Object.assign(identity(node), {
-            authorityKind: "local" as "local", localNodeId: target.nodeId,
-            runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
-            sourceQualifiedName: target.qname, sourceLocalName: localName,
-            targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
-        });
+        return localSemanticImport(target, currentLocal, node);
     };
     content.children.filter((child) => child.kind === "IMPORT").forEach((node) => {
         const qname = requiredText(node, "import");
@@ -2115,6 +2120,26 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         };
     }
     const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal);
+    const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface",
+        node: TreeNode): SemanticImport | null => {
+        const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
+        const existing = parsedImports.importsByLocal[localName];
+        if (existing) return existing;
+        if (!localAuthority || !resolveCurrentLocal) return null;
+        const current = resolveCurrentLocal();
+        const qname = sourceName.indexOf(".") >= 0 ? sourceName
+            : packageName === "" ? sourceName : `${packageName}.${sourceName}`;
+        const target = localAuthority.entriesByIdentity[`${current.entry.module}\u0000${qname}`];
+        if (!target || !target.importable || target.typeKind !== expectedKind) return null;
+        if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {
+            fail("HARDENED_LOCAL_IMPORT_EDGE",
+                "same-package type lacks an authenticated dependency edge: " + qname, node);
+        }
+        const item = localSemanticImport(target, current, node);
+        parsedImports.imports.push(item);
+        parsedImports.importsByLocal[localName] = item;
+        return item;
+    };
     const placeholder: AdapterContext = {
         className,
         classQualifiedName: packageName === "" ? className : `${packageName}.${className}`,
@@ -2229,10 +2254,12 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     let extendsType: SemanticType | null = null;
     if (extendsNode !== null) {
         const sourceName = requiredText(extendsNode, "base type");
-        const imported = parsedImports.importsByLocal[sourceName];
-        if (!imported) {
+        const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
+        const imported = parsedImports.importsByLocal[localName]
+            || resolveImplicitLocalType(sourceName, "class", extendsNode);
+        if (!imported || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)) {
             fail("HARDENED_BASE_TYPE", "base type " + extendsNode.text
-                + " must be a double-pinned imported Flash class", extendsNode);
+                + " must be a double-pinned Flash class or authenticated local class", extendsNode);
         }
         if (imported.authorityKind === "flash") {
             mappingForRole(authority, imported.sourceQualifiedName, "base-type", extendsNode);
@@ -2242,7 +2269,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 fail("HARDENED_BASE_TYPE", "local base type must resolve to an authenticated class", extendsNode);
             }
         }
-        extendsType = semanticType(extendsNode, sourceName, sourceName);
+        extendsType = semanticType(extendsNode, imported.sourceLocalName, imported.sourceLocalName);
         placeholder.extendsType = extendsType;
         placeholder.baseSourceQName = imported.authorityKind === "flash" ? imported.sourceQualifiedName : null;
     }

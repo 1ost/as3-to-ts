@@ -650,7 +650,8 @@ function canonicalJson(value) {
 }
 
 function buildLocalBaseTree(options = {}) {
-    const imports = options.wildcardImports ? [n("IMPORT", "lobby.base.*")] : [n("IMPORT", "lobby.base.Base")];
+    const imports = options.samePackage ? []
+        : options.wildcardImports ? [n("IMPORT", "lobby.base.*")] : [n("IMPORT", "lobby.base.Base")];
     if (options.withInterface && !options.wildcardImports) imports.push(n("IMPORT", "lobby.base.IReady"));
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
@@ -677,10 +678,12 @@ function localAuthority(api, normalized, options = {}) {
         {
             componentId: "scc-00001", importable: options.baseImportable !== false, module: options.baseModule || "application",
             graphSourceSha256: "1".repeat(64), nodeId: baseNodeId, prerequisites: [],
-            qname: options.baseQName || "lobby.base.Base",
+            qname: options.baseQName || (options.samePackage ? "lobby.ui.Base" : "lobby.base.Base"),
             sourceContentSha256: "5".repeat(64),
-            sourcePath: "game-client/tapplication_main/src/lobby/base/Base.as",
-            targetPath: "game-client/layaair/src/application/lobby/base/Base.ts", topologicalLevel: 0,
+            sourcePath: options.samePackage ? "game-client/tapplication_main/src/lobby/ui/Base.as"
+                : "game-client/tapplication_main/src/lobby/base/Base.as",
+            targetPath: options.samePackage ? "game-client/layaair/src/application/lobby/ui/Base.ts"
+                : "game-client/layaair/src/application/lobby/base/Base.ts", topologicalLevel: 0,
             typeKind: options.baseKind || "class",
         },
         ...(options.withInterface ? [{
@@ -851,6 +854,14 @@ function main() {
     const localBaseOutput = api.emitSemanticProgram(localBaseProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(localBaseOutput.code, /import \{ Base \} from "\.\.\/base\/Base";/);
     assert.match(localBaseOutput.code, /export class Demo extends Base/);
+    const samePackageBaseProgram = adaptLocal(api, authority, { samePackage: true });
+    assert.equal(samePackageBaseProgram.imports[0].sourceQualifiedName, "lobby.ui.Base");
+    assert.equal(samePackageBaseProgram.imports[0].authorityKind, "local");
+    assert.match(api.emitSemanticProgram(samePackageBaseProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" }).code,
+    /import \{ Base \} from "\.\/Base";/);
+    assertErrorCode(() => adaptLocal(api, authority, { samePackage: true, withEdge: false }),
+        "HARDENED_LOCAL_IMPORT_EDGE");
     const localInterfaceProgram = adaptLocal(api, authority, { withInterface: true });
     assert.equal(localInterfaceProgram.imports[1].runtimeInterface, true);
     assert.equal(localInterfaceProgram.declaration.implementsTypes[0].runtimeName, "lobby.base.IReady");
