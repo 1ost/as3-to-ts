@@ -50,8 +50,12 @@ async function runHarness(options) {
     bleachRoot,
     options.graphPath || DEFAULT_GRAPH,
     options.censusPath || DEFAULT_CENSUS,
-    options.expectedCensus || EXPECTED_BLEACH_CENSUS
+    options.expectedCensus || EXPECTED_BLEACH_CENSUS,
+    options.expectedDependencyGraphSha256
   );
+  const runPolicy = Object.assign({}, OUTPUT_POLICY, {
+    dependencyGraphSha256: authority.dependencyGraphPolicySha256
+  });
   const config = {
     commonjs: true,
     maxOutputBytes,
@@ -62,6 +66,7 @@ async function runHarness(options) {
     authority: {
       census: authority.censusAuthority,
       censusSha256: authority.censusSha256,
+      dependencyGraphPolicySha256: authority.dependencyGraphPolicySha256,
       dependencyGraphSha256: authority.dependencyGraphSha256,
       dependencyGraphSummary: authority.dependencyGraphSummary,
       dependencyManifestSha256: authority.manifestSha256,
@@ -70,7 +75,7 @@ async function runHarness(options) {
     classification: 'unverified_scaffold',
     config,
     kind: 'header',
-    policy: OUTPUT_POLICY,
+    policy: runPolicy,
     resumeSeal: sha256Json({ authority: authority.semanticManifest, config, identity }),
     schema: SCHEMA,
     tool: identity
@@ -98,7 +103,7 @@ async function runHarness(options) {
       workerPath: path.join(__dirname, 'worker.js')
     });
     recheckSourceIdentity(entry);
-    const record = buildRecord(entry, subprocess, sha256Bytes(Buffer.from(state.lines[state.lines.length - 1], 'utf8')));
+    const record = buildRecord(entry, subprocess, sha256Bytes(Buffer.from(state.lines[state.lines.length - 1], 'utf8')), runPolicy);
     appendCanonicalLine(checkpointPath, state.lines, record);
   }
 
@@ -110,7 +115,7 @@ async function runHarness(options) {
     classification: 'unverified_scaffold',
     fileCount: authority.entries.length,
     kind: 'seal',
-    policy: OUTPUT_POLICY,
+    policy: runPolicy,
     previousLineSha256: sha256Bytes(Buffer.from(state.lines[state.lines.length - 1], 'utf8')),
     resultCounts: counts,
     resumeSeal: header.resumeSeal,
@@ -134,13 +139,13 @@ function recheckSourceIdentity(entry) {
   }
 }
 
-function buildRecord(entry, subprocess, previousLineSha256) {
+function buildRecord(entry, subprocess, previousLineSha256, policy) {
   const base = {
     authority: publicEntry(entry),
     classification: 'unverified_scaffold',
     kind: 'file',
     path: entry.logicalPath,
-    policy: OUTPUT_POLICY,
+    policy,
     previousLineSha256,
     schema: SCHEMA,
     subprocess: {
@@ -275,7 +280,7 @@ function loadOrCreateCheckpoint(checkpointPath, expectedHeader, entries) {
       if (record.checkpointContentSha256 !== sha256Bytes(Buffer.from(content, 'utf8'))) throw new Error('checkpoint seal content hash mismatch');
       if (record.resumeSeal !== expectedHeader.resumeSeal) throw new Error('checkpoint seal authority mismatch');
       validateExactKeys(record, ['checkpointContentSha256', 'classification', 'fileCount', 'kind', 'policy', 'previousLineSha256', 'resultCounts', 'resumeSeal', 'schema'], 'checkpoint seal');
-      if (record.schema !== SCHEMA || record.classification !== 'unverified_scaffold' || stringify(record.policy) !== stringify(OUTPUT_POLICY)) {
+      if (record.schema !== SCHEMA || record.classification !== 'unverified_scaffold' || stringify(record.policy) !== stringify(expectedHeader.policy)) {
         throw new Error('checkpoint seal schema/policy mismatch');
       }
       const recomputedCounts = countResults(records.slice(1, index));
@@ -285,15 +290,15 @@ function loadOrCreateCheckpoint(checkpointPath, expectedHeader, entries) {
     if (record.kind !== 'file') throw new Error(`unexpected checkpoint record kind at line ${index + 1}`);
     const expectedEntry = entries[completedCount];
     if (!expectedEntry || record.path !== expectedEntry.logicalPath) throw new Error(`checkpoint is not an exact sorted manifest prefix at line ${index + 1}`);
-    validateFileRecord(record, expectedEntry, expectedHeader.config);
+    validateFileRecord(record, expectedEntry, expectedHeader.config, expectedHeader.policy);
     completedCount++;
   }
   return { completedCount, lines, sealed: false };
 }
 
-function validateFileRecord(record, expectedEntry, config) {
+function validateFileRecord(record, expectedEntry, config, policy) {
   validateExactKeys(record, ['admission', 'authority', 'classification', 'emit', 'kind', 'output', 'parse', 'path', 'policy', 'previousLineSha256', 'schema', 'subprocess', 'syntax', 'type'], `file record ${record.path}`);
-  if (record.schema !== SCHEMA || record.classification !== 'unverified_scaffold' || stringify(record.policy) !== stringify(OUTPUT_POLICY)) {
+  if (record.schema !== SCHEMA || record.classification !== 'unverified_scaffold' || stringify(record.policy) !== stringify(policy)) {
     throw new Error(`file record schema/policy mismatch for ${record.path}`);
   }
   if (stringify(record.authority) !== stringify(publicEntry(expectedEntry))) {

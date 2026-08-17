@@ -12,6 +12,8 @@ authorities agree on the exact maintained corpus:
 - 2,921 `.as` files
 - canonical-LF source-set SHA-256
   `45ae512fe7ef44e01199e4aaeb95722cf5afd287da1084626e25366790c03790`
+- complete semantic dependency-graph SHA-256
+  `3d0d7e0717708e2931bb9cf81de913aa21f5fe4b24babb2703edd9abdcb8f593`
 
 `game-client/swc/tapplication/src` is an excluded shell mirror and is refused as
 an authority entry or maintained root.
@@ -42,10 +44,13 @@ well.
   every maintained path, raw SHA-256, size, and canonical-LF source-set hash is
   independently recomputed.
 - The dependency seal covers all graph nodes, 55,482 sorted edges, each node's
-  prerequisite set, all SCC membership/prerequisite/dependent sets, edge
-  semantics, and the unresolved-reference/adapter/ordering/wildcard summaries.
-  Endpoint, prerequisite, SCC, and summary counts are cross-validated before
-  the semantic graph hash is admitted.
+  prerequisite and dependent facts, all SCC membership/prerequisite/dependent
+  sets, edge semantics, and unresolved-reference/adapter/ordering/wildcard
+  summaries. SCCs are recomputed for strong connectivity and maximality;
+  cyclic flags, the acyclic condensation graph, topological levels, and every
+  graph-derivable summary count/map are independently recomputed. The resulting
+  semantic graph digest must also match the explicit policy pin recorded on
+  every checkpoint line.
 - Disk `.as` paths must exactly equal the sorted authority set. Symlinks,
   non-files, missing paths, extras, unsafe paths, and the excluded mirror abort
   the run.
@@ -76,6 +81,7 @@ and authored-content contracts.
 ## Tests
 
 ```powershell
+$env:BLEACH_REPO_ROOT = 'C:\path\to\bleach-services'
 node tests\hardened-corpus\run-tests.js
 ```
 
@@ -87,3 +93,5 @@ identity, uppercase-call assertion corruption, label mangling, multiple types
 per file, `super()` without `extends`, and conditional compilation. The tests
 also execute timeout/output caps, exact-set refusal, excluded-mirror refusal,
 canonical resume sealing, and cross-CWD/input-order determinism.
+They additionally mutate the real authority's cyclic/level declarations and
+summary count maps to prove that graph drift is rejected before conversion.

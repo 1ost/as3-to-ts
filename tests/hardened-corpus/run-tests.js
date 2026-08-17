@@ -8,7 +8,11 @@ const path = require('path');
 const crypto = require('crypto');
 const { runHarness, runWorker } = require('../../tools/hardened-corpus/hardened-corpus');
 const { compareUtf8, sha256Bytes, stringify } = require('../../tools/hardened-corpus/canonical');
-const { loadAuthority } = require('../../tools/hardened-corpus/manifest');
+const {
+  EXPECTED_DEPENDENCY_GRAPH_SHA256,
+  authenticateDependencyGraph,
+  loadAuthority
+} = require('../../tools/hardened-corpus/manifest');
 
 const repoRoot = path.resolve(__dirname, '..', '..');
 const converterRoot = process.env.AS3_TO_TS_CONVERTER_ROOT || 'D:\\bleach-port-worktrees-tools\\as3-to-ts-evaluation';
@@ -40,12 +44,14 @@ async function run() {
   const firstSummary = await runHarness(Object.assign({}, options, {
     bleachRoot: first.root,
     checkpointPath: firstCheckpoint,
-    expectedCensus: first.expectedCensus
+    expectedCensus: first.expectedCensus,
+    expectedDependencyGraphSha256: first.expectedDependencyGraphSha256
   }));
   const secondSummary = await withWorkingDirectory(second.root, () => runHarness(Object.assign({}, options, {
     bleachRoot: '.',
     checkpointPath: secondCheckpoint,
-    expectedCensus: second.expectedCensus
+    expectedCensus: second.expectedCensus,
+    expectedDependencyGraphSha256: second.expectedDependencyGraphSha256
   })));
   assert.strictEqual(firstSummary.sealed, true);
   assert.strictEqual(secondSummary.sealed, true);
@@ -54,6 +60,8 @@ async function run() {
   assert.deepStrictEqual(firstBytes, secondBytes, 'checkpoint must be independent of CWD and authority node order');
 
   const records = readCheckpoint(firstCheckpoint);
+  assert.strictEqual(records[0].policy.dependencyGraphSha256, first.expectedDependencyGraphSha256, 'checkpoint policy must pin the complete graph digest');
+  assert.strictEqual(records[0].authority.dependencyGraphPolicySha256, first.expectedDependencyGraphSha256, 'checkpoint header must pin the complete graph digest');
   const files = records.filter(record => record.kind === 'file');
   assert.strictEqual(files.length, first.expectedCensus.fileCount);
   const paths = files.map(record => record.path);
@@ -82,7 +90,8 @@ async function run() {
   const resumeSummary = await runHarness(Object.assign({}, options, {
     bleachRoot: first.root,
     checkpointPath: firstCheckpoint,
-    expectedCensus: first.expectedCensus
+    expectedCensus: first.expectedCensus,
+    expectedDependencyGraphSha256: first.expectedDependencyGraphSha256
   }));
   assert.strictEqual(resumeSummary.sealed, true);
   assert.deepStrictEqual(fs.readFileSync(firstCheckpoint), beforeResume, 'sealed resume must not rewrite checkpoint');
@@ -94,7 +103,8 @@ async function run() {
   await assertRejects(() => runHarness(Object.assign({}, options, {
     bleachRoot: first.root,
     checkpointPath: tampered,
-    expectedCensus: first.expectedCensus
+    expectedCensus: first.expectedCensus,
+    expectedDependencyGraphSha256: first.expectedDependencyGraphSha256
   })), /header|canonical|hash chain|content hash/);
 
   const forgedCounts = path.join(tempRoot, 'forged-counts.jsonl');
@@ -104,7 +114,8 @@ async function run() {
   await assertRejects(() => runHarness(Object.assign({}, options, {
     bleachRoot: first.root,
     checkpointPath: forgedCounts,
-    expectedCensus: first.expectedCensus
+    expectedCensus: first.expectedCensus,
+    expectedDependencyGraphSha256: first.expectedDependencyGraphSha256
   })), /resultCounts/);
 
   const forgedAuthority = path.join(tempRoot, 'forged-authority.jsonl');
@@ -115,7 +126,8 @@ async function run() {
   await assertRejects(() => runHarness(Object.assign({}, options, {
     bleachRoot: first.root,
     checkpointPath: forgedAuthority,
-    expectedCensus: first.expectedCensus
+    expectedCensus: first.expectedCensus,
+    expectedDependencyGraphSha256: first.expectedDependencyGraphSha256
   })), /full authority mismatch/);
 
   const forgedSchema = path.join(tempRoot, 'forged-schema.jsonl');
@@ -126,7 +138,8 @@ async function run() {
   await assertRejects(() => runHarness(Object.assign({}, options, {
     bleachRoot: first.root,
     checkpointPath: forgedSchema,
-    expectedCensus: first.expectedCensus
+    expectedCensus: first.expectedCensus,
+    expectedDependencyGraphSha256: first.expectedDependencyGraphSha256
   })), /schema keys/);
 
   const extra = path.join(first.root, 'game-client', 'tmain', 'src', 'Unmanifested.as');
@@ -134,7 +147,8 @@ async function run() {
   await assertRejects(() => runHarness(Object.assign({}, options, {
     bleachRoot: first.root,
     checkpointPath: path.join(tempRoot, 'extra.jsonl'),
-    expectedCensus: first.expectedCensus
+    expectedCensus: first.expectedCensus,
+    expectedDependencyGraphSha256: first.expectedDependencyGraphSha256
   })), /manifest\/disk/);
   fs.unlinkSync(extra);
 
@@ -145,7 +159,8 @@ async function run() {
     },
     bleachRoot: mutated.root,
     checkpointPath: path.join(tempRoot, 'mutated.jsonl'),
-    expectedCensus: mutated.expectedCensus
+    expectedCensus: mutated.expectedCensus,
+    expectedDependencyGraphSha256: mutated.expectedDependencyGraphSha256
   })), /source bytes changed after authority capture/);
 
   const brokenEdge = createFixtureRepository(path.join(tempRoot, 'broken-edge'), false);
@@ -153,28 +168,35 @@ async function run() {
   await assertRejects(() => runHarness(Object.assign({}, options, {
     bleachRoot: brokenEdge.root,
     checkpointPath: path.join(tempRoot, 'broken-edge.jsonl'),
-    expectedCensus: brokenEdge.expectedCensus
-  })), /prerequisites disagree|edge_count mismatch/);
+    expectedCensus: brokenEdge.expectedCensus,
+    expectedDependencyGraphSha256: brokenEdge.expectedDependencyGraphSha256
+  })), /prerequisites disagree|dependent_count|edge_count mismatch/);
 
   const brokenScc = createFixtureRepository(path.join(tempRoot, 'broken-scc'), false);
   mutateGraph(brokenScc.root, graph => { graph.sccs.shift(); graph.summary.component_count--; });
   await assertRejects(() => runHarness(Object.assign({}, options, {
     bleachRoot: brokenScc.root,
     checkpointPath: path.join(tempRoot, 'broken-scc.jsonl'),
-    expectedCensus: brokenScc.expectedCensus
+    expectedCensus: brokenScc.expectedCensus,
+    expectedDependencyGraphSha256: brokenScc.expectedDependencyGraphSha256
   })), /absent from SCC membership|unknown component|SCC/);
 
   const changedEdge = createFixtureRepository(path.join(tempRoot, 'changed-edge'), false);
   const originalAuthority = loadFixtureAuthority(first);
   mutateGraph(changedEdge.root, graph => { graph.edges[0].evidence_line = 999; });
-  const changedAuthority = loadFixtureAuthority(changedEdge);
+  const changedGraphSha256 = authenticateDependencyGraph(readFixtureGraph(changedEdge.root)).sha256;
+  const changedAuthority = loadFixtureAuthority(changedEdge, changedGraphSha256);
   assert.notStrictEqual(changedAuthority.dependencyGraphSha256, originalAuthority.dependencyGraphSha256, 'semantic edge change must change graph hash');
+  assert.throws(() => loadFixtureAuthority(changedEdge, originalAuthority.dependencyGraphSha256), /policy SHA-256 mismatch/);
+
+  verifyRealDependencyGraphAdversaries();
 
   const excluded = createFixtureRepository(path.join(tempRoot, 'excluded'), false, true);
   await assertRejects(() => runHarness(Object.assign({}, options, {
     bleachRoot: excluded.root,
     checkpointPath: path.join(tempRoot, 'excluded.jsonl'),
-    expectedCensus: excluded.expectedCensus
+    expectedCensus: excluded.expectedCensus,
+    expectedDependencyGraphSha256: excluded.expectedDependencyGraphSha256
   })), /excluded SWC shell mirror/);
 
   const samplePath = files.find(record => record.path.endsWith('03-uppercase-member-call.as')).path;
@@ -238,26 +260,32 @@ function createFixtureRepository(root, reverseNodes, includeExcluded) {
     const logical = toLogical(path.relative(root, destination));
     nodes.push({
       component_id: `scc-${String(index).padStart(3, '0')}`,
+      dependent_count: index < fixtures.length - 1 ? 1 : 0,
+      function_count: 0,
       module: 'application',
       node_id: `fixture-${String(index).padStart(3, '0')}`,
+      node_kind: 'as3_type',
       prerequisites: index === 0 ? [] : [`fixture-${String(index - 1).padStart(3, '0')}`],
       qname: `fixtures.Fixture${index}`,
       source_path: logical,
       source_sha256: sha256Bytes(fs.readFileSync(destination)),
-      topological_level: index + 1,
+      topological_level: index,
       type_kind: 'class'
     });
   });
   if (includeExcluded) {
     nodes.push({
       component_id: 'scc-excluded',
+      dependent_count: 0,
+      function_count: 0,
       module: 'excluded-shell',
       node_id: 'excluded-shell',
+      node_kind: 'as3_type',
       prerequisites: [],
       qname: 'excluded.Shell',
       source_path: 'game-client/swc/tapplication/src/Excluded.as',
       source_sha256: '0'.repeat(64),
-      topological_level: 1,
+      topological_level: 0,
       type_kind: 'class'
     });
   }
@@ -292,9 +320,19 @@ function createFixtureRepository(root, reverseNodes, includeExcluded) {
       as3_file_count: fixtures.length,
       as3_type_count: fixtures.length,
       component_count: sccs.length,
+      cyclic_component_count: 0,
       edge_count: edges.length,
+      edge_kind_counts: edges.length ? { explicit_import: edges.length } : {},
+      executable_authored_function_count: 0,
+      executable_type_count: fixtures.length,
+      flash_api_count: 0,
+      function_count: 0,
       missing_flash_adapter_count: 0,
+      module_node_counts: includeExcluded
+        ? { application: fixtures.length, 'excluded-shell': 1 }
+        : { application: fixtures.length },
       node_count: nodes.length,
+      raw_authored_function_count: 0,
       script_ordering_missing_predecessor_count: 0,
       unresolved_project_reference_count: 0,
       wildcard_evidence_gap_count: 0
@@ -307,6 +345,7 @@ function createFixtureRepository(root, reverseNodes, includeExcluded) {
   const graphPath = path.join(reportRoot, 'dependency-graph', 'bleach-as3-dependency-graph.json');
   fs.mkdirSync(path.dirname(graphPath), { recursive: true });
   fs.writeFileSync(graphPath, JSON.stringify(graph));
+  const expectedDependencyGraphSha256 = authenticateDependencyGraph(graph).sha256;
   const sourceSetSha256 = fixtureSourceSet(root, nodes.filter(node => !node.source_path.startsWith('game-client/swc/')));
   const expectedCensus = {
     fileCount: fixtures.length,
@@ -326,16 +365,76 @@ function createFixtureRepository(root, reverseNodes, includeExcluded) {
   const censusPath = path.join(reportRoot, 'reports', 'swf-capability-census.json');
   fs.mkdirSync(path.dirname(censusPath), { recursive: true });
   fs.writeFileSync(censusPath, JSON.stringify(census));
-  return { expectedCensus, root };
+  return { expectedCensus, expectedDependencyGraphSha256, root };
 }
 
-function loadFixtureAuthority(fixture) {
+function loadFixtureAuthority(fixture, expectedDependencyGraphSha256) {
   return loadAuthority(
     fixture.root,
     'as3-to-layaair-porting-kit/generated/dependency-graph/bleach-as3-dependency-graph.json',
     'as3-to-layaair-porting-kit/generated/reports/swf-capability-census.json',
-    fixture.expectedCensus
+    fixture.expectedCensus,
+    expectedDependencyGraphSha256 === undefined
+      ? fixture.expectedDependencyGraphSha256
+      : expectedDependencyGraphSha256
   );
+}
+
+function readFixtureGraph(root) {
+  const graphPath = path.join(root, 'as3-to-layaair-porting-kit', 'generated', 'dependency-graph', 'bleach-as3-dependency-graph.json');
+  return JSON.parse(fs.readFileSync(graphPath, 'utf8'));
+}
+
+function verifyRealDependencyGraphAdversaries() {
+  const bleachRoot = process.env.BLEACH_REPO_ROOT;
+  assert(bleachRoot, 'BLEACH_REPO_ROOT is required for real dependency-graph adversary tests');
+  const graphPath = path.join(bleachRoot, 'as3-to-layaair-porting-kit', 'generated', 'dependency-graph', 'bleach-as3-dependency-graph.json');
+  assert(fs.existsSync(graphPath), `real dependency graph is required for adversary tests: ${graphPath}`);
+  const original = JSON.parse(fs.readFileSync(graphPath, 'utf8'));
+  assert.strictEqual(authenticateDependencyGraph(original).sha256, EXPECTED_DEPENDENCY_GRAPH_SHA256, 'real graph must match the pinned policy digest');
+
+  assertGraphMutationRejected(original, graph => {
+    findScc(graph, 'scc-00010').cyclic = false;
+  }, /cyclic flag/);
+  assertGraphMutationRejected(original, graph => {
+    findScc(graph, 'scc-00010').topological_level = -999;
+  }, /topological_level/);
+  assertGraphMutationRejected(original, graph => {
+    graph.summary.cyclic_component_count = 0;
+  }, /cyclic_component_count/);
+  assertGraphMutationRejected(original, graph => {
+    graph.summary.edge_kind_counts.explicit_import = 0;
+  }, /edge_kind_counts/);
+  assertGraphMutationRejected(original, graph => {
+    graph.summary.module_node_counts.application = 0;
+  }, /module_node_counts/);
+
+  const splitComponent = JSON.parse(JSON.stringify(original));
+  const target = findScc(splitComponent, 'scc-00010');
+  const moved = target.members.pop();
+  splitComponent.nodes.find(node => node.node_id === moved).component_id = 'scc-forged-split';
+  splitComponent.sccs.push({
+    component_id: 'scc-forged-split',
+    cyclic: false,
+    dependent_components: [],
+    members: [moved],
+    prerequisite_components: [],
+    topological_level: 0
+  });
+  splitComponent.summary.component_count++;
+  assert.throws(() => authenticateDependencyGraph(splitComponent), /strongly connected and maximal|prerequisite_components|dependent_components/);
+}
+
+function assertGraphMutationRejected(original, mutate, pattern) {
+  const copy = JSON.parse(JSON.stringify(original));
+  mutate(copy);
+  assert.throws(() => authenticateDependencyGraph(copy), pattern);
+}
+
+function findScc(graph, componentId) {
+  const scc = graph.sccs.find(candidate => candidate.component_id === componentId);
+  assert(scc, `missing real SCC ${componentId}`);
+  return scc;
 }
 
 function mutateGraph(root, callback) {

@@ -15,8 +15,9 @@ const EXPECTED_BLEACH_CENSUS = {
   roots: MAINTAINED_ROOTS.map(root => root.path),
   sourceSetSha256: '45ae512fe7ef44e01199e4aaeb95722cf5afd287da1084626e25366790c03790'
 };
+const EXPECTED_DEPENDENCY_GRAPH_SHA256 = '3d0d7e0717708e2931bb9cf81de913aa21f5fe4b24babb2703edd9abdcb8f593';
 
-function loadAuthority(bleachRoot, manifestRelativePath, censusRelativePath, expectedCensus) {
+function loadAuthority(bleachRoot, manifestRelativePath, censusRelativePath, expectedCensus, expectedDependencyGraphSha256) {
   const root = fs.realpathSync(path.resolve(bleachRoot));
   const manifestPath = resolveInside(root, manifestRelativePath);
   const censusPath = resolveInside(root, censusRelativePath);
@@ -31,6 +32,15 @@ function loadAuthority(bleachRoot, manifestRelativePath, censusRelativePath, exp
   }
 
   const graphSemantics = authenticateDependencyGraph(parsed);
+  const graphPolicySha256 = expectedDependencyGraphSha256 === undefined
+    ? EXPECTED_DEPENDENCY_GRAPH_SHA256
+    : expectedDependencyGraphSha256;
+  if (typeof graphPolicySha256 !== 'string' || !/^[0-9a-f]{64}$/.test(graphPolicySha256)) {
+    throw new Error('dependency graph policy SHA-256 must be an exact lowercase digest');
+  }
+  if (graphSemantics.sha256 !== graphPolicySha256) {
+    throw new Error(`dependency graph policy SHA-256 mismatch: expected=${graphPolicySha256} actual=${graphSemantics.sha256}`);
+  }
   const byPath = new Map();
   parsed.nodes.forEach(node => {
     if (typeof node.source_path === 'string' && normalizeLogicalPath(node.source_path).startsWith(`${EXCLUDED_SHELL_ROOT}/`)) {
@@ -85,6 +95,7 @@ function loadAuthority(bleachRoot, manifestRelativePath, censusRelativePath, exp
 
   const semanticManifest = {
     dependencyGraphSha256: graphSemantics.sha256,
+    dependencyGraphPolicySha256: graphPolicySha256,
     dependencyGraphSummary: graphSemantics.summary,
     schemaVersion: parsed.schema_version === undefined ? null : parsed.schema_version,
     sourceManifestSha256: parsed.source_manifest_sha256 || null,
@@ -108,6 +119,7 @@ function loadAuthority(bleachRoot, manifestRelativePath, censusRelativePath, exp
     },
     censusSha256: sha256Json(censusAuthority),
     dependencyGraphSha256: graphSemantics.sha256,
+    dependencyGraphPolicySha256: graphPolicySha256,
     dependencyGraphSummary: graphSemantics.summary,
     semanticManifest,
     sourceManifestSha256: parsed.source_manifest_sha256 || null
@@ -134,17 +146,24 @@ function authenticateDependencyGraph(graph) {
 
   const edges = graph.edges.map(edge => JSON.parse(JSON.stringify(edge))).sort(compareCanonicalValues);
   const prerequisitesByConsumer = new Map();
+  const dependentsByPrerequisite = new Map();
   edges.forEach((edge, index) => {
     if (!nodeById.has(edge.consumer) || !nodeById.has(edge.prerequisite)) {
       throw new Error(`dependency edge ${index} has an unknown endpoint`);
     }
     if (!prerequisitesByConsumer.has(edge.consumer)) prerequisitesByConsumer.set(edge.consumer, new Set());
     prerequisitesByConsumer.get(edge.consumer).add(edge.prerequisite);
+    if (!dependentsByPrerequisite.has(edge.prerequisite)) dependentsByPrerequisite.set(edge.prerequisite, new Set());
+    dependentsByPrerequisite.get(edge.prerequisite).add(edge.consumer);
   });
   nodes.forEach(node => {
     const derived = Array.from(prerequisitesByConsumer.get(node.node_id) || []).sort(compareUtf8);
     if (JSON.stringify(derived) !== JSON.stringify(node.prerequisites)) {
       throw new Error(`dependency prerequisites disagree with edges for ${node.node_id}`);
+    }
+    const derivedDependentCount = (dependentsByPrerequisite.get(node.node_id) || new Set()).size;
+    if (node.dependent_count !== derivedDependentCount) {
+      throw new Error(`dependency dependent_count disagrees with edges for ${node.node_id}`);
     }
   });
 
@@ -174,6 +193,29 @@ function authenticateDependencyGraph(graph) {
     if (!memberOwner.has(node.node_id)) throw new Error(`dependency node ${node.node_id} is absent from SCC membership`);
   });
 
+  const recomputedComponents = computeStronglyConnectedComponents(nodes);
+  const declaredComponentByMembers = new Map();
+  sccs.forEach(scc => declaredComponentByMembers.set(stringify(scc.members), scc));
+  recomputedComponents.forEach(members => {
+    if (!declaredComponentByMembers.has(stringify(members))) {
+      throw new Error(`declared SCC partition is not strongly connected and maximal at ${members[0]}`);
+    }
+  });
+  if (recomputedComponents.length !== sccs.length) {
+    throw new Error(`declared SCC count disagrees with recomputed maximal partition`);
+  }
+
+  const selfLoops = new Set(edges.filter(edge => edge.consumer === edge.prerequisite).map(edge => edge.consumer));
+  sccs.forEach(scc => {
+    const expectedCyclic = scc.members.length > 1 || selfLoops.has(scc.members[0]);
+    if (scc.cyclic !== expectedCyclic) {
+      throw new Error(`SCC cyclic flag disagrees with graph for ${scc.component_id}`);
+    }
+    if (!Number.isInteger(scc.topological_level) || scc.topological_level < 0) {
+      throw new Error(`SCC topological_level is invalid for ${scc.component_id}`);
+    }
+  });
+
   const prerequisiteComponents = new Map();
   const dependentComponents = new Map();
   sccs.forEach(scc => {
@@ -198,6 +240,18 @@ function authenticateDependencyGraph(graph) {
       throw new Error(`SCC dependent_components disagree with edges for ${scc.component_id}`);
     }
   });
+  const recomputedLevels = computeCondensationLevels(sccs, prerequisiteComponents, dependentComponents);
+  sccs.forEach(scc => {
+    if (scc.topological_level !== recomputedLevels.get(scc.component_id)) {
+      throw new Error(`SCC topological_level disagrees with condensation DAG for ${scc.component_id}`);
+    }
+  });
+  nodes.forEach(node => {
+    const componentLevel = recomputedLevels.get(node.component_id);
+    if (node.topological_level !== componentLevel) {
+      throw new Error(`dependency node topological_level disagrees with SCC for ${node.node_id}`);
+    }
+  });
 
   const unresolved = {
     missingFlashAdapters: sortedCanonicalArray(graph.missing_flash_adapters, 'missing_flash_adapters'),
@@ -206,12 +260,28 @@ function authenticateDependencyGraph(graph) {
     wildcardEvidenceGaps: sortedCanonicalArray(graph.wildcard_evidence_gaps, 'wildcard_evidence_gaps')
   };
   const maintainedNodeCount = nodes.filter(node => node.module === 'application' || node.module === 'bootstrap').length;
+  const maintainedNodes = nodes.filter(node => node.module === 'application' || node.module === 'bootstrap');
+  const maintainedFileCount = new Set(maintainedNodes.map(node => node.source_path)).size;
+  const maintainedFunctionCount = maintainedNodes.reduce((total, node) => {
+    if (!Number.isInteger(node.function_count) || node.function_count < 0) {
+      throw new Error(`dependency node function_count is invalid for ${node.node_id}`);
+    }
+    return total + node.function_count;
+  }, 0);
+  const edgeKindCounts = countBy(edges, edge => edge.kind, 'edge kind');
+  const moduleNodeCounts = countBy(nodes, node => node.module, 'node module');
   validateGraphSummary(graph.summary, {
+    as3FileCount: maintainedFileCount,
     componentCount: sccs.length,
+    cyclicComponentCount: sccs.filter(scc => scc.cyclic).length,
     edgeCount: edges.length,
+    edgeKindCounts,
+    flashApiCount: nodes.filter(node => node.node_kind === 'flash_api').length,
+    functionCount: maintainedFunctionCount,
     maintainedNodeCount,
     missingFlashAdapterCount: unresolved.missingFlashAdapters.length,
     nodeCount: nodes.length,
+    moduleNodeCounts,
     unresolvedProjectReferenceCount: unresolved.unresolvedProjectReferences.length,
     unresolvedScriptOrderingPredecessorCount: unresolved.unresolvedScriptOrderingPredecessors.length,
     wildcardEvidenceGapCount: unresolved.wildcardEvidenceGaps.length
@@ -248,10 +318,17 @@ function authenticateDependencyGraph(graph) {
 function validateGraphSummary(summary, actual) {
   if (!summary || typeof summary !== 'object') throw new Error('dependency graph summary is required');
   const checks = [
+    ['as3_file_count', actual.as3FileCount],
     ['node_count', actual.nodeCount],
     ['as3_type_count', actual.maintainedNodeCount],
     ['edge_count', actual.edgeCount],
     ['component_count', actual.componentCount],
+    ['cyclic_component_count', actual.cyclicComponentCount],
+    ['flash_api_count', actual.flashApiCount],
+    ['function_count', actual.functionCount],
+    ['raw_authored_function_count', actual.functionCount],
+    ['executable_authored_function_count', actual.functionCount],
+    ['executable_type_count', actual.maintainedNodeCount],
     ['missing_flash_adapter_count', actual.missingFlashAdapterCount],
     ['unresolved_project_reference_count', actual.unresolvedProjectReferenceCount],
     ['script_ordering_missing_predecessor_count', actual.unresolvedScriptOrderingPredecessorCount],
@@ -260,6 +337,95 @@ function validateGraphSummary(summary, actual) {
   checks.forEach(([key, value]) => {
     if (summary[key] !== value) throw new Error(`dependency graph summary ${key} mismatch: summary=${summary[key]} actual=${value}`);
   });
+  assertExactCountMap(summary.edge_kind_counts, actual.edgeKindCounts, 'edge_kind_counts');
+  assertExactCountMap(summary.module_node_counts, actual.moduleNodeCounts, 'module_node_counts');
+}
+
+function computeStronglyConnectedComponents(nodes) {
+  const adjacency = new Map(nodes.map(node => [node.node_id, node.prerequisites]));
+  const indices = new Map();
+  const lowLinks = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const components = [];
+  let nextIndex = 0;
+
+  function visit(nodeId) {
+    indices.set(nodeId, nextIndex);
+    lowLinks.set(nodeId, nextIndex);
+    nextIndex++;
+    stack.push(nodeId);
+    onStack.add(nodeId);
+    adjacency.get(nodeId).forEach(prerequisite => {
+      if (!indices.has(prerequisite)) {
+        visit(prerequisite);
+        lowLinks.set(nodeId, Math.min(lowLinks.get(nodeId), lowLinks.get(prerequisite)));
+      } else if (onStack.has(prerequisite)) {
+        lowLinks.set(nodeId, Math.min(lowLinks.get(nodeId), indices.get(prerequisite)));
+      }
+    });
+    if (lowLinks.get(nodeId) !== indices.get(nodeId)) return;
+    const members = [];
+    let member;
+    do {
+      member = stack.pop();
+      onStack.delete(member);
+      members.push(member);
+    } while (member !== nodeId);
+    components.push(members.sort(compareUtf8));
+  }
+
+  nodes.forEach(node => {
+    if (!indices.has(node.node_id)) visit(node.node_id);
+  });
+  return components.sort((left, right) => compareUtf8(stringify(left), stringify(right)));
+}
+
+function computeCondensationLevels(sccs, prerequisites, dependents) {
+  const remainingPrerequisites = new Map();
+  const levels = new Map();
+  const queue = [];
+  sccs.forEach(scc => {
+    const count = prerequisites.get(scc.component_id).size;
+    remainingPrerequisites.set(scc.component_id, count);
+    if (count === 0) {
+      levels.set(scc.component_id, 0);
+      queue.push(scc.component_id);
+    }
+  });
+  queue.sort(compareUtf8);
+  let processed = 0;
+  while (queue.length) {
+    const componentId = queue.shift();
+    processed++;
+    Array.from(dependents.get(componentId)).sort(compareUtf8).forEach(dependentId => {
+      levels.set(dependentId, Math.max(levels.get(dependentId) || 0, levels.get(componentId) + 1));
+      const remaining = remainingPrerequisites.get(dependentId) - 1;
+      remainingPrerequisites.set(dependentId, remaining);
+      if (remaining === 0) {
+        queue.push(dependentId);
+        queue.sort(compareUtf8);
+      }
+    });
+  }
+  if (processed !== sccs.length) throw new Error('dependency condensation graph contains a cycle');
+  return levels;
+}
+
+function countBy(values, keySelector, label) {
+  const counts = {};
+  values.forEach(value => {
+    const key = keySelector(value);
+    if (typeof key !== 'string' || !key) throw new Error(`invalid ${label}`);
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
+}
+
+function assertExactCountMap(declared, actual, label) {
+  if (!declared || typeof declared !== 'object' || Array.isArray(declared) || stringify(declared) !== stringify(actual)) {
+    throw new Error(`dependency graph summary ${label} mismatch: summary=${stringify(declared)} actual=${stringify(actual)}`);
+  }
 }
 
 function sortedUniqueStrings(values, label) {
@@ -447,8 +613,10 @@ function requireSha256(value, logicalPath) {
 module.exports = {
   EXCLUDED_SHELL_ROOT,
   EXPECTED_BLEACH_CENSUS,
+  EXPECTED_DEPENDENCY_GRAPH_SHA256,
   MAINTAINED_ROOTS,
   computeCanonicalLfSourceSet,
+  authenticateDependencyGraph,
   loadAuthority,
   publicEntry,
   relevantDefinitions
