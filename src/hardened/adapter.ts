@@ -84,9 +84,15 @@ const PRIMITIVE_TYPES: { [source: string]: string } = {
     Number: "number",
     Object: "unknown",
     String: "string",
+    int: "number",
+    uint: "number",
     void: "void",
 };
 const ALLOWED_MODIFIERS = new Set(["private", "protected", "public", "static"]);
+const VECTOR_METHODS = new Set([
+    "concat", "every", "filter", "forEach", "indexOf", "join", "lastIndexOf", "map", "pop", "push",
+    "reverse", "shift", "slice", "some", "sort", "splice", "toString", "unshift",
+]);
 const ADAPTED_PROGRAMS = new WeakSet<object>();
 
 function fail(code: string, message: string, node: TreeNode | null = null): never {
@@ -262,6 +268,12 @@ function relativeLocalModule(currentModulePath: string, target: LocalTypeMapping
     return relative.startsWith(".") ? relative : `./${relative}`;
 }
 
+function oneType(node: TreeNode): TreeNode {
+    const matches = node.children.filter(child => child.kind === "TYPE" || child.kind === "VECTOR");
+    if (matches.length !== 1) fail("HARDENED_TYPE_CARDINALITY", "declaration requires exactly one type", node);
+    return matches[0]!;
+}
+
 function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
     localAuthority: LoadedLocalTypeAuthority | undefined, resolveCurrentLocal: (() => CurrentLocalType) | null): {
     imports: SemanticImport[];
@@ -279,7 +291,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         if (authority.typeMappingsBySource[qname]) {
             const mapping = mappingForRole(authority, qname, "import", node);
             item = Object.assign(identity(node), {
-                authorityKind: "flash" as "flash", localNodeId: null,
+                authorityKind: "flash" as "flash", localNodeId: null, runtimeConstructible: mapping.targetKind === "class",
                 sourceQualifiedName: qname, sourceLocalName: localName,
                 targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
             });
@@ -296,7 +308,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
                 fail("HARDENED_LOCAL_IMPORT_EDGE", "project-local import lacks an authenticated dependency edge: " + qname, node);
             }
             item = Object.assign(identity(node), {
-                authorityKind: "local" as "local", localNodeId: target.nodeId,
+                authorityKind: "local" as "local", localNodeId: target.nodeId, runtimeConstructible: target.typeKind === "class",
                 sourceQualifiedName: qname, sourceLocalName: localName,
                 targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
             });
@@ -307,9 +319,37 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
     return { imports, importsByLocal };
 }
 
+function semanticType(node: TreeNode, sourceName: string, emittedName: string,
+    typeArguments: SemanticType[] = []): SemanticType {
+    return Object.assign(identity(node), { sourceName, emittedName, typeArguments });
+}
+
+function sameType(left: SemanticType, right: SemanticType): boolean {
+    return left.sourceName === right.sourceName && left.emittedName === right.emittedName
+        && left.typeArguments.length === right.typeArguments.length
+        && left.typeArguments.every((item, index) => sameType(item, right.typeArguments[index]!));
+}
+
+function vectorElement(type: SemanticType): SemanticType | null {
+    return type.emittedName === "AS3Vector" && type.typeArguments.length === 1 ? type.typeArguments[0]! : null;
+}
+
 function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean): SemanticType {
+    if (node.kind === "VECTOR") {
+        if (node.children.length !== 1 || (node.children[0]!.kind !== "TYPE" && node.children[0]!.kind !== "VECTOR")) {
+            fail("HARDENED_VECTOR_TYPE", "Vector must have exactly one structurally admitted element type", node);
+        }
+        const element = parseType(node.children[0]!, context, false);
+        const primitivePolicy = ["int", "uint", "Number", "Boolean", "String", "Object"].includes(element.sourceName);
+        const imported = context.importsByLocal[element.sourceName];
+        if (!primitivePolicy && element.sourceName !== context.className && element.emittedName !== "AS3Vector"
+            && (!imported || !imported.runtimeConstructible)) {
+            fail("HARDENED_VECTOR_ELEMENT_RUNTIME", "Vector reference element requires a proven runtime class identity", node.children[0]!);
+        }
+        return semanticType(node, `Vector.<${element.sourceName}>`, "AS3Vector", [element]);
+    }
     if (node.kind !== "TYPE") {
-        fail("HARDENED_TYPE_NODE", "only named source types are admitted", node);
+        fail("HARDENED_TYPE_NODE", "only named or Vector source types are admitted", node);
     }
     const sourceName = requiredText(node, "type");
     if (sourceName === "void" && !allowVoid) {
@@ -326,7 +366,7 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
                 + " is not a proven primitive or double-pinned import", node);
         }
     }
-    return Object.assign(identity(node), { sourceName, emittedName });
+    return semanticType(node, sourceName, emittedName);
 }
 
 function parseParameters(list: TreeNode, context: AdapterContext): SemanticParameter[] {
@@ -338,7 +378,7 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
         }
         onlyKinds(parameter, ["NAME_TYPE_INIT"]);
         const declaration = one(parameter, "NAME_TYPE_INIT")!;
-        onlyKinds(declaration, ["NAME", "TYPE", "INIT"]);
+        onlyKinds(declaration, ["NAME", "TYPE", "VECTOR", "INIT"]);
         if (declaration.children.some((child) => child.kind === "INIT")) {
             fail("HARDENED_PARAMETER_DEFAULT", "default parameters are not admitted in the minimal emitter", declaration);
         }
@@ -350,7 +390,7 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
         seen[name] = true;
         return Object.assign(identity(parameter), {
             name,
-            type: parseType(one(declaration, "TYPE")!, context, false),
+            type: parseType(oneType(declaration), context, false),
         });
     });
 }
@@ -405,16 +445,23 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         && context.accessors[expression.name]?.getter) {
         return context.accessors[expression.name]!.getter!.returnType!;
     }
+    if (expression.kind === "member") {
+        const ownerType = assignmentType(expression.target, context, node);
+        if (vectorElement(ownerType) !== null) {
+            if (expression.name === "length") return semanticType(node, "uint", "number");
+            if (expression.name === "fixed") return semanticType(node, "Boolean", "boolean");
+        }
+    }
     if (expression.kind === "literal") {
         if (expression.value === null) {
             fail("HARDENED_ASSIGNMENT_NULL", "null assignment requires an explicit nullable source-to-target type policy", node);
         }
         const sourceName = typeof expression.value === "number" ? "Number"
             : typeof expression.value === "string" ? "String" : "Boolean";
-        return Object.assign(identity(node), { sourceName, emittedName: PRIMITIVE_TYPES[sourceName]! });
+        return semanticType(node, sourceName, PRIMITIVE_TYPES[sourceName]!);
     }
     if (expression.kind === "methodClosure") {
-        return Object.assign(identity(node), { sourceName: "Function", emittedName: "Function" });
+        return semanticType(node, "Function", "Function");
     }
     if (expression.kind === "new") {
         return expression.sourceType;
@@ -428,17 +475,14 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "parenthesized") {
         return expression.resultType;
     }
-    if (expression.kind === "conditional" || expression.kind === "update") {
+    if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index") {
         return expression.resultType;
     }
+    if (expression.kind === "vectorConversion") return expression.vectorType;
     if (expression.kind === "assignment") {
         return assignmentTargetType(expression.target, context, node);
     }
-    if (expression.kind === "call" && expression.callee.kind === "member"
-        && expression.callee.target.kind === "this" && context.methods[expression.callee.name]
-        && !context.methods[expression.callee.name]!.constructor) {
-        return context.methods[expression.callee.name]!.returnType!;
-    }
+    if (expression.kind === "call" && expression.resultType !== null) return expression.resultType;
     fail("HARDENED_ASSIGNMENT_TYPE", "assignment value type is not statically proven in the admitted subset", node);
 }
 
@@ -469,12 +513,21 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
         }
         return setter.parameters[0]!.type;
     }
+    if (expression.kind === "member") {
+        const ownerType = assignmentType(expression.target, context, node);
+        if (vectorElement(ownerType) !== null) {
+            if (expression.name === "length") return semanticType(node, "uint", "number");
+            if (expression.name === "fixed") return semanticType(node, "Boolean", "boolean");
+        }
+    }
+    if (expression.kind === "index") return expression.resultType;
     fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable parameter or instance field", node);
 }
 
 function assertAssignmentCompatible(target: SemanticType, value: SemanticType, node: TreeNode): void {
-    if (target.sourceName === "Object" || (target.sourceName === value.sourceName
-        && target.emittedName === value.emittedName)) {
+    if (target.sourceName === "Object" || sameType(target, value)
+        || (["Number", "int", "uint"].includes(target.sourceName)
+            && ["Number", "int", "uint"].includes(value.sourceName))) {
         return;
     }
     fail("HARDENED_ASSIGNMENT_TYPE", "assignment requires exact proven source types; implicit AS3 coercion is held", node);
@@ -486,16 +539,37 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
     if (node.kind === "LITERAL") {
         return parseLiteral(node);
     }
+    if (node.kind === "ARRAY") {
+        return Object.assign(identity(node), {
+            kind: "array" as "array",
+            elements: node.children.map(child => parseExpression(child, context, true)),
+        });
+    }
     if (node.kind === "NEW") {
         if (node.children.length !== 1 || node.children[0]!.kind !== "CALL") {
             fail("HARDENED_NEW_SHAPE", "constructor expression must contain exactly one direct call", node);
         }
         const call = node.children[0]!;
-        if (call.children.length !== 2 || call.children[0]!.kind !== "IDENTIFIER"
+        if (call.children.length !== 2 || (call.children[0]!.kind !== "IDENTIFIER" && call.children[0]!.kind !== "VECTOR")
             || call.children[1]!.kind !== "ARGUMENTS") {
             fail("HARDENED_NEW_TARGET", "constructor target must be one local or double-pinned imported class", call);
         }
         const nameNode = call.children[0]!;
+        if (nameNode.kind === "VECTOR") {
+            const sourceType = parseType(nameNode, context, false);
+            const args = call.children[1]!.children.map(child => parseExpression(child, context, true));
+            if (args.length > 2) fail("HARDENED_VECTOR_CONSTRUCTOR_ARITY", "Vector constructor accepts length and fixed only", call);
+            if (args[0]) {
+                const lengthType = assignmentType(args[0], context, call.children[1]!.children[0]!);
+                if (!["Number", "int", "uint"].includes(lengthType.sourceName)) {
+                    fail("HARDENED_VECTOR_LENGTH", "Vector length must be a proven numeric value", call.children[1]!.children[0]!);
+                }
+            }
+            if (args[1] && assignmentType(args[1], context, call.children[1]!.children[1]!).sourceName !== "Boolean") {
+                fail("HARDENED_VECTOR_FIXED", "Vector fixed argument must be a proven Boolean", call.children[1]!.children[1]!);
+            }
+            return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
+        }
         const name = validateIdentifier(requiredText(nameNode, "constructor target"), nameNode);
         const args = call.children[1]!.children.map((child) => parseExpression(child, context, true));
         let sourceType: SemanticType;
@@ -509,7 +583,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 assignmentType(argument, context, call.children[1]!.children[index]!),
                 call.children[1]!.children[index]!,
             ));
-            sourceType = Object.assign(identity(nameNode), { sourceName: name, emittedName: name });
+            sourceType = semanticType(nameNode, name, name);
         } else {
             const imported = context.importsByLocal[name];
             const typeMapping = imported ? context.mappingsBySource[imported.sourceQualifiedName] : undefined;
@@ -531,7 +605,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (matches.length !== 1) {
                 fail("HARDENED_NEW_ARITY", "constructor arity lacks one exact double-pinned signature", call);
             }
-            sourceType = Object.assign(identity(nameNode), { sourceName: name, emittedName: name });
+            sourceType = semanticType(nameNode, name, name);
         }
         return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
     }
@@ -549,7 +623,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const right = parseExpression(node.children[2]!, context, true);
         const leftType = assignmentType(left, context, node.children[0]!);
         const rightType = assignmentType(right, context, node.children[2]!);
-        if (leftType.sourceName !== rightType.sourceName || leftType.emittedName !== rightType.emittedName) {
+        if (!sameType(leftType, rightType)) {
             fail("HARDENED_BINARY_TYPE", "binary operands require the exact same proven source type", node);
         }
         if ((operator === "&&" || operator === "||") && leftType.sourceName !== "Boolean") {
@@ -567,7 +641,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         const booleanResult = ["<", "<=", ">", ">=", "===", "!==", "&&", "||"].indexOf(operator) >= 0;
         const resultType = booleanResult
-            ? Object.assign(identity(node), { sourceName: "Boolean", emittedName: "boolean" })
+            ? semanticType(node, "Boolean", "boolean")
             : leftType;
         return Object.assign(identity(node), {
             kind: "binary" as "binary",
@@ -617,7 +691,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const whenFalse = parseExpression(node.children[2]!, context, true);
         const trueType = assignmentType(whenTrue, context, node.children[1]!);
         const falseType = assignmentType(whenFalse, context, node.children[2]!);
-        if (trueType.sourceName !== falseType.sourceName || trueType.emittedName !== falseType.emittedName) {
+        if (!sameType(trueType, falseType)) {
             fail("HARDENED_CONDITIONAL_TYPE", "conditional branches require the exact same proven source type", node);
         }
         return Object.assign(identity(node), {
@@ -629,11 +703,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_UPDATE_SHAPE", "update expression requires exactly one writable target", node);
         }
         const parsedTarget = parseExpression(node.children[0]!, context, false);
-        if (parsedTarget.kind !== "identifier" && parsedTarget.kind !== "member") {
+        if (parsedTarget.kind !== "identifier" && parsedTarget.kind !== "member" && parsedTarget.kind !== "index") {
             fail("HARDENED_UPDATE_TARGET", "update target must be a proven writable identity", node.children[0]!);
         }
         const resultType = assignmentTargetType(parsedTarget, context, node.children[0]!);
-        if (resultType.sourceName !== "Number" || resultType.emittedName !== "number") {
+        if (!["Number", "int", "uint"].includes(resultType.sourceName) || resultType.emittedName !== "number") {
             fail("HARDENED_UPDATE_NUMBER", "increment and decrement require an exact writable Number", node);
         }
         return Object.assign(identity(node), {
@@ -646,6 +720,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
     }
     if (node.kind === "IDENTIFIER") {
         const name = requiredText(node, "identifier");
+        if (name === "true" || name === "false" || name === "null") {
+            return parseLiteral(Object.assign({}, node, { kind: "LITERAL", text: name }));
+        }
         if (name === "this") {
             return Object.assign(identity(node), { kind: "this" as "this" });
         }
@@ -698,7 +775,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_ASSIGNMENT_OPERATOR", "compound assignment requires an explicit coercion policy", node.children[1]!);
         }
         const target = parseExpression(node.children[0]!, context, false);
-        if (target.kind !== "identifier" && target.kind !== "member") {
+        if (target.kind !== "identifier" && target.kind !== "member" && target.kind !== "index") {
             fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable lvalue", node.children[0]!);
         }
         const value = parseExpression(node.children[2]!, context, true);
@@ -710,6 +787,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         return Object.assign(identity(node), {
             kind: "assignment" as "assignment", operator: "=" as "=", target, value,
         });
+    }
+    if (node.kind === "ARRAY_ACCESSOR") {
+        if (node.children.length !== 2) {
+            fail("HARDENED_INDEX_SHAPE", "indexed access requires one target and one index", node);
+        }
+        const target = parseExpression(node.children[0]!, context, true);
+        const ownerType = assignmentType(target, context, node.children[0]!);
+        const element = vectorElement(ownerType);
+        if (!element) fail("HARDENED_INDEX_TARGET", "indexed access currently requires a proven Vector", node);
+        const index = parseExpression(node.children[1]!, context, true);
+        const indexType = assignmentType(index, context, node.children[1]!);
+        if (!["Number", "int", "uint"].includes(indexType.sourceName)) {
+            fail("HARDENED_INDEX_TYPE", "Vector index must be a proven numeric value", node.children[1]!);
+        }
+        return Object.assign(identity(node), { kind: "index" as "index", target, index, resultType: element });
     }
     if (node.kind === "DOT") {
         if (node.children.length !== 2 || node.children[1]!.kind !== "LITERAL") {
@@ -744,7 +836,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (target.kind === "identifier" && context.importsByLocal[target.name]) {
             fail("HARDENED_STATIC_MEMBER", "Flash static members require an explicit paired member mapping", node);
         } else {
-            fail("HARDENED_MEMBER_TARGET", "member target is outside the admitted subset", node);
+            const targetType = assignmentType(target, context, node.children[0]!);
+            if (vectorElement(targetType) === null
+                || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name))) {
+                fail("HARDENED_MEMBER_TARGET", "member target is outside the admitted subset", node);
+            }
+            capabilitySource = targetType.sourceName;
         }
         return Object.assign(identity(node), { kind: "member" as "member", target, name, capabilitySource });
     }
@@ -752,9 +849,20 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children.length !== 2 || node.children[1]!.kind !== "ARGUMENTS") {
             fail("HARDENED_CALL_SHAPE", "call expression has the wrong normalized shape", node);
         }
-        onlyKinds(node.children[1]!, ["AND", "ARRAY_ACCESSOR", "CALL", "DOT", "EQUALITY", "IDENTIFIER",
-            "LITERAL", "NEW", "OR", "RELATION"]);
+        onlyKinds(node.children[1]!, ["AND", "ARRAY", "ARRAY_ACCESSOR", "CALL", "DOT", "EQUALITY", "IDENTIFIER",
+            "LITERAL", "NEW", "OR", "RELATION", "VECTOR"]);
         const rawCallee = node.children[0]!;
+        if (rawCallee.kind === "VECTOR") {
+            const vectorType = parseType(rawCallee, context, false);
+            if (node.children[1]!.children.length !== 1) {
+                fail("HARDENED_VECTOR_CONVERSION_ARITY", "Vector conversion requires exactly one source value", node);
+            }
+            const source = parseExpression(node.children[1]!.children[0]!, context, true);
+            if (source.kind !== "array" && vectorElement(assignmentType(source, context, node.children[1]!.children[0]!)) === null) {
+                fail("HARDENED_VECTOR_CONVERSION_SOURCE", "Vector conversion requires an Array literal or proven Vector", node);
+            }
+            return Object.assign(identity(node), { kind: "vectorConversion" as "vectorConversion", vectorType, source });
+        }
         let callee: SemanticExpression;
         if (rawCallee.kind === "IDENTIFIER" && rawCallee.text === "super") {
             if (!allowSuperCall) {
@@ -776,6 +884,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
         let capabilitySource: string | null = null;
         let capabilityMember: string | null = null;
+        let resultType: SemanticType | null = null;
         if (callee.kind === "super") {
             if (args.length !== 0) {
                 fail("HARDENED_SUPER_ARITY", "minimal derived constructor admits only zero-argument super", node);
@@ -784,6 +893,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (context.methods[callee.name]!.parameters.length !== args.length) {
                 fail("HARDENED_LOCAL_CALL_ARITY", "local method call does not match its declared arity", node);
             }
+            resultType = context.methods[callee.name]!.returnType;
         } else if (callee.kind === "member" && callee.target.kind === "this" && callee.capabilitySource !== null) {
             const mapping = memberMapping(context, callee.capabilitySource, "call", callee.name, node);
             if (mapping === null || mapping.sourceMember === null
@@ -792,11 +902,36 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             capabilitySource = mapping.sourceQName;
             capabilityMember = mapping.sourceMember.name;
+        } else if (callee.kind === "member" && vectorElement(assignmentType(callee.target, context, rawCallee)) !== null) {
+            const ownerType = assignmentType(callee.target, context, rawCallee);
+            const element = vectorElement(ownerType)!;
+            const name = callee.name;
+            const arities: { [name: string]: [number, number] } = {
+                concat: [0, Number.MAX_SAFE_INTEGER], every: [1, 2], filter: [1, 2], forEach: [1, 2],
+                indexOf: [1, 2], join: [0, 1], lastIndexOf: [1, 2], map: [1, 2], pop: [0, 0],
+                push: [0, Number.MAX_SAFE_INTEGER], reverse: [0, 0], shift: [0, 0], slice: [0, 2],
+                some: [1, 2], sort: [0, 1], splice: [1, Number.MAX_SAFE_INTEGER],
+                unshift: [0, Number.MAX_SAFE_INTEGER],
+            };
+            const arity: [number, number] | undefined = name === "toString" ? [0, 0] : arities[name];
+            if (!arity || args.length < arity[0] || args.length > arity[1]) {
+                fail("HARDENED_VECTOR_MEMBER_ARITY", "Vector member call has unsupported identity or arity", node);
+            }
+            if (name === "push" || name === "unshift") {
+                args.forEach((argument, index) => assertAssignmentCompatible(element,
+                    assignmentType(argument, context, node.children[1]!.children[index]!), node.children[1]!.children[index]!));
+            }
+            resultType = name === "pop" || name === "shift" ? element
+                : ["concat", "filter", "map", "reverse", "slice", "sort", "splice"].includes(name) ? ownerType
+                    : ["every", "some"].includes(name) ? semanticType(node, "Boolean", "boolean")
+                        : name === "join" || name === "toString" ? semanticType(node, "String", "string")
+                            : name === "forEach" ? semanticType(node, "void", "void")
+                                : semanticType(node, "int", "number");
         } else {
             fail("HARDENED_CALL_TARGET", "call target is not a proven local method or super", node);
         }
         const result: CallExpression = Object.assign(identity(node), {
-            kind: "call" as "call", callee, arguments: args, capabilitySource, capabilityMember,
+            kind: "call" as "call", callee, arguments: args, capabilitySource, capabilityMember, resultType,
         });
         return result;
     }
@@ -893,7 +1028,7 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 fail("HARDENED_LOCAL_EMPTY", "local declaration must contain at least one declarator", node);
             }
             const declarations = node.children.map((declaration): SemanticLocal => {
-                onlyKinds(declaration, ["INIT", "NAME", "TYPE"]);
+                onlyKinds(declaration, ["INIT", "NAME", "TYPE", "VECTOR"]);
                 const nameNode = one(declaration, "NAME")!;
                 const name = validateIdentifier(requiredText(nameNode, "local name"), nameNode);
                 const header = context.locals[name];
@@ -923,7 +1058,7 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
                 fail("HARDENED_LOCAL_EMPTY", "local declaration must contain at least one declarator", node);
             }
             node.children.forEach((declaration) => {
-                onlyKinds(declaration, ["INIT", "NAME", "TYPE"]);
+                onlyKinds(declaration, ["INIT", "NAME", "TYPE", "VECTOR"]);
                 const nameNode = one(declaration, "NAME")!;
                 const name = validateIdentifier(requiredText(nameNode, "local name"), nameNode);
                 if (context.parameters[name]) {
@@ -936,7 +1071,7 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
                     node: declaration,
                     name,
                     readonly: node.kind === "CONST_LIST",
-                    type: parseType(one(declaration, "TYPE")!, context, false),
+                    type: parseType(oneType(declaration), context, false),
                 };
             });
             return;
@@ -979,7 +1114,7 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
         fail("HARDENED_FIELD_EMPTY", "field declaration must contain at least one source declarator", list);
     }
     return declarations.map((declaration) => {
-        onlyKinds(declaration, ["INIT", "NAME", "TYPE"]);
+        onlyKinds(declaration, ["INIT", "NAME", "TYPE", "VECTOR"]);
         const nameNode = one(declaration, "NAME")!;
         const name = validateIdentifier(requiredText(nameNode, "field name"), nameNode);
         if (context.fields[name] || context.methods[name] || context.accessors[name]) {
@@ -996,7 +1131,7 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
         } else if (readonly) {
             fail("HARDENED_CONST_INITIALIZER", "AS3 const fields require an explicit admitted initializer", declaration);
         }
-        const fieldType = parseType(one(declaration, "TYPE")!, context, false);
+        const fieldType = parseType(oneType(declaration), context, false);
         if (initializer !== null) {
             assertAssignmentCompatible(fieldType, assignmentType(initializer, context, init!), declaration);
         }
@@ -1018,12 +1153,12 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     if (node.kind !== "FUNCTION" && node.kind !== "GET" && node.kind !== "SET") {
         fail("HARDENED_METHOD_KIND", "callable form is unsupported", node);
     }
-    onlyKinds(node, ["BLOCK", "MOD_LIST", "NAME", "PARAMETER_LIST", "TYPE"]);
+    onlyKinds(node, ["BLOCK", "MOD_LIST", "NAME", "PARAMETER_LIST", "TYPE", "VECTOR"]);
     const nameNode = one(node, "NAME")!;
     const name = validateIdentifier(requiredText(nameNode, "method name"), nameNode);
     const accessor = node.kind === "GET" ? "getter" : node.kind === "SET" ? "setter" : null;
     const constructor = accessor === null && name === className;
-    const returnNode = one(node, "TYPE")!;
+    const returnNode = oneType(node);
     const returnType = constructor ? null : parseType(returnNode, context, true);
     if (constructor && (returnNode.text !== null && returnNode.text !== "")) {
         fail("HARDENED_CONSTRUCTOR_RETURN", "constructor must not declare a return type", returnNode);
@@ -1138,7 +1273,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 fail("HARDENED_BASE_TYPE", "local base type must resolve to an authenticated class", extendsNode);
             }
         }
-        extendsType = Object.assign(identity(extendsNode), { sourceName, emittedName: sourceName });
+        extendsType = semanticType(extendsNode, sourceName, sourceName);
         placeholder.extendsType = extendsType;
         placeholder.baseSourceQName = imported.authorityKind === "flash" ? imported.sourceQualifiedName : null;
     }
@@ -1172,7 +1307,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         if (pair.getter && pair.setter) {
             const getterType = pair.getter.returnType!;
             const setterType = pair.setter.parameters[0]!.type;
-            if (getterType.sourceName !== setterType.sourceName || getterType.emittedName !== setterType.emittedName
+            if (!sameType(getterType, setterType)
                 || pair.getter.modifiers.join("\u0000") !== pair.setter.modifiers.join("\u0000")) {
                 fail("HARDENED_ACCESSOR_PAIR", "paired getter/setter type and modifiers must match exactly", pair.setter.node);
             }

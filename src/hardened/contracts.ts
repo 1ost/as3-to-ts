@@ -76,6 +76,7 @@ export interface SemanticIdentity {
 export interface SemanticType extends SemanticIdentity {
     sourceName: string;
     emittedName: string;
+    typeArguments: SemanticType[];
 }
 
 export type SemanticModifier = "public" | "private" | "protected" | "static";
@@ -83,6 +84,7 @@ export type SemanticModifier = "public" | "private" | "protected" | "static";
 export interface SemanticImport extends SemanticIdentity {
     authorityKind: "flash" | "local";
     localNodeId: string | null;
+    runtimeConstructible: boolean;
     sourceQualifiedName: string;
     sourceLocalName: string;
     targetModule: string;
@@ -127,6 +129,25 @@ export interface CallExpression extends SemanticIdentity {
     arguments: SemanticExpression[];
     capabilitySource: string | null;
     capabilityMember: string | null;
+    resultType: SemanticType | null;
+}
+
+export interface ArrayExpression extends SemanticIdentity {
+    kind: "array";
+    elements: SemanticExpression[];
+}
+
+export interface IndexExpression extends SemanticIdentity {
+    kind: "index";
+    target: SemanticExpression;
+    index: SemanticExpression;
+    resultType: SemanticType;
+}
+
+export interface VectorConversionExpression extends SemanticIdentity {
+    kind: "vectorConversion";
+    vectorType: SemanticType;
+    source: SemanticExpression;
 }
 
 export type LocalTypeModule = "application" | "bootstrap";
@@ -157,7 +178,7 @@ export interface LoadedLocalTypeAuthority {
 export interface AssignmentExpression extends SemanticIdentity {
     kind: "assignment";
     operator: "=";
-    target: IdentifierExpression | MemberExpression;
+    target: IdentifierExpression | MemberExpression | IndexExpression;
     value: SemanticExpression;
 }
 
@@ -201,14 +222,14 @@ export interface UpdateExpression extends SemanticIdentity {
     kind: "update";
     operator: "++" | "--";
     prefix: boolean;
-    target: IdentifierExpression | MemberExpression;
+    target: IdentifierExpression | MemberExpression | IndexExpression;
     resultType: SemanticType;
 }
 
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
-    ConditionalExpression | UpdateExpression;
+    ConditionalExpression | UpdateExpression | ArrayExpression | IndexExpression | VectorConversionExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";

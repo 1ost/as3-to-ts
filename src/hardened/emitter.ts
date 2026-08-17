@@ -52,6 +52,13 @@ function modifierTokens(modifiers: SemanticModifier[], ts: TypeScriptCompilerApi
 }
 
 function typeNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
+    if (type.emittedName === "AS3Vector") {
+        if (type.typeArguments.length !== 1) {
+            throw new HardenedSemanticError("HARDENED_EMIT_VECTOR_TYPE", "Vector semantic type requires one element type");
+        }
+        return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier("__as3Vector"),
+            [vectorElementTypeNode(type.typeArguments[0]!, ts)]);
+    }
     if (type.emittedName === "boolean") {
         return ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword);
     }
@@ -67,7 +74,35 @@ function typeNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
     if (type.emittedName === "void") {
         return ts.factory.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword);
     }
-    return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier(type.emittedName), undefined);
+    return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier(type.emittedName),
+        type.typeArguments.length === 0 ? undefined : type.typeArguments.map(argument => typeNode(argument, ts)));
+}
+
+function vectorElementTypeNode(element: SemanticType, ts: TypeScriptCompilerApi): any {
+    const type = typeNode(element, ts);
+    return ["Number", "int", "uint", "Boolean"].includes(element.sourceName) ? type
+        : ts.factory.createUnionTypeNode([type, ts.factory.createLiteralTypeNode(ts.factory.createNull())]);
+}
+
+function vectorPolicyNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
+    const element = type.typeArguments[0];
+    if (type.emittedName !== "AS3Vector" || !element) {
+        throw new HardenedSemanticError("HARDENED_EMIT_VECTOR_POLICY", "Vector runtime policy requires one element type");
+    }
+    const names: { [sourceName: string]: string } = {
+        int: "int", uint: "uint", Number: "number", Boolean: "boolean", String: "string", Object: "object",
+    };
+    const policy = names[element.sourceName];
+    if (policy) {
+        return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3VectorPolicies"), policy);
+    }
+    if (element.emittedName === "AS3Vector") {
+        throw new HardenedSemanticError("HARDENED_EMIT_VECTOR_NESTED",
+            "nested Vector requires a specialized runtime element policy");
+    }
+    return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3VectorReference"), undefined, [
+        ts.factory.createStringLiteral(element.sourceName), ts.factory.createIdentifier(element.emittedName),
+    ]);
 }
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
@@ -102,6 +137,19 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createCallExpression(expressionNode(expression.callee, ts), undefined,
             expression.arguments.map((argument) => expressionNode(argument, ts)));
     }
+    if (expression.kind === "array") {
+        return ts.factory.createArrayLiteralExpression(expression.elements.map(element => expressionNode(element, ts)), false);
+    }
+    if (expression.kind === "index") {
+        return ts.factory.createElementAccessExpression(expressionNode(expression.target, ts), expressionNode(expression.index, ts));
+    }
+    if (expression.kind === "vectorConversion") {
+        const element = expression.vectorType.typeArguments[0]!;
+        return ts.factory.createCallExpression(
+            ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3Vector"), "from"),
+            [vectorElementTypeNode(element, ts)], [vectorPolicyNode(expression.vectorType, ts), expressionNode(expression.source, ts)],
+        );
+    }
     if (expression.kind === "assignment") {
         return ts.factory.createBinaryExpression(
             expressionNode(expression.target, ts),
@@ -110,6 +158,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "new") {
+        if (expression.sourceType.emittedName === "AS3Vector") {
+            return ts.factory.createNewExpression(ts.factory.createIdentifier("__as3Vector"),
+                [vectorElementTypeNode(expression.sourceType.typeArguments[0]!, ts)],
+                [vectorPolicyNode(expression.sourceType, ts)].concat(
+                    expression.arguments.map((argument) => expressionNode(argument, ts))));
+        }
         return ts.factory.createNewExpression(
             ts.factory.createIdentifier(expression.sourceType.emittedName),
             undefined,
@@ -227,6 +281,13 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.value);
         } else if (expression.kind === "new") {
             expression.arguments.forEach(inspectExpression);
+        } else if (expression.kind === "array") {
+            expression.elements.forEach(inspectExpression);
+        } else if (expression.kind === "index") {
+            inspectExpression(expression.target);
+            inspectExpression(expression.index);
+        } else if (expression.kind === "vectorConversion") {
+            inspectExpression(expression.source);
         } else if (expression.kind === "binary") {
             inspectExpression(expression.left);
             inspectExpression(expression.right);
@@ -336,6 +397,57 @@ function importNode(item: any, ts: TypeScriptCompilerApi): any {
     );
 }
 
+function programUsesVector(program: SemanticProgram): boolean {
+    const visitType = (type: SemanticType | null): boolean => type !== null
+        && (type.emittedName === "AS3Vector" || type.typeArguments.some(visitType));
+    const visitExpression = (expression: SemanticExpression): boolean => {
+        if (expression.kind === "new") return visitType(expression.sourceType) || expression.arguments.some(visitExpression);
+        if (expression.kind === "vectorConversion") return true;
+        if (expression.kind === "array") return expression.elements.some(visitExpression);
+        if (expression.kind === "index") return visitType(expression.resultType)
+            || visitExpression(expression.target) || visitExpression(expression.index);
+        if (expression.kind === "member") return visitExpression(expression.target);
+        if (expression.kind === "call") return visitExpression(expression.callee) || expression.arguments.some(visitExpression);
+        if (expression.kind === "assignment") return visitExpression(expression.target) || visitExpression(expression.value);
+        if (expression.kind === "binary") return visitExpression(expression.left) || visitExpression(expression.right);
+        if (expression.kind === "unary") return visitExpression(expression.operand);
+        if (expression.kind === "parenthesized") return visitExpression(expression.expression);
+        if (expression.kind === "conditional") return visitExpression(expression.condition)
+            || visitExpression(expression.whenTrue) || visitExpression(expression.whenFalse);
+        if (expression.kind === "update") return visitExpression(expression.target);
+        return false;
+    };
+    const visitStatement = (statement: SemanticStatement): boolean => {
+        if (statement.kind === "expression") return visitExpression(statement.expression);
+        if (statement.kind === "return") return statement.expression !== null && visitExpression(statement.expression);
+        if (statement.kind === "local") return statement.declarations.some(local => visitType(local.type) || visitExpression(local.initializer));
+        if (statement.kind === "while") return visitExpression(statement.condition) || statement.statements.some(visitStatement);
+        if (statement.kind === "if") return visitExpression(statement.condition) || statement.thenStatements.some(visitStatement)
+            || (statement.elseStatements !== null && statement.elseStatements.some(visitStatement));
+        return false;
+    };
+    return visitType(program.declaration.extendsType) || program.declaration.members.some(member => {
+        if (member.kind === "field") return visitType(member.type)
+            || (member.initializer !== null && visitExpression(member.initializer));
+        if (member.kind === "constructor") return member.parameters.some(parameter => visitType(parameter.type))
+            || member.body.some(visitStatement);
+        if (member.kind === "setter") return visitType(member.parameter.type) || member.body.some(visitStatement);
+        return visitType(member.returnType) || (member.kind === "method" && member.parameters.some(parameter => visitType(parameter.type)))
+            || member.body.some(visitStatement);
+    });
+}
+
+function vectorRuntimeImport(ts: TypeScriptCompilerApi): any {
+    const names = [
+        ["AS3Vector", "__as3Vector"], ["AS3VectorPolicies", "__as3VectorPolicies"],
+        ["as3VectorReference", "__as3VectorReference"],
+    ].map(([exported, local]) => ts.factory.createImportSpecifier(false,
+        ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!)));
+    return ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports(names)),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Vector"), undefined);
+}
+
 export function emitSemanticProgram(program: SemanticProgram, options: EmitterOptions): EmittedTypeScript {
     assertAdaptedSemanticProgram(program);
     const ts = options.compiler;
@@ -343,6 +455,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         throw new HardenedSemanticError("HARDENED_TYPESCRIPT_VERSION", "structural emitter requires the exact configured modern TypeScript compiler API");
     }
     const imports = program.imports.map((item) => importNode(item, ts));
+    if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
     const boundMethods = boundMethodNames(program);
     if (boundMethods.length > 0 && !program.declaration.members.some((member) => member.kind === "constructor")) {
         throw new HardenedSemanticError("HARDENED_METHOD_CLOSURE_CONSTRUCTOR",

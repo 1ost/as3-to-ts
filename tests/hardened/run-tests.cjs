@@ -74,6 +74,10 @@ function type(name) {
     return n("TYPE", name);
 }
 
+function vectorType(name) {
+    return n("VECTOR", null, [type(name)]);
+}
+
 function dot(target, name) {
     return n("DOT", null, [target, n("LITERAL", name)]);
 }
@@ -147,6 +151,16 @@ function buildTree(options = {}) {
             n("INIT", null, [construct("Sprite", options.newArguments || [])]),
         ]));
     }
+    if (options.vectorWorkpack) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "values"), vectorType("int"),
+            n("INIT", null, [n("NEW", null, [call(vectorType("int"), [n("LITERAL", "2"), n("LITERAL", "false")])])]),
+        ]));
+        body.push(
+            assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "values"), n("LITERAL", "0")]), n("LITERAL", "4")),
+            call(dot(n("IDENTIFIER", "values"), "push"), [n("LITERAL", "5")]),
+        );
+    }
     let onEventBody = options.returnValue ? [n("RETURN", null, [n("LITERAL", "1")])] : [n("RETURN")];
     if (options.assignment) {
         const target = n("IDENTIFIER", options.assignmentTarget || "b");
@@ -199,6 +213,16 @@ function buildTree(options = {}) {
         onEventBody = options.breakOutsideLoop
             ? [active, total, chosen, n("BREAK"), n("RETURN")]
             : [active, total, chosen, loop, n("RETURN")];
+    }
+    if (options.vectorWorkpack) {
+        onEventBody = [
+            n("VAR_LIST", null, [n("NAME_TYPE_INIT", null, [
+                n("NAME", "copy"), vectorType("int"), n("INIT", null, [
+                    call(vectorType("int"), [n("ARRAY", null, [n("LITERAL", "1"), n("LITERAL", "2")])]),
+                ]),
+            ])]),
+            n("RETURN"),
+        ];
     }
     const members = [
         field,
@@ -499,6 +523,13 @@ function main() {
     const constOutput = api.emitSemanticProgram(constProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(constOutput.code, /private readonly a: number = 1;/);
     assert.match(constOutput.code, /private readonly b: string = "x";/);
+    const vectorProgram = adapt(api, buildTree({ vectorWorkpack: true }), authority);
+    const vectorOutput = api.emitSemanticProgram(vectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorOutput.code, /AS3Vector as __as3Vector/);
+    assert.match(vectorOutput.code, /private values: __as3Vector<number> = new __as3Vector<number>\(__as3VectorPolicies\.int, 2, false\);/);
+    assert.match(vectorOutput.code, /this\.values\[0\] = 4;/);
+    assert.match(vectorOutput.code, /this\.values\.push\(5\);/);
+    assert.match(vectorOutput.code, /var copy: __as3Vector<number> = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

@@ -9,10 +9,10 @@ const SHA256 = /^[0-9a-f]{64}$/;
 // and the closed structural vocabulary consumed by adapter.ts. Expanding it is
 // an admission decision, not a parser compatibility convenience.
 const ADMITTED_KINDS = new Set([
-    "ADD", "AND", "ARGUMENTS", "ASSIGN", "BLOCK", "BREAK", "CALL", "CLASS", "COMPILATION_UNIT", "CONDITION", "CONDITIONAL", "CONST_LIST", "CONTENT", "CONTINUE", "DOT",
+    "ADD", "AND", "ARGUMENTS", "ARRAY", "ARRAY_ACCESSOR", "ASSIGN", "BLOCK", "BREAK", "CALL", "CLASS", "COMPILATION_UNIT", "CONDITION", "CONDITIONAL", "CONST_LIST", "CONTENT", "CONTINUE", "DOT",
     "ENCAPSULATED", "EQUALITY", "EXTENDS", "FUNCTION", "GET", "IDENTIFIER", "IF", "IMPORT", "INIT", "LITERAL", "MODIFIER",
     "MINUS", "MOD_LIST", "MULTIPLICATION", "NAME", "NAME_TYPE_INIT", "NEW", "NOT", "OP", "PACKAGE", "PARAMETER", "PARAMETER_LIST", "PLUS",
-    "OR", "POST_DEC", "POST_INC", "PRE_DEC", "PRE_INC", "RELATION", "RETURN", "SET", "TYPE", "VAR_LIST", "WHILE",
+    "OR", "POST_DEC", "POST_INC", "PRE_DEC", "PRE_INC", "RELATION", "RETURN", "SET", "TYPE", "VAR_LIST", "VECTOR", "WHILE",
 ]);
 
 const RECOVERY_FIELDS = ["diagnostics", "errors", "recovered", "recovery"];
