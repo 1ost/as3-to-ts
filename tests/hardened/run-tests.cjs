@@ -147,6 +147,10 @@ function method(name, parameters, returnType, body, modifierValues = ["public"])
     ]);
 }
 
+function restParameter(name) {
+    return n("PARAMETER", null, [n("REST", name)]);
+}
+
 function accessor(kind, name, parameters, returnType, body, modifierValues = ["public"]) {
     return n(kind, name, [
         mods(...modifierValues), n("NAME", name), n("PARAMETER_LIST", null, parameters),
@@ -399,6 +403,12 @@ function buildTree(options = {}) {
     if (options.defaultParameterWorkpack) {
         onEventBody = [call(n("IDENTIFIER", "configure")), n("RETURN")];
     }
+    if (options.restParameterWorkpack || options.badRestPosition) {
+        onEventBody = options.badRestPosition ? [n("RETURN")] : [
+            call(n("IDENTIFIER", "collect"), [n("LITERAL", '"p"'), n("LITERAL", "1"), n("LITERAL", '"two"')]),
+            n("RETURN"),
+        ];
+    }
     const members = [
         field,
         constructor(body),
@@ -408,6 +418,12 @@ function buildTree(options = {}) {
     ];
     if (options.defaultParameterWorkpack) {
         members.push(method("configure", [parameter("enabled", "Boolean", "true")], "void", [n("RETURN")]));
+    }
+    if (options.restParameterWorkpack || options.badRestPosition) {
+        const parameters = options.badRestPosition
+            ? [restParameter("values"), parameter("suffix", "String")]
+            : [parameter("prefix", "String"), restParameter("values")];
+        members.push(method("collect", parameters, "void", [n("RETURN")]));
     }
     if (options.implicitObjectSuper) members.splice(0, members.length, constructor(body));
     if (options.accessors) {
@@ -821,6 +837,12 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(defaultParameterOutput.code, /configure\(enabled: boolean = true\): void/);
     assert.match(defaultParameterOutput.code, /this\.configure\(\);/);
+    const restParameterProgram = adapt(api, buildTree({ restParameterWorkpack: true }), authority);
+    const restParameterOutput = api.emitSemanticProgram(restParameterProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(restParameterOutput.code, /collect\(prefix: string, \.\.\.values: unknown\[\]\): void/);
+    assert.match(restParameterOutput.code, /this\.collect\("p", 1, "two"\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badRestPosition: true }), authority), "HARDENED_PARAMETER_REST");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -831,7 +853,7 @@ function main() {
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
-        bitwiseOutput.code, compoundOutput.code]);
+        bitwiseOutput.code, compoundOutput.code, restParameterOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

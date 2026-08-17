@@ -376,7 +376,12 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
 }
 
 function parameterNode(parameter: any, ts: TypeScriptCompilerApi): any {
-    return ts.factory.createParameterDeclaration(undefined, undefined, parameter.name, undefined, typeNode(parameter.type, ts),
+    const emittedType = parameter.rest
+        ? ts.factory.createArrayTypeNode(typeNode(parameter.type, ts))
+        : typeNode(parameter.type, ts);
+    return ts.factory.createParameterDeclaration(undefined,
+        parameter.rest ? ts.factory.createToken(ts.SyntaxKind.DotDotDotToken) : undefined,
+        parameter.name, undefined, emittedType,
         parameter.defaultValue === null ? undefined : expressionNode(parameter.defaultValue, ts));
 }
 

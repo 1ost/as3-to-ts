@@ -183,6 +183,7 @@ try {
         "        public function bits():void { var flags:int = 1 | 2; var shifted:uint = flags >>> 1; var inverted:int = ~flags; var active:Boolean = true; flags >>>= 1; active &&= false; }",
         "        public function objectConfig():void { var config:Object = {\"alpha\":1,\"label\":\"ready\"}; }",
         "        public function optional(enabled:Boolean = true):void { }",
+        "        public function collect(prefix:String,...values):void { }",
         "    }",
         "}",
         "",
@@ -240,7 +241,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -302,6 +303,8 @@ try {
     assert.equal(objectInitializer.kind, "object");
     assert.deepEqual(objectInitializer.properties.map(property => property.name), ["alpha", "label"]);
     assert.equal(semantic.declaration.members[13].parameters[0].defaultValue.value, true);
+    assert.equal(semantic.declaration.members[14].parameters[1].rest, true);
+    assert.equal(semantic.declaration.members[14].parameters[1].type.sourceName, "*");
 
     const vectorSource = "package vectors { public class VectorFixture { public var values:Vector.<int> = new Vector.<int>(2,true); public function VectorFixture(){ values[0] = 3; values.push(4); var copy:Vector.<int> = Vector.<int>([1,2]); var objectValue:Object = values as Object; var matches:Boolean = values is Vector.<int>; } } }";
     const vectorTree = built.parse("fixtures/VectorFixture.as", vectorSource);

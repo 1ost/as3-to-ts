@@ -362,6 +362,7 @@ export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatem
 export interface SemanticParameter extends SemanticIdentity {
     defaultValue: SemanticExpression | null;
     name: string;
+    rest: boolean;
     type: SemanticType;
 }
 

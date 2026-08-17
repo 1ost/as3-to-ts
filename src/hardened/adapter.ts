@@ -426,11 +426,23 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
     onlyKinds(list, ["PARAMETER"]);
     const seen: { [name: string]: true } = Object.create(null);
     let sawDefault = false;
-    return list.children.map((parameter) => {
+    return list.children.map((parameter, parameterIndex) => {
         if (parameter.kind !== "PARAMETER") {
             fail("HARDENED_PARAMETER_NODE", "only ordinary required parameters are admitted", parameter);
         }
-        onlyKinds(parameter, ["NAME_TYPE_INIT"]);
+        onlyKinds(parameter, ["NAME_TYPE_INIT", "REST"]);
+        const restNode = one(parameter, "REST", true);
+        if (restNode !== null) {
+            if (parameter.children.length !== 1 || parameterIndex !== list.children.length - 1 || sawDefault) {
+                fail("HARDENED_PARAMETER_REST", "rest parameter must be the final parameter and cannot follow a default", parameter);
+            }
+            const name = validateIdentifier(requiredText(restNode, "rest parameter name"), restNode);
+            if (seen[name]) fail("HARDENED_PARAMETER_DUPLICATE", "parameter identity is duplicated", restNode);
+            seen[name] = true;
+            return Object.assign(identity(parameter), {
+                defaultValue: null, name, rest: true, type: semanticType(restNode, "*", "unknown"),
+            });
+        }
         const declaration = one(parameter, "NAME_TYPE_INIT")!;
         onlyKinds(declaration, ["NAME", "TYPE", "VECTOR", "INIT"]);
         const nameNode = one(declaration, "NAME")!;
@@ -459,14 +471,14 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
             fail("HARDENED_PARAMETER_ORDER", "required parameter cannot follow a default parameter", declaration);
         }
         return Object.assign(identity(parameter), {
-            defaultValue, name, type: parameterType,
+            defaultValue, name, rest: false, type: parameterType,
         });
     });
 }
 
 function admittedArity(parameters: SemanticParameter[], argumentCount: number): boolean {
-    const minimum = parameters.filter(parameter => parameter.defaultValue === null).length;
-    return argumentCount >= minimum && argumentCount <= parameters.length;
+    const minimum = parameters.filter(parameter => parameter.defaultValue === null && !parameter.rest).length;
+    return argumentCount >= minimum && (parameters.some(parameter => parameter.rest) || argumentCount <= parameters.length);
 }
 
 function parseLiteral(node: TreeNode): SemanticExpression {
@@ -1107,8 +1119,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (!admittedArity(parameters, args.length)) {
                 fail("HARDENED_LOCAL_CALL_ARITY", "local method call does not match its declared arity", node);
             }
-            args.forEach((argument, index) => assertAssignmentCompatible(parameters[index]!.type,
-                assignmentType(argument, context, node.children[1]!.children[index]!), node.children[1]!.children[index]!));
+            args.slice(0, parameters.findIndex(parameter => parameter.rest) < 0
+                ? parameters.length : parameters.findIndex(parameter => parameter.rest))
+                .forEach((argument, index) => assertAssignmentCompatible(parameters[index]!.type,
+                    assignmentType(argument, context, node.children[1]!.children[index]!), node.children[1]!.children[index]!));
             resultType = context.methods[callee.name]!.returnType;
         } else if (callee.kind === "member" && callee.target.kind === "this" && callee.capabilitySource !== null) {
             const mapping = memberMapping(context, callee.capabilitySource, "call", callee.name, node);
@@ -1654,8 +1668,8 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     if (accessor === "setter" && (parameters.length !== 1 || returnType === null || returnType.sourceName !== "void")) {
         fail("HARDENED_SETTER_SIGNATURE", "setter requires exactly one parameter and an explicit void return type", node);
     }
-    if (accessor !== null && parameters.some(parameter => parameter.defaultValue !== null)) {
-        fail("HARDENED_ACCESSOR_DEFAULT", "accessor parameters cannot have default values", node);
+    if (accessor !== null && parameters.some(parameter => parameter.defaultValue !== null || parameter.rest)) {
+        fail("HARDENED_ACCESSOR_DEFAULT", "accessor parameters cannot have default or rest values", node);
     }
     return { node, name, modifiers, parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor };
 }
