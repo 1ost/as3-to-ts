@@ -580,6 +580,7 @@ function buildTree(options = {}) {
     if (options.dictionaryWorkpack || options.badDictionaryConstructor) {
         imports.push(n("IMPORT", "flash.utils.Dictionary"));
     }
+    if (options.unmappedFlashImport) imports.push(n("IMPORT", "flash.geom.Point"));
     if (options.unusedWildcard) imports.push(n("IMPORT", "flash.geom.*"));
     if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
         imports.push(n("USE", "ResourcesSpace"));
@@ -871,6 +872,8 @@ function main() {
         "HARDENED_LOCAL_SOURCE_AUTHORITY");
     assertErrorCode(() => adaptLocal(api, authority, { logicalPath: "other/Demo.as" }),
         "HARDENED_LOCAL_SOURCE_AUTHORITY");
+    assertErrorCode(() => adapt(api, buildTree({ unmappedFlashImport: true }), authority),
+        "HARDENED_FLASH_IMPORT_UNMAPPED");
 
     const emitted = api.emitSemanticProgram(program, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     const repeated = api.emitSemanticProgram(program, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });

@@ -435,6 +435,10 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         } else if (authority.intrinsicTypesBySource[qname]) {
             item = intrinsicImport(qname, node);
         } else {
+            if (qname.startsWith("flash.")) {
+                fail("HARDENED_FLASH_IMPORT_UNMAPPED",
+                    "Flash import lacks an admitted source/target capability mapping: " + qname, node);
+            }
             if (!localAuthority || !resolveCurrentLocal) {
                 fail("HARDENED_LOCAL_IMPORT_AUTHORITY", "project-local import requires the authenticated dependency type map", node);
             }
