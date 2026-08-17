@@ -49,16 +49,21 @@ export function parseStatement(parser:AS3Parser):Node {
     } else if (tokIs(parser, Operators.SEMI_COLUMN)) {
         result = parseEmptyStatement(parser);
     } else {
-        const labelCheckpoint = getParserCheckPoint(parser);
-        const possibleLabel = parsePrimaryExpression(parser);
-        if (possibleLabel.kind === NodeKind.IDENTIFIER && tokIs(parser, Operators.COLUMN)) {
-            nextToken(parser, true);
-            const statement = parseStatement(parser);
-            result = createNode(NodeKind.LABEL, {
-                start: possibleLabel.start, end: statement.end, text: possibleLabel.text,
-            }, statement);
+        if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) {
+            const labelCheckpoint = getParserCheckPoint(parser);
+            const possibleLabel = parsePrimaryExpression(parser);
+            if (possibleLabel.kind === NodeKind.IDENTIFIER && tokIs(parser, Operators.COLUMN)) {
+                nextToken(parser, true);
+                const statement = parseStatement(parser);
+                result = createNode(NodeKind.LABEL, {
+                    start: possibleLabel.start, end: statement.end, text: possibleLabel.text,
+                }, statement);
+            } else {
+                rewindParser(parser, labelCheckpoint);
+                result = parseExpressionList(parser);
+                skip(parser, Operators.SEMI_COLUMN);
+            }
         } else {
-            rewindParser(parser, labelCheckpoint);
             result = parseExpressionList(parser);
             skip(parser, Operators.SEMI_COLUMN);
         }

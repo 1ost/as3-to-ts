@@ -180,7 +180,7 @@ try {
         "        public function flow(value:Number):void { var active:Boolean = true; switch (value) { case 1: value = 2; break; default: value = 3; } do { active = false; } while (active); throw \"done\"; }",
         "        public function iteration():void { var values:Vector.<int> = new Vector.<int>(); for (var i:Number = 0; i < 2; i++) { values.push(int(i)); } for each (var item:int in values) { values.indexOf(item); } }",
         "        public function guarded():void { try { throw \"bad\"; } catch (error:Error) { throw error; } finally { status = \"done\"; } }",
-        "        public function bits():void { var flags:int = 1 | 2; var shifted:uint = flags >>> 1; var inverted:int = ~flags; var active:Boolean = true; flags >>>= 1; active &&= false; }",
+        "        public function bits():void { var flags:int = 1 | 2; var shifted:uint = flags >>> 1; var inverted:int = ~flags; var active:Boolean = true; flags >>>= 1; active &&= false; ++flags; --flags; }",
         "        public function objectConfig():void { var config:Object = {\"alpha\":1,\"label\":\"ready\"}; }",
         "        public function optional(enabled:Boolean = true):void { }",
         "        public function collect(prefix:String,...values):void { }",
@@ -296,6 +296,8 @@ try {
     assert.equal(semantic.declaration.members[11].body[4].expression.value.kind, "coercion");
     assert.equal(semantic.declaration.members[11].body[5].expression.value.kind, "binary");
     assert.equal(semantic.declaration.members[11].body[5].expression.value.operator, "&&");
+    assert.equal(semantic.declaration.members[11].body[6].expression.kind, "update");
+    assert.equal(semantic.declaration.members[11].body[7].expression.kind, "update");
     ["B_OR", "SHIFT", "B_NOT"].forEach(kind =>
         assert.ok(normalized.nodes.some(node => node.kind === kind), `real parser preserves ${kind}`));
     ["OBJECT", "PROP", "VALUE"].forEach(kind =>
