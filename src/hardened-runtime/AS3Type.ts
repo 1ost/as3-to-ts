@@ -11,6 +11,7 @@ type RuntimeConstructor<T extends object = object> = abstract new (...args: any[
 const TOKENS = new WeakSet<object>();
 const CLASS_TOKENS = new WeakMap<Function, AS3TypeToken<object>>();
 const INTERFACE_IMPLEMENTATIONS = new WeakMap<Function, Set<object>>();
+const INTERFACE_TOKENS = new Map<string, AS3TypeToken<object>>();
 
 function token<T>(name: string, test: (value: unknown) => value is T): AS3TypeToken<T> {
     if (typeof name !== "string" || name.length === 0 || /[\u0000-\u001f\u007f]/.test(name)
@@ -75,6 +76,8 @@ export function as3ClassType<T extends object>(name: string, constructor: Runtim
 }
 
 export function as3InterfaceType<T extends object>(name: string): AS3TypeToken<T> {
+    const cached = INTERFACE_TOKENS.get(name);
+    if (cached) return cached as AS3TypeToken<T>;
     let created: AS3TypeToken<T>;
     created = token<T>(name, (value): value is T => {
         if ((typeof value !== "object" && typeof value !== "function") || value === null) return false;
@@ -90,6 +93,7 @@ export function as3InterfaceType<T extends object>(name: string): AS3TypeToken<T
         }
         return false;
     });
+    INTERFACE_TOKENS.set(name, created as AS3TypeToken<object>);
     return created;
 }
 

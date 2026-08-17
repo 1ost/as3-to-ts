@@ -52,6 +52,7 @@ test("interfaces are nominal registrations inherited through classes", () => {
     class Base {}
     class Child extends Base {}
     const runnable = as3InterfaceType("test.IRunnable");
+    assert.equal(as3InterfaceType("test.IRunnable"), runnable, "interface identity is stable by authenticated name");
     as3RegisterInterfaces(Base, [runnable]);
     assert.equal(as3Is(new Base(), runnable), true);
     assert.equal(as3Is(new Child(), runnable), true);

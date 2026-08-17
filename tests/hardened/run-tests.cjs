@@ -444,13 +444,23 @@ function canonicalJson(value) {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
 }
 
-function buildLocalBaseTree() {
+function buildLocalBaseTree(options = {}) {
+    const imports = [n("IMPORT", "lobby.base.Base")];
+    if (options.withInterface) imports.push(n("IMPORT", "lobby.base.IReady"));
+    const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
+    if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
+    const members = [constructor([call(n("IDENTIFIER", "super"))])];
+    if (options.withInterface) members.push(method("check", [parameter("value", "Object")], "void", [
+        localDeclaration("VAR_LIST", "ready", "IReady",
+            n("RELATION", null, [n("IDENTIFIER", "value"), n("AS", "as"), n("IDENTIFIER", "IReady")])),
+        localDeclaration("VAR_LIST", "matches", "Boolean",
+            n("RELATION", null, [n("IDENTIFIER", "value"), n("OP", "is"), n("IDENTIFIER", "IReady")])),
+        n("RETURN"),
+    ]));
+    classChildren.push(n("CONTENT", null, members));
     return n("COMPILATION_UNIT", null, [
-        n("PACKAGE", null, [n("NAME", "lobby.ui"), n("CONTENT", null, [
-            n("IMPORT", "lobby.base.Base"),
-            n("CLASS", null, [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base"),
-                n("CONTENT", null, [constructor([call(n("IDENTIFIER", "super"))])])]),
-        ])]),
+        n("PACKAGE", null, [n("NAME", "lobby.ui"), n("CONTENT", null,
+            imports.concat([n("CLASS", null, classChildren)]))]),
         n("CONTENT"),
     ]);
 }
@@ -466,9 +476,16 @@ function localAuthority(api, normalized, options = {}) {
             targetPath: "game-client/layaair/src/application/lobby/base/Base.ts", topologicalLevel: 0,
             typeKind: options.baseKind || "class",
         },
+        ...(options.withInterface ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            nodeId: "0000000000000003", prerequisites: [], qname: "lobby.base.IReady",
+            sourcePath: "game-client/tapplication_main/src/lobby/base/IReady.as", sourceSha256: "6".repeat(64),
+            targetPath: "game-client/layaair/src/application/lobby/base/IReady.ts", topologicalLevel: 0,
+            typeKind: "interface",
+        }] : []),
         {
             componentId: "scc-00002", importable: true, module: "application", nodeId: currentNodeId,
-            prerequisites: options.withEdge === false ? [] : [baseNodeId], qname: "lobby.ui.Demo",
+            prerequisites: options.withEdge === false ? [] : [baseNodeId].concat(options.withInterface ? ["0000000000000003"] : []), qname: "lobby.ui.Demo",
             sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
             sourceSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
             targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
@@ -489,7 +506,7 @@ function localAuthority(api, normalized, options = {}) {
 }
 
 function adaptLocal(api, authority, options = {}) {
-    const normalized = flatten(buildLocalBaseTree());
+    const normalized = flatten(buildLocalBaseTree(options));
     const locals = localAuthority(api, normalized, options);
     return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
         locals, options.logicalPath || "lobby/ui/Demo.as");
@@ -624,6 +641,14 @@ function main() {
     const localBaseOutput = api.emitSemanticProgram(localBaseProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(localBaseOutput.code, /import \{ Base \} from "\.\.\/base\/Base";/);
     assert.match(localBaseOutput.code, /export class Demo extends Base/);
+    const localInterfaceProgram = adaptLocal(api, authority, { withInterface: true });
+    assert.equal(localInterfaceProgram.imports[1].runtimeInterface, true);
+    assert.equal(localInterfaceProgram.declaration.implementsTypes[0].runtimeName, "lobby.base.IReady");
+    const localInterfaceOutput = api.emitSemanticProgram(localInterfaceProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localInterfaceOutput.code, /export class Demo extends Base implements IReady/);
+    assert.match(localInterfaceOutput.code, /__as3RegisterInterfaces\(Demo, \[__as3InterfaceType\("lobby\.base\.IReady"\)\]\);/);
+    assert.match(localInterfaceOutput.code, /__as3As\(value, __as3InterfaceType\("lobby\.base\.IReady"\)\)/);
     assertErrorCode(() => adaptLocal(api, authority, { withEdge: false }), "HARDENED_LOCAL_IMPORT_EDGE");
     assertErrorCode(() => adaptLocal(api, authority, { baseQName: "lobby.base.Other" }), "HARDENED_LOCAL_IMPORT");
     assertErrorCode(() => adaptLocal(api, authority, { baseKind: "interface" }), "HARDENED_BASE_TYPE");

@@ -299,7 +299,8 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         if (authority.typeMappingsBySource[qname]) {
             const mapping = mappingForRole(authority, qname, "import", node);
             item = Object.assign(identity(node), {
-                authorityKind: "flash" as "flash", localNodeId: null, runtimeConstructible: mapping.targetKind === "class",
+                authorityKind: "flash" as "flash", localNodeId: null,
+                runtimeConstructible: mapping.targetKind === "class", runtimeInterface: mapping.targetKind === "interface",
                 sourceQualifiedName: qname, sourceLocalName: localName,
                 targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
             });
@@ -316,7 +317,8 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
                 fail("HARDENED_LOCAL_IMPORT_EDGE", "project-local import lacks an authenticated dependency edge: " + qname, node);
             }
             item = Object.assign(identity(node), {
-                authorityKind: "local" as "local", localNodeId: target.nodeId, runtimeConstructible: target.typeKind === "class",
+                authorityKind: "local" as "local", localNodeId: target.nodeId,
+                runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
                 sourceQualifiedName: qname, sourceLocalName: localName,
                 targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
             });
@@ -639,12 +641,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_RUNTIME_TYPE_TARGET", "runtime type target must be a named class, primitive, or Vector", rawTarget);
         }
         const runtimePrimitives = new Set(["int", "uint", "Number", "Boolean", "String", "Object", "Array", "Class", "Function"]);
-        let targetKind: "primitive" | "class" | "vector";
+        let targetKind: "primitive" | "class" | "interface" | "vector";
         let runtimeName = targetType.sourceName;
         if (targetType.emittedName === "AS3Vector") {
             targetKind = "vector";
         } else if (runtimePrimitives.has(targetType.sourceName)) {
             targetKind = "primitive";
+        } else if (context.importsByLocal[targetType.sourceName]?.runtimeInterface) {
+            targetKind = "interface";
+            runtimeName = context.importsByLocal[targetType.sourceName]!.sourceQualifiedName;
         } else if (targetType.sourceName === context.className
             || context.importsByLocal[targetType.sourceName]?.runtimeConstructible) {
             targetKind = "class";
@@ -1540,7 +1545,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         fail("HARDENED_PACKAGE_CONTENT", "minimal semantic adapter requires imports followed by exactly one class", content);
     }
     const classNode = classes[0]!;
-    onlyKinds(classNode, ["CONTENT", "EXTENDS", "MOD_LIST", "NAME"]);
+    onlyKinds(classNode, ["CONTENT", "EXTENDS", "IMPLEMENTS_LIST", "MOD_LIST", "NAME"]);
     const classNameNode = one(classNode, "NAME")!;
     const className = validateIdentifier(requiredText(classNameNode, "class name"), classNameNode);
     const outputModulePath = modulePath(packageName, className, packageNameNode);
@@ -1603,6 +1608,25 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         extendsType = semanticType(extendsNode, sourceName, sourceName);
         placeholder.extendsType = extendsType;
         placeholder.baseSourceQName = imported.authorityKind === "flash" ? imported.sourceQualifiedName : null;
+    }
+    const implementsTypes: Array<{ type: SemanticType; runtimeName: string }> = [];
+    const implementsNode = one(classNode, "IMPLEMENTS_LIST", true);
+    if (implementsNode !== null) {
+        onlyKinds(implementsNode, ["IMPLEMENTS"]);
+        if (implementsNode.children.length === 0) fail("HARDENED_IMPLEMENTS_EMPTY", "implements list must not be empty", implementsNode);
+        const seen = new Set<string>();
+        implementsNode.children.forEach(item => {
+            const sourceName = requiredText(item, "implemented interface");
+            const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
+            const imported = parsedImports.importsByLocal[localName];
+            if (!imported || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)
+                || !imported.runtimeInterface) {
+                fail("HARDENED_IMPLEMENTS_TYPE", "implemented type must be one authenticated imported interface", item);
+            }
+            if (seen.has(imported.sourceQualifiedName)) fail("HARDENED_IMPLEMENTS_DUPLICATE", "implemented interface is duplicated", item);
+            seen.add(imported.sourceQualifiedName);
+            implementsTypes.push({ type: semanticType(item, localName, localName), runtimeName: imported.sourceQualifiedName });
+        });
     }
     const classContent = one(classNode, "CONTENT")!;
     const functionNodes = classContent.children.filter((child) =>
@@ -1707,6 +1731,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         name: className,
         modifiers: parseModifiers(classNode, true),
         extendsType,
+        implementsTypes,
         members,
     });
     const program: SemanticProgram = Object.assign(identity(root), {

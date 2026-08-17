@@ -301,6 +301,12 @@ try {
     assert.equal(vectorSemantic.declaration.members[1].body[2].declarations[0].initializer.kind, "vectorConversion");
     assert.equal(semantic.declaration.members[7].body[5].expression.target.name, "status");
 
+    const implementsSource = "package p { import q.IReady; public class C implements IReady {} }";
+    const implementsTree = built.parse("fixtures/Implements.as", implementsSource);
+    const implementsNormalized = built.normalizer.normalizeParserAst(implementsTree, implementsSource, sha256);
+    assert.ok(implementsNormalized.nodes.some(node => node.kind === "IMPLEMENTS_LIST"));
+    assert.ok(implementsNormalized.nodes.some(node => node.kind === "IMPLEMENTS"));
+
     const repeat = built.normalizer.normalizeParserAst(built.parse("fixtures/Demo.as", source), source, sha256);
     assert.deepEqual(repeat, normalized, "real parser normalization is byte-for-byte deterministic");
 

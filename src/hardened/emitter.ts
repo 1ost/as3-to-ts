@@ -115,6 +115,10 @@ function runtimeTypeTokenNode(expression: Extract<SemanticExpression, { kind: "r
         return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3VectorType"), undefined,
             [vectorPolicyNode(expression.targetType, ts)]);
     }
+    if (expression.targetKind === "interface") {
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3InterfaceType"), undefined,
+            [ts.factory.createStringLiteral(expression.runtimeName)]);
+    }
     return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ClassType"), undefined, [
         ts.factory.createStringLiteral(expression.runtimeName),
         ts.factory.createIdentifier(expression.targetType.emittedName),
@@ -610,7 +614,8 @@ function programUsesRuntimeType(program: SemanticProgram): boolean {
 function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
     const names = [
         ["AS3Types", "__as3Types"], ["as3As", "__as3As"], ["as3Is", "__as3Is"],
-        ["as3ClassType", "__as3ClassType"],
+        ["as3ClassType", "__as3ClassType"], ["as3InterfaceType", "__as3InterfaceType"],
+        ["as3RegisterInterfaces", "__as3RegisterInterfaces"],
     ].map(([exported, local]) => ts.factory.createImportSpecifier(false,
         ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!)));
     return ts.factory.createImportDeclaration(undefined,
@@ -635,7 +640,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     }
     const imports = program.imports.map((item) => importNode(item, ts));
     if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
-    if (programUsesRuntimeType(program)) imports.push(runtimeTypeImport(ts));
+    if (programUsesRuntimeType(program) || program.declaration.implementsTypes.length > 0) imports.push(runtimeTypeImport(ts));
     if (programHasKind(program, "coercion")) imports.push(coercionRuntimeImport(ts));
     const boundMethods = boundMethodNames(program);
     if (boundMethods.length > 0 && !program.declaration.members.some((member) => member.kind === "constructor")) {
@@ -644,22 +649,35 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     }
     const classModifiers = program.declaration.modifiers.indexOf("public") >= 0
         ? [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)] : [];
-    const heritage = program.declaration.extendsType === null ? undefined : [
+    const heritage: any[] = [];
+    if (program.declaration.extendsType !== null) heritage.push(
         ts.factory.createHeritageClause(ts.SyntaxKind.ExtendsKeyword, [
             ts.factory.createExpressionWithTypeArguments(
                 ts.factory.createIdentifier(program.declaration.extendsType.emittedName), undefined,
             ),
-        ]),
-    ];
+        ]));
+    if (program.declaration.implementsTypes.length > 0) heritage.push(
+        ts.factory.createHeritageClause(ts.SyntaxKind.ImplementsKeyword,
+            program.declaration.implementsTypes.map(item => ts.factory.createExpressionWithTypeArguments(
+                ts.factory.createIdentifier(item.type.emittedName), undefined))));
     const declaration = ts.factory.createClassDeclaration(
         classModifiers,
         program.declaration.name,
         undefined,
-        heritage,
+        heritage.length === 0 ? undefined : heritage,
         program.declaration.members.map((member) => memberNode(member, ts, boundMethods)),
     );
     const empty = ts.createSourceFile(program.outputModulePath, "", ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
-    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat([declaration]));
+    const registration = program.declaration.implementsTypes.length === 0 ? [] : [
+        ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3RegisterInterfaces"), undefined, [
+                ts.factory.createIdentifier(program.declaration.name),
+                ts.factory.createArrayLiteralExpression(program.declaration.implementsTypes.map(item =>
+                    ts.factory.createCallExpression(ts.factory.createIdentifier("__as3InterfaceType"), undefined,
+                        [ts.factory.createStringLiteral(item.runtimeName)]))),
+            ])),
+    ];
+    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat([declaration]).concat(registration));
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
     let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n");
     code = code.replace(/\n*$/, "\n");

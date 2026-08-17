@@ -85,6 +85,7 @@ export interface SemanticImport extends SemanticIdentity {
     authorityKind: "flash" | "local";
     localNodeId: string | null;
     runtimeConstructible: boolean;
+    runtimeInterface: boolean;
     sourceQualifiedName: string;
     sourceLocalName: string;
     targetModule: string;
@@ -155,7 +156,7 @@ export interface RuntimeTypeExpression extends SemanticIdentity {
     operator: "as" | "is";
     value: SemanticExpression;
     targetType: SemanticType;
-    targetKind: "primitive" | "class" | "vector";
+    targetKind: "primitive" | "class" | "interface" | "vector";
     runtimeName: string;
     resultType: SemanticType;
 }
@@ -400,6 +401,7 @@ export interface SemanticClass extends SemanticIdentity {
     name: string;
     modifiers: SemanticModifier[];
     extendsType: SemanticType | null;
+    implementsTypes: Array<{ type: SemanticType; runtimeName: string }>;
     members: SemanticMember[];
 }
 
