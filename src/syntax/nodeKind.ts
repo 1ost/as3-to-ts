@@ -52,6 +52,7 @@ enum NodeKind {
     INIT,
     INTERFACE,
     ITER,
+    LABEL,
     LAMBDA,
     LEFT_CURLY_BRACKET,
     META,

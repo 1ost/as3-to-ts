@@ -5,7 +5,7 @@ import * as Operators from '../syntax/operators'
 import Token from './token';
 import AS3Parser, {
     nextToken, nextTokenAllowNewLine, consume, skip, tokIs,
-    getParserCheckPoint, assertProgress, assertNotEOF, parseError,
+    getParserCheckPoint, rewindParser, assertProgress, assertNotEOF, parseError,
 } from './parser';
 import {parseExpressionList, parseExpression, parsePrimaryExpression} from './parse-expressions';
 import {parseVarList, parseConstList} from './parse-declarations';
@@ -49,8 +49,19 @@ export function parseStatement(parser:AS3Parser):Node {
     } else if (tokIs(parser, Operators.SEMI_COLUMN)) {
         result = parseEmptyStatement(parser);
     } else {
-        result = parseExpressionList(parser);
-        skip(parser, Operators.SEMI_COLUMN);
+        const labelCheckpoint = getParserCheckPoint(parser);
+        const possibleLabel = parsePrimaryExpression(parser);
+        if (possibleLabel.kind === NodeKind.IDENTIFIER && tokIs(parser, Operators.COLUMN)) {
+            nextToken(parser, true);
+            const statement = parseStatement(parser);
+            result = createNode(NodeKind.LABEL, {
+                start: possibleLabel.start, end: statement.end, text: possibleLabel.text,
+            }, statement);
+        } else {
+            rewindParser(parser, labelCheckpoint);
+            result = parseExpressionList(parser);
+            skip(parser, Operators.SEMI_COLUMN);
+        }
     }
     assertProgress(parser, checkpoint, 'statement');
     return result;

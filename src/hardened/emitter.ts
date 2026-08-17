@@ -370,8 +370,13 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             ts.factory.createVariableDeclarationList(declarations,
                 readonly ? ts.NodeFlags.Const : ts.NodeFlags.None));
     }
-    if (statement.kind === "break") return ts.factory.createBreakStatement();
-    if (statement.kind === "continue") return ts.factory.createContinueStatement();
+    if (statement.kind === "label") {
+        return ts.factory.createLabeledStatement(ts.factory.createIdentifier(statement.label), statementNode(statement.statement, ts));
+    }
+    if (statement.kind === "break") return ts.factory.createBreakStatement(
+        statement.label === null ? undefined : ts.factory.createIdentifier(statement.label));
+    if (statement.kind === "continue") return ts.factory.createContinueStatement(
+        statement.label === null ? undefined : ts.factory.createIdentifier(statement.label));
     throw new HardenedSemanticError("HARDENED_EMIT_STATEMENT", "semantic IR contains an unsupported statement");
 }
 
@@ -464,6 +469,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             statement.tryStatements.forEach(inspectStatement);
             statement.catchClause?.statements.forEach(inspectStatement);
             statement.finallyStatements?.forEach(inspectStatement);
+        } else if (statement.kind === "label") {
+            inspectStatement(statement.statement);
         } else if (statement.kind === "local") {
             statement.declarations.forEach((local) => inspectExpression(local.initializer));
         }
@@ -588,6 +595,7 @@ function programUsesVector(program: SemanticProgram): boolean {
             || (statement.catchClause !== null && (visitType(statement.catchClause.type)
                 || statement.catchClause.statements.some(visitStatement)))
             || (statement.finallyStatements !== null && statement.finallyStatements.some(visitStatement));
+        if (statement.kind === "label") return visitStatement(statement.statement);
         if (statement.kind === "if") return visitExpression(statement.condition) || statement.thenStatements.some(visitStatement)
             || (statement.elseStatements !== null && statement.elseStatements.some(visitStatement));
         return false;

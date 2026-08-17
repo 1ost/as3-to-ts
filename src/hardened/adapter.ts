@@ -72,6 +72,7 @@ interface AdapterContext {
     locals: { [name: string]: LocalHeader };
     loopDepth: number;
     breakableDepth: number;
+    labels: Array<{ name: string; continuable: boolean }>;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -1404,14 +1405,39 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
         if (node.kind === "TRY" || node.kind === "CATCH" || node.kind === "FINALLY") {
             fail("HARDENED_TRY_SEQUENCE", "try/catch/finally must be consumed as one adjacent statement sequence", node);
         }
-        if (node.kind === "BREAK" || node.kind === "CONTINUE") {
-            if (node.children.length !== 0) {
-                fail("HARDENED_LOOP_LABEL", "labelled loop control remains held", node);
+        if (node.kind === "LABEL") {
+            if (node.children.length !== 1) fail("HARDENED_LABEL_SHAPE", "label requires exactly one statement", node);
+            const label = validateIdentifier(requiredText(node, "statement label"), node);
+            if (context.labels.some(item => item.name === label)) {
+                fail("HARDENED_LABEL_DUPLICATE", "active statement label is duplicated", node);
             }
-            if ((node.kind === "BREAK" ? context.breakableDepth : context.loopDepth) === 0) {
+            const child = node.children[0]!;
+            context.labels.push({ name: label, continuable: ["DO", "FOR", "FOREACH", "WHILE"].includes(child.kind) });
+            try {
+                return Object.assign(identity(node), {
+                    kind: "label" as "label", label,
+                    statement: parseStatementNode(child, context, constructor, derived, expectedReturn, false),
+                });
+            } finally {
+                context.labels.pop();
+            }
+        }
+        if (node.kind === "BREAK" || node.kind === "CONTINUE") {
+            if (node.children.length > 1 || (node.children.length === 1 && node.children[0]!.kind !== "IDENTIFIER")) {
+                fail("HARDENED_LOOP_LABEL", "loop-control label has the wrong normalized shape", node);
+            }
+            const label = node.children.length === 0 ? null
+                : validateIdentifier(requiredText(node.children[0]!, "loop-control label"), node.children[0]!);
+            const target = label === null ? null : context.labels.slice().reverse().find(item => item.name === label);
+            if (label !== null && (!target || (node.kind === "CONTINUE" && !target.continuable))) {
+                fail("HARDENED_LOOP_LABEL", "loop-control label is absent or not an iteration target", node);
+            }
+            if (label === null && (node.kind === "BREAK" ? context.breakableDepth : context.loopDepth) === 0) {
                 fail("HARDENED_LOOP_CONTEXT", "break requires a loop or switch and continue requires a loop", node);
             }
-            return Object.assign(identity(node), { kind: node.kind === "BREAK" ? "break" as "break" : "continue" as "continue" });
+            return Object.assign(identity(node), {
+                kind: node.kind === "BREAK" ? "break" as "break" : "continue" as "continue", label,
+            });
         }
         if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {
             onlyKinds(node, ["NAME_TYPE_INIT"]);
@@ -1483,6 +1509,10 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
         }
         if (node.kind === "INIT") {
             node.children.forEach(visit);
+            return;
+        }
+        if (node.kind === "LABEL" && node.children.length === 1) {
+            visit(node.children[0]!);
             return;
         }
         if (node.kind === "IF") {
@@ -1595,7 +1625,8 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
 function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {
     if (statements.length === 0) return false;
     const last = statements[statements.length - 1]!;
-    return last.kind === "return" || (last.kind === "if" && last.elseStatements !== null
+    return last.kind === "return" || (last.kind === "label" && statementsAlwaysReturn([last.statement]))
+        || (last.kind === "if" && last.elseStatements !== null
         && statementsAlwaysReturn(last.thenStatements) && statementsAlwaysReturn(last.elseStatements));
 }
 
@@ -1757,6 +1788,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         locals: Object.create(null),
         loopDepth: 0,
         breakableDepth: 0,
+        labels: [],
     };
     const extendsNode = one(classNode, "EXTENDS", true);
     let extendsType: SemanticType | null = null;

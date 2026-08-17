@@ -353,11 +353,18 @@ export interface LocalDeclarationStatement extends SemanticIdentity {
 
 export interface LoopControlStatement extends SemanticIdentity {
     kind: "break" | "continue";
+    label: string | null;
+}
+
+export interface LabelStatement extends SemanticIdentity {
+    kind: "label";
+    label: string;
+    statement: SemanticStatement;
 }
 
 export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement |
     WhileStatement | DoWhileStatement | SwitchStatement | ThrowStatement |
-    ForStatement | ForEachStatement | TryStatement | LocalDeclarationStatement | LoopControlStatement;
+    ForStatement | ForEachStatement | TryStatement | LocalDeclarationStatement | LoopControlStatement | LabelStatement;
 
 export interface SemanticParameter extends SemanticIdentity {
     defaultValue: SemanticExpression | null;

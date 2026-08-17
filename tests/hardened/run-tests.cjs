@@ -412,6 +412,16 @@ function buildTree(options = {}) {
             binary("MINUS", n("LITERAL", "4"), "-", n("LITERAL", "1")),
         ]), n("RETURN")];
     }
+    if (options.labelWorkpack || options.badContinueLabel) {
+        const target = options.badContinueLabel
+            ? n("SWITCH", null, [n("CONDITION", null, [n("LITERAL", "1")]), n("CASES", null, [
+                n("CASE", null, [n("DEFAULT"), n("SWITCH_BLOCK", null, [n("CONTINUE", null, [n("IDENTIFIER", "outer")])])]),
+            ])])
+            : n("WHILE", null, [n("CONDITION", null, [n("LITERAL", "true")]), n("BLOCK", null, [
+                n("BREAK", null, [n("IDENTIFIER", "outer")]),
+            ])]);
+        onEventBody = [n("LABEL", "outer", [target]), n("RETURN")];
+    }
     if (options.restParameterWorkpack || options.badRestPosition) {
         onEventBody = options.badRestPosition ? [n("RETURN")] : [
             call(n("IDENTIFIER", "collect"), [n("LITERAL", '"p"'), n("LITERAL", "1"), n("LITERAL", '"two"')]),
@@ -852,6 +862,12 @@ function main() {
     assert.match(nestedExpressionOutput.code, /private a: number = 1 \+ 2;/);
     assert.match(nestedExpressionOutput.code, /__as3Int\(4 - 1\);/);
     assertErrorCode(() => adapt(api, buildTree({ badNestedExpression: true }), authority), "HARDENED_EXPRESSION_UNSUPPORTED");
+    const labelProgram = adapt(api, buildTree({ labelWorkpack: true }), authority);
+    const labelOutput = api.emitSemanticProgram(labelProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(labelOutput.code, /outer: while \(true\)/);
+    assert.match(labelOutput.code, /break outer;/);
+    assertErrorCode(() => adapt(api, buildTree({ badContinueLabel: true }), authority), "HARDENED_LOOP_LABEL");
     const restParameterProgram = adapt(api, buildTree({ restParameterWorkpack: true }), authority);
     const restParameterOutput = api.emitSemanticProgram(restParameterProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
