@@ -75,7 +75,8 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     assert.match(firstCode, /constructor\(\) \{\n\s+super\(\);/);
     assert.match(firstCode, /super\(\);\n\s+this\.onEvent = this\.onEvent\.bind\(this\);\n\s+this\.addEventListener\("ready", this\.onEvent\);/);
     assert.match(firstCode, /this\.label = "changed";/);
-    assert.match(firstCode, /private child: Sprite = new Sprite\(\);/);
+    assert.match(firstCode, /private child: Sprite \| null = new Sprite\(\);/);
+    assert.match(firstCode, /private label: string \| null = "ok";/);
     assert.match(firstCode, /public get value\(\): number/);
     assert.match(firstCode, /if \(this\._value > 0\)/);
     assert.match(firstCode, /public set value\(input: number\)/);

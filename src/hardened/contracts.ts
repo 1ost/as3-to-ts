@@ -76,6 +76,7 @@ export interface SemanticIdentity {
 export interface SemanticType extends SemanticIdentity {
     sourceName: string;
     emittedName: string;
+    nullable: boolean;
     typeArguments: SemanticType[];
 }
 
@@ -115,6 +116,7 @@ export interface SuperExpression extends SemanticIdentity {
 export interface MemberExpression extends SemanticIdentity {
     kind: "member";
     target: SemanticExpression;
+    targetNullable: boolean;
     name: string;
     capabilitySource: string | null;
 }
@@ -151,6 +153,7 @@ export interface ObjectExpression extends SemanticIdentity {
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
     target: SemanticExpression;
+    targetNullable: boolean;
     index: SemanticExpression;
     resultType: SemanticType;
 }
@@ -322,6 +325,7 @@ export interface ForEachStatement extends SemanticIdentity {
     kind: "forEach";
     binding: SemanticIterationBinding;
     iterable: SemanticExpression;
+    iterableType: SemanticType;
     statements: SemanticStatement[];
 }
 

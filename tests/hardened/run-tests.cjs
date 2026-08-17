@@ -94,7 +94,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.writeFileSync(config, JSON.stringify({
             compilerOptions: {
                 target: "ES2022", module: "CommonJS", moduleResolution: "Node", strict: true,
-                strictNullChecks: false, skipLibCheck: true, noEmit: true, baseUrl: root,
+                strictNullChecks: true, skipLibCheck: true, noEmit: true, baseUrl: root,
                 paths: {
                     "@bleach/as3-runtime/*": ["runtime/*"],
                     "laya/flash/display/Sprite": ["stubs/Sprite"],
@@ -207,6 +207,13 @@ function buildTree(options = {}) {
         field.children.push(n("NAME_TYPE_INIT", null, [
             n("NAME", "sprite"), type("Sprite"),
             n("INIT", null, [construct("Sprite", options.newArguments || [])]),
+        ]));
+    }
+    if (options.nullableWorkpack || options.badPrimitiveNull) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", options.badPrimitiveNull ? "badNull" : "maybeSprite"),
+            type(options.badPrimitiveNull ? "Number" : "Sprite"),
+            n("INIT", null, [n("LITERAL", "null")]),
         ]));
     }
     if (options.vectorWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack || options.badForEachType) {
@@ -441,6 +448,16 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
+    if (options.nullableWorkpack) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "maybeEvent", "Event", n("LITERAL", "null")),
+            localDeclaration("VAR_LIST", "isMissing", "Boolean",
+                binary("EQUALITY", n("IDENTIFIER", "maybeEvent"), "===", n("LITERAL", "null"))),
+            localDeclaration("VAR_LIST", "selected", "Event",
+                conditional(n("LITERAL", "true"), n("IDENTIFIER", "maybeEvent"), n("LITERAL", "null"))),
+            n("RETURN"),
+        ];
+    }
     const members = [
         field,
         constructor(body),
@@ -463,6 +480,10 @@ function buildTree(options = {}) {
             parameter("useCapture", "Boolean", "false"), parameter("priority", "int", "0"),
             parameter("useWeakReference", "Boolean", "false"),
         ], "void", [n("RETURN")], ["override", "public"]));
+    }
+    if (options.nullableWorkpack || options.badPrimitiveNullDefault) {
+        members.push(method("acceptNullable", [parameter("value",
+            options.badPrimitiveNullDefault ? "Number" : "Event", "null")], "void", [n("RETURN")]));
     }
     if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
         members.push(method("namespaced", [], "void", [n("RETURN")],
@@ -807,7 +828,7 @@ function main() {
     assert.match(emitted.code, /import \{ Sprite \} from "laya\/flash\/display\/Sprite";/);
     assert.match(emitted.code, /import \{ Event \} from "laya\/flash\/events\/Event";/);
     assert.match(emitted.code, /private a: number = 1;/);
-    assert.match(emitted.code, /private b: string = "x";/);
+    assert.match(emitted.code, /private b: string \| null = "x";/);
     assert.ok(emitted.code.indexOf("super();") < emitted.code.indexOf("this.addEventListener"));
     assert.match(emitted.code, /this\.onEvent = this\.onEvent\.bind\(this\);/);
     assert.match(emitted.code, /this\.addEventListener\("ready", this\.onEvent\);/);
@@ -834,18 +855,18 @@ function main() {
     assert.equal(constFields.every((field) => field.readonly), true);
     const constOutput = api.emitSemanticProgram(constProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(constOutput.code, /private readonly a: number = 1;/);
-    assert.match(constOutput.code, /private readonly b: string = "x";/);
+    assert.match(constOutput.code, /private readonly b: string \| null = "x";/);
     const vectorProgram = adapt(api, buildTree({ vectorWorkpack: true }), authority);
     const vectorOutput = api.emitSemanticProgram(vectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(vectorOutput.code, /AS3Vector as __as3Vector/);
-    assert.match(vectorOutput.code, /private values: __as3Vector<number> = new __as3Vector<number>\(__as3VectorPolicies\.int, 2, false\);/);
-    assert.match(vectorOutput.code, /this\.values\[0\] = 4;/);
-    assert.match(vectorOutput.code, /this\.values\.push\(5\);/);
-    assert.match(vectorOutput.code, /var copy: __as3Vector<number> = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
+    assert.match(vectorOutput.code, /private values: __as3Vector<number> \| null = new __as3Vector<number>\(__as3VectorPolicies\.int, 2, false\);/);
+    assert.match(vectorOutput.code, /this\.values!\[0\] = 4;/);
+    assert.match(vectorOutput.code, /this\.values!\.push\(5\);/);
+    assert.match(vectorOutput.code, /var copy: __as3Vector<number> \| null = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
     const runtimeTypeProgram = adapt(api, buildTree({ runtimeTypeWorkpack: true }), authority);
     const runtimeTypeOutput = api.emitSemanticProgram(runtimeTypeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(runtimeTypeOutput.code, /as3As as __as3As/);
-    assert.match(runtimeTypeOutput.code, /var cast: Event = __as3As\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
+    assert.match(runtimeTypeOutput.code, /var cast: Event \| null = __as3As\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
     assert.match(runtimeTypeOutput.code, /var matches: boolean = __as3Is\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
     const vectorRuntimeProgram = adapt(api, buildTree({ vectorRuntimeWorkpack: true }), authority);
     const vectorRuntimeOutput = api.emitSemanticProgram(vectorRuntimeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -854,13 +875,13 @@ function main() {
     const nestedVectorProgram = adapt(api, buildTree({ nestedVectorWorkpack: true }), authority);
     const nestedVectorOutput = api.emitSemanticProgram(nestedVectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(nestedVectorOutput.code,
-        /private matrix: __as3Vector<__as3Vector<number> \| null> = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), 1\);/);
+        /private matrix: __as3Vector<__as3Vector<number> \| null> \| null = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), 1\);/);
     const coercionProgram = adapt(api, buildTree({ coercionWorkpack: true }), authority);
     const coercionOutput = api.emitSemanticProgram(coercionProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(coercionOutput.code, /as3Int as __as3Int/);
     assert.match(coercionOutput.code, /var signed: number = __as3Int\(4294967295\);/);
     assert.match(coercionOutput.code, /var unsigned: number = __as3Uint\(-1\);/);
-    assert.match(coercionOutput.code, /var message: string = __as3String\(event\);/);
+    assert.match(coercionOutput.code, /var message: string \| null = __as3String\(event\);/);
     const statementProgram = adapt(api, buildTree({ statementWorkpack: true }), authority);
     const statementOutput = api.emitSemanticProgram(statementProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(statementOutput.code, /switch \(total\)/);
@@ -876,8 +897,8 @@ function main() {
     const iterationProgram = adapt(api, buildTree({ iterationWorkpack: true }), authority);
     const iterationOutput = api.emitSemanticProgram(iterationProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(iterationOutput.code, /for \(var i: number = 0; i < 2; i\+\+\)/);
-    assert.match(iterationOutput.code, /for \(var item of this\.values\)/);
-    assert.match(iterationOutput.code, /this\.values\.indexOf\(item\);/);
+    assert.match(iterationOutput.code, /for \(var item of this\.values!\)/);
+    assert.match(iterationOutput.code, /this\.values!\.indexOf\(item\);/);
     assertErrorCode(() => adapt(api, buildTree({ badForEachType: true }), authority),
         "HARDENED_ASSIGNMENT_TYPE");
     const tryProgram = adapt(api, buildTree({ tryWorkpack: true }), authority);
@@ -921,14 +942,14 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.equal(interfaceProgram.declaration.declarationKind, "interface");
     assert.match(interfaceOutput.code, /export interface IThing/);
-    assert.match(interfaceOutput.code, /run\(value: number, \.\.\.rest: unknown\[\]\): string;/);
-    assert.match(interfaceOutput.code, /get name\(\): string;/);
-    assert.match(interfaceOutput.code, /set name\(value: string\);/);
+    assert.match(interfaceOutput.code, /run\(value: number, \.\.\.rest: unknown\[\]\): string \| null;/);
+    assert.match(interfaceOutput.code, /get name\(\): string \| null;/);
+    assert.match(interfaceOutput.code, /set name\(value: string \| null\);/);
     assertErrorCode(() => adapt(api, buildInterfaceTree({ duplicate: true }), authority), "HARDENED_INTERFACE_DUPLICATE");
     const restParameterProgram = adapt(api, buildTree({ restParameterWorkpack: true }), authority);
     const restParameterOutput = api.emitSemanticProgram(restParameterProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(restParameterOutput.code, /collect\(prefix: string, \.\.\.values: unknown\[\]\): void/);
+    assert.match(restParameterOutput.code, /collect\(prefix: string \| null, \.\.\.values: unknown\[\]\): void/);
     assert.match(restParameterOutput.code, /this\.collect\("p", 1, "two"\);/);
     assertErrorCode(() => adapt(api, buildTree({ badRestPosition: true }), authority), "HARDENED_PARAMETER_REST");
     const namespaceProgram = adapt(api, buildTree({ namespaceWorkpack: true }), authority);
@@ -944,7 +965,7 @@ function main() {
     const overrideProgram = adapt(api, buildTree({ overrideWorkpack: true }), authority);
     const overrideOutput = api.emitSemanticProgram(overrideProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(overrideOutput.code, /public override addEventListener\(type: string, listener: Function, useCapture: boolean = false, priority: number = 0, useWeakReference: boolean = false\): void/);
+    assert.match(overrideOutput.code, /public override addEventListener\(type: string \| null, listener: Function \| null, useCapture: boolean = false, priority: number = 0, useWeakReference: boolean = false\): void/);
     assertErrorCode(() => adapt(api, buildTree({ fieldModifiers: ["override"] }), authority), "HARDENED_OVERRIDE_TARGET");
     const forInProgram = adapt(api, buildTree({ forInWorkpack: true }), authority);
     const forInOutput = api.emitSemanticProgram(forInProgram,
@@ -952,6 +973,16 @@ function main() {
     assert.match(forInOutput.code, /for \(key in enumerable as object\)/);
     assertErrorCode(() => adapt(api, buildTree({ badForInKey: true }), authority), "HARDENED_FORIN_KEY");
     assertErrorCode(() => adapt(api, buildTree({ badForInIterable: true }), authority), "HARDENED_FORIN_ITERABLE");
+    const nullableProgram = adapt(api, buildTree({ nullableWorkpack: true }), authority);
+    const nullableOutput = api.emitSemanticProgram(nullableProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(nullableOutput.code, /private maybeSprite: Sprite \| null = null;/);
+    assert.match(nullableOutput.code, /var maybeEvent: Event \| null = null;/);
+    assert.match(nullableOutput.code, /var isMissing: boolean = maybeEvent === null;/);
+    assert.match(nullableOutput.code, /var selected: Event \| null = true \? maybeEvent : null;/);
+    assert.match(nullableOutput.code, /acceptNullable\(value: Event \| null = null\): void/);
+    assertErrorCode(() => adapt(api, buildTree({ badPrimitiveNull: true }), authority), "HARDENED_ASSIGNMENT_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ badPrimitiveNullDefault: true }), authority), "HARDENED_ASSIGNMENT_TYPE");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -963,7 +994,8 @@ function main() {
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
-        labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code]);
+        labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code,
+        nullableOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);
@@ -980,7 +1012,7 @@ function main() {
     );
     const constructedProgram = adapt(api, buildTree({ newField: true }), authority);
     const constructedOutput = api.emitSemanticProgram(constructedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(constructedOutput.code, /private sprite: Sprite = new Sprite\(\);/);
+    assert.match(constructedOutput.code, /private sprite: Sprite \| null = new Sprite\(\);/);
     assertErrorCode(
         () => adapt(api, buildTree({ newField: true, newArguments: [n("LITERAL", "1")] }), authority),
         "HARDENED_NEW_ARGUMENT_TYPES",

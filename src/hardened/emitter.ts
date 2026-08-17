@@ -54,7 +54,7 @@ function modifierTokens(modifiers: SemanticModifier[], ts: TypeScriptCompilerApi
     });
 }
 
-function typeNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
+function baseTypeNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
     if (type.emittedName === "AS3Vector") {
         if (type.typeArguments.length !== 1) {
             throw new HardenedSemanticError("HARDENED_EMIT_VECTOR_TYPE", "Vector semantic type requires one element type");
@@ -77,14 +77,22 @@ function typeNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
     if (type.emittedName === "void") {
         return ts.factory.createKeywordTypeNode(ts.SyntaxKind.VoidKeyword);
     }
+    if (type.emittedName === "null") {
+        return ts.factory.createLiteralTypeNode(ts.factory.createNull());
+    }
     return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier(type.emittedName),
         type.typeArguments.length === 0 ? undefined : type.typeArguments.map(argument => typeNode(argument, ts)));
 }
 
+function typeNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
+    const base = baseTypeNode(type, ts);
+    return type.nullable && type.emittedName !== "unknown" && type.emittedName !== "null"
+        ? ts.factory.createUnionTypeNode([base, ts.factory.createLiteralTypeNode(ts.factory.createNull())])
+        : base;
+}
+
 function vectorElementTypeNode(element: SemanticType, ts: TypeScriptCompilerApi): any {
-    const type = typeNode(element, ts);
-    return ["Number", "int", "uint", "Boolean"].includes(element.sourceName) ? type
-        : ts.factory.createUnionTypeNode([type, ts.factory.createLiteralTypeNode(ts.factory.createNull())]);
+    return typeNode(element, ts);
 }
 
 function vectorPolicyNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
@@ -151,7 +159,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createSuper();
     }
     if (expression.kind === "member") {
-        return ts.factory.createPropertyAccessExpression(expressionNode(expression.target, ts), expression.name);
+        const target = expressionNode(expression.target, ts);
+        return ts.factory.createPropertyAccessExpression(
+            expression.targetNullable ? ts.factory.createNonNullExpression(target) : target,
+            expression.name,
+        );
     }
     if (expression.kind === "methodClosure") {
         return ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
@@ -169,7 +181,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 expressionNode(property.value, ts))), false);
     }
     if (expression.kind === "index") {
-        return ts.factory.createElementAccessExpression(expressionNode(expression.target, ts), expressionNode(expression.index, ts));
+        const target = expressionNode(expression.target, ts);
+        return ts.factory.createElementAccessExpression(
+            expression.targetNullable ? ts.factory.createNonNullExpression(target) : target,
+            expressionNode(expression.index, ts),
+        );
     }
     if (expression.kind === "vectorConversion") {
         const element = expression.vectorType.typeArguments[0]!;
@@ -335,7 +351,9 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
         const declaration = ts.factory.createVariableDeclarationList([
             ts.factory.createVariableDeclaration(statement.binding.name, undefined, undefined, undefined),
         ], ts.NodeFlags.None);
-        return ts.factory.createForOfStatement(undefined, declaration, expressionNode(statement.iterable, ts),
+        const iterable = expressionNode(statement.iterable, ts);
+        return ts.factory.createForOfStatement(undefined, declaration,
+            statement.iterableType.nullable ? ts.factory.createNonNullExpression(iterable) : iterable,
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
     if (statement.kind === "forIn") {
@@ -344,10 +362,13 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
                 ts.factory.createVariableDeclaration((statement.target as any).name, undefined, undefined, undefined),
             ], ts.NodeFlags.None)
             : expressionNode(statement.target, ts);
-        const iterable = statement.iterableType.emittedName === "unknown"
+        let iterable = statement.iterableType.emittedName === "unknown"
             ? ts.factory.createAsExpression(expressionNode(statement.iterable, ts),
                 ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword))
             : expressionNode(statement.iterable, ts);
+        if (statement.iterableType.nullable && statement.iterableType.emittedName !== "unknown") {
+            iterable = ts.factory.createNonNullExpression(iterable);
+        }
         return ts.factory.createForInStatement(initializer, iterable,
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
@@ -625,7 +646,7 @@ function programUsesVector(program: SemanticProgram): boolean {
             || (statement.initializer?.kind === "local" && statement.initializer.declarations.some(local => visitType(local.type) || visitExpression(local.initializer)))
             || (statement.condition !== null && visitExpression(statement.condition))
             || (statement.update !== null && visitExpression(statement.update)) || statement.statements.some(visitStatement);
-        if (statement.kind === "forEach") return visitType(statement.binding.type)
+        if (statement.kind === "forEach") return visitType(statement.binding.type) || visitType(statement.iterableType)
             || visitExpression(statement.iterable) || statement.statements.some(visitStatement);
         if (statement.kind === "forIn") return visitType(statement.targetType) || visitType(statement.iterableType)
             || visitExpression(statement.target)

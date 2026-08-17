@@ -433,14 +433,26 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
 }
 
 function semanticType(node: TreeNode, sourceName: string, emittedName: string,
-    typeArguments: SemanticType[] = []): SemanticType {
-    return Object.assign(identity(node), { sourceName, emittedName, typeArguments });
+    typeArguments: SemanticType[] = [], nullableOverride?: boolean): SemanticType {
+    const nullable = nullableOverride === undefined
+        ? !["Boolean", "Number", "int", "uint", "void"].includes(sourceName)
+        : nullableOverride;
+    return Object.assign(identity(node), { sourceName, emittedName, nullable, typeArguments });
+}
+
+function sameUnderlyingType(left: SemanticType, right: SemanticType): boolean {
+    return left.sourceName === right.sourceName && left.emittedName === right.emittedName
+        && left.typeArguments.length === right.typeArguments.length
+        && left.typeArguments.every((item, index) => sameUnderlyingType(item, right.typeArguments[index]!));
 }
 
 function sameType(left: SemanticType, right: SemanticType): boolean {
-    return left.sourceName === right.sourceName && left.emittedName === right.emittedName
-        && left.typeArguments.length === right.typeArguments.length
+    return left.nullable === right.nullable && sameUnderlyingType(left, right)
         && left.typeArguments.every((item, index) => sameType(item, right.typeArguments[index]!));
+}
+
+function withNullability(type: SemanticType, nullable: boolean): SemanticType {
+    return Object.assign({}, type, { nullable });
 }
 
 function vectorElement(type: SemanticType): SemanticType | null {
@@ -522,8 +534,8 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
             const rawDefault = init.children[0]!;
             defaultValue = parseLiteral(rawDefault.kind === "IDENTIFIER"
                 ? Object.assign({}, rawDefault, { kind: "LITERAL" }) : rawDefault);
-            if (defaultValue.kind !== "literal" || defaultValue.value === null) {
-                fail("HARDENED_PARAMETER_DEFAULT_NULL", "nullable default parameters require a future explicit nullable type policy", init);
+            if (defaultValue.kind !== "literal") {
+                fail("HARDENED_PARAMETER_DEFAULT", "default parameter must normalize to one scalar literal", init);
             }
             assertAssignmentCompatible(parameterType, assignmentType(defaultValue, context, init.children[0]!), init);
             sawDefault = true;
@@ -573,12 +585,12 @@ interface CurrentLocalType {
 function implicitThisMember(node: TreeNode, name: string, capabilitySource: string | null = null): SemanticExpression {
     const target = Object.assign(identity(node), { kind: "this" as "this" });
     return Object.assign(identity(node), {
-        kind: "member" as "member", target, name, capabilitySource,
+        kind: "member" as "member", target, targetNullable: false, name, capabilitySource,
     });
 }
 
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
-    if (expression.kind === "this") return semanticType(node, context.className, context.className);
+    if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
         return context.locals[expression.name]!.type;
     }
@@ -601,18 +613,18 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     }
     if (expression.kind === "literal") {
         if (expression.value === null) {
-            fail("HARDENED_ASSIGNMENT_NULL", "null assignment requires an explicit nullable source-to-target type policy", node);
+            return semanticType(node, "null", "null", [], true);
         }
         const sourceName = typeof expression.value === "number" ? "Number"
             : typeof expression.value === "string" ? "String" : "Boolean";
-        return semanticType(node, sourceName, PRIMITIVE_TYPES[sourceName]!);
+        return semanticType(node, sourceName, PRIMITIVE_TYPES[sourceName]!, [], false);
     }
     if (expression.kind === "methodClosure") {
-        return semanticType(node, "Function", "Function");
+        return semanticType(node, "Function", "Function", [], false);
     }
-    if (expression.kind === "object") return semanticType(node, "Object", "unknown");
+    if (expression.kind === "object") return semanticType(node, "Object", "unknown", [], false);
     if (expression.kind === "new") {
-        return expression.sourceType;
+        return withNullability(expression.sourceType, false);
     }
     if (expression.kind === "binary") {
         return expression.resultType;
@@ -675,7 +687,9 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
 }
 
 function assertAssignmentCompatible(target: SemanticType, value: SemanticType, node: TreeNode): void {
-    if (target.sourceName === "Object" || sameType(target, value)
+    if ((value.sourceName === "null" && target.nullable)
+        || (sameUnderlyingType(target, value) && (target.nullable || !value.nullable))
+        || target.sourceName === "Object" || sameType(target, value)
         || (["Number", "int", "uint"].includes(target.sourceName)
             && ["Number", "int", "uint"].includes(value.sourceName))) {
         return;
@@ -866,7 +880,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const right = parseExpression(node.children[2]!, context, true);
         const leftType = assignmentType(left, context, node.children[0]!);
         const rightType = assignmentType(right, context, node.children[2]!);
-        if (!sameType(leftType, rightType)) {
+        const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
+            || (rightType.sourceName === "null" && leftType.nullable);
+        const strictEquality = operator === "===" || operator === "!==";
+        if (!sameType(leftType, rightType)
+            && !(strictEquality && (nullComparison || sameUnderlyingType(leftType, rightType)))) {
             fail("HARDENED_BINARY_TYPE", "binary operands require the exact same proven source type", node);
         }
         if ((operator === "&&" || operator === "||") && leftType.sourceName !== "Boolean") {
@@ -938,11 +956,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const whenFalse = parseExpression(node.children[2]!, context, true);
         const trueType = assignmentType(whenTrue, context, node.children[1]!);
         const falseType = assignmentType(whenFalse, context, node.children[2]!);
-        if (!sameType(trueType, falseType)) {
+        const trueNull = trueType.sourceName === "null" && falseType.nullable;
+        const falseNull = falseType.sourceName === "null" && trueType.nullable;
+        if (!sameType(trueType, falseType) && !trueNull && !falseNull) {
             fail("HARDENED_CONDITIONAL_TYPE", "conditional branches require the exact same proven source type", node);
         }
+        const resultType = trueNull ? falseType : falseNull ? trueType : trueType;
         return Object.assign(identity(node), {
-            kind: "conditional" as "conditional", condition, whenTrue, whenFalse, resultType: trueType,
+            kind: "conditional" as "conditional", condition, whenTrue, whenFalse,
+            resultType: withNullability(resultType, trueNull || falseNull || resultType.nullable),
         });
     }
     if (node.kind === "PRE_INC" || node.kind === "PRE_DEC" || node.kind === "POST_INC" || node.kind === "POST_DEC") {
@@ -1075,7 +1097,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (!["Number", "int", "uint"].includes(indexType.sourceName)) {
             fail("HARDENED_INDEX_TYPE", "Vector index must be a proven numeric value", node.children[1]!);
         }
-        return Object.assign(identity(node), { kind: "index" as "index", target, index, resultType: element });
+        return Object.assign(identity(node), {
+            kind: "index" as "index", target, targetNullable: ownerType.nullable, index, resultType: element,
+        });
     }
     if (node.kind === "DOT") {
         if (node.children.length !== 2 || node.children[1]!.kind !== "LITERAL") {
@@ -1094,6 +1118,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
         }
         let capabilitySource: string | null = null;
+        let targetNullable = false;
         if (target.kind === "this") {
             if (context.methods[name] && (context.methods[name].constructor
                 || context.methods[name].modifiers.indexOf("static") >= 0)) {
@@ -1111,13 +1136,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_STATIC_MEMBER", "Flash static members require an explicit paired member mapping", node);
         } else {
             const targetType = assignmentType(target, context, node.children[0]!);
+            targetNullable = targetType.nullable;
             if (vectorElement(targetType) === null
                 || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name))) {
                 fail("HARDENED_MEMBER_TARGET", "member target is outside the admitted subset", node);
             }
             capabilitySource = targetType.sourceName;
         }
-        return Object.assign(identity(node), { kind: "member" as "member", target, name, capabilitySource });
+        return Object.assign(identity(node), {
+            kind: "member" as "member", target, targetNullable, name, capabilitySource,
+        });
     }
     if (node.kind === "CALL") {
         if (node.children.length !== 2 || node.children[1]!.kind !== "ARGUMENTS") {
@@ -1143,7 +1171,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (rawArguments.length > 1) {
                 fail("HARDENED_COERCION_ARITY", "primitive AS3 coercion accepts zero or one argument", node);
             }
-            const targetType = parseType(Object.assign({}, rawCallee, { kind: "TYPE" }), context, false);
+            const targetType = withNullability(
+                parseType(Object.assign({}, rawCallee, { kind: "TYPE" }), context, false), false);
             const argument = rawArguments.length === 0 ? null : parseExpression(rawArguments[0]!, context, true);
             return Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument });
         }
@@ -1213,7 +1242,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             resultType = name === "pop" || name === "shift" ? element
                 : ["concat", "filter", "map", "reverse", "slice", "sort", "splice"].includes(name) ? ownerType
                     : ["every", "some"].includes(name) ? semanticType(node, "Boolean", "boolean")
-                        : name === "join" || name === "toString" ? semanticType(node, "String", "string")
+                        : name === "join" || name === "toString" ? semanticType(node, "String", "string", [], false)
                             : name === "forEach" ? semanticType(node, "void", "void")
                                 : semanticType(node, "int", "number");
         } else {
@@ -1451,7 +1480,7 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 return Object.assign(identity(node), {
                     kind: "forEach" as "forEach", binding: Object.assign(identity(declaration), {
                         name: header.name, type: header.type,
-                    }), iterable,
+                    }), iterable, iterableType,
                     statements: body.kind === "BLOCK"
                         ? parseBlock(body, context, constructor, derived, expectedReturn, false)
                         : [parseStatementNode(body, context, constructor, derived, expectedReturn, false)],
@@ -1704,7 +1733,7 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
             const typeNode = one(catchNode, "TYPE")!;
             const catchBlock = one(catchNode, "BLOCK")!;
             const name = validateIdentifier(requiredText(nameNode, "catch binding"), nameNode);
-            const type = parseType(typeNode, context, false);
+            const type = withNullability(parseType(typeNode, context, false), false);
             if (type.sourceName !== "Error" || type.emittedName !== "Error") {
                 fail("HARDENED_CATCH_TYPE", "this wave admits only the canonical AS3 Error catch type", typeNode);
             }
