@@ -8,10 +8,12 @@ The adapter consumes only a closed `authored-ui-as3-flat-ast@1` plus the exact
 source text and a caller-supplied SHA-256 function. It authenticates the source
 digest and the parser frontend's `SHA-256(JSON.stringify(nodes))` fingerprint
 before preserving source node IDs, spans, package/class/member names, import and
-member order, accepted modifiers, source type names, and statement order in
+member order, accepted modifiers, compile-time namespace annotations, source type names, and statement order in
 `as3-semantic-ir@1`. Every node shape outside the minimal discriminated subset
-fails closed. In particular, expression returns, metadata, namespaces,
-accessors, loops, implicit coercions, parser recovery, implicit derived
+fails closed. `use namespace X` plus an exact `X` member modifier is flattened
+only after ordinary member-name collision proof; it never creates QName or
+namespace runtime state. In particular, expression returns, metadata,
+runtime namespace selection, implicit coercions, parser recovery, implicit derived
 constructors, and misplaced `super` are not admitted.
 
 Flash APIs require three authenticated byte boundaries:

@@ -58,6 +58,7 @@ export default class AS3Parser {
     /** Complete source-ordered comment trivia consumed by the parser. */
     trivia:Token[] = [];
     pendingTrivia:Token[] = [];
+    activeNamespaces:Set<string> = new Set<string>();
 }
 
 export interface ParserCheckPoint {
@@ -69,6 +70,7 @@ export interface ParserCheckPoint {
     currentFunctionNode: Node;
     currentMultiLineComment: Node;
     isInFor: boolean;
+    activeNamespaces: string[];
 }
 
 export function getParserCheckPoint(parser:AS3Parser):ParserCheckPoint {
@@ -81,6 +83,7 @@ export function getParserCheckPoint(parser:AS3Parser):ParserCheckPoint {
         currentFunctionNode: parser.currentFunctionNode,
         currentMultiLineComment: parser.currentMultiLineComment,
         isInFor: parser.isInFor,
+        activeNamespaces: Array.from(parser.activeNamespaces),
     };
 }
 
@@ -93,6 +96,7 @@ export function rewindParser(parser:AS3Parser, checkpoint:ParserCheckPoint):void
     parser.currentFunctionNode = checkpoint.currentFunctionNode;
     parser.currentMultiLineComment = checkpoint.currentMultiLineComment;
     parser.isInFor = checkpoint.isInFor;
+    parser.activeNamespaces = new Set<string>(checkpoint.activeNamespaces);
 }
 
 export function parseError(parser:AS3Parser, code:AS3ParseDiagnosticCode, expected:string,

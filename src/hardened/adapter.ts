@@ -38,6 +38,7 @@ interface MethodHeader {
     node: TreeNode;
     name: string;
     modifiers: SemanticModifier[];
+    namespaceName: string | null;
     parameters: SemanticParameter[];
     returnType: SemanticType | null;
     block: TreeNode;
@@ -73,6 +74,7 @@ interface AdapterContext {
     loopDepth: number;
     breakableDepth: number;
     labels: Array<{ name: string; continuable: boolean }>;
+    namespaceNames: { [name: string]: true };
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -245,6 +247,56 @@ function parseModifiers(owner: TreeNode, classLevel: boolean): SemanticModifier[
         fail("HARDENED_MODIFIER_ORDER", "access modifier must precede static in the admitted TypeScript order", owner);
     }
     return result;
+}
+
+function validateNamespaceIdentifier(value: string, node: TreeNode): string {
+    if (!IDENTIFIER.test(value) || value === "__proto__" || value === "prototype" || value === "constructor") {
+        fail("HARDENED_NAMESPACE_NAME", "compile-time namespace name is not a safe AS3 identity", node);
+    }
+    return value;
+}
+
+function parseMemberModifiers(owner: TreeNode, context: AdapterContext): {
+    modifiers: SemanticModifier[];
+    namespaceName: string | null;
+} {
+    const list = one(owner, "MOD_LIST", true);
+    if (list === null) return { modifiers: [], namespaceName: null };
+    const seen: { [modifier: string]: true } = Object.create(null);
+    const modifiers: SemanticModifier[] = [];
+    let namespaceName: string | null = null;
+    list.children.forEach((node) => {
+        if (node.kind !== "MODIFIER") {
+            fail("HARDENED_MODIFIER_NODE", "modifier list contains an unsupported node", node);
+        }
+        const modifier = requiredText(node, "modifier");
+        if (context.namespaceNames[modifier]) {
+            if (namespaceName !== null || seen[modifier]) {
+                fail("HARDENED_NAMESPACE_MODIFIER", "member namespace modifier is duplicated or ambiguous", node);
+            }
+            namespaceName = modifier;
+            seen[modifier] = true;
+            return;
+        }
+        if (!ALLOWED_MODIFIERS.has(modifier) || seen[modifier]) {
+            fail("HARDENED_MODIFIER", "modifier is unsupported or duplicated", node);
+        }
+        seen[modifier] = true;
+        modifiers.push(modifier as SemanticModifier);
+    });
+    const accessModifiers = modifiers.filter((modifier) =>
+        modifier === "private" || modifier === "protected" || modifier === "public");
+    if (accessModifiers.length > 1) {
+        fail("HARDENED_MODIFIER_ACCESS", "declaration has conflicting access modifiers", owner);
+    }
+    if (namespaceName !== null && accessModifiers.length > 0) {
+        fail("HARDENED_NAMESPACE_MODIFIER", "compile-time namespace replaces the ordinary access modifier", owner);
+    }
+    const staticIndex = modifiers.indexOf("static");
+    if (staticIndex >= 0 && accessModifiers.length === 1 && modifiers.indexOf(accessModifiers[0]!) > staticIndex) {
+        fail("HARDENED_MODIFIER_ORDER", "access modifier must precede static in the admitted TypeScript order", owner);
+    }
+    return { modifiers, namespaceName };
 }
 
 function mappingForRole(authority: LoadedCapabilityAuthority, qname: string, role: string, node: TreeNode): CapabilityMapping {
@@ -1632,7 +1684,8 @@ function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {
 
 function parseField(list: TreeNode, context: AdapterContext, readonly: boolean): SemanticField[] {
     onlyKinds(list, ["MOD_LIST", "NAME_TYPE_INIT"]);
-    const modifiers = parseModifiers(list, false);
+    const memberModifiers = parseMemberModifiers(list, context);
+    const modifiers = memberModifiers.modifiers;
     const declarations = list.children.filter((child) => child.kind === "NAME_TYPE_INIT");
     if (declarations.length === 0) {
         fail("HARDENED_FIELD_EMPTY", "field declaration must contain at least one source declarator", list);
@@ -1663,6 +1716,7 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
             sharedDeclarationNodeId: list.id,
             name,
             modifiers: modifiers.slice(),
+            namespaceName: memberModifiers.namespaceName,
             readonly,
             type: fieldType,
             initializer,
@@ -1687,8 +1741,9 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
         fail("HARDENED_CONSTRUCTOR_RETURN", "constructor must not declare a return type", returnNode);
     }
     const parameters = parseParameters(one(node, "PARAMETER_LIST")!, context);
-    const modifiers = parseModifiers(node, false);
-    if (constructor && modifiers.indexOf("static") >= 0) {
+    const memberModifiers = parseMemberModifiers(node, context);
+    const modifiers = memberModifiers.modifiers;
+    if (constructor && (modifiers.indexOf("static") >= 0 || memberModifiers.namespaceName !== null)) {
         fail("HARDENED_CONSTRUCTOR_STATIC", "constructor cannot be static", node);
     }
     if (accessor === "getter" && (parameters.length !== 0 || returnType === null || returnType.sourceName === "void")) {
@@ -1700,7 +1755,8 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     if (accessor !== null && parameters.some(parameter => parameter.defaultValue !== null || parameter.rest)) {
         fail("HARDENED_ACCESSOR_DEFAULT", "accessor parameters cannot have default or rest values", node);
     }
-    return { node, name, modifiers, parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor };
+    return { node, name, modifiers, namespaceName: memberModifiers.namespaceName,
+        parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor };
 }
 
 function superCall(statement: SemanticStatement): boolean {
@@ -1733,11 +1789,12 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     const packageName = packageNameNode.text === null ? "" : packageNameNode.text;
     const content = one(packageNode, "CONTENT")!;
     const declarationPosition = content.children.findIndex((child) => child.kind === "CLASS" || child.kind === "INTERFACE");
-    if (declarationPosition >= 0 && content.children.slice(declarationPosition + 1).some((child) => child.kind === "IMPORT")) {
-        fail("HARDENED_IMPORT_ORDER", "source imports must precede the declaration and are preserved in source order", content);
+    if (declarationPosition >= 0 && content.children.slice(declarationPosition + 1)
+        .some((child) => child.kind === "IMPORT" || child.kind === "USE")) {
+        fail("HARDENED_IMPORT_ORDER", "source imports and namespace directives must precede the declaration", content);
     }
     const declarations = content.children.filter((child) => child.kind === "CLASS" || child.kind === "INTERFACE");
-    if (declarations.length !== 1 || content.children.some((child) => child.kind !== "IMPORT"
+    if (declarations.length !== 1 || content.children.some((child) => child.kind !== "IMPORT" && child.kind !== "USE"
         && child.kind !== "CLASS" && child.kind !== "INTERFACE")) {
         fail("HARDENED_PACKAGE_CONTENT", "semantic adapter requires imports followed by exactly one class or interface", content);
     }
@@ -1746,6 +1803,20 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     const classNameNode = one(classNode, "NAME")!;
     const className = validateIdentifier(requiredText(classNameNode, "class name"), classNameNode);
     const outputModulePath = modulePath(packageName, className, packageNameNode);
+    const classContentForNamespaces = one(classNode, "CONTENT")!;
+    const firstClassMember = classContentForNamespaces.children.findIndex(child => child.kind !== "USE");
+    if (firstClassMember >= 0 && classContentForNamespaces.children.slice(firstClassMember + 1)
+        .some(child => child.kind === "USE")) {
+        fail("HARDENED_NAMESPACE_ORDER", "class namespace directives must precede every member", classContentForNamespaces);
+    }
+    const namespaceNames: { [name: string]: true } = Object.create(null);
+    content.children.filter(child => child.kind === "USE")
+        .concat(classContentForNamespaces.children.filter(child => child.kind === "USE"))
+        .forEach((node) => {
+            onlyKinds(node, []);
+            const name = validateNamespaceIdentifier(requiredText(node, "namespace directive"), node);
+            namespaceNames[name] = true;
+        });
     let currentLocal: CurrentLocalType | null = null;
     let resolveCurrentLocal: (() => CurrentLocalType) | null = null;
     if (localAuthority !== undefined || sourceLogicalPath !== undefined) {
@@ -1790,6 +1861,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         loopDepth: 0,
         breakableDepth: 0,
         labels: [],
+        namespaceNames,
     };
     if (classNode.kind === "INTERFACE") {
         const modifiers = parseModifiers(classNode, true);
@@ -1831,7 +1903,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 if (names.has(name) || accessors[name]) fail("HARDENED_INTERFACE_DUPLICATE", "interface member is duplicated", node);
                 names.add(name);
                 members.push(Object.assign(identity(node), {
-                    kind: "method" as "method", name, modifiers: [], parameters, returnType, body: [],
+                    kind: "method" as "method", name, modifiers: [], namespaceName: null,
+                    parameters, returnType, body: [],
                 }));
             } else if (node.kind === "GET") {
                 if (names.has(name) || parameters.length !== 0 || returnType.sourceName === "void") {
@@ -1840,7 +1913,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 const pair = accessors[name] || {};
                 if (pair.getter) fail("HARDENED_INTERFACE_DUPLICATE", "interface getter is duplicated", node);
                 pair.getter = Object.assign(identity(node), {
-                    kind: "getter" as "getter", name, modifiers: [], returnType, body: [],
+                    kind: "getter" as "getter", name, modifiers: [], namespaceName: null, returnType, body: [],
                 });
                 accessors[name] = pair;
             } else {
@@ -1851,7 +1924,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 const pair = accessors[name] || {};
                 if (pair.setter) fail("HARDENED_INTERFACE_DUPLICATE", "interface setter is duplicated", node);
                 pair.setter = Object.assign(identity(node), {
-                    kind: "setter" as "setter", name, modifiers: [], parameter: parameters[0]!, body: [],
+                    kind: "setter" as "setter", name, modifiers: [], namespaceName: null,
+                    parameter: parameters[0]!, body: [],
                 });
                 accessors[name] = pair;
             }
@@ -1951,7 +2025,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             const getterType = pair.getter.returnType!;
             const setterType = pair.setter.parameters[0]!.type;
             if (!sameType(getterType, setterType)
-                || pair.getter.modifiers.join("\u0000") !== pair.setter.modifiers.join("\u0000")) {
+                || pair.getter.modifiers.join("\u0000") !== pair.setter.modifiers.join("\u0000")
+                || pair.getter.namespaceName !== pair.setter.namespaceName) {
                 fail("HARDENED_ACCESSOR_PAIR", "paired getter/setter type and modifiers must match exactly", pair.setter.node);
             }
         }
@@ -2002,13 +2077,13 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 }
                 const getter: SemanticGetter = Object.assign(identity(node), {
                     kind: "getter" as "getter", name: header.name, modifiers: header.modifiers,
-                    returnType: header.returnType!, body,
+                    namespaceName: header.namespaceName, returnType: header.returnType!, body,
                 });
                 members.push(getter);
             } else if (header.accessor === "setter") {
                 const setter: SemanticSetter = Object.assign(identity(node), {
                     kind: "setter" as "setter", name: header.name, modifiers: header.modifiers,
-                    parameter: header.parameters[0]!, body,
+                    namespaceName: header.namespaceName, parameter: header.parameters[0]!, body,
                 });
                 members.push(setter);
             } else {
@@ -2017,13 +2092,16 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 }
                 const method: SemanticMethod = Object.assign(identity(node), {
                     kind: "method" as "method", name: header.name, modifiers: header.modifiers,
-                    parameters: header.parameters, returnType: header.returnType!, body,
+                    namespaceName: header.namespaceName, parameters: header.parameters,
+                    returnType: header.returnType!, body,
                 });
                 members.push(method);
             }
             return;
         }
-        fail("HARDENED_CLASS_MEMBER", "class member kind is unsupported: " + node.kind, node);
+        if (node.kind !== "USE") {
+            fail("HARDENED_CLASS_MEMBER", "class member kind is unsupported: " + node.kind, node);
+        }
     });
     const declaration: SemanticClass = Object.assign(identity(classNode), {
         declarationKind: "class" as "class", name: className,

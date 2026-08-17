@@ -151,6 +151,7 @@ function parseUse(parser:AS3Parser):Node {
     consume(parser, Keywords.NAMESPACE);
     let nameIndex = parser.tok.index;
     let namespace = parseNamespaceName(parser);
+    parser.activeNamespaces.add(namespace);
     let result:Node = createNode(NodeKind.USE, {
         start: tok.index,
         end: nameIndex + namespace.length,
@@ -291,13 +292,15 @@ function parseClassContent(parser:AS3Parser):Node {
             parseClassConstant(parser, result, modifiers, meta);
         } else if (tokIs(parser, Keywords.IMPORT)) {
             result.children.push(parseImport(parser));
+        } else if (tokIs(parser, Keywords.USE)) {
+            result.children.push(parseUse(parser));
         } else if (tokIs(parser, Keywords.INCLUDE) || tokIs(parser, Keywords.INCLUDE_AS2)) {
             result.children.push(parseIncludeExpression(parser));
         } else if (tokIs(parser, Keywords.FUNCTION)) {
             parseClassFunctions(parser, result, modifiers, meta);
         } else if (tokIs(parser, Operators.SEMI_COLUMN)) {
             nextToken(parser);
-        } else if (isDeclarationModifier(parser.tok.text)) {
+        } else if (isDeclarationModifier(parser.tok.text) || parser.activeNamespaces.has(parser.tok.text)) {
             modifiers.push(parser.tok);
             nextTokenIgnoringDocumentation(parser);
         } else {

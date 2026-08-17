@@ -444,6 +444,13 @@ function buildTree(options = {}) {
             : [parameter("prefix", "String"), restParameter("values")];
         members.push(method("collect", parameters, "void", [n("RETURN")]));
     }
+    if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
+        members.push(method("namespaced", [], "void", [n("RETURN")],
+            options.namespaceAccessCollision ? ["public", "ResourcesSpace"] : ["ResourcesSpace"]));
+        if (options.namespaceCollision) {
+            members.push(method("namespaced", [], "void", [n("RETURN")], ["OtherSpace"]));
+        }
+    }
     if (options.implicitObjectSuper) members.splice(0, members.length, constructor(body));
     if (options.accessors) {
         const getterBody = options.getterNoReturn ? [] : options.accessorIf
@@ -479,6 +486,10 @@ function buildTree(options = {}) {
         ? [n("IMPORT", "flash.display.*"), n("IMPORT", "flash.events.*")]
         : [n("IMPORT", "flash.display.Sprite"), n("IMPORT", "flash.events.Event")];
     if (options.unusedWildcard) imports.push(n("IMPORT", "flash.geom.*"));
+    if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
+        imports.push(n("USE", "ResourcesSpace"));
+        if (options.namespaceCollision) imports.push(n("USE", "OtherSpace"));
+    }
     return n("COMPILATION_UNIT", null, [
         n("PACKAGE", null, [
             n("NAME", "lobby.ui"),
@@ -900,6 +911,16 @@ function main() {
     assert.match(restParameterOutput.code, /collect\(prefix: string, \.\.\.values: unknown\[\]\): void/);
     assert.match(restParameterOutput.code, /this\.collect\("p", 1, "two"\);/);
     assertErrorCode(() => adapt(api, buildTree({ badRestPosition: true }), authority), "HARDENED_PARAMETER_REST");
+    const namespaceProgram = adapt(api, buildTree({ namespaceWorkpack: true }), authority);
+    const namespaceMember = namespaceProgram.declaration.members.find(member => member.kind === "method"
+        && member.name === "namespaced");
+    assert.equal(namespaceMember.namespaceName, "ResourcesSpace");
+    const namespaceOutput = api.emitSemanticProgram(namespaceProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(namespaceOutput.code, /namespaced\(\): void/);
+    assert.doesNotMatch(namespaceOutput.code, /ResourcesSpace/);
+    assertErrorCode(() => adapt(api, buildTree({ namespaceCollision: true }), authority), "HARDENED_METHOD_DUPLICATE");
+    assertErrorCode(() => adapt(api, buildTree({ namespaceAccessCollision: true }), authority), "HARDENED_NAMESPACE_MODIFIER");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -911,7 +932,7 @@ function main() {
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
-        labelOutput.code, interfaceOutput.code]);
+        labelOutput.code, interfaceOutput.code, namespaceOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

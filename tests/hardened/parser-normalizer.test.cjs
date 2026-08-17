@@ -168,6 +168,7 @@ try {
         "    /* preserved comment trivia */",
         "    import flash.display.Sprite;",
         "    import flash.events.Event;",
+        "    use namespace ResourcesSpace;",
         "    public class Demo extends Sprite {",
         "        private const label:String = \"ok\";",
         "        private var status:String = \"old\";",
@@ -185,6 +186,7 @@ try {
         "        public function optional(enabled:Boolean = true):void { }",
         "        public function collect(prefix:String,...values):void { }",
         "        public function labelled():void { outer: while (true) { break outer; } }",
+        "        ResourcesSpace function namespaced():void { status = \"namespace\"; }",
         "    }",
         "}",
         "",
@@ -242,7 +244,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -311,6 +313,10 @@ try {
     assert.equal(semantic.declaration.members[15].body[0].kind, "label");
     assert.equal(semantic.declaration.members[15].body[0].statement.kind, "while");
     assert.equal(semantic.declaration.members[15].body[0].statement.statements[0].label, "outer");
+    assert.equal(semantic.declaration.members[16].name, "namespaced");
+    assert.equal(semantic.declaration.members[16].namespaceName, "ResourcesSpace");
+    assert.deepEqual(semantic.declaration.members[16].modifiers, []);
+    assert.ok(normalized.nodes.some(node => node.kind === "USE" && node.text === "ResourcesSpace"));
 
     const interfaceSource = "package p { public interface IThing { function run(value:int,...rest):String; function get name():String; function set name(value:String):void; } }";
     const interfaceTree = built.parse("fixtures/IThing.as", interfaceSource);

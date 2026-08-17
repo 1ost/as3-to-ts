@@ -378,6 +378,7 @@ export interface SemanticField extends SemanticIdentity {
     sharedDeclarationNodeId: string;
     name: string;
     modifiers: SemanticModifier[];
+    namespaceName: string | null;
     readonly: boolean;
     type: SemanticType;
     initializer: SemanticExpression | null;
@@ -387,6 +388,7 @@ export interface SemanticMethod extends SemanticIdentity {
     kind: "method";
     name: string;
     modifiers: SemanticModifier[];
+    namespaceName: string | null;
     parameters: SemanticParameter[];
     returnType: SemanticType;
     body: SemanticStatement[];
@@ -396,6 +398,7 @@ export interface SemanticGetter extends SemanticIdentity {
     kind: "getter";
     name: string;
     modifiers: SemanticModifier[];
+    namespaceName: string | null;
     returnType: SemanticType;
     body: SemanticStatement[];
 }
@@ -404,6 +407,7 @@ export interface SemanticSetter extends SemanticIdentity {
     kind: "setter";
     name: string;
     modifiers: SemanticModifier[];
+    namespaceName: string | null;
     parameter: SemanticParameter;
     body: SemanticStatement[];
 }
