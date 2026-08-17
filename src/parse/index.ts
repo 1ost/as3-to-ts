@@ -16,9 +16,10 @@ export default function parse(filePath:string, content:string):Node {
     } catch (error) {
         if (isAS3ParseError(error)) throw error;
         const token = parser.tok;
+        const failureMessage = error instanceof Error ? error.message : String(error);
         const failure = new AS3ParseError('AS3_PARSE_INTERNAL', parser.sourceFile,
             token ? token.index : 0,
-            error && error.message ? error.message : String(error),
+            failureMessage,
             'successful parser production', 'parser');
         throw failure;
     }

@@ -246,8 +246,9 @@ test("serializes concurrent portable-case-equivalent output reservations", async
         invokeAsync([source, path.join(root, "PortableOutput"), "--timeout-ms=1500"], root),
         invokeAsync([source, path.join(root, "portableoutput"), "--timeout-ms=1500"], root),
     ]);
-    assert.deepEqual([first.status, second.status].sort((left, right) => left - right), [5, 6]);
+    assert.deepEqual([first.status, second.status].sort((left, right) => left - right), [0, 6]);
     assert.match(`${first.stderr}${second.stderr}`, /reserve output publication/);
+    assert.equal(fs.existsSync(path.join(root, "PortableOutput")), true);
     assert.deepEqual(publicationDebris(root), []);
 });
 
@@ -316,29 +317,27 @@ test("contains fatal low-memory parser failures in the child process", t => {
     assert.deepEqual(publicationDebris(root), []);
 });
 
-test("terminates a known parser hang and removes staging output", t => {
+test("parses a comment after extends without the historical parser hang", t => {
     const root = temporaryDirectory(t);
     const source = path.join(root, "source");
     fs.mkdirSync(source);
     write(source, "Hang.as", "package p { public class Hang extends Base /* comment */ {} }\n");
     const output = path.join(root, "output");
     const result = invoke([source, output, "--timeout-ms=300"], root, 5_000);
-    assert.equal(result.status, 5, result.stderr);
-    assert.match(result.stderr, /timed out/);
-    assert.equal(fs.existsSync(output), false);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.existsSync(output), true);
     assert.deepEqual(publicationDebris(root), []);
 });
 
-test("terminates a trailing line-comment scanner hang", t => {
+test("parses a trailing line comment without the historical scanner hang", t => {
     const root = temporaryDirectory(t);
     const source = path.join(root, "source");
     fs.mkdirSync(source);
     write(source, "Hang.as", "package p { public class Hang {} } // no final newline");
     const output = path.join(root, "output");
     const result = invoke([source, output, "--timeout-ms=300"], root, 5_000);
-    assert.equal(result.status, 5, result.stderr);
-    assert.match(result.stderr, /timed out/);
-    assert.equal(fs.existsSync(output), false);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.existsSync(output), true);
     assert.deepEqual(publicationDebris(root), []);
 });
 

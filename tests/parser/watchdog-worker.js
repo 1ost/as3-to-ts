@@ -1,8 +1,9 @@
 'use strict';
 
-const parse = require('../../lib/parse');
+const path = require('path');
+const parse = require(path.join(process.argv[2], 'parse.js')).default;
 
-const source = Buffer.from(process.argv[2], 'base64').toString('utf8');
+const source = Buffer.from(process.argv[3], 'base64').toString('utf8');
 try {
     parse('C:\\watchdog\\Malformed.as', source);
     process.stdout.write(JSON.stringify({ok: true}));

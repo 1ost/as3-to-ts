@@ -51,6 +51,7 @@ function compileHardenedSources(ts) {
         moduleResolution: ts.ModuleResolutionKind.NodeJs,
         strict: true,
         noImplicitAny: true,
+        types: [],
         skipLibCheck: true,
         rootDir: path.join(ROOT, "src"),
         outDir: output,

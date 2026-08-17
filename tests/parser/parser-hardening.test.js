@@ -2,14 +2,37 @@
 
 const assert = require('assert');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
-const parse = require('../../lib/parse');
-const NodeKind = require('../../lib/syntax/nodeKind').default;
-const AS3Parser = require('../../lib/parse/parser').default;
-const parserApi = require('../../lib/parse/parser');
-const AS3Scanner = require('../../lib/parse/scanner').default;
-const SourceFile = require('../../lib/parse/source-file').default;
+const esbuild = require('esbuild');
+
+const testBundleRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'as3-parser-hardening-'));
+esbuild.buildSync({
+    absWorkingDir: path.join(__dirname, '..', '..'),
+    entryPoints: {
+        parse: 'src/parse/index.ts',
+        parser: 'src/parse/parser.ts',
+        scanner: 'src/parse/scanner.ts',
+        'source-file': 'src/parse/source-file.ts',
+        nodeKind: 'src/syntax/nodeKind.ts',
+    },
+    outdir: testBundleRoot,
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    target: 'node24',
+    logLevel: 'silent',
+});
+
+const parse = require(path.join(testBundleRoot, 'parse.js')).default;
+const NodeKind = require(path.join(testBundleRoot, 'nodeKind.js')).default;
+const AS3Parser = require(path.join(testBundleRoot, 'parser.js')).default;
+const parserApi = require(path.join(testBundleRoot, 'parser.js'));
+const AS3Scanner = require(path.join(testBundleRoot, 'scanner.js')).default;
+const SourceFile = require(path.join(testBundleRoot, 'source-file.js')).default;
+
+process.on('exit', () => fs.rmSync(testBundleRoot, {recursive: true, force: true}));
 
 function all(node, kind, result = []) {
     if (node.kind === kind) result.push(node);
@@ -43,7 +66,7 @@ function assertMonotoneSpans(node, source, label, parent = null) {
 function watchdog(source) {
     const worker = path.join(__dirname, 'watchdog-worker.js');
     const result = childProcess.spawnSync(process.execPath,
-        [worker, Buffer.from(source).toString('base64')],
+        [worker, testBundleRoot, Buffer.from(source).toString('base64')],
         {encoding: 'utf8', timeout: 1500});
     assert.strictEqual(result.error && result.error.code, undefined,
         `parser exceeded watchdog or failed to launch: ${result.error && result.error.message}`);
