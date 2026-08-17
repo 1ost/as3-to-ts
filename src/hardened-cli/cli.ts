@@ -42,12 +42,37 @@ interface TranspiledManifestFile {
     typescriptSha256: string;
 }
 
+interface QualificationFile {
+    sourcePath: string;
+    sourceBytes: number;
+    sourceSha256: string;
+    status: "admitted" | "held";
+    stage: "parse" | "normalize" | "semantic" | "emit" | "output" | null;
+    code: string | null;
+    message: string | null;
+    modulePath: string | null;
+    normalizedFingerprintSha256: string | null;
+    typescriptSha256: string | null;
+}
+
 function sha256(data: string | Buffer): string {
     return createHash("sha256").update(data).digest("hex");
 }
 
 function astPathFor(sourcePath: string): string {
     return `ast/${sourcePath.replace(/\.as$/i, ".ast.json")}`;
+}
+
+function holdDetails(error: unknown): Pick<QualificationFile, "stage" | "code" | "message"> {
+    const message = errorMessage(error).replace(/\r?\n/g, " ");
+    const match = /\b(AS3_PARSE_[A-Z0-9_]+|PARSER_NORMALIZER_[A-Z0-9_]+|HARDENED_[A-Z0-9_]+)/.exec(message);
+    const code = match ? match[1]! : error instanceof CliError && error.exitCode === 5
+        ? "FRONTEND_RESOURCE_LIMIT" : "FRONTEND_HOLD";
+    const stage = code.startsWith("AS3_PARSE_") || code === "FRONTEND_RESOURCE_LIMIT" ? "parse"
+        : code.startsWith("PARSER_NORMALIZER_") ? "normalize"
+        : code.startsWith("HARDENED_EMIT_") || code === "HARDENED_TYPESCRIPT_VERSION" ? "emit"
+        : code.startsWith("HARDENED_") ? "semantic" : "output";
+    return { stage, code, message };
 }
 
 async function execute(argv: readonly string[], io: Io): Promise<number> {
@@ -63,7 +88,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
 
     const { options } = parsed;
     const inputs = discoverInputs(options.sourceDirectory, options.limits);
-    const transpileAuthority = options.operation === "transpile"
+    const transpileAuthority = options.operation !== "parse"
         ? loadTranspileAuthority(options.sourceCensusPath, options.targetCapabilitiesPath)
         : null;
     let publication: Publication | undefined;
@@ -71,13 +96,31 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
         publication = preparePublication(options.outputDirectory, inputs.root);
         const manifestFiles: ManifestFile[] = [];
         const transpiledFiles: TranspiledManifestFile[] = [];
+        const qualificationFiles: QualificationFile[] = [];
         const outputKeys = new Set<string>();
+        const qualificationOwners = new Map<string, QualificationFile>();
         let totalOutputBytes = 0;
 
         for (const file of inputs.files) {
             const source = readInput(file);
-            const parsedFile = await parseIsolated(file.portablePath, source.content, options.limits,
-                options.operation === "transpile" ? "normalized" : "legacy");
+            let parsedFile;
+            try {
+                parsedFile = await parseIsolated(file.portablePath, source.content, options.limits,
+                    options.operation === "parse" ? "legacy" : "normalized");
+            } catch (error) {
+                if (options.operation !== "qualify") throw error;
+                qualificationFiles.push({
+                    sourcePath: file.portablePath,
+                    sourceBytes: source.bytes.byteLength,
+                    sourceSha256: sha256(source.bytes),
+                    status: "held",
+                    ...holdDetails(error),
+                    modulePath: null,
+                    normalizedFingerprintSha256: null,
+                    typescriptSha256: null,
+                });
+                continue;
+            }
             if (options.operation === "parse") {
                 totalOutputBytes += parsedFile.byteLength;
                 if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
@@ -104,6 +147,37 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     expectedTypeScriptVersion: transpileAuthority!.typeScriptVersion,
                 });
                 const collisionKey = portableCollisionKey(emitted.modulePath);
+                if (options.operation === "qualify") {
+                    const current: QualificationFile = {
+                        sourcePath: file.portablePath,
+                        sourceBytes: source.bytes.byteLength,
+                        sourceSha256: sha256(source.bytes),
+                        status: "admitted",
+                        stage: null,
+                        code: null,
+                        message: null,
+                        modulePath: emitted.modulePath,
+                        normalizedFingerprintSha256: normalized.fingerprintSha256,
+                        typescriptSha256: sha256(emitted.code),
+                    };
+                    const prior = qualificationOwners.get(collisionKey);
+                    if (prior) {
+                        prior.status = "held";
+                        prior.stage = "output";
+                        prior.code = "HARDENED_OUTPUT_COLLISION";
+                        prior.message = `portable module path collides with ${file.portablePath}`;
+                        prior.typescriptSha256 = null;
+                        current.status = "held";
+                        current.stage = "output";
+                        current.code = "HARDENED_OUTPUT_COLLISION";
+                        current.message = `portable module path collides with ${prior.sourcePath}`;
+                        current.typescriptSha256 = null;
+                    } else {
+                        qualificationOwners.set(collisionKey, current);
+                    }
+                    qualificationFiles.push(current);
+                    continue;
+                }
                 if (outputKeys.has(collisionKey)) {
                     throw new CliError(`two sources emit the same portable module path: ${emitted.modulePath}`, 4);
                 }
@@ -125,18 +199,39 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     typescriptSha256: sha256(emitted.code),
                 });
             } catch (error) {
+                if (options.operation === "qualify") {
+                    const normalized = (() => {
+                        try { return JSON.parse(parsedFile.json) as NormalizedParserAst; } catch { return null; }
+                    })();
+                    qualificationFiles.push({
+                        sourcePath: file.portablePath,
+                        sourceBytes: source.bytes.byteLength,
+                        sourceSha256: sha256(source.bytes),
+                        status: "held",
+                        ...holdDetails(error),
+                        modulePath: null,
+                        normalizedFingerprintSha256: normalized?.fingerprintSha256 || null,
+                        typescriptSha256: null,
+                    });
+                    continue;
+                }
                 if (error instanceof CliError) throw error;
                 throw new CliError(`transpile rejected ${file.portablePath}: ${errorMessage(error)}`, 4);
             }
         }
 
+        const qualificationCounts = options.operation === "qualify" ? qualificationFiles.reduce((result, item) => {
+            const key = item.status === "admitted" ? "admitted" : item.code!;
+            result[key] = (result[key] || 0) + 1;
+            return result;
+        }, Object.create(null) as Record<string, number>) : null;
         const manifest = options.operation === "parse" ? {
             schema: "bleach.as3.frontend-manifest.v1",
             toolVersion: TOOL_VERSION,
             upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
             astFormat: "legacy-as3-to-ts-node-v1",
             files: manifestFiles,
-        } : {
+        } : options.operation === "transpile" ? {
             schema: "bleach.as3.transpile-manifest.v1",
             toolVersion: TOOL_VERSION,
             upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
@@ -148,6 +243,19 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             capabilityMappingSha256: transpileAuthority!.capabilityMappingSha256,
             classification: "capability-authenticated-typescript-proposal",
             files: transpiledFiles,
+        } : {
+            schema: "bleach.as3.qualification-report.v1",
+            toolVersion: TOOL_VERSION,
+            upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
+            normalizedAstFormat: "authored-ui-as3-flat-ast@1",
+            semanticFormat: "as3-semantic-ir@1",
+            typeScriptVersion: transpileAuthority!.typeScriptVersion,
+            sourceCapabilitySha256: transpileAuthority!.sourceCensusSha256,
+            targetCapabilitySha256: transpileAuthority!.targetCapabilitiesSha256,
+            capabilityMappingSha256: transpileAuthority!.capabilityMappingSha256,
+            generatedTypeScriptMaterialized: false,
+            counts: qualificationCounts,
+            files: qualificationFiles,
         };
         const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`;
         totalOutputBytes += Buffer.byteLength(manifestJson, "utf8");
@@ -156,8 +264,9 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
         }
         writeArtifact(publication, "manifest.json", manifestJson);
         publish(publication);
-        const count = options.operation === "parse" ? manifestFiles.length : transpiledFiles.length;
-        const verb = options.operation === "parse" ? "Parsed" : "Transpiled";
+        const count = options.operation === "parse" ? manifestFiles.length
+            : options.operation === "transpile" ? transpiledFiles.length : qualificationFiles.length;
+        const verb = options.operation === "parse" ? "Parsed" : options.operation === "transpile" ? "Transpiled" : "Qualified";
         io.stdout.write(`${verb} ${count} ActionScript file${count === 1 ? "" : "s"}.\n`);
         return 0;
     } catch (error) {

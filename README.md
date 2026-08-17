@@ -43,6 +43,11 @@ node bin/as3-frontend transpile <source-directory> <new-output-directory> \
   --target-capabilities <laya-authored-content-capabilities.json>
 ```
 
+To measure the same gate over a source root without writing any `.ts` files,
+replace `transpile` with `qualify`. Its sole output is a deterministic manifest
+containing one admitted/held record per source and counts by stable diagnostic
+code.
+
 The output directory must not exist. A successful run publishes it with one
 atomic directory rename after every source has parsed and every staged artifact
 has been revalidated. Failures leave no partial output directory.

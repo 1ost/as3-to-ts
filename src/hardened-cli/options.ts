@@ -26,13 +26,13 @@ export interface ParseRunOptions extends BaseRunOptions {
     operation: "parse";
 }
 
-export interface TranspileRunOptions extends BaseRunOptions {
-    operation: "transpile";
+export interface CapabilityRunOptions extends BaseRunOptions {
+    operation: "transpile" | "qualify";
     sourceCensusPath: string;
     targetCapabilitiesPath: string;
 }
 
-export type RunOptions = ParseRunOptions | TranspileRunOptions;
+export type RunOptions = ParseRunOptions | CapabilityRunOptions;
 
 export type ParsedArguments =
     | { mode: "help" }
@@ -147,9 +147,9 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
         }
     }
 
-    let operation: "parse" | "transpile" = "parse";
-    if (positional[0] === "parse" || positional[0] === "transpile") {
-        operation = positional.shift() as "parse" | "transpile";
+    let operation: "parse" | "transpile" | "qualify" = "parse";
+    if (positional[0] === "parse" || positional[0] === "transpile" || positional[0] === "qualify") {
+        operation = positional.shift() as "parse" | "transpile" | "qualify";
     }
     if (positional.length !== 2) {
         throw new CliError("an operation, one source directory, and one output directory are required", 2);
@@ -189,10 +189,12 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
 export const HELP = `Usage:
   as3-frontend parse <source-directory> <output-directory> [options]
   as3-frontend transpile <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [options]
+  as3-frontend qualify <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [options]
 
 Parse emits deterministic legacy-AST JSON artifacts. Transpile emits only the
-closed, capability-authenticated TypeScript subset. The two-argument legacy
-form remains an alias for parse.
+closed, capability-authenticated TypeScript subset. Qualify emits a report of
+admitted and held sources without materializing TypeScript. The two-argument
+legacy form remains an alias for parse.
 The output directory must not already exist.
 
 Options:

@@ -133,3 +133,26 @@ test("authority byte drift fails before output reservation", t => {
     assert.match(result.stderr, /capability authority rejected/);
     assert.equal(fs.existsSync(output), false);
 });
+
+test("qualification records holds without materializing TypeScript", t => {
+    const root = temporaryDirectory(t);
+    const source = path.join(root, "source");
+    const output = path.join(root, "qualification");
+    fs.mkdirSync(source);
+    write(source, "Demo.as", admittedSource);
+    write(source, "Unsupported.as",
+        "package p { public class Unsupported { public function f():void { while (true) {} } } }\n");
+    const result = spawnSync(process.execPath, [executable, "qualify", source, output,
+        "--source-census", sourceCensus, "--target-capabilities", targetCapabilities], {
+        cwd: root, encoding: "utf8", timeout: 20_000, windowsHide: true,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const files = fs.readdirSync(output);
+    assert.deepEqual(files, ["manifest.json"]);
+    const report = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8"));
+    assert.equal(report.schema, "bleach.as3.qualification-report.v1");
+    assert.equal(report.generatedTypeScriptMaterialized, false);
+    assert.equal(report.counts.admitted, 1);
+    assert.equal(report.counts.PARSER_NORMALIZER_UNSUPPORTED_KIND, 1);
+    assert.deepEqual(report.files.map(item => item.status), ["admitted", "held"]);
+});
