@@ -792,7 +792,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         });
     }
     if (node.kind === "RELATION" || node.kind === "EQUALITY" || node.kind === "AND" || node.kind === "OR"
-        || node.kind === "ADD" || node.kind === "MULTIPLICATION") {
+        || node.kind === "ADD" || (node.kind === "MINUS" && node.children.length === 3)
+        || node.kind === "MULTIPLICATION") {
         if (node.children.length !== 3 || node.children[1]!.kind !== "OP") {
             fail("HARDENED_BINARY_SHAPE", "binary expression must contain exactly one operator and two operands", node);
         }
@@ -1062,8 +1063,6 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children.length !== 2 || node.children[1]!.kind !== "ARGUMENTS") {
             fail("HARDENED_CALL_SHAPE", "call expression has the wrong normalized shape", node);
         }
-        onlyKinds(node.children[1]!, ["AND", "ARRAY", "ARRAY_ACCESSOR", "CALL", "DOT", "EQUALITY", "IDENTIFIER",
-            "LITERAL", "NEW", "OBJECT", "OR", "RELATION", "VECTOR"]);
         const rawCallee = node.children[0]!;
         if (rawCallee.kind === "VECTOR") {
             const vectorType = parseType(rawCallee, context, false);
@@ -1617,7 +1616,6 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
         const init = one(declaration, "INIT", true);
         let initializer: SemanticExpression | null = null;
         if (init !== null) {
-            onlyKinds(init, ["ARRAY", "CALL", "DOT", "IDENTIFIER", "LITERAL", "NEW", "OBJECT"]);
             if (init.children.length !== 1) {
                 fail("HARDENED_INITIALIZER_SHAPE", "field initializer has the wrong normalized shape", init);
             }

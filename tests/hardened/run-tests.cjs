@@ -196,7 +196,11 @@ function buildTree(options = {}) {
     }
     const field = n(options.constFields ? "CONST_LIST" : "VAR_LIST", null, [
         mods(...(options.fieldModifiers || ["private"])),
-        n("NAME_TYPE_INIT", null, [n("NAME", "a"), type("Number"), n("INIT", null, [n("LITERAL", "1")])]),
+        n("NAME_TYPE_INIT", null, [n("NAME", "a"), type("Number"), n("INIT", null, [
+            options.nestedExpressionWorkpack
+                ? binary("ADD", n("LITERAL", "1"), "+", n("LITERAL", "2"))
+                : options.badNestedExpression ? n("FORIN") : n("LITERAL", "1"),
+        ])]),
         n("NAME_TYPE_INIT", null, [n("NAME", "b"), type("String"), n("INIT", null, [n("LITERAL", '"x"')])]),
     ]);
     if (options.newField) {
@@ -402,6 +406,11 @@ function buildTree(options = {}) {
     }
     if (options.defaultParameterWorkpack) {
         onEventBody = [call(n("IDENTIFIER", "configure")), n("RETURN")];
+    }
+    if (options.nestedExpressionWorkpack) {
+        onEventBody = [call(n("IDENTIFIER", "int"), [
+            binary("MINUS", n("LITERAL", "4"), "-", n("LITERAL", "1")),
+        ]), n("RETURN")];
     }
     if (options.restParameterWorkpack || options.badRestPosition) {
         onEventBody = options.badRestPosition ? [n("RETURN")] : [
@@ -837,6 +846,12 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(defaultParameterOutput.code, /configure\(enabled: boolean = true\): void/);
     assert.match(defaultParameterOutput.code, /this\.configure\(\);/);
+    const nestedExpressionProgram = adapt(api, buildTree({ nestedExpressionWorkpack: true }), authority);
+    const nestedExpressionOutput = api.emitSemanticProgram(nestedExpressionProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(nestedExpressionOutput.code, /private a: number = 1 \+ 2;/);
+    assert.match(nestedExpressionOutput.code, /__as3Int\(4 - 1\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badNestedExpression: true }), authority), "HARDENED_EXPRESSION_UNSUPPORTED");
     const restParameterProgram = adapt(api, buildTree({ restParameterWorkpack: true }), authority);
     const restParameterOutput = api.emitSemanticProgram(restParameterProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
