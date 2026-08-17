@@ -3,20 +3,25 @@ import AS3Parser from './parser';
 import SourceFile from './source-file';
 import AS3Scanner from './scanner';
 import {parseCompilationUnit} from './parse-declarations';
-import {VERBOSE_MASK, WARNINGS} from '../config';
-import {ReportFlags} from '../reports/report-flags';
+import {AS3ParseError, isAS3ParseError} from './diagnostic';
 
 export default function parse(filePath:string, content:string):Node {
-
-    //if(VERBOSE >= 1) {
-
-    if((VERBOSE_MASK & ReportFlags.KEY_POINTS) == ReportFlags.KEY_POINTS) {
-        console.log("parse() ⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣⇣");
-    }
 
     let parser = new AS3Parser();
     parser.sourceFile = new SourceFile(content, filePath);
     parser.scn = new AS3Scanner();
-    parser.scn.setContent(content);
-    return parseCompilationUnit(parser);
+    parser.scn.setContent(content, filePath);
+    try {
+        return parseCompilationUnit(parser);
+    } catch (error) {
+        if (isAS3ParseError(error)) throw error;
+        const token = parser.tok;
+        const failure = new AS3ParseError('AS3_PARSE_INTERNAL', parser.sourceFile,
+            token ? token.index : 0,
+            error && error.message ? error.message : String(error),
+            'successful parser production', 'parser');
+        throw failure;
+    }
 }
+
+export {AS3ParseError, AS3ParseDiagnostic, AS3ParseDiagnosticCode} from './diagnostic';

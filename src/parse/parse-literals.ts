@@ -1,7 +1,9 @@
 import Node, {createNode} from '../syntax/node';
 import NodeKind from '../syntax/nodeKind';
 import * as Operators from '../syntax/operators';
-import AS3Parser, {nextToken, consume, skip, tokIs} from "./parser";
+import AS3Parser, {
+    nextToken, consume, skip, tokIs, getParserCheckPoint, assertProgress, assertNotEOF, parseError,
+} from "./parser";
 import {parseExpression} from "./parse-expressions";
 import {parseType} from "./parse-types";
 
@@ -10,11 +12,18 @@ export function parseArrayLiteral(parser:AS3Parser):Node {
     let tok = consume(parser, Operators.LEFT_SQUARE_BRACKET);
     let result:Node = createNode(NodeKind.ARRAY, {start: tok.index});
     while (!tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) {
+        assertNotEOF(parser, 'array literal');
+        const checkpoint = getParserCheckPoint(parser);
         result.children.push(parseExpression(parser));
-        skip(parser, Operators.COMMA);
+        if (!tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) {
+            if (!tokIs(parser, Operators.COMMA)) {
+                throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', ', or ]', 'array literal');
+            }
+            nextToken(parser);
+        }
+        assertProgress(parser, checkpoint, 'array literal');
     }
     result.end = consume(parser, Operators.RIGHT_SQUARE_BRACKET).end;
-    //console.log(result);
     return result;
 }
 
@@ -23,8 +32,16 @@ export function parseObjectLiteral(parser:AS3Parser):Node {
     let tok = consume(parser, Operators.LEFT_CURLY_BRACKET);
     let result:Node = createNode(NodeKind.OBJECT, {start: tok.index, end: tok.end});
     while (!tokIs(parser, Operators.RIGHT_CURLY_BRACKET)) {
+        assertNotEOF(parser, 'object literal');
+        const checkpoint = getParserCheckPoint(parser);
         result.children.push(parseObjectLiteralPropertyDeclaration(parser));
-        skip(parser, Operators.COMMA);
+        if (!tokIs(parser, Operators.RIGHT_CURLY_BRACKET)) {
+            if (!tokIs(parser, Operators.COMMA)) {
+                throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', ', or }', 'object literal');
+            }
+            nextToken(parser);
+        }
+        assertProgress(parser, checkpoint, 'object literal');
     }
     tok = consume(parser, Operators.RIGHT_CURLY_BRACKET);
     result.end = tok.end;

@@ -1,0 +1,145 @@
+'use strict';
+
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const childProcess = require('child_process');
+const parse = require('../../lib/parse');
+const NodeKind = require('../../lib/syntax/nodeKind').default;
+const AS3Parser = require('../../lib/parse/parser').default;
+const parserApi = require('../../lib/parse/parser');
+const AS3Scanner = require('../../lib/parse/scanner').default;
+const SourceFile = require('../../lib/parse/source-file').default;
+
+function all(node, kind, result = []) {
+    if (node.kind === kind) result.push(node);
+    node.children.forEach(child => {
+        assert.ok(child, 'AST child arrays must not contain null placeholders');
+        all(child, kind, result);
+    });
+    return result;
+}
+
+function childText(node, kind) {
+    const child = node.children.find(candidate => candidate.kind === kind);
+    return child && child.text;
+}
+
+function watchdog(source) {
+    const worker = path.join(__dirname, 'watchdog-worker.js');
+    const result = childProcess.spawnSync(process.execPath,
+        [worker, Buffer.from(source).toString('base64')],
+        {encoding: 'utf8', timeout: 1500});
+    assert.strictEqual(result.error && result.error.code, undefined,
+        `parser exceeded watchdog or failed to launch: ${result.error && result.error.message}`);
+    assert.strictEqual(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+}
+
+const fixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'hardening.as'), 'utf8');
+const ast = parse('C:\\fixture\\hardening.as', fixture);
+assert.strictEqual(ast.start, 0);
+assert.strictEqual(ast.end, fixture.length, 'compilation-unit span covers the full source');
+assert.deepStrictEqual(ast.trivia.map(token => token.text), [
+    '/* between declarations */',
+    '// ASI must terminate break here',
+    '/* inline before semicolon */',
+]);
+ast.trivia.forEach(token => {
+    assert.strictEqual(fixture.slice(token.index, token.end), token.text,
+        'trivia token retains its exact source span');
+});
+
+const varList = all(ast, NodeKind.VAR_LIST)[0];
+const declarations = varList.children.filter(child => child.kind === NodeKind.NAME_TYPE_INIT);
+assert.strictEqual(declarations.length, 2, 'one AST declaration is retained for every var-list entry');
+assert.deepStrictEqual(declarations.map(node => childText(node, NodeKind.NAME)), ['first', 'second']);
+assert.deepStrictEqual(declarations.map(node => childText(node, NodeKind.TYPE)), ['int', 'uint']);
+
+const functions = all(ast, NodeKind.FUNCTION);
+assert.strictEqual(functions.length, 1, 'omitted member access modifier is valid ActionScript');
+const parameterTypes = all(functions[0], NodeKind.PARAMETER)
+    .map(parameter => childText(parameter.findChild(NodeKind.NAME_TYPE_INIT), NodeKind.TYPE));
+assert.deepStrictEqual(parameterTypes, ['flash.display.Sprite']);
+assert.ok(all(functions[0], NodeKind.TYPE).some(type => type.text === 'flash.events.Event'),
+    'fully-qualified return type is preserved');
+assert.ok(all(functions[0], NodeKind.IDENTIFIER).some(identifier => identifier.text === 'int'),
+    'int expression identity is preserved in the parser AST');
+assert.strictEqual(all(ast, NodeKind.BREAK).length, 1);
+assert.strictEqual(all(ast, NodeKind.CONTINUE).length, 1);
+assert.strictEqual(all(ast, NodeKind.THROW).length, 1, 'throw is not represented as return');
+
+const scanner = new AS3Scanner();
+scanner.setContent('Vector.<uint> tail', 'checkpoint.as');
+assert.strictEqual(scanner.nextToken().text, 'Vector');
+const scannerCheckpoint = scanner.getCheckPoint();
+const expectedNext = scanner.nextToken().text;
+scanner.missedSemi = true;
+scanner.lastLineScanned = 99;
+scanner.queuedToken = scanner.createToken('rogue', {skip: false});
+scanner.rewind(scannerCheckpoint);
+assert.deepStrictEqual(scanner.getCheckPoint(), scannerCheckpoint, 'scanner checkpoint restores every mutable field');
+assert.strictEqual(scanner.nextToken().text, expectedNext);
+
+const speculative = new AS3Parser();
+speculative.sourceFile = new SourceFile('alpha /* trivia */ beta', 'checkpoint.as');
+speculative.scn = new AS3Scanner();
+speculative.scn.setContent(speculative.sourceFile.content, speculative.sourceFile.path);
+parserApi.nextToken(speculative);
+const originalToken = speculative.tok;
+const originalScanner = speculative.scn.getCheckPoint();
+const parsed = parserApi.tryParse(speculative, () => {
+    parserApi.nextToken(speculative);
+    speculative.isInFor = true;
+    throw parserApi.parseError(speculative, 'AS3_PARSE_UNEXPECTED_TOKEN',
+        'speculative syntax', 'checkpoint test');
+});
+assert.strictEqual(parsed, null);
+assert.strictEqual(speculative.tok, originalToken);
+assert.deepStrictEqual(speculative.scn.getCheckPoint(), originalScanner);
+assert.strictEqual(speculative.isInFor, false);
+assert.deepStrictEqual(speculative.trivia, [], 'failed speculation does not leak trivia');
+
+const malformed = [
+    'package missing',
+    'package p { class C { function f():void {',
+    'package p { [Meta class C {} }',
+    'package p { class C { function f():void { call(1 2); } } }',
+    'package p { class C { function f():void { var a:Array = [1, 2; } } }',
+];
+malformed.forEach(source => {
+    const result = watchdog(source);
+    assert.strictEqual(result.ok, false, source);
+    assert.strictEqual(result.name, 'AS3ParseError');
+    assert.ok(/^AS3_PARSE_/.test(result.code), result.code);
+    assert.strictEqual(result.path, 'C:/watchdog/Malformed.as');
+    assert.ok(result.line >= 1 && result.column >= 1);
+    assert.strictEqual(/[\r\n]/.test(result.message), false, 'diagnostic is one logical line');
+});
+
+assert.strictEqual(watchdog('package p { class C { function f():void { throw\nvalue; } } }').code,
+    'AS3_PARSE_THROW_LINE_BREAK');
+assert.strictEqual(watchdog('package p { /* never closed').code,
+    'AS3_PARSE_UNTERMINATED_COMMENT');
+assert.strictEqual(watchdog('package p { class C { var s:String = "never closed; } }').code,
+    'AS3_PARSE_UNTERMINATED_STRING');
+
+const trailing = watchdog('package p { class C {} } )');
+assert.strictEqual(trailing.ok, false, 'non-trivia trailing input is never silently consumed');
+assert.ok(/^AS3_PARSE_/.test(trailing.code));
+
+const corpusFiles = [];
+function collectActionScript(directory) {
+    fs.readdirSync(directory).forEach(name => {
+        const entry = path.join(directory, name);
+        if (fs.statSync(entry).isDirectory()) collectActionScript(entry);
+        else if (/\.as$/.test(name)) corpusFiles.push(entry);
+    });
+}
+collectActionScript(path.join(__dirname, '..', 'simple'));
+collectActionScript(path.join(__dirname, '..', 'compound'));
+const corpusFailures = corpusFiles.map(file => ({file, result: watchdog(fs.readFileSync(file, 'utf8'))}))
+    .filter(entry => !entry.result.ok);
+assert.deepStrictEqual(corpusFailures, [], 'checked-in AS3 corpus remains parseable without watchdog expiry');
+
+console.log(`parser hardening gates passed (${corpusFiles.length} corpus files)`);

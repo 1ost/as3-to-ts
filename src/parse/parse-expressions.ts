@@ -2,12 +2,13 @@ import Node, {createNode} from '../syntax/node';
 import NodeKind from '../syntax/nodeKind';
 import * as Keywords from '../syntax/keywords';
 import * as Operators from '../syntax/operators';
-import AS3Parser, {nextToken, tryParse, skip, consume, tokIs, VECTOR} from './parser';
+import AS3Parser, {
+    nextToken, tryParse, skip, consume, tokIs, VECTOR,
+    getParserCheckPoint, assertProgress, assertNotEOF, parseError,
+} from './parser';
 import {parseParameterList, parseBlock} from './parse-common';
 import {parseOptionalType, parseVector} from './parse-types';
 import {parseArrayLiteral, parseObjectLiteral, parseShortVector} from './parse-literals';
-import {VERBOSE_MASK} from '../config';
-import {ReportFlags} from '../reports/report-flags';
 
 export function parseExpressionList(parser:AS3Parser):Node {
     let result:Node = createNode(NodeKind.EXPR_LIST, {start: parser.tok.index}, parseAssignmentExpression(parser));
@@ -29,11 +30,7 @@ export function parseExpression(parser:AS3Parser):Node {
 
 export function parsePrimaryExpression(parser:AS3Parser):Node {
     let result:Node;
-
-    //if(VERBOSE >= 2) {
-    if((VERBOSE_MASK & ReportFlags.PARSER_POINTS) == ReportFlags.PARSER_POINTS) {
-        console.log("parse-expressions.ts - parsePrimaryExpression() - token: " + parser.tok.text);
-    }
+    assertNotEOF(parser, 'primary expression');
 
     if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
         return parseArrayLiteral(parser);
@@ -66,14 +63,10 @@ export function parsePrimaryExpression(parser:AS3Parser):Node {
         result = createNode(NodeKind.XML_LITERAL, {tok: parser.tok});
     } else if (parser.tok.isNumeric || /('|")/.test(parser.tok.text[0])) {
         result = createNode(NodeKind.LITERAL, {tok: parser.tok});
+    } else if (!/^[A-Za-z_$][\w$]*$/.test(parser.tok.text)) {
+        throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', 'a primary expression', 'expression');
     } else {
         result = createNode(NodeKind.IDENTIFIER, {tok: parser.tok});
-
-        // Transpile identifier to JavaScript equivalent if it's a keyword.
-        if (result.text === Keywords.INT || result.text === Keywords.UINT) {
-            // console.log("That's a INT/UINT: ", result);
-            result.text = "Number";
-        }
     }
     nextToken(parser, true);
     return result;
@@ -81,11 +74,6 @@ export function parsePrimaryExpression(parser:AS3Parser):Node {
 
 
 function parseLambdaExpression(parser:AS3Parser):Node {
-
-    //if(VERBOSE >= 2) {
-    if((VERBOSE_MASK & ReportFlags.PARSER_POINTS) == ReportFlags.PARSER_POINTS) {
-        console.log("parse-expressions.ts - parseLambdaExpression() - token: " + parser.tok.text);
-    }
 
     let tok = consume(parser, Keywords.FUNCTION);
     let result:Node;
@@ -127,11 +115,6 @@ function parseNewExpression(parser:AS3Parser):Node {
 
 
 function parseEncapsulatedExpression(parser:AS3Parser):Node {
-
-    //if(VERBOSE >= 2) {
-    if((VERBOSE_MASK & ReportFlags.PARSER_POINTS) == ReportFlags.PARSER_POINTS) {
-        console.log("parse-expressions.ts - parseEncapsulatedExpression()");
-    }
 
     let tok = consume(parser, Operators.LEFT_PARENTHESIS);
     let result:Node = createNode(NodeKind.ENCAPSULATED, {start: tok.index});
@@ -470,8 +453,16 @@ function parseArgumentList(parser:AS3Parser):Node {
     let tok = consume(parser, Operators.LEFT_PARENTHESIS);
     let result:Node = createNode(NodeKind.ARGUMENTS, {start: tok.index});
     while (!tokIs(parser, Operators.RIGHT_PARENTHESIS)) {
+        assertNotEOF(parser, 'argument list');
+        const checkpoint = getParserCheckPoint(parser);
         result.children.push(parseExpression(parser));
-        skip(parser, Operators.COMMA);
+        if (!tokIs(parser, Operators.RIGHT_PARENTHESIS)) {
+            if (!tokIs(parser, Operators.COMMA)) {
+                throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', ', or )', 'argument list');
+            }
+            nextToken(parser);
+        }
+        assertProgress(parser, checkpoint, 'argument list');
     }
     tok = consume(parser, Operators.RIGHT_PARENTHESIS);
     result.end = tok.end;

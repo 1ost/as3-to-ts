@@ -23,7 +23,7 @@ export function parseType(parser:AS3Parser):Node {
         result = parseVector(parser);
     } else {
         let index = parser.tok.index;
-        let name = parseQualifiedName(parser, true);
+        let name = parseQualifiedName(parser, false);
         result = createNode(NodeKind.TYPE, {start: index, text: name});
         // nextToken(parser,  true );
     }

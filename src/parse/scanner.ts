@@ -30,18 +30,22 @@
  */
 
 
-import {VERBOSE_MASK, WARNINGS, AUTO_INSERT_SEMICOLONS} from '../config';
 import Token from './token';
 import * as Keywords from '../syntax/keywords';
 import {startsWith, endsWith} from '../string';
 
 import sax = require('sax');
 import objectAssign = require('object-assign');
-import {ReportFlags} from '../reports/report-flags';
+import SourceFile from './source-file';
+import {AS3ParseError} from './diagnostic';
 
 export interface CheckPoint {
-    index: number;
-    inVector: boolean;
+    readonly index: number;
+    readonly inVector: boolean;
+    readonly lastTokenText: string;
+    readonly lastLineScanned: number;
+    readonly missedSemi: boolean;
+    readonly queuedToken: Token;
 }
 
 
@@ -56,16 +60,18 @@ export default class AS3Scanner {
     inVector: boolean = false;
     index: number;
     content: string = '';
-    lastTokenText:String = "";
+    lastTokenText:string = "";
     lastLineScanned:number = 0;
-    missedSemi:Boolean = false;
+    missedSemi:boolean = false;
     queuedToken:Token = null;
+    sourceFile:SourceFile = new SourceFile('', '<memory>');
 
-    setContent(content: string = ''): void {
+    setContent(content: string = '', path: string = '<memory>'): void {
         this.inVector = false;
         this.missedSemi = false;
         this.queuedToken = null;
         this.content = content;
+        this.sourceFile = new SourceFile(content, path);
         this.index = -1;
         this.lastLineScanned = 0;
     }
@@ -79,12 +85,23 @@ export default class AS3Scanner {
     }
 
     getCheckPoint(): CheckPoint {
-        return { index: this.index, inVector: this.inVector };
+        return {
+            index: this.index,
+            inVector: this.inVector,
+            lastTokenText: this.lastTokenText,
+            lastLineScanned: this.lastLineScanned,
+            missedSemi: this.missedSemi,
+            queuedToken: this.queuedToken,
+        };
     }
 
     rewind(checkpoint: CheckPoint): void {
         this.index = checkpoint.index;
         this.inVector = checkpoint.inVector;
+        this.lastTokenText = checkpoint.lastTokenText;
+        this.lastLineScanned = checkpoint.lastLineScanned;
+        this.missedSemi = checkpoint.missedSemi;
+        this.queuedToken = checkpoint.queuedToken;
     }
 
     createToken(
@@ -98,11 +115,6 @@ export default class AS3Scanner {
         options = objectAssign({index: this.index, isNumeric: false, isXML: false, skip: true}, options);
         if (options.skip && text.length > 1) {
             this.skipChars(text.length - 1);
-        }
-
-        //if(VERBOSE >= 2) {
-        if((VERBOSE_MASK & ReportFlags.SCANNER_POINTS) == ReportFlags.SCANNER_POINTS) {
-            console.log("  scanner - token: " + text + ", line: " + this.getNumLineBreaksBeforeIndex());
         }
 
         this.lastTokenText = text;
@@ -138,27 +150,14 @@ export default class AS3Scanner {
             currentChar = this.content.charAt(this.index);
         }
 
-        //if(VERBOSE >= 3) {
-        if((VERBOSE_MASK & ReportFlags.SCANNER_DETAILS) == ReportFlags.SCANNER_DETAILS) {
-            console.log("  scanner - char: " + currentChar + ", index: " + this.index + ", inVector: " + this.inVector);
-        }
-
         if(isNewLineChar(currentChar)) {
 
             this.lastLineScanned = this.getNumLineBreaksBeforeIndex();
 
             // Check for missing semicolons in 'break' or 'continue' statements.
             if(this.getPreviousCharacter() !== ";") {
-                var isCriticalToken = this.lastTokenText === Keywords.BREAK || this.lastTokenText === Keywords.CONTINUE;
                 var isValidToken = this.lastTokenText === "{" || this.lastTokenText === "}" || this.lastTokenText === "\n" || this.lastTokenText === ";";
                 this.missedSemi = this.lastTokenText && !isValidToken;
-                if(WARNINGS >= 1 && this.lastTokenText && isCriticalToken) {
-                    console.warn("scanner.ts: *** IMPORTANT WARNING *** Dangerous missing semicolon in line: " + this.lastLineScanned + " after '" + this.lastTokenText + "' statement.\n" +
-                        "Missing semicolons around such statements can cause the transpiler to fail by entering and infinite loop.");
-                }
-                else if(WARNINGS >= 3 && this.missedSemi) {
-                    console.log("scanner.ts: *** WARNING *** Missing semicolon in line: " + this.lastLineScanned + ", last: >" + this.lastTokenText + "<");
-                }
             }
         }
 
@@ -204,21 +203,10 @@ function nextToken(scanner: AS3Scanner): Token {
     }
 
     if (scanner.index >= scanner.content.length) {
-        //if(VERBOSE >= 3) {
-        if((VERBOSE_MASK & ReportFlags.SCANNER_DETAILS) == ReportFlags.SCANNER_DETAILS) {
-            console.log("  scanner - EOF");
-        }
         return scanner.createToken(Keywords.EOF, { skip: false });
     }
 
     let currentCharacter = scanner.nextNonWhitespaceCharacter();
-    if(AUTO_INSERT_SEMICOLONS && scanner.missedSemi) {
-        // insert semicolon
-        // TODO: this is successfully detected, but the insertion doesn not work
-        // console.log(">>> [INSERT SEMICOLON] <<<");
-        // scanner.queuedToken = scanner.createToken(";\n", {skip: true});
-    }
-
     switch (currentCharacter) {
         case '\n':
         case '\r':
@@ -227,7 +215,7 @@ function nextToken(scanner: AS3Scanner): Token {
         case '/':
             return scanCommentRegExpOrOperator(scanner);
         case '"': case '\'':
-            return scanUntilDelimiter(scanner, currentCharacter);
+            return scanUntilDelimiter(scanner, currentCharacter, currentCharacter, true);
         case '<':
             return scanXMLOrOperator(scanner, currentCharacter);
         case '0': case '1': case '2': case '3': case '4':
@@ -298,7 +286,7 @@ function scanCharacterSequence(scanner: AS3Scanner, currentCharacter: string, po
 
 
 function scanRegExp(scanner: AS3Scanner): Token {
-    let currentIndex = scanner.index;
+    const checkpoint = scanner.getCheckPoint();
     let token = scanUntilDelimiter(scanner, '/');
     if (token) {
         let flags = '';
@@ -325,7 +313,7 @@ function scanRegExp(scanner: AS3Scanner): Token {
             // invalid RegExp source
         }
     }
-    scanner.index = currentIndex;
+    scanner.rewind(checkpoint);
     return null;
 }
 
@@ -425,6 +413,7 @@ function scanHex(scanner: AS3Scanner): Token {
  * the current string is the first slash plus we know, that a * is following
  */
 function scanMultiLineComment(scanner: AS3Scanner): Token {
+    const start = scanner.index;
     let buffer = '/*';
     let currentCharacter = ' ';
     let previousCharacter = ' ';
@@ -437,7 +426,12 @@ function scanMultiLineComment(scanner: AS3Scanner): Token {
     }
     while (currentCharacter && (previousCharacter !== '*' || currentCharacter !== '/'));
 
-    return scanner.createToken(buffer, {skip: false});
+    if (!currentCharacter) {
+        throw new AS3ParseError('AS3_PARSE_UNTERMINATED_COMMENT', scanner.sourceFile,
+            start, 'EOF', '*/', 'block comment');
+    }
+
+    return scanner.createToken(buffer, {index: start, skip: false});
 }
 
 
@@ -469,15 +463,13 @@ function scanNumberOrDots(scanner: AS3Scanner, characterToBeScanned: string): To
  * following
  */
 function scanSingleLineComment(scanner: AS3Scanner): Token {
-    let buffer = scanner.content[scanner.index];
-    let char: string;
-    do {
-        char = scanner.nextChar();
+    let buffer = '/';
+    for (let peekPos = 1; scanner.index + peekPos < scanner.content.length; peekPos++) {
+        const char = scanner.peekChar(peekPos);
+        if (isNewLineChar(char)) break;
         buffer += char;
     }
-    while (!isNewLineChar(char));
-
-    return scanner.createToken(buffer, {skip: false});
+    return scanner.createToken(buffer);
 }
 
 
@@ -485,14 +477,18 @@ function scanSingleLineComment(scanner: AS3Scanner): Token {
  * Something started with a quote or number quote consume characters until
  * the quote/double quote shows up again and is not escaped
  */
-function scanUntilDelimiter(scanner: AS3Scanner, start: string, delimiter: string = start): Token {
+function scanUntilDelimiter(scanner: AS3Scanner, start: string, delimiter: string = start,
+        required: boolean = false): Token {
     let buffer = start;
-    let peekPos = 1;
     let numberOfBackslashes = 0;
 
-    while (peekPos < scanner.content.length) {
-        let currentCharacter: string = scanner.peekChar(peekPos++);
-        if (isNewLineChar(currentCharacter) || (scanner.index + peekPos >= scanner.content.length)) {
+    for (let peekPos = 1; scanner.index + peekPos < scanner.content.length; peekPos++) {
+        let currentCharacter: string = scanner.peekChar(peekPos);
+        if (isNewLineChar(currentCharacter)) {
+            if (required) {
+                throw new AS3ParseError('AS3_PARSE_UNTERMINATED_STRING', scanner.sourceFile,
+                    scanner.index, start, delimiter, 'string literal');
+            }
             return null;
         }
         buffer += currentCharacter;
@@ -505,7 +501,10 @@ function scanUntilDelimiter(scanner: AS3Scanner, start: string, delimiter: strin
             ? (numberOfBackslashes + 1) % 2
             : 0 ;
     }
-
+    if (required) {
+        throw new AS3ParseError('AS3_PARSE_UNTERMINATED_STRING', scanner.sourceFile,
+            scanner.index, start, delimiter, 'string literal');
+    }
     return null;
 
 }
@@ -550,6 +549,7 @@ function scanWord(scanner: AS3Scanner, startingCharacter: string): Token {
  * Try to parse a XML document
  */
 function scanXML(scanner: AS3Scanner): Token {
+    const checkpoint = scanner.getCheckPoint();
     let currentIndex = scanner.index;
     let level = 0;
     let buffer = '';
@@ -560,7 +560,7 @@ function scanXML(scanner: AS3Scanner): Token {
         do {
             currentToken = scanUntilDelimiter(scanner, '<', '>');
             if (currentToken === null) {
-                scanner.index = currentIndex;
+                scanner.rewind(checkpoint);
                 return null;
             }
             buffer += currentToken.text;
@@ -612,9 +612,11 @@ function verifyXML(string: string): boolean {
  * Something started with a lower sign <
  */
 function scanXMLOrOperator(scanner: AS3Scanner, startingCharacterc: string): Token {
+    const checkpoint = scanner.getCheckPoint();
     let xmlToken = scanXML(scanner);
     if (xmlToken !== null && verifyXML(xmlToken.text)) {
         return xmlToken;
     }
+    scanner.rewind(checkpoint);
     return scanCharacterSequence(scanner, startingCharacterc, ['<<<=', '<<<', '<<=', '<<', '<=']);
 }

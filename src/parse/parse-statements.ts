@@ -3,14 +3,19 @@ import NodeKind from '../syntax/nodeKind';
 import * as Keywords from '../syntax/keywords'
 import * as Operators from '../syntax/operators'
 import Token from './token';
-import AS3Parser, {nextToken, nextTokenAllowNewLine, tryParse, consume, skip, tokIs} from './parser';
+import AS3Parser, {
+    nextToken, nextTokenAllowNewLine, consume, skip, tokIs,
+    getParserCheckPoint, assertProgress, assertNotEOF, parseError,
+} from './parser';
 import {parseExpressionList, parseExpression, parsePrimaryExpression} from './parse-expressions';
 import {parseVarList, parseConstList} from './parse-declarations';
-import {parseBlock, parseNameTypeInit} from './parse-common';
+import {parseBlock, parseNameTypeInit, parseQualifiedName} from './parse-common';
 import {NEW_LINE} from './parser';
 
 
 export function parseStatement(parser:AS3Parser):Node {
+    assertNotEOF(parser, 'statement');
+    const checkpoint = getParserCheckPoint(parser);
     let result:Node;
 
     if (tokIs(parser, Keywords.FOR)) {
@@ -47,6 +52,7 @@ export function parseStatement(parser:AS3Parser):Node {
         result = parseExpressionList(parser);
         skip(parser, Operators.SEMI_COLUMN);
     }
+    assertProgress(parser, checkpoint, 'statement');
     return result;
 }
 
@@ -166,6 +172,8 @@ function parseSwitch(parser:AS3Parser):Node {
 function parseSwitchCases(parser:AS3Parser):Node {
     let result:Node = createNode(NodeKind.CASES, {start: parser.tok.index, end: parser.tok.end});
     while (true) {
+        assertNotEOF(parser, 'switch cases');
+        const checkpoint = getParserCheckPoint(parser);
         if (tokIs(parser, Operators.RIGHT_CURLY_BRACKET)) {
             break;
         } else if (tokIs(parser, Keywords.CASE)) {
@@ -190,7 +198,11 @@ function parseSwitchCases(parser:AS3Parser):Node {
             caseNode.end = block.end;
             caseNode.children.push(block);
             result.children.push(caseNode);
+        } else {
+            throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
+                'case, default, or }', 'switch cases');
         }
+        assertProgress(parser, checkpoint, 'switch cases');
     }
     result.end = result.children.reduce((index:number, child:Node) => {
         return Math.max(index, child ? child.end : 0);
@@ -202,7 +214,10 @@ function parseSwitchCases(parser:AS3Parser):Node {
 function parseSwitchBlock(parser:AS3Parser):Node {
     let result:Node = createNode(NodeKind.SWITCH_BLOCK, {start: parser.tok.index, end: parser.tok.end});
     while (!tokIs(parser, Keywords.CASE) && !tokIs(parser, Keywords.DEFAULT) && !tokIs(parser, Operators.RIGHT_CURLY_BRACKET)) {
+        assertNotEOF(parser, 'switch block');
+        const checkpoint = getParserCheckPoint(parser);
         result.children.push(parseStatement(parser));
+        assertProgress(parser, checkpoint, 'switch block');
     }
     result.end = result.children.reduce((index:number, child:Node) => {
         return Math.max(index, child ? child.end : 0);
@@ -257,8 +272,9 @@ function parseCatch(parser:AS3Parser):Node {
     nextToken(parser, true); // name
     if (tokIs(parser, Operators.COLUMN)) {
         nextToken(parser, true); // :
-        result.children.push(createNode(NodeKind.TYPE, {tok: parser.tok}));
-        nextToken(parser, true); // type
+        const typeStart = parser.tok.index;
+        const typeName = parseQualifiedName(parser, false);
+        result.children.push(createNode(NodeKind.TYPE, {start: typeStart, text: typeName}));
     }
     consume(parser, Operators.RIGHT_PARENTHESIS);
     let block = parseBlock(parser);
@@ -302,6 +318,8 @@ function parseReturnStatement(parser:AS3Parser):Node {
     if (tokIs(parser, NEW_LINE) || tokIs(parser, Operators.SEMI_COLUMN)) {
         nextToken(parser, true);
         result = createNode(NodeKind.RETURN, {start: index, end: end});
+    } else if (tokIs(parser, Operators.RIGHT_CURLY_BRACKET) || tokIs(parser, Keywords.EOF)) {
+        result = createNode(NodeKind.RETURN, {start: index, end: end});
     } else {
         let expr = parseExpression(parser);
         result = createNode(NodeKind.RETURN, {start: index, end: expr.end}, expr);
@@ -312,10 +330,22 @@ function parseReturnStatement(parser:AS3Parser):Node {
 
 
 function parseThrowStatement(parser:AS3Parser):Node {
-    let tok = consume(parser, Keywords.THROW);
+    let tok = parser.tok;
+    nextTokenAllowNewLine(parser);
+    if (tokIs(parser, NEW_LINE)) {
+        throw parseError(parser, 'AS3_PARSE_THROW_LINE_BREAK', 'an expression on the same line',
+            'throw statement', 'line break');
+    }
+    if (tokIs(parser, Keywords.EOF) || tokIs(parser, Operators.RIGHT_CURLY_BRACKET)
+            || tokIs(parser, Operators.SEMI_COLUMN)) {
+        throw parseError(parser, tokIs(parser, Keywords.EOF)
+            ? 'AS3_PARSE_UNEXPECTED_EOF' : 'AS3_PARSE_UNEXPECTED_TOKEN',
+            'an expression', 'throw statement',
+            tokIs(parser, Keywords.EOF) ? 'EOF' : undefined);
+    }
     let expr = parseExpression(parser);
-
-    return createNode(NodeKind.RETURN, {start: tok.index, end: expr.end}, expr);
+    skip(parser, Operators.SEMI_COLUMN);
+    return createNode(NodeKind.THROW, {start: tok.index, end: expr.end}, expr);
 }
 
 
@@ -324,34 +354,25 @@ function parseBreakOrContinueStatement(parser:AS3Parser):Node {
     let kind:NodeKind;
     if (tokIs(parser, Keywords.BREAK) || tokIs(parser, Keywords.CONTINUE)) {
         kind = tokIs(parser, Keywords.BREAK) ? NodeKind.BREAK : NodeKind.CONTINUE;
-        nextToken(parser);
+        nextTokenAllowNewLine(parser);
     } else {
-        let pos = parser.sourceFile.getLineAndCharacterFromPosition(parser.tok.index);
-        throw new Error('unexpected token : ' +
-            parser.tok.text + '(' + pos.line + ',' + pos.col + ')' +
-            ' in file ' + parser.sourceFile.path +
-            'expected: continue or break'
-        );
+        throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', 'continue or break',
+            'break/continue statement');
     }
     let result:Node;
-    if (tokIs(parser, NEW_LINE) || tokIs(parser, Operators.SEMI_COLUMN)) {
+    if (tokIs(parser, NEW_LINE)) {
         nextToken(parser, true);
         result = createNode(kind, {start: tok.index, end: tok.end});
+    } else if (tokIs(parser, Operators.SEMI_COLUMN)) {
+        nextToken(parser, true);
+        result = createNode(kind, {start: tok.index, end: tok.end});
+    } else if (tokIs(parser, Operators.RIGHT_CURLY_BRACKET) || tokIs(parser, Keywords.EOF)) {
+        result = createNode(kind, {start: tok.index, end: tok.end});
     } else {
-        let ident = tryParse(parser, () => {
-            let expr = parsePrimaryExpression(parser);
-            if (expr.kind === NodeKind.IDENTIFIER) {
-                return expr;
-            } else {
-                throw new Error();
-            }
-        });
-        if (!ident) {
-            let pos = parser.sourceFile.getLineAndCharacterFromPosition(parser.tok.index);
-            throw new Error(
-                `unexpected token : ${parser.tok.text}(${pos.line},${pos.col})` +
-                ` in file ${ parser.sourceFile.path } expected: ident`
-            );
+        let ident = parsePrimaryExpression(parser);
+        if (ident.kind !== NodeKind.IDENTIFIER) {
+            throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', 'a label identifier',
+                'break/continue statement');
         }
         result = createNode(kind, {start: tok.index, end: ident.end}, ident);
     }

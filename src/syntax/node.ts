@@ -1,7 +1,5 @@
 import NodeKind, {nodeKindName} from './nodeKind';
 import Token from '../parse/token';
-import {VERBOSE_MASK} from '../config';
-import {ReportFlags} from '../reports/report-flags';
 
 interface CreateNodeOptions {
     start?: number;
@@ -37,13 +35,8 @@ export function createNode(kind: NodeKind, options?: CreateNodeOptions, ... chil
     node.start = start;
     node.end = end;
     node.text = text;
-    node.children = children;
-
-    //if(VERBOSE >= 3) {
-    if((VERBOSE_MASK & ReportFlags.CREATE_NODES) == ReportFlags.CREATE_NODES) {
-
-        console.log("node.ts - createNode() - kind: " + nodeKindName(node.kind) + ", text: " + node.text);
-    }
+    node.children = children.filter(child => !!child);
+    node.leadingTrivia = options && options.tok ? options.tok.leadingTrivia.slice() : [];
 
     return node;
 }
@@ -54,6 +47,10 @@ export default class Node {
     public end: number;
     public text: string;
     public children: Node[];
+    /** Exact comment tokens which immediately precede a token-backed node. */
+    public leadingTrivia: Token[];
+    /** Complete source-ordered comment trivia; populated on the compilation unit. */
+    public trivia: Token[];
     public parent: Node; // only during emit
 
     toString(offset:string = ""):string {
@@ -105,7 +102,7 @@ export default class Node {
     getChildUntil(kind: NodeKind): Node[] {
         let child = this.findChild(kind);
         if (!child) {
-            return this.children.splice(0);
+            return this.children.slice(0);
         } else {
             let index = this.children.indexOf(child);
             return this.children.slice(0, index);
