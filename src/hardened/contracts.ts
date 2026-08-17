@@ -127,6 +127,31 @@ export interface CallExpression extends SemanticIdentity {
     capabilityMember: string | null;
 }
 
+export type LocalTypeModule = "application" | "bootstrap";
+export type LocalTypeKind = "class" | "interface" | "package";
+
+export interface LocalTypeMapping {
+    componentId: string;
+    importable: boolean;
+    module: LocalTypeModule;
+    nodeId: string;
+    prerequisites: string[];
+    qname: string;
+    sourcePath: string;
+    sourceSha256: string;
+    targetPath: string;
+    topologicalLevel: number;
+    typeKind: LocalTypeKind;
+}
+
+export interface LoadedLocalTypeAuthority {
+    dependencyGraphRawSha256: string;
+    dependencyGraphSemanticSha256: string;
+    sourceManifestSha256: string;
+    entriesByIdentity: { [identity: string]: LocalTypeMapping };
+    entries: LocalTypeMapping[];
+}
+
 export interface AssignmentExpression extends SemanticIdentity {
     kind: "assignment";
     operator: "=";

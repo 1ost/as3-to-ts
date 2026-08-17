@@ -7,6 +7,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const esbuild = require("esbuild");
+const { stringify } = require("../../tools/hardened-corpus/canonical");
 
 const repository = path.resolve(__dirname, "../..");
 const generator = path.join(repository, "tools", "generate-local-type-map.cjs");
@@ -54,4 +56,49 @@ test("derives the complete local type map deterministically from the authenticat
     assert.equal(value.entries.filter(entry => !entry.importable).length, 2,
         "script-private identities remain authenticated but cannot be imported");
     assert.equal(sha256(firstBytes), "031826165af0ad5ed20ba8de28f487fe3cf0b283729ec875b4b9615f80d5bbdb");
+
+    const bundle = path.join(root, "local-types.cjs");
+    esbuild.buildSync({
+        absWorkingDir: repository,
+        entryPoints: ["src/hardened/local-types.ts"],
+        outfile: bundle,
+        bundle: true,
+        platform: "node",
+        format: "cjs",
+        target: "node24",
+        logLevel: "silent",
+    });
+    const api = require(bundle);
+    const expected = {
+        expectedDependencyGraphRawSha256: value.dependencyGraphRawSha256,
+        expectedDependencyGraphSemanticSha256: value.dependencyGraphSemanticSha256,
+        expectedEntryCount: 2923,
+        expectedSourceManifestSha256: value.sourceManifestSha256,
+    };
+    function load(text) {
+        return api.loadLocalTypeAuthority({ ...expected, json: text, sha256: sha256(text) }, sha256);
+    }
+    const loaded = load(firstBytes.toString("utf8"));
+    assert.equal(loaded.entries.length, 2923);
+    assert.ok(Object.isFrozen(loaded));
+    assert.ok(Object.isFrozen(loaded.entries[0].prerequisites));
+    assert.throws(() => api.assertLoadedLocalTypeAuthority({ ...loaded }),
+        error => error && error.code === "HARDENED_LOCAL_AUTHORITY_INSTANCE");
+
+    function mutated(change) {
+        const copy = JSON.parse(firstBytes.toString("utf8"));
+        change(copy);
+        return `${stringify(copy)}\n`;
+    }
+    [
+        document => { document.extra = true; },
+        document => { document.entryCount -= 1; },
+        document => { document.entries[0].sourceSha256 = "not-a-sha"; },
+        document => { document.entries[0].topologicalLevel = -1; },
+        document => { document.entries[0].importable = !document.entries[0].importable; },
+        document => { document.entries[1].qname = document.entries[0].qname; document.entries[1].module = document.entries[0].module; },
+        document => { document.entries[0].prerequisites = ["ffffffffffffffff", "0000000000000000"]; },
+        document => { document.entries[0].sourcePath = "game-client/tapplication_main/src/../escape.as"; },
+    ].forEach(change => assert.throws(() => load(mutated(change)),
+        error => error && /^HARDENED_LOCAL_AUTHORITY_/.test(error.code)));
 });

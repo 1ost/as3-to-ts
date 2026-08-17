@@ -10,12 +10,18 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { loadCapabilityAuthority } from "../hardened/ledger";
-import type { LoadedCapabilityAuthority } from "../hardened/contracts";
+import { loadLocalTypeAuthority } from "../hardened/local-types";
+import type { LoadedCapabilityAuthority, LoadedLocalTypeAuthority } from "../hardened/contracts";
 import { CliError } from "./errors";
 
 const MAX_AUTHORITY_BYTES = 64 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
 const COMPILED_AUTHORITY_LOCK_SHA256 = "e64a5446511f0b0f773decc8d83282045d745a350770651a5f087ac516178ebd";
+const COMPILED_LOCAL_TYPE_MAP_SHA256 = "031826165af0ad5ed20ba8de28f487fe3cf0b283729ec875b4b9615f80d5bbdb";
+const COMPILED_LOCAL_TYPE_COUNT = 2923;
+const COMPILED_DEPENDENCY_GRAPH_RAW_SHA256 = "fb86df7b5a8c8be4abf4f27578544ae1b10267fffa05ba01656da2dca6892fc9";
+const COMPILED_DEPENDENCY_GRAPH_SEMANTIC_SHA256 = "3d0d7e0717708e2931bb9cf81de913aa21f5fe4b24babb2703edd9abdcb8f593";
+const COMPILED_SOURCE_MANIFEST_SHA256 = "7e3e0475837a72fa730a37cbbb8a7863d146ec1c09debbbf23229dec5cd8a5e8";
 
 const COMPILED_AUTHORITY_LOCK = Object.freeze({
     schema: "bleach-local-as3-authority-lock@1",
@@ -30,6 +36,7 @@ const COMPILED_AUTHORITY_LOCK = Object.freeze({
 
 export interface TranspileAuthority {
     authority: LoadedCapabilityAuthority;
+    localTypes: LoadedLocalTypeAuthority;
     typeScriptVersion: string;
     sourceCensusSha256: string;
     targetCapabilitiesSha256: string;
@@ -105,6 +112,7 @@ export function loadTranspileAuthority(
     const configRoot = resolve(join(__dirname, "..", "config"));
     const lockJson = readRegularUtf8(join(configRoot, "authority-lock.json"), "local authority lock");
     const mappingJson = readRegularUtf8(join(configRoot, "capability-map.json"), "local capability map");
+    const localTypeJson = readRegularUtf8(join(configRoot, "local-type-map.json"), "local type map");
     if (sha256(lockJson) !== COMPILED_AUTHORITY_LOCK_SHA256) {
         throw new CliError("local authority lock bytes do not match the compiled trust root", 6);
     }
@@ -130,12 +138,21 @@ export function loadTranspileAuthority(
             mappingJson,
             mappingSha256: COMPILED_AUTHORITY_LOCK.capabilityMappingSha256,
         }, sha256);
+        const localTypes = loadLocalTypeAuthority({
+            json: localTypeJson,
+            sha256: COMPILED_LOCAL_TYPE_MAP_SHA256,
+            expectedEntryCount: COMPILED_LOCAL_TYPE_COUNT,
+            expectedDependencyGraphRawSha256: COMPILED_DEPENDENCY_GRAPH_RAW_SHA256,
+            expectedDependencyGraphSemanticSha256: COMPILED_DEPENDENCY_GRAPH_SEMANTIC_SHA256,
+            expectedSourceManifestSha256: COMPILED_SOURCE_MANIFEST_SHA256,
+        }, sha256);
         if (Object.keys(authority.typeMappingsBySource).length !== COMPILED_AUTHORITY_LOCK.mappedTypeCount
             || Object.keys(authority.memberMappingsByKey).length !== COMPILED_AUTHORITY_LOCK.mappedMemberCount) {
             throw new CliError("loaded capability map count does not match the compiled authority lock", 6);
         }
         return Object.freeze({
             authority,
+            localTypes,
             typeScriptVersion: COMPILED_AUTHORITY_LOCK.typeScriptVersion,
             sourceCensusSha256: COMPILED_AUTHORITY_LOCK.sourceCensusSha256,
             targetCapabilitiesSha256: COMPILED_AUTHORITY_LOCK.targetCapabilitiesSha256,
