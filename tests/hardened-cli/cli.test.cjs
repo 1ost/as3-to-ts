@@ -374,6 +374,7 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and runtime
         "lib/parser-worker.js",
         "config/authority-lock.json",
         "config/capability-map.json",
+        "config/local-type-map.json",
         "src/hardened-cli/THIRD_PARTY_NOTICES.md",
     ]);
 
