@@ -138,6 +138,16 @@ export interface ArrayExpression extends SemanticIdentity {
     elements: SemanticExpression[];
 }
 
+export interface ObjectProperty extends SemanticIdentity {
+    name: string;
+    value: SemanticExpression;
+}
+
+export interface ObjectExpression extends SemanticIdentity {
+    kind: "object";
+    properties: ObjectProperty[];
+}
+
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
     target: SemanticExpression;
@@ -247,7 +257,7 @@ export interface UpdateExpression extends SemanticIdentity {
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
-    ConditionalExpression | UpdateExpression | ArrayExpression | IndexExpression | VectorConversionExpression |
+    ConditionalExpression | UpdateExpression | ArrayExpression | ObjectExpression | IndexExpression | VectorConversionExpression |
     RuntimeTypeExpression | CoercionExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
@@ -350,6 +360,7 @@ export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatem
     ForStatement | ForEachStatement | TryStatement | LocalDeclarationStatement | LoopControlStatement;
 
 export interface SemanticParameter extends SemanticIdentity {
+    defaultValue: SemanticExpression | null;
     name: string;
     type: SemanticType;
 }

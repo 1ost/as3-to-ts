@@ -135,8 +135,10 @@ function construct(name, args = []) {
     return n("NEW", null, [call(n("IDENTIFIER", name), args)]);
 }
 
-function parameter(name, typeName) {
-    return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, [n("NAME", name), type(typeName)])]);
+function parameter(name, typeName, defaultValue) {
+    const children = [n("NAME", name), type(typeName)];
+    if (defaultValue !== undefined) children.push(n("INIT", null, [n("LITERAL", defaultValue)]));
+    return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, children)]);
 }
 
 function method(name, parameters, returnType, body, modifierValues = ["public"]) {
@@ -164,6 +166,12 @@ function localDeclaration(kind, name, typeName, initializer) {
 
 function conditional(condition, whenTrue, whenFalse) {
     return n("CONDITIONAL", null, [condition, whenTrue, whenFalse]);
+}
+
+function objectLiteral(properties) {
+    return n("OBJECT", null, properties.map(([name, value]) => n("PROP", null, [
+        n("NAME", JSON.stringify(name)), n("VALUE", null, [value]),
+    ])));
 }
 
 function constructor(body) {
@@ -367,6 +375,20 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
+    if (options.objectWorkpack || options.objectDuplicate || options.objectProto) {
+        const properties = options.objectProto
+            ? [["__proto__", n("LITERAL", "1")]]
+            : options.objectDuplicate
+                ? [["alpha", n("LITERAL", "1")], ["alpha", n("LITERAL", "2")]]
+                : [["alpha", n("LITERAL", "1")], ["label", n("LITERAL", '\"ready\"')]];
+        onEventBody = [
+            localDeclaration("VAR_LIST", "config", "Object", objectLiteral(properties)),
+            n("RETURN"),
+        ];
+    }
+    if (options.defaultParameterWorkpack) {
+        onEventBody = [call(n("IDENTIFIER", "configure")), n("RETURN")];
+    }
     const members = [
         field,
         constructor(body),
@@ -374,6 +396,9 @@ function buildTree(options = {}) {
             options.superInMethod ? [call(n("IDENTIFIER", "super"))] : onEventBody,
             options.staticMethod ? ["public", "static"] : ["public"]),
     ];
+    if (options.defaultParameterWorkpack) {
+        members.push(method("configure", [parameter("enabled", "Boolean", "true")], "void", [n("RETURN")]));
+    }
     if (options.implicitObjectSuper) members.splice(0, members.length, constructor(body));
     if (options.accessors) {
         const getterBody = options.getterNoReturn ? [] : options.accessorIf
@@ -408,6 +433,7 @@ function buildTree(options = {}) {
     const imports = options.wildcardImports
         ? [n("IMPORT", "flash.display.*"), n("IMPORT", "flash.events.*")]
         : [n("IMPORT", "flash.display.Sprite"), n("IMPORT", "flash.events.Event")];
+    if (options.unusedWildcard) imports.push(n("IMPORT", "flash.geom.*"));
     return n("COMPILATION_UNIT", null, [
         n("PACKAGE", null, [
             n("NAME", "lobby.ui"),
@@ -700,6 +726,9 @@ function main() {
     const wildcardOutput = api.emitSemanticProgram(wildcardProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(wildcardOutput.code, /import \{ Sprite \} from "laya\/flash\/display\/Sprite";/);
+    const unusedWildcardProgram = adapt(api, buildTree({ unusedWildcard: true }), authority);
+    assert.deepEqual(unusedWildcardProgram.imports.map(item => item.sourceQualifiedName),
+        ["flash.display.Sprite", "flash.events.Event"]);
     const implicitObjectProgram = adapt(api, buildTree({ implicitObjectSuper: true }), authority);
     assert.equal(implicitObjectProgram.declaration.extendsType, null);
     const implicitObjectOutput = api.emitSemanticProgram(implicitObjectProgram,
@@ -772,6 +801,16 @@ function main() {
     assert.match(bitwiseOutput.code, /var flags: number = 1 \| 2;/);
     assert.match(bitwiseOutput.code, /var shifted: number = flags >>> 1;/);
     assert.match(bitwiseOutput.code, /var inverted: number = ~flags;/);
+    const objectProgram = adapt(api, buildTree({ objectWorkpack: true }), authority);
+    const objectOutput = api.emitSemanticProgram(objectProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(objectOutput.code, /var config: unknown = \{ "alpha": 1, "label": "ready" \};/);
+    assertErrorCode(() => adapt(api, buildTree({ objectDuplicate: true }), authority), "HARDENED_OBJECT_NAME");
+    assertErrorCode(() => adapt(api, buildTree({ objectProto: true }), authority), "HARDENED_OBJECT_NAME");
+    const defaultParameterProgram = adapt(api, buildTree({ defaultParameterWorkpack: true }), authority);
+    const defaultParameterOutput = api.emitSemanticProgram(defaultParameterProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(defaultParameterOutput.code, /configure\(enabled: boolean = true\): void/);
+    assert.match(defaultParameterOutput.code, /this\.configure\(\);/);
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,

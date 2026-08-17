@@ -333,6 +333,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
                 flashMatches.forEach(candidate => append(flashImport(candidate, node), node));
                 return;
             }
+            if (qname.startsWith("flash.")) return;
             if (!localAuthority || !resolveCurrentLocal) {
                 fail("HARDENED_LOCAL_IMPORT_AUTHORITY", "project-local wildcard import requires the authenticated dependency type map", node);
             }
@@ -342,9 +343,9 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
                 && target.importable && target.typeKind !== "package"
                 && currentLocal.entry.prerequisites.indexOf(target.nodeId) >= 0)
                 .sort((left, right) => compareUtf8(left.qname, right.qname));
-            if (localMatches.length === 0) {
-                fail("HARDENED_WILDCARD_IMPORT", "wildcard import resolves no exact mapped Flash type or graph prerequisite", node);
-            }
+            // An unused wildcard contributes no emitted binding. Any source identity actually
+            // consumed later must still resolve through importsByLocal, so this does not create
+            // an open package lookup or a fallback type.
             localMatches.forEach(target => append(localImport(target, currentLocal, node), node));
             return;
         }
@@ -424,6 +425,7 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
 function parseParameters(list: TreeNode, context: AdapterContext): SemanticParameter[] {
     onlyKinds(list, ["PARAMETER"]);
     const seen: { [name: string]: true } = Object.create(null);
+    let sawDefault = false;
     return list.children.map((parameter) => {
         if (parameter.kind !== "PARAMETER") {
             fail("HARDENED_PARAMETER_NODE", "only ordinary required parameters are admitted", parameter);
@@ -431,20 +433,40 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
         onlyKinds(parameter, ["NAME_TYPE_INIT"]);
         const declaration = one(parameter, "NAME_TYPE_INIT")!;
         onlyKinds(declaration, ["NAME", "TYPE", "VECTOR", "INIT"]);
-        if (declaration.children.some((child) => child.kind === "INIT")) {
-            fail("HARDENED_PARAMETER_DEFAULT", "default parameters are not admitted in the minimal emitter", declaration);
-        }
         const nameNode = one(declaration, "NAME")!;
         const name = validateIdentifier(requiredText(nameNode, "parameter name"), nameNode);
         if (seen[name]) {
             fail("HARDENED_PARAMETER_DUPLICATE", "parameter identity is duplicated", nameNode);
         }
         seen[name] = true;
+        const parameterType = parseType(oneType(declaration), context, false);
+        const init = one(declaration, "INIT", true);
+        let defaultValue: SemanticExpression | null = null;
+        if (init !== null) {
+            if (init.children.length !== 1 || (init.children[0]!.kind !== "LITERAL"
+                && init.children[0]!.kind !== "IDENTIFIER")) {
+                fail("HARDENED_PARAMETER_DEFAULT", "default parameter must be one admitted scalar literal", init);
+            }
+            const rawDefault = init.children[0]!;
+            defaultValue = parseLiteral(rawDefault.kind === "IDENTIFIER"
+                ? Object.assign({}, rawDefault, { kind: "LITERAL" }) : rawDefault);
+            if (defaultValue.kind !== "literal" || defaultValue.value === null) {
+                fail("HARDENED_PARAMETER_DEFAULT_NULL", "nullable default parameters require a future explicit nullable type policy", init);
+            }
+            assertAssignmentCompatible(parameterType, assignmentType(defaultValue, context, init.children[0]!), init);
+            sawDefault = true;
+        } else if (sawDefault) {
+            fail("HARDENED_PARAMETER_ORDER", "required parameter cannot follow a default parameter", declaration);
+        }
         return Object.assign(identity(parameter), {
-            name,
-            type: parseType(oneType(declaration), context, false),
+            defaultValue, name, type: parameterType,
         });
     });
+}
+
+function admittedArity(parameters: SemanticParameter[], argumentCount: number): boolean {
+    const minimum = parameters.filter(parameter => parameter.defaultValue === null).length;
+    return argumentCount >= minimum && argumentCount <= parameters.length;
 }
 
 function parseLiteral(node: TreeNode): SemanticExpression {
@@ -516,6 +538,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "methodClosure") {
         return semanticType(node, "Function", "Function");
     }
+    if (expression.kind === "object") return semanticType(node, "Object", "unknown");
     if (expression.kind === "new") {
         return expression.sourceType;
     }
@@ -600,6 +623,36 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             elements: node.children.map(child => parseExpression(child, context, true)),
         });
     }
+    if (node.kind === "OBJECT") {
+        const seen = new Set<string>();
+        const properties = node.children.map(property => {
+            if (property.kind !== "PROP") fail("HARDENED_OBJECT_PROPERTY", "object literal requires property nodes", property);
+            onlyKinds(property, ["NAME", "VALUE"]);
+            const nameNode = one(property, "NAME")!;
+            const valueNode = one(property, "VALUE")!;
+            if (valueNode.children.length !== 1) {
+                fail("HARDENED_OBJECT_VALUE", "object property requires exactly one value expression", valueNode);
+            }
+            const rawName = requiredText(nameNode, "object property name");
+            let name: string;
+            if (rawName.startsWith('"') && rawName.endsWith('"')) {
+                try { name = JSON.parse(rawName); } catch (_error) {
+                    fail("HARDENED_OBJECT_NAME", "quoted object property name must be canonical JSON string source", nameNode);
+                }
+                if (typeof name !== "string") fail("HARDENED_OBJECT_NAME", "object property name must be a string", nameNode);
+            } else {
+                name = validateIdentifier(rawName, nameNode);
+            }
+            if (["__proto__", "prototype", "constructor"].includes(name) || seen.has(name)) {
+                fail("HARDENED_OBJECT_NAME", "object property identity is dangerous or duplicated", nameNode);
+            }
+            seen.add(name);
+            return Object.assign(identity(property), {
+                name, value: parseExpression(valueNode.children[0]!, context, true),
+            });
+        });
+        return Object.assign(identity(node), { kind: "object" as "object", properties });
+    }
     if (node.kind === "NEW") {
         if (node.children.length !== 1 || node.children[0]!.kind !== "CALL") {
             fail("HARDENED_NEW_SHAPE", "constructor expression must contain exactly one direct call", node);
@@ -630,7 +683,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         let sourceType: SemanticType;
         if (name === context.className) {
             const local = context.methods[name];
-            if (!local || !local.constructor || local.parameters.length !== args.length) {
+            if (!local || !local.constructor || !admittedArity(local.parameters, args.length)) {
                 fail("HARDENED_NEW_LOCAL_ARITY", "local constructor call does not match its exact declaration", call);
             }
             args.forEach((argument, index) => assertAssignmentCompatible(
@@ -971,7 +1024,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_CALL_SHAPE", "call expression has the wrong normalized shape", node);
         }
         onlyKinds(node.children[1]!, ["AND", "ARRAY", "ARRAY_ACCESSOR", "CALL", "DOT", "EQUALITY", "IDENTIFIER",
-            "LITERAL", "NEW", "OR", "RELATION", "VECTOR"]);
+            "LITERAL", "NEW", "OBJECT", "OR", "RELATION", "VECTOR"]);
         const rawCallee = node.children[0]!;
         if (rawCallee.kind === "VECTOR") {
             const vectorType = parseType(rawCallee, context, false);
@@ -1023,9 +1076,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_SUPER_ARITY", "minimal derived constructor admits only zero-argument super", node);
             }
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {
-            if (context.methods[callee.name]!.parameters.length !== args.length) {
+            const parameters = context.methods[callee.name]!.parameters;
+            if (!admittedArity(parameters, args.length)) {
                 fail("HARDENED_LOCAL_CALL_ARITY", "local method call does not match its declared arity", node);
             }
+            args.forEach((argument, index) => assertAssignmentCompatible(parameters[index]!.type,
+                assignmentType(argument, context, node.children[1]!.children[index]!), node.children[1]!.children[index]!));
             resultType = context.methods[callee.name]!.returnType;
         } else if (callee.kind === "member" && callee.target.kind === "this" && callee.capabilitySource !== null) {
             const mapping = memberMapping(context, callee.capabilitySource, "call", callee.name, node);
@@ -1570,6 +1626,9 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     }
     if (accessor === "setter" && (parameters.length !== 1 || returnType === null || returnType.sourceName !== "void")) {
         fail("HARDENED_SETTER_SIGNATURE", "setter requires exactly one parameter and an explicit void return type", node);
+    }
+    if (accessor !== null && parameters.some(parameter => parameter.defaultValue !== null)) {
+        fail("HARDENED_ACCESSOR_DEFAULT", "accessor parameters cannot have default values", node);
     }
     return { node, name, modifiers, parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor };
 }

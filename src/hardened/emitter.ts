@@ -160,6 +160,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "array") {
         return ts.factory.createArrayLiteralExpression(expression.elements.map(element => expressionNode(element, ts)), false);
     }
+    if (expression.kind === "object") {
+        return ts.factory.createObjectLiteralExpression(expression.properties.map(property =>
+            ts.factory.createPropertyAssignment(ts.factory.createStringLiteral(property.name),
+                expressionNode(property.value, ts))), false);
+    }
     if (expression.kind === "index") {
         return ts.factory.createElementAccessExpression(expressionNode(expression.target, ts), expressionNode(expression.index, ts));
     }
@@ -371,7 +376,8 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
 }
 
 function parameterNode(parameter: any, ts: TypeScriptCompilerApi): any {
-    return ts.factory.createParameterDeclaration(undefined, undefined, parameter.name, undefined, typeNode(parameter.type, ts), undefined);
+    return ts.factory.createParameterDeclaration(undefined, undefined, parameter.name, undefined, typeNode(parameter.type, ts),
+        parameter.defaultValue === null ? undefined : expressionNode(parameter.defaultValue, ts));
 }
 
 function boundMethodNames(program: SemanticProgram): string[] {
@@ -391,6 +397,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             expression.arguments.forEach(inspectExpression);
         } else if (expression.kind === "array") {
             expression.elements.forEach(inspectExpression);
+        } else if (expression.kind === "object") {
+            expression.properties.forEach(property => inspectExpression(property.value));
         } else if (expression.kind === "index") {
             inspectExpression(expression.target);
             inspectExpression(expression.index);
@@ -542,6 +550,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "runtimeType") return visitType(expression.targetType) || visitExpression(expression.value);
         if (expression.kind === "coercion") return expression.argument !== null && visitExpression(expression.argument);
         if (expression.kind === "array") return expression.elements.some(visitExpression);
+        if (expression.kind === "object") return expression.properties.some(property => visitExpression(property.value));
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
         if (expression.kind === "member") return visitExpression(expression.target);
