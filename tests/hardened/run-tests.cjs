@@ -192,7 +192,7 @@ function buildTree(options = {}) {
             n("INIT", null, [construct("Sprite", options.newArguments || [])]),
         ]));
     }
-    if (options.vectorWorkpack || options.vectorRuntimeWorkpack) {
+    if (options.vectorWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack || options.badForEachType) {
         field.children.push(n("NAME_TYPE_INIT", null, [
             n("NAME", "values"), vectorType("int"),
             n("INIT", null, [n("NEW", null, [call(vectorType("int"), [n("LITERAL", "2"), n("LITERAL", "false")])])]),
@@ -325,6 +325,23 @@ function buildTree(options = {}) {
                 n("CONDITION", null, [n("IDENTIFIER", "active")]),
             ]),
             n("THROW", null, [n("LITERAL", '"done"')]),
+        ];
+    }
+    if (options.iterationWorkpack || options.badForEachType) {
+        const bindingType = options.badForEachType ? "String" : "int";
+        onEventBody = [
+            n("FOR", null, [
+                n("INIT", null, [localDeclaration("VAR_LIST", "i", "Number", n("LITERAL", "0"))]),
+                n("COND", null, [binary("RELATION", n("IDENTIFIER", "i"), "<", n("LITERAL", "2"))]),
+                n("ITER", null, [n("POST_INC", null, [n("IDENTIFIER", "i")])]),
+                n("BLOCK", null, [call(dot(n("IDENTIFIER", "values"), "push"), [call(n("IDENTIFIER", "int"), [n("IDENTIFIER", "i")])])]),
+            ]),
+            n("FOREACH", null, [
+                n("VAR", null, [n("NAME_TYPE_INIT", null, [n("NAME", "item"), type(bindingType)])]),
+                n("IN", null, [n("IDENTIFIER", "values")]),
+                n("BLOCK", null, [call(dot(n("IDENTIFIER", "values"), "indexOf"), [n("IDENTIFIER", "item")])]),
+            ]),
+            n("RETURN"),
         ];
     }
     const members = [
@@ -664,8 +681,15 @@ function main() {
         "HARDENED_SWITCH_DEFAULT");
     assertErrorCode(() => adapt(api, buildTree({ continueInSwitch: true }), authority),
         "HARDENED_LOOP_CONTEXT");
+    const iterationProgram = adapt(api, buildTree({ iterationWorkpack: true }), authority);
+    const iterationOutput = api.emitSemanticProgram(iterationProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(iterationOutput.code, /for \(var i: number = 0; i < 2; i\+\+\)/);
+    assert.match(iterationOutput.code, /for \(var item of this\.values\)/);
+    assert.match(iterationOutput.code, /this\.values\.indexOf\(item\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badForEachType: true }), authority),
+        "HARDENED_ASSIGNMENT_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
-        nestedVectorOutput.code, coercionOutput.code, statementOutput.code]);
+        nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

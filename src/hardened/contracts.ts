@@ -293,6 +293,26 @@ export interface ThrowStatement extends SemanticIdentity {
     expression: SemanticExpression;
 }
 
+export interface ForStatement extends SemanticIdentity {
+    kind: "for";
+    initializer: LocalDeclarationStatement | ExpressionStatement | null;
+    condition: SemanticExpression | null;
+    update: SemanticExpression | null;
+    statements: SemanticStatement[];
+}
+
+export interface SemanticIterationBinding extends SemanticIdentity {
+    name: string;
+    type: SemanticType;
+}
+
+export interface ForEachStatement extends SemanticIdentity {
+    kind: "forEach";
+    binding: SemanticIterationBinding;
+    iterable: SemanticExpression;
+    statements: SemanticStatement[];
+}
+
 export interface SemanticLocal extends SemanticIdentity {
     name: string;
     readonly: boolean;
@@ -311,7 +331,7 @@ export interface LoopControlStatement extends SemanticIdentity {
 
 export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement |
     WhileStatement | DoWhileStatement | SwitchStatement | ThrowStatement |
-    LocalDeclarationStatement | LoopControlStatement;
+    ForStatement | ForEachStatement | LocalDeclarationStatement | LoopControlStatement;
 
 export interface SemanticParameter extends SemanticIdentity {
     name: string;

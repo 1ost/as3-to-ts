@@ -13,6 +13,8 @@ import {
     SemanticGetter,
     SemanticIdentity,
     SemanticImport,
+    ExpressionStatement,
+    LocalDeclarationStatement,
     SemanticLocal,
     SemanticMember,
     SemanticMethod,
@@ -1146,6 +1148,89 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 kind: "throw" as "throw", expression: parseExpression(node.children[0]!, context, true),
             });
         }
+        if (node.kind === "FOR") {
+            const body = node.children[node.children.length - 1]!;
+            if (!body || ["INIT", "COND", "ITER"].includes(body.kind)
+                || node.children.filter(child => child.kind === "INIT").length > 1
+                || node.children.filter(child => child.kind === "COND").length > 1
+                || node.children.filter(child => child.kind === "ITER").length > 1) {
+                fail("HARDENED_FOR_SHAPE", "for statement has the wrong normalized shape", node);
+            }
+            const initOwner = node.children.find(child => child.kind === "INIT") || null;
+            const conditionOwner = node.children.find(child => child.kind === "COND") || null;
+            const updateOwner = node.children.find(child => child.kind === "ITER") || null;
+            let initializer: LocalDeclarationStatement | ExpressionStatement | null = null;
+            if (initOwner !== null) {
+                if (initOwner.children.length !== 1) fail("HARDENED_FOR_INIT", "for initializer requires one expression or declaration", initOwner);
+                const raw = initOwner.children[0]!;
+                initializer = raw.kind === "VAR_LIST"
+                    ? parseStatementNode(raw, context, constructor, derived, expectedReturn, false) as LocalDeclarationStatement
+                    : Object.assign(identity(raw), {
+                        kind: "expression" as "expression",
+                        expression: parseExpression(raw, context, false, false, true, raw.kind === "ASSIGN"),
+                    });
+            }
+            let condition: SemanticExpression | null = null;
+            if (conditionOwner !== null) {
+                if (conditionOwner.children.length !== 1) fail("HARDENED_FOR_CONDITION", "for condition requires one expression", conditionOwner);
+                condition = parseExpression(conditionOwner.children[0]!, context, true);
+                const conditionType = assignmentType(condition, context, conditionOwner.children[0]!);
+                if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
+                    fail("HARDENED_FOR_BOOLEAN", "for condition requires an exact Boolean expression", conditionOwner);
+                }
+            }
+            let update: SemanticExpression | null = null;
+            if (updateOwner !== null) {
+                if (updateOwner.children.length !== 1) fail("HARDENED_FOR_UPDATE", "for update admits exactly one expression", updateOwner);
+                const raw = updateOwner.children[0]!;
+                if (raw.kind === "EXPR_LIST") fail("HARDENED_FOR_UPDATE", "comma-separated for updates remain held", raw);
+                update = parseExpression(raw, context, false, false, true, raw.kind === "ASSIGN");
+            }
+            context.loopDepth += 1;
+            context.breakableDepth += 1;
+            try {
+                return Object.assign(identity(node), {
+                    kind: "for" as "for", initializer, condition, update,
+                    statements: body.kind === "BLOCK"
+                        ? parseBlock(body, context, constructor, derived, expectedReturn, false)
+                        : [parseStatementNode(body, context, constructor, derived, expectedReturn, false)],
+                });
+            } finally {
+                context.loopDepth -= 1;
+                context.breakableDepth -= 1;
+            }
+        }
+        if (node.kind === "FOREACH") {
+            if (node.children.length !== 3 || node.children[0]!.kind !== "VAR"
+                || node.children[1]!.kind !== "IN" || node.children[0]!.children.length !== 1
+                || node.children[1]!.children.length !== 1) {
+                fail("HARDENED_FOREACH_SHAPE", "for each requires one typed var binding and one iterable", node);
+            }
+            const declaration = node.children[0]!.children[0]!;
+            const header = Object.values(context.locals).find(local => local.node === declaration);
+            if (!header) fail("HARDENED_FOREACH_BINDING", "for each binding lacks its predeclared local identity", declaration);
+            const iterable = parseExpression(node.children[1]!.children[0]!, context, true);
+            const iterableType = assignmentType(iterable, context, node.children[1]!.children[0]!);
+            const elementType = vectorElement(iterableType);
+            if (elementType === null) fail("HARDENED_FOREACH_ITERABLE", "for each currently requires a proven typed Vector", node.children[1]!);
+            assertAssignmentCompatible(header.type, elementType, declaration);
+            const body = node.children[2]!;
+            context.loopDepth += 1;
+            context.breakableDepth += 1;
+            try {
+                return Object.assign(identity(node), {
+                    kind: "forEach" as "forEach", binding: Object.assign(identity(declaration), {
+                        name: header.name, type: header.type,
+                    }), iterable,
+                    statements: body.kind === "BLOCK"
+                        ? parseBlock(body, context, constructor, derived, expectedReturn, false)
+                        : [parseStatementNode(body, context, constructor, derived, expectedReturn, false)],
+                });
+            } finally {
+                context.loopDepth -= 1;
+                context.breakableDepth -= 1;
+            }
+        }
         if (node.kind === "BREAK" || node.kind === "CONTINUE") {
             if (node.children.length !== 0) {
                 fail("HARDENED_LOOP_LABEL", "labelled loop control remains held", node);
@@ -1209,7 +1294,21 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
             });
             return;
         }
+        if (node.kind === "VAR" && node.children.length === 1 && node.children[0]!.kind === "NAME_TYPE_INIT") {
+            const declaration = node.children[0]!;
+            onlyKinds(declaration, ["NAME", "TYPE", "VECTOR"]);
+            const nameNode = one(declaration, "NAME")!;
+            const name = validateIdentifier(requiredText(nameNode, "for each local name"), nameNode);
+            if (context.parameters[name]) fail("HARDENED_LOCAL_PARAMETER_COLLISION", "for each local duplicates a parameter", nameNode);
+            if (context.locals[name]) fail("HARDENED_LOCAL_DUPLICATE", "function-scoped local identity is duplicated", nameNode);
+            context.locals[name] = { node: declaration, name, readonly: false, type: parseType(oneType(declaration), context, false) };
+            return;
+        }
         if (node.kind === "BLOCK") {
+            node.children.forEach(visit);
+            return;
+        }
+        if (node.kind === "INIT") {
             node.children.forEach(visit);
             return;
         }
@@ -1230,6 +1329,17 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
                 const block = caseNode.children.find((child) => child.kind === "SWITCH_BLOCK");
                 if (block) visit(block);
             });
+            return;
+        }
+        if (node.kind === "FOR") {
+            node.children.forEach(child => {
+                if (child.kind === "INIT" || child.kind === "BLOCK") visit(child);
+            });
+            return;
+        }
+        if (node.kind === "FOREACH") {
+            visit(node.children[0]!);
+            if (node.children.length >= 3) visit(node.children[2]!);
         }
     };
     visit(block);

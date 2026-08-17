@@ -296,6 +296,29 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
     if (statement.kind === "throw") {
         return ts.factory.createThrowStatement(expressionNode(statement.expression, ts));
     }
+    if (statement.kind === "for") {
+        let initializer: any = undefined;
+        if (statement.initializer !== null) {
+            if (statement.initializer.kind === "local") {
+                initializer = ts.factory.createVariableDeclarationList(statement.initializer.declarations.map(local =>
+                    ts.factory.createVariableDeclaration(local.name, undefined, typeNode(local.type, ts),
+                        expressionNode(local.initializer, ts))), ts.NodeFlags.None);
+            } else {
+                initializer = expressionNode(statement.initializer.expression, ts);
+            }
+        }
+        return ts.factory.createForStatement(initializer,
+            statement.condition === null ? undefined : expressionNode(statement.condition, ts),
+            statement.update === null ? undefined : expressionNode(statement.update, ts),
+            ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
+    }
+    if (statement.kind === "forEach") {
+        const declaration = ts.factory.createVariableDeclarationList([
+            ts.factory.createVariableDeclaration(statement.binding.name, undefined, undefined, undefined),
+        ], ts.NodeFlags.None);
+        return ts.factory.createForOfStatement(undefined, declaration, expressionNode(statement.iterable, ts),
+            ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
+    }
     if (statement.kind === "local") {
         const declarations = statement.declarations.map((local) => ts.factory.createVariableDeclaration(
             local.name, undefined, typeNode(local.type, ts), expressionNode(local.initializer, ts),
@@ -378,6 +401,15 @@ function boundMethodNames(program: SemanticProgram): string[] {
             });
         } else if (statement.kind === "throw") {
             inspectExpression(statement.expression);
+        } else if (statement.kind === "for") {
+            if (statement.initializer?.kind === "expression") inspectExpression(statement.initializer.expression);
+            if (statement.initializer?.kind === "local") statement.initializer.declarations.forEach(local => inspectExpression(local.initializer));
+            if (statement.condition !== null) inspectExpression(statement.condition);
+            if (statement.update !== null) inspectExpression(statement.update);
+            statement.statements.forEach(inspectStatement);
+        } else if (statement.kind === "forEach") {
+            inspectExpression(statement.iterable);
+            statement.statements.forEach(inspectStatement);
         } else if (statement.kind === "local") {
             statement.declarations.forEach((local) => inspectExpression(local.initializer));
         }
@@ -491,6 +523,12 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (statement.kind === "switch") return visitExpression(statement.expression)
             || statement.cases.some(item => (item.test !== null && visitExpression(item.test)) || item.statements.some(visitStatement));
         if (statement.kind === "throw") return visitExpression(statement.expression);
+        if (statement.kind === "for") return (statement.initializer?.kind === "expression" && visitExpression(statement.initializer.expression))
+            || (statement.initializer?.kind === "local" && statement.initializer.declarations.some(local => visitType(local.type) || visitExpression(local.initializer)))
+            || (statement.condition !== null && visitExpression(statement.condition))
+            || (statement.update !== null && visitExpression(statement.update)) || statement.statements.some(visitStatement);
+        if (statement.kind === "forEach") return visitType(statement.binding.type)
+            || visitExpression(statement.iterable) || statement.statements.some(visitStatement);
         if (statement.kind === "if") return visitExpression(statement.condition) || statement.thenStatements.some(visitStatement)
             || (statement.elseStatements !== null && statement.elseStatements.some(visitStatement));
         return false;
