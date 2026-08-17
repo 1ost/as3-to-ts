@@ -945,19 +945,43 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_ASSIGNMENT_CONTEXT", "assignment is admitted only as one top-level expression statement", node);
         }
         const operator = requiredText(node.children[1]!, "assignment operator");
-        if (operator !== "=") {
-            fail("HARDENED_ASSIGNMENT_OPERATOR", "compound assignment requires an explicit coercion policy", node.children[1]!);
-        }
         const target = parseExpression(node.children[0]!, context, false);
         if (target.kind !== "identifier" && target.kind !== "member" && target.kind !== "index") {
             fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable lvalue", node.children[0]!);
         }
-        const value = parseExpression(node.children[2]!, context, true);
-        assertAssignmentCompatible(
-            assignmentTargetType(target, context, node.children[0]!),
-            assignmentType(value, context, node.children[2]!),
-            node,
-        );
+        const targetType = assignmentTargetType(target, context, node.children[0]!);
+        let value = parseExpression(node.children[2]!, context, true);
+        const valueType = assignmentType(value, context, node.children[2]!);
+        if (operator === "=") {
+            assertAssignmentCompatible(targetType, valueType, node);
+        } else {
+            const binaryOperator = operator.slice(0, -1);
+            if (!["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>", ">>>"].includes(binaryOperator)) {
+                fail("HARDENED_ASSIGNMENT_OPERATOR", "compound assignment operator is unsupported", node.children[1]!);
+            }
+            if (target.kind === "index" || (target.kind === "member" && target.target.kind !== "this")) {
+                fail("HARDENED_COMPOUND_TARGET", "compound assignment requires a once-evaluated local, parameter, or direct this field", node.children[0]!);
+            }
+            const numeric = (type: SemanticType): boolean => ["Number", "int", "uint"].includes(type.sourceName)
+                && type.emittedName === "number";
+            const stringAdd = binaryOperator === "+" && targetType.sourceName === "String"
+                && valueType.sourceName === "String";
+            if (!stringAdd && (!numeric(targetType) || !numeric(valueType))) {
+                fail("HARDENED_COMPOUND_TYPE", "compound assignment requires exact String addition or proven numeric operands", node);
+            }
+            const bitwise = ["&", "|", "^", "<<", ">>", ">>>"].includes(binaryOperator);
+            const resultType = stringAdd ? semanticType(node, "String", "string")
+                : bitwise ? semanticType(node, binaryOperator === ">>>" ? "uint" : "int", "number")
+                    : semanticType(node, "Number", "number");
+            const binary: SemanticExpression = Object.assign(identity(node), {
+                kind: "binary" as "binary",
+                operator: binaryOperator as "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>",
+                left: target, right: value, resultType,
+            });
+            value = (targetType.sourceName === "int" || targetType.sourceName === "uint")
+                ? Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument: binary })
+                : binary;
+        }
         return Object.assign(identity(node), {
             kind: "assignment" as "assignment", operator: "=" as "=", target, value,
         });

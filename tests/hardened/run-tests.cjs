@@ -375,6 +375,14 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
+    if (options.compoundWorkpack) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "flags", "int", n("LITERAL", "1")),
+            assignment(n("IDENTIFIER", "flags"), n("LITERAL", "2"), "+="),
+            assignment(n("IDENTIFIER", "flags"), n("LITERAL", "1"), ">>>="),
+            n("RETURN"),
+        ];
+    }
     if (options.objectWorkpack || options.objectDuplicate || options.objectProto) {
         const properties = options.objectProto
             ? [["__proto__", n("LITERAL", "1")]]
@@ -811,10 +819,15 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(defaultParameterOutput.code, /configure\(enabled: boolean = true\): void/);
     assert.match(defaultParameterOutput.code, /this\.configure\(\);/);
+    const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
+    const compoundOutput = api.emitSemanticProgram(compoundProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(compoundOutput.code, /flags = __as3Int\(flags \+ 2\);/);
+    assert.match(compoundOutput.code, /flags = __as3Int\(flags >>> 1\);/);
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
-        bitwiseOutput.code]);
+        bitwiseOutput.code, compoundOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);
@@ -822,10 +835,9 @@ function main() {
         () => adapt(api, buildTree({ assignment: true, assignmentValue: "1" }), authority),
         "HARDENED_ASSIGNMENT_TYPE",
     );
-    assertErrorCode(
-        () => adapt(api, buildTree({ assignment: true, assignmentOperator: "+=" }), authority),
-        "HARDENED_ASSIGNMENT_OPERATOR",
-    );
+    const compoundStringProgram = adapt(api, buildTree({ assignment: true, assignmentOperator: "+=" }), authority);
+    assert.match(api.emitSemanticProgram(compoundStringProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" }).code, /this\.b = this\.b \+ "changed";/);
     assertErrorCode(
         () => adapt(api, buildTree({ constFields: true, assignment: true }), authority),
         "HARDENED_ASSIGNMENT_READONLY",
