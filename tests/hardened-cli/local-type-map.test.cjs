@@ -64,6 +64,10 @@ test("derives the complete local type map deterministically from the authenticat
     assert.ok(comboBox);
     assert.notEqual(comboBox.graphSourceSha256, comboBox.sourceContentSha256,
         "graph evidence digest and canonical source-byte digest remain distinct authorities");
+    const comboBoxBytes = fs.readFileSync(path.join(sourceRepository, comboBox.sourcePath));
+    const parserVisibleComboBox = new TextDecoder("utf-8", { fatal: true }).decode(comboBoxBytes).replace(/\r\n?/g, "\n");
+    assert.equal(comboBox.sourceContentSha256, sha256(parserVisibleComboBox),
+        "source content authority exactly matches the parser-visible BOM and newline policy");
 
     const bundle = path.join(root, "local-types.cjs");
     esbuild.buildSync({

@@ -37,10 +37,16 @@ function canonicalSourceSha256(repository, portablePath) {
         || before.mtimeNs !== after.mtimeNs || BigInt(bytes.length) !== before.size) {
         throw new Error(`source changed while it was read: ${portablePath}`);
     }
-    const text = bytes.toString("utf8");
-    if (Buffer.from(text, "utf8").compare(bytes) !== 0) {
+    let text;
+    try {
+        text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    } catch (_error) {
         throw new Error(`source must be exact UTF-8: ${portablePath}`);
     }
+    const decodedBytes = Buffer.from(text, "utf8");
+    const expectedBytes = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
+        ? bytes.subarray(3) : bytes;
+    if (decodedBytes.compare(expectedBytes) !== 0) throw new Error(`source must be exact UTF-8: ${portablePath}`);
     return sha256(Buffer.from(text.replace(/\r\n?/g, "\n"), "utf8"));
 }
 

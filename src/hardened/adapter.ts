@@ -1626,14 +1626,18 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         resolveCurrentLocal = () => {
             if (currentLocal) return currentLocal;
             const qname = packageName === "" ? className : `${packageName}.${className}`;
+            const currentSourceSha256 = sha256(sourceText.replace(/\r\n?/g, "\n"));
             const candidates = (["application", "bootstrap"] as const).map(module =>
                 localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry)
                 .filter(entry => entry.sourcePath === (entry.module === "application"
                     ? `game-client/tapplication_main/src/${sourceLogicalPath}` : `game-client/tmain/src/${sourceLogicalPath}`)
-                    && entry.sourceContentSha256 === sha256(sourceText.replace(/\r\n?/g, "\n"))
+                    && entry.sourceContentSha256 === currentSourceSha256
                     && entry.typeKind === "class");
             if (candidates.length !== 1) {
-                fail("HARDENED_LOCAL_SOURCE_AUTHORITY", "current class path, hash, module, kind, and qname lack one exact graph identity", classNode);
+                const known = (["application", "bootstrap"] as const).map(module =>
+                    localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry)
+                    .map(entry => `${entry.module}:${entry.sourcePath}:${entry.sourceContentSha256}:${entry.typeKind}`);
+                fail("HARDENED_LOCAL_SOURCE_AUTHORITY", `current class ${qname} at ${sourceLogicalPath} with canonical source ${currentSourceSha256} lacks one exact graph identity; authority=${known.join("|") || "absent"}`, classNode);
             }
             currentLocal = { entry: candidates[0]!, outputModulePath };
             return currentLocal;
