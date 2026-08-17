@@ -9,7 +9,7 @@ const SHA256 = /^[0-9a-f]{64}$/;
 // and the closed structural vocabulary consumed by adapter.ts. Expanding it is
 // an admission decision, not a parser compatibility convenience.
 const ADMITTED_KINDS = new Set([
-    "ARGUMENTS", "BLOCK", "CALL", "CLASS", "COMPILATION_UNIT", "CONTENT", "DOT",
+    "ARGUMENTS", "BLOCK", "CALL", "CLASS", "COMPILATION_UNIT", "CONST_LIST", "CONTENT", "DOT",
     "EXTENDS", "FUNCTION", "IDENTIFIER", "IMPORT", "INIT", "LITERAL", "MODIFIER",
     "MOD_LIST", "NAME", "NAME_TYPE_INIT", "PACKAGE", "PARAMETER", "PARAMETER_LIST",
     "RETURN", "TYPE", "VAR_LIST",

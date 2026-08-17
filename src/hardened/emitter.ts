@@ -159,8 +159,10 @@ function bindMethodStatement(name: string, ts: TypeScriptCompilerApi): any {
 
 function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, boundMethods: string[]): any {
     if (member.kind === "field") {
+        const modifiers = modifierTokens(member.modifiers, ts);
+        if (member.readonly) modifiers.push(ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword));
         return ts.factory.createPropertyDeclaration(
-            modifierTokens(member.modifiers, ts), member.name, undefined, typeNode(member.type, ts),
+            modifiers, member.name, undefined, typeNode(member.type, ts),
             member.initializer === null ? undefined : expressionNode(member.initializer, ts),
         );
     }

@@ -148,7 +148,7 @@ try {
         "    import flash.display.Sprite;",
         "    import flash.events.Event;",
         "    public class Demo extends Sprite {",
-        "        private var label:String = \"ok\";",
+        "        private const label:String = \"ok\";",
         "        public function Demo() { super(); }",
         "        public function onEvent(event:Event):void { return; }",
         "    }",
@@ -210,6 +210,7 @@ try {
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
         ["field", "constructor", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
+    assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].body[0].expression.callee.kind, "super");
     assert.equal(semantic.declaration.members[2].name, "onEvent");
     assert.equal(semantic.declaration.members[2].parameters[0].name, "event");
@@ -219,7 +220,6 @@ try {
 
     [
         "package p { public interface I {} }",
-        "package p { public class C { public const X:int = 1; } }",
         "package p { [Bindable] public class C {} }",
         "package p { public class C { public function f():void { while (true) {} } } }",
     ].forEach((unsupported) => {

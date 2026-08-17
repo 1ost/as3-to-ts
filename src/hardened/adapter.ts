@@ -443,7 +443,7 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
     });
 }
 
-function parseField(list: TreeNode, context: AdapterContext): SemanticField[] {
+function parseField(list: TreeNode, context: AdapterContext, readonly: boolean): SemanticField[] {
     onlyKinds(list, ["MOD_LIST", "NAME_TYPE_INIT"]);
     const modifiers = parseModifiers(list, false);
     const declarations = list.children.filter((child) => child.kind === "NAME_TYPE_INIT");
@@ -465,12 +465,15 @@ function parseField(list: TreeNode, context: AdapterContext): SemanticField[] {
                 fail("HARDENED_INITIALIZER_SHAPE", "field initializer has the wrong normalized shape", init);
             }
             initializer = parseExpression(init.children[0]!, context, true, false, false);
+        } else if (readonly) {
+            fail("HARDENED_CONST_INITIALIZER", "AS3 const fields require an explicit admitted initializer", declaration);
         }
         const field: SemanticField = Object.assign(identity(declaration), {
             kind: "field" as "field",
             sharedDeclarationNodeId: list.id,
             name,
             modifiers: modifiers.slice(),
+            readonly,
             type: parseType(one(declaration, "TYPE")!, context, false),
             initializer,
         });
@@ -580,8 +583,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     }
     const members: SemanticMember[] = [];
     classContent.children.forEach((node) => {
-        if (node.kind === "VAR_LIST") {
-            members.push.apply(members, parseField(node, placeholder));
+        if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {
+            members.push.apply(members, parseField(node, placeholder, node.kind === "CONST_LIST"));
             return;
         }
         if (node.kind === "FUNCTION") {

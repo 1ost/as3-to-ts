@@ -107,7 +107,7 @@ function buildTree(options = {}) {
     if (options.unsupportedStatement) {
         body.push(n("WHILE"));
     }
-    const field = n("VAR_LIST", null, [
+    const field = n(options.constFields ? "CONST_LIST" : "VAR_LIST", null, [
         mods(...(options.fieldModifiers || ["private"])),
         n("NAME_TYPE_INIT", null, [n("NAME", "a"), type("Number"), n("INIT", null, [n("LITERAL", "1")])]),
         n("NAME_TYPE_INIT", null, [n("NAME", "b"), type("String"), n("INIT", null, [n("LITERAL", '"x"')])]),
@@ -270,6 +270,7 @@ function main() {
     assert.deepEqual(fields.map((field) => field.name), ["a", "b"]);
     assert.equal(fields[0].sharedDeclarationNodeId, fields[1].sharedDeclarationNodeId);
     assert.notEqual(fields[0].sourceNodeId, fields[1].sourceNodeId);
+    assert.equal(fields[0].readonly, false);
 
     const emitted = api.emitSemanticProgram(program, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     const repeated = api.emitSemanticProgram(program, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -288,6 +289,12 @@ function main() {
     assert.match(emitted.code, /this\.addEventListener\("ready", this\.onEvent\);/);
     assert.equal((emitted.code.match(/this\.onEvent = this\.onEvent\.bind\(this\);/g) || []).length, 1);
     assert.doesNotMatch(emitted.code, /AVM|ABC|compat|wrapper/i);
+    const constProgram = adapt(api, buildTree({ constFields: true }), authority);
+    const constFields = constProgram.declaration.members.filter((member) => member.kind === "field");
+    assert.equal(constFields.every((field) => field.readonly), true);
+    const constOutput = api.emitSemanticProgram(constProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(constOutput.code, /private readonly a: number = 1;/);
+    assert.match(constOutput.code, /private readonly b: string = "x";/);
     const runnable = ts.transpileModule(emitted.code, {
         compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },
     }).outputText;

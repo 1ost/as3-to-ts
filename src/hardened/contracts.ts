@@ -152,6 +152,7 @@ export interface SemanticField extends SemanticIdentity {
     sharedDeclarationNodeId: string;
     name: string;
     modifiers: SemanticModifier[];
+    readonly: boolean;
     type: SemanticType;
     initializer: SemanticExpression | null;
 }
