@@ -338,6 +338,19 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
         return ts.factory.createForOfStatement(undefined, declaration, expressionNode(statement.iterable, ts),
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
+    if (statement.kind === "forIn") {
+        const initializer = statement.declaresTarget
+            ? ts.factory.createVariableDeclarationList([
+                ts.factory.createVariableDeclaration((statement.target as any).name, undefined, undefined, undefined),
+            ], ts.NodeFlags.None)
+            : expressionNode(statement.target, ts);
+        const iterable = statement.iterableType.emittedName === "unknown"
+            ? ts.factory.createAsExpression(expressionNode(statement.iterable, ts),
+                ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword))
+            : expressionNode(statement.iterable, ts);
+        return ts.factory.createForInStatement(initializer, iterable,
+            ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
+    }
     if (statement.kind === "try") {
         let catchClause: any = undefined;
         if (statement.catchClause !== null) {
@@ -466,6 +479,10 @@ function boundMethodNames(program: SemanticProgram): string[] {
             if (statement.update !== null) inspectExpression(statement.update);
             statement.statements.forEach(inspectStatement);
         } else if (statement.kind === "forEach") {
+            inspectExpression(statement.iterable);
+            statement.statements.forEach(inspectStatement);
+        } else if (statement.kind === "forIn") {
+            inspectExpression(statement.target);
             inspectExpression(statement.iterable);
             statement.statements.forEach(inspectStatement);
         } else if (statement.kind === "try") {
@@ -609,6 +626,9 @@ function programUsesVector(program: SemanticProgram): boolean {
             || (statement.condition !== null && visitExpression(statement.condition))
             || (statement.update !== null && visitExpression(statement.update)) || statement.statements.some(visitStatement);
         if (statement.kind === "forEach") return visitType(statement.binding.type)
+            || visitExpression(statement.iterable) || statement.statements.some(visitStatement);
+        if (statement.kind === "forIn") return visitType(statement.targetType) || visitType(statement.iterableType)
+            || visitExpression(statement.target)
             || visitExpression(statement.iterable) || statement.statements.some(visitStatement);
         if (statement.kind === "try") return statement.tryStatements.some(visitStatement)
             || (statement.catchClause !== null && (visitType(statement.catchClause.type)

@@ -1461,6 +1461,62 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 context.breakableDepth -= 1;
             }
         }
+        if (node.kind === "FORIN") {
+            if (node.children.length !== 3 || node.children[0]!.kind !== "INIT"
+                || node.children[1]!.kind !== "IN" || node.children[0]!.children.length !== 1
+                || node.children[1]!.children.length !== 1) {
+                fail("HARDENED_FORIN_SHAPE", "for-in requires one target, one enumerable, and one body", node);
+            }
+            const targetOwner = node.children[0]!.children[0]!;
+            let target: SemanticExpression;
+            let targetType: SemanticType;
+            let declaresTarget = false;
+            if (targetOwner.kind === "VAR_LIST") {
+                if (targetOwner.children.length !== 1) {
+                    fail("HARDENED_FORIN_TARGET", "for-in declares exactly one variable", targetOwner);
+                }
+                const declaration = targetOwner.children[0]!;
+                onlyKinds(declaration, ["NAME", "TYPE"]);
+                const nameNode = one(declaration, "NAME")!;
+                const name = validateIdentifier(requiredText(nameNode, "for-in variable"), nameNode);
+                const header = context.locals[name];
+                if (!header || header.node !== declaration) {
+                    fail("HARDENED_FORIN_TARGET", "for-in variable lacks its predeclared identity", declaration);
+                }
+                targetType = header.type;
+                target = Object.assign(identity(nameNode), { kind: "identifier" as "identifier", name });
+                declaresTarget = true;
+            } else {
+                target = parseExpression(targetOwner, context, false, false, true);
+                if (target.kind !== "identifier") {
+                    fail("HARDENED_FORIN_TARGET", "for-in currently admits one existing local or parameter identity", targetOwner);
+                }
+                targetType = assignmentType(target, context, targetOwner);
+            }
+            if (targetType.sourceName !== "String" && targetType.sourceName !== "*") {
+                fail("HARDENED_FORIN_KEY", "for-in property keys require a String or dynamic binding", targetOwner);
+            }
+            const iterableOwner = node.children[1]!.children[0]!;
+            const iterable = parseExpression(iterableOwner, context, true);
+            const iterableType = assignmentType(iterable, context, iterableOwner);
+            if (["Boolean", "Number", "int", "uint", "String", "void"].includes(iterableType.sourceName)) {
+                fail("HARDENED_FORIN_ITERABLE", "for-in requires a proven object/reference enumerable", iterableOwner);
+            }
+            const body = node.children[2]!;
+            context.loopDepth += 1;
+            context.breakableDepth += 1;
+            try {
+                return Object.assign(identity(node), {
+                    kind: "forIn" as "forIn", target, declaresTarget, targetType, iterable, iterableType,
+                    statements: body.kind === "BLOCK"
+                        ? parseBlock(body, context, constructor, derived, expectedReturn, false)
+                        : [parseStatementNode(body, context, constructor, derived, expectedReturn, false)],
+                });
+            } finally {
+                context.loopDepth -= 1;
+                context.breakableDepth -= 1;
+            }
+        }
         if (node.kind === "TRY" || node.kind === "CATCH" || node.kind === "FINALLY") {
             fail("HARDENED_TRY_SEQUENCE", "try/catch/finally must be consumed as one adjacent statement sequence", node);
         }
@@ -1471,7 +1527,7 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 fail("HARDENED_LABEL_DUPLICATE", "active statement label is duplicated", node);
             }
             const child = node.children[0]!;
-            context.labels.push({ name: label, continuable: ["DO", "FOR", "FOREACH", "WHILE"].includes(child.kind) });
+            context.labels.push({ name: label, continuable: ["DO", "FOR", "FOREACH", "FORIN", "WHILE"].includes(child.kind) });
             try {
                 return Object.assign(identity(node), {
                     kind: "label" as "label", label,
@@ -1601,6 +1657,11 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
         }
         if (node.kind === "FOREACH") {
             visit(node.children[0]!);
+            if (node.children.length >= 3) visit(node.children[2]!);
+            return;
+        }
+        if (node.kind === "FORIN") {
+            if (node.children.length >= 1) visit(node.children[0]!);
             if (node.children.length >= 3) visit(node.children[2]!);
             return;
         }

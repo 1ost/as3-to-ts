@@ -325,6 +325,16 @@ export interface ForEachStatement extends SemanticIdentity {
     statements: SemanticStatement[];
 }
 
+export interface ForInStatement extends SemanticIdentity {
+    kind: "forIn";
+    target: SemanticExpression;
+    declaresTarget: boolean;
+    targetType: SemanticType;
+    iterable: SemanticExpression;
+    iterableType: SemanticType;
+    statements: SemanticStatement[];
+}
+
 export interface SemanticCatchClause extends SemanticIdentity {
     name: string;
     temporaryName: string;
@@ -364,7 +374,7 @@ export interface LabelStatement extends SemanticIdentity {
 
 export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement |
     WhileStatement | DoWhileStatement | SwitchStatement | ThrowStatement |
-    ForStatement | ForEachStatement | TryStatement | LocalDeclarationStatement | LoopControlStatement | LabelStatement;
+    ForStatement | ForEachStatement | ForInStatement | TryStatement | LocalDeclarationStatement | LoopControlStatement | LabelStatement;
 
 export interface SemanticParameter extends SemanticIdentity {
     defaultValue: SemanticExpression | null;

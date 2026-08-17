@@ -187,6 +187,7 @@ try {
         "        public function collect(prefix:String,...values):void { }",
         "        public function labelled():void { outer: while (true) { break outer; } }",
         "        ResourcesSpace function namespaced():void { status = \"namespace\"; }",
+        "        public function enumerate():void { var values:Object = {\"a\":1}; for (var key:String in values) { if (key === \"done\") { continue; } } }",
         "    }",
         "}",
         "",
@@ -244,7 +245,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -316,6 +317,11 @@ try {
     assert.equal(semantic.declaration.members[16].name, "namespaced");
     assert.equal(semantic.declaration.members[16].namespaceName, "ResourcesSpace");
     assert.deepEqual(semantic.declaration.members[16].modifiers, []);
+    assert.equal(semantic.declaration.members[17].name, "enumerate");
+    assert.equal(semantic.declaration.members[17].body[1].kind, "forIn");
+    assert.equal(semantic.declaration.members[17].body[1].declaresTarget, true);
+    assert.equal(semantic.declaration.members[17].body[1].targetType.sourceName, "String");
+    assert.ok(normalized.nodes.some(node => node.kind === "FORIN"));
     assert.ok(normalized.nodes.some(node => node.kind === "USE" && node.text === "ResourcesSpace"));
 
     const overrideSource = "package p { import flash.display.Sprite; public class C extends Sprite { public function C(){super();} override public function toString():String{return \"C\";} } }";

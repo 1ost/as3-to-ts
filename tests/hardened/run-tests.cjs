@@ -192,7 +192,7 @@ function buildTree(options = {}) {
     const body = options.implicitObjectSuper ? [superStatement]
         : options.badSuperOrder ? [closureStatement, superStatement] : [superStatement, closureStatement];
     if (options.unsupportedStatement) {
-        body.push(n("FORIN"));
+        body.push(n("DELETE"));
     }
     const field = n(options.constFields ? "CONST_LIST" : "VAR_LIST", null, [
         mods(...(options.fieldModifiers || ["private"])),
@@ -425,6 +425,19 @@ function buildTree(options = {}) {
     if (options.restParameterWorkpack || options.badRestPosition) {
         onEventBody = options.badRestPosition ? [n("RETURN")] : [
             call(n("IDENTIFIER", "collect"), [n("LITERAL", '"p"'), n("LITERAL", "1"), n("LITERAL", '"two"')]),
+            n("RETURN"),
+        ];
+    }
+    if (options.forInWorkpack || options.badForInKey || options.badForInIterable) {
+        const keyType = options.badForInKey ? "Number" : "String";
+        const iterableType = options.badForInIterable ? "Number" : "Object";
+        onEventBody = [
+            localDeclaration("VAR_LIST", "key", keyType,
+                n("LITERAL", options.badForInKey ? "0" : '""')),
+            localDeclaration("VAR_LIST", "enumerable", iterableType,
+                options.badForInIterable ? n("LITERAL", "1") : objectLiteral([["alpha", n("LITERAL", "1")]])),
+            n("FORIN", null, [n("INIT", null, [n("IDENTIFIER", "key")]),
+                n("IN", null, [n("IDENTIFIER", "enumerable")]), n("BLOCK", null, [n("CONTINUE")])]),
             n("RETURN"),
         ];
     }
@@ -933,6 +946,12 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(overrideOutput.code, /public override addEventListener\(type: string, listener: Function, useCapture: boolean = false, priority: number = 0, useWeakReference: boolean = false\): void/);
     assertErrorCode(() => adapt(api, buildTree({ fieldModifiers: ["override"] }), authority), "HARDENED_OVERRIDE_TARGET");
+    const forInProgram = adapt(api, buildTree({ forInWorkpack: true }), authority);
+    const forInOutput = api.emitSemanticProgram(forInProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(forInOutput.code, /for \(key in enumerable as object\)/);
+    assertErrorCode(() => adapt(api, buildTree({ badForInKey: true }), authority), "HARDENED_FORIN_KEY");
+    assertErrorCode(() => adapt(api, buildTree({ badForInIterable: true }), authority), "HARDENED_FORIN_ITERABLE");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -944,7 +963,7 @@ function main() {
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
-        labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code]);
+        labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);
