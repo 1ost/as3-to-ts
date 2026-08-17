@@ -127,10 +127,10 @@ test("unsupported syntax fails closed without publishing", t => {
     const output = path.join(root, "output");
     fs.mkdirSync(source);
     write(source, "Unsupported.as",
-        "package p { public interface Unsupported {} }\n");
+        "package p { public interface Unsupported { function dynamicValue(value:*):void; } }\n");
     const result = invoke(source, output, root);
     assert.equal(result.status, 4, result.stderr);
-    assert.match(result.stderr, /PARSER_NORMALIZER_UNSUPPORTED_KIND/);
+    assert.match(result.stderr, /HARDENED_TYPE_UNMAPPED/);
     assert.equal(fs.existsSync(output), false);
 });
 
@@ -158,7 +158,7 @@ test("qualification records holds without materializing TypeScript", t => {
     fs.mkdirSync(source);
     write(source, "Demo.as", admittedSource);
     write(source, "Unsupported.as",
-        "package p { public interface Unsupported {} }\n");
+        "package p { public interface Unsupported { function dynamicValue(value:*):void; } }\n");
     const result = spawnSync(process.execPath, [executable, "qualify", source, output,
         "--source-census", sourceCensus, "--target-capabilities", targetCapabilities], {
         cwd: root, encoding: "utf8", timeout: 20_000, windowsHide: true,
@@ -170,6 +170,6 @@ test("qualification records holds without materializing TypeScript", t => {
     assert.equal(report.schema, "bleach.as3.qualification-report.v1");
     assert.equal(report.generatedTypeScriptMaterialized, false);
     assert.equal(report.counts.admitted, 1);
-    assert.equal(report.counts.PARSER_NORMALIZER_UNSUPPORTED_KIND, 1);
+    assert.equal(report.counts.HARDENED_TYPE_UNMAPPED, 1);
     assert.deepEqual(report.files.map(item => item.status), ["admitted", "held"]);
 });

@@ -418,9 +418,11 @@ export interface SemanticConstructor extends SemanticIdentity {
 export type SemanticMember = SemanticField | SemanticMethod | SemanticConstructor | SemanticGetter | SemanticSetter;
 
 export interface SemanticClass extends SemanticIdentity {
+    declarationKind: "class" | "interface";
     name: string;
     modifiers: SemanticModifier[];
     extendsType: SemanticType | null;
+    interfaceExtendsTypes: SemanticType[];
     implementsTypes: Array<{ type: SemanticType; runtimeName: string }>;
     members: SemanticMember[];
 }

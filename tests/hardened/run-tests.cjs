@@ -517,6 +517,23 @@ function adapt(api, tree, authority) {
     return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256);
 }
 
+function buildInterfaceTree(options = {}) {
+    const members = [
+        n("FUNCTION", "function", [n("NAME", "run"), n("PARAMETER_LIST", null, [
+            parameter("value", "int"), restParameter("rest"),
+        ]), type("String")]),
+        n("GET", "name", [n("NAME", "name"), n("PARAMETER_LIST"), type("String")]),
+        n("SET", "name", [n("NAME", "name"), n("PARAMETER_LIST", null, [parameter("value", "String")]), type("void")]),
+    ];
+    if (options.duplicate) members.push(members[0]);
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [n("NAME", "lobby.api"), n("CONTENT", null, [
+            n("INTERFACE", null, [n("NAME", "IThing"), mods("public"), n("CONTENT", null, members)]),
+        ])]),
+        n("CONTENT"),
+    ]);
+}
+
 function canonicalJson(value) {
     if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
         return JSON.stringify(value);
@@ -868,6 +885,15 @@ function main() {
     assert.match(labelOutput.code, /outer: while \(true\)/);
     assert.match(labelOutput.code, /break outer;/);
     assertErrorCode(() => adapt(api, buildTree({ badContinueLabel: true }), authority), "HARDENED_LOOP_LABEL");
+    const interfaceProgram = adapt(api, buildInterfaceTree(), authority);
+    const interfaceOutput = api.emitSemanticProgram(interfaceProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.equal(interfaceProgram.declaration.declarationKind, "interface");
+    assert.match(interfaceOutput.code, /export interface IThing/);
+    assert.match(interfaceOutput.code, /run\(value: number, \.\.\.rest: unknown\[\]\): string;/);
+    assert.match(interfaceOutput.code, /get name\(\): string;/);
+    assert.match(interfaceOutput.code, /set name\(value: string\);/);
+    assertErrorCode(() => adapt(api, buildInterfaceTree({ duplicate: true }), authority), "HARDENED_INTERFACE_DUPLICATE");
     const restParameterProgram = adapt(api, buildTree({ restParameterWorkpack: true }), authority);
     const restParameterOutput = api.emitSemanticProgram(restParameterProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -884,7 +910,8 @@ function main() {
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
-        bitwiseOutput.code, compoundOutput.code, restParameterOutput.code]);
+        bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
+        labelOutput.code, interfaceOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

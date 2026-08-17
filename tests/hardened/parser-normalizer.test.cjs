@@ -310,6 +310,17 @@ try {
     assert.equal(semantic.declaration.members[15].body[0].statement.kind, "while");
     assert.equal(semantic.declaration.members[15].body[0].statement.statements[0].label, "outer");
 
+    const interfaceSource = "package p { public interface IThing { function run(value:int,...rest):String; function get name():String; function set name(value:String):void; } }";
+    const interfaceTree = built.parse("fixtures/IThing.as", interfaceSource);
+    const interfaceNormalized = built.normalizer.normalizeParserAst(interfaceTree, interfaceSource, sha256);
+    assert.ok(interfaceNormalized.nodes.some(node => node.kind === "INTERFACE"));
+    const interfaceSemantic = built.adapter.adaptNormalizedParserAst(
+        interfaceNormalized, authority(built.ledger), interfaceSource, sha256,
+    );
+    assert.equal(interfaceSemantic.declaration.declarationKind, "interface");
+    assert.deepEqual(interfaceSemantic.declaration.members.map(member => member.kind), ["method", "getter", "setter"]);
+    assert.equal(interfaceSemantic.declaration.members[0].parameters[1].rest, true);
+
     const vectorSource = "package vectors { public class VectorFixture { public var values:Vector.<int> = new Vector.<int>(2,true); public function VectorFixture(){ values[0] = 3; values.push(4); var copy:Vector.<int> = Vector.<int>([1,2]); var objectValue:Object = values as Object; var matches:Boolean = values is Vector.<int>; } } }";
     const vectorTree = built.parse("fixtures/VectorFixture.as", vectorSource);
     const vectorNormalized = built.normalizer.normalizeParserAst(vectorTree, vectorSource, sha256);
@@ -335,7 +346,6 @@ try {
     assert.deepEqual(repeat, normalized, "real parser normalization is byte-for-byte deterministic");
 
     [
-        "package p { public interface I {} }",
         "package p { [Bindable] public class C {} }",
     ].forEach((unsupported) => {
         const tree = built.parse("fixtures/Unsupported.as", unsupported);

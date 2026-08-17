@@ -553,6 +553,22 @@ function importNode(item: any, ts: TypeScriptCompilerApi): any {
     );
 }
 
+function interfaceMemberNode(member: SemanticMember, ts: TypeScriptCompilerApi): any {
+    if (member.kind === "method") {
+        return ts.factory.createMethodSignature(undefined, member.name, undefined, undefined,
+            member.parameters.map(parameter => parameterNode(parameter, ts)), typeNode(member.returnType, ts));
+    }
+    if (member.kind === "getter") {
+        return ts.factory.createGetAccessorDeclaration(undefined, member.name, [], typeNode(member.returnType, ts), undefined);
+    }
+    if (member.kind === "setter") {
+        return ts.factory.createSetAccessorDeclaration(undefined, member.name,
+            [parameterNode(member.parameter, ts)], undefined);
+    }
+    throw new HardenedSemanticError("HARDENED_EMIT_INTERFACE_MEMBER",
+        "interface semantic IR contains a field or constructor implementation");
+}
+
 function programUsesVector(program: SemanticProgram): boolean {
     const visitType = (type: SemanticType | null): boolean => type !== null
         && (type.emittedName === "AS3Vector" || type.typeArguments.some(visitType));
@@ -600,7 +616,9 @@ function programUsesVector(program: SemanticProgram): boolean {
             || (statement.elseStatements !== null && statement.elseStatements.some(visitStatement));
         return false;
     };
-    return visitType(program.declaration.extendsType) || program.declaration.members.some(member => {
+    return visitType(program.declaration.extendsType)
+        || program.declaration.interfaceExtendsTypes.some(visitType)
+        || program.declaration.members.some(member => {
         if (member.kind === "field") return visitType(member.type)
             || (member.initializer !== null && visitExpression(member.initializer));
         if (member.kind === "constructor") return member.parameters.some(parameter => visitType(parameter.type))
@@ -689,13 +707,25 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         ts.factory.createHeritageClause(ts.SyntaxKind.ImplementsKeyword,
             program.declaration.implementsTypes.map(item => ts.factory.createExpressionWithTypeArguments(
                 ts.factory.createIdentifier(item.type.emittedName), undefined))));
-    const declaration = ts.factory.createClassDeclaration(
-        classModifiers,
-        program.declaration.name,
-        undefined,
-        heritage.length === 0 ? undefined : heritage,
-        program.declaration.members.map((member) => memberNode(member, ts, boundMethods)),
-    );
+    const declaration = program.declaration.declarationKind === "interface"
+        ? ts.factory.createInterfaceDeclaration(
+            classModifiers,
+            program.declaration.name,
+            undefined,
+            program.declaration.interfaceExtendsTypes.length === 0 ? undefined : [
+                ts.factory.createHeritageClause(ts.SyntaxKind.ExtendsKeyword,
+                    program.declaration.interfaceExtendsTypes.map(item => ts.factory.createExpressionWithTypeArguments(
+                        ts.factory.createIdentifier(item.emittedName), undefined))),
+            ],
+            program.declaration.members.map(member => interfaceMemberNode(member, ts)),
+        )
+        : ts.factory.createClassDeclaration(
+            classModifiers,
+            program.declaration.name,
+            undefined,
+            heritage.length === 0 ? undefined : heritage,
+            program.declaration.members.map((member) => memberNode(member, ts, boundMethods)),
+        );
     const empty = ts.createSourceFile(program.outputModulePath, "", ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
     const registration = program.declaration.implementsTypes.length === 0 ? [] : [
         ts.factory.createExpressionStatement(ts.factory.createCallExpression(

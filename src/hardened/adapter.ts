@@ -1732,15 +1732,16 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     onlyKinds(packageNode, ["CONTENT", "NAME"]);
     const packageName = packageNameNode.text === null ? "" : packageNameNode.text;
     const content = one(packageNode, "CONTENT")!;
-    const classPosition = content.children.findIndex((child) => child.kind === "CLASS");
-    if (classPosition >= 0 && content.children.slice(classPosition + 1).some((child) => child.kind === "IMPORT")) {
-        fail("HARDENED_IMPORT_ORDER", "source imports must precede the class and are preserved in source order", content);
+    const declarationPosition = content.children.findIndex((child) => child.kind === "CLASS" || child.kind === "INTERFACE");
+    if (declarationPosition >= 0 && content.children.slice(declarationPosition + 1).some((child) => child.kind === "IMPORT")) {
+        fail("HARDENED_IMPORT_ORDER", "source imports must precede the declaration and are preserved in source order", content);
     }
-    const classes = content.children.filter((child) => child.kind === "CLASS");
-    if (classes.length !== 1 || content.children.some((child) => child.kind !== "IMPORT" && child.kind !== "CLASS")) {
-        fail("HARDENED_PACKAGE_CONTENT", "minimal semantic adapter requires imports followed by exactly one class", content);
+    const declarations = content.children.filter((child) => child.kind === "CLASS" || child.kind === "INTERFACE");
+    if (declarations.length !== 1 || content.children.some((child) => child.kind !== "IMPORT"
+        && child.kind !== "CLASS" && child.kind !== "INTERFACE")) {
+        fail("HARDENED_PACKAGE_CONTENT", "semantic adapter requires imports followed by exactly one class or interface", content);
     }
-    const classNode = classes[0]!;
+    const classNode = declarations[0]!;
     onlyKinds(classNode, ["CONTENT", "EXTENDS", "IMPLEMENTS_LIST", "MOD_LIST", "NAME"]);
     const classNameNode = one(classNode, "NAME")!;
     const className = validateIdentifier(requiredText(classNameNode, "class name"), classNameNode);
@@ -1761,7 +1762,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 .filter(entry => entry.sourcePath === (entry.module === "application"
                     ? `game-client/tapplication_main/src/${sourceLogicalPath}` : `game-client/tmain/src/${sourceLogicalPath}`)
                     && entry.sourceContentSha256 === currentSourceSha256
-                    && entry.typeKind === "class");
+                    && entry.typeKind === (classNode.kind === "CLASS" ? "class" : "interface"));
             if (candidates.length !== 1) {
                 const known = (["application", "bootstrap"] as const).map(module =>
                     localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry)
@@ -1790,6 +1791,95 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         breakableDepth: 0,
         labels: [],
     };
+    if (classNode.kind === "INTERFACE") {
+        const modifiers = parseModifiers(classNode, true);
+        if (modifiers.some(modifier => modifier !== "public")) {
+            fail("HARDENED_INTERFACE_MODIFIER", "source interface admits only the public package modifier", classNode);
+        }
+        const interfaceExtendsTypes: SemanticType[] = [];
+        const seenExtends = new Set<string>();
+        classNode.children.filter(child => child.kind === "EXTENDS").forEach((extendsNode) => {
+            const sourceName = requiredText(extendsNode, "extended interface");
+            const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
+            const imported = parsedImports.importsByLocal[localName];
+            if (!imported || !imported.runtimeInterface
+                || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)) {
+                fail("HARDENED_INTERFACE_EXTENDS", "extended interface must be one authenticated imported interface", extendsNode);
+            }
+            if (seenExtends.has(imported.sourceQualifiedName)) {
+                fail("HARDENED_INTERFACE_EXTENDS", "extended interface is duplicated", extendsNode);
+            }
+            seenExtends.add(imported.sourceQualifiedName);
+            interfaceExtendsTypes.push(semanticType(extendsNode, localName, localName));
+        });
+        const interfaceContent = one(classNode, "CONTENT")!;
+        if (interfaceContent.children.some(child => !["FUNCTION", "GET", "SET"].includes(child.kind))) {
+            fail("HARDENED_INTERFACE_MEMBER", "interface body admits only callable signatures", interfaceContent);
+        }
+        const members: SemanticMember[] = [];
+        const names = new Set<string>();
+        const accessors: { [name: string]: { getter?: SemanticGetter; setter?: SemanticSetter } } = Object.create(null);
+        interfaceContent.children.forEach((node) => {
+            onlyKinds(node, ["NAME", "PARAMETER_LIST", "TYPE", "VECTOR"]);
+            const name = validateIdentifier(requiredText(one(node, "NAME")!, "interface member name"), one(node, "NAME")!);
+            const parameters = parseParameters(one(node, "PARAMETER_LIST")!, placeholder);
+            if (parameters.some(parameter => parameter.defaultValue !== null)) {
+                fail("HARDENED_INTERFACE_DEFAULT", "interface signatures cannot declare default parameter values", node);
+            }
+            const returnType = parseType(oneType(node), placeholder, true);
+            if (node.kind === "FUNCTION") {
+                if (names.has(name) || accessors[name]) fail("HARDENED_INTERFACE_DUPLICATE", "interface member is duplicated", node);
+                names.add(name);
+                members.push(Object.assign(identity(node), {
+                    kind: "method" as "method", name, modifiers: [], parameters, returnType, body: [],
+                }));
+            } else if (node.kind === "GET") {
+                if (names.has(name) || parameters.length !== 0 || returnType.sourceName === "void") {
+                    fail("HARDENED_INTERFACE_ACCESSOR", "interface getter signature is invalid or duplicated", node);
+                }
+                const pair = accessors[name] || {};
+                if (pair.getter) fail("HARDENED_INTERFACE_DUPLICATE", "interface getter is duplicated", node);
+                pair.getter = Object.assign(identity(node), {
+                    kind: "getter" as "getter", name, modifiers: [], returnType, body: [],
+                });
+                accessors[name] = pair;
+            } else {
+                if (names.has(name) || parameters.length !== 1 || returnType.sourceName !== "void"
+                    || parameters[0]!.rest) {
+                    fail("HARDENED_INTERFACE_ACCESSOR", "interface setter signature is invalid or duplicated", node);
+                }
+                const pair = accessors[name] || {};
+                if (pair.setter) fail("HARDENED_INTERFACE_DUPLICATE", "interface setter is duplicated", node);
+                pair.setter = Object.assign(identity(node), {
+                    kind: "setter" as "setter", name, modifiers: [], parameter: parameters[0]!, body: [],
+                });
+                accessors[name] = pair;
+            }
+        });
+        Object.keys(accessors).sort().forEach((name) => {
+            const pair = accessors[name]!;
+            if (pair.getter && pair.setter && !sameType(pair.getter.returnType, pair.setter.parameter.type)) {
+                fail("HARDENED_INTERFACE_ACCESSOR", "paired interface accessor types must match", pair.setter as unknown as TreeNode);
+            }
+            if (pair.getter) members.push(pair.getter);
+            if (pair.setter) members.push(pair.setter);
+        });
+        const declaration: SemanticClass = Object.assign(identity(classNode), {
+            declarationKind: "interface" as "interface", name: className, modifiers,
+            extendsType: null, interfaceExtendsTypes, implementsTypes: [], members,
+        });
+        const program: SemanticProgram = Object.assign(identity(root), {
+            schema: "as3-semantic-ir@1" as "as3-semantic-ir@1", sourceSha256: ast.sourceSha256,
+            fingerprintSha256: ast.fingerprintSha256, packageName, outputModulePath,
+            imports: parsedImports.imports, declaration,
+            sourceCapabilitySha256: authority.sourceCensusSha256,
+            targetCapabilitySha256: authority.targetCapabilitiesSha256,
+            capabilityMappingSha256: authority.mappingSha256,
+        });
+        deepFreeze(program);
+        ADAPTED_PROGRAMS.add(program);
+        return program;
+    }
     const extendsNode = one(classNode, "EXTENDS", true);
     let extendsType: SemanticType | null = null;
     if (extendsNode !== null) {
@@ -1936,9 +2026,10 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         fail("HARDENED_CLASS_MEMBER", "class member kind is unsupported: " + node.kind, node);
     });
     const declaration: SemanticClass = Object.assign(identity(classNode), {
-        name: className,
+        declarationKind: "class" as "class", name: className,
         modifiers: parseModifiers(classNode, true),
         extendsType,
+        interfaceExtendsTypes: [],
         implementsTypes,
         members,
     });
