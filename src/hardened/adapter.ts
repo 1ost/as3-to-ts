@@ -346,6 +346,9 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "methodClosure") {
         return Object.assign(identity(node), { sourceName: "Function", emittedName: "Function" });
     }
+    if (expression.kind === "new") {
+        return expression.sourceType;
+    }
     fail("HARDENED_ASSIGNMENT_TYPE", "assignment value type is not statically proven in the admitted subset", node);
 }
 
@@ -379,6 +382,55 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
     allowAssignment: boolean = false): SemanticExpression {
     if (node.kind === "LITERAL") {
         return parseLiteral(node);
+    }
+    if (node.kind === "NEW") {
+        if (node.children.length !== 1 || node.children[0]!.kind !== "CALL") {
+            fail("HARDENED_NEW_SHAPE", "constructor expression must contain exactly one direct call", node);
+        }
+        const call = node.children[0]!;
+        if (call.children.length !== 2 || call.children[0]!.kind !== "IDENTIFIER"
+            || call.children[1]!.kind !== "ARGUMENTS") {
+            fail("HARDENED_NEW_TARGET", "constructor target must be one local or double-pinned imported class", call);
+        }
+        const nameNode = call.children[0]!;
+        const name = validateIdentifier(requiredText(nameNode, "constructor target"), nameNode);
+        const args = call.children[1]!.children.map((child) => parseExpression(child, context, true));
+        let sourceType: SemanticType;
+        if (name === context.className) {
+            const local = context.methods[name];
+            if (!local || !local.constructor || local.parameters.length !== args.length) {
+                fail("HARDENED_NEW_LOCAL_ARITY", "local constructor call does not match its exact declaration", call);
+            }
+            args.forEach((argument, index) => assertAssignmentCompatible(
+                local.parameters[index]!.type,
+                assignmentType(argument, context, call.children[1]!.children[index]!),
+                call.children[1]!.children[index]!,
+            ));
+            sourceType = Object.assign(identity(nameNode), { sourceName: name, emittedName: name });
+        } else {
+            const imported = context.importsByLocal[name];
+            const typeMapping = imported ? context.mappingsBySource[imported.sourceQualifiedName] : undefined;
+            if (!imported || !typeMapping || typeMapping.sourceRoles.indexOf("constructor") < 0) {
+                fail("HARDENED_NEW_AUTHORITY", "constructor target lacks a double-pinned source and target constructor", nameNode);
+            }
+            if (args.length !== 0) {
+                fail("HARDENED_NEW_ARGUMENT_TYPES",
+                    "imported constructor arguments remain held until every source parameter type is structurally mapped", call);
+            }
+            const matches = Object.keys(context.memberMappingsByKey)
+                .map((key) => context.memberMappingsByKey[key])
+                .filter((mapping): mapping is CapabilityMapping => mapping !== undefined)
+                .filter((mapping) => mapping.sourceQName === imported.sourceQualifiedName
+                    && mapping.sourceRoles.indexOf("constructor") >= 0
+                    && mapping.sourceMember !== null && mapping.sourceMember.name === name
+                    && mapping.targetMember !== null && mapping.targetMember.kind === "constructor"
+                    && args.length >= mapping.sourceMember.minArgs && args.length <= mapping.sourceMember.maxArgs);
+            if (matches.length !== 1) {
+                fail("HARDENED_NEW_ARITY", "constructor arity lacks one exact double-pinned signature", call);
+            }
+            sourceType = Object.assign(identity(nameNode), { sourceName: name, emittedName: name });
+        }
+        return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
     }
     if (node.kind === "IDENTIFIER") {
         const name = requiredText(node, "identifier");
@@ -575,13 +627,17 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
         } else if (readonly) {
             fail("HARDENED_CONST_INITIALIZER", "AS3 const fields require an explicit admitted initializer", declaration);
         }
+        const fieldType = parseType(one(declaration, "TYPE")!, context, false);
+        if (initializer !== null) {
+            assertAssignmentCompatible(fieldType, assignmentType(initializer, context, init!), declaration);
+        }
         const field: SemanticField = Object.assign(identity(declaration), {
             kind: "field" as "field",
             sharedDeclarationNodeId: list.id,
             name,
             modifiers: modifiers.slice(),
             readonly,
-            type: parseType(one(declaration, "TYPE")!, context, false),
+            type: fieldType,
             initializer,
         });
         context.fields[name] = field;

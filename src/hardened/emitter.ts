@@ -109,6 +109,13 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             expressionNode(expression.value, ts),
         );
     }
+    if (expression.kind === "new") {
+        return ts.factory.createNewExpression(
+            ts.factory.createIdentifier(expression.sourceType.emittedName),
+            undefined,
+            expression.arguments.map((argument) => expressionNode(argument, ts)),
+        );
+    }
     throw new HardenedSemanticError("HARDENED_EMIT_EXPRESSION", "semantic IR contains an unsupported expression");
 }
 
@@ -139,6 +146,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
         } else if (expression.kind === "assignment") {
             inspectExpression(expression.target);
             inspectExpression(expression.value);
+        } else if (expression.kind === "new") {
+            expression.arguments.forEach(inspectExpression);
         }
     };
     program.declaration.members.forEach((member) => {

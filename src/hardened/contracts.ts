@@ -134,8 +134,14 @@ export interface AssignmentExpression extends SemanticIdentity {
     value: SemanticExpression;
 }
 
+export interface NewExpression extends SemanticIdentity {
+    kind: "new";
+    sourceType: SemanticType;
+    arguments: SemanticExpression[];
+}
+
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
-    SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression;
+    SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression | NewExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";

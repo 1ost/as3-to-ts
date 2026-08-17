@@ -43,7 +43,43 @@ function exactTarget(sourceQName, obligations) {
     return matches.length === 1 ? matches[0] : null;
 }
 
-function targetMemberFor(sourceUse, obligation) {
+function constructorArity(signature) {
+    const match = /^new \((.*)\): [A-Za-z_$][A-Za-z0-9_$]*$/.exec(signature);
+    if (!match) return null;
+    const text = match[1].trim();
+    if (text === "") return { minArgs: 0, maxArgs: 0 };
+    const parts = [];
+    let start = 0;
+    let depth = 0;
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        if ("([{<".includes(char)) depth += 1;
+        else if (")]}>".includes(char)) depth -= 1;
+        else if (char === "," && depth === 0) {
+            parts.push(text.slice(start, index).trim());
+            start = index + 1;
+        }
+        if (depth < 0) return null;
+    }
+    if (depth !== 0) return null;
+    parts.push(text.slice(start).trim());
+    if (parts.some(part => part === "" || part.startsWith("..."))) return null;
+    const optional = parts.findIndex(part => /^[A-Za-z_$][A-Za-z0-9_$]*\?\s*:/.test(part));
+    if (optional >= 0 && parts.slice(optional).some(part => !/^[A-Za-z_$][A-Za-z0-9_$]*\?\s*:/.test(part))) return null;
+    return { minArgs: optional < 0 ? parts.length : optional, maxArgs: parts.length };
+}
+
+function targetMemberFor(sourceUse, sourceSignature, obligation) {
+    if (sourceUse.context === "constructor") {
+        const constructors = Array.isArray(obligation.constructors) ? obligation.constructors : [];
+        const matches = constructors.filter(signature => {
+            if (typeof signature !== "string") return false;
+            const arity = constructorArity(signature);
+            return arity && arity.minArgs === sourceSignature.minArgs && arity.maxArgs === sourceSignature.maxArgs;
+        });
+        if (matches.length !== 1 || sourceUse.member !== obligation.export) return null;
+        return { name: sourceUse.member, kind: "constructor", scope: "static", signature: matches[0] };
+    }
     const scope = sourceUse.context === "event-constant" || sourceUse.context === "static-member"
         ? "static" : "instance";
     const admittedKinds = sourceUse.access === "call" ? new Set(["method"])
@@ -104,13 +140,16 @@ for (const use of sourceCapabilities.memberUses) {
         || typeof use.qname !== "string" || !mappedTypes.has(use.qname)
         || use.access !== "call" || !Array.isArray(use.signatures) || use.signatures.length === 0) continue;
     const targetMatch = mappedTypes.get(use.qname);
-    const targetMember = targetMemberFor(use, targetMatch.obligation);
-    if (!targetMember) continue;
+    const ordinaryTargetMember = use.context === "constructor"
+        ? null : targetMemberFor(use, null, targetMatch.obligation);
+    if (use.context !== "constructor" && !ordinaryTargetMember) continue;
     for (const signature of use.signatures) {
         if (!signature || typeof signature.signature !== "string" || !Number.isInteger(signature.minArgs)
             || !Number.isInteger(signature.maxArgs) || signature.minArgs < 0 || signature.maxArgs < signature.minArgs) {
             throw new Error(`invalid source member signature for ${use.qname}.${use.member}`);
         }
+        const targetMember = ordinaryTargetMember || targetMemberFor(use, signature, targetMatch.obligation);
+        if (!targetMember) continue;
         const key = [use.qname, use.access, use.member, signature.signature].join("\u0000");
         if (memberKeys.has(key)) continue;
         memberKeys.add(key);

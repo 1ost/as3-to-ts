@@ -15,7 +15,7 @@ import { CliError } from "./errors";
 
 const MAX_AUTHORITY_BYTES = 64 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
-const COMPILED_AUTHORITY_LOCK_SHA256 = "a0d3054ddfe18878e4907abb4f566dea4bb1260159b524aa7db423742be55cf4";
+const COMPILED_AUTHORITY_LOCK_SHA256 = "e64a5446511f0b0f773decc8d83282045d745a350770651a5f087ac516178ebd";
 
 const COMPILED_AUTHORITY_LOCK = Object.freeze({
     schema: "bleach-local-as3-authority-lock@1",
@@ -23,9 +23,9 @@ const COMPILED_AUTHORITY_LOCK = Object.freeze({
     typeScriptVersion: "4.9.5",
     sourceCensusSha256: "2144b14090e51a1c0525ec3a35bfb8e532c6a19bb7ab355428ce70b4db7bde90",
     targetCapabilitiesSha256: "c364d4a0fce5df16033980a3eba4e7a72d658993eef0f3675ea9771c9eba86d2",
-    capabilityMappingSha256: "eddb7194330d4c14691b35e28322c4752bdd0f9b351b1d2db3bd4d7ebc688c2c",
+    capabilityMappingSha256: "cde1bd197ce4c67e3613f9ca8ee1e7eb96aa702744fe8b222c754fe1d0d13c8a",
     mappedTypeCount: 12,
-    mappedMemberCount: 68,
+    mappedMemberCount: 73,
 });
 
 export interface TranspileAuthority {

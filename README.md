@@ -66,7 +66,7 @@ Node process so a fatal parser OOM cannot terminate the controlling CLI.
 The transpile command authenticates the exact Bleach source census, the exact
 Laya capability ledger, and the locally generated source-to-target mapping
 against `config/authority-lock.json`. The current bridge admits 12 Flash types
-and 68 proven callable member signatures. Every other parser construct, API,
+and 73 proven callable member or constructor signatures. Every other parser construct, API,
 member, overload, coercion, or recovery path stops the whole publication with a
 diagnostic. Successful files are labeled
 `capability-authenticated-typescript-proposal`; they still require the normal

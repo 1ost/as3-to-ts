@@ -132,6 +132,30 @@ function parseMapping(raw: unknown): CapabilityMappingDocument {
         if (sourceMember !== null && targetMember !== null && sourceMember.name !== targetMember.name) {
             throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_NAME", "source-visible Flash member name must be preserved by the target bridge");
         }
+        const constructorRole = sourceMember !== null && sourceRoles.indexOf("constructor") >= 0;
+        const constructorTarget = targetMember !== null && targetMember.kind === "constructor";
+        if (constructorRole !== constructorTarget || (constructorRole && (sourceMember === null
+            || sourceMember.access !== "call" || sourceMember.name !== value.targetExport
+            || targetMember!.scope !== "static"))) {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_CONSTRUCTOR_PAIR",
+                "constructor mappings must pair the exact source class call with a static target constructor");
+        }
+        if (constructorTarget) {
+            const match = /^new \((.*)\): [A-Za-z_$][A-Za-z0-9_$]*$/.exec(targetMember!.signature);
+            if (!match) {
+                throw new HardenedSemanticError("HARDENED_TARGET_CONSTRUCTOR_SIGNATURE", "target constructor signature is not canonical");
+            }
+            const body = match[1]!.trim();
+            const parameters = body === "" ? [] : body.split(/,\s*/);
+            const optional = parameters.findIndex((parameter) => /^[A-Za-z_$][A-Za-z0-9_$]*\?\s*:/.test(parameter));
+            const targetMin = optional < 0 ? parameters.length : optional;
+            if (parameters.some((parameter, index) => parameter.length === 0 || parameter.startsWith("...")
+                || (index >= targetMin) !== /\?\s*:/.test(parameter))
+                || sourceMember!.minArgs !== targetMin || sourceMember!.maxArgs !== parameters.length) {
+                throw new HardenedSemanticError("HARDENED_TARGET_CONSTRUCTOR_ARITY",
+                    "source and target constructor arities are not exact");
+            }
+        }
         return {
             sourceQName: String(value.sourceQName),
             sourceRoles: sourceRoles.slice() as string[],
@@ -161,7 +185,8 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
     if (mapping.sourceMember !== null) {
         const use = section.memberUses.find((value: unknown) => isObject(value)
             && value.qname === mapping.sourceQName && value.member === mapping.sourceMember!.name
-            && value.access === mapping.sourceMember!.access);
+            && value.access === mapping.sourceMember!.access
+            && (mapping.sourceRoles.indexOf("constructor") < 0 || value.context === "constructor"));
         if (!isObject(use) || use.preserveNameAndSignature !== true || !Array.isArray(use.signatures)
             || !use.signatures.some((signature: unknown) => isObject(signature)
                 && signature.signature === mapping.sourceMember!.signature
@@ -187,9 +212,15 @@ function findTargetCapability(target: { [key: string]: unknown }, mapping: Capab
         throw new HardenedSemanticError("HARDENED_TARGET_EXPORT", "target Laya module/export/signature is not capability-authenticated");
     }
     if (mapping.targetMember !== null) {
-        if (!Array.isArray(obligation.members) || !obligation.members.some((member: unknown) => isObject(member)
+        const constructor = mapping.targetMember.kind === "constructor"
+            && mapping.targetMember.scope === "static"
+            && mapping.targetMember.name === mapping.targetExport
+            && Array.isArray(obligation.constructors)
+            && obligation.constructors.indexOf(mapping.targetMember.signature) >= 0;
+        const ordinary = Array.isArray(obligation.members) && obligation.members.some((member: unknown) => isObject(member)
             && member.name === mapping.targetMember!.name && member.kind === mapping.targetMember!.kind
-            && member.scope === mapping.targetMember!.scope && member.signature === mapping.targetMember!.signature)) {
+            && member.scope === mapping.targetMember!.scope && member.signature === mapping.targetMember!.signature);
+        if (!constructor && !ordinary) {
             throw new HardenedSemanticError("HARDENED_TARGET_MEMBER", "target Laya public member signature is not capability-authenticated");
         }
     }

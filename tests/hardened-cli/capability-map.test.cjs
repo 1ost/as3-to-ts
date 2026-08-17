@@ -34,7 +34,8 @@ test("capability map regenerates byte-identically from both authorities", t => {
     const typeMappings = document.mappings.filter(item => item.sourceMember === null);
     const memberMappings = document.mappings.filter(item => item.sourceMember !== null);
     assert.equal(typeMappings.length, 12);
-    assert.equal(memberMappings.length, 68);
+    assert.equal(memberMappings.length, 73);
+    assert.equal(memberMappings.filter(item => item.targetMember.kind === "constructor").length, 5);
     for (const item of document.mappings) {
         assert.match(item.targetModule, /^src\/layaAir\/flash\//);
         assert.doesNotMatch(item.targetExport, /^_/);

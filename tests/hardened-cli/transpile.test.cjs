@@ -44,6 +44,7 @@ const admittedSource = [
     "    import flash.events.Event;",
     "    public class Demo extends Sprite {",
     "        private var label:String = \"ok\";",
+    "        private var child:Sprite = new Sprite();",
     "        public function Demo() { super(); addEventListener(\"ready\", onEvent); }",
     "        public function onEvent(event:Event):void { label = \"changed\"; return; }",
     "    }",
@@ -71,6 +72,7 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     assert.match(firstCode, /constructor\(\) \{\n\s+super\(\);/);
     assert.match(firstCode, /super\(\);\n\s+this\.onEvent = this\.onEvent\.bind\(this\);\n\s+this\.addEventListener\("ready", this\.onEvent\);/);
     assert.match(firstCode, /this\.label = "changed";/);
+    assert.match(firstCode, /private child: Sprite = new Sprite\(\);/);
     const manifest = JSON.parse(fs.readFileSync(path.join(first, "manifest.json"), "utf8"));
     assert.equal(manifest.schema, "bleach.as3.transpile-manifest.v1");
     assert.equal(manifest.typeScriptVersion, "4.9.5");

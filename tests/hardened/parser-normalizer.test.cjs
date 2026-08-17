@@ -66,7 +66,7 @@ function authority(api) {
         mappings: [
             {
                 sourceQName: "flash.display.Sprite",
-                sourceRoles: ["base-type", "import"],
+                sourceRoles: ["base-type", "constructor", "import"],
                 sourceMember: null,
                 targetCapabilityId: "api.flash.display.sprite",
                 targetModule: "src/layaAir/flash/display/Sprite.ts",
@@ -74,6 +74,22 @@ function authority(api) {
                 targetKind: "class",
                 targetSignature: "typeof Sprite",
                 targetMember: null,
+            },
+            {
+                sourceQName: "flash.display.Sprite",
+                sourceRoles: ["constructor"],
+                sourceMember: {
+                    access: "call", name: "Sprite", minArgs: 0, maxArgs: 0,
+                    signature: "public function Sprite()",
+                },
+                targetCapabilityId: "api.flash.display.sprite",
+                targetModule: "src/layaAir/flash/display/Sprite.ts",
+                targetExport: "Sprite",
+                targetKind: "class",
+                targetSignature: "typeof Sprite",
+                targetMember: {
+                    name: "Sprite", kind: "constructor", scope: "static", signature: "new (): Sprite",
+                },
             },
             {
                 sourceQName: "flash.events.Event",
@@ -93,14 +109,19 @@ function authority(api) {
             apis: [
                 {
                     qname: "flash.display.Sprite", classification: "layaair-flash-api-bridge",
-                    roles: ["base-type", "import"], preserve: { apiName: true, signature: true },
+                    roles: ["base-type", "constructor", "import"], preserve: { apiName: true, signature: true },
                 },
                 {
                     qname: "flash.events.Event", classification: "layaair-flash-api-bridge",
                     roles: ["import"], preserve: { apiName: true, signature: true },
                 },
             ],
-            memberUses: [],
+            memberUses: [{
+                qname: "flash.display.Sprite", member: "Sprite", access: "call",
+                context: "constructor",
+                preserveNameAndSignature: true,
+                signatures: [{ signature: "public function Sprite()", minArgs: 0, maxArgs: 0 }],
+            }],
         },
     };
     const target = {
@@ -110,7 +131,7 @@ function authority(api) {
                 id: "api.flash.display.sprite", status: "typescript-obligation",
                 obligations: [{
                     module: "src/layaAir/flash/display/Sprite.ts", export: "Sprite",
-                    kind: "class", signature: "typeof Sprite", members: [],
+                    kind: "class", signature: "typeof Sprite", members: [], constructors: ["new (): Sprite"],
                 }],
             },
             {
@@ -150,6 +171,7 @@ try {
         "    public class Demo extends Sprite {",
         "        private const label:String = \"ok\";",
         "        private var status:String = \"old\";",
+        "        private var child:Sprite = new Sprite();",
         "        public function Demo() { super(); }",
         "        public function onEvent(event:Event):void { status = \"changed\"; return; }",
         "    }",
@@ -209,17 +231,20 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "constructor", "method"]);
+        ["field", "field", "field", "constructor", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
     assert.equal(semantic.declaration.members[1].readonly, false);
-    assert.equal(semantic.declaration.members[2].body[0].expression.callee.kind, "super");
-    assert.equal(semantic.declaration.members[3].name, "onEvent");
-    assert.equal(semantic.declaration.members[3].parameters[0].name, "event");
-    assert.equal(semantic.declaration.members[3].body[0].expression.kind, "assignment");
-    assert.equal(semantic.declaration.members[3].body[0].expression.target.kind, "member");
-    assert.equal(semantic.declaration.members[3].body[0].expression.target.name, "status");
+    assert.equal(semantic.declaration.members[2].name, "child");
+    assert.equal(semantic.declaration.members[2].initializer.kind, "new");
+    assert.equal(semantic.declaration.members[2].initializer.sourceType.sourceName, "Sprite");
+    assert.equal(semantic.declaration.members[3].body[0].expression.callee.kind, "super");
+    assert.equal(semantic.declaration.members[4].name, "onEvent");
+    assert.equal(semantic.declaration.members[4].parameters[0].name, "event");
+    assert.equal(semantic.declaration.members[4].body[0].expression.kind, "assignment");
+    assert.equal(semantic.declaration.members[4].body[0].expression.target.kind, "member");
+    assert.equal(semantic.declaration.members[4].body[0].expression.target.name, "status");
 
     const repeat = built.normalizer.normalizeParserAst(built.parse("fixtures/Demo.as", source), source, sha256);
     assert.deepEqual(repeat, normalized, "real parser normalization is byte-for-byte deterministic");

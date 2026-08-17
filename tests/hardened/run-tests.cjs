@@ -86,6 +86,10 @@ function assignment(target, value, operator = "=") {
     return n("ASSIGN", null, [target, n("OP", operator), value]);
 }
 
+function construct(name, args = []) {
+    return n("NEW", null, [call(n("IDENTIFIER", name), args)]);
+}
+
 function parameter(name, typeName) {
     return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, [n("NAME", name), type(typeName)])]);
 }
@@ -116,6 +120,12 @@ function buildTree(options = {}) {
         n("NAME_TYPE_INIT", null, [n("NAME", "a"), type("Number"), n("INIT", null, [n("LITERAL", "1")])]),
         n("NAME_TYPE_INIT", null, [n("NAME", "b"), type("String"), n("INIT", null, [n("LITERAL", '"x"')])]),
     ]);
+    if (options.newField) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "sprite"), type("Sprite"),
+            n("INIT", null, [construct("Sprite", options.newArguments || [])]),
+        ]));
+    }
     let onEventBody = options.returnValue ? [n("RETURN", null, [n("LITERAL", "1")])] : [n("RETURN")];
     if (options.assignment) {
         const target = n("IDENTIFIER", options.assignmentTarget || "b");
@@ -187,7 +197,7 @@ function mappingDocument() {
         mappings: [
             {
                 sourceQName: "flash.display.Sprite",
-                sourceRoles: ["base-type", "import"],
+                sourceRoles: ["base-type", "constructor", "import"],
                 sourceMember: null,
                 targetCapabilityId: "api.flash.display",
                 targetModule: "src/layaAir/flash/display/Sprite.ts",
@@ -195,6 +205,28 @@ function mappingDocument() {
                 targetKind: "class",
                 targetSignature: "typeof Sprite",
                 targetMember: null,
+            },
+            {
+                sourceQName: "flash.display.Sprite",
+                sourceRoles: ["constructor"],
+                sourceMember: {
+                    access: "call",
+                    name: "Sprite",
+                    minArgs: 0,
+                    maxArgs: 0,
+                    signature: "public function Sprite()",
+                },
+                targetCapabilityId: "api.flash.display",
+                targetModule: "src/layaAir/flash/display/Sprite.ts",
+                targetExport: "Sprite",
+                targetKind: "class",
+                targetSignature: "typeof Sprite",
+                targetMember: {
+                    name: "Sprite",
+                    kind: "constructor",
+                    scope: "static",
+                    signature: "new (): Sprite",
+                },
             },
             {
                 sourceQName: "flash.events.Event",
@@ -318,6 +350,13 @@ function main() {
     assertErrorCode(
         () => adapt(api, buildTree({ constFields: true, assignment: true }), authority),
         "HARDENED_ASSIGNMENT_READONLY",
+    );
+    const constructedProgram = adapt(api, buildTree({ newField: true }), authority);
+    const constructedOutput = api.emitSemanticProgram(constructedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(constructedOutput.code, /private sprite: Sprite = new Sprite\(\);/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ newField: true, newArguments: [n("LITERAL", "1")] }), authority),
+        "HARDENED_NEW_ARGUMENT_TYPES",
     );
     const runnable = ts.transpileModule(emitted.code, {
         compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },
