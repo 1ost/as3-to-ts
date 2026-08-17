@@ -228,7 +228,8 @@ function parseModifiers(owner: TreeNode, classLevel: boolean): SemanticModifier[
 function mappingForRole(authority: LoadedCapabilityAuthority, qname: string, role: string, node: TreeNode): CapabilityMapping {
     const mapping = authority.typeMappingsBySource[qname];
     if (!mapping || mapping.sourceMember !== null || mapping.sourceRoles.indexOf(role) < 0) {
-        fail("HARDENED_CAPABILITY_ROLE", "Flash API use lacks a double-pinned source/target mapping for role " + role, node);
+        fail("HARDENED_CAPABILITY_ROLE", "Flash API " + qname
+            + " lacks a double-pinned source/target mapping for role " + role, node);
     }
     return mapping!;
 }
@@ -239,7 +240,8 @@ function memberMapping(context: AdapterContext, sourceQName: string, access: str
         mapping.sourceQName === sourceQName && mapping.sourceMember !== null
         && mapping.sourceMember.access === access && mapping.sourceMember.name === name);
     if (matches.length > 1) {
-        fail("HARDENED_CAPABILITY_MEMBER_OVERLOAD", "multiple member mappings require a future typed overload resolver", node);
+        fail("HARDENED_CAPABILITY_MEMBER_OVERLOAD", "Flash API " + sourceQName + "." + name
+            + " has multiple mappings and requires a future typed overload resolver", node);
     }
     return matches.length === 1 ? matches[0]! : null;
 }
@@ -284,7 +286,8 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
         } else if (context.importsByLocal[sourceName]) {
             emittedName = sourceName;
         } else {
-            fail("HARDENED_TYPE_UNMAPPED", "source type is not a proven primitive or double-pinned import", node);
+            fail("HARDENED_TYPE_UNMAPPED", "source type " + sourceName
+                + " is not a proven primitive or double-pinned import", node);
         }
     }
     return Object.assign(identity(node), { sourceName, emittedName });
@@ -1059,7 +1062,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         const sourceName = requiredText(extendsNode, "base type");
         const imported = parsedImports.importsByLocal[sourceName];
         if (!imported) {
-            fail("HARDENED_BASE_TYPE", "base type must be a double-pinned imported Flash class", extendsNode);
+            fail("HARDENED_BASE_TYPE", "base type " + extendsNode.text
+                + " must be a double-pinned imported Flash class", extendsNode);
         }
         mappingForRole(authority, imported!.sourceQualifiedName, "base-type", extendsNode);
         extendsType = Object.assign(identity(extendsNode), { sourceName, emittedName: sourceName });
