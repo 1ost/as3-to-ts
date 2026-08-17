@@ -9,10 +9,10 @@ const SHA256 = /^[0-9a-f]{64}$/;
 // and the closed structural vocabulary consumed by adapter.ts. Expanding it is
 // an admission decision, not a parser compatibility convenience.
 const ADMITTED_KINDS = new Set([
-    "ADD", "AND", "ARGUMENTS", "ARRAY", "ARRAY_ACCESSOR", "AS", "ASSIGN", "BLOCK", "BREAK", "CALL", "CLASS", "COMPILATION_UNIT", "CONDITION", "CONDITIONAL", "CONST_LIST", "CONTENT", "CONTINUE", "DOT",
+    "ADD", "AND", "ARGUMENTS", "ARRAY", "ARRAY_ACCESSOR", "AS", "ASSIGN", "B_AND", "B_NOT", "B_OR", "B_XOR", "BLOCK", "BREAK", "CALL", "CLASS", "COMPILATION_UNIT", "CONDITION", "CONDITIONAL", "CONST_LIST", "CONTENT", "CONTINUE", "DOT",
     "CASE", "CASES", "CATCH", "COND", "DEFAULT", "DO", "ENCAPSULATED", "EQUALITY", "EXPR_LIST", "EXTENDS", "FINALLY", "FOR", "FOREACH", "FUNCTION", "GET", "IDENTIFIER", "IF", "IMPLEMENTS", "IMPLEMENTS_LIST", "IMPORT", "IN", "INIT", "ITER", "LITERAL", "MODIFIER",
     "MINUS", "MOD_LIST", "MULTIPLICATION", "NAME", "NAME_TYPE_INIT", "NEW", "NOT", "OP", "PACKAGE", "PARAMETER", "PARAMETER_LIST", "PLUS",
-    "OR", "POST_DEC", "POST_INC", "PRE_DEC", "PRE_INC", "RELATION", "RETURN", "SET", "SWITCH", "SWITCH_BLOCK", "THROW", "TRY", "TYPE", "VAR", "VAR_LIST", "VECTOR", "WHILE",
+    "OR", "POST_DEC", "POST_INC", "PRE_DEC", "PRE_INC", "RELATION", "RETURN", "SET", "SHIFT", "SWITCH", "SWITCH_BLOCK", "THROW", "TRY", "TYPE", "VAR", "VAR_LIST", "VECTOR", "WHILE",
 ]);
 
 const RECOVERY_FIELDS = ["diagnostics", "errors", "recovered", "recovery"];

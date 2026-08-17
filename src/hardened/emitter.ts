@@ -221,6 +221,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             "*": ts.SyntaxKind.AsteriskToken,
             "/": ts.SyntaxKind.SlashToken,
             "%": ts.SyntaxKind.PercentToken,
+            "&": ts.SyntaxKind.AmpersandToken,
+            "|": ts.SyntaxKind.BarToken,
+            "^": ts.SyntaxKind.CaretToken,
+            "<<": ts.SyntaxKind.LessThanLessThanToken,
+            ">>": ts.SyntaxKind.GreaterThanGreaterThanToken,
+            ">>>": ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken,
         };
         const token = tokens[expression.operator];
         if (token === undefined) {
@@ -235,6 +241,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             "+": ts.SyntaxKind.PlusToken,
             "-": ts.SyntaxKind.MinusToken,
             "!": ts.SyntaxKind.ExclamationToken,
+            "~": ts.SyntaxKind.TildeToken,
         };
         const token = tokens[expression.operator];
         if (token === undefined) {

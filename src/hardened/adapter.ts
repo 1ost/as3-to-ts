@@ -663,6 +663,27 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             kind: "runtimeType" as "runtimeType", operator, value, targetType, targetKind, runtimeName, resultType,
         });
     }
+    if (node.kind === "B_AND" || node.kind === "B_OR" || node.kind === "B_XOR" || node.kind === "SHIFT") {
+        if (node.children.length !== 3 || node.children[1]!.kind !== "OP") {
+            fail("HARDENED_BITWISE_SHAPE", "bitwise expression requires exactly one operator and two operands", node);
+        }
+        const operator = requiredText(node.children[1]!, "bitwise operator");
+        const admitted = new Set(["&", "|", "^", "<<", ">>", ">>>"]);
+        if (!admitted.has(operator)) fail("HARDENED_BITWISE_OPERATOR", "bitwise operator is unsupported", node.children[1]!);
+        const left = parseExpression(node.children[0]!, context, true);
+        const right = parseExpression(node.children[2]!, context, true);
+        const numeric = (type: SemanticType): boolean => ["Number", "int", "uint"].includes(type.sourceName)
+            && type.emittedName === "number";
+        if (!numeric(assignmentType(left, context, node.children[0]!))
+            || !numeric(assignmentType(right, context, node.children[2]!))) {
+            fail("HARDENED_BITWISE_TYPE", "bitwise operands require proven numeric values", node);
+        }
+        const resultType = semanticType(node, operator === ">>>" ? "uint" : "int", "number");
+        return Object.assign(identity(node), {
+            kind: "binary" as "binary",
+            operator: operator as "&" | "|" | "^" | "<<" | ">>" | ">>>", left, right, resultType,
+        });
+    }
     if (node.kind === "RELATION" || node.kind === "EQUALITY" || node.kind === "AND" || node.kind === "OR"
         || node.kind === "ADD" || node.kind === "MULTIPLICATION") {
         if (node.children.length !== 3 || node.children[1]!.kind !== "OP") {
@@ -704,22 +725,26 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             left, right, resultType,
         });
     }
-    if (node.kind === "PLUS" || node.kind === "MINUS" || node.kind === "NOT") {
+    if (node.kind === "PLUS" || node.kind === "MINUS" || node.kind === "NOT" || node.kind === "B_NOT") {
         if (node.children.length !== 1) {
             fail("HARDENED_UNARY_SHAPE", "unary expression requires exactly one operand", node);
         }
         const operand = parseExpression(node.children[0]!, context, true);
         const operandType = assignmentType(operand, context, node.children[0]!);
-        const operator = node.kind === "PLUS" ? "+" : node.kind === "MINUS" ? "-" : "!";
+        const operator = node.kind === "PLUS" ? "+" : node.kind === "MINUS" ? "-" : node.kind === "NOT" ? "!" : "~";
         if (operator === "!" && operandType.sourceName !== "Boolean") {
             fail("HARDENED_UNARY_BOOLEAN", "logical negation requires exact Boolean input", node);
         }
-        if (operator !== "!" && operandType.sourceName !== "Number") {
+        if (operator === "~" && (!["Number", "int", "uint"].includes(operandType.sourceName)
+            || operandType.emittedName !== "number")) {
+            fail("HARDENED_UNARY_BITWISE", "bitwise complement requires a proven numeric input", node);
+        }
+        if (operator !== "!" && operator !== "~" && operandType.sourceName !== "Number") {
             fail("HARDENED_UNARY_NUMBER", "numeric unary operators require exact Number input", node);
         }
         return Object.assign(identity(node), {
-            kind: "unary" as "unary", operator: operator as "+" | "-" | "!", operand,
-            resultType: operandType,
+            kind: "unary" as "unary", operator: operator as "+" | "-" | "!" | "~", operand,
+            resultType: operator === "~" ? semanticType(node, "int", "number") : operandType,
         });
     }
     if (node.kind === "ENCAPSULATED") {

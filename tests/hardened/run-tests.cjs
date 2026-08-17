@@ -356,6 +356,16 @@ function buildTree(options = {}) {
             n("FINALLY", null, [n("BLOCK", null, [assignment(n("IDENTIFIER", "b"), n("LITERAL", '"done"'))])]),
         ];
     }
+    if (options.bitwiseWorkpack || options.badBitwiseType) {
+        const left = options.badBitwiseType ? n("LITERAL", '"bad"') : n("LITERAL", "1");
+        onEventBody = [
+            localDeclaration("VAR_LIST", "flags", "int", binary("B_OR", left, "|", n("LITERAL", "2"))),
+            localDeclaration("VAR_LIST", "shifted", "uint",
+                binary("SHIFT", n("IDENTIFIER", "flags"), ">>>", n("LITERAL", "1"))),
+            localDeclaration("VAR_LIST", "inverted", "int", n("B_NOT", null, [n("IDENTIFIER", "flags")])),
+            n("RETURN"),
+        ];
+    }
     const members = [
         field,
         constructor(body),
@@ -734,8 +744,15 @@ function main() {
     assert.match(tryOutput.code, /finally \{/);
     assertErrorCode(() => adapt(api, buildTree({ badCatchType: true }), authority), "HARDENED_CATCH_TYPE");
     assertErrorCode(() => adapt(api, buildTree({ strayCatch: true }), authority), "HARDENED_TRY_SEQUENCE");
+    const bitwiseProgram = adapt(api, buildTree({ bitwiseWorkpack: true }), authority);
+    const bitwiseOutput = api.emitSemanticProgram(bitwiseProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(bitwiseOutput.code, /var flags: number = 1 \| 2;/);
+    assert.match(bitwiseOutput.code, /var shifted: number = flags >>> 1;/);
+    assert.match(bitwiseOutput.code, /var inverted: number = ~flags;/);
+    assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
-        nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code]);
+        nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
+        bitwiseOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

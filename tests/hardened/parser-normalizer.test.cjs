@@ -180,6 +180,7 @@ try {
         "        public function flow(value:Number):void { var active:Boolean = true; switch (value) { case 1: value = 2; break; default: value = 3; } do { active = false; } while (active); throw \"done\"; }",
         "        public function iteration():void { var values:Vector.<int> = new Vector.<int>(); for (var i:Number = 0; i < 2; i++) { values.push(int(i)); } for each (var item:int in values) { values.indexOf(item); } }",
         "        public function guarded():void { try { throw \"bad\"; } catch (error:Error) { throw error; } finally { status = \"done\"; } }",
+        "        public function bits():void { var flags:int = 1 | 2; var shifted:uint = flags >>> 1; var inverted:int = ~flags; }",
         "    }",
         "}",
         "",
@@ -237,7 +238,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -284,6 +285,11 @@ try {
     assert.equal(semantic.declaration.members[10].body[0].catchClause.type.sourceName, "Error");
     assert.equal(semantic.declaration.members[10].body[0].finallyStatements.length, 1);
     ["TRY", "CATCH", "FINALLY", "THROW"].forEach(kind =>
+        assert.ok(normalized.nodes.some(node => node.kind === kind), `real parser preserves ${kind}`));
+    assert.equal(semantic.declaration.members[11].body[0].declarations[0].initializer.operator, "|");
+    assert.equal(semantic.declaration.members[11].body[1].declarations[0].initializer.operator, ">>>");
+    assert.equal(semantic.declaration.members[11].body[2].declarations[0].initializer.operator, "~");
+    ["B_OR", "SHIFT", "B_NOT"].forEach(kind =>
         assert.ok(normalized.nodes.some(node => node.kind === kind), `real parser preserves ${kind}`));
 
     const vectorSource = "package vectors { public class VectorFixture { public var values:Vector.<int> = new Vector.<int>(2,true); public function VectorFixture(){ values[0] = 3; values.push(4); var copy:Vector.<int> = Vector.<int>([1,2]); var objectValue:Object = values as Object; var matches:Boolean = values is Vector.<int>; } } }";

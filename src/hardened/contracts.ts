@@ -208,7 +208,7 @@ export interface NewExpression extends SemanticIdentity {
 export interface BinaryExpression extends SemanticIdentity {
     kind: "binary";
     operator: "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||" |
-        "+" | "-" | "*" | "/" | "%";
+        "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>";
     left: SemanticExpression;
     right: SemanticExpression;
     resultType: SemanticType;
@@ -216,7 +216,7 @@ export interface BinaryExpression extends SemanticIdentity {
 
 export interface UnaryExpression extends SemanticIdentity {
     kind: "unary";
-    operator: "+" | "-" | "!";
+    operator: "+" | "-" | "!" | "~";
     operand: SemanticExpression;
     resultType: SemanticType;
 }
