@@ -135,7 +135,8 @@ function parseAssignmentExpression(parser:AS3Parser):Node {
     || tokIs(parser, Operators.TIMES_EQUAL) || tokIs(parser, Operators.DIVIDED_EQUAL)
     || tokIs(parser, Operators.MODULO_EQUAL) || tokIs(parser, Operators.AND_EQUAL) || tokIs(parser, Operators.OR_EQUAL)
     || tokIs(parser, Operators.XOR_EQUAL) || tokIs(parser, Operators.DOUBLE_SHIFT_LEFT_EQUAL)
-    || tokIs(parser, Operators.DOUBLE_SHIFT_RIGHT_EQUAL) || tokIs(parser, Operators.TRIPLE_SHIFT_RIGHT_EQUAL)) {
+    || tokIs(parser, Operators.DOUBLE_SHIFT_RIGHT_EQUAL) || tokIs(parser, Operators.TRIPLE_SHIFT_RIGHT_EQUAL)
+    || tokIs(parser, Operators.LOGICAL_AND_EQUAL) || tokIs(parser, Operators.LOGICAL_OR_EQUAL)) {
         result.children.push(createNode(NodeKind.OP, {tok: parser.tok}));
         nextToken(parser, true);
         result.children.push(parseExpression(parser));

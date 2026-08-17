@@ -956,7 +956,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             assertAssignmentCompatible(targetType, valueType, node);
         } else {
             const binaryOperator = operator.slice(0, -1);
-            if (!["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>", ">>>"].includes(binaryOperator)) {
+            if (!["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>", ">>>", "&&", "||"].includes(binaryOperator)) {
                 fail("HARDENED_ASSIGNMENT_OPERATOR", "compound assignment operator is unsupported", node.children[1]!);
             }
             if (target.kind === "index" || (target.kind === "member" && target.target.kind !== "this")) {
@@ -966,16 +966,19 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 && type.emittedName === "number";
             const stringAdd = binaryOperator === "+" && targetType.sourceName === "String"
                 && valueType.sourceName === "String";
-            if (!stringAdd && (!numeric(targetType) || !numeric(valueType))) {
+            const logical = (binaryOperator === "&&" || binaryOperator === "||")
+                && targetType.sourceName === "Boolean" && valueType.sourceName === "Boolean";
+            if (!stringAdd && !logical && (!numeric(targetType) || !numeric(valueType))) {
                 fail("HARDENED_COMPOUND_TYPE", "compound assignment requires exact String addition or proven numeric operands", node);
             }
             const bitwise = ["&", "|", "^", "<<", ">>", ">>>"].includes(binaryOperator);
             const resultType = stringAdd ? semanticType(node, "String", "string")
+                : logical ? semanticType(node, "Boolean", "boolean")
                 : bitwise ? semanticType(node, binaryOperator === ">>>" ? "uint" : "int", "number")
                     : semanticType(node, "Number", "number");
             const binary: SemanticExpression = Object.assign(identity(node), {
                 kind: "binary" as "binary",
-                operator: binaryOperator as "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>",
+                operator: binaryOperator as "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>" | "&&" | "||",
                 left: target, right: value, resultType,
             });
             value = (targetType.sourceName === "int" || targetType.sourceName === "uint")

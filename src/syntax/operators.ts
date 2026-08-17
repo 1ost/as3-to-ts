@@ -1,6 +1,7 @@
 export let AND = '&&';
 export let AND_AS2 = 'and';
 export let AND_EQUAL = '&=';
+export let LOGICAL_AND_EQUAL = '&&=';
 export let AT = '@';
 export let B_AND = '&';
 export let B_OR = '|';
@@ -29,6 +30,7 @@ export let LEFT_PARENTHESIS = '(';
 export let LEFT_SQUARE_BRACKET = '[';
 export let LOGICAL_OR = '||';
 export let LOGICAL_OR_AS2 = 'or';
+export let LOGICAL_OR_EQUAL = '||=';
 export let MINUS = '-';
 export let MINUS_EQUAL = '-=';
 export let MODULO = '%';

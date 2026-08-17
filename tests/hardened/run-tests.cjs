@@ -375,11 +375,13 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
-    if (options.compoundWorkpack) {
+    if (options.compoundWorkpack || options.badLogicalCompound) {
         onEventBody = [
             localDeclaration("VAR_LIST", "flags", "int", n("LITERAL", "1")),
+            localDeclaration("VAR_LIST", "active", "Boolean", n("LITERAL", "true")),
             assignment(n("IDENTIFIER", "flags"), n("LITERAL", "2"), "+="),
             assignment(n("IDENTIFIER", "flags"), n("LITERAL", "1"), ">>>="),
+            assignment(n("IDENTIFIER", "active"), n("LITERAL", options.badLogicalCompound ? "1" : "false"), "&&="),
             n("RETURN"),
         ];
     }
@@ -824,6 +826,8 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(compoundOutput.code, /flags = __as3Int\(flags \+ 2\);/);
     assert.match(compoundOutput.code, /flags = __as3Int\(flags >>> 1\);/);
+    assert.match(compoundOutput.code, /active = active && false;/);
+    assertErrorCode(() => adapt(api, buildTree({ badLogicalCompound: true }), authority), "HARDENED_COMPOUND_TYPE");
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
