@@ -151,15 +151,17 @@ function buildTree(options = {}) {
             n("INIT", null, [construct("Sprite", options.newArguments || [])]),
         ]));
     }
-    if (options.vectorWorkpack) {
+    if (options.vectorWorkpack || options.vectorRuntimeWorkpack) {
         field.children.push(n("NAME_TYPE_INIT", null, [
             n("NAME", "values"), vectorType("int"),
             n("INIT", null, [n("NEW", null, [call(vectorType("int"), [n("LITERAL", "2"), n("LITERAL", "false")])])]),
         ]));
-        body.push(
-            assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "values"), n("LITERAL", "0")]), n("LITERAL", "4")),
-            call(dot(n("IDENTIFIER", "values"), "push"), [n("LITERAL", "5")]),
-        );
+        if (options.vectorWorkpack) {
+            body.push(
+                assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "values"), n("LITERAL", "0")]), n("LITERAL", "4")),
+                call(dot(n("IDENTIFIER", "values"), "push"), [n("LITERAL", "5")]),
+            );
+        }
     }
     let onEventBody = options.returnValue ? [n("RETURN", null, [n("LITERAL", "1")])] : [n("RETURN")];
     if (options.assignment) {
@@ -221,6 +223,27 @@ function buildTree(options = {}) {
                     call(vectorType("int"), [n("ARRAY", null, [n("LITERAL", "1"), n("LITERAL", "2")])]),
                 ]),
             ])]),
+            n("RETURN"),
+        ];
+    }
+    if (options.runtimeTypeWorkpack) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "cast", "Event",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "Event")])),
+            localDeclaration("VAR_LIST", "matches", "Boolean",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("OP", "is"), n("IDENTIFIER", "Event")])),
+            n("RETURN"),
+        ];
+    }
+    if (options.vectorRuntimeWorkpack) {
+        onEventBody = [
+            n("VAR_LIST", null, [n("NAME_TYPE_INIT", null, [
+                n("NAME", "castVector"), vectorType("int"), n("INIT", null, [
+                    n("RELATION", null, [n("IDENTIFIER", "values"), n("AS", "as"), vectorType("int")]),
+                ]),
+            ])]),
+            localDeclaration("VAR_LIST", "matchesVector", "Boolean",
+                n("RELATION", null, [n("IDENTIFIER", "values"), n("OP", "is"), vectorType("int")])),
             n("RETURN"),
         ];
     }
@@ -530,6 +553,15 @@ function main() {
     assert.match(vectorOutput.code, /this\.values\[0\] = 4;/);
     assert.match(vectorOutput.code, /this\.values\.push\(5\);/);
     assert.match(vectorOutput.code, /var copy: __as3Vector<number> = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
+    const runtimeTypeProgram = adapt(api, buildTree({ runtimeTypeWorkpack: true }), authority);
+    const runtimeTypeOutput = api.emitSemanticProgram(runtimeTypeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(runtimeTypeOutput.code, /as3As as __as3As/);
+    assert.match(runtimeTypeOutput.code, /var cast: Event = __as3As\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
+    assert.match(runtimeTypeOutput.code, /var matches: boolean = __as3Is\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
+    const vectorRuntimeProgram = adapt(api, buildTree({ vectorRuntimeWorkpack: true }), authority);
+    const vectorRuntimeOutput = api.emitSemanticProgram(vectorRuntimeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorRuntimeOutput.code, /__as3As\(this\.values, __as3VectorType\(__as3VectorPolicies\.int\)\)/);
+    assert.match(vectorRuntimeOutput.code, /__as3Is\(this\.values, __as3VectorType\(__as3VectorPolicies\.int\)\)/);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

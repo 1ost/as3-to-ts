@@ -150,6 +150,16 @@ export interface VectorConversionExpression extends SemanticIdentity {
     source: SemanticExpression;
 }
 
+export interface RuntimeTypeExpression extends SemanticIdentity {
+    kind: "runtimeType";
+    operator: "as" | "is";
+    value: SemanticExpression;
+    targetType: SemanticType;
+    targetKind: "primitive" | "class" | "vector";
+    runtimeName: string;
+    resultType: SemanticType;
+}
+
 export type LocalTypeModule = "application" | "bootstrap";
 export type LocalTypeKind = "class" | "interface" | "package";
 
@@ -229,7 +239,8 @@ export interface UpdateExpression extends SemanticIdentity {
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
-    ConditionalExpression | UpdateExpression | ArrayExpression | IndexExpression | VectorConversionExpression;
+    ConditionalExpression | UpdateExpression | ArrayExpression | IndexExpression | VectorConversionExpression |
+    RuntimeTypeExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";

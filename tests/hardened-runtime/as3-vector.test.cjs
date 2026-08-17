@@ -20,7 +20,8 @@ fs.writeFileSync(CONFIG, JSON.stringify({
 childProcess.execFileSync(process.execPath,
     [path.join(ROOT, "node_modules/typescript-4-9/bin/tsc"), "-p", CONFIG], { cwd: ROOT, stdio: "inherit" });
 const runtime = require(path.join(OUTPUT, "hardened-runtime/AS3Vector.js"));
-const { AS3Vector, AS3VectorPolicies, as3VectorReference } = runtime;
+const { AS3Vector, AS3VectorPolicies, as3VectorReference, as3VectorType } = runtime;
+const { as3As, as3Is } = require(path.join(OUTPUT, "hardened-runtime/AS3Type.js"));
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
 
@@ -80,4 +81,14 @@ test("callback APIs expose the proxied vector identity", () => {
     assert.deepEqual([...vector.map(value => value * 2)], [2, 4, 6]);
     assert.equal(vector.every(value => value > 0), true);
     assert.equal(vector.some(value => value === 2), true);
+});
+
+test("specialized Vector runtime types preserve element policy identity", () => {
+    const ints = AS3Vector.from(AS3VectorPolicies.int, [1, 2]);
+    const uints = AS3Vector.from(AS3VectorPolicies.uint, [1, 2]);
+    const intType = as3VectorType(AS3VectorPolicies.int);
+    assert.equal(as3Is(ints, intType), true);
+    assert.equal(as3Is(uints, intType), false);
+    assert.equal(as3As(ints, intType), ints);
+    assert.equal(as3As([], intType), null);
 });

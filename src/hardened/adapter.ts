@@ -56,6 +56,7 @@ interface LocalHeader {
 
 interface AdapterContext {
     className: string;
+    classQualifiedName: string;
     extendsType: SemanticType | null;
     importsByLocal: { [name: string]: SemanticImport };
     mappingsBySource: { [name: string]: CapabilityMapping };
@@ -84,6 +85,8 @@ const PRIMITIVE_TYPES: { [source: string]: string } = {
     Number: "number",
     Object: "unknown",
     String: "string",
+    Array: "Array",
+    Class: "Function",
     int: "number",
     uint: "number",
     void: "void",
@@ -432,6 +435,7 @@ function implicitThisMember(node: TreeNode, name: string, capabilitySource: stri
 }
 
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "this") return semanticType(node, context.className, context.className);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
         return context.locals[expression.name]!.type;
     }
@@ -479,6 +483,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         return expression.resultType;
     }
     if (expression.kind === "vectorConversion") return expression.vectorType;
+    if (expression.kind === "runtimeType") return expression.resultType;
     if (expression.kind === "assignment") {
         return assignmentTargetType(expression.target, context, node);
     }
@@ -608,6 +613,44 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             sourceType = semanticType(nameNode, name, name);
         }
         return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
+    }
+    if (node.kind === "RELATION" && node.children.length === 3
+        && (node.children[1]!.kind === "AS" || (node.children[1]!.kind === "OP"
+            && ["as", "is"].includes(String(node.children[1]!.text))))) {
+        const operatorText = requiredText(node.children[1]!, "runtime type operator");
+        if (operatorText !== "as" && operatorText !== "is") {
+            fail("HARDENED_RUNTIME_TYPE_OPERATOR", "runtime type expression requires as or is", node.children[1]!);
+        }
+        const operator = operatorText as "as" | "is";
+        const value = parseExpression(node.children[0]!, context, true);
+        const rawTarget = node.children[2]!;
+        let targetType: SemanticType;
+        if (rawTarget.kind === "VECTOR") {
+            targetType = parseType(rawTarget, context, false);
+        } else if (rawTarget.kind === "IDENTIFIER") {
+            targetType = parseType(Object.assign({}, rawTarget, { kind: "TYPE" }), context, false);
+        } else {
+            fail("HARDENED_RUNTIME_TYPE_TARGET", "runtime type target must be a named class, primitive, or Vector", rawTarget);
+        }
+        const runtimePrimitives = new Set(["int", "uint", "Number", "Boolean", "String", "Object", "Array", "Class", "Function"]);
+        let targetKind: "primitive" | "class" | "vector";
+        let runtimeName = targetType.sourceName;
+        if (targetType.emittedName === "AS3Vector") {
+            targetKind = "vector";
+        } else if (runtimePrimitives.has(targetType.sourceName)) {
+            targetKind = "primitive";
+        } else if (targetType.sourceName === context.className
+            || context.importsByLocal[targetType.sourceName]?.runtimeConstructible) {
+            targetKind = "class";
+            runtimeName = targetType.sourceName === context.className ? context.classQualifiedName
+                : context.importsByLocal[targetType.sourceName]!.sourceQualifiedName;
+        } else {
+            fail("HARDENED_RUNTIME_TYPE_IDENTITY", "runtime type target lacks a proven class or primitive identity", rawTarget);
+        }
+        const resultType = operator === "is" ? semanticType(node, "Boolean", "boolean") : targetType;
+        return Object.assign(identity(node), {
+            kind: "runtimeType" as "runtimeType", operator, value, targetType, targetKind, runtimeName, resultType,
+        });
     }
     if (node.kind === "RELATION" || node.kind === "EQUALITY" || node.kind === "AND" || node.kind === "OR"
         || node.kind === "ADD" || node.kind === "MULTIPLICATION") {
@@ -1244,6 +1287,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal);
     const placeholder: AdapterContext = {
         className,
+        classQualifiedName: packageName === "" ? className : `${packageName}.${className}`,
         extendsType: null,
         importsByLocal: parsedImports.importsByLocal,
         mappingsBySource: authority.typeMappingsBySource,

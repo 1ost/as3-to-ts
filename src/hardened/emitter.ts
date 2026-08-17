@@ -105,6 +105,22 @@ function vectorPolicyNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
     ]);
 }
 
+function runtimeTypeTokenNode(expression: Extract<SemanticExpression, { kind: "runtimeType" }>,
+    ts: TypeScriptCompilerApi): any {
+    if (expression.targetKind === "primitive") {
+        return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3Types"),
+            expression.targetType.sourceName);
+    }
+    if (expression.targetKind === "vector") {
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3VectorType"), undefined,
+            [vectorPolicyNode(expression.targetType, ts)]);
+    }
+    return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ClassType"), undefined, [
+        ts.factory.createStringLiteral(expression.runtimeName),
+        ts.factory.createIdentifier(expression.targetType.emittedName),
+    ]);
+}
+
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
     if (expression.kind === "literal") {
         if (expression.value === null) {
@@ -148,6 +164,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createCallExpression(
             ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3Vector"), "from"),
             [vectorElementTypeNode(element, ts)], [vectorPolicyNode(expression.vectorType, ts), expressionNode(expression.source, ts)],
+        );
+    }
+    if (expression.kind === "runtimeType") {
+        return ts.factory.createCallExpression(
+            ts.factory.createIdentifier(expression.operator === "as" ? "__as3As" : "__as3Is"), undefined,
+            [expressionNode(expression.value, ts), runtimeTypeTokenNode(expression, ts)],
         );
     }
     if (expression.kind === "assignment") {
@@ -288,6 +310,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.index);
         } else if (expression.kind === "vectorConversion") {
             inspectExpression(expression.source);
+        } else if (expression.kind === "runtimeType") {
+            inspectExpression(expression.value);
         } else if (expression.kind === "binary") {
             inspectExpression(expression.left);
             inspectExpression(expression.right);
@@ -403,6 +427,7 @@ function programUsesVector(program: SemanticProgram): boolean {
     const visitExpression = (expression: SemanticExpression): boolean => {
         if (expression.kind === "new") return visitType(expression.sourceType) || expression.arguments.some(visitExpression);
         if (expression.kind === "vectorConversion") return true;
+        if (expression.kind === "runtimeType") return visitType(expression.targetType) || visitExpression(expression.value);
         if (expression.kind === "array") return expression.elements.some(visitExpression);
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
@@ -440,12 +465,36 @@ function programUsesVector(program: SemanticProgram): boolean {
 function vectorRuntimeImport(ts: TypeScriptCompilerApi): any {
     const names = [
         ["AS3Vector", "__as3Vector"], ["AS3VectorPolicies", "__as3VectorPolicies"],
-        ["as3VectorReference", "__as3VectorReference"],
+        ["as3VectorReference", "__as3VectorReference"], ["as3VectorType", "__as3VectorType"],
     ].map(([exported, local]) => ts.factory.createImportSpecifier(false,
         ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!)));
     return ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports(names)),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Vector"), undefined);
+}
+
+function programUsesRuntimeType(program: SemanticProgram): boolean {
+    const seen = new WeakSet<object>();
+    const visit = (value: unknown): boolean => {
+        if (typeof value !== "object" || value === null) return false;
+        if (seen.has(value)) return false;
+        seen.add(value);
+        const record = value as { [key: string]: unknown };
+        if (record.kind === "runtimeType") return true;
+        return Object.keys(record).some(key => visit(record[key]));
+    };
+    return visit(program);
+}
+
+function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
+    const names = [
+        ["AS3Types", "__as3Types"], ["as3As", "__as3As"], ["as3Is", "__as3Is"],
+        ["as3ClassType", "__as3ClassType"],
+    ].map(([exported, local]) => ts.factory.createImportSpecifier(false,
+        ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!)));
+    return ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports(names)),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Type"), undefined);
 }
 
 export function emitSemanticProgram(program: SemanticProgram, options: EmitterOptions): EmittedTypeScript {
@@ -456,6 +505,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     }
     const imports = program.imports.map((item) => importNode(item, ts));
     if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
+    if (programUsesRuntimeType(program)) imports.push(runtimeTypeImport(ts));
     const boundMethods = boundMethodNames(program);
     if (boundMethods.length > 0 && !program.declaration.members.some((member) => member.kind === "constructor")) {
         throw new HardenedSemanticError("HARDENED_METHOD_CLOSURE_CONSTRUCTOR",

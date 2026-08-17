@@ -1,3 +1,5 @@
+import { AS3TypeToken, as3PredicateType } from "./AS3Type";
+
 export interface AS3VectorElementPolicy<T> {
     readonly name: string;
     defaultValue(): T;
@@ -8,6 +10,8 @@ type MutableVector<T> = AS3Vector<T> & { [index: number]: T };
 
 const MAX_VECTOR_LENGTH = 0x00ffffff;
 const ARRAY_INDEX = /^(?:0|[1-9][0-9]*)$/;
+const REFERENCE_POLICIES = new WeakMap<Function, AS3VectorElementPolicy<object | null>>();
+const VECTOR_TYPES = new WeakMap<object, AS3TypeToken<AS3Vector<unknown>>>();
 
 function range(message: string): never {
     throw new RangeError(message);
@@ -45,7 +49,12 @@ export function as3VectorReference<T extends object>(name: string,
     if (typeof name !== "string" || name.length === 0 || typeof constructor !== "function") {
         throw new TypeError("AS3 Vector reference policy requires a name and constructor");
     }
-    return Object.freeze({
+    const cached = REFERENCE_POLICIES.get(constructor);
+    if (cached) {
+        if (cached.name !== name) throw new TypeError("AS3 Vector reference constructor has a different identity");
+        return cached as AS3VectorElementPolicy<T | null>;
+    }
+    const created = Object.freeze({
         name,
         defaultValue: () => null,
         coerce(value: unknown): T | null {
@@ -56,6 +65,17 @@ export function as3VectorReference<T extends object>(name: string,
             return value;
         },
     });
+    REFERENCE_POLICIES.set(constructor, created as AS3VectorElementPolicy<object | null>);
+    return created;
+}
+
+export function as3VectorType<T>(policy: AS3VectorElementPolicy<T>): AS3TypeToken<AS3Vector<T>> {
+    const cached = VECTOR_TYPES.get(policy as object);
+    if (cached) return cached as AS3TypeToken<AS3Vector<T>>;
+    const created = as3PredicateType<AS3Vector<T>>(`Vector.<${policy.name}>`,
+        (value): value is AS3Vector<T> => value instanceof AS3Vector && value.elementPolicy === policy);
+    VECTOR_TYPES.set(policy as object, created as AS3TypeToken<AS3Vector<unknown>>);
+    return created;
 }
 
 export class AS3Vector<T> implements Iterable<T> {
@@ -130,6 +150,7 @@ export class AS3Vector<T> implements Iterable<T> {
 
     public get fixed(): boolean { return this._fixed; }
     public set fixed(value: boolean) { this._fixed = Boolean(value); }
+    public get elementPolicy(): AS3VectorElementPolicy<T> { return this._policy; }
 
     public push(...items: unknown[]): number {
         const values = items.map(value => this._policy.coerce(value));

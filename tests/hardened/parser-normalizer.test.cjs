@@ -269,10 +269,10 @@ try {
     assert.equal(semantic.declaration.members[7].body[5].expression.kind, "assignment");
     assert.equal(semantic.declaration.members[7].body[5].expression.target.kind, "member");
 
-    const vectorSource = "package vectors { public class VectorFixture { public var values:Vector.<int> = new Vector.<int>(2,true); public function VectorFixture(){ values[0] = 3; values.push(4); var copy:Vector.<int> = Vector.<int>([1,2]); } } }";
+    const vectorSource = "package vectors { public class VectorFixture { public var values:Vector.<int> = new Vector.<int>(2,true); public function VectorFixture(){ values[0] = 3; values.push(4); var copy:Vector.<int> = Vector.<int>([1,2]); var objectValue:Object = values as Object; var matches:Boolean = values is Vector.<int>; } } }";
     const vectorTree = built.parse("fixtures/VectorFixture.as", vectorSource);
     const vectorNormalized = built.normalizer.normalizeParserAst(vectorTree, vectorSource, sha256);
-    ["VECTOR", "ARRAY", "ARRAY_ACCESSOR"].forEach(kind =>
+    ["VECTOR", "ARRAY", "ARRAY_ACCESSOR", "AS"].forEach(kind =>
         assert.ok(vectorNormalized.nodes.some(node => node.kind === kind), `real parser preserves ${kind}`));
     const vectorSemantic = built.adapter.adaptNormalizedParserAst(
         vectorNormalized, authority(built.ledger), vectorSource, sha256,
