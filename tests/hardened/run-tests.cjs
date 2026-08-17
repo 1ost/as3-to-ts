@@ -74,6 +74,42 @@ function type(name) {
     return n("TYPE", name);
 }
 
+function assertGeneratedRuntimeTypechecks(outputs) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "as3-generated-runtime-"));
+    try {
+        const runtime = path.join(root, "runtime");
+        const stubs = path.join(root, "stubs");
+        const generated = path.join(root, "generated");
+        fs.mkdirSync(runtime, { recursive: true });
+        fs.mkdirSync(stubs, { recursive: true });
+        fs.mkdirSync(generated, { recursive: true });
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Type.ts"), path.join(runtime, "AS3Type.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Vector.ts"), path.join(runtime, "AS3Vector.ts"));
+        fs.writeFileSync(path.join(stubs, "Sprite.ts"),
+            "export class Sprite { public addEventListener(_type:string,_listener:Function):void {} }\n", "utf8");
+        fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
+        outputs.forEach((code, index) => fs.writeFileSync(path.join(generated, `Fixture${index}.ts`), code, "utf8"));
+        const config = path.join(root, "tsconfig.json");
+        fs.writeFileSync(config, JSON.stringify({
+            compilerOptions: {
+                target: "ES2022", module: "CommonJS", moduleResolution: "Node", strict: true,
+                strictNullChecks: false, skipLibCheck: true, noEmit: true, baseUrl: root,
+                paths: {
+                    "@bleach/as3-runtime/*": ["runtime/*"],
+                    "laya/flash/display/Sprite": ["stubs/Sprite"],
+                    "laya/flash/events/Event": ["stubs/Event"],
+                },
+            },
+            include: ["generated/**/*.ts", "runtime/**/*.ts", "stubs/**/*.ts"],
+        }), "utf8");
+        childProcess.execFileSync(process.execPath,
+            [path.join(requiredEnvironmentPath("HARDENED_TYPESCRIPT_PATH", "directory"), "bin/tsc"), "-p", config],
+            { cwd: root, stdio: "inherit" });
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+}
+
 function vectorType(name) {
     return n("VECTOR", null, [type(name)]);
 }
@@ -576,6 +612,8 @@ function main() {
     const nestedVectorOutput = api.emitSemanticProgram(nestedVectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(nestedVectorOutput.code,
         /private matrix: __as3Vector<__as3Vector<number> \| null> = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), 1\);/);
+    assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
+        nestedVectorOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

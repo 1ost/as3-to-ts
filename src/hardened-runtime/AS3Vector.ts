@@ -99,7 +99,7 @@ export function as3VectorNested<T>(elementPolicy: AS3VectorElementPolicy<T>):
 }
 
 export class AS3Vector<T> implements Iterable<T> {
-    readonly [index: number]: T;
+    [index: number]: T;
     private readonly _policy: AS3VectorElementPolicy<T>;
     private readonly _values: T[];
     private _fixed: boolean;
