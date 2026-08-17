@@ -127,8 +127,15 @@ export interface CallExpression extends SemanticIdentity {
     capabilityMember: string | null;
 }
 
+export interface AssignmentExpression extends SemanticIdentity {
+    kind: "assignment";
+    operator: "=";
+    target: IdentifierExpression | MemberExpression;
+    value: SemanticExpression;
+}
+
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
-    SuperExpression | MemberExpression | MethodClosureExpression | CallExpression;
+    SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";

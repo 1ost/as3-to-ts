@@ -82,6 +82,10 @@ function call(target, args = []) {
     return n("CALL", null, [target, n("ARGUMENTS", null, args)]);
 }
 
+function assignment(target, value, operator = "=") {
+    return n("ASSIGN", null, [target, n("OP", operator), value]);
+}
+
 function parameter(name, typeName) {
     return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, [n("NAME", name), type(typeName)])]);
 }
@@ -100,8 +104,8 @@ function constructor(body) {
 
 function buildTree(options = {}) {
     const superStatement = call(n("IDENTIFIER", "super"));
-    const closureStatement = call(dot(n("IDENTIFIER", "this"), "addEventListener"), [
-        n("LITERAL", '"ready"'), dot(n("IDENTIFIER", "this"), "onEvent"),
+    const closureStatement = call(n("IDENTIFIER", "addEventListener"), [
+        n("LITERAL", '"ready"'), n("IDENTIFIER", "onEvent"),
     ]);
     const body = options.badSuperOrder ? [closureStatement, superStatement] : [superStatement, closureStatement];
     if (options.unsupportedStatement) {
@@ -112,7 +116,12 @@ function buildTree(options = {}) {
         n("NAME_TYPE_INIT", null, [n("NAME", "a"), type("Number"), n("INIT", null, [n("LITERAL", "1")])]),
         n("NAME_TYPE_INIT", null, [n("NAME", "b"), type("String"), n("INIT", null, [n("LITERAL", '"x"')])]),
     ]);
-    const onEventBody = options.returnValue ? [n("RETURN", null, [n("LITERAL", "1")])] : [n("RETURN")];
+    let onEventBody = options.returnValue ? [n("RETURN", null, [n("LITERAL", "1")])] : [n("RETURN")];
+    if (options.assignment) {
+        const target = n("IDENTIFIER", options.assignmentTarget || "b");
+        const value = n("LITERAL", options.assignmentValue || '"changed"');
+        onEventBody = [assignment(target, value, options.assignmentOperator || "="), n("RETURN")];
+    }
     const members = [
         field,
         constructor(body),
@@ -295,6 +304,21 @@ function main() {
     const constOutput = api.emitSemanticProgram(constProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(constOutput.code, /private readonly a: number = 1;/);
     assert.match(constOutput.code, /private readonly b: string = "x";/);
+    const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
+    const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(assignedOutput.code, /this\.b = "changed";/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ assignment: true, assignmentValue: "1" }), authority),
+        "HARDENED_ASSIGNMENT_TYPE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ assignment: true, assignmentOperator: "+=" }), authority),
+        "HARDENED_ASSIGNMENT_OPERATOR",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ constFields: true, assignment: true }), authority),
+        "HARDENED_ASSIGNMENT_READONLY",
+    );
     const runnable = ts.transpileModule(emitted.code, {
         compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },
     }).outputText;

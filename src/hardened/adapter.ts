@@ -321,8 +321,62 @@ function parseLiteral(node: TreeNode): SemanticExpression {
     return Object.assign(identity(node), { kind: "literal" as "literal", value });
 }
 
+function implicitThisMember(node: TreeNode, name: string, capabilitySource: string | null = null): SemanticExpression {
+    const target = Object.assign(identity(node), { kind: "this" as "this" });
+    return Object.assign(identity(node), {
+        kind: "member" as "member", target, name, capabilitySource,
+    });
+}
+
+function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "identifier" && context.parameters[expression.name]) {
+        return context.parameters[expression.name]!.type;
+    }
+    if (expression.kind === "member" && expression.target.kind === "this" && context.fields[expression.name]) {
+        return context.fields[expression.name]!.type;
+    }
+    if (expression.kind === "literal") {
+        if (expression.value === null) {
+            fail("HARDENED_ASSIGNMENT_NULL", "null assignment requires an explicit nullable source-to-target type policy", node);
+        }
+        const sourceName = typeof expression.value === "number" ? "Number"
+            : typeof expression.value === "string" ? "String" : "Boolean";
+        return Object.assign(identity(node), { sourceName, emittedName: PRIMITIVE_TYPES[sourceName]! });
+    }
+    if (expression.kind === "methodClosure") {
+        return Object.assign(identity(node), { sourceName: "Function", emittedName: "Function" });
+    }
+    fail("HARDENED_ASSIGNMENT_TYPE", "assignment value type is not statically proven in the admitted subset", node);
+}
+
+function assignmentTargetType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "identifier" && context.parameters[expression.name]) {
+        return context.parameters[expression.name]!.type;
+    }
+    if (expression.kind === "member" && expression.target.kind === "this" && context.fields[expression.name]) {
+        const field = context.fields[expression.name]!;
+        if (field.readonly) {
+            fail("HARDENED_ASSIGNMENT_READONLY", "AS3 const fields are not writable", node);
+        }
+        if (field.modifiers.indexOf("static") >= 0) {
+            fail("HARDENED_ASSIGNMENT_STATIC", "static fields require class-qualified lowering", node);
+        }
+        return field.type;
+    }
+    fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable parameter or instance field", node);
+}
+
+function assertAssignmentCompatible(target: SemanticType, value: SemanticType, node: TreeNode): void {
+    if (target.sourceName === "Object" || (target.sourceName === value.sourceName
+        && target.emittedName === value.emittedName)) {
+        return;
+    }
+    fail("HARDENED_ASSIGNMENT_TYPE", "assignment requires exact proven source types; implicit AS3 coercion is held", node);
+}
+
 function parseExpression(node: TreeNode, context: AdapterContext, valuePosition: boolean,
-    allowSuperCall: boolean = false, allowMethodClosure: boolean = true): SemanticExpression {
+    allowSuperCall: boolean = false, allowMethodClosure: boolean = true,
+    allowAssignment: boolean = false): SemanticExpression {
     if (node.kind === "LITERAL") {
         return parseLiteral(node);
     }
@@ -334,10 +388,53 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (name === "super") {
             fail("HARDENED_SUPER_CONTEXT", "super is admitted only as the first zero-argument statement of a derived constructor", node);
         }
-        if (!context.parameters[name] && !context.importsByLocal[name]) {
+        if (context.parameters[name] || context.importsByLocal[name]) {
+            return Object.assign(identity(node), { kind: "identifier" as "identifier", name });
+        }
+        if (context.fields[name]) {
+            return implicitThisMember(node, name);
+        }
+        if (context.methods[name]) {
+            const method = context.methods[name]!;
+            if (valuePosition) {
+                if (!allowMethodClosure) {
+                    fail("HARDENED_METHOD_CLOSURE_INITIALIZER", "method closures in field initializers are not admitted before per-instance binding", node);
+                }
+                if (method.constructor || method.modifiers.indexOf("static") >= 0) {
+                    fail("HARDENED_METHOD_CLOSURE_SCOPE", "only non-static instance methods have admitted AS3 closure identity", node);
+                }
+                return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
+            }
+            if (method.constructor || method.modifiers.indexOf("static") >= 0) {
+                fail("HARDENED_METHOD_INSTANCE_SCOPE", "constructor or static method cannot be resolved through implicit this", node);
+            }
+            return implicitThisMember(node, name);
+        }
+        {
             fail("HARDENED_IDENTIFIER_SCOPE", "identifier is not a parameter or proven import", node);
         }
-        return Object.assign(identity(node), { kind: "identifier" as "identifier", name });
+    }
+    if (node.kind === "ASSIGN") {
+        if (!allowAssignment || valuePosition || node.children.length !== 3 || node.children[1]!.kind !== "OP") {
+            fail("HARDENED_ASSIGNMENT_CONTEXT", "assignment is admitted only as one top-level expression statement", node);
+        }
+        const operator = requiredText(node.children[1]!, "assignment operator");
+        if (operator !== "=") {
+            fail("HARDENED_ASSIGNMENT_OPERATOR", "compound assignment requires an explicit coercion policy", node.children[1]!);
+        }
+        const target = parseExpression(node.children[0]!, context, false);
+        if (target.kind !== "identifier" && target.kind !== "member") {
+            fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable lvalue", node.children[0]!);
+        }
+        const value = parseExpression(node.children[2]!, context, true);
+        assertAssignmentCompatible(
+            assignmentTargetType(target, context, node.children[0]!),
+            assignmentType(value, context, node.children[2]!),
+            node,
+        );
+        return Object.assign(identity(node), {
+            kind: "assignment" as "assignment", operator: "=" as "=", target, value,
+        });
     }
     if (node.kind === "DOT") {
         if (node.children.length !== 2 || node.children[1]!.kind !== "LITERAL") {
@@ -389,7 +486,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             callee = Object.assign(identity(rawCallee), { kind: "super" as "super" });
         } else {
-            callee = parseExpression(rawCallee, context, false);
+            if (rawCallee.kind === "IDENTIFIER" && typeof rawCallee.text === "string"
+                && !context.parameters[rawCallee.text] && !context.importsByLocal[rawCallee.text]
+                && !context.fields[rawCallee.text] && !context.methods[rawCallee.text]
+                && context.baseSourceQName !== null) {
+                const mapping = memberMapping(context, context.baseSourceQName, "call", rawCallee.text, rawCallee);
+                callee = mapping === null ? parseExpression(rawCallee, context, false)
+                    : implicitThisMember(rawCallee, rawCallee.text, mapping.sourceQName);
+            } else {
+                callee = parseExpression(rawCallee, context, false);
+            }
         }
         const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
         let capabilitySource: string | null = null;
@@ -424,10 +530,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
 function parseBlock(block: TreeNode, context: AdapterContext, constructor: boolean,
     derived: boolean): SemanticStatement[] {
     return block.children.map((node, statementIndex): SemanticStatement => {
-        if (node.kind === "CALL") {
+        if (node.kind === "CALL" || node.kind === "ASSIGN") {
             return Object.assign(identity(node), {
                 kind: "expression" as "expression",
-                expression: parseExpression(node, context, false, constructor && derived && statementIndex === 0),
+                expression: parseExpression(node, context, false,
+                    constructor && derived && statementIndex === 0, true, node.kind === "ASSIGN"),
             });
         }
         if (node.kind === "RETURN") {

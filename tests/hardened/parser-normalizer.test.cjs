@@ -149,8 +149,9 @@ try {
         "    import flash.events.Event;",
         "    public class Demo extends Sprite {",
         "        private const label:String = \"ok\";",
+        "        private var status:String = \"old\";",
         "        public function Demo() { super(); }",
-        "        public function onEvent(event:Event):void { return; }",
+        "        public function onEvent(event:Event):void { status = \"changed\"; return; }",
         "    }",
         "}",
         "",
@@ -208,12 +209,17 @@ try {
         ["flash.display.Sprite", "flash.events.Event"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "constructor", "method"]);
+        ["field", "field", "constructor", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
-    assert.equal(semantic.declaration.members[1].body[0].expression.callee.kind, "super");
-    assert.equal(semantic.declaration.members[2].name, "onEvent");
-    assert.equal(semantic.declaration.members[2].parameters[0].name, "event");
+    assert.equal(semantic.declaration.members[1].name, "status");
+    assert.equal(semantic.declaration.members[1].readonly, false);
+    assert.equal(semantic.declaration.members[2].body[0].expression.callee.kind, "super");
+    assert.equal(semantic.declaration.members[3].name, "onEvent");
+    assert.equal(semantic.declaration.members[3].parameters[0].name, "event");
+    assert.equal(semantic.declaration.members[3].body[0].expression.kind, "assignment");
+    assert.equal(semantic.declaration.members[3].body[0].expression.target.kind, "member");
+    assert.equal(semantic.declaration.members[3].body[0].expression.target.name, "status");
 
     const repeat = built.normalizer.normalizeParserAst(built.parse("fixtures/Demo.as", source), source, sha256);
     assert.deepEqual(repeat, normalized, "real parser normalization is byte-for-byte deterministic");
