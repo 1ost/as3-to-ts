@@ -81,6 +81,8 @@ export interface SemanticType extends SemanticIdentity {
 export type SemanticModifier = "public" | "private" | "protected" | "static";
 
 export interface SemanticImport extends SemanticIdentity {
+    authorityKind: "flash" | "local";
+    localNodeId: string | null;
     sourceQualifiedName: string;
     sourceLocalName: string;
     targetModule: string;

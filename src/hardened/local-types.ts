@@ -32,9 +32,9 @@ function exactKeys(value: { [key: string]: unknown }, expected: string[]): boole
 }
 
 function compareUtf8(left: string, right: string): number {
-    const a = Buffer.from(left, "utf8");
-    const b = Buffer.from(right, "utf8");
-    return a.compare(b);
+    // Every admitted identity, path, and schema key is restricted to ASCII,
+    // whose UTF-8 byte order is identical to ECMAScript string order.
+    return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function canonical(value: unknown): string {

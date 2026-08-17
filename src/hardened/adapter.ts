@@ -2,6 +2,8 @@ import {
     CallExpression,
     CapabilityMapping,
     LoadedCapabilityAuthority,
+    LoadedLocalTypeAuthority,
+    LocalTypeMapping,
     NormalizedParserAst,
     NormalizedParserNode,
     SemanticClass,
@@ -23,6 +25,7 @@ import {
     HardenedSemanticError,
 } from "./contracts";
 import { assertLoadedCapabilityAuthority, Sha256Function, targetModuleSpecifier } from "./ledger";
+import { assertLoadedLocalTypeAuthority } from "./local-types";
 
 interface TreeNode extends NormalizedParserNode {
     children: TreeNode[];
@@ -246,7 +249,21 @@ function memberMapping(context: AdapterContext, sourceQName: string, access: str
     return matches.length === 1 ? matches[0]! : null;
 }
 
-function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority): {
+function relativeLocalModule(currentModulePath: string, target: LocalTypeMapping): string {
+    const prefix = target.module === "application" ? "game-client/layaair/src/application/" : "game-client/layaair/src/bootstrap/";
+    const targetModule = target.targetPath.slice(prefix.length, -3);
+    const currentSegments = currentModulePath.split("/");
+    currentSegments.pop();
+    const targetSegments = targetModule.split("/");
+    let shared = 0;
+    while (shared < currentSegments.length && shared < targetSegments.length
+        && currentSegments[shared] === targetSegments[shared]) shared += 1;
+    const relative = currentSegments.slice(shared).map(() => "..").concat(targetSegments.slice(shared)).join("/");
+    return relative.startsWith(".") ? relative : `./${relative}`;
+}
+
+function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
+    localAuthority: LoadedLocalTypeAuthority | undefined, resolveCurrentLocal: (() => CurrentLocalType) | null): {
     imports: SemanticImport[];
     importsByLocal: { [name: string]: SemanticImport };
 } {
@@ -254,17 +271,36 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority): 
     const importsByLocal: { [name: string]: SemanticImport } = Object.create(null);
     content.children.filter((child) => child.kind === "IMPORT").forEach((node) => {
         const qname = requiredText(node, "import");
-        const mapping = mappingForRole(authority, qname, "import", node);
         const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
         if (importsByLocal[localName]) {
             fail("HARDENED_IMPORT_COLLISION", "import local identity is duplicated", node);
         }
-        const item: SemanticImport = Object.assign(identity(node), {
-            sourceQualifiedName: qname,
-            sourceLocalName: localName,
-            targetModule: targetModuleSpecifier(mapping.targetModule),
-            targetExport: mapping.targetExport,
-        });
+        let item: SemanticImport;
+        if (authority.typeMappingsBySource[qname]) {
+            const mapping = mappingForRole(authority, qname, "import", node);
+            item = Object.assign(identity(node), {
+                authorityKind: "flash" as "flash", localNodeId: null,
+                sourceQualifiedName: qname, sourceLocalName: localName,
+                targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
+            });
+        } else {
+            if (!localAuthority || !resolveCurrentLocal) {
+                fail("HARDENED_LOCAL_IMPORT_AUTHORITY", "project-local import requires the authenticated dependency type map", node);
+            }
+            const currentLocal = resolveCurrentLocal();
+            const target = localAuthority.entriesByIdentity[`${currentLocal.entry.module}\u0000${qname}`];
+            if (!target || !target.importable || target.typeKind === "package") {
+                fail("HARDENED_LOCAL_IMPORT", "project-local import is absent, non-importable, or not a declared type: " + qname, node);
+            }
+            if (currentLocal.entry.prerequisites.indexOf(target.nodeId) < 0) {
+                fail("HARDENED_LOCAL_IMPORT_EDGE", "project-local import lacks an authenticated dependency edge: " + qname, node);
+            }
+            item = Object.assign(identity(node), {
+                authorityKind: "local" as "local", localNodeId: target.nodeId,
+                sourceQualifiedName: qname, sourceLocalName: localName,
+                targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
+            });
+        }
         imports.push(item);
         importsByLocal[localName] = item;
     });
@@ -341,6 +377,11 @@ function parseLiteral(node: TreeNode): SemanticExpression {
         fail("HARDENED_LITERAL", "literal is outside the admitted scalar subset", node);
     }
     return Object.assign(identity(node), { kind: "literal" as "literal", value });
+}
+
+interface CurrentLocalType {
+    entry: LocalTypeMapping;
+    outputModulePath: string;
 }
 
 function implicitThisMember(node: TreeNode, name: string, capabilitySource: string | null = null): SemanticExpression {
@@ -1013,7 +1054,8 @@ function modulePath(packageName: string, className: string, node: TreeNode): str
 }
 
 export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: LoadedCapabilityAuthority,
-    sourceText: string, sha256: Sha256Function): SemanticProgram {
+    sourceText: string, sha256: Sha256Function, localAuthority?: LoadedLocalTypeAuthority,
+    sourceLogicalPath?: string): SemanticProgram {
     assertLoadedCapabilityAuthority(authority);
     const root = buildTree(ast, sourceText, sha256);
     if (root.kind !== "COMPILATION_UNIT") {
@@ -1033,7 +1075,6 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     if (classPosition >= 0 && content.children.slice(classPosition + 1).some((child) => child.kind === "IMPORT")) {
         fail("HARDENED_IMPORT_ORDER", "source imports must precede the class and are preserved in source order", content);
     }
-    const parsedImports = parseImports(content, authority);
     const classes = content.children.filter((child) => child.kind === "CLASS");
     if (classes.length !== 1 || content.children.some((child) => child.kind !== "IMPORT" && child.kind !== "CLASS")) {
         fail("HARDENED_PACKAGE_CONTENT", "minimal semantic adapter requires imports followed by exactly one class", content);
@@ -1042,6 +1083,30 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     onlyKinds(classNode, ["CONTENT", "EXTENDS", "MOD_LIST", "NAME"]);
     const classNameNode = one(classNode, "NAME")!;
     const className = validateIdentifier(requiredText(classNameNode, "class name"), classNameNode);
+    const outputModulePath = modulePath(packageName, className, packageNameNode);
+    let currentLocal: CurrentLocalType | null = null;
+    let resolveCurrentLocal: (() => CurrentLocalType) | null = null;
+    if (localAuthority !== undefined || sourceLogicalPath !== undefined) {
+        if (!localAuthority || typeof sourceLogicalPath !== "string" || sourceLogicalPath.length === 0) {
+            fail("HARDENED_LOCAL_SOURCE_AUTHORITY", "local source authentication requires authority and logical path together", classNode);
+        }
+        assertLoadedLocalTypeAuthority(localAuthority);
+        resolveCurrentLocal = () => {
+            if (currentLocal) return currentLocal;
+            const qname = packageName === "" ? className : `${packageName}.${className}`;
+            const candidates = (["application", "bootstrap"] as const).map(module =>
+                localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry)
+                .filter(entry => entry.sourcePath === (entry.module === "application"
+                    ? `game-client/tapplication_main/src/${sourceLogicalPath}` : `game-client/tmain/src/${sourceLogicalPath}`)
+                    && entry.sourceSha256 === ast.sourceSha256 && entry.typeKind === "class");
+            if (candidates.length !== 1) {
+                fail("HARDENED_LOCAL_SOURCE_AUTHORITY", "current class path, hash, module, kind, and qname lack one exact graph identity", classNode);
+            }
+            currentLocal = { entry: candidates[0]!, outputModulePath };
+            return currentLocal;
+        };
+    }
+    const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal);
     const placeholder: AdapterContext = {
         className,
         extendsType: null,
@@ -1065,10 +1130,17 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             fail("HARDENED_BASE_TYPE", "base type " + extendsNode.text
                 + " must be a double-pinned imported Flash class", extendsNode);
         }
-        mappingForRole(authority, imported!.sourceQualifiedName, "base-type", extendsNode);
+        if (imported.authorityKind === "flash") {
+            mappingForRole(authority, imported.sourceQualifiedName, "base-type", extendsNode);
+        } else {
+            const localBase = localAuthority!.entriesByIdentity[`${resolveCurrentLocal!().entry.module}\u0000${imported.sourceQualifiedName}`];
+            if (!localBase || localBase.typeKind !== "class") {
+                fail("HARDENED_BASE_TYPE", "local base type must resolve to an authenticated class", extendsNode);
+            }
+        }
         extendsType = Object.assign(identity(extendsNode), { sourceName, emittedName: sourceName });
         placeholder.extendsType = extendsType;
-        placeholder.baseSourceQName = imported.sourceQualifiedName;
+        placeholder.baseSourceQName = imported.authorityKind === "flash" ? imported.sourceQualifiedName : null;
     }
     const classContent = one(classNode, "CONTENT")!;
     const functionNodes = classContent.children.filter((child) =>
@@ -1180,7 +1252,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         sourceSha256: ast.sourceSha256,
         fingerprintSha256: ast.fingerprintSha256,
         packageName,
-        outputModulePath: modulePath(packageName, className, packageNameNode),
+        outputModulePath,
         imports: parsedImports.imports,
         declaration,
         sourceCapabilitySha256: authority.sourceCensusSha256,

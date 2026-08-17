@@ -280,6 +280,65 @@ function adapt(api, tree, authority) {
     return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256);
 }
 
+function canonicalJson(value) {
+    if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
+        return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+}
+
+function buildLocalBaseTree() {
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [n("NAME", "lobby.ui"), n("CONTENT", null, [
+            n("IMPORT", "lobby.base.Base"),
+            n("CLASS", null, [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base"),
+                n("CONTENT", null, [constructor([call(n("IDENTIFIER", "super"))])])]),
+        ])]),
+        n("CONTENT"),
+    ]);
+}
+
+function localAuthority(api, normalized, options = {}) {
+    const baseNodeId = "0000000000000001";
+    const currentNodeId = "0000000000000002";
+    const entries = [
+        {
+            componentId: "scc-00001", importable: options.baseImportable !== false, module: options.baseModule || "application",
+            nodeId: baseNodeId, prerequisites: [], qname: options.baseQName || "lobby.base.Base",
+            sourcePath: "game-client/tapplication_main/src/lobby/base/Base.as", sourceSha256: "1".repeat(64),
+            targetPath: "game-client/layaair/src/application/lobby/base/Base.ts", topologicalLevel: 0,
+            typeKind: options.baseKind || "class",
+        },
+        {
+            componentId: "scc-00002", importable: true, module: "application", nodeId: currentNodeId,
+            prerequisites: options.withEdge === false ? [] : [baseNodeId], qname: "lobby.ui.Demo",
+            sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
+            sourceSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
+            targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
+        },
+    ].sort((left, right) => `${left.module}\u0000${left.qname}`.localeCompare(`${right.module}\u0000${right.qname}`));
+    const document = {
+        dependencyGraphRawSha256: "2".repeat(64), dependencyGraphSemanticSha256: "3".repeat(64), entries,
+        entryCount: entries.length, schema: "bleach-local-as3-type-map@1", sourceManifestSha256: "4".repeat(64),
+    };
+    const json = `${canonicalJson(document)}\n`;
+    return api.loadLocalTypeAuthority({
+        expectedDependencyGraphRawSha256: document.dependencyGraphRawSha256,
+        expectedDependencyGraphSemanticSha256: document.dependencyGraphSemanticSha256,
+        expectedEntryCount: entries.length,
+        expectedSourceManifestSha256: document.sourceManifestSha256,
+        json, sha256: sha256(json),
+    }, sha256);
+}
+
+function adaptLocal(api, authority, options = {}) {
+    const normalized = flatten(buildLocalBaseTree());
+    const locals = localAuthority(api, normalized, options);
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
+        locals, options.logicalPath || "lobby/ui/Demo.as");
+}
+
 function mappingDocument() {
     return {
         schema: "as3-source-to-laya-capability-map@1",
@@ -401,6 +460,21 @@ function main() {
     assert.equal(fields[0].sharedDeclarationNodeId, fields[1].sharedDeclarationNodeId);
     assert.notEqual(fields[0].sourceNodeId, fields[1].sourceNodeId);
     assert.equal(fields[0].readonly, false);
+
+    const localBaseProgram = adaptLocal(api, authority);
+    assert.equal(localBaseProgram.imports[0].authorityKind, "local");
+    assert.equal(localBaseProgram.imports[0].localNodeId, "0000000000000001");
+    assert.equal(localBaseProgram.imports[0].targetModule, "../base/Base");
+    const localBaseOutput = api.emitSemanticProgram(localBaseProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localBaseOutput.code, /import \{ Base \} from "\.\.\/base\/Base";/);
+    assert.match(localBaseOutput.code, /export class Demo extends Base/);
+    assertErrorCode(() => adaptLocal(api, authority, { withEdge: false }), "HARDENED_LOCAL_IMPORT_EDGE");
+    assertErrorCode(() => adaptLocal(api, authority, { baseQName: "lobby.base.Other" }), "HARDENED_LOCAL_IMPORT");
+    assertErrorCode(() => adaptLocal(api, authority, { baseKind: "interface" }), "HARDENED_BASE_TYPE");
+    assertErrorCode(() => adaptLocal(api, authority, { currentSourceSha256: "5".repeat(64) }),
+        "HARDENED_LOCAL_SOURCE_AUTHORITY");
+    assertErrorCode(() => adaptLocal(api, authority, { logicalPath: "other/Demo.as" }),
+        "HARDENED_LOCAL_SOURCE_AUTHORITY");
 
     const emitted = api.emitSemanticProgram(program, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     const repeated = api.emitSemanticProgram(program, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
