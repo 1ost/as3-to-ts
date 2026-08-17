@@ -89,6 +89,7 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     assert.match(firstCode, /break;/);
     const manifest = JSON.parse(fs.readFileSync(path.join(first, "manifest.json"), "utf8"));
     assert.equal(manifest.schema, "bleach.as3.transpile-manifest.v1");
+    assert.match(manifest.parserWorkerSha256, /^[0-9a-f]{64}$/);
     assert.equal(manifest.typeScriptVersion, "4.9.5");
     assert.equal(manifest.classification, "capability-authenticated-typescript-proposal");
     assert.equal(manifest.files[0].typescriptPath, "lobby/ui/Demo.ts");
@@ -168,6 +169,7 @@ test("qualification records holds without materializing TypeScript", t => {
     assert.deepEqual(files, ["manifest.json"]);
     const report = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8"));
     assert.equal(report.schema, "bleach.as3.qualification-report.v1");
+    assert.match(report.parserWorkerSha256, /^[0-9a-f]{64}$/);
     assert.equal(report.generatedTypeScriptMaterialized, false);
     assert.equal(report.counts.admitted, 1);
     assert.equal(report.counts.HARDENED_TYPE_UNMAPPED, 1);

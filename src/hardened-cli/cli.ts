@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import ts49 = require("typescript-4-9");
 import { CliError, errorMessage } from "./errors";
 import { discoverInputs, portableCollisionKey, readInput } from "./inputs";
-import { parseIsolated } from "./isolated-parser";
+import { assertParserWorkerSha256, captureParserWorkerSha256, parseIsolated } from "./isolated-parser";
 import { HELP, parseArguments, TOOL_VERSION } from "./options";
 import { loadTranspileAuthority } from "./authority";
 import { adaptNormalizedParserAst } from "../hardened/adapter";
@@ -88,6 +88,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
 
     const { options } = parsed;
     const inputs = discoverInputs(options.sourceDirectory, options.limits);
+    const parserWorkerSha256 = captureParserWorkerSha256();
     const transpileAuthority = options.operation !== "parse"
         ? loadTranspileAuthority(options.sourceCensusPath, options.targetCapabilitiesPath)
         : null;
@@ -106,7 +107,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             let parsedFile;
             try {
                 parsedFile = await parseIsolated(file.portablePath, source.content, options.limits,
-                    options.operation === "parse" ? "legacy" : "normalized");
+                    options.operation === "parse" ? "legacy" : "normalized", parserWorkerSha256);
             } catch (error) {
                 if (options.operation !== "qualify") throw error;
                 qualificationFiles.push({
@@ -220,6 +221,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             }
         }
 
+        assertParserWorkerSha256(parserWorkerSha256);
         const qualificationCounts = options.operation === "qualify" ? qualificationFiles.reduce((result, item) => {
             const key = item.status === "admitted" ? "admitted" : item.code!;
             result[key] = (result[key] || 0) + 1;
@@ -229,12 +231,14 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             schema: "bleach.as3.frontend-manifest.v1",
             toolVersion: TOOL_VERSION,
             upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
+            parserWorkerSha256,
             astFormat: "legacy-as3-to-ts-node-v1",
             files: manifestFiles,
         } : options.operation === "transpile" ? {
             schema: "bleach.as3.transpile-manifest.v1",
             toolVersion: TOOL_VERSION,
             upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
+            parserWorkerSha256,
             normalizedAstFormat: "authored-ui-as3-flat-ast@1",
             semanticFormat: "as3-semantic-ir@1",
             typeScriptVersion: transpileAuthority!.typeScriptVersion,
@@ -247,6 +251,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             schema: "bleach.as3.qualification-report.v1",
             toolVersion: TOOL_VERSION,
             upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
+            parserWorkerSha256,
             normalizedAstFormat: "authored-ui-as3-flat-ast@1",
             semanticFormat: "as3-semantic-ir@1",
             typeScriptVersion: transpileAuthority!.typeScriptVersion,

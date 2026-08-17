@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
 import parse from "../parse/index";
 import { normalizeParserAst } from "../hardened/parser-normalizer";
 import { createHash } from "node:crypto";
@@ -9,21 +10,25 @@ interface ParserRequest {
     content: string;
     maxAstBytes: number;
     format: "legacy" | "normalized";
+    workerSha256: string;
 }
 
 interface ParserSuccess {
     ok: true;
     json: string;
     byteLength: number;
+    workerSha256: string;
 }
 
 interface ParserFailure {
     ok: false;
     error: string;
     resourceLimit: boolean;
+    workerSha256: string;
 }
 
 const MAX_DIAGNOSTIC_BYTES = 8 * 1024;
+const WORKER_SHA256 = createHash("sha256").update(readFileSync(__filename)).digest("hex");
 
 function isRequest(value: unknown): value is ParserRequest {
     if (!value || typeof value !== "object") {
@@ -34,7 +39,8 @@ function isRequest(value: unknown): value is ParserRequest {
         typeof candidate.content === "string" &&
         Number.isSafeInteger(candidate.maxAstBytes) &&
         (candidate.maxAstBytes as number) > 0 &&
-        (candidate.format === "legacy" || candidate.format === "normalized");
+        (candidate.format === "legacy" || candidate.format === "normalized") &&
+        typeof candidate.workerSha256 === "string" && /^[0-9a-f]{64}$/.test(candidate.workerSha256);
 }
 
 function boundedDiagnostic(error: unknown): string {
@@ -58,7 +64,11 @@ function reply(result: ParserSuccess | ParserFailure): void {
 
 process.once("message", (message: unknown) => {
     if (!isRequest(message)) {
-        reply({ ok: false, error: "invalid parser request", resourceLimit: false });
+        reply({ ok: false, error: "invalid parser request", resourceLimit: false, workerSha256: WORKER_SHA256 });
+        return;
+    }
+    if (message.workerSha256 !== WORKER_SHA256) {
+        reply({ ok: false, error: "parser worker authority mismatch", resourceLimit: false, workerSha256: WORKER_SHA256 });
         return;
     }
     try {
@@ -74,12 +84,13 @@ process.once("message", (message: unknown) => {
                 ok: false,
                 error: `serialized AST exceeds --max-ast-bytes for ${message.sourcePath}`,
                 resourceLimit: true,
+                workerSha256: WORKER_SHA256,
             });
         } else {
-            reply({ ok: true, json, byteLength });
+            reply({ ok: true, json, byteLength, workerSha256: WORKER_SHA256 });
         }
     } catch (error) {
-        reply({ ok: false, error: boundedDiagnostic(error), resourceLimit: false });
+        reply({ ok: false, error: boundedDiagnostic(error), resourceLimit: false, workerSha256: WORKER_SHA256 });
     }
 });
 
