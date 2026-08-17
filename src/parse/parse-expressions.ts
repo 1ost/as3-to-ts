@@ -152,9 +152,9 @@ function parseConditionalExpression(parser:AS3Parser):Node {
         let conditional:Node = createNode(NodeKind.CONDITIONAL, {start: result.start}, result);
         nextToken(parser, true); // ?
         conditional.children.push(parseExpression(parser));
-        nextToken(parser, true); // :
+        consume(parser, Operators.COLUMN);
         conditional.children.push(parseExpression(parser));
-        conditional.end = conditional.lastChild.start;
+        conditional.end = conditional.lastChild.end;
         return conditional;
     }
     return result;
@@ -332,20 +332,24 @@ function parseUnaryExpression(parser:AS3Parser):Node {
         index = parser.tok.index;
     if (tokIs(parser, Operators.INCREMENT)) {
         nextToken(parser);
-        result = createNode(NodeKind.PRE_INC, {start: parser.tok.index, end: index}, parseUnaryExpression(parser));
+        const operand = parseUnaryExpression(parser);
+        result = createNode(NodeKind.PRE_INC, {start: index, end: operand.end}, operand);
     } else if (tokIs(parser, Operators.DECREMENT)) {
         nextToken(parser);
-        result = createNode(NodeKind.PRE_DEC, {start: parser.tok.index, end: index}, parseUnaryExpression(parser));
+        const operand = parseUnaryExpression(parser);
+        result = createNode(NodeKind.PRE_DEC, {start: index, end: operand.end}, operand);
     } else if (tokIs(parser, Operators.MINUS)) {
         nextToken(parser);
-        result = createNode(NodeKind.MINUS, {start: parser.tok.index, end: index}, parseUnaryExpression(parser));
+        const operand = parseUnaryExpression(parser);
+        result = createNode(NodeKind.MINUS, {start: index, end: operand.end}, operand);
     //
     // Having PLUS_AS2 emits wrong AST when a method is called "add"
     // } else if (tokIs(parser, Operators.PLUS) || tokIs(parser, Operators.PLUS_AS2)) {
     //
     } else if (tokIs(parser, Operators.PLUS)) {
         nextToken(parser);
-        result = createNode(NodeKind.PLUS, {start: parser.tok.index, end: index}, parseUnaryExpression(parser));
+        const operand = parseUnaryExpression(parser);
+        result = createNode(NodeKind.PLUS, {start: index, end: operand.end}, operand);
     } else {
         return parseUnaryExpressionNotPlusMinus(parser);
     }

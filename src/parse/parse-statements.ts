@@ -126,7 +126,9 @@ function parseTraditionalFor(parser:AS3Parser, index:number):Node {
         result.children.push(createNode(NodeKind.ITER, {start: expr.start, end: expr.end}, expr));
     }
     consume(parser, Operators.RIGHT_PARENTHESIS);
-    result.children.push(parseStatement(parser));
+    const body = parseStatement(parser);
+    result.children.push(body);
+    result.end = body.end;
     return result;
 }
 
@@ -138,6 +140,9 @@ function parseForIn(parser:AS3Parser, result:Node):Node {
     result.children.push(createNode(NodeKind.IN, {start: index, end: expr.end}, expr));
     result.kind = NodeKind.FORIN;
     consume(parser, Operators.RIGHT_PARENTHESIS);
+    const body = parseStatement(parser);
+    result.children.push(body);
+    result.end = body.end;
     return result;
 }
 

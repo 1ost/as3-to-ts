@@ -25,6 +25,21 @@ function childText(node, kind) {
     return child && child.text;
 }
 
+function assertMonotoneSpans(node, source, label, parent = null) {
+    assert.ok(Number.isInteger(node.start), `${label}: start must be an integer`);
+    assert.ok(Number.isInteger(node.end), `${label}: end must be an integer`);
+    assert.ok(node.start >= 0, `${label}: start ${node.start} precedes source`);
+    assert.ok(node.start <= node.end, `${label}: inverted span ${node.start}..${node.end}`);
+    assert.ok(node.end <= source.length,
+        `${label}: end ${node.end} exceeds source length ${source.length}`);
+    if (parent) {
+        assert.ok(node.start >= parent.start && node.end <= parent.end,
+            `${label}: child span ${node.start}..${node.end} escapes parent ${parent.start}..${parent.end}`);
+    }
+    node.children.forEach((child, index) =>
+        assertMonotoneSpans(child, source, `${label}/${NodeKind[node.kind]}[${index}]`, node));
+}
+
 function watchdog(source) {
     const worker = path.join(__dirname, 'watchdog-worker.js');
     const result = childProcess.spawnSync(process.execPath,
@@ -38,6 +53,7 @@ function watchdog(source) {
 
 const fixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'hardening.as'), 'utf8');
 const ast = parse('C:\\fixture\\hardening.as', fixture);
+assertMonotoneSpans(ast, fixture, 'hardening fixture');
 assert.strictEqual(ast.start, 0);
 assert.strictEqual(ast.end, fixture.length, 'compilation-unit span covers the full source');
 assert.deepStrictEqual(ast.trivia.map(token => token.text), [
@@ -68,6 +84,26 @@ assert.ok(all(functions[0], NodeKind.IDENTIFIER).some(identifier => identifier.t
 assert.strictEqual(all(ast, NodeKind.BREAK).length, 1);
 assert.strictEqual(all(ast, NodeKind.CONTINUE).length, 1);
 assert.strictEqual(all(ast, NodeKind.THROW).length, 1, 'throw is not represented as return');
+
+const emptySource = 'package p { class C {} interface I {} }';
+const emptyAst = parse('empty-bodies.as', emptySource);
+assertMonotoneSpans(emptyAst, emptySource, 'empty bodies');
+assert.strictEqual(emptyAst.children.length, 1, 'no redundant post-package CONTENT node is synthesized');
+const emptyPackageContent = emptyAst.children[0].findChild(NodeKind.CONTENT);
+const emptyClassContent = all(emptyAst, NodeKind.CLASS)[0].findChild(NodeKind.CONTENT);
+const emptyInterfaceContent = all(emptyAst, NodeKind.INTERFACE)[0].findChild(NodeKind.CONTENT);
+assert.strictEqual(emptyClassContent.start, emptyClassContent.end, 'empty class content has an exact zero-width span');
+assert.strictEqual(emptyInterfaceContent.start, emptyInterfaceContent.end,
+    'empty interface content has an exact zero-width span');
+assert.ok(emptyPackageContent.end > emptyPackageContent.start,
+    'non-empty package content ends at its closing boundary');
+
+const emptyPackageSource = 'package p {}';
+const emptyPackageAst = parse('empty-package.as', emptyPackageSource);
+assertMonotoneSpans(emptyPackageAst, emptyPackageSource, 'empty package');
+const zeroPackageContent = emptyPackageAst.children[0].findChild(NodeKind.CONTENT);
+assert.strictEqual(zeroPackageContent.start, zeroPackageContent.end,
+    'empty package content has an exact zero-width span');
 
 const scanner = new AS3Scanner();
 scanner.setContent('Vector.<uint> tail', 'checkpoint.as');
@@ -141,5 +177,9 @@ collectActionScript(path.join(__dirname, '..', 'compound'));
 const corpusFailures = corpusFiles.map(file => ({file, result: watchdog(fs.readFileSync(file, 'utf8'))}))
     .filter(entry => !entry.result.ok);
 assert.deepStrictEqual(corpusFailures, [], 'checked-in AS3 corpus remains parseable without watchdog expiry');
+corpusFiles.forEach(file => {
+    const source = fs.readFileSync(file, 'utf8');
+    assertMonotoneSpans(parse(file, source), source, file);
+});
 
 console.log(`parser hardening gates passed (${corpusFiles.length} corpus files)`);

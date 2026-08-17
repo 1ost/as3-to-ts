@@ -20,8 +20,12 @@ export function parseCompilationUnit(parser:AS3Parser):Node {
     nextTokenIgnoringDocumentation(parser);
     if (tokIs(parser, Keywords.PACKAGE)) {
         result.children.push(parsePackage(parser));
+        if (!tokIs(parser, Keywords.EOF)) {
+            result.children.push(parsePackageContent(parser, true));
+        }
+    } else {
+        result.children.push(parsePackageContent(parser, true));
     }
-    result.children.push(parsePackageContent(parser, true));
     if (!tokIs(parser, Keywords.EOF)) {
         throw parseError(parser, 'AS3_PARSE_TRAILING_INPUT', 'end of input', 'compilation unit');
     }
@@ -38,14 +42,16 @@ function parsePackage(parser:AS3Parser):Node {
     let nameBuffer = '';
 
     let index = parser.tok.index;
+    let nameEnd = index;
     while (!tokIs(parser, Operators.LEFT_CURLY_BRACKET)) {
         assertNotEOF(parser, 'package declaration');
         const checkpoint = getParserCheckPoint(parser);
         nameBuffer += parser.tok.text;
+        nameEnd = parser.tok.end;
         nextToken(parser);
         assertProgress(parser, checkpoint, 'package declaration');
     }
-    result.children.push(createNode(NodeKind.NAME, {start: index, text: nameBuffer}));
+    result.children.push(createNode(NodeKind.NAME, {start: index, end: nameEnd, text: nameBuffer}));
     consume(parser, Operators.LEFT_CURLY_BRACKET);
     result.children.push(parsePackageContent(parser, true));
     tok = consume(parser, Operators.RIGHT_CURLY_BRACKET);
@@ -106,9 +112,7 @@ function parsePackageContent(parser:AS3Parser, allowScriptStatements:boolean):No
         throw parseError(parser, 'AS3_PARSE_UNEXPECTED_EOF', 'a declaration after modifiers or metadata',
             'package content', 'EOF');
     }
-    if (result.lastChild) {
-        result.end = result.lastChild.end;
-    }
+    result.end = parser.tok.index;
     return result;
 }
 
@@ -263,6 +267,7 @@ function parseImplementsList(parser:AS3Parser):Node {
         let name = parseQualifiedName(parser, false);
         result.children.push(createNode(NodeKind.IMPLEMENTS, {start: index, text: name}));
     }
+    result.end = result.lastChild.end;
     return result;
 }
 
@@ -301,9 +306,7 @@ function parseClassContent(parser:AS3Parser):Node {
         }
         assertProgress(parser, checkpoint, 'class body');
     }
-    if (result.lastChild) {
-        result.end = result.lastChild.end;
-    }
+    result.end = parser.tok.index;
     return result;
 }
 
@@ -405,9 +408,7 @@ function parseInterfaceContent(parser:AS3Parser):Node {
         }
         assertProgress(parser, checkpoint, 'interface body');
     }
-    if (result.lastChild) {
-        result.end = result.lastChild.end;
-    }
+    result.end = parser.tok.index;
     return result;
 }
 

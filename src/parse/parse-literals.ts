@@ -56,7 +56,7 @@ function parseObjectLiteralPropertyDeclaration(parser:AS3Parser):Node {
     nextToken(parser); // name
     consume(parser, Operators.COLUMN);
     let expr = parseExpression(parser);
-    let val = createNode(NodeKind.VALUE, {start: parser.tok.index, end: expr.end}, expr);
+    let val = createNode(NodeKind.VALUE, {start: expr.start, end: expr.end}, expr);
     result.children.push(val);
     result.end = val.end;
     return result;
