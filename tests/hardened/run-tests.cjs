@@ -177,7 +177,8 @@ function buildTree(options = {}) {
     const closureStatement = call(n("IDENTIFIER", "addEventListener"), [
         n("LITERAL", '"ready"'), n("IDENTIFIER", "onEvent"),
     ]);
-    const body = options.badSuperOrder ? [closureStatement, superStatement] : [superStatement, closureStatement];
+    const body = options.implicitObjectSuper ? [superStatement]
+        : options.badSuperOrder ? [closureStatement, superStatement] : [superStatement, closureStatement];
     if (options.unsupportedStatement) {
         body.push(n("FORIN"));
     }
@@ -373,6 +374,7 @@ function buildTree(options = {}) {
             options.superInMethod ? [call(n("IDENTIFIER", "super"))] : onEventBody,
             options.staticMethod ? ["public", "static"] : ["public"]),
     ];
+    if (options.implicitObjectSuper) members.splice(0, members.length, constructor(body));
     if (options.accessors) {
         const getterBody = options.getterNoReturn ? [] : options.accessorIf
             ? [n("IF", null, [
@@ -397,23 +399,21 @@ function buildTree(options = {}) {
             && member.children.some((child) => child.kind === "NAME" && child.text === "Demo"));
         members.splice(constructorIndex, 1);
     }
-    const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Sprite")];
+    const classChildren = [n("NAME", "Demo"), mods("public")];
+    if (!options.implicitObjectSuper) classChildren.push(n("EXTENDS", "Sprite"));
     if (options.unsupportedChild) {
         classChildren.push(n("META_LIST"));
     }
     classChildren.push(n("CONTENT", null, members));
+    const imports = options.wildcardImports
+        ? [n("IMPORT", "flash.display.*"), n("IMPORT", "flash.events.*")]
+        : [n("IMPORT", "flash.display.Sprite"), n("IMPORT", "flash.events.Event")];
     return n("COMPILATION_UNIT", null, [
         n("PACKAGE", null, [
             n("NAME", "lobby.ui"),
             n("CONTENT", null, options.postClassImport ? [
                 n("CLASS", null, classChildren),
-                n("IMPORT", "flash.display.Sprite"),
-                n("IMPORT", "flash.events.Event"),
-            ] : [
-                n("IMPORT", "flash.display.Sprite"),
-                n("IMPORT", "flash.events.Event"),
-                n("CLASS", null, classChildren),
-            ]),
+            ].concat(imports) : imports.concat([n("CLASS", null, classChildren)])),
         ]),
         n("CONTENT"),
     ]);
@@ -455,8 +455,8 @@ function canonicalJson(value) {
 }
 
 function buildLocalBaseTree(options = {}) {
-    const imports = [n("IMPORT", "lobby.base.Base")];
-    if (options.withInterface) imports.push(n("IMPORT", "lobby.base.IReady"));
+    const imports = options.wildcardImports ? [n("IMPORT", "lobby.base.*")] : [n("IMPORT", "lobby.base.Base")];
+    if (options.withInterface && !options.wildcardImports) imports.push(n("IMPORT", "lobby.base.IReady"));
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
     const members = [constructor([call(n("IDENTIFIER", "super"))])];
@@ -663,6 +663,12 @@ function main() {
     assert.match(localInterfaceOutput.code, /export class Demo extends Base implements IReady/);
     assert.match(localInterfaceOutput.code, /__as3RegisterInterfaces\(Demo, \[__as3InterfaceType\("lobby\.base\.IReady"\)\]\);/);
     assert.match(localInterfaceOutput.code, /__as3As\(value, __as3InterfaceType\("lobby\.base\.IReady"\)\)/);
+    const localWildcardProgram = adaptLocal(api, authority, { withInterface: true, wildcardImports: true });
+    assert.deepEqual(localWildcardProgram.imports.map(item => item.sourceQualifiedName),
+        ["lobby.base.Base", "lobby.base.IReady"]);
+    assert.match(api.emitSemanticProgram(localWildcardProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" }).code,
+    /import \{ Base \} from "\.\.\/base\/Base";/);
     assertErrorCode(() => adaptLocal(api, authority, { withEdge: false }), "HARDENED_LOCAL_IMPORT_EDGE");
     assertErrorCode(() => adaptLocal(api, authority, { baseQName: "lobby.base.Other" }), "HARDENED_LOCAL_IMPORT");
     assertErrorCode(() => adaptLocal(api, authority, { baseKind: "interface" }), "HARDENED_BASE_TYPE");
@@ -688,6 +694,19 @@ function main() {
     assert.match(emitted.code, /this\.addEventListener\("ready", this\.onEvent\);/);
     assert.equal((emitted.code.match(/this\.onEvent = this\.onEvent\.bind\(this\);/g) || []).length, 1);
     assert.doesNotMatch(emitted.code, /AVM|ABC|compat|wrapper/i);
+    const wildcardProgram = adapt(api, buildTree({ wildcardImports: true }), authority);
+    assert.ok(wildcardProgram.imports.some(item => item.sourceQualifiedName === "flash.display.Sprite"));
+    assert.ok(wildcardProgram.imports.some(item => item.sourceQualifiedName === "flash.events.Event"));
+    const wildcardOutput = api.emitSemanticProgram(wildcardProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(wildcardOutput.code, /import \{ Sprite \} from "laya\/flash\/display\/Sprite";/);
+    const implicitObjectProgram = adapt(api, buildTree({ implicitObjectSuper: true }), authority);
+    assert.equal(implicitObjectProgram.declaration.extendsType, null);
+    const implicitObjectOutput = api.emitSemanticProgram(implicitObjectProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(implicitObjectOutput.code, /export class Demo \{/);
+    assert.doesNotMatch(implicitObjectOutput.code, /super\(\)/,
+        "AS3's explicit call to the implicit Object constructor lowers to the native TS class default");
     const constProgram = adapt(api, buildTree({ constFields: true }), authority);
     const constFields = constProgram.declaration.members.filter((member) => member.kind === "field");
     assert.equal(constFields.every((field) => field.readonly), true);

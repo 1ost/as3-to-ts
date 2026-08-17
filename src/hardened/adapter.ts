@@ -103,6 +103,10 @@ const VECTOR_METHODS = new Set([
 ]);
 const ADAPTED_PROGRAMS = new WeakSet<object>();
 
+function compareUtf8(left: string, right: string): number {
+    return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function fail(code: string, message: string, node: TreeNode | null = null): never {
     throw new HardenedSemanticError(code, message, node === null ? null : node.id);
 }
@@ -289,21 +293,65 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
 } {
     const imports: SemanticImport[] = [];
     const importsByLocal: { [name: string]: SemanticImport } = Object.create(null);
+    const append = (item: SemanticImport, node: TreeNode): void => {
+        const prior = importsByLocal[item.sourceLocalName];
+        if (prior) {
+            if (prior.sourceQualifiedName === item.sourceQualifiedName) return;
+            fail("HARDENED_IMPORT_COLLISION", "import local identity is ambiguous across authenticated packages", node);
+        }
+        imports.push(item);
+        importsByLocal[item.sourceLocalName] = item;
+    };
+    const flashImport = (qname: string, node: TreeNode): SemanticImport => {
+        const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
+        const mapping = mappingForRole(authority, qname, "import", node);
+        return Object.assign(identity(node), {
+            authorityKind: "flash" as "flash", localNodeId: null,
+            runtimeConstructible: mapping.targetKind === "class", runtimeInterface: mapping.targetKind === "interface",
+            sourceQualifiedName: qname, sourceLocalName: localName,
+            targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
+        });
+    };
+    const localImport = (target: LocalTypeMapping, currentLocal: CurrentLocalType,
+        node: TreeNode): SemanticImport => {
+        const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
+        return Object.assign(identity(node), {
+            authorityKind: "local" as "local", localNodeId: target.nodeId,
+            runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
+            sourceQualifiedName: target.qname, sourceLocalName: localName,
+            targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
+        });
+    };
     content.children.filter((child) => child.kind === "IMPORT").forEach((node) => {
         const qname = requiredText(node, "import");
-        const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
-        if (importsByLocal[localName]) {
-            fail("HARDENED_IMPORT_COLLISION", "import local identity is duplicated", node);
+        if (qname.endsWith(".*")) {
+            const prefix = qname.slice(0, -1);
+            const flashMatches = Object.keys(authority.typeMappingsBySource)
+                .filter(candidate => candidate.startsWith(prefix) && !candidate.slice(prefix.length).includes("."))
+                .sort(compareUtf8);
+            if (flashMatches.length > 0) {
+                flashMatches.forEach(candidate => append(flashImport(candidate, node), node));
+                return;
+            }
+            if (!localAuthority || !resolveCurrentLocal) {
+                fail("HARDENED_LOCAL_IMPORT_AUTHORITY", "project-local wildcard import requires the authenticated dependency type map", node);
+            }
+            const currentLocal = resolveCurrentLocal();
+            const localMatches = localAuthority.entries.filter(target => target.module === currentLocal.entry.module
+                && target.qname.startsWith(prefix) && !target.qname.slice(prefix.length).includes(".")
+                && target.importable && target.typeKind !== "package"
+                && currentLocal.entry.prerequisites.indexOf(target.nodeId) >= 0)
+                .sort((left, right) => compareUtf8(left.qname, right.qname));
+            if (localMatches.length === 0) {
+                fail("HARDENED_WILDCARD_IMPORT", "wildcard import resolves no exact mapped Flash type or graph prerequisite", node);
+            }
+            localMatches.forEach(target => append(localImport(target, currentLocal, node), node));
+            return;
         }
+        const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
         let item: SemanticImport;
         if (authority.typeMappingsBySource[qname]) {
-            const mapping = mappingForRole(authority, qname, "import", node);
-            item = Object.assign(identity(node), {
-                authorityKind: "flash" as "flash", localNodeId: null,
-                runtimeConstructible: mapping.targetKind === "class", runtimeInterface: mapping.targetKind === "interface",
-                sourceQualifiedName: qname, sourceLocalName: localName,
-                targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
-            });
+            item = flashImport(qname, node);
         } else {
             if (!localAuthority || !resolveCurrentLocal) {
                 fail("HARDENED_LOCAL_IMPORT_AUTHORITY", "project-local import requires the authenticated dependency type map", node);
@@ -316,15 +364,9 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
             if (currentLocal.entry.prerequisites.indexOf(target.nodeId) < 0) {
                 fail("HARDENED_LOCAL_IMPORT_EDGE", "project-local import lacks an authenticated dependency edge: " + qname, node);
             }
-            item = Object.assign(identity(node), {
-                authorityKind: "local" as "local", localNodeId: target.nodeId,
-                runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
-                sourceQualifiedName: qname, sourceLocalName: localName,
-                targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
-            });
+            item = localImport(target, currentLocal, node);
         }
-        imports.push(item);
-        importsByLocal[localName] = item;
+        append(item, node);
     });
     return { imports, importsByLocal };
 }
@@ -1391,7 +1433,7 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
         const node = block.children[statementIndex]!;
         if (node.kind !== "TRY") {
             statements.push(parseStatementNode(node, context, constructor, derived, expectedReturn,
-                allowLeadingSuper && constructor && derived && statementIndex === 0));
+                allowLeadingSuper && constructor && statementIndex === 0));
             continue;
         }
         if (node.children.length !== 1 || node.children[0]!.kind !== "BLOCK") {
@@ -1716,8 +1758,14 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             placeholder.locals = oldLocals;
             if (header.constructor) {
                 const count = body.filter(superCall).length;
-                if ((extendsType !== null && (count !== 1 || !superCall(body[0]!))) || (extendsType === null && count !== 0)) {
+                if (extendsType !== null && (count !== 1 || !superCall(body[0]!))) {
                     fail("HARDENED_SUPER_ORDER", "derived constructor requires exactly one first-position super call and it is never reordered", node);
+                }
+                if (extendsType === null) {
+                    if (count > 1 || (count === 1 && !superCall(body[0]!))) {
+                        fail("HARDENED_SUPER_ORDER", "implicit Object constructor permits only one first-position zero-argument super call", node);
+                    }
+                    if (count === 1) body.shift();
                 }
                 const constructor: SemanticConstructor = Object.assign(identity(node), {
                     kind: "constructor" as "constructor", modifiers: header.modifiers,
