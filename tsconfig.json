@@ -1,15 +1,28 @@
 {
   "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "rootDir": "./src",
-    "outDir": "./lib",
-    "target": "es6",
-    "module": "commonjs",
-    "sourceMap": true,
-    "noImplicitAny": true
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "noEmit": true,
+    "noEmitOnError": true,
+    "noImplicitAny": true,
+    "strictNullChecks": false,
+    "strictPropertyInitialization": false,
+    "useUnknownInCatchVariables": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
   },
-  "exclude": [
-    "node_modules",
-    "tests",
-    "utils"
+  "include": [
+    "src/command.ts",
+    "src/hardened-cli/**/*.ts",
+    "src/parse/**/*.ts",
+    "src/syntax/**/*.ts",
+    "src/reports/**/*.ts",
+    "src/config.ts",
+    "src/string.ts"
   ]
 }

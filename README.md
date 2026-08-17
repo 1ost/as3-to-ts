@@ -1,69 +1,71 @@
-# as3-to-ts
+# Bleach AS3 frontend
 
-> A tool that helps porting as3 codebase to typescript
+This repository contains a hardened, local-only ActionScript 3 parser frontend
+used by the Bleach porting toolchain. It converts a rooted `.as` source tree
+into deterministic parser-AST JSON and a hashed manifest.
 
-This fork has major improvements parsing and emitting code. It has also a custom
-node visitor that allows extending the default behaviour.
+It does **not** emit TypeScript, load visitors or plugins, overwrite an existing
+output, or provide the legacy `as3-to-ts` command. The historical emitter,
+visitors, wrappers, and tests remain upstream-reference material only: they are
+excluded from both TypeScript compilation and the packaged production graph.
 
-This project is a fork of
-[simonbuchan/as3-to-typescript](https://github.com/simonbuchan/as3-to-typescript),
-which is a fork of [the original
-as3-to-typescript](https://github.com/fdecampredon/as3-to-typescript)
-implementation.
+## Requirements
 
-## Projects ported using `as3-to-ts`
+- Node.js 24 or newer
+- npm 11 or newer
 
-- [RobotlegsJS](https://github.com/GoodgameStudios/RobotlegsJS)
-- [SignalsJS](https://github.com/GoodgameStudios/SignalJS)
+## Build and verify
 
-## Installation
-
-**Option 1: via npm:**:
-
-```
-npm install -g as3-to-ts
+```text
+npm ci --ignore-scripts
+npm test
+npm audit --audit-level=high
 ```
 
-**Option 2: building the source:**
-
-Make sure you have [Node v6+](https://nodejs.org/) installed.
-
-- Clone the repository
-- Run `npm link`
-
-You should have `as3-to-ts` now globaly available in your commandline.
+The package is marked `private` and has no publish hooks or runtime dependency
+graph. Its two production JavaScript files are self-contained local bundles.
 
 ## Usage
 
+Build first, then run:
+
+```text
+node bin/as3-frontend <source-directory> <new-output-directory> [options]
 ```
-as3-to-ts <sourceDir> <outputDir> [--commonjs] [--visitors dictionary,stringutil,createjs] [--interactive] [--overwrite]
+
+The output directory must not exist. A successful run publishes it with one
+atomic directory rename after every source has parsed and every staged artifact
+has been revalidated. Failures leave no partial output directory.
+
+Available limits are shown by:
+
+```text
+node bin/as3-frontend --help
 ```
 
-Options:
+Limits cover parser time and memory, file count and bytes, all discovered tree
+entries and directories, nesting depth, portable path bytes, per-file AST size,
+and complete output size. Parsing occurs in a separate capped Node process so a
+fatal parser OOM cannot terminate the controlling CLI.
 
-- `--commonjs`: export .ts files using CommonJS's import style.
-- `--visitors [name]`: use custom visitors, separated by comma. implemented
-  under `src/custom-visitor/[name]` (currently available: `dictionary`,
-  `stringutil`, `createjs`)
-- `--overwrite`: force overwrite of previously-converted files.
-- `--interactive`: if you've manually changed a generated `.ts` file, you'll be
-  asked if you want to overwrite it or not.
+The frontend rejects unknown options, plugin/visitor flags, symlinks and
+junctions, hard-linked aliases, path escapes, non-NFC names, case collisions,
+non-ASCII cased path characters with platform-dependent folding, invalid UTF-8,
+input mutation, output overlap, and existing or concurrently reserved outputs.
 
+The output parent is a trusted local directory. The reservation serializes all
+cooperating frontend processes by portable case/NFC output identity. On POSIX,
+Node's portable directory rename API has no `RENAME_NOREPLACE` flag, so the
+tool cannot defend the final scan/rename instant from a non-cooperating process
+running as the same OS user. Do not grant untrusted writers access to that
+parent while a conversion is running.
 
-## Known issues
+## Provenance and licenses
 
-- `super` calls on constructor need to be moved as the first call after conversion.
-- having a comment on `extends` statement causes infinite loop parsint the `.as` file.
-- having `break` without a semicolon results in infinite loop parsing the `.as` file.
-- having a method without access level will throw `Error: invalid consume`.
-  (usually this is result of bad copy & paste without renaming the class constructor)
-- having inline multiline comment break the parser (`var i = (/*comment*/true)`)
-- namespaces can't have TypeScript keywords, such as `enum`, `class`, etc. (not
-  an issue if transpiled using `--commonjs`)
-- multiple property definitions generate invalid syntax (`public var velocityX:Number, velocityY:Number;`)
+The frozen parser and syntax model derive from `@as3web/as3-to-ts` 0.3.10 at
+revision `fa0b5151ab82758511ddd4b464f0c05b80e06da7`:
+<https://github.com/as3web/as3-to-ts.git>.
 
-## Note
-
-This tool will not magicly transform your as3 codebase into perfect typescript, the goal is to transform the sources into *syntacticly* correct typescript, and even this goal is not perfectly respected. It also won't try to provide javascript implementation for flash libraries.
-
-However unlike most attempts that I have seen this tool is based on a true actionscript parser, and so should be able to handle most of as3 constructs and greatly ease the pain of porting a large code base written in as3 to typescript.
+This local fork is licensed under Apache-2.0. Adobe parser notices and bundled
+third-party licenses are preserved in
+[`src/hardened-cli/THIRD_PARTY_NOTICES.md`](src/hardened-cli/THIRD_PARTY_NOTICES.md).
