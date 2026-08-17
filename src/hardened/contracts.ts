@@ -160,6 +160,12 @@ export interface RuntimeTypeExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
+export interface CoercionExpression extends SemanticIdentity {
+    kind: "coercion";
+    targetType: SemanticType;
+    argument: SemanticExpression | null;
+}
+
 export type LocalTypeModule = "application" | "bootstrap";
 export type LocalTypeKind = "class" | "interface" | "package";
 
@@ -240,7 +246,7 @@ export type SemanticExpression = LiteralExpression | IdentifierExpression | This
     SuperExpression | MemberExpression | MethodClosureExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
     ConditionalExpression | UpdateExpression | ArrayExpression | IndexExpression | VectorConversionExpression |
-    RuntimeTypeExpression;
+    RuntimeTypeExpression | CoercionExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";

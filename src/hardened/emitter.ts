@@ -172,6 +172,16 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             [expressionNode(expression.value, ts), runtimeTypeTokenNode(expression, ts)],
         );
     }
+    if (expression.kind === "coercion") {
+        const helper: { [sourceName: string]: string } = {
+            int: "__as3Int", uint: "__as3Uint", Number: "__as3Number",
+            Boolean: "__as3Boolean", String: "__as3String",
+        };
+        const name = helper[expression.targetType.sourceName];
+        if (!name) throw new HardenedSemanticError("HARDENED_EMIT_COERCION", "unknown AS3 coercion helper");
+        return ts.factory.createCallExpression(ts.factory.createIdentifier(name), undefined,
+            expression.argument === null ? [] : [expressionNode(expression.argument, ts)]);
+    }
     if (expression.kind === "assignment") {
         return ts.factory.createBinaryExpression(
             expressionNode(expression.target, ts),
@@ -312,6 +322,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.source);
         } else if (expression.kind === "runtimeType") {
             inspectExpression(expression.value);
+        } else if (expression.kind === "coercion") {
+            if (expression.argument !== null) inspectExpression(expression.argument);
         } else if (expression.kind === "binary") {
             inspectExpression(expression.left);
             inspectExpression(expression.right);
@@ -428,6 +440,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "new") return visitType(expression.sourceType) || expression.arguments.some(visitExpression);
         if (expression.kind === "vectorConversion") return true;
         if (expression.kind === "runtimeType") return visitType(expression.targetType) || visitExpression(expression.value);
+        if (expression.kind === "coercion") return expression.argument !== null && visitExpression(expression.argument);
         if (expression.kind === "array") return expression.elements.some(visitExpression);
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
@@ -474,17 +487,21 @@ function vectorRuntimeImport(ts: TypeScriptCompilerApi): any {
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Vector"), undefined);
 }
 
-function programUsesRuntimeType(program: SemanticProgram): boolean {
+function programHasKind(program: SemanticProgram, kind: string): boolean {
     const seen = new WeakSet<object>();
     const visit = (value: unknown): boolean => {
         if (typeof value !== "object" || value === null) return false;
         if (seen.has(value)) return false;
         seen.add(value);
         const record = value as { [key: string]: unknown };
-        if (record.kind === "runtimeType") return true;
+        if (record.kind === kind) return true;
         return Object.keys(record).some(key => visit(record[key]));
     };
     return visit(program);
+}
+
+function programUsesRuntimeType(program: SemanticProgram): boolean {
+    return programHasKind(program, "runtimeType");
 }
 
 function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
@@ -498,6 +515,15 @@ function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Type"), undefined);
 }
 
+function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint"].map(exported =>
+        ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
+            ts.factory.createIdentifier(`__${exported}`)));
+    return ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports(names)),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Coerce"), undefined);
+}
+
 export function emitSemanticProgram(program: SemanticProgram, options: EmitterOptions): EmittedTypeScript {
     assertAdaptedSemanticProgram(program);
     const ts = options.compiler;
@@ -507,6 +533,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     const imports = program.imports.map((item) => importNode(item, ts));
     if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
     if (programUsesRuntimeType(program)) imports.push(runtimeTypeImport(ts));
+    if (programHasKind(program, "coercion")) imports.push(coercionRuntimeImport(ts));
     const boundMethods = boundMethodNames(program);
     if (boundMethods.length > 0 && !program.declaration.members.some((member) => member.kind === "constructor")) {
         throw new HardenedSemanticError("HARDENED_METHOD_CLOSURE_CONSTRUCTOR",

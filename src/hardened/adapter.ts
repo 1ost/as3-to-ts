@@ -484,6 +484,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     }
     if (expression.kind === "vectorConversion") return expression.vectorType;
     if (expression.kind === "runtimeType") return expression.resultType;
+    if (expression.kind === "coercion") return expression.targetType;
     if (expression.kind === "assignment") {
         return assignmentTargetType(expression.target, context, node);
     }
@@ -905,6 +906,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_VECTOR_CONVERSION_SOURCE", "Vector conversion requires an Array literal or proven Vector", node);
             }
             return Object.assign(identity(node), { kind: "vectorConversion" as "vectorConversion", vectorType, source });
+        }
+        if (rawCallee.kind === "IDENTIFIER" && typeof rawCallee.text === "string"
+            && ["int", "uint", "Number", "Boolean", "String"].includes(rawCallee.text)
+            && !context.importsByLocal[rawCallee.text] && !context.locals[rawCallee.text]
+            && !context.parameters[rawCallee.text] && !context.fields[rawCallee.text]) {
+            const rawArguments = node.children[1]!.children;
+            if (rawArguments.length > 1) {
+                fail("HARDENED_COERCION_ARITY", "primitive AS3 coercion accepts zero or one argument", node);
+            }
+            const targetType = parseType(Object.assign({}, rawCallee, { kind: "TYPE" }), context, false);
+            const argument = rawArguments.length === 0 ? null : parseExpression(rawArguments[0]!, context, true);
+            return Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument });
         }
         let callee: SemanticExpression;
         if (rawCallee.kind === "IDENTIFIER" && rawCallee.text === "super") {

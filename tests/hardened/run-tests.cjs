@@ -85,6 +85,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.mkdirSync(generated, { recursive: true });
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Type.ts"), path.join(runtime, "AS3Type.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Vector.ts"), path.join(runtime, "AS3Vector.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Coerce.ts"), path.join(runtime, "AS3Coerce.ts"));
         fs.writeFileSync(path.join(stubs, "Sprite.ts"),
             "export class Sprite { public addEventListener(_type:string,_listener:Function):void {} }\n", "utf8");
         fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
@@ -290,6 +291,14 @@ function buildTree(options = {}) {
             ])]),
             localDeclaration("VAR_LIST", "matchesVector", "Boolean",
                 n("RELATION", null, [n("IDENTIFIER", "values"), n("OP", "is"), vectorType("int")])),
+            n("RETURN"),
+        ];
+    }
+    if (options.coercionWorkpack) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "signed", "int", call(n("IDENTIFIER", "int"), [n("LITERAL", "4294967295")])),
+            localDeclaration("VAR_LIST", "unsigned", "uint", call(n("IDENTIFIER", "uint"), [n("LITERAL", "-1")])),
+            localDeclaration("VAR_LIST", "message", "String", call(n("IDENTIFIER", "String"), [n("IDENTIFIER", "event")])),
             n("RETURN"),
         ];
     }
@@ -612,8 +621,14 @@ function main() {
     const nestedVectorOutput = api.emitSemanticProgram(nestedVectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(nestedVectorOutput.code,
         /private matrix: __as3Vector<__as3Vector<number> \| null> = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), 1\);/);
+    const coercionProgram = adapt(api, buildTree({ coercionWorkpack: true }), authority);
+    const coercionOutput = api.emitSemanticProgram(coercionProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(coercionOutput.code, /as3Int as __as3Int/);
+    assert.match(coercionOutput.code, /var signed: number = __as3Int\(4294967295\);/);
+    assert.match(coercionOutput.code, /var unsigned: number = __as3Uint\(-1\);/);
+    assert.match(coercionOutput.code, /var message: string = __as3String\(event\);/);
     assertGeneratedRuntimeTypechecks([vectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
-        nestedVectorOutput.code]);
+        nestedVectorOutput.code, coercionOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);
