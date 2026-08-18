@@ -799,6 +799,11 @@ function buildLocalBaseTree(options = {}) {
             localDeclaration("VAR_LIST", "shared", "Base", n("IDENTIFIER", "SCore")), n("RETURN"),
         ]));
     }
+    if (options.packageInstanceCall) {
+        members.push(method("callPackageInstance", [], "String", [n("RETURN", null, [
+            call(dot(n("IDENTIFIER", "SCore"), "describe"), [n("LITERAL", "1.5")]),
+        ])]));
+    }
     if (options.withPackageSymbols || options.withNamespace) {
         members.push(method("packageNamespaced", [], "void", [n("RETURN")], ["InternalSpace"]));
     }
@@ -860,6 +865,17 @@ function buildLocalBaseTree(options = {}) {
     ]));
     if (options.badLocalInstanceClosure) members.push(method("readInstanceClosure", [], "Function", [
         n("RETURN", null, [dot(n("IDENTIFIER", "worker"), "process")]),
+    ]));
+    if (options.ownProtectedInstance) {
+        members.push(method("ownProtected", [], "void", [n("RETURN")], ["protected"]));
+        members.push(method("callOwnProtected", [], "void", [
+            localDeclaration("VAR_LIST", "peer", "Demo", n("IDENTIFIER", "this")),
+            call(dot(n("IDENTIFIER", "peer"), "ownProtected")), n("RETURN"),
+        ]));
+    }
+    if (options.badBareNamespaceInstance) members.push(method("callBareNamespace", [], "void", [
+        localDeclaration("VAR_LIST", "other", "Base", n("LITERAL", "null")),
+        call(dot(n("IDENTIFIER", "other"), "namespacedRun")), n("RETURN"),
     ]));
     classChildren.push(n("CONTENT", null, members));
     return n("COMPILATION_UNIT", null, [
@@ -963,12 +979,12 @@ function adaptLocal(api, authority, options = {}) {
     const normalized = flatten(buildLocalBaseTree(options));
     const locals = localAuthority(api, normalized, options);
     const members = options.withoutMemberAuthority ? undefined : localMemberAuthority(api, locals,
-        options.mutateMemberAuthority || null);
+        options.mutateMemberAuthority || null, options);
     return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
         locals, options.logicalPath || "lobby/ui/Demo.as", members);
 }
 
-function localMemberAuthority(api, localTypes, mutate = null) {
+function localMemberAuthority(api, localTypes, mutate = null, options = {}) {
     const entries = localTypes.entries.map(entry => ({
         module: entry.module,
         qname: entry.qname,
@@ -1026,6 +1042,10 @@ function localMemberAuthority(api, localTypes, mutate = null) {
                 kind: "method", name: "namespacedRun", modifiers: [], namespaceName: "InternalSpace",
                 parameters: [], returnType: "void", fieldType: null, readonly: false,
             }, {
+                kind: "method", name: "describe", modifiers: ["public"], namespaceName: null,
+                parameters: [{ name: "value", type: "int", optional: false, rest: false }],
+                returnType: "String", fieldType: null, readonly: false,
+            }, {
                 kind: "field", name: "count", modifiers: ["protected"], namespaceName: null,
                 parameters: [], returnType: null, fieldType: "int", readonly: false,
             }, {
@@ -1038,7 +1058,10 @@ function localMemberAuthority(api, localTypes, mutate = null) {
             }] : [{
                 kind: "constructor", name: "Demo", modifiers: ["public"], namespaceName: null,
                 parameters: [], returnType: null, fieldType: null, readonly: false,
-            }],
+            }].concat(options.ownProtectedInstance ? [{
+                kind: "method", name: "ownProtected", modifiers: ["protected"], namespaceName: null,
+                parameters: [], returnType: "void", fieldType: null, readonly: false,
+            }] : []),
             packageInitializer: null,
         },
     }));
@@ -1289,6 +1312,15 @@ function main() {
         "HARDENED_LOCAL_MEMBER_VISIBILITY");
     assertErrorCode(() => adaptLocal(api, authority, { badLocalInstanceClosure: true }),
         "HARDENED_LOCAL_METHOD_CLOSURE");
+    const packageInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { withPackageSymbols: true, packageInstanceCall: true }),
+    { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(packageInstanceOutput.code, /return SCore!\.describe\(__as3Int\(1\.5\)\);/);
+    const ownProtectedOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { ownProtectedInstance: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(ownProtectedOutput.code, /peer!\.ownProtected\(\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { badBareNamespaceInstance: true }),
+        "HARDENED_LOCAL_INSTANCE_MEMBER");
     const localNormalizedForMembers = flatten(buildLocalBaseTree());
     const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
     const localMembers = localMemberAuthority(api, localTypesForMembers);

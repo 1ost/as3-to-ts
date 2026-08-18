@@ -976,7 +976,8 @@ function localInstanceNamedMembers(context: AdapterContext, qname: string, name:
         visited.add(current);
         const entry = localDeclaration(context, current, node);
         const members = entry.declaration!.members.filter(member => member.name === name
-            && member.kind !== "constructor" && member.modifiers.indexOf("static") < 0);
+            && member.kind !== "constructor" && member.modifiers.indexOf("static") < 0
+            && member.namespaceName === null);
         if (members.length > 0) return { members, ownerQName: current };
         if (entry.declaration!.baseQNames.length > 1) {
             fail("HARDENED_LOCAL_MEMBER_BASE", `class ${current} has an ambiguous base lineage`, node);
@@ -986,14 +987,35 @@ function localInstanceNamedMembers(context: AdapterContext, qname: string, name:
     return { members: [], ownerQName: null };
 }
 
+function localLineageContains(context: AdapterContext, startQName: string, ownerQName: string,
+    node: TreeNode): boolean {
+    const visited = new Set<string>();
+    let current: string | null = startQName;
+    while (current !== null) {
+        if (current === ownerQName) return true;
+        if (visited.has(current) || visited.size >= 1024) {
+            fail("HARDENED_LOCAL_MEMBER_CYCLE", "local visibility lineage is cyclic or exceeds its bound", node);
+        }
+        visited.add(current);
+        const entry = localDeclaration(context, current, node);
+        if (entry.declaration!.baseQNames.length > 1) {
+            fail("HARDENED_LOCAL_MEMBER_BASE", `class ${current} has an ambiguous base lineage`, node);
+        }
+        current = entry.declaration!.baseQNames.length === 1 ? entry.declaration!.baseQNames[0]! : null;
+    }
+    return false;
+}
+
 function assertLocalReceiverVisibility(member: LocalDeclarationMember, ownerQName: string,
-    context: AdapterContext, node: TreeNode): void {
+    receiverQName: string, context: AdapterContext, node: TreeNode): void {
     const visibility = memberVisibility(member.modifiers);
     const ownerPackage = ownerQName.slice(0, Math.max(0, ownerQName.lastIndexOf(".")));
     const currentPackage = context.classQualifiedName.slice(0,
         Math.max(0, context.classQualifiedName.lastIndexOf(".")));
     if (visibility === "public" || (visibility === "internal" && ownerPackage === currentPackage)
-        || (visibility === "private" && ownerQName === context.classQualifiedName)) return;
+        || (visibility === "private" && ownerQName === context.classQualifiedName)
+        || (visibility === "protected" && receiverQName === context.classQualifiedName
+            && localLineageContains(context, context.classQualifiedName, ownerQName, node))) return;
     fail("HARDENED_LOCAL_MEMBER_VISIBILITY",
         "local receiver member is not visible through the authenticated source type", node);
 }
@@ -1124,7 +1146,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
                 fail("HARDENED_LOCAL_INSTANCE_READ",
                     "local instance read requires one exact authenticated field or getter", node);
             }
-            assertLocalReceiverVisibility(readable[0]!, lookup.ownerQName!, context, node);
+            assertLocalReceiverVisibility(readable[0]!, lookup.ownerQName!, receiverQName, context, node);
             return authoritySemanticType(readable[0]!.kind === "field"
                 ? readable[0]!.fieldType! : readable[0]!.returnType!, context, node);
         }
@@ -1243,7 +1265,7 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
                 fail("HARDENED_LOCAL_INSTANCE_WRITE",
                     "local instance write requires one exact authenticated field or setter", node);
             }
-            assertLocalReceiverVisibility(writable[0]!, lookup.ownerQName!, context, node);
+            assertLocalReceiverVisibility(writable[0]!, lookup.ownerQName!, receiverQName, context, node);
             return authoritySemanticType(writable[0]!.kind === "field"
                 ? writable[0]!.fieldType! : writable[0]!.parameters[0]!.type, context, node);
         }
@@ -1928,7 +1950,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     capabilitySource = mapping.sourceQName;
                 }
             }
-        } else if (target.kind === "identifier" && context.importsByLocal[target.name]) {
+        } else if (target.kind === "identifier" && context.importsByLocal[target.name]
+            && (context.importsByLocal[target.name]!.authorityKind === "intrinsic"
+                || (context.importsByLocal[target.name]!.authorityKind === "local"
+                    && context.importsByLocal[target.name]!.localValueType === null))) {
             const imported = context.importsByLocal[target.name]!;
             if (imported.authorityKind === "local" && imported.localValueType === null) {
                 const members = localStaticNamedMembers(context, imported.sourceQualifiedName, name, node);
@@ -1947,8 +1972,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
                 capabilitySource = imported.sourceQualifiedName;
             } else {
-                const member = imported.authorityKind === "intrinsic"
-                    ? intrinsicMember(context, imported.sourceQualifiedName, "read", name) : null;
+                const member = intrinsicMember(context, imported.sourceQualifiedName, "read", name);
                 if (member === null) {
                     fail("HARDENED_STATIC_MEMBER", "static members require an explicit authenticated member", node);
                 }
@@ -1974,7 +1998,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                             "local receiver member lacks an authenticated declaration", node);
                     }
                     lookup.members.forEach(member =>
-                        assertLocalReceiverVisibility(member, lookup.ownerQName!, context, node));
+                        assertLocalReceiverVisibility(member, lookup.ownerQName!, receiverQName, context, node));
                     if (valuePosition && lookup.members.some(member => member.kind === "method")) {
                         fail("HARDENED_LOCAL_METHOD_CLOSURE",
                             "local receiver method closures remain held until stable identity is proven", node);
@@ -2143,7 +2167,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_LOCAL_INSTANCE_CALL",
                     "local receiver call requires one exact authenticated method", node);
             }
-            assertLocalReceiverVisibility(methods[0]!, lookup.ownerQName!, context, node);
+            assertLocalReceiverVisibility(methods[0]!, lookup.ownerQName!, receiverQName, context, node);
             assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node);
             resultType = authoritySemanticType(methods[0]!.returnType!, context, node);
         } else if (callee.kind === "member" && callee.capabilitySource !== null
