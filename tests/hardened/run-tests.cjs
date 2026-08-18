@@ -40,6 +40,30 @@ function git(repo, ...args) {
     return childProcess.execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" }).trim();
 }
 
+function assertMaintainedArrayReadEvidence(sourceRepo) {
+    const root = path.join(sourceRepo, "game-client/tapplication_main/src");
+    const cases = [
+        {
+            path: "Logics/HDChristmas/THDChristmasCarnivalLanguage.as",
+            sha256: "abbfdaa8ef43d6ee66183ebf5ce4dcbf81bcabc0d5914012ebc58852d4273b94",
+            reads: 6,
+        },
+        {
+            path: "Logics/HDNewYear/THDNewYearLuckEggLanguage.as",
+            sha256: "3786ad15ce99d7198c0a3e8c67caf62540e933549e2c67ecc4e321ea7d1edb8f",
+            reads: 3,
+        },
+    ];
+    cases.forEach(item => {
+        const bytes = fs.readFileSync(path.join(root, ...item.path.split("/")));
+        assert.equal(sha256(bytes), item.sha256, `${item.path} maintained source bytes drifted`);
+        const source = bytes.toString("utf8").replace(/\r\n?/g, "\n");
+        assert.match(source, /var _loc2_:Array = param1\.Language;/);
+        assert.equal((source.match(/_loc2_\[[0-9]+\]/g) || []).length, item.reads);
+        assert.doesNotMatch(source, /_loc2_\[[^\]]+\]\s*=/);
+    });
+}
+
 function compileHardenedSources(ts) {
     const output = fs.mkdtempSync(path.join(os.tmpdir(), "as3-semantic-ir-"));
     const sources = fs.readdirSync(path.join(ROOT, "src/hardened"))
@@ -89,6 +113,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Coerce.ts"), path.join(runtime, "AS3Coerce.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Dictionary.ts"), path.join(runtime, "AS3Dictionary.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3ByteArray.ts"), path.join(runtime, "AS3ByteArray.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Array.ts"), path.join(runtime, "AS3Array.ts"));
         fs.writeFileSync(path.join(stubs, "Sprite.ts"),
             "export class Sprite { public addEventListener(_type:string,_listener:Function,_capture=false,_priority=0,_weak=false):void {} }\n", "utf8");
         fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
@@ -588,10 +613,53 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
+    const arrayIndexOptions = options.arrayReadWorkpack || options.arrayNegativeLiteral
+        || options.arrayFractionalLiteral || options.arrayUintMaxLiteral || options.arrayNumberIndex
+        || options.arrayStringIndex || options.arrayWrite || options.arrayDelete
+        || options.objectIndex || options.displayIndex;
+    if (arrayIndexOptions) {
+        const arrayIndex = options.arrayNegativeLiteral ? n("LITERAL", "-1")
+            : options.arrayFractionalLiteral ? n("LITERAL", "1.5")
+                : options.arrayUintMaxLiteral ? n("LITERAL", "4294967295")
+                    : options.arrayNumberIndex ? n("IDENTIFIER", "numberIndex")
+                        : options.arrayStringIndex ? n("LITERAL", '"zero"')
+                            : n("LITERAL", "0");
+        const target = options.objectIndex ? n("IDENTIFIER", "record")
+            : options.displayIndex ? n("IDENTIFIER", "display") : n("IDENTIFIER", "items");
+        onEventBody = options.arrayReadWorkpack ? [
+            localDeclaration("VAR_LIST", "first", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("LITERAL", "0")])),
+            localDeclaration("VAR_LIST", "byInt", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("IDENTIFIER", "index")])),
+            localDeclaration("VAR_LIST", "byUint", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("IDENTIFIER", "unsignedIndex")])),
+            localDeclaration("VAR_LIST", "coercedInt", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"),
+                    call(n("IDENTIFIER", "int"), [n("IDENTIFIER", "numberIndex")])])),
+            localDeclaration("VAR_LIST", "lastLegal", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("LITERAL", "4294967294")])),
+            localDeclaration("VAR_LIST", "count", "uint", dot(n("IDENTIFIER", "items"), "length")),
+            n("RETURN"),
+        ] : options.arrayWrite ? [
+            assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("LITERAL", "0")]),
+                n("LITERAL", '"changed"')),
+            n("RETURN"),
+        ] : options.arrayDelete ? [
+            n("DELETE", null, [n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("LITERAL", "0")])]),
+            n("RETURN"),
+        ] : [
+            localDeclaration("VAR_LIST", "found", "Object", n("ARRAY_ACCESSOR", null, [target, arrayIndex])),
+            n("RETURN"),
+        ];
+    }
     const members = [
         field,
         constructor(body),
-        method("onEvent", [parameter("event", "Event")], "void",
+        method("onEvent", arrayIndexOptions ? [
+            parameter("event", "Event"), parameter("items", "Array"), parameter("index", "int"),
+            parameter("unsignedIndex", "uint"), parameter("numberIndex", "Number"),
+            parameter("record", "Object"), parameter("display", "Sprite"),
+        ] : [parameter("event", "Event")], "void",
             options.superInMethod ? [call(n("IDENTIFIER", "super"))] : onEventBody,
             options.staticMethod ? ["public", "static"] : ["public"]),
     ];
@@ -1200,6 +1268,7 @@ function main() {
     assert.equal(git(targetRepo, "hash-object", requiredEnvironmentPath("HARDENED_TARGET_CAPABILITIES")), EXPECTED_TARGET_BLOB);
     assert.equal(sha256(sourceCensusJson), EXPECTED_SOURCE_SHA256);
     assert.equal(sha256(targetCapabilitiesJson), EXPECTED_TARGET_SHA256);
+    assertMaintainedArrayReadEvidence(sourceRepo);
     const mappingJson = api.canonicalMappingJson(mappingDocument());
     const authority = api.loadCapabilityAuthority({
         sourceCensusJson,
@@ -1660,6 +1729,34 @@ function main() {
     assert.match(byteArrayOutput.code, /this\.bytes!\.writeMultiByte\("mail", ""\);/);
     assertErrorCode(() => adapt(api, buildTree({ heldByteArrayMember: true }), authority),
         "HARDENED_INTRINSIC_MEMBER");
+    const arrayProgram = adapt(api, buildTree({ arrayReadWorkpack: true }), authority);
+    const arrayOutput = api.emitSemanticProgram(arrayProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(arrayOutput.code,
+        /import \{ as3ArrayIndex as __as3ArrayIndex \} from "@bleach\/as3-runtime\/AS3Array";/);
+    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(0\)\]/);
+    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(index\)\]/);
+    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(unsignedIndex\)\]/);
+    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(__as3Int\(numberIndex\)\)\]/);
+    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(4294967294\)\]/);
+    assert.match(arrayOutput.code, /var count: number = items!\.length;/);
+    assert.doesNotMatch(arrayOutput.code, /\bany\b/);
+    assertErrorCode(() => adapt(api, buildTree({ arrayNegativeLiteral: true }), authority),
+        "HARDENED_ARRAY_INDEX_LITERAL");
+    assertErrorCode(() => adapt(api, buildTree({ arrayFractionalLiteral: true }), authority),
+        "HARDENED_ARRAY_INDEX_LITERAL");
+    assertErrorCode(() => adapt(api, buildTree({ arrayUintMaxLiteral: true }), authority),
+        "HARDENED_ARRAY_INDEX_LITERAL");
+    assertErrorCode(() => adapt(api, buildTree({ arrayNumberIndex: true }), authority),
+        "HARDENED_ARRAY_INDEX_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ arrayStringIndex: true }), authority),
+        "HARDENED_ARRAY_INDEX_LITERAL");
+    assertErrorCode(() => adapt(api, buildTree({ arrayWrite: true }), authority),
+        "HARDENED_ARRAY_INDEX_WRITE");
+    assertErrorCode(() => adapt(api, buildTree({ arrayDelete: true }), authority),
+        "HARDENED_DELETE_TARGET");
+    assertErrorCode(() => adapt(api, buildTree({ objectIndex: true }), authority), "HARDENED_INDEX_TARGET");
+    assertErrorCode(() => adapt(api, buildTree({ displayIndex: true }), authority), "HARDENED_INDEX_TARGET");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1675,7 +1772,7 @@ function main() {
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,
         nestedExpressionOutput.code,
         labelOutput.code, interfaceOutput.code, localNamespaceOutput.code, overrideOutput.code, forInOutput.code,
-        nullableOutput.code, lambdaOutput.code, dictionaryOutput.code, byteArrayOutput.code]);
+        nullableOutput.code, lambdaOutput.code, dictionaryOutput.code, byteArrayOutput.code, arrayOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

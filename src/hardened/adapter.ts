@@ -569,6 +569,10 @@ function vectorElement(type: SemanticType): SemanticType | null {
     return type.emittedName === "AS3Vector" && type.typeArguments.length === 1 ? type.typeArguments[0]! : null;
 }
 
+function isArrayType(type: SemanticType): boolean {
+    return type.sourceName === "Array" && type.emittedName === "Array";
+}
+
 function callbackSignature(expression: SemanticExpression, context: AdapterContext):
     { parameters: SemanticParameter[]; returnType: SemanticType } | null {
     if (expression.kind === "lambda") {
@@ -1216,6 +1220,9 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             if (expression.name === "length") return semanticType(node, "uint", "number");
             if (expression.name === "fixed") return semanticType(node, "Boolean", "boolean");
         }
+        if (isArrayType(ownerType) && expression.name === "length") {
+            return semanticType(node, "uint", "number");
+        }
     }
     if (expression.kind === "literal") {
         if (expression.value === null) {
@@ -1338,7 +1345,12 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
             if (expression.name === "fixed") return semanticType(node, "Boolean", "boolean");
         }
     }
-    if (expression.kind === "index") return expression.resultType;
+    if (expression.kind === "index") {
+        if (expression.accessKind === "array") {
+            fail("HARDENED_ARRAY_INDEX_WRITE", "Array indexed writes remain outside the proven read-only slice", node);
+        }
+        return expression.resultType;
+    }
     fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable parameter or instance field", node);
 }
 
@@ -1916,8 +1928,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const element = vectorElement(ownerType);
         const dictionary = isDictionaryType(ownerType);
         const byteArray = intrinsicSourceForType(ownerType, context) === "flash.utils.ByteArray";
-        if (!element && !dictionary && !byteArray) {
-            fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Vector, ByteArray, or intrinsic Dictionary", node);
+        const array = isArrayType(ownerType);
+        if (!element && !dictionary && !byteArray && !array) {
+            fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Array, Vector, ByteArray, or intrinsic Dictionary", node);
         }
         let index = parseExpression(node.children[1]!, context, true);
         const indexType = assignmentType(index, context, node.children[1]!);
@@ -1930,9 +1943,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (dictionary && indexType.sourceName === "void") {
             fail("HARDENED_DICTIONARY_KEY", "Dictionary key must be a proven value", node.children[1]!);
         }
+        if (array) {
+            if (index.kind === "literal") {
+                if (typeof index.value !== "number" || !Number.isInteger(index.value)
+                    || index.value < 0 || index.value > 0xfffffffe) {
+                    fail("HARDENED_ARRAY_INDEX_LITERAL",
+                        "Array literal index must be an integer from 0 through 4294967294", node.children[1]!);
+                }
+            } else if (indexType.sourceName !== "int" && indexType.sourceName !== "uint") {
+                fail("HARDENED_ARRAY_INDEX_TYPE",
+                    "Array dynamic index requires an exact int or uint source type", node.children[1]!);
+            }
+        }
         return Object.assign(identity(node), {
             kind: "index" as "index", accessKind: dictionary ? "dictionary" as "dictionary"
-                : byteArray ? "byteArray" as "byteArray" : "vector" as "vector",
+                : byteArray ? "byteArray" as "byteArray" : array ? "array" as "array" : "vector" as "vector",
             target, targetNullable: ownerType.nullable, index,
             resultType: element || (byteArray ? semanticType(node, "uint", "number") : semanticType(node, "*", "unknown")),
         });
@@ -2072,8 +2097,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         capabilitySource = lookup.ownerQName;
                     }
                 } else {
-                    if (vectorElement(targetType) === null
-                        || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name))) {
+                    const arrayLength = isArrayType(targetType) && name === "length";
+                    if (!arrayLength && (vectorElement(targetType) === null
+                        || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", "member target is outside the admitted subset", node);
                     }
                     capabilitySource = targetType.sourceName;

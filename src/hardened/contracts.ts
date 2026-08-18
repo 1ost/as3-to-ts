@@ -179,7 +179,7 @@ export interface ObjectExpression extends SemanticIdentity {
 
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
-    accessKind: "vector" | "dictionary" | "byteArray";
+    accessKind: "vector" | "dictionary" | "byteArray" | "array";
     target: SemanticExpression;
     targetNullable: boolean;
     index: SemanticExpression;
