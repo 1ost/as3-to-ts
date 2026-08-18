@@ -1345,9 +1345,27 @@ function main() {
     const flashBaseInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
         { localInstanceFlashBase: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(flashBaseInstanceOutput.code, /this\.worker!\.addEventListener\("ready", function \(\): void/);
+    const multipleFlashBaseOutput = api.emitSemanticProgram(adaptLocal(api, authority, {
+        localInstanceFlashBase: true,
+        mutateMemberAuthority: entries => {
+            entries.find(entry => entry.qname === "lobby.base.Worker").declaration.baseQNames = [
+                "flash.display.Sprite", "flash.events.IEventDispatcher",
+            ];
+        },
+    }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(multipleFlashBaseOutput.code,
+        /this\.worker!\.addEventListener\("ready", function \(\): void/);
     const multipleBaseOutput = api.emitSemanticProgram(adaptLocal(api, authority,
         { multipleLocalBases: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(multipleBaseOutput.code, /return this\.worker!\.describe\(__as3Int\(1\.5\)\);/);
+    assertErrorCode(() => adaptLocal(api, authority, {
+        localInstanceCall: true,
+        mutateMemberAuthority: entries => {
+            entries.find(entry => entry.qname === "lobby.base.Worker").declaration.baseQNames = [
+                "lobby.base.Worker",
+            ];
+        },
+    }), "HARDENED_LOCAL_MEMBER_CYCLE");
     const localNormalizedForMembers = flatten(buildLocalBaseTree());
     const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
     const localMembers = localMemberAuthority(api, localTypesForMembers);
