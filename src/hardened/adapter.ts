@@ -89,6 +89,8 @@ interface AdapterContext {
     namespaceNames: { [name: string]: true };
     lambdaDepth: number;
     currentCallable: MethodHeader | null;
+    ownRecordTargetDepth: number;
+    ownRecordInitializations: number;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -571,6 +573,25 @@ function vectorElement(type: SemanticType): SemanticType | null {
 
 function isArrayType(type: SemanticType): boolean {
     return type.sourceName === "Array" && type.emittedName === "Array";
+}
+
+const TREE_NODE_QNAME = "Foundation.SensitiveWord.TTreeNode";
+const TREE_NODE_SOURCE_PATH = "game-client/tapplication_main/src/Foundation/SensitiveWord/TTreeNode.as";
+
+function isTreeNodeContext(context: AdapterContext): boolean {
+    if (context.classQualifiedName !== TREE_NODE_QNAME || context.resolveCurrentLocal === null) return false;
+    const current = context.resolveCurrentLocal().entry;
+    return current.module === "application" && current.qname === TREE_NODE_QNAME
+        && current.sourcePath === TREE_NODE_SOURCE_PATH && current.typeKind === "class";
+}
+
+function ownRecordValue(type: SemanticType): SemanticType | null {
+    return type.emittedName === "AS3OwnRecord" && type.typeArguments.length === 1 ? type.typeArguments[0]! : null;
+}
+
+function isTreeNodeRecordMember(expression: SemanticExpression, context: AdapterContext): boolean {
+    return isTreeNodeContext(context) && expression.kind === "member" && expression.target.kind === "this"
+        && expression.name === "FData" && expression.capabilitySource === null;
 }
 
 function callbackSignature(expression: SemanticExpression, context: AdapterContext):
@@ -1239,6 +1260,9 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         return semanticType(node, "Function", "Function", [], false);
     }
     if (expression.kind === "object") return semanticType(node, "Object", "unknown", [], false);
+    if (expression.kind === "ownRecord") {
+        return semanticType(node, "Object", "AS3OwnRecord", [expression.valueType], false);
+    }
     if (expression.kind === "new") {
         return withNullability(expression.sourceType, false);
     }
@@ -1366,6 +1390,20 @@ function assertAssignmentCompatible(target: SemanticType, value: SemanticType, n
 function adaptAssignmentValue(target: SemanticType, expression: SemanticExpression,
     context: AdapterContext, node: TreeNode): SemanticExpression {
     const value = assignmentType(expression, context, node);
+    const recordValue = ownRecordValue(target);
+    if (recordValue !== null) {
+        if (!isTreeNodeContext(context) || context.currentCallable?.constructor !== true
+            || expression.kind !== "object" || expression.properties.length !== 0) {
+            fail("HARDENED_OWN_RECORD_INITIALIZER",
+                "TTreeNode.FData is initialized exactly once from the authenticated empty literal", node);
+        }
+        context.ownRecordInitializations += 1;
+        if (context.ownRecordInitializations > 1) {
+            fail("HARDENED_OWN_RECORD_INITIALIZER",
+                "TTreeNode.FData requires exactly one authenticated constructor initialization", node);
+        }
+        return Object.assign(identity(node), { kind: "ownRecord" as "ownRecord", valueType: recordValue });
+    }
     if (["Number", "int", "uint"].includes(target.sourceName)
         && ["Number", "int", "uint"].includes(value.sourceName)
         && target.sourceName !== value.sourceName) {
@@ -1771,7 +1809,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children.length !== 1) {
             fail("HARDENED_DELETE_SHAPE", "delete requires exactly one indexed target", node);
         }
-        const target = parseExpression(node.children[0]!, context, false);
+        context.ownRecordTargetDepth += 1;
+        let target: SemanticExpression;
+        try {
+            target = parseExpression(node.children[0]!, context, false);
+        } finally {
+            context.ownRecordTargetDepth -= 1;
+        }
         if (target.kind !== "index" || target.accessKind !== "dictionary") {
             fail("HARDENED_DELETE_TARGET", "delete is admitted only for an authenticated Dictionary index", node.children[0]!);
         }
@@ -1801,6 +1845,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         if (context.fields[name]) {
             if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
+            if (isTreeNodeContext(context) && name === "FData" && context.ownRecordTargetDepth === 0) {
+                fail("HARDENED_OWN_RECORD_ESCAPE", "TTreeNode.FData is confined to authenticated own-record indexing", node);
+            }
             return implicitThisMember(node, name);
         }
         if (context.accessors[name]) {
@@ -1868,7 +1915,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_ASSIGNMENT_CONTEXT", "assignment is admitted only as one top-level expression statement", node);
         }
         const operator = requiredText(node.children[1]!, "assignment operator");
-        const target = parseExpression(node.children[0]!, context, false);
+        context.ownRecordTargetDepth += 1;
+        let target: SemanticExpression;
+        try {
+            target = parseExpression(node.children[0]!, context, false);
+        } finally {
+            context.ownRecordTargetDepth -= 1;
+        }
         if (target.kind !== "identifier" && target.kind !== "member" && target.kind !== "index") {
             fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable lvalue", node.children[0]!);
         }
@@ -1923,14 +1976,24 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children.length !== 2) {
             fail("HARDENED_INDEX_SHAPE", "indexed access requires one target and one index", node);
         }
-        const target = parseExpression(node.children[0]!, context, true);
+        context.ownRecordTargetDepth += 1;
+        let target: SemanticExpression;
+        try {
+            target = parseExpression(node.children[0]!, context, true);
+        } finally {
+            context.ownRecordTargetDepth -= 1;
+        }
         const ownerType = assignmentType(target, context, node.children[0]!);
         const element = vectorElement(ownerType);
         const dictionary = isDictionaryType(ownerType);
         const byteArray = intrinsicSourceForType(ownerType, context) === "flash.utils.ByteArray";
         const array = isArrayType(ownerType);
-        if (!element && !dictionary && !byteArray && !array) {
-            fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Array, Vector, ByteArray, or intrinsic Dictionary", node);
+        const ownRecord = ownRecordValue(ownerType);
+        if (!element && !dictionary && !byteArray && !array && !ownRecord) {
+            fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Array, Vector, ByteArray, intrinsic Dictionary, or authenticated local record", node);
+        }
+        if (ownRecord && !isTreeNodeRecordMember(target, context)) {
+            fail("HARDENED_OWN_RECORD_TARGET", "local record access is confined to TTreeNode.FData", node.children[0]!);
         }
         let index = parseExpression(node.children[1]!, context, true);
         const indexType = assignmentType(index, context, node.children[1]!);
@@ -1955,11 +2018,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     "Array dynamic index requires an exact int or uint source type", node.children[1]!);
             }
         }
+        if (ownRecord && (indexType.sourceName !== "String" || indexType.emittedName !== "string")) {
+            fail("HARDENED_OWN_RECORD_KEY", "TTreeNode.FData requires one exact String key", node.children[1]!);
+        }
         return Object.assign(identity(node), {
             kind: "index" as "index", accessKind: dictionary ? "dictionary" as "dictionary"
-                : byteArray ? "byteArray" as "byteArray" : array ? "array" as "array" : "vector" as "vector",
+                : byteArray ? "byteArray" as "byteArray" : array ? "array" as "array"
+                    : ownRecord ? "ownRecord" as "ownRecord" : "vector" as "vector",
             target, targetNullable: ownerType.nullable, index,
-            resultType: element || (byteArray ? semanticType(node, "uint", "number") : semanticType(node, "*", "unknown")),
+            resultType: element || (ownRecord ? withNullability(ownRecord, true) : null)
+                || (byteArray ? semanticType(node, "uint", "number") : semanticType(node, "*", "unknown")),
         });
     }
     if (node.kind === "DOT") {
@@ -2105,6 +2173,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     capabilitySource = targetType.sourceName;
                 }
             }
+        }
+        if (target.kind === "this" && isTreeNodeContext(context) && name === "FData"
+            && context.ownRecordTargetDepth === 0) {
+            fail("HARDENED_OWN_RECORD_ESCAPE", "TTreeNode.FData is confined to authenticated own-record indexing", node);
         }
         return Object.assign(identity(node), {
             kind: "member" as "member", target, targetNullable, name, capabilitySource,
@@ -2939,8 +3011,17 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
         } else if (readonly) {
             fail("HARDENED_CONST_INITIALIZER", "AS3 const fields require an explicit admitted initializer", declaration);
         }
-        const fieldType = parseType(oneType(declaration), context, false);
-        if (initializer !== null) {
+        let fieldType = parseType(oneType(declaration), context, false);
+        const treeNodeRecord = isTreeNodeContext(context) && name === "FData";
+        if (treeNodeRecord) {
+            if (readonly || modifiers.join("\u0000") !== "protected" || fieldType.sourceName !== "Object"
+                || initializer !== null) {
+                fail("HARDENED_OWN_RECORD_DECLARATION",
+                    "TTreeNode.FData requires the authenticated protected uninitialized Object field", declaration);
+            }
+            const valueType = semanticType(declaration, context.className, context.className, [], false);
+            fieldType = semanticType(declaration, "Object", "AS3OwnRecord", [valueType], false);
+        } else if (initializer !== null) {
             initializer = adaptAssignmentValue(fieldType, initializer, context, init!.children[0]!);
         }
         const field: SemanticField = Object.assign(identity(declaration), {
@@ -3110,7 +3191,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         localMemberAuthority, resolveCurrentLocal, fields: Object.create(null), methods: Object.create(null),
         accessors: Object.create(null), parameters: Object.create(null), locals: Object.create(null),
         loopDepth: 0, breakableDepth: 0, labels: [], namespaceNames: Object.create(null), lambdaDepth: 0,
-        currentCallable: null,
+        currentCallable: null, ownRecordTargetDepth: 0, ownRecordInitializations: 0,
     };
     const type = parseType(oneType(declarator), context, false);
     const init = one(declarator, "INIT")!;
@@ -3274,7 +3355,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         labels: [],
         namespaceNames,
         lambdaDepth: 0,
-        currentCallable: null,
+        currentCallable: null, ownRecordTargetDepth: 0, ownRecordInitializations: 0,
     };
     if (classNode.kind === "INTERFACE") {
         const modifiers = parseModifiers(classNode, true);
@@ -3528,6 +3609,10 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             fail("HARDENED_CLASS_MEMBER", "class member kind is unsupported: " + node.kind, node);
         }
     });
+    if (isTreeNodeContext(placeholder) && placeholder.ownRecordInitializations !== 1) {
+        fail("HARDENED_OWN_RECORD_INITIALIZER",
+            "TTreeNode.FData requires exactly one authenticated constructor initialization", classNode);
+    }
     const declaration: SemanticClass = Object.assign(identity(classNode), {
         declarationKind: "class" as "class", name: className,
         modifiers: parseModifiers(classNode, true),

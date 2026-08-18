@@ -114,6 +114,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Dictionary.ts"), path.join(runtime, "AS3Dictionary.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3ByteArray.ts"), path.join(runtime, "AS3ByteArray.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Array.ts"), path.join(runtime, "AS3Array.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3OwnRecord.ts"), path.join(runtime, "AS3OwnRecord.ts"));
         fs.writeFileSync(path.join(stubs, "Sprite.ts"),
             "export class Sprite { public addEventListener(_type:string,_listener:Function,_capture=false,_priority=0,_weak=false):void {} }\n", "utf8");
         fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
@@ -784,6 +785,71 @@ function flatten(tree) {
 function adapt(api, tree, authority) {
     const normalized = flatten(tree);
     return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256);
+}
+
+function buildTreeNodeRecordTree(options = {}) {
+    const className = options.otherClass ? "OtherNode" : "TTreeNode";
+    const recordTarget = () => dot(n("IDENTIFIER", "this"), "FData");
+    const key = options.numericKey ? n("LITERAL", "0") : n("IDENTIFIER", "param1");
+    const members = [
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "FData"), type("Object"),
+        ])]),
+        method(className, [], "", [
+            call(n("IDENTIFIER", "super")),
+            ...(options.missingInitializer ? [] : [
+                assignment(recordTarget(), options.badInitializer
+                    ? objectLiteral([["bad", n("LITERAL", "1")]]) : objectLiteral([])),
+            ]),
+            ...(options.duplicateInitializer ? [assignment(recordTarget(), objectLiteral([]))] : []),
+        ], ["public"]),
+        method("GetNode", [parameter("param1", options.numericKey ? "Number" : "String")], className,
+            options.escapeRecord ? [n("RETURN", null, [recordTarget()])]
+                : [n("RETURN", null, [n("ARRAY_ACCESSOR", null, [recordTarget(), key])])]),
+        method("SetNode", [parameter("param1", "String")], className, [
+            localDeclaration("VAR_LIST", "created", className, n("LITERAL", "null")),
+            assignment(n("IDENTIFIER", "created"), construct(className)),
+            assignment(n("ARRAY_ACCESSOR", null, [recordTarget(), n("IDENTIFIER", "param1")]),
+                n("IDENTIFIER", "created")),
+            n("RETURN", null, [n("IDENTIFIER", "created")]),
+        ]),
+    ];
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [n("NAME", options.otherClass ? "Foundation.Other" : "Foundation.SensitiveWord"),
+            n("CONTENT", null, [n("CLASS", null, [
+                n("NAME", className), mods("public"), n("CONTENT", null, members),
+            ])])]),
+        n("CONTENT"),
+    ]);
+}
+
+function adaptTreeNodeRecord(api, authority, options = {}) {
+    const normalized = flatten(buildTreeNodeRecordTree(options));
+    const other = options.otherClass === true;
+    const qname = other ? "Foundation.Other.OtherNode" : "Foundation.SensitiveWord.TTreeNode";
+    const logicalPath = other ? "Foundation/Other/OtherNode.as" : "Foundation/SensitiveWord/TTreeNode.as";
+    const entry = {
+        componentId: "scc-00001", graphSourceSha256: "8".repeat(64), importable: true,
+        module: "application", nodeId: "0000000000000100", prerequisites: [], qname,
+        sourcePath: `game-client/tapplication_main/src/${logicalPath}`,
+        sourceContentSha256: sha256(normalized.sourceText),
+        targetPath: `game-client/layaair/src/application/${logicalPath.replace(/\.as$/, ".ts")}`,
+        topologicalLevel: 0, typeKind: "class",
+    };
+    const document = {
+        dependencyGraphRawSha256: "2".repeat(64), dependencyGraphSemanticSha256: "3".repeat(64),
+        entries: [entry], entryCount: 1, schema: "bleach-local-as3-type-map@2",
+        sourceManifestSha256: "4".repeat(64),
+    };
+    const json = `${canonicalJson(document)}\n`;
+    const locals = api.loadLocalTypeAuthority({
+        expectedDependencyGraphRawSha256: document.dependencyGraphRawSha256,
+        expectedDependencyGraphSemanticSha256: document.dependencyGraphSemanticSha256,
+        expectedEntryCount: 1, expectedSourceManifestSha256: document.sourceManifestSha256,
+        json, sha256: sha256(json),
+    }, sha256);
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
+        locals, logicalPath);
 }
 
 function buildInterfaceTree(options = {}) {
@@ -1713,6 +1779,28 @@ function main() {
     assert.match(dictionaryOutput.code, /for \(key of this\.dictionary!\.keys\(\)\)/);
     assertErrorCode(() => adapt(api, buildTree({ badDictionaryConstructor: true }), authority),
         "HARDENED_DICTIONARY_CONSTRUCTOR");
+    const recordProgram = adaptTreeNodeRecord(api, authority);
+    const recordOutput = api.emitSemanticProgram(recordProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(recordOutput.code,
+        /import \{ AS3OwnRecord as __AS3OwnRecord, as3CreateOwnRecord as __as3CreateOwnRecord, as3OwnRecordGet as __as3OwnRecordGet, as3OwnRecordSet as __as3OwnRecordSet \} from "@bleach\/as3-runtime\/AS3OwnRecord";/);
+    assert.match(recordOutput.code, /protected FData: __AS3OwnRecord<TTreeNode>;/);
+    assert.match(recordOutput.code, /this\.FData = __as3CreateOwnRecord<TTreeNode>\(\);/);
+    assert.match(recordOutput.code, /return __as3OwnRecordGet\(this\.FData, param1\);/);
+    assert.match(recordOutput.code, /__as3OwnRecordSet\(this\.FData, param1, created\);/);
+    assert.doesNotMatch(recordOutput.code, /\bany\b|Object\.prototype|\[[^\]]+\]/);
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { numericKey: true }),
+        "HARDENED_OWN_RECORD_KEY");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { escapeRecord: true }),
+        "HARDENED_OWN_RECORD_ESCAPE");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { badInitializer: true }),
+        "HARDENED_OWN_RECORD_INITIALIZER");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { missingInitializer: true }),
+        "HARDENED_OWN_RECORD_INITIALIZER");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { duplicateInitializer: true }),
+        "HARDENED_OWN_RECORD_INITIALIZER");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { otherClass: true }),
+        "HARDENED_INDEX_TARGET");
     const byteArrayProgram = adapt(api, buildTree({ byteArrayWorkpack: true }), authority);
     const byteArrayOutput = api.emitSemanticProgram(byteArrayProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1772,7 +1860,8 @@ function main() {
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,
         nestedExpressionOutput.code,
         labelOutput.code, interfaceOutput.code, localNamespaceOutput.code, overrideOutput.code, forInOutput.code,
-        nullableOutput.code, lambdaOutput.code, dictionaryOutput.code, byteArrayOutput.code, arrayOutput.code]);
+        nullableOutput.code, lambdaOutput.code, dictionaryOutput.code, byteArrayOutput.code,
+        arrayOutput.code, recordOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

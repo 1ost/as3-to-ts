@@ -62,6 +62,14 @@ function baseTypeNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
         return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier("__as3Vector"),
             [vectorElementTypeNode(type.typeArguments[0]!, ts)]);
     }
+    if (type.emittedName === "AS3OwnRecord") {
+        if (type.typeArguments.length !== 1) {
+            throw new HardenedSemanticError("HARDENED_EMIT_OWN_RECORD_TYPE",
+                "own-record semantic type requires one value type");
+        }
+        return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier("__AS3OwnRecord"),
+            [typeNode(type.typeArguments[0]!, ts)]);
+    }
     if (type.emittedName === "boolean") {
         return ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword);
     }
@@ -186,6 +194,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             ts.factory.createPropertyAssignment(ts.factory.createStringLiteral(property.name),
                 expressionNode(property.value, ts))), false);
     }
+    if (expression.kind === "ownRecord") {
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3CreateOwnRecord"),
+            [typeNode(expression.valueType, ts)], []);
+    }
     if (expression.kind === "index") {
         const target = expressionNode(expression.target, ts);
         const admittedTarget = expression.targetNullable ? ts.factory.createNonNullExpression(target) : target;
@@ -194,6 +206,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 ts.factory.createPropertyAccessExpression(admittedTarget, "get"), undefined,
                 [expressionNode(expression.index, ts)],
             );
+        }
+        if (expression.accessKind === "ownRecord") {
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3OwnRecordGet"), undefined,
+                [admittedTarget, expressionNode(expression.index, ts)]);
         }
         return ts.factory.createElementAccessExpression(
             admittedTarget,
@@ -235,6 +251,14 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 ts.factory.createPropertyAccessExpression(admittedTarget, "set"), undefined,
                 [expressionNode(expression.target.index, ts), expressionNode(expression.value, ts)],
             );
+        }
+        if (expression.target.kind === "index" && expression.target.accessKind === "ownRecord") {
+            const target = expressionNode(expression.target.target, ts);
+            const admittedTarget = expression.target.targetNullable
+                ? ts.factory.createNonNullExpression(target) : target;
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3OwnRecordSet"), undefined, [
+                admittedTarget, expressionNode(expression.target.index, ts), expressionNode(expression.value, ts),
+            ]);
         }
         return ts.factory.createBinaryExpression(
             expressionNode(expression.target, ts),
@@ -808,6 +832,17 @@ function programUsesArrayIndex(program: SemanticProgram): boolean {
     return visit(program);
 }
 
+function ownRecordRuntimeImport(ts: TypeScriptCompilerApi): any {
+    const names = [
+        ["AS3OwnRecord", "__AS3OwnRecord"], ["as3CreateOwnRecord", "__as3CreateOwnRecord"],
+        ["as3OwnRecordGet", "__as3OwnRecordGet"], ["as3OwnRecordSet", "__as3OwnRecordSet"],
+    ].map(([exported, local]) => ts.factory.createImportSpecifier(false,
+        ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!)));
+    return ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports(names)),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3OwnRecord"), undefined);
+}
+
 export function emitSemanticProgram(program: SemanticProgram, options: EmitterOptions): EmittedTypeScript {
     assertAdaptedSemanticProgram(program);
     const ts = options.compiler;
@@ -821,6 +856,9 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (programUsesRuntimeType(program) || implementsTypes.length > 0) imports.push(runtimeTypeImport(ts));
     if (programHasKind(program, "coercion")) imports.push(coercionRuntimeImport(ts));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
+    if (programHasKind(program, "ownRecord")) {
+        imports.push(ownRecordRuntimeImport(ts));
+    }
     if (program.declaration.declarationKind === "packageField") {
         const declaration = ts.factory.createVariableStatement(
             [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],

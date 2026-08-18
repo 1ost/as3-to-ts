@@ -177,9 +177,14 @@ export interface ObjectExpression extends SemanticIdentity {
     properties: ObjectProperty[];
 }
 
+export interface OwnRecordExpression extends SemanticIdentity {
+    kind: "ownRecord";
+    valueType: SemanticType;
+}
+
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
-    accessKind: "vector" | "dictionary" | "byteArray" | "array";
+    accessKind: "vector" | "dictionary" | "byteArray" | "array" | "ownRecord";
     target: SemanticExpression;
     targetNullable: boolean;
     index: SemanticExpression;
@@ -354,7 +359,7 @@ export interface UpdateExpression extends SemanticIdentity {
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
-    ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | IndexExpression | VectorConversionExpression |
+    ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |
     RuntimeTypeExpression | CoercionExpression;
 
 export interface ExpressionStatement extends SemanticIdentity {

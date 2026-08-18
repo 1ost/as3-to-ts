@@ -192,3 +192,24 @@ test("qualification records holds without materializing TypeScript", t => {
     assert.equal(report.counts.HARDENED_TYPE_UNMAPPED, 1);
     assert.deepEqual(report.files.map(item => item.status), ["admitted", "held"]);
 });
+
+test("the authenticated TTreeNode record advances without general Object admission", t => {
+    const root = temporaryDirectory(t);
+    const source = path.join(root, "source");
+    const output = path.join(root, "qualification");
+    const portable = "Foundation/SensitiveWord/TTreeNode.as";
+    fs.mkdirSync(source);
+    write(source, portable, fs.readFileSync(path.join(sourceRepository,
+        "game-client/tapplication_main/src", ...portable.split("/")), "utf8"));
+    const result = spawnSync(process.execPath, [executable, "qualify", source, output,
+        "--source-census", sourceCensus, "--target-capabilities", targetCapabilities], {
+        cwd: root, encoding: "utf8", timeout: 20_000, windowsHide: true,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8"));
+    assert.equal(report.generatedTypeScriptMaterialized, false);
+    assert.equal(report.files.length, 1);
+    assert.equal(report.files[0].sourcePath, portable);
+    assert.equal(report.files[0].code, "HARDENED_WHILE_BOOLEAN");
+    assert.doesNotMatch(report.files[0].message, /HARDENED_INDEX_TARGET|HARDENED_OWN_RECORD/);
+});
