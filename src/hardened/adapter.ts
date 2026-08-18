@@ -966,25 +966,53 @@ function localQNameForExpression(expression: SemanticExpression, context: Adapte
 }
 
 function localInstanceNamedMembers(context: AdapterContext, qname: string, name: string,
-    node: TreeNode): { members: LocalDeclarationMember[]; ownerQName: string | null } {
-    const visited = new Set<string>();
-    let current: string | null = qname;
-    while (current !== null) {
-        if (visited.has(current) || visited.size >= 1024) {
-            fail("HARDENED_LOCAL_MEMBER_CYCLE", "local instance-member lineage is cyclic or exceeds its bound", node);
-        }
-        visited.add(current);
-        const entry = localDeclaration(context, current, node);
-        const members = entry.declaration!.members.filter(member => member.name === name
-            && member.kind !== "constructor" && member.modifiers.indexOf("static") < 0
-            && member.namespaceName === null);
-        if (members.length > 0) return { members, ownerQName: current };
-        if (entry.declaration!.baseQNames.length > 1) {
-            fail("HARDENED_LOCAL_MEMBER_BASE", `class ${current} has an ambiguous base lineage`, node);
-        }
-        current = entry.declaration!.baseQNames.length === 1 ? entry.declaration!.baseQNames[0]! : null;
+    node: TreeNode): { members: LocalDeclarationMember[]; ownerQName: string | null; terminalFlashQName: string | null } {
+    if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) {
+        fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "local receiver requires the loaded member authority", node);
     }
-    return { members: [], ownerQName: null };
+    assertLoadedLocalMemberAuthority(context.localMemberAuthority);
+    const moduleName = context.resolveCurrentLocal().entry.module;
+    const visited = new Set<string>();
+    let frontier = [qname];
+    const terminalFlash = new Set<string>();
+    while (frontier.length > 0) {
+        const matches: Array<{ members: LocalDeclarationMember[]; ownerQName: string }> = [];
+        const next: string[] = [];
+        for (const current of [...new Set(frontier)].sort()) {
+            if (visited.has(current)) continue;
+            if (visited.size >= 1024) {
+                fail("HARDENED_LOCAL_MEMBER_CYCLE", "local instance-member lineage exceeds its bound", node);
+            }
+            visited.add(current);
+            if (current.startsWith("flash.")) {
+                terminalFlash.add(current);
+                continue;
+            }
+            const entry = context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${current}`];
+            if (!entry || entry.status !== "complete" || entry.declaration === null) {
+                fail("HARDENED_LOCAL_MEMBER_HELD", `local declaration authority for ${current} is absent or held`, node);
+            }
+            const members = entry.declaration.members.filter(member => member.name === name
+                && member.kind !== "constructor" && member.modifiers.indexOf("static") < 0
+                && (member.namespaceName === null
+                    || Object.prototype.hasOwnProperty.call(context.namespaceNames, member.namespaceName)));
+            if (members.length > 0) matches.push({ members, ownerQName: current });
+            next.push(...entry.declaration.baseQNames);
+        }
+        if (matches.length > 1) {
+            fail("HARDENED_LOCAL_MEMBER_AMBIGUOUS",
+                "local receiver member is inherited from multiple declarations at the same depth", node);
+        }
+        if (matches.length === 1) {
+            return { ...matches[0]!, terminalFlashQName: null };
+        }
+        frontier = next;
+    }
+    if (terminalFlash.size > 1) {
+        fail("HARDENED_LOCAL_MEMBER_BASE", "local receiver reaches multiple Flash base authorities", node);
+    }
+    return { members: [], ownerQName: null,
+        terminalFlashQName: terminalFlash.size === 1 ? [...terminalFlash][0]! : null };
 }
 
 function localLineageContains(context: AdapterContext, startQName: string, ownerQName: string,
@@ -1008,6 +1036,8 @@ function localLineageContains(context: AdapterContext, startQName: string, owner
 
 function assertLocalReceiverVisibility(member: LocalDeclarationMember, ownerQName: string,
     receiverQName: string, context: AdapterContext, node: TreeNode): void {
+    if (member.namespaceName !== null
+        && Object.prototype.hasOwnProperty.call(context.namespaceNames, member.namespaceName)) return;
     const visibility = memberVisibility(member.modifiers);
     const ownerPackage = ownerQName.slice(0, Math.max(0, ownerQName.lastIndexOf(".")));
     const currentPackage = context.classQualifiedName.slice(0,
@@ -1994,16 +2024,25 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (receiverQName !== null) {
                     const lookup = localInstanceNamedMembers(context, receiverQName, name, node);
                     if (lookup.members.length === 0 || lookup.ownerQName === null) {
-                        fail("HARDENED_LOCAL_INSTANCE_MEMBER",
-                            "local receiver member lacks an authenticated declaration", node);
+                        if (lookup.terminalFlashQName === null) {
+                            fail("HARDENED_LOCAL_INSTANCE_MEMBER",
+                                "local receiver member lacks an authenticated declaration", node);
+                        }
+                        const mapping = memberMapping(context, lookup.terminalFlashQName, "call", name, node);
+                        if (mapping === null || mapping.sourceMember === null) {
+                            fail("HARDENED_MEMBER_UNMAPPED",
+                                "terminal Flash receiver member lacks an exact bridge mapping", node);
+                        }
+                        capabilitySource = mapping.sourceQName;
+                    } else {
+                        lookup.members.forEach(member =>
+                            assertLocalReceiverVisibility(member, lookup.ownerQName!, receiverQName, context, node));
+                        if (valuePosition && lookup.members.some(member => member.kind === "method")) {
+                            fail("HARDENED_LOCAL_METHOD_CLOSURE",
+                                "local receiver method closures remain held until stable identity is proven", node);
+                        }
+                        capabilitySource = lookup.ownerQName;
                     }
-                    lookup.members.forEach(member =>
-                        assertLocalReceiverVisibility(member, lookup.ownerQName!, receiverQName, context, node));
-                    if (valuePosition && lookup.members.some(member => member.kind === "method")) {
-                        fail("HARDENED_LOCAL_METHOD_CLOSURE",
-                            "local receiver method closures remain held until stable identity is proven", node);
-                    }
-                    capabilitySource = lookup.ownerQName;
                 } else {
                     if (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name))) {
@@ -2163,13 +2202,23 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const receiverQName = localQNameForExpression(callee.target, context, rawCallee)!;
             const lookup = localInstanceNamedMembers(context, receiverQName, callee.name, node);
             const methods = lookup.members.filter(member => member.kind === "method");
-            if (lookup.ownerQName !== callee.capabilitySource || methods.length !== 1) {
+            if (lookup.ownerQName === callee.capabilitySource && methods.length === 1) {
+                assertLocalReceiverVisibility(methods[0]!, lookup.ownerQName!, receiverQName, context, node);
+                assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node);
+                resultType = authoritySemanticType(methods[0]!.returnType!, context, node);
+            } else if (lookup.terminalFlashQName === callee.capabilitySource && methods.length === 0) {
+                const mapping = memberMapping(context, lookup.terminalFlashQName!, "call", callee.name, node);
+                if (mapping === null || mapping.sourceMember === null
+                    || args.length < mapping.sourceMember.minArgs || args.length > mapping.sourceMember.maxArgs) {
+                    fail("HARDENED_CAPABILITY_CALL_ARITY",
+                        "terminal Flash receiver call does not match its exact bridge signature", node);
+                }
+                capabilitySource = mapping.sourceQName;
+                capabilityMember = mapping.sourceMember.name;
+            } else {
                 fail("HARDENED_LOCAL_INSTANCE_CALL",
                     "local receiver call requires one exact authenticated method", node);
             }
-            assertLocalReceiverVisibility(methods[0]!, lookup.ownerQName!, receiverQName, context, node);
-            assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node);
-            resultType = authoritySemanticType(methods[0]!.returnType!, context, node);
         } else if (callee.kind === "member" && callee.capabilitySource !== null
             && intrinsicMember(context, callee.capabilitySource, "call", callee.name) !== null) {
             const member = intrinsicMember(context, callee.capabilitySource, "call", callee.name)!;

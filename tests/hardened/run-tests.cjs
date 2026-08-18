@@ -757,7 +757,8 @@ function buildLocalBaseTree(options = {}) {
         || options.badLocalStaticWrite) imports.push(n("IMPORT", "lobby.base.Utility"));
     const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
         || options.localInstanceMembers || options.badLocalInstanceReadonly
-        || options.badLocalInstancePrivate || options.badLocalInstanceClosure;
+        || options.badLocalInstancePrivate || options.badLocalInstanceClosure
+        || options.localInstanceFlashBase || options.multipleLocalBases;
     if (localInstanceWorkpack) imports.push(n("IMPORT", "lobby.base.Worker"));
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
@@ -877,6 +878,18 @@ function buildLocalBaseTree(options = {}) {
         localDeclaration("VAR_LIST", "other", "Base", n("LITERAL", "null")),
         call(dot(n("IDENTIFIER", "other"), "namespacedRun")), n("RETURN"),
     ]));
+    if (options.activeNamespaceInstance) members.push(method("callActiveNamespace", [], "void", [
+        localDeclaration("VAR_LIST", "other", "Base", n("LITERAL", "null")),
+        call(dot(n("IDENTIFIER", "other"), "namespacedRun")), n("RETURN"),
+    ]));
+    if (options.localInstanceFlashBase) members.push(method("callFlashBase", [], "void", [
+        call(dot(n("IDENTIFIER", "worker"), "addEventListener"), [
+            n("LITERAL", '"ready"'), lambda([], "void", [n("RETURN")]),
+        ]), n("RETURN"),
+    ]));
+    if (options.multipleLocalBases) members.push(method("callMultipleBase", [], "String", [
+        n("RETURN", null, [call(dot(n("IDENTIFIER", "worker"), "describe"), [n("LITERAL", "1.5")])]),
+    ]));
     classChildren.push(n("CONTENT", null, members));
     return n("COMPILATION_UNIT", null, [
         n("PACKAGE", null, [n("NAME", "lobby.ui"), n("CONTENT", null,
@@ -890,7 +903,8 @@ function localAuthority(api, normalized, options = {}) {
     const currentNodeId = "0000000000000002";
     const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
         || options.localInstanceMembers || options.badLocalInstanceReadonly
-        || options.badLocalInstancePrivate || options.badLocalInstanceClosure;
+        || options.badLocalInstancePrivate || options.badLocalInstanceClosure
+        || options.localInstanceFlashBase || options.multipleLocalBases;
     const entries = [
         {
             componentId: "scc-00001", importable: options.baseImportable !== false, module: options.baseModule || "application",
@@ -1005,7 +1019,10 @@ function localMemberAuthority(api, localTypes, mutate = null, options = {}) {
             packageInitializer: entry.qname.endsWith(".InternalSpace") ? null
                 : { kind: "new", targetQName: "lobby.base.Base", argumentCount: 0 },
         } : {
-            baseQNames: entry.qname.endsWith(".Demo") ? [entry.qname.replace(/\.Demo$/, ".Base")] : [],
+            baseQNames: entry.qname.endsWith(".Demo") ? [entry.qname.replace(/\.Demo$/, ".Base")]
+                : entry.qname.endsWith(".Worker") && options.localInstanceFlashBase ? ["flash.display.Sprite"]
+                    : entry.qname.endsWith(".Worker") && options.multipleLocalBases
+                        ? ["lobby.base.Base", "flash.display.Sprite"] : [],
             interfaceQNames: [],
             members: entry.qname.endsWith(".Utility") ? [{
                 kind: "method", name: "describe", modifiers: ["public", "static"], namespaceName: null,
@@ -1321,6 +1338,16 @@ function main() {
     assert.match(ownProtectedOutput.code, /peer!\.ownProtected\(\);/);
     assertErrorCode(() => adaptLocal(api, authority, { badBareNamespaceInstance: true }),
         "HARDENED_LOCAL_INSTANCE_MEMBER");
+    const activeNamespaceInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { withNamespace: true, activeNamespaceInstance: true }),
+    { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(activeNamespaceInstanceOutput.code, /other!\.namespacedRun\(\);/);
+    const flashBaseInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localInstanceFlashBase: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(flashBaseInstanceOutput.code, /this\.worker!\.addEventListener\("ready", function \(\): void/);
+    const multipleBaseOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { multipleLocalBases: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(multipleBaseOutput.code, /return this\.worker!\.describe\(__as3Int\(1\.5\)\);/);
     const localNormalizedForMembers = flatten(buildLocalBaseTree());
     const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
     const localMembers = localMemberAuthority(api, localTypesForMembers);
