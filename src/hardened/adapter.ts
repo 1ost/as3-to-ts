@@ -64,6 +64,8 @@ interface AdapterContext {
     classQualifiedName: string;
     extendsType: SemanticType | null;
     importsByLocal: { [name: string]: SemanticImport };
+    resolveImportedType: (sourceName: string, expectedKind: "class" | "interface" | null,
+        node: TreeNode) => SemanticImport | null;
     mappingsBySource: { [name: string]: CapabilityMapping };
     memberMappingsByKey: { [name: string]: CapabilityMapping };
     baseSourceQName: string | null;
@@ -514,18 +516,24 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
     if (sourceName === "void" && !allowVoid) {
         fail("HARDENED_VOID_TYPE", "void is not valid in this type position", node);
     }
+    let semanticSourceName = sourceName;
     let emittedName = PRIMITIVE_TYPES[sourceName];
     if (!emittedName) {
         if (sourceName === context.className) {
             emittedName = sourceName;
-        } else if (context.importsByLocal[sourceName]) {
-            emittedName = sourceName;
         } else {
-            fail("HARDENED_TYPE_UNMAPPED", "source type " + sourceName
-                + " is not a proven primitive or double-pinned import", node);
+            const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
+            const imported = context.importsByLocal[localName]
+                || context.resolveImportedType(sourceName, null, node);
+            if (!imported || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)) {
+                fail("HARDENED_TYPE_UNMAPPED", "source type " + sourceName
+                    + " is not a proven primitive or authenticated import", node);
+            }
+            semanticSourceName = imported.sourceLocalName;
+            emittedName = imported.sourceLocalName;
         }
     }
-    return semanticType(node, sourceName, emittedName);
+    return semanticType(node, semanticSourceName, emittedName);
 }
 
 function parseParameters(list: TreeNode, context: AdapterContext): SemanticParameter[] {
@@ -2120,17 +2128,21 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         };
     }
     const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal);
-    const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface",
+    const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
         node: TreeNode): SemanticImport | null => {
         const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
         const existing = parsedImports.importsByLocal[localName];
         if (existing) return existing;
         if (!localAuthority || !resolveCurrentLocal) return null;
-        const current = resolveCurrentLocal();
         const qname = sourceName.indexOf(".") >= 0 ? sourceName
             : packageName === "" ? sourceName : `${packageName}.${sourceName}`;
+        const candidates = (["application", "bootstrap"] as const).map(module =>
+            localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry);
+        if (candidates.length === 0) return null;
+        const current = resolveCurrentLocal();
         const target = localAuthority.entriesByIdentity[`${current.entry.module}\u0000${qname}`];
-        if (!target || !target.importable || target.typeKind !== expectedKind) return null;
+        if (!target || !target.importable || target.typeKind === "package"
+            || (expectedKind !== null && target.typeKind !== expectedKind)) return null;
         if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {
             fail("HARDENED_LOCAL_IMPORT_EDGE",
                 "same-package type lacks an authenticated dependency edge: " + qname, node);
@@ -2145,6 +2157,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         classQualifiedName: packageName === "" ? className : `${packageName}.${className}`,
         extendsType: null,
         importsByLocal: parsedImports.importsByLocal,
+        resolveImportedType: resolveImplicitLocalType,
         mappingsBySource: authority.typeMappingsBySource,
         memberMappingsByKey: authority.memberMappingsByKey,
         baseSourceQName: null,
@@ -2169,7 +2182,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         classNode.children.filter(child => child.kind === "EXTENDS").forEach((extendsNode) => {
             const sourceName = requiredText(extendsNode, "extended interface");
             const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
-            const imported = parsedImports.importsByLocal[localName];
+            const imported = parsedImports.importsByLocal[localName]
+                || resolveImplicitLocalType(sourceName, "interface", extendsNode);
             if (!imported || !imported.runtimeInterface
                 || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)) {
                 fail("HARDENED_INTERFACE_EXTENDS", "extended interface must be one authenticated imported interface", extendsNode);
@@ -2282,7 +2296,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         implementsNode.children.forEach(item => {
             const sourceName = requiredText(item, "implemented interface");
             const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
-            const imported = parsedImports.importsByLocal[localName];
+            const imported = parsedImports.importsByLocal[localName]
+                || resolveImplicitLocalType(sourceName, "interface", item);
             if (!imported || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)
                 || !imported.runtimeInterface) {
                 fail("HARDENED_IMPLEMENTS_TYPE", "implemented type must be one authenticated imported interface", item);

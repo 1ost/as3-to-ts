@@ -652,7 +652,9 @@ function canonicalJson(value) {
 function buildLocalBaseTree(options = {}) {
     const imports = options.samePackage ? []
         : options.wildcardImports ? [n("IMPORT", "lobby.base.*")] : [n("IMPORT", "lobby.base.Base")];
-    if (options.withInterface && !options.wildcardImports) imports.push(n("IMPORT", "lobby.base.IReady"));
+    if (options.withInterface && !options.wildcardImports && !options.samePackage) {
+        imports.push(n("IMPORT", "lobby.base.IReady"));
+    }
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
     const members = [constructor([call(n("IDENTIFIER", "super"))])];
@@ -689,9 +691,11 @@ function localAuthority(api, normalized, options = {}) {
         ...(options.withInterface ? [{
             componentId: "scc-00001", importable: true, module: "application",
             graphSourceSha256: "6".repeat(64), nodeId: "0000000000000003", prerequisites: [],
-            qname: "lobby.base.IReady", sourceContentSha256: "7".repeat(64),
-            sourcePath: "game-client/tapplication_main/src/lobby/base/IReady.as",
-            targetPath: "game-client/layaair/src/application/lobby/base/IReady.ts", topologicalLevel: 0,
+            qname: options.samePackage ? "lobby.ui.IReady" : "lobby.base.IReady", sourceContentSha256: "7".repeat(64),
+            sourcePath: options.samePackage ? "game-client/tapplication_main/src/lobby/ui/IReady.as"
+                : "game-client/tapplication_main/src/lobby/base/IReady.as",
+            targetPath: options.samePackage ? "game-client/layaair/src/application/lobby/ui/IReady.ts"
+                : "game-client/layaair/src/application/lobby/base/IReady.ts", topologicalLevel: 0,
             typeKind: "interface",
         }] : []),
         {
@@ -862,6 +866,10 @@ function main() {
     /import \{ Base \} from "\.\/Base";/);
     assertErrorCode(() => adaptLocal(api, authority, { samePackage: true, withEdge: false }),
         "HARDENED_LOCAL_IMPORT_EDGE");
+    const samePackageInterfaceProgram = adaptLocal(api, authority, { samePackage: true, withInterface: true });
+    assert.deepEqual(samePackageInterfaceProgram.imports.map(item => item.sourceQualifiedName),
+        ["lobby.ui.Base", "lobby.ui.IReady"]);
+    assert.equal(samePackageInterfaceProgram.declaration.implementsTypes[0].runtimeName, "lobby.ui.IReady");
     const localInterfaceProgram = adaptLocal(api, authority, { withInterface: true });
     assert.equal(localInterfaceProgram.imports[1].runtimeInterface, true);
     assert.equal(localInterfaceProgram.declaration.implementsTypes[0].runtimeName, "lobby.base.IReady");
