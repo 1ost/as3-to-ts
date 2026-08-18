@@ -794,6 +794,77 @@ function isArrayType(type: SemanticType): boolean {
 const TREE_NODE_QNAME = "Foundation.SensitiveWord.TTreeNode";
 const TREE_NODE_SOURCE_PATH = "game-client/tapplication_main/src/Foundation/SensitiveWord/TTreeNode.as";
 
+const BIG_TURN_TABLE_INNER_CONSUMERS: { [qname: string]: string } = Object.freeze({
+    "Logics.HDActivityBigTurnTable.TBigTurnTableGoldLotteryInner":
+        "game-client/tapplication_main/src/Logics/HDActivityBigTurnTable/TBigTurnTableGoldLotteryInner.as",
+    "Logics.HDActivityBigTurnTable.TBigTurnTableLuckyLotteryInner":
+        "game-client/tapplication_main/src/Logics/HDActivityBigTurnTable/TBigTurnTableLuckyLotteryInner.as",
+});
+const BIG_TURN_TABLE_INNER_MEMBERS: { [qname: string]: ReadonlySet<string> } = Object.freeze({
+    "Logics.HDActivityBigTurnTable.TBigTurnTableGoldLotteryInner":
+        new Set(["index", "des", "costChip", "flag"]),
+    "Logics.HDActivityBigTurnTable.TBigTurnTableLuckyLotteryInner":
+        new Set(["index", "des", "costChip", "flag"]),
+});
+export const BIG_TURN_TABLE_INNER_DTO_AUTHORITY_SHA256 =
+    "ecaaaca59ba9e94795be12e90659c52042f573443cb500eccd03826c70db2bc4";
+
+const BIG_TURN_TABLE_INNER_ENTRY = "__bleachBigTurnTableInnerEntry";
+const BIG_TURN_TABLE_INNER_COST_TUPLE = "__bleachBigTurnTableInnerCostTuple";
+const BIG_TURN_TABLE_INNER_COST_ENTRY = "__bleachBigTurnTableInnerCostEntry";
+const BIG_TURN_TABLE_INNER_FLAGS = "__bleachBigTurnTableInnerFlags";
+const BIG_TURN_TABLE_INNER_CONFIG = "__bleachBigTurnTableInnerConfig";
+
+function isBigTurnTableInnerContext(context: AdapterContext): boolean {
+    const sourcePath = BIG_TURN_TABLE_INNER_CONSUMERS[context.classQualifiedName];
+    if (sourcePath === undefined || context.resolveCurrentLocal === null) return false;
+    const current = context.resolveCurrentLocal().entry;
+    return current.module === "application" && current.qname === context.classQualifiedName
+        && current.sourcePath === sourcePath && current.typeKind === "class";
+}
+
+function bigTurnTableInnerType(node: TreeNode, sourceName: string): SemanticType {
+    return semanticType(node, sourceName, sourceName, [], false);
+}
+
+function innerRootTarget(expression: SemanticExpression, context: AdapterContext): boolean {
+    return isBigTurnTableInnerContext(context) && context.currentCallable?.constructor === true
+        && expression.kind === "identifier" && expression.name === "param1"
+        && context.parameters.param1?.type.sourceName === BIG_TURN_TABLE_INNER_CONFIG
+        && context.parameters.param1.type.emittedName === "__BigTurnTableInnerConfig";
+}
+
+function authenticateBigTurnTableInnerConstructorParameters(
+    parameters: SemanticParameter[], constructor: boolean, context: AdapterContext, node: TreeNode,
+): SemanticParameter[] {
+    if (!constructor || !isBigTurnTableInnerContext(context)) return parameters;
+    const parameter = parameters[0];
+    if (parameters.length !== 1 || parameter === undefined || parameter.name !== "param1"
+        || parameter.rest || parameter.defaultValue !== null || parameter.type.sourceName !== "Object"
+        || parameter.type.emittedName !== "unknown" || parameter.type.nullable !== true) {
+        fail("HARDENED_BIG_TURN_TABLE_DTO_CONSTRUCTOR",
+            "authenticated Big Turntable Inner constructors require the exact source Object parameter", node);
+    }
+    return [Object.assign({}, parameter, {
+        type: semanticType(node, BIG_TURN_TABLE_INNER_CONFIG, "__BigTurnTableInnerConfig", [], false),
+    })];
+}
+
+function innerMemberType(context: AdapterContext, ownerType: SemanticType, name: string, node: TreeNode): SemanticType | null {
+    if (ownerType.sourceName === BIG_TURN_TABLE_INNER_ENTRY) {
+        if (!BIG_TURN_TABLE_INNER_MEMBERS[context.classQualifiedName]?.has(name)) return null;
+        if (name === "index") return semanticType(node, "int", "number", [], false);
+        if (name === "des") return semanticType(node, "String", "string", [], false);
+        if (name === "costChip") return bigTurnTableInnerType(node, BIG_TURN_TABLE_INNER_COST_TUPLE);
+        if (name === "flag") return bigTurnTableInnerType(node, BIG_TURN_TABLE_INNER_FLAGS);
+        return null;
+    }
+    if (ownerType.sourceName === BIG_TURN_TABLE_INNER_COST_ENTRY && name === "value") {
+        return semanticType(node, "int", "number", [], false);
+    }
+    return null;
+}
+
 function isTreeNodeContext(context: AdapterContext): boolean {
     if (context.classQualifiedName !== TREE_NODE_QNAME || context.resolveCurrentLocal === null) return false;
     const current = context.resolveCurrentLocal().entry;
@@ -1563,6 +1634,13 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         }
     }
     if (expression.kind === "member") {
+        if (BIG_TURN_TABLE_INNER_CONSUMERS[expression.capabilitySource || ""] !== undefined) {
+            const innerMember = innerMemberType(context,
+                assignmentType(expression.target, context, node), expression.name, node);
+            if (innerMember !== null) return innerMember;
+            fail("HARDENED_BIG_TURN_TABLE_DTO_MEMBER",
+                "Big Turntable DTO member is outside the authenticated projection", node);
+        }
         if (expression.target.kind === "identifier") {
             const imported = context.importsByLocal[expression.target.name];
             if (imported?.authorityKind === "flash" && imported.localValueType === null) {
@@ -1760,6 +1838,10 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
     if (expression.kind === "index") {
         if (expression.accessKind === "array") {
             fail("HARDENED_ARRAY_INDEX_WRITE", "Array indexed writes remain outside the proven read-only slice", node);
+        }
+        if (expression.accessKind === "bigTurnTableInnerRoot" || expression.accessKind === "bigTurnTableInnerCost") {
+            fail("HARDENED_BIG_TURN_TABLE_DTO_WRITE",
+                "authenticated Big Turntable DTO projections are read-only", node);
         }
         return expression.resultType;
     }
@@ -2392,12 +2474,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             context.ownRecordTargetDepth -= 1;
         }
         const ownerType = assignmentType(target, context, node.children[0]!);
+        const innerRoot = innerRootTarget(target, context);
+        const innerCost = ownerType.sourceName === BIG_TURN_TABLE_INNER_COST_TUPLE;
         const element = vectorElement(ownerType);
         const dictionary = isDictionaryType(ownerType);
         const byteArray = intrinsicSourceForType(ownerType, context) === "flash.utils.ByteArray";
         const array = isArrayType(ownerType);
         const ownRecord = ownRecordValue(ownerType);
-        if (!element && !dictionary && !byteArray && !array && !ownRecord) {
+        if (!innerRoot && !innerCost && !element && !dictionary && !byteArray && !array && !ownRecord) {
             fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Array, Vector, ByteArray, intrinsic Dictionary, or authenticated local record", node);
         }
         if (ownRecord && !isTreeNodeRecordMember(target, context)) {
@@ -2405,6 +2489,20 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         let index = parseExpression(node.children[1]!, context, true);
         const indexType = assignmentType(index, context, node.children[1]!);
+        if (innerRoot || innerCost) {
+            if (index.kind !== "literal" || index.value !== 0) {
+                fail("HARDENED_BIG_TURN_TABLE_DTO_INDEX",
+                    "authenticated Big Turntable DTO projection admits only literal slot 0", node.children[1]!);
+            }
+            return Object.assign(identity(node), {
+                kind: "index" as "index",
+                accessKind: innerRoot ? "bigTurnTableInnerRoot" as "bigTurnTableInnerRoot"
+                    : "bigTurnTableInnerCost" as "bigTurnTableInnerCost",
+                target, targetNullable: ownerType.nullable, index,
+                resultType: innerRoot ? bigTurnTableInnerType(node, BIG_TURN_TABLE_INNER_ENTRY)
+                    : bigTurnTableInnerType(node, BIG_TURN_TABLE_INNER_COST_ENTRY),
+            });
+        }
         if ((element || byteArray) && !["Number", "int", "uint"].includes(indexType.sourceName)) {
             fail("HARDENED_INDEX_TYPE", "Vector or ByteArray index must be a proven numeric value", node.children[1]!);
         }
@@ -2575,6 +2673,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else {
             const targetType = assignmentType(target, context, node.children[0]!);
             targetNullable = targetType.nullable;
+            const innerMember = innerMemberType(context, targetType, name, node);
+            if (innerMember !== null) {
+                return Object.assign(identity(node), {
+                    kind: "member" as "member", target, targetNullable, name,
+                    capabilitySource: context.classQualifiedName,
+                });
+            }
             const intrinsicSource = intrinsicSourceForType(targetType, context);
             const flashSource = mappedFlashQNameForType(targetType, context);
             if (flashSource !== null) {
@@ -2646,7 +2751,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_VECTOR_CONVERSION_ARITY", "Vector conversion requires exactly one source value", node);
             }
             const source = parseExpression(node.children[1]!.children[0]!, context, true);
-            if (source.kind !== "array" && vectorElement(assignmentType(source, context, node.children[1]!.children[0]!)) === null) {
+            const sourceType = source.kind === "array" ? null
+                : assignmentType(source, context, node.children[1]!.children[0]!);
+            const exactInnerFlags = sourceType !== null && isBigTurnTableInnerContext(context)
+                && sourceType.sourceName === BIG_TURN_TABLE_INNER_FLAGS
+                && vectorType.typeArguments[0]?.sourceName === "int";
+            if (!exactInnerFlags && source.kind !== "array" && vectorElement(sourceType!) === null) {
                 fail("HARDENED_VECTOR_CONVERSION_SOURCE", "Vector conversion requires an Array literal or proven Vector", node);
             }
             return Object.assign(identity(node), { kind: "vectorConversion" as "vectorConversion", vectorType, source });
@@ -3552,7 +3662,8 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     if (constructor && (returnNode.text !== null && returnNode.text !== "")) {
         fail("HARDENED_CONSTRUCTOR_RETURN", "constructor must not declare a return type", returnNode);
     }
-    const parameters = parseParameters(one(node, "PARAMETER_LIST")!, context);
+    const parameters = authenticateBigTurnTableInnerConstructorParameters(
+        parseParameters(one(node, "PARAMETER_LIST")!, context), constructor, context, node);
     const memberModifiers = parseMemberModifiers(node, context);
     const modifiers = memberModifiers.modifiers;
     if (constructor && (modifiers.indexOf("static") >= 0 || modifiers.indexOf("override") >= 0

@@ -5,6 +5,7 @@
   "type": "commonjs",
   "exports": {
     "./AS3Array": "./AS3Authority.generated.js",
+    "./AS3BigTurnTableInnerDto": "./AS3Authority.generated.js",
     "./AS3ByteArray": "./AS3Authority.generated.js",
     "./AS3Authority": "./AS3Authority.generated.js",
     "./AS3Coerce": "./AS3Authority.generated.js",

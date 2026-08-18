@@ -120,6 +120,8 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3ByteArray.ts"), path.join(runtime, "AS3ByteArray.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Array.ts"), path.join(runtime, "AS3Array.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3OwnRecord.ts"), path.join(runtime, "AS3OwnRecord.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3BigTurnTableInnerDto.ts"),
+            path.join(runtime, "AS3BigTurnTableInnerDto.ts"));
         fs.writeFileSync(path.join(stubs, "Sprite.ts"),
             "export class Sprite { public addEventListener(_type:string,_listener:Function,_capture=false,_priority=0,_weak=false):void {} }\n", "utf8");
         fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
@@ -851,6 +853,68 @@ function adaptTreeNodeRecord(api, authority, options = {}) {
     const entry = {
         componentId: "scc-00001", graphSourceSha256: "8".repeat(64), importable: true,
         module: "application", nodeId: "0000000000000100", prerequisites: [], qname,
+        sourcePath: `game-client/tapplication_main/src/${logicalPath}`,
+        sourceContentSha256: sha256(normalized.sourceText),
+        targetPath: `game-client/layaair/src/application/${logicalPath.replace(/\.as$/, ".ts")}`,
+        topologicalLevel: 0, typeKind: "class",
+    };
+    const document = {
+        dependencyGraphRawSha256: "2".repeat(64), dependencyGraphSemanticSha256: "3".repeat(64),
+        entries: [entry], entryCount: 1, schema: "bleach-local-as3-type-map@2",
+        sourceManifestSha256: "4".repeat(64),
+    };
+    const json = `${canonicalJson(document)}\n`;
+    const locals = api.loadLocalTypeAuthority({
+        expectedDependencyGraphRawSha256: document.dependencyGraphRawSha256,
+        expectedDependencyGraphSemanticSha256: document.dependencyGraphSemanticSha256,
+        expectedEntryCount: 1, expectedSourceManifestSha256: document.sourceManifestSha256,
+        json, sha256: sha256(json),
+    }, sha256);
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
+        locals, logicalPath);
+}
+
+function buildBigTurnTableInnerTree(options = {}) {
+    const className = options.otherClass ? "TBigTurnTableLuckyLotteryOutter"
+        : options.lucky ? "TBigTurnTableLuckyLotteryInner" : "TBigTurnTableGoldLotteryInner";
+    const root = () => n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "param1"),
+        options.dynamicIndex ? n("IDENTIFIER", "slot") : n("LITERAL", "0")]);
+    const property = (name) => dot(root(), name);
+    const costValue = dot(n("ARRAY_ACCESSOR", null, [property("costChip"), n("LITERAL", "0")]), "value");
+    const costField = options.lucky ? "FCostChip" : "FCost";
+    const members = [
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [n("NAME", "FIndex"), type("int")])]),
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [n("NAME", costField), type("int")])]),
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [n("NAME", "FBtnDescription"), type("String")])]),
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [n("NAME", "FFlushVec"), vectorType("int")])]),
+        method(className, [parameter("param1", "Object"),
+            ...(options.dynamicIndex ? [parameter("slot", "int")] : [])], "", [
+            call(n("IDENTIFIER", "super")),
+            ...(options.badWrite ? [assignment(root(), n("LITERAL", "1"))]
+                : [assignment(dot(n("IDENTIFIER", "this"), "FIndex"), property("index"))]),
+            assignment(dot(n("IDENTIFIER", "this"), costField), costValue),
+            assignment(dot(n("IDENTIFIER", "this"), "FBtnDescription"),
+                property(options.extraMember ? "unproved" : "des")),
+            assignment(dot(n("IDENTIFIER", "this"), "FFlushVec"), call(vectorType("int"), [property("flag")])),
+        ], ["public"]),
+    ];
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [n("NAME", "Logics.HDActivityBigTurnTable"), n("CONTENT", null, [
+            n("CLASS", null, [n("NAME", className), mods("public"), n("CONTENT", null, members)]),
+        ])]), n("CONTENT"),
+    ]);
+}
+
+function adaptBigTurnTableInner(api, authority, options = {}) {
+    const normalized = flatten(buildBigTurnTableInnerTree(options));
+    const other = options.otherClass === true;
+    const className = other ? "TBigTurnTableLuckyLotteryOutter"
+        : options.lucky ? "TBigTurnTableLuckyLotteryInner" : "TBigTurnTableGoldLotteryInner";
+    const logicalPath = `Logics/HDActivityBigTurnTable/${className}.as`;
+    const entry = {
+        componentId: "scc-00001", graphSourceSha256: "8".repeat(64), importable: true,
+        module: "application", nodeId: "0000000000000200", prerequisites: [],
+        qname: `Logics.HDActivityBigTurnTable.${className}`,
         sourcePath: `game-client/tapplication_main/src/${logicalPath}`,
         sourceContentSha256: sha256(normalized.sourceText),
         targetPath: `game-client/layaair/src/application/${logicalPath.replace(/\.as$/, ".ts")}`,
@@ -1961,6 +2025,44 @@ function main() {
         "HARDENED_OWN_RECORD_INITIALIZER");
     assertErrorCode(() => adaptTreeNodeRecord(api, authority, { otherClass: true }),
         "HARDENED_INDEX_TARGET");
+    const dtoAuthorityBytes = fs.readFileSync(path.join(ROOT,
+        "config/big-turntable-inner-dto-authority.json"));
+    assert.equal(sha256(dtoAuthorityBytes), api.BIG_TURN_TABLE_INNER_DTO_AUTHORITY_SHA256);
+    const goldProgram = adaptBigTurnTableInner(api, authority);
+    const goldOutput = api.emitSemanticProgram(goldProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(goldOutput.code,
+        /BigTurnTableInnerConfig as __BigTurnTableInnerConfig/);
+    assert.match(goldOutput.code,
+        /as3BigTurnTableInnerEntry as __as3BigTurnTableInnerEntry/);
+    assert.match(goldOutput.code,
+        /constructor\(param1: __BigTurnTableInnerConfig\)/);
+    assert.match(goldOutput.code, /this\.FIndex = __as3BigTurnTableInnerEntry\(param1, 0\)\.index;/);
+    assert.match(goldOutput.code,
+        /this\.FCost = __as3BigTurnTableInnerEntry\(param1, 0\)\.costChip\[0\]\.value;/);
+    assert.match(goldOutput.code, /this\.FBtnDescription = __as3BigTurnTableInnerEntry\(param1, 0\)\.des;/);
+    assert.match(goldOutput.code,
+        /__as3Vector\.from<number>\(__as3VectorPolicies\.int, __as3BigTurnTableInnerEntry\(param1, 0\)\.flag\)/);
+    assert.doesNotMatch(goldOutput.code,
+        /\bany\b|param1!?\[|Object\.prototype|as3DecodeBigTurnTableInnerConfig/);
+    const luckyProgram = adaptBigTurnTableInner(api, authority, { lucky: true });
+    const luckyOutput = api.emitSemanticProgram(luckyProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(luckyOutput.code, /export class TBigTurnTableLuckyLotteryInner/);
+    assert.match(luckyOutput.code,
+        /constructor\(param1: __BigTurnTableInnerConfig\)/);
+    assert.match(luckyOutput.code,
+        /this\.FCostChip = __as3BigTurnTableInnerEntry\(param1, 0\)\.costChip\[0\]\.value;/);
+    assert.doesNotMatch(luckyOutput.code,
+        /\bany\b|param1!?\[|Object\.prototype|as3DecodeBigTurnTableInnerConfig/);
+    assertErrorCode(() => adaptBigTurnTableInner(api, authority, { otherClass: true }),
+        "HARDENED_INDEX_TARGET");
+    assertErrorCode(() => adaptBigTurnTableInner(api, authority, { dynamicIndex: true }),
+        "HARDENED_BIG_TURN_TABLE_DTO_CONSTRUCTOR");
+    assertErrorCode(() => adaptBigTurnTableInner(api, authority, { extraMember: true }),
+        "HARDENED_MEMBER_TARGET");
+    assertErrorCode(() => adaptBigTurnTableInner(api, authority, { badWrite: true }),
+        "HARDENED_BIG_TURN_TABLE_DTO_WRITE");
     const byteArrayProgram = adapt(api, buildTree({ byteArrayWorkpack: true }), authority);
     const byteArrayOutput = api.emitSemanticProgram(byteArrayProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -2021,7 +2123,7 @@ function main() {
         nestedExpressionOutput.code,
         labelOutput.code, interfaceOutput.code, vectorInterfaceOutput.code, localNamespaceOutput.code, overrideOutput.code, forInOutput.code,
         nullableOutput.code, lambdaOutput.code, dictionaryOutput.code, byteArrayOutput.code,
-        arrayOutput.code, recordOutput.code]);
+        arrayOutput.code, recordOutput.code, goldOutput.code, luckyOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);

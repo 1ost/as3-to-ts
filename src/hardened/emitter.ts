@@ -212,6 +212,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "index") {
         const target = expressionNode(expression.target, ts);
         const admittedTarget = expression.targetNullable ? ts.factory.createNonNullExpression(target) : target;
+        if (expression.accessKind === "bigTurnTableInnerRoot") {
+            return ts.factory.createCallExpression(
+                ts.factory.createIdentifier("__as3BigTurnTableInnerEntry"), undefined,
+                [target, expressionNode(expression.index, ts)],
+            );
+        }
         if (expression.accessKind === "dictionary") {
             return ts.factory.createCallExpression(
                 ts.factory.createPropertyAccessExpression(admittedTarget, "get"), undefined,
@@ -1046,6 +1052,32 @@ function ownRecordRuntimeImport(ts: TypeScriptCompilerApi): any {
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3OwnRecord"), undefined);
 }
 
+function bigTurnTableInnerRuntimeImport(ts: TypeScriptCompilerApi): any {
+    return ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false,
+                ts.factory.createIdentifier("BigTurnTableInnerConfig"),
+                ts.factory.createIdentifier("__BigTurnTableInnerConfig")),
+            ts.factory.createImportSpecifier(false,
+                ts.factory.createIdentifier("as3BigTurnTableInnerEntry"),
+                ts.factory.createIdentifier("__as3BigTurnTableInnerEntry")),
+        ])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3BigTurnTableInnerDto"), undefined);
+}
+
+function programUsesBigTurnTableInner(program: SemanticProgram): boolean {
+    const seen = new WeakSet<object>();
+    const visit = (value: unknown): boolean => {
+        if (typeof value !== "object" || value === null) return false;
+        if (seen.has(value)) return false;
+        seen.add(value);
+        const record = value as { [key: string]: unknown };
+        if (record.kind === "index" && record.accessKind === "bigTurnTableInnerRoot") return true;
+        return Object.keys(record).some(key => visit(record[key]));
+    };
+    return visit(program);
+}
+
 export function emitSemanticProgram(program: SemanticProgram, options: EmitterOptions): EmittedTypeScript {
     assertAdaptedSemanticProgram(program);
     const ts = options.compiler;
@@ -1064,6 +1096,9 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
         imports.push(ownRecordRuntimeImport(ts));
+    }
+    if (programUsesBigTurnTableInner(program)) {
+        imports.push(bigTurnTableInnerRuntimeImport(ts));
     }
     if (program.declaration.declarationKind === "packageField") {
         const declaration = ts.factory.createVariableStatement(

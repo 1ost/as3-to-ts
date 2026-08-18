@@ -370,3 +370,39 @@ test("the authenticated TTreeNode record advances without general Object admissi
     assert.equal(report.files[0].code, "HARDENED_WHILE_BOOLEAN");
     assert.doesNotMatch(report.files[0].message, /HARDENED_INDEX_TARGET|HARDENED_OWN_RECORD/);
 });
+
+test("the exact Inner DTOs advance while Outer and Easter records stay held", t => {
+    const root = temporaryDirectory(t);
+    const source = path.join(root, "source");
+    const output = path.join(root, "qualification");
+    const innerPortables = [
+        "Logics/HDActivityBigTurnTable/TBigTurnTableGoldLotteryInner.as",
+        "Logics/HDActivityBigTurnTable/TBigTurnTableLuckyLotteryInner.as",
+    ];
+    const heldPortables = [
+        "Logics/HDActivityBigTurnTable/TBigTurnTableGoldLotteryOutter.as",
+        "Logics/HDActivityBigTurnTable/TBigTurnTableLuckyLotteryOutter.as",
+        "Logics/Streamization/HDEaster2016/TUnstreamizerEaster2016_2.as",
+    ];
+    const portables = innerPortables.concat(heldPortables).sort();
+    fs.mkdirSync(source);
+    portables.forEach(portable => write(source, portable, fs.readFileSync(path.join(sourceRepository,
+        "game-client/tapplication_main/src", ...portable.split("/")), "utf8")));
+    const result = spawnSync(process.execPath, [executable, "qualify", source, output,
+        "--source-census", sourceCensus, "--target-capabilities", targetCapabilities], {
+        cwd: root, encoding: "utf8", timeout: 20_000, windowsHide: true,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8"));
+    assert.equal(report.files.length, 5);
+    assert.deepEqual(report.files.map(item => item.sourcePath), portables);
+    report.files.filter(item => innerPortables.includes(item.sourcePath)).forEach(item => {
+        assert.equal(item.code, "HARDENED_MEMBER_TARGET");
+        assert.doesNotMatch(item.message, /HARDENED_INDEX_TARGET|HARDENED_BIG_TURN_TABLE/);
+    });
+    assert.equal(report.files.find(item => item.sourcePath.endsWith("GoldLotteryOutter.as")).code,
+        "HARDENED_SUPER_CONTEXT");
+    report.files.filter(item => item.sourcePath.endsWith("LuckyLotteryOutter.as")
+        || item.sourcePath.endsWith("TUnstreamizerEaster2016_2.as"))
+        .forEach(item => assert.equal(item.code, "HARDENED_INDEX_TARGET"));
+});

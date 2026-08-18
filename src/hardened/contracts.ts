@@ -211,7 +211,8 @@ export interface OwnRecordExpression extends SemanticIdentity {
 
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
-    accessKind: "vector" | "dictionary" | "byteArray" | "array" | "ownRecord";
+    accessKind: "vector" | "dictionary" | "byteArray" | "array" | "ownRecord"
+        | "bigTurnTableInnerRoot" | "bigTurnTableInnerCost";
     target: SemanticExpression;
     targetNullable: boolean;
     index: SemanticExpression;

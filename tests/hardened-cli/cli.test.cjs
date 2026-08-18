@@ -381,6 +381,7 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and third-p
         "config/runtime-type-predicates.json",
         "src/hardened-runtime/**/*.ts",
         "config/native-timer-authority.json",
+        "config/big-turntable-inner-dto-authority.json",
         "src/hardened-cli/THIRD_PARTY_NOTICES.md",
     ]);
 
