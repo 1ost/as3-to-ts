@@ -56,7 +56,8 @@ test("conversion and mutators preserve the element policy", () => {
     assert.deepEqual([...vector], [1, 7, 8, 3]);
     assert.deepEqual([...removed], [2]);
     assert.deepEqual([...vector.slice(1, 3)], [7, 8]);
-    assert.deepEqual([...vector.concat([9.4])], [1, 7, 8, 3, 9]);
+    assert.deepEqual([...vector.concat(AS3Vector.from(AS3VectorPolicies.int, [9.4]))], [1, 7, 8, 3, 9]);
+    assert.throws(() => vector.concat(AS3Vector.from(AS3VectorPolicies.uint, [9])), /exact element specialization/);
     assert.equal(vector.join("|"), "1|7|8|3");
 });
 
@@ -93,6 +94,7 @@ test("callback APIs expose the proxied vector identity", () => {
     assert.deepEqual([...vector.map(value => value * 2)], [2, 4, 6]);
     assert.equal(vector.every(value => value > 0), true);
     assert.equal(vector.some(value => value === 2), true);
+    assert.throws(() => vector.forEach(null), /requires a callback function/);
 });
 
 test("specialized Vector runtime types preserve element policy identity", () => {

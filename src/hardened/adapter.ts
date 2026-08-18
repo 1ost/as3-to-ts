@@ -568,6 +568,53 @@ function vectorElement(type: SemanticType): SemanticType | null {
     return type.emittedName === "AS3Vector" && type.typeArguments.length === 1 ? type.typeArguments[0]! : null;
 }
 
+function callbackSignature(expression: SemanticExpression, context: AdapterContext):
+    { parameters: SemanticParameter[]; returnType: SemanticType } | null {
+    if (expression.kind === "lambda") {
+        return { parameters: expression.parameters, returnType: expression.returnType };
+    }
+    if (expression.kind === "methodClosure") {
+        const method = context.methods[expression.methodName];
+        return method === undefined || method.returnType === null
+            ? null : { parameters: method.parameters, returnType: method.returnType };
+    }
+    if (expression.kind === "identifier") {
+        return context.locals[expression.name]?.lambdaSignature || null;
+    }
+    return null;
+}
+
+function assertVectorCallback(name: string, expression: SemanticExpression, element: SemanticType,
+    owner: SemanticType, context: AdapterContext, node: TreeNode): void {
+    const signature = callbackSignature(expression, context);
+    if (signature === null) {
+        fail("HARDENED_VECTOR_CALLBACK_IDENTITY",
+            `Vector.${name} callback must be a proven local lambda or stable instance-method closure`, node);
+    }
+    const expected = name === "sort" ? [element, element]
+        : [element, semanticType(node, "int", "number"), owner];
+    if (signature.parameters.length > expected.length || signature.parameters.some(parameter => parameter.rest)) {
+        fail("HARDENED_VECTOR_CALLBACK_ARITY",
+            `Vector.${name} callback declares unsupported parameters`, node);
+    }
+    signature.parameters.forEach((parameter, index) => {
+        const wanted = expected[index]!;
+        const acceptsAny = parameter.type.sourceName === "Object" || parameter.type.sourceName === "*";
+        const numericIndex = index === 1 && name !== "sort"
+            && ["Number", "int", "uint"].includes(parameter.type.sourceName);
+        if (!acceptsAny && !numericIndex && !sameUnderlyingType(parameter.type, wanted)) {
+            fail("HARDENED_VECTOR_CALLBACK_TYPE",
+                `Vector.${name} callback parameter ${index} has an unproven source type`, node);
+        }
+    });
+    if (name === "sort" && !["Number", "int", "uint"].includes(signature.returnType.sourceName)) {
+        fail("HARDENED_VECTOR_CALLBACK_RETURN", "Vector.sort callback must return a proven numeric value", node);
+    }
+    if (["every", "filter", "some"].includes(name) && signature.returnType.sourceName !== "Boolean") {
+        fail("HARDENED_VECTOR_CALLBACK_RETURN", `Vector.${name} callback must return Boolean`, node);
+    }
+}
+
 function isDictionaryType(type: SemanticType): boolean {
     return type.sourceName === "Dictionary" && type.emittedName === "Dictionary";
 }
@@ -1921,6 +1968,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 for (let index = 2; index < args.length; index += 1) {
                     args[index] = adaptAssignmentValue(element, args[index]!, context,
                         node.children[1]!.children[index]!);
+                }
+            } else if (name === "concat") {
+                args.forEach((argument, index) => {
+                    const argumentType = assignmentType(argument, context, node.children[1]!.children[index]!);
+                    if (!sameUnderlyingType(argumentType, ownerType)) {
+                        fail("HARDENED_VECTOR_CONCAT_TYPE",
+                            "Vector.concat arguments must preserve the exact element specialization", node.children[1]!.children[index]!);
+                    }
+                });
+            } else if (["every", "filter", "forEach", "map", "some"].includes(name)
+                || (name === "sort" && args.length === 1)) {
+                assertVectorCallback(name, args[0]!, element, ownerType, context, node.children[1]!.children[0]!);
+                if (name !== "sort" && args[0]!.kind === "methodClosure" && args[1]
+                    && !(args[1]!.kind === "literal" && args[1]!.value === null)) {
+                    fail("HARDENED_VECTOR_METHOD_CLOSURE_THIS",
+                        `Vector.${name} method closure requires a null thisObject`, node.children[1]!.children[1]!);
                 }
             }
             resultType = name === "pop" || name === "shift" ? element

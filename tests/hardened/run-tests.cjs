@@ -247,7 +247,8 @@ function buildTree(options = {}) {
             n("NAME", "bytes"), type("ByteArray"), n("INIT", null, [construct("ByteArray")]),
         ]));
     }
-    if (options.vectorWorkpack || options.vectorNumericWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack
+    if (options.vectorWorkpack || options.vectorNumericWorkpack || options.vectorRuntimeWorkpack
+        || options.vectorCallbackWorkpack || options.badVectorCallback || options.iterationWorkpack
         || options.existingForEachWorkpack || options.badForEachType) {
         field.children.push(n("NAME_TYPE_INIT", null, [
             n("NAME", "values"), vectorType("int"),
@@ -364,6 +365,15 @@ function buildTree(options = {}) {
             ])]),
             localDeclaration("VAR_LIST", "matchesVector", "Boolean",
                 n("RELATION", null, [n("IDENTIFIER", "values"), n("OP", "is"), vectorType("int")])),
+            n("RETURN"),
+        ];
+    }
+    if (options.vectorCallbackWorkpack || options.badVectorCallback) {
+        onEventBody = [
+            call(dot(n("IDENTIFIER", "values"), "sort"), [
+                n("IDENTIFIER", options.badVectorCallback ? "onEvent" : "compareValues"),
+            ]),
+            call(dot(n("IDENTIFIER", "values"), "forEach"), [n("IDENTIFIER", "visitValue")]),
             n("RETURN"),
         ];
     }
@@ -565,6 +575,13 @@ function buildTree(options = {}) {
             options.superInMethod ? [call(n("IDENTIFIER", "super"))] : onEventBody,
             options.staticMethod ? ["public", "static"] : ["public"]),
     ];
+    if (options.vectorCallbackWorkpack || options.badVectorCallback) {
+        members.push(
+            method("compareValues", [parameter("left", "int"), parameter("right", "int")],
+                "Number", [n("RETURN", null, [n("LITERAL", "0")])]),
+            method("visitValue", [parameter("value", "int")], "void", [n("RETURN")]),
+        );
+    }
     if (options.defaultParameterWorkpack) {
         members.push(method("configure", [parameter("enabled", "Boolean", "true")], "void", [n("RETURN")]));
     }
@@ -1192,6 +1209,13 @@ function main() {
     assert.match(vectorNumericOutput.code,
         /new __as3Vector<number>\(__as3VectorPolicies\.int, __as3Uint\(1\.5\), false\)/);
     assert.match(vectorNumericOutput.code, /this\.values!\.slice\(__as3Int\(4294967295\)\);/);
+    const vectorCallbackProgram = adapt(api, buildTree({ vectorCallbackWorkpack: true }), authority);
+    const vectorCallbackOutput = api.emitSemanticProgram(vectorCallbackProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorCallbackOutput.code, /this\.values!\.sort\(this\.compareValues\);/);
+    assert.match(vectorCallbackOutput.code, /this\.values!\.forEach\(this\.visitValue\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badVectorCallback: true }), authority),
+        "HARDENED_VECTOR_CALLBACK_TYPE");
     const shortVectorProgram = adapt(api, buildTree({ shortVectorWorkpack: true }), authority);
     const shortVectorOutput = api.emitSemanticProgram(shortVectorProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1372,7 +1396,8 @@ function main() {
     assert.match(compoundOutput.code, /active = active && false;/);
     assertErrorCode(() => adapt(api, buildTree({ badLogicalCompound: true }), authority), "HARDENED_COMPOUND_TYPE");
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
-    assertGeneratedRuntimeTypechecks([vectorOutput.code, vectorNumericOutput.code, shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
+    assertGeneratedRuntimeTypechecks([vectorOutput.code, vectorNumericOutput.code, vectorCallbackOutput.code,
+        shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code,
         existingForEachOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,

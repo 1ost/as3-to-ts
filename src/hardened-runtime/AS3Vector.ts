@@ -207,9 +207,14 @@ export class AS3Vector<T> implements Iterable<T> {
         return AS3Vector.from(this._policy, this._values.slice(this._relativeIndex(start), this._relativeIndex(end)));
     }
 
-    public concat(...values: Array<AS3Vector<T> | ReadonlyArray<T>>): AS3Vector<T> {
+    public concat(...values: AS3Vector<T>[]): AS3Vector<T> {
         const result = AS3Vector.from(this._policy, this._values);
-        for (const value of values) result.push(...Array.from(value));
+        for (const value of values) {
+            if (!(value instanceof AS3Vector) || value.elementPolicy !== this._policy) {
+                throw new TypeError("AS3 Vector.concat requires the exact element specialization");
+            }
+            result.push(...Array.from(value));
+        }
         return result;
     }
 
@@ -224,37 +229,39 @@ export class AS3Vector<T> implements Iterable<T> {
     public join(separator: string = ","): string { return this._values.join(separator); }
     public reverse(): AS3Vector<T> { this._values.reverse(); return this; }
 
-    public sort(compareFunction?: (left: T, right: T) => number): AS3Vector<T> {
+    public sort(compareFunction?: unknown): AS3Vector<T> {
         if (compareFunction !== undefined && typeof compareFunction !== "function") {
             throw new TypeError("AS3 Vector.sort currently requires a comparator function when an argument is supplied");
         }
-        this._values.sort(compareFunction);
+        this._values.sort(compareFunction as ((left: T, right: T) => number) | undefined);
         return this;
     }
 
-    public forEach(callback: (value: T, index: number, vector: AS3Vector<T>) => void, thisObject?: unknown): void {
-        this._values.forEach((value, index) => callback.call(thisObject, value, index, this));
+    public forEach(callback: unknown, thisObject?: unknown): void {
+        const callable = this._callback(callback, "forEach");
+        this._values.forEach((value, index) => callable.call(thisObject, value, index, this));
     }
 
-    public map(callback: (value: T, index: number, vector: AS3Vector<T>) => T, thisObject?: unknown): AS3Vector<T> {
+    public map(callback: unknown, thisObject?: unknown): AS3Vector<T> {
+        const callable = this._callback(callback, "map");
         return AS3Vector.from(this._policy,
-            this._values.map((value, index) => callback.call(thisObject, value, index, this)));
+            this._values.map((value, index) => callable.call(thisObject, value, index, this)));
     }
 
-    public filter(callback: (value: T, index: number, vector: AS3Vector<T>) => boolean,
-        thisObject?: unknown): AS3Vector<T> {
+    public filter(callback: unknown, thisObject?: unknown): AS3Vector<T> {
+        const callable = this._callback(callback, "filter");
         return AS3Vector.from(this._policy,
-            this._values.filter((value, index) => callback.call(thisObject, value, index, this)));
+            this._values.filter((value, index) => callable.call(thisObject, value, index, this)));
     }
 
-    public every(callback: (value: T, index: number, vector: AS3Vector<T>) => boolean,
-        thisObject?: unknown): boolean {
-        return this._values.every((value, index) => callback.call(thisObject, value, index, this));
+    public every(callback: unknown, thisObject?: unknown): boolean {
+        const callable = this._callback(callback, "every");
+        return this._values.every((value, index) => callable.call(thisObject, value, index, this));
     }
 
-    public some(callback: (value: T, index: number, vector: AS3Vector<T>) => boolean,
-        thisObject?: unknown): boolean {
-        return this._values.some((value, index) => callback.call(thisObject, value, index, this));
+    public some(callback: unknown, thisObject?: unknown): boolean {
+        const callable = this._callback(callback, "some");
+        return this._values.some((value, index) => callable.call(thisObject, value, index, this));
     }
 
     public toString(): string { return this._values.toString(); }
@@ -264,6 +271,11 @@ export class AS3Vector<T> implements Iterable<T> {
     private _get(index: number): T {
         if (index >= this.length) range(`AS3 Vector index ${index} is outside length ${this.length}`);
         return this._values[index]!;
+    }
+
+    private _callback(value: unknown, name: string): Function {
+        if (typeof value !== "function") throw new TypeError(`AS3 Vector.${name} requires a callback function`);
+        return value;
     }
 
     private _set(index: number, value: unknown): void {
