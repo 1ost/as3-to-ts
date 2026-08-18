@@ -944,7 +944,8 @@ function localMemberAuthority(api, localTypes, mutate = null) {
         entryCount: entries.length,
         heldCount: 0,
         localTypeMapSha256: "b".repeat(64),
-        schema: "bleach-local-as3-member-map@1",
+        schema: "bleach-local-as3-member-map@2",
+        sourceCensusSha256: "c".repeat(64),
     };
     const json = `${canonicalJson(document)}\n`;
     return api.loadLocalMemberAuthority({
@@ -953,6 +954,7 @@ function localMemberAuthority(api, localTypes, mutate = null) {
         expectedEntryCount: entries.length,
         expectedHeldCount: 0,
         expectedLocalTypeMapSha256: document.localTypeMapSha256,
+        expectedSourceCensusSha256: document.sourceCensusSha256,
         json,
         sha256: sha256(json),
     }, sha256, localTypes);
@@ -1148,7 +1150,8 @@ function main() {
         .declaration.members[1].parameters[0].type, "Vector.<int>");
     assertErrorCode(() => api.loadLocalMemberAuthority({
         expectedCompleteCount: 2, expectedDeclarationWorkerSha256: "a".repeat(64), expectedEntryCount: 2,
-        expectedHeldCount: 0, expectedLocalTypeMapSha256: "b".repeat(64), json: "{}\n", sha256: sha256("{}\n"),
+        expectedHeldCount: 0, expectedLocalTypeMapSha256: "b".repeat(64),
+        expectedSourceCensusSha256: "c".repeat(64), json: "{}\n", sha256: sha256("{}\n"),
     }, sha256, localTypesForMembers), "HARDENED_LOCAL_MEMBER_SCHEMA");
     assertErrorCode(() => localMemberAuthority(api, localTypesForMembers,
         entries => { entries[0].sourceContentSha256 = "c".repeat(64); }), "HARDENED_LOCAL_MEMBER_ENTRY");

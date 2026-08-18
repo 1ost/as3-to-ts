@@ -15,9 +15,11 @@ const BUILTINS = new Set([
     "RegExp", "String", "XML", "XMLList", "int", "uint", "void",
 ]);
 
-const [typeMapArgument, outputArgument, sourceRepositoryArgument, workerArgument] = process.argv.slice(2);
-if (!typeMapArgument || !outputArgument || !sourceRepositoryArgument || !workerArgument) {
-    process.stderr.write("usage: node tools/generate-local-member-map.cjs <local-type-map> <output> <source-repository> <declaration-worker>\n");
+const [typeMapArgument, outputArgument, sourceRepositoryArgument, workerArgument,
+    sourceCensusArgument, expectedSourceCensusSha256] = process.argv.slice(2);
+if (!typeMapArgument || !outputArgument || !sourceRepositoryArgument || !workerArgument
+    || !sourceCensusArgument || !/^[0-9a-f]{64}$/.test(expectedSourceCensusSha256 || "")) {
+    process.stderr.write("usage: node tools/generate-local-member-map.cjs <local-type-map> <output> <source-repository> <declaration-worker> <source-census> <expected-source-census-sha256>\n");
     process.exit(2);
 }
 
@@ -62,6 +64,28 @@ if (!typeMap || typeMap.schema !== "bleach-local-as3-type-map@2" || !Array.isArr
 }
 const localTypeMapSha256 = sha256(Buffer.from(typeMapText, "utf8"));
 const byIdentity = new Map(typeMap.entries.map(entry => [`${entry.module}\u0000${entry.qname}`, entry]));
+const sourceCensusFile = readCanonicalFile(sourceCensusArgument, MAX_MAP_BYTES, "source capability census");
+const sourceCensusText = sourceCensusFile.text.replace(/\r\n?/g, "\n");
+const sourceCensusSha256 = sha256(Buffer.from(sourceCensusText, "utf8"));
+if (sourceCensusSha256 !== expectedSourceCensusSha256) {
+    throw new Error("source capability census differs from its expected canonical digest");
+}
+const sourceCensus = JSON.parse(sourceCensusText);
+if (!sourceCensus || sourceCensus.schema !== "swf-capability-census@1"
+    || !sourceCensus.as3SourceCapabilities || !Array.isArray(sourceCensus.as3SourceCapabilities.apis)
+    || `${stringify(sourceCensus)}\n` !== sourceCensusText) {
+    throw new Error("source capability census must be the exact canonical v1 authority");
+}
+const flashDefinitions = new Set();
+for (const [index, api] of sourceCensus.as3SourceCapabilities.apis.entries()) {
+    if (!api || typeof api !== "object" || typeof api.qname !== "string"
+        || !/^flash(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$/.test(api.qname)
+        || !Array.isArray(api.roles) || api.roles.some(role => typeof role !== "string")
+        || flashDefinitions.has(api.qname)) {
+        throw new Error(`source capability API ${index} has an invalid or duplicate definition`);
+    }
+    flashDefinitions.add(api.qname);
+}
 
 function readSource(entry) {
     const lexical = path.resolve(sourceRepository, ...entry.sourcePath.split("/"));
@@ -129,7 +153,7 @@ function resolveQName(entry, extract, rawName, requiredKind = null) {
     if (!rawName.includes(".") && extract.packageName !== "") candidates.push(`${extract.packageName}.${rawName}`);
     extract.imports.filter(item => item.endsWith(".*")).forEach(item => candidates.push(`${item.slice(0, -1)}${rawName}`));
     candidates = [...new Set(candidates)].filter(qname => {
-        if (qname.startsWith("flash.")) return true;
+        if (qname.startsWith("flash.")) return flashDefinitions.has(qname);
         const target = byIdentity.get(`${entry.module}\u0000${qname}`);
         return !!target && target.importable && target.typeKind !== "package"
             && entry.prerequisites.includes(target.nodeId)
@@ -227,7 +251,8 @@ async function main() {
     }
     entries.sort((left, right) => compareUtf8(`${left.module}\u0000${left.qname}`, `${right.module}\u0000${right.qname}`));
     const output = {
-        schema: "bleach-local-as3-member-map@1",
+        schema: "bleach-local-as3-member-map@2",
+        sourceCensusSha256,
         localTypeMapSha256,
         declarationWorkerSha256: workerSha256,
         entryCount: entries.length,

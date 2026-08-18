@@ -23,10 +23,10 @@ const COMPILED_LOCAL_TYPE_COUNT = 2923;
 const COMPILED_DEPENDENCY_GRAPH_RAW_SHA256 = "11604f7e274113e26d14a4426364e278526efa8001e27d8dfd5a0e54b4caa184";
 const COMPILED_DEPENDENCY_GRAPH_SEMANTIC_SHA256 = "3d0d7e0717708e2931bb9cf81de913aa21f5fe4b24babb2703edd9abdcb8f593";
 const COMPILED_SOURCE_MANIFEST_SHA256 = "7e3e0475837a72fa730a37cbbb8a7863d146ec1c09debbbf23229dec5cd8a5e8";
-const COMPILED_LOCAL_MEMBER_MAP_SHA256 = "6eb0293ccb4f7d647bce387d9c63b958bc9a5474e8aa814554b61995865922da";
+const COMPILED_LOCAL_MEMBER_MAP_SHA256 = "0b364c56ceed607235b02d0bdf269db728db89973f9cc861b71be4111977fcd9";
 const COMPILED_DECLARATION_WORKER_SHA256 = "87f04afe96e2713595eb8ed2998f158d43f57a65cbebb03d3a12be499f112db7";
-const COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = 2324;
-const COMPILED_LOCAL_MEMBER_HELD_COUNT = 599;
+const COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = 2499;
+const COMPILED_LOCAL_MEMBER_HELD_COUNT = 424;
 
 const COMPILED_AUTHORITY_LOCK = Object.freeze({
     schema: "bleach-local-as3-authority-lock@1",
@@ -161,6 +161,7 @@ export function loadTranspileAuthority(
             expectedHeldCount: COMPILED_LOCAL_MEMBER_HELD_COUNT,
             expectedLocalTypeMapSha256: COMPILED_LOCAL_TYPE_MAP_SHA256,
             expectedDeclarationWorkerSha256: COMPILED_DECLARATION_WORKER_SHA256,
+            expectedSourceCensusSha256: COMPILED_AUTHORITY_LOCK.sourceCensusSha256,
         }, sha256, localTypes);
         if (Object.keys(authority.typeMappingsBySource).length !== COMPILED_AUTHORITY_LOCK.mappedTypeCount
             || Object.keys(authority.memberMappingsByKey).length !== COMPILED_AUTHORITY_LOCK.mappedMemberCount) {

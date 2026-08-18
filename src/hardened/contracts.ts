@@ -293,6 +293,7 @@ export interface LocalMemberAuthorityEntry {
 export interface LoadedLocalMemberAuthority {
     localTypeMapSha256: string;
     declarationWorkerSha256: string;
+    sourceCensusSha256: string;
     completeCount: number;
     heldCount: number;
     entries: LocalMemberAuthorityEntry[];

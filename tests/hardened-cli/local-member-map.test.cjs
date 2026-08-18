@@ -37,7 +37,7 @@ function entry(qname, nodeId, sourcePath, source, prerequisites, typeKind = "cla
 test("local member map is deterministic and resolves authenticated inheritance signatures", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "local-member-map-"));
     try {
-        const baseSource = "package p { public class Base { public function Base(value:int = 0){} protected function run(value:Vector.<int>):String{return null;} } }";
+        const baseSource = "package p { import flash.display.*; import flash.geom.*; public class Base { public var bounds:Rectangle; public function Base(value:int = 0){} protected function run(value:Vector.<int>):String{return null;} } }";
         const childSource = "package p { public class Child extends Base { public function Child(){super();} override protected function run(value:Vector.<int>):String{return null;} } }";
         const packageSource = "package p { public const Shared:Base = new Base(); }";
         const namespaceSource = "package p { public namespace InternalSpace; }";
@@ -64,30 +64,58 @@ test("local member map is deterministic and resolves authenticated inheritance s
             sourceManifestSha256: "4".repeat(64),
         };
         const mapPath = path.join(root, "local-types.json");
+        const censusPath = path.join(root, "source-census.json");
+        const census = {
+            as3SourceCapabilities: { apis: [{ qname: "flash.geom.Rectangle", roles: ["wildcard-resolution"] }] },
+            schema: "swf-capability-census@1",
+        };
+        const censusText = `${canonical(census)}\n`;
+        fs.writeFileSync(censusPath, censusText, "utf8");
+        const censusSha256 = sha256(censusText);
         const first = path.join(root, "members-a.json");
         const second = path.join(root, "members-b.json");
         fs.writeFileSync(mapPath, `${canonical(map)}\n`, "utf8");
         for (const output of [first, second]) {
-            childProcess.execFileSync(process.execPath, [GENERATOR, mapPath, output, root, WORKER],
+            childProcess.execFileSync(process.execPath,
+                [GENERATOR, mapPath, output, root, WORKER, censusPath, censusSha256],
                 { cwd: ROOT, stdio: "pipe", timeout: 15000 });
         }
         assert.equal(fs.readFileSync(first).compare(fs.readFileSync(second)), 0);
         const value = JSON.parse(fs.readFileSync(first, "utf8"));
-        assert.equal(value.schema, "bleach-local-as3-member-map@1");
+        assert.equal(value.schema, "bleach-local-as3-member-map@2");
         assert.equal(value.entryCount, 4);
         assert.equal(value.completeCount, 4);
         assert.equal(value.heldCount, 0);
+        assert.equal(value.sourceCensusSha256, censusSha256);
         const base = value.entries.find(item => item.qname === "p.Base");
         const child = value.entries.find(item => item.qname === "p.Child");
         assert.deepEqual(child.declaration.baseQNames, ["p.Base"]);
         assert.equal(base.declaration.members.find(member => member.name === "run").parameters[0].type,
             "Vector.<int>");
+        assert.equal(base.declaration.members.find(member => member.name === "bounds").fieldType,
+            "flash.geom.Rectangle");
         assert.equal(child.declaration.members.find(member => member.name === "run").modifiers.includes("override"), true);
         assert.equal(value.entries.find(item => item.qname === "p.Shared").declaration.members[0].fieldType, "p.Base");
         assert.deepEqual(value.entries.find(item => item.qname === "p.Shared").declaration.packageInitializer,
             { kind: "new", targetQName: "p.Base", argumentCount: 0 });
         assert.equal(value.entries.find(item => item.qname === "p.InternalSpace").declaration.members[0].kind,
             "namespace");
+
+        const ambiguousCensus = {
+            as3SourceCapabilities: { apis: [
+                { qname: "flash.display.Rectangle", roles: ["wildcard-resolution"] },
+                { qname: "flash.geom.Rectangle", roles: ["wildcard-resolution"] },
+            ] },
+            schema: "swf-capability-census@1",
+        };
+        const ambiguousText = `${canonical(ambiguousCensus)}\n`;
+        fs.writeFileSync(censusPath, ambiguousText, "utf8");
+        const ambiguousOutput = path.join(root, "members-ambiguous.json");
+        childProcess.execFileSync(process.execPath, [GENERATOR, mapPath, ambiguousOutput, root, WORKER,
+            censusPath, sha256(ambiguousText)], { cwd: ROOT, stdio: "pipe", timeout: 15000 });
+        const ambiguous = JSON.parse(fs.readFileSync(ambiguousOutput, "utf8"));
+        assert.equal(ambiguous.entries.find(item => item.qname === "p.Base").holdCode,
+            "LOCAL_MEMBER_TYPE_RESOLUTION");
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
