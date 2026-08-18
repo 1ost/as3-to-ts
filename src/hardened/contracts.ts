@@ -94,6 +94,8 @@ export interface SemanticImport extends SemanticIdentity {
     localNodeId: string | null;
     runtimeConstructible: boolean;
     runtimeInterface: boolean;
+    localValueType: string | null;
+    compileTimeNamespace: boolean;
     sourceQualifiedName: string;
     sourceLocalName: string;
     targetModule: string;
@@ -226,6 +228,63 @@ export interface LoadedLocalTypeAuthority {
     sourceManifestSha256: string;
     entriesByIdentity: { [identity: string]: LocalTypeMapping };
     entries: LocalTypeMapping[];
+}
+
+export interface LocalDeclarationParameter {
+    name: string;
+    type: string;
+    optional: boolean;
+    rest: boolean;
+}
+
+export interface LocalDeclarationMember {
+    kind: "constructor" | "method" | "getter" | "setter" | "field" | "namespace";
+    name: string;
+    modifiers: string[];
+    namespaceName: string | null;
+    parameters: LocalDeclarationParameter[];
+    returnType: string | null;
+    fieldType: string | null;
+    readonly: boolean;
+}
+
+export interface LocalDeclarationExtract {
+    schema: "as3-local-declaration-extract@1";
+    sourceSha256: string;
+    packageName: string;
+    qualifiedName: string;
+    declarationKind: "class" | "interface" | "package";
+    imports: string[];
+    extendsNames: string[];
+    implementsNames: string[];
+    members: LocalDeclarationMember[];
+}
+
+export interface LocalMemberDeclaration {
+    baseQNames: string[];
+    interfaceQNames: string[];
+    members: LocalDeclarationMember[];
+}
+
+export interface LocalMemberAuthorityEntry {
+    module: LocalTypeModule;
+    qname: string;
+    nodeId: string;
+    sourceContentSha256: string;
+    typeKind: LocalTypeKind;
+    status: "complete" | "held";
+    holdCode: string | null;
+    holdSha256: string | null;
+    declaration: LocalMemberDeclaration | null;
+}
+
+export interface LoadedLocalMemberAuthority {
+    localTypeMapSha256: string;
+    declarationWorkerSha256: string;
+    completeCount: number;
+    heldCount: number;
+    entries: LocalMemberAuthorityEntry[];
+    entriesByIdentity: { [identity: string]: LocalMemberAuthorityEntry };
 }
 
 export interface AssignmentExpression extends SemanticIdentity {

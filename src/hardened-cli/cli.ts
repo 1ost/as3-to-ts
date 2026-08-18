@@ -142,7 +142,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             try {
                 const normalized = JSON.parse(parsedFile.json) as NormalizedParserAst;
                 const semantic = adaptNormalizedParserAst(normalized, transpileAuthority!.authority,
-                    source.content, value => sha256(value), transpileAuthority!.localTypes, file.portablePath);
+                    source.content, value => sha256(value), transpileAuthority!.localTypes, file.portablePath,
+                    transpileAuthority!.localMembers);
                 const emitted = emitSemanticProgram(semantic, {
                     compiler: ts49,
                     expectedTypeScriptVersion: transpileAuthority!.typeScriptVersion,

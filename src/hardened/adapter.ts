@@ -2,7 +2,10 @@ import {
     CallExpression,
     CapabilityMapping,
     LoadedCapabilityAuthority,
+    LoadedLocalMemberAuthority,
     LoadedLocalTypeAuthority,
+    LocalDeclarationMember,
+    LocalMemberAuthorityEntry,
     LocalTypeMapping,
     NormalizedParserAst,
     NormalizedParserNode,
@@ -29,8 +32,9 @@ import {
 } from "./contracts";
 import { assertLoadedCapabilityAuthority, Sha256Function, targetModuleSpecifier } from "./ledger";
 import { assertLoadedLocalTypeAuthority } from "./local-types";
+import { assertLoadedLocalMemberAuthority } from "./local-members";
 
-interface TreeNode extends NormalizedParserNode {
+export interface TreeNode extends NormalizedParserNode {
     children: TreeNode[];
 }
 
@@ -69,6 +73,9 @@ interface AdapterContext {
     mappingsBySource: { [name: string]: CapabilityMapping };
     memberMappingsByKey: { [name: string]: CapabilityMapping };
     baseSourceQName: string | null;
+    baseLocalQName: string | null;
+    localMemberAuthority: LoadedLocalMemberAuthority | null;
+    resolveCurrentLocal: (() => CurrentLocalType) | null;
     fields: { [name: string]: SemanticField };
     methods: { [name: string]: MethodHeader };
     accessors: { [name: string]: AccessorPair };
@@ -142,7 +149,7 @@ function identity(node: TreeNode): SemanticIdentity {
     return { sourceNodeId: node.id, sourceSpan: node.span };
 }
 
-function buildTree(ast: NormalizedParserAst, sourceText: string, sha256: Sha256Function): TreeNode {
+export function buildTree(ast: NormalizedParserAst, sourceText: string, sha256: Sha256Function): TreeNode {
     if (!isObject(ast) || !exactKeys(ast, ["fingerprintSha256", "nodes", "schema", "sourceSha256"])
         || ast.schema !== "authored-ui-as3-flat-ast@1" || typeof sourceText !== "string"
         || typeof sha256 !== "function" || !SHA256.test(ast.sourceSha256)
@@ -345,11 +352,31 @@ function relativeLocalModule(currentModulePath: string, target: LocalTypeMapping
 }
 
 function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLocalType,
-    node: TreeNode): SemanticImport {
+    node: TreeNode, localMemberAuthority: LoadedLocalMemberAuthority | null = null): SemanticImport {
     const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
+    let localValueType: string | null = null;
+    let compileTimeNamespace = false;
+    if (target.typeKind === "package") {
+        if (localMemberAuthority === null) {
+            fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "package symbol import requires local member authority", node);
+        }
+        assertLoadedLocalMemberAuthority(localMemberAuthority);
+        const entry = localMemberAuthority.entriesByIdentity[`${target.module}\u0000${target.qname}`];
+        if (!entry || entry.status !== "complete" || entry.declaration === null
+            || entry.declaration.members.length !== 1) {
+            fail("HARDENED_LOCAL_MEMBER_HELD", `package symbol ${target.qname} lacks one complete declaration`, node);
+        }
+        const member = entry.declaration.members[0]!;
+        if (member.name !== localName || (member.kind !== "field" && member.kind !== "namespace")) {
+            fail("HARDENED_LOCAL_PACKAGE_SYMBOL", "package symbol declaration disagrees with its import identity", node);
+        }
+        localValueType = member.kind === "field" ? member.fieldType : null;
+        compileTimeNamespace = member.kind === "namespace";
+    }
     return Object.assign(identity(node), {
         authorityKind: "local" as "local", localNodeId: target.nodeId,
         runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
+        localValueType, compileTimeNamespace,
         sourceQualifiedName: target.qname, sourceLocalName: localName,
         targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
     });
@@ -362,7 +389,8 @@ function oneType(node: TreeNode): TreeNode {
 }
 
 function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
-    localAuthority: LoadedLocalTypeAuthority | undefined, resolveCurrentLocal: (() => CurrentLocalType) | null): {
+    localAuthority: LoadedLocalTypeAuthority | undefined, resolveCurrentLocal: (() => CurrentLocalType) | null,
+    localMemberAuthority: LoadedLocalMemberAuthority | null): {
     imports: SemanticImport[];
     importsByLocal: { [name: string]: SemanticImport };
 } {
@@ -383,6 +411,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         return Object.assign(identity(node), {
             authorityKind: "flash" as "flash", localNodeId: null,
             runtimeConstructible: mapping.targetKind === "class", runtimeInterface: mapping.targetKind === "interface",
+            localValueType: null, compileTimeNamespace: false,
             sourceQualifiedName: qname, sourceLocalName: localName,
             targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
         });
@@ -396,13 +425,14 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         return Object.assign(identity(node), {
             authorityKind: "intrinsic" as "intrinsic", localNodeId: null,
             runtimeConstructible: true, runtimeInterface: false,
+            localValueType: null, compileTimeNamespace: false,
             sourceQualifiedName: qname, sourceLocalName: localName,
             targetModule: mapping.targetModule, targetExport: mapping.targetExport,
         });
     };
     const localImport = (target: LocalTypeMapping, currentLocal: CurrentLocalType,
         node: TreeNode): SemanticImport => {
-        return localSemanticImport(target, currentLocal, node);
+        return localSemanticImport(target, currentLocal, node, localMemberAuthority);
     };
     content.children.filter((child) => child.kind === "IMPORT").forEach((node) => {
         const qname = requiredText(node, "import");
@@ -426,7 +456,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
             const currentLocal = resolveCurrentLocal();
             const localMatches = localAuthority.entries.filter(target => target.module === currentLocal.entry.module
                 && target.qname.startsWith(prefix) && !target.qname.slice(prefix.length).includes(".")
-                && target.importable && target.typeKind !== "package"
+                && target.importable
                 && currentLocal.entry.prerequisites.indexOf(target.nodeId) >= 0)
                 .sort((left, right) => compareUtf8(left.qname, right.qname));
             // An unused wildcard contributes no emitted binding. Any source identity actually
@@ -451,7 +481,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
             }
             const currentLocal = resolveCurrentLocal();
             const target = localAuthority.entriesByIdentity[`${currentLocal.entry.module}\u0000${qname}`];
-            if (!target || !target.importable || target.typeKind === "package") {
+            if (!target || !target.importable) {
                 fail("HARDENED_LOCAL_IMPORT", "project-local import is absent, non-importable, or not a declared type: " + qname, node);
             }
             if (currentLocal.entry.prerequisites.indexOf(target.nodeId) < 0) {
@@ -525,7 +555,8 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
             const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
             const imported = context.importsByLocal[localName]
                 || context.resolveImportedType(sourceName, null, node);
-            if (!imported || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)) {
+            if (!imported || imported.localValueType !== null || imported.compileTimeNamespace
+                || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)) {
                 fail("HARDENED_TYPE_UNMAPPED", "source type " + sourceName
                     + " is not a proven primitive or authenticated import", node);
             }
@@ -635,6 +666,234 @@ interface CurrentLocalType {
     outputModulePath: string;
 }
 
+interface LocalInheritedMemberLookup {
+    member: LocalDeclarationMember | null;
+    ownerQName: string | null;
+    terminalBaseQName: string | null;
+}
+
+function authoritySemanticType(typeName: string, context: AdapterContext, node: TreeNode): SemanticType {
+    if (typeName.startsWith("Vector.<") && typeName.endsWith(">")) {
+        const element = authoritySemanticType(typeName.slice("Vector.<".length, -1), context, node);
+        return semanticType(node, `Vector.<${element.sourceName}>`, "AS3Vector", [element]);
+    }
+    const primitive = PRIMITIVE_TYPES[typeName];
+    if (primitive) return semanticType(node, typeName, primitive);
+    if (typeName === "*") return semanticType(node, "*", "unknown");
+    if (typeName === context.classQualifiedName) return semanticType(node, context.className, context.className);
+    const importedName = Object.keys(context.importsByLocal).find(localName =>
+        context.importsByLocal[localName]!.sourceQualifiedName === typeName);
+    if (importedName) return semanticType(node, importedName, importedName);
+    return semanticType(node, typeName, typeName.slice(typeName.lastIndexOf(".") + 1));
+}
+
+function localInheritedNamedMembers(context: AdapterContext, name: string,
+    node: TreeNode): { members: LocalDeclarationMember[]; ownerQName: string | null } {
+    if (context.baseLocalQName === null) return { members: [], ownerQName: null };
+    if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) {
+        fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "local inheritance requires the loaded member authority", node);
+    }
+    assertLoadedLocalMemberAuthority(context.localMemberAuthority);
+    const moduleName = context.resolveCurrentLocal().entry.module;
+    const visited = new Set<string>();
+    let qname: string | null = context.baseLocalQName;
+    while (qname !== null) {
+        if (visited.has(qname) || visited.size >= 1024) {
+            fail("HARDENED_LOCAL_MEMBER_CYCLE", "local base-member lineage is cyclic or exceeds its bound", node);
+        }
+        visited.add(qname);
+        const entry: LocalMemberAuthorityEntry | undefined =
+            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+        if (!entry) return { members: [], ownerQName: null };
+        if (entry.status !== "complete" || entry.declaration === null) {
+            fail("HARDENED_LOCAL_MEMBER_HELD",
+                `local member authority for ${qname} is held by ${entry.holdCode || "unknown"}`, node);
+        }
+        const members = entry.declaration.members.filter(member => member.name === name
+            && member.modifiers.indexOf("static") < 0 && member.modifiers.indexOf("private") < 0
+            && member.kind !== "constructor");
+        if (members.length > 0) return { members, ownerQName: qname };
+        if (entry.declaration.baseQNames.length > 1) {
+            fail("HARDENED_LOCAL_MEMBER_BASE", `class ${qname} has an ambiguous base lineage`, node);
+        }
+        qname = entry.declaration.baseQNames.length === 1 ? entry.declaration.baseQNames[0]! : null;
+    }
+    return { members: [], ownerQName: null };
+}
+
+function authorityTypeName(type: SemanticType, context: AdapterContext, node: TreeNode): string {
+    const element = vectorElement(type);
+    if (element !== null) return `Vector.<${authorityTypeName(element, context, node)}>`;
+    if (Object.prototype.hasOwnProperty.call(PRIMITIVE_TYPES, type.sourceName) || type.sourceName === "*") {
+        return type.sourceName;
+    }
+    if (type.sourceName === context.className) return context.classQualifiedName;
+    const imported = context.importsByLocal[type.sourceName];
+    if (imported) return imported.sourceQualifiedName;
+    fail("HARDENED_LOCAL_MEMBER_TYPE", "semantic type lacks an authenticated local-member identity", node);
+}
+
+function localInheritedMember(context: AdapterContext, name: string,
+    kind: "method" | "getter" | "setter" | "field", node: TreeNode): LocalInheritedMemberLookup {
+    if (context.baseLocalQName === null || context.localMemberAuthority === null
+        || context.resolveCurrentLocal === null) {
+        fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "local inheritance requires the loaded member authority", node);
+    }
+    assertLoadedLocalMemberAuthority(context.localMemberAuthority);
+    const moduleName = context.resolveCurrentLocal().entry.module;
+    const visited = new Set<string>();
+    let qname: string | null = context.baseLocalQName;
+    while (qname !== null) {
+        if (visited.has(qname) || visited.size >= 1024) {
+            fail("HARDENED_LOCAL_MEMBER_CYCLE", "local base-member lineage is cyclic or exceeds its bound", node);
+        }
+        visited.add(qname);
+        const entry: LocalMemberAuthorityEntry | undefined =
+            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+        if (!entry) return { member: null, ownerQName: null, terminalBaseQName: qname };
+        if (entry.status !== "complete" || entry.declaration === null) {
+            fail("HARDENED_LOCAL_MEMBER_HELD",
+                `local member authority for ${qname} is held by ${entry.holdCode || "unknown"}`, node);
+        }
+        const matches = entry.declaration.members.filter((member: LocalDeclarationMember) => member.kind === kind && member.name === name
+            && member.modifiers.indexOf("static") < 0 && member.modifiers.indexOf("private") < 0);
+        if (matches.length > 1) {
+            fail("HARDENED_LOCAL_MEMBER_AMBIGUOUS", `local member ${qname}.${name} is duplicated`, node);
+        }
+        if (matches.length === 1) {
+            return { member: matches[0]!, ownerQName: qname, terminalBaseQName: null };
+        }
+        if (entry.declaration.baseQNames.length > 1) {
+            fail("HARDENED_LOCAL_MEMBER_BASE", `class ${qname} has an ambiguous base lineage`, node);
+        }
+        qname = entry.declaration.baseQNames.length === 1 ? entry.declaration.baseQNames[0]! : null;
+    }
+    return { member: null, ownerQName: null, terminalBaseQName: null };
+}
+
+function assertLocalMemberParameters(expected: LocalDeclarationMember, actual: SemanticParameter[],
+    context: AdapterContext, node: TreeNode): void {
+    if (expected.parameters.length !== actual.length) {
+        fail("HARDENED_LOCAL_MEMBER_SIGNATURE", "local member parameter count differs from its authenticated declaration", node);
+    }
+    expected.parameters.forEach((parameter, index) => {
+        const candidate = actual[index]!;
+        if (parameter.type !== authorityTypeName(candidate.type, context, node)
+            || parameter.optional !== (candidate.defaultValue !== null) || parameter.rest !== candidate.rest) {
+            fail("HARDENED_LOCAL_MEMBER_SIGNATURE",
+                `local member parameter ${index} differs from its authenticated declaration`, node);
+        }
+    });
+}
+
+function memberVisibility(modifiers: string[]): "public" | "protected" | "internal" | "private" {
+    if (modifiers.indexOf("public") >= 0) return "public";
+    if (modifiers.indexOf("protected") >= 0) return "protected";
+    if (modifiers.indexOf("private") >= 0) return "private";
+    return "internal";
+}
+
+function assertInheritedVisibility(member: LocalDeclarationMember, ownerQName: string,
+    context: AdapterContext, node: TreeNode): void {
+    const visibility = memberVisibility(member.modifiers);
+    const ownerPackage = ownerQName.slice(0, Math.max(0, ownerQName.lastIndexOf(".")));
+    const currentPackage = context.classQualifiedName.slice(0, Math.max(0, context.classQualifiedName.lastIndexOf(".")));
+    if (visibility === "private" || (visibility === "internal" && ownerPackage !== currentPackage)) {
+        fail("HARDENED_LOCAL_MEMBER_VISIBILITY", "inherited local member is not visible to the current class", node);
+    }
+}
+
+function assertLocalOverride(expected: LocalDeclarationMember, parameters: SemanticParameter[],
+    returnType: SemanticType | null, modifiers: SemanticModifier[], context: AdapterContext, node: TreeNode): void {
+    assertLocalMemberParameters(expected, parameters, context, node);
+    const actualReturn = returnType === null ? null : authorityTypeName(returnType, context, node);
+    if (expected.returnType !== actualReturn) {
+        fail("HARDENED_LOCAL_MEMBER_SIGNATURE", "local override return type differs from its authenticated declaration", node);
+    }
+    const baseVisibility = memberVisibility(expected.modifiers);
+    const actualVisibility = memberVisibility(modifiers);
+    if ((baseVisibility === "public" && actualVisibility !== "public")
+        || (baseVisibility === "protected" && actualVisibility !== "protected" && actualVisibility !== "public")
+        || baseVisibility === "private" || (baseVisibility === "internal" && actualVisibility === "private")) {
+        fail("HARDENED_LOCAL_MEMBER_VISIBILITY", "local override narrows or cannot inherit the base visibility", node);
+    }
+}
+
+function localDeclaration(context: AdapterContext, qname: string, node: TreeNode): LocalMemberAuthorityEntry {
+    if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) {
+        fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "local declaration requires the loaded member authority", node);
+    }
+    assertLoadedLocalMemberAuthority(context.localMemberAuthority);
+    const moduleName = context.resolveCurrentLocal().entry.module;
+    const entry = context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+    if (!entry || entry.status !== "complete" || entry.declaration === null) {
+        fail("HARDENED_LOCAL_MEMBER_HELD", `local declaration authority for ${qname} is absent or held`, node);
+    }
+    return entry;
+}
+
+function localConstructor(context: AdapterContext, qname: string, node: TreeNode): LocalDeclarationMember | null {
+    const entry = localDeclaration(context, qname, node);
+    const constructors = entry.declaration!.members.filter(member => member.kind === "constructor");
+    if (constructors.length > 1) {
+        fail("HARDENED_LOCAL_CONSTRUCTOR_AMBIGUOUS", `local class ${qname} has multiple constructors`, node);
+    }
+    return constructors.length === 1 ? constructors[0]! : null;
+}
+
+function authorityArgumentCompatible(expected: string, actual: SemanticType,
+    context: AdapterContext, node: TreeNode): boolean {
+    if (expected === "*" || expected === "Object") return actual.sourceName !== "void";
+    if (actual.sourceName === "null") {
+        return !["Boolean", "Number", "int", "uint", "void"].includes(expected);
+    }
+    const actualName = authorityTypeName(actual, context, node);
+    return expected === actualName || (["Number", "int", "uint"].includes(expected)
+        && ["Number", "int", "uint"].includes(actualName));
+}
+
+function assertLocalCallArguments(member: LocalDeclarationMember | null, argumentsList: SemanticExpression[],
+    argumentNodes: TreeNode[], context: AdapterContext, node: TreeNode): void {
+    if (member === null) {
+        if (argumentsList.length !== 0) {
+            fail("HARDENED_LOCAL_CONSTRUCTOR_ARITY", "implicit local constructor accepts no arguments", node);
+        }
+        return;
+    }
+    const minimum = member.parameters.filter(parameter => !parameter.optional && !parameter.rest).length;
+    if (argumentsList.length < minimum
+        || (!member.parameters.some(parameter => parameter.rest) && argumentsList.length > member.parameters.length)) {
+        fail("HARDENED_LOCAL_CONSTRUCTOR_ARITY", "local constructor call does not match its authenticated arity", node);
+    }
+    argumentsList.forEach((argument, index) => {
+        const parameter = member.parameters[Math.min(index, member.parameters.length - 1)];
+        if (!parameter || (!parameter.rest && index >= member.parameters.length)
+            || !authorityArgumentCompatible(parameter.type, assignmentType(argument, context, argumentNodes[index]!),
+                context, argumentNodes[index]!)) {
+            fail("HARDENED_LOCAL_CONSTRUCTOR_TYPE",
+                `local constructor argument ${index} does not match its authenticated type`, argumentNodes[index] || node);
+        }
+    });
+}
+
+function assertLocalMethodCall(member: LocalDeclarationMember, argumentsList: SemanticExpression[],
+    argumentNodes: TreeNode[], context: AdapterContext, node: TreeNode): void {
+    const minimum = member.parameters.filter(parameter => !parameter.optional && !parameter.rest).length;
+    if (argumentsList.length < minimum
+        || (!member.parameters.some(parameter => parameter.rest) && argumentsList.length > member.parameters.length)) {
+        fail("HARDENED_LOCAL_CALL_ARITY", "inherited local method call does not match its authenticated arity", node);
+    }
+    argumentsList.forEach((argument, index) => {
+        const parameter = member.parameters[Math.min(index, member.parameters.length - 1)];
+        if (!parameter || (!parameter.rest && index >= member.parameters.length)
+            || !authorityArgumentCompatible(parameter.type, assignmentType(argument, context, argumentNodes[index]!),
+                context, argumentNodes[index]!)) {
+            fail("HARDENED_LOCAL_CALL_TYPE",
+                `inherited local method argument ${index} does not match its authenticated type`, argumentNodes[index] || node);
+        }
+    });
+}
+
 function implicitThisMember(node: TreeNode, name: string, capabilitySource: string | null = null): SemanticExpression {
     const target = Object.assign(identity(node), { kind: "this" as "this" });
     return Object.assign(identity(node), {
@@ -650,12 +909,25 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "identifier" && context.parameters[expression.name]) {
         return context.parameters[expression.name]!.type;
     }
+    if (expression.kind === "identifier" && context.importsByLocal[expression.name]?.localValueType !== null
+        && context.importsByLocal[expression.name]?.localValueType !== undefined) {
+        return authoritySemanticType(context.importsByLocal[expression.name]!.localValueType!, context, node);
+    }
     if (expression.kind === "member" && expression.target.kind === "this" && context.fields[expression.name]) {
         return context.fields[expression.name]!.type;
     }
     if (expression.kind === "member" && expression.target.kind === "this"
         && context.accessors[expression.name]?.getter) {
         return context.accessors[expression.name]!.getter!.returnType!;
+    }
+    if (expression.kind === "member" && expression.target.kind === "this"
+        && context.baseLocalQName !== null && expression.capabilitySource !== null) {
+        const inherited = localInheritedNamedMembers(context, expression.name, node);
+        const readable = inherited.members.find(member => member.kind === "getter" || member.kind === "field");
+        if (readable && inherited.ownerQName === expression.capabilitySource) {
+            assertInheritedVisibility(readable, inherited.ownerQName, context, node);
+            return authoritySemanticType(readable.kind === "field" ? readable.fieldType! : readable.returnType!, context, node);
+        }
     }
     if (expression.kind === "member") {
         const ownerType = assignmentType(expression.target, context, node);
@@ -731,6 +1003,17 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
             fail("HARDENED_ASSIGNMENT_STATIC", "static accessors require class-qualified lowering", node);
         }
         return setter.parameters[0]!.type;
+    }
+    if (expression.kind === "member" && expression.target.kind === "this"
+        && context.baseLocalQName !== null && expression.capabilitySource !== null) {
+        const inherited = localInheritedNamedMembers(context, expression.name, node);
+        const writable = inherited.members.find(member => member.kind === "setter"
+            || (member.kind === "field" && !member.readonly));
+        if (writable && inherited.ownerQName === expression.capabilitySource) {
+            assertInheritedVisibility(writable, inherited.ownerQName, context, node);
+            return authoritySemanticType(writable.kind === "field" ? writable.fieldType!
+                : writable.parameters[0]!.type, context, node);
+        }
     }
     if (expression.kind === "member") {
         const ownerType = assignmentType(expression.target, context, node);
@@ -866,6 +1149,24 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     fail("HARDENED_DICTIONARY_CONSTRUCTOR",
                         "Dictionary constructor accepts only one optional proven Boolean weakKeys flag", call);
                 }
+                sourceType = semanticType(nameNode, name, name);
+                return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
+            }
+            if (imported?.authorityKind === "local") {
+                const constructorMember = localConstructor(context, imported.sourceQualifiedName, call);
+                if (constructorMember !== null) {
+                    const visibility = memberVisibility(constructorMember.modifiers);
+                    const currentPackage = context.classQualifiedName.slice(0,
+                        Math.max(0, context.classQualifiedName.lastIndexOf(".")));
+                    const targetPackage = imported.sourceQualifiedName.slice(0,
+                        Math.max(0, imported.sourceQualifiedName.lastIndexOf(".")));
+                    if (visibility === "private" || visibility === "protected"
+                        || (visibility === "internal" && currentPackage !== targetPackage)) {
+                        fail("HARDENED_LOCAL_CONSTRUCTOR_VISIBILITY",
+                            "local constructor is not visible from the current source package", call);
+                    }
+                }
+                assertLocalCallArguments(constructorMember, args, call.children[1]!.children, context, call);
                 sourceType = semanticType(nameNode, name, name);
                 return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
             }
@@ -1138,6 +1439,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (name === "super") {
             fail("HARDENED_SUPER_CONTEXT", "super is admitted only as the first zero-argument statement of a derived constructor", node);
         }
+        if (context.importsByLocal[name]?.compileTimeNamespace) {
+            fail("HARDENED_NAMESPACE_VALUE", "compile-time namespace cannot be used as a runtime value", node);
+        }
         if (context.locals[name] || context.parameters[name] || context.importsByLocal[name]) {
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name });
         }
@@ -1173,6 +1477,33 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_METHOD_INSTANCE_SCOPE", "constructor or static method cannot be resolved through implicit this", node);
             }
             return implicitThisMember(node, name);
+        }
+        if (context.baseLocalQName !== null) {
+            if (context.lambdaDepth > 0) {
+                fail("HARDENED_LAMBDA_THIS", "implicit inherited this in anonymous functions remains held", node);
+            }
+            const inherited = localInheritedNamedMembers(context, name, node);
+            if (inherited.members.length > 0 && inherited.ownerQName !== null) {
+                inherited.members.forEach(member => assertInheritedVisibility(member, inherited.ownerQName!, context, node));
+                const methods = inherited.members.filter(member => member.kind === "method");
+                const readable = inherited.members.some(member => member.kind === "field" || member.kind === "getter");
+                const writable = inherited.members.some(member => member.kind === "setter"
+                    || (member.kind === "field" && !member.readonly));
+                if (methods.length > 1 || (methods.length > 0 && (readable || writable))) {
+                    fail("HARDENED_LOCAL_MEMBER_AMBIGUOUS", "inherited local member kind is ambiguous", node);
+                }
+                if (methods.length === 1) {
+                    if (valuePosition) {
+                        fail("HARDENED_LOCAL_METHOD_CLOSURE",
+                            "inherited method closures remain held until their stable identity binding is proven", node);
+                    }
+                    return implicitThisMember(node, name, inherited.ownerQName);
+                }
+                if ((valuePosition && !readable) || (!valuePosition && !readable && !writable)) {
+                    fail("HARDENED_ACCESSOR_WRITE_ONLY", "inherited accessor cannot be used in this value position", node);
+                }
+                return implicitThisMember(node, name, inherited.ownerQName);
+            }
         }
         {
             fail("HARDENED_IDENTIFIER_SCOPE", "identifier is not a parameter or proven import", node);
@@ -1276,12 +1607,26 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_METHOD_INSTANCE_SCOPE", "constructor or static method cannot be resolved through this", node);
             }
             if (!context.methods[name] && !context.fields[name] && !context.accessors[name]) {
-                const mapping = context.baseSourceQName === null ? null
-                    : memberMapping(context, context.baseSourceQName, "call", name, node);
-                if (mapping === null) {
-                    fail("HARDENED_MEMBER_UNMAPPED", "instance member is neither local nor double-pinned in the minimal subset", node);
+                if (context.baseLocalQName !== null) {
+                    const inherited = localInheritedNamedMembers(context, name, node);
+                    if (inherited.members.length > 0 && inherited.ownerQName !== null) {
+                        inherited.members.forEach(member =>
+                            assertInheritedVisibility(member, inherited.ownerQName!, context, node));
+                        if (valuePosition && inherited.members.some(member => member.kind === "method")) {
+                            fail("HARDENED_LOCAL_METHOD_CLOSURE",
+                                "inherited method closures remain held until their stable identity binding is proven", node);
+                        }
+                        capabilitySource = inherited.ownerQName;
+                    }
                 }
-                capabilitySource = mapping.sourceQName;
+                if (capabilitySource === null) {
+                    const mapping = context.baseSourceQName === null ? null
+                        : memberMapping(context, context.baseSourceQName, "call", name, node);
+                    if (mapping === null) {
+                        fail("HARDENED_MEMBER_UNMAPPED", "instance member is neither local nor double-pinned in the minimal subset", node);
+                    }
+                    capabilitySource = mapping.sourceQName;
+                }
             }
         } else if (target.kind === "identifier" && context.importsByLocal[target.name]) {
             fail("HARDENED_STATIC_MEMBER", "Flash static members require an explicit paired member mapping", node);
@@ -1351,8 +1696,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         let resultType: SemanticType | null = null;
         let calleeNullable = false;
         if (callee.kind === "super") {
-            if (args.length !== 0) {
-                fail("HARDENED_SUPER_ARITY", "minimal derived constructor admits only zero-argument super", node);
+            if (context.baseLocalQName !== null) {
+                const constructorMember = localConstructor(context, context.baseLocalQName, node);
+                if (constructorMember !== null) {
+                    const visibility = memberVisibility(constructorMember.modifiers);
+                    const currentPackage = context.classQualifiedName.slice(0,
+                        Math.max(0, context.classQualifiedName.lastIndexOf(".")));
+                    const targetPackage = context.baseLocalQName.slice(0,
+                        Math.max(0, context.baseLocalQName.lastIndexOf(".")));
+                    if (visibility === "private" || (visibility === "internal" && currentPackage !== targetPackage)) {
+                        fail("HARDENED_LOCAL_CONSTRUCTOR_VISIBILITY",
+                            "local base constructor is not visible to the derived class", node);
+                    }
+                }
+                assertLocalCallArguments(constructorMember, args, node.children[1]!.children, context, node);
+            } else if (args.length !== 0) {
+                fail("HARDENED_SUPER_ARITY", "Flash base constructor arguments remain outside the typed bridge subset", node);
             }
         } else if (callee.kind === "identifier" && context.locals[callee.name]?.lambdaSignature) {
             const signature = context.locals[callee.name]!.lambdaSignature!;
@@ -1377,13 +1736,26 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     assignmentType(argument, context, node.children[1]!.children[index]!), node.children[1]!.children[index]!));
             resultType = context.methods[callee.name]!.returnType;
         } else if (callee.kind === "member" && callee.target.kind === "this" && callee.capabilitySource !== null) {
-            const mapping = memberMapping(context, callee.capabilitySource, "call", callee.name, node);
-            if (mapping === null || mapping.sourceMember === null
-                || args.length < mapping.sourceMember.minArgs || args.length > mapping.sourceMember.maxArgs) {
-                fail("HARDENED_CAPABILITY_CALL_ARITY", "Flash bridge call does not match the double-pinned source signature", node);
+            const inherited = context.baseLocalQName === null ? { members: [], ownerQName: null }
+                : localInheritedNamedMembers(context, callee.name, node);
+            if (inherited.ownerQName === callee.capabilitySource) {
+                const methods = inherited.members.filter(member => member.kind === "method");
+                if (methods.length !== 1) {
+                    fail("HARDENED_LOCAL_MEMBER_AMBIGUOUS", "inherited local call lacks one exact method", node);
+                }
+                const method = methods[0]!;
+                assertInheritedVisibility(method, inherited.ownerQName!, context, node);
+                assertLocalMethodCall(method, args, node.children[1]!.children, context, node);
+                resultType = authoritySemanticType(method.returnType!, context, node);
+            } else {
+                const mapping = memberMapping(context, callee.capabilitySource, "call", callee.name, node);
+                if (mapping === null || mapping.sourceMember === null
+                    || args.length < mapping.sourceMember.minArgs || args.length > mapping.sourceMember.maxArgs) {
+                    fail("HARDENED_CAPABILITY_CALL_ARITY", "Flash bridge call does not match the double-pinned source signature", node);
+                }
+                capabilitySource = mapping.sourceQName;
+                capabilityMember = mapping.sourceMember.name;
             }
-            capabilitySource = mapping.sourceQName;
-            capabilityMember = mapping.sourceMember.name;
         } else if (callee.kind === "member" && vectorElement(assignmentType(callee.target, context, rawCallee)) !== null) {
             const ownerType = assignmentType(callee.target, context, rawCallee);
             const element = vectorElement(ownerType)!;
@@ -2051,16 +2423,33 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
         fail("HARDENED_ACCESSOR_DEFAULT", "accessor parameters cannot have default or rest values", node);
     }
     if (modifiers.indexOf("override") >= 0) {
-        if (context.baseSourceQName === null) {
-            fail("HARDENED_OVERRIDE_AUTHORITY", "local-base override requires a future authenticated local member signature authority", node);
+        const localKind = accessor === "getter" ? "getter" : accessor === "setter" ? "setter" : "method";
+        let flashBaseQName = context.baseSourceQName;
+        if (context.baseLocalQName !== null) {
+            const inherited = localInheritedMember(context, name, localKind, node);
+            if (inherited.member !== null) {
+                if (inherited.member.namespaceName !== null) {
+                    fail("HARDENED_LOCAL_MEMBER_NAMESPACE",
+                        "custom-namespace local overrides remain outside the admitted lowering", node);
+                }
+                assertLocalOverride(inherited.member, parameters, returnType, modifiers, context, node);
+                flashBaseQName = null;
+            } else {
+                flashBaseQName = inherited.terminalBaseQName;
+                if (flashBaseQName === null) {
+                    fail("HARDENED_OVERRIDE_AUTHORITY", "override has no inherited local or Flash declaration", node);
+                }
+            }
         }
-        const access = accessor === "getter" ? "read" : accessor === "setter" ? "write" : "call";
-        const mapping = memberMapping(context, context.baseSourceQName, access, name, node);
-        const required = parameters.filter(parameter => parameter.defaultValue === null && !parameter.rest).length;
-        if (!mapping || !mapping.sourceMember || mapping.targetMember === null
-            || mapping.targetMember.scope !== "instance" || parameters.some(parameter => parameter.rest)
-            || mapping.sourceMember.minArgs !== required || mapping.sourceMember.maxArgs !== parameters.length) {
-            fail("HARDENED_OVERRIDE_AUTHORITY", "override lacks one exact base member signature and instance bridge mapping", node);
+        if (flashBaseQName !== null) {
+            const access = accessor === "getter" ? "read" : accessor === "setter" ? "write" : "call";
+            const mapping = memberMapping(context, flashBaseQName, access, name, node);
+            const required = parameters.filter(parameter => parameter.defaultValue === null && !parameter.rest).length;
+            if (!mapping || !mapping.sourceMember || mapping.targetMember === null
+                || mapping.targetMember.scope !== "instance" || parameters.some(parameter => parameter.rest)
+                || mapping.sourceMember.minArgs !== required || mapping.sourceMember.maxArgs !== parameters.length) {
+                fail("HARDENED_OVERRIDE_AUTHORITY", "override lacks one exact base member signature and instance bridge mapping", node);
+            }
         }
     }
     return { node, name, modifiers, namespaceName: memberModifiers.namespaceName,
@@ -2080,7 +2469,7 @@ function modulePath(packageName: string, className: string, node: TreeNode): str
 
 export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: LoadedCapabilityAuthority,
     sourceText: string, sha256: Sha256Function, localAuthority?: LoadedLocalTypeAuthority,
-    sourceLogicalPath?: string): SemanticProgram {
+    sourceLogicalPath?: string, localMemberAuthority?: LoadedLocalMemberAuthority): SemanticProgram {
     assertLoadedCapabilityAuthority(authority);
     const root = buildTree(ast, sourceText, sha256);
     if (root.kind !== "COMPILATION_UNIT") {
@@ -2132,6 +2521,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             fail("HARDENED_LOCAL_SOURCE_AUTHORITY", "local source authentication requires authority and logical path together", classNode);
         }
         assertLoadedLocalTypeAuthority(localAuthority);
+        if (localMemberAuthority !== undefined) assertLoadedLocalMemberAuthority(localMemberAuthority);
         resolveCurrentLocal = () => {
             if (currentLocal) return currentLocal;
             const qname = packageName === "" ? className : `${packageName}.${className}`;
@@ -2152,7 +2542,11 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             return currentLocal;
         };
     }
-    const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal);
+    if (localMemberAuthority !== undefined && localAuthority === undefined) {
+        fail("HARDENED_LOCAL_MEMBER_AUTHORITY_INSTANCE", "local member authority requires its local type authority", classNode);
+    }
+    const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal,
+        localMemberAuthority || null);
     const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
         node: TreeNode): SemanticImport | null => {
         const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
@@ -2172,7 +2566,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             fail("HARDENED_LOCAL_IMPORT_EDGE",
                 "same-package type lacks an authenticated dependency edge: " + qname, node);
         }
-        const item = localSemanticImport(target, current, node);
+        const item = localSemanticImport(target, current, node, localMemberAuthority || null);
         parsedImports.imports.push(item);
         parsedImports.importsByLocal[localName] = item;
         return item;
@@ -2186,6 +2580,9 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         mappingsBySource: authority.typeMappingsBySource,
         memberMappingsByKey: authority.memberMappingsByKey,
         baseSourceQName: null,
+        baseLocalQName: null,
+        localMemberAuthority: localMemberAuthority || null,
+        resolveCurrentLocal,
         fields: Object.create(null),
         methods: Object.create(null),
         accessors: Object.create(null),
@@ -2311,6 +2708,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         extendsType = semanticType(extendsNode, imported.sourceLocalName, imported.sourceLocalName);
         placeholder.extendsType = extendsType;
         placeholder.baseSourceQName = imported.authorityKind === "flash" ? imported.sourceQualifiedName : null;
+        placeholder.baseLocalQName = imported.authorityKind === "local" ? imported.sourceQualifiedName : null;
     }
     const implementsTypes: Array<{ type: SemanticType; runtimeName: string }> = [];
     const implementsNode = one(classNode, "IMPLEMENTS_LIST", true);

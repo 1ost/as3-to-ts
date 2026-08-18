@@ -1,72 +1,66 @@
-# Local AS3 type authority workpack
+# Local AS3 type and member authority
 
-Status: implementation prerequisite. This document does not admit local imports.
+Status: active fail-closed transpiler authority. Generated TypeScript remains a
+proposal until the normal porting workflow verifies behavior and prerequisite
+completion.
 
-The hardened frontend currently authenticates Flash types and members against the
-Bleach capability census and Laya capability ledger. Project-local imports remain
-held because a package spelling alone is not sufficient authority for a TypeScript
-module, declaration kind, source revision, dependency order, or constructor shape.
+The frontend authenticates project-local types and declaration signatures from
+the Bleach dependency graph and the exact maintained source bytes. It does not
+infer a constructor, override, inherited field, accessor, or method from a name.
 
-## Evidence baseline
+## Type authority
 
-- Qualification `application-7fe18d9` covers 2,907 application files and publishes
-  no TypeScript. It records 278 first failures at `HARDENED_CAPABILITY_ROLE`.
-- 264 of those 278 failures begin with a project-local import; 11 begin with an
-  unmapped `flash.*` import and three require other semantic diagnosis.
-- The repository dependency authority contains 3,029 nodes, 2,923 maintained AS3
-  type nodes, 55,482 edges, 2,698 SCCs, and zero unresolved project references.
+`config/local-type-map.json` is deterministically derived from the authenticated
+dependency graph. Each entry pins the source qualified name, declaration kind,
+application/bootstrap owner, AS3 path and SHA-256, target TypeScript path, graph
+node/SCC/level, and exact prerequisite node IDs.
 
-## Required authority
+The loader rejects unknown keys, duplicate or unsafe identities, hash/count
+drift, source disagreement, missing dependency edges, excluded mirror paths,
+and any non-canonical map. Explicit imports, graph-backed wildcard imports, and
+same-package references resolve only to exact importable prerequisite nodes.
 
-Generate one canonical local-type map from the fully authenticated dependency
-graph. Reuse the hardened-corpus graph verifier; do not implement a weaker second
-graph interpretation. Each entry must contain exactly:
+## Member authority
 
-- source qualified name;
-- declaration kind;
-- application/bootstrap module owner;
-- authenticated AS3 source path and SHA-256;
-- target TypeScript path;
-- node ID, SCC ID, and topological level;
-- exact prerequisite node IDs.
+`config/local-member-map.json` is produced by one bounded parser/normalizer/
+declaration-worker process per authenticated source. It records a complete or
+held result for every local type-map entry. Complete declarations contain exact
+bases, interfaces, fields, constructors, methods, accessors, modifiers,
+namespaces, parameter optional/rest state, return types, and recursive
+`Vector.<T>` type spellings. Held declarations retain a stable diagnostic code
+and evidence hash; they never become an empty declaration fallback.
 
-The generated map, raw dependency-graph digest, canonical semantic-graph digest,
-entry count, and source-manifest digest must be pinned by the local authority lock.
-Runtime loading must reject unknown keys, duplicate qualified names or paths,
-unsafe paths, unsupported declaration kinds, hash drift, count drift, and any map
-whose canonical bytes do not match the compiled trust root.
+The compiled trust root pins the complete canonical member-map SHA-256, the
+local-type-map SHA-256, declaration-worker SHA-256, entry count, and complete/
+held counts. Runtime loading deep-validates and freezes the whole document.
 
-## Admission rules
+## Admitted uses
 
-1. Authenticate the current source's qualified name, module, relative path, and
-   raw source SHA before interpreting any local import.
-2. Resolve an explicit local import only by exact qualified name. Wildcards,
-   aliases, namespace selectors, implicit same-package lookup, and recovery are
-   separate workpacks and remain held.
-3. Preserve the imported source name and emit a deterministic module specifier
-   derived from authenticated target paths. Reject cross-module imports until the
-   application/bootstrap TypeScript module boundary is explicitly configured.
-4. Admit a local base class only when its graph node is a class and its SCC or
-   prerequisite component is eligible under the porting frontier. Interfaces are
-   not interchangeable with classes.
-5. Do not infer constructor arity from a class import. `new LocalType(...)` remains
-   held until an authenticated callable-signature authority exists.
-6. The emitter may produce only proposal output. A consumer whose prerequisite
-   SCC is unfinished cannot be classified as implemented or publishable.
+- local base classes and interfaces with exact dependency edges;
+- local constructors with authenticated visibility, arity, defaults/rest, and
+  argument types;
+- typed `super(...)` calls against the exact direct local constructor;
+- local overrides against the nearest inherited declaration, including nested
+  `Vector.<T>` signatures and non-narrowing visibility;
+- inherited local fields, getters, setters, and method calls with exact owner,
+  visibility, arity, argument, and result types.
 
-## Mandatory adversaries
+Flash bases and members remain independently double-pinned by the source census,
+target capability ledger, and mapping artifact. Inherited local method closures,
+custom-namespace overrides, ambiguous/held declarations, implicit coercions,
+and any missing signature remain explicit HOLDs.
 
-- forged qname/path/SHA/module/kind/node/SCC/level/prerequisite data;
-- graph edge, SCC membership, cyclic flag, or condensation-level drift;
-- duplicate qnames, portable path collisions, case/NFC collisions, traversal,
-  symlinks, excluded shell paths, and application/bootstrap confusion;
-- current source bytes that disagree with the mapped source node;
-- unresolved, wildcard, same-package, self, and cross-module imports;
-- local class used as interface, interface used as base class, and unproven local
-  constructor calls;
-- consumer admission before every prerequisite component is eligible;
-- different CWD/order/time runs producing non-identical authority and output.
+## Mandatory verification
 
-No generated TypeScript from this workpack is production code. Strict TypeScript,
-capability, forbidden-runtime, dependency-frontier, and behavior gates remain
-required after structural emission.
+- deterministic map generation across working directories and source order;
+- forged qname/path/SHA/module/kind/node/edge/declaration/parameter data;
+- parser recovery, timeout, output cap, malformed IPC, and held-source cases;
+- wrong constructor/super/override/call arity, type, visibility, rest/default,
+  member kind, base cycle, and missing authority;
+- nested `Vector.<T>` declarations and calls;
+- full strict TypeScript compile, runtime vector/type tests, package inventory,
+  qualification over the maintained application corpus, and diff/status checks.
+
+No generated TypeScript is production application ownership by itself. A
+consumer whose prerequisite component is unfinished remains unfinished even if
+its structural conversion is admitted.

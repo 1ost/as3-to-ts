@@ -372,9 +372,11 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and runtime
         "bin/as3-frontend",
         "lib/command.js",
         "lib/parser-worker.js",
+        "lib/declaration-worker.js",
         "config/authority-lock.json",
         "config/capability-map.json",
         "config/local-type-map.json",
+        "config/local-member-map.json",
         "src/hardened-cli/THIRD_PARTY_NOTICES.md",
     ]);
 

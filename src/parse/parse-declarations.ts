@@ -96,6 +96,11 @@ function parsePackageContent(parser:AS3Parser, allowScriptStatements:boolean):No
             skip(parser, Operators.SEMI_COLUMN);
             modifiers.length = 0;
             meta.length = 0;
+        } else if (allowScriptStatements && tokIs(parser, Keywords.NAMESPACE)) {
+            result.children.push(parseNamespaceDeclaration(parser, meta, modifiers));
+            skip(parser, Operators.SEMI_COLUMN);
+            modifiers.length = 0;
+            meta.length = 0;
         } else if (isDeclarationModifier(parser.tok.text)) {
             modifiers.push(parser.tok);
             nextTokenIgnoringDocumentation(parser);
@@ -113,6 +118,24 @@ function parsePackageContent(parser:AS3Parser, allowScriptStatements:boolean):No
             'package content', 'EOF');
     }
     result.end = parser.tok.index;
+    return result;
+}
+
+function parseNamespaceDeclaration(parser:AS3Parser, meta:Node[], modifiers:Token[]):Node {
+    const tok = consume(parser, Keywords.NAMESPACE);
+    if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) {
+        throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', 'a namespace identifier', 'namespace declaration');
+    }
+    const name = parser.tok;
+    nextToken(parser);
+    if (tokIs(parser, Operators.EQUAL)) {
+        throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', 'an uninitialized namespace declaration',
+            'namespace declaration');
+    }
+    const result = createNode(NodeKind.NAMESPACE, { start: tok.index, end: name.end, text: name.text });
+    appendIfPresent(result, convertMeta(parser, meta));
+    appendIfPresent(result, convertModifiers(parser, modifiers));
+    result.start = result.children.reduce((index:number, child:Node) => Math.min(index, child.start), tok.index);
     return result;
 }
 

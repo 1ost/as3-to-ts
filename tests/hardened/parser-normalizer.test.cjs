@@ -19,6 +19,7 @@ function compileFocusedSources() {
         "src/parse/index.ts",
         "src/hardened/parser-normalizer.ts",
         "src/hardened/adapter.ts",
+        "src/hardened/local-declarations.ts",
         "src/hardened/ledger.ts",
         "src/hardened/contracts.ts",
     ].map((name) => path.join(ROOT, name));
@@ -56,6 +57,7 @@ function compileFocusedSources() {
         parse: require(path.join(output, "parse/index.js")).default,
         normalizer: require(path.join(output, "hardened/parser-normalizer.js")),
         adapter: require(path.join(output, "hardened/adapter.js")),
+        localDeclarations: require(path.join(output, "hardened/local-declarations.js")),
         ledger: require(path.join(output, "hardened/ledger.js")),
     };
 }
@@ -248,6 +250,19 @@ try {
     const semantic = built.adapter.adaptNormalizedParserAst(
         normalized, authority(built.ledger), source, sha256,
     );
+    const declarationExtract = built.localDeclarations.extractLocalDeclaration(normalized, source, sha256);
+    assert.equal(declarationExtract.schema, "as3-local-declaration-extract@1");
+    assert.equal(declarationExtract.qualifiedName, "lobby.ui.Demo");
+    assert.equal(declarationExtract.declarationKind, "class");
+    assert.deepEqual(declarationExtract.imports,
+        ["flash.display.Sprite", "flash.events.Event", "flash.utils.Dictionary"]);
+    assert.deepEqual(declarationExtract.extendsNames, ["Sprite"]);
+    assert.equal(declarationExtract.members.filter(member => member.kind === "field").length, 4);
+    assert.equal(declarationExtract.members.find(member => member.kind === "constructor").name, "Demo");
+    const extractedOptional = declarationExtract.members.find(member => member.name === "optional");
+    assert.deepEqual(extractedOptional.parameters.map(parameter => ({ type: parameter.type, optional: parameter.optional })),
+        [{ type: "Boolean", optional: true }, { type: "int", optional: true }]);
+    assert.equal(declarationExtract.members.find(member => member.name === "iteration").returnType, "void");
     assert.equal(semantic.packageName, "lobby.ui");
     assert.equal(semantic.outputModulePath, "lobby/ui/Demo.ts");
     assert.deepEqual(semantic.imports.map((item) => item.sourceQualifiedName),
@@ -353,6 +368,15 @@ try {
     assert.equal(semantic.declaration.members[17].body[1].targetType.sourceName, "String");
     assert.ok(normalized.nodes.some(node => node.kind === "FORIN"));
     assert.ok(normalized.nodes.some(node => node.kind === "USE" && node.text === "ResourcesSpace"));
+
+    const packageFunctionSource = "package p { public function helper():void {} }";
+    const packageFunctionTree = built.parse("fixtures/PackageFunction.as", packageFunctionSource);
+    const packageFunctionNormalized = built.normalizer.normalizeParserAst(
+        packageFunctionTree, packageFunctionSource, sha256,
+    );
+    assert.throws(() => built.localDeclarations.extractLocalDeclaration(
+        packageFunctionNormalized, packageFunctionSource, sha256,
+    ), error => error && error.code === "HARDENED_LOCAL_DECLARATION_CONTENT");
 
     const overrideSource = "package p { import flash.display.Sprite; public class C extends Sprite { public function C(){super();} override public function toString():String{return \"C\";} } }";
     const overrideTree = built.parse("fixtures/Override.as", overrideSource);

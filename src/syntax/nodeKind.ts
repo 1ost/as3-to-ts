@@ -102,7 +102,8 @@ enum NodeKind {
     LITERAL,
     IDENTIFIER,
     EMBED,
-    THROW
+    THROW,
+    NAMESPACE
 }
 
 // Can't do 'export default enum Foo {...}' for some reason?

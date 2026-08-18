@@ -148,6 +148,10 @@ function method(name, parameters, returnType, body, modifierValues = ["public"])
     ]);
 }
 
+function vectorParameter(name, elementType) {
+    return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, [n("NAME", name), vectorType(elementType)])]);
+}
+
 function expressionParameter(name, typeName, defaultExpression) {
     return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, [
         n("NAME", name), type(typeName), n("INIT", null, [defaultExpression]),
@@ -671,12 +675,49 @@ function canonicalJson(value) {
 function buildLocalBaseTree(options = {}) {
     const imports = options.samePackage ? []
         : options.wildcardImports ? [n("IMPORT", "lobby.base.*")] : [n("IMPORT", "lobby.base.Base")];
+    if (options.withPackageSymbols) {
+        imports.push(n("IMPORT", "lobby.base.SCore"), n("IMPORT", "lobby.base.InternalSpace"),
+            n("USE", "InternalSpace"));
+    }
     if (options.withInterface && !options.wildcardImports && !options.samePackage) {
         imports.push(n("IMPORT", "lobby.base.IReady"));
     }
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
-    const members = [constructor([call(n("IDENTIFIER", "super"))])];
+    const superArguments = options.superArgument ? [n("LITERAL", options.badSuperArgument ? '"bad"' : "1")] : [];
+    const members = [constructor([call(n("IDENTIFIER", "super"), superArguments)])];
+    if (options.localOverride || options.badLocalOverride) {
+        members.push(method("run", [vectorParameter("value", options.badLocalOverride ? "uint" : "int")],
+            "String", [n("RETURN", null, [n("LITERAL", '"ok"')])], ["protected", "override"]));
+    }
+    if (options.localNew || options.badLocalNew) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "created"), type("Base"), n("INIT", null, [construct("Base", [
+                n("LITERAL", options.badLocalNew ? '"bad"' : "1"),
+            ])]),
+        ])]));
+    }
+    if (options.inheritedCall || options.badInheritedCall) {
+        const element = options.badInheritedCall ? "uint" : "int";
+        members.push(method("invokeInherited", [], "void", [
+            call(n("IDENTIFIER", "run"), [n("NEW", null, [call(vectorType(element), [])])]),
+            n("RETURN"),
+        ]));
+    }
+    if (options.inheritedMembers) {
+        members.push(method("useInheritedMembers", [], "void", [
+            assignment(n("IDENTIFIER", "count"), n("LITERAL", "1")),
+            localDeclaration("VAR_LIST", "label", "String", n("IDENTIFIER", "title")),
+            assignment(n("IDENTIFIER", "title"), n("LITERAL", '"updated"')),
+            n("RETURN"),
+        ]));
+    }
+    if (options.withPackageSymbols) {
+        members.push(method("usePackageConstant", [], "void", [
+            localDeclaration("VAR_LIST", "shared", "Base", n("IDENTIFIER", "SCore")), n("RETURN"),
+        ]));
+        members.push(method("packageNamespaced", [], "void", [n("RETURN")], ["InternalSpace"]));
+    }
     if (options.withInterface) members.push(method("check", [parameter("value", "Object")], "void", [
         localDeclaration("VAR_LIST", "ready", "IReady",
             n("RELATION", null, [n("IDENTIFIER", "value"), n("AS", "as"), n("IDENTIFIER", "IReady")])),
@@ -717,10 +758,27 @@ function localAuthority(api, normalized, options = {}) {
                 : "game-client/layaair/src/application/lobby/base/IReady.ts", topologicalLevel: 0,
             typeKind: "interface",
         }] : []),
+        ...(options.withPackageSymbols ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "9".repeat(64), nodeId: "0000000000000004", prerequisites: [baseNodeId],
+            qname: "lobby.base.SCore", sourceContentSha256: "a".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/SCore.as",
+            targetPath: "game-client/layaair/src/application/lobby/base/SCore.ts", topologicalLevel: 1,
+            typeKind: "package",
+        }, {
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "b".repeat(64), nodeId: "0000000000000005", prerequisites: [],
+            qname: "lobby.base.InternalSpace", sourceContentSha256: "c".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/InternalSpace.as",
+            targetPath: "game-client/layaair/src/application/lobby/base/InternalSpace.ts", topologicalLevel: 0,
+            typeKind: "package",
+        }] : []),
         {
             componentId: "scc-00002", graphSourceSha256: "8".repeat(64), importable: true,
             module: "application", nodeId: currentNodeId,
-            prerequisites: options.withEdge === false ? [] : [baseNodeId].concat(options.withInterface ? ["0000000000000003"] : []), qname: "lobby.ui.Demo",
+            prerequisites: options.withEdge === false ? [] : [baseNodeId]
+                .concat(options.withInterface ? ["0000000000000003"] : [])
+                .concat(options.withPackageSymbols ? ["0000000000000004", "0000000000000005"] : []), qname: "lobby.ui.Demo",
             sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
             sourceContentSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
             targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
@@ -743,8 +801,77 @@ function localAuthority(api, normalized, options = {}) {
 function adaptLocal(api, authority, options = {}) {
     const normalized = flatten(buildLocalBaseTree(options));
     const locals = localAuthority(api, normalized, options);
+    const members = options.withoutMemberAuthority ? undefined : localMemberAuthority(api, locals,
+        options.mutateMemberAuthority || null);
     return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
-        locals, options.logicalPath || "lobby/ui/Demo.as");
+        locals, options.logicalPath || "lobby/ui/Demo.as", members);
+}
+
+function localMemberAuthority(api, localTypes, mutate = null) {
+    const entries = localTypes.entries.map(entry => ({
+        module: entry.module,
+        qname: entry.qname,
+        nodeId: entry.nodeId,
+        sourceContentSha256: entry.sourceContentSha256,
+        typeKind: entry.typeKind,
+        status: "complete",
+        holdCode: null,
+        holdSha256: null,
+        declaration: entry.typeKind === "package" ? {
+            baseQNames: [], interfaceQNames: [], members: [entry.qname.endsWith(".InternalSpace") ? {
+                kind: "namespace", name: "InternalSpace", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: null, readonly: false,
+            } : {
+                kind: "field", name: "SCore", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "lobby.base.Base", readonly: true,
+            }],
+        } : {
+            baseQNames: entry.qname.endsWith(".Demo") ? [entry.qname.replace(/\.Demo$/, ".Base")] : [],
+            interfaceQNames: [],
+            members: entry.qname.endsWith(".Base") ? [{
+                kind: "constructor", name: "Base", modifiers: ["public"], namespaceName: null,
+                parameters: [{ name: "value", type: "int", optional: true, rest: false }],
+                returnType: null, fieldType: null, readonly: false,
+            }, {
+                kind: "method", name: "run", modifiers: ["protected"], namespaceName: null,
+                parameters: [{ name: "value", type: "Vector.<int>", optional: false, rest: false }],
+                returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "field", name: "count", modifiers: ["protected"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "int", readonly: false,
+            }, {
+                kind: "getter", name: "title", modifiers: ["protected"], namespaceName: null,
+                parameters: [], returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "setter", name: "title", modifiers: ["protected"], namespaceName: null,
+                parameters: [{ name: "value", type: "String", optional: false, rest: false }],
+                returnType: "void", fieldType: null, readonly: false,
+            }] : [{
+                kind: "constructor", name: "Demo", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: null, readonly: false,
+            }],
+        },
+    }));
+    if (mutate) mutate(entries);
+    const document = {
+        completeCount: entries.length,
+        declarationWorkerSha256: "a".repeat(64),
+        entries,
+        entryCount: entries.length,
+        heldCount: 0,
+        localTypeMapSha256: "b".repeat(64),
+        schema: "bleach-local-as3-member-map@1",
+    };
+    const json = `${canonicalJson(document)}\n`;
+    return api.loadLocalMemberAuthority({
+        expectedCompleteCount: entries.length,
+        expectedDeclarationWorkerSha256: document.declarationWorkerSha256,
+        expectedEntryCount: entries.length,
+        expectedHeldCount: 0,
+        expectedLocalTypeMapSha256: document.localTypeMapSha256,
+        json,
+        sha256: sha256(json),
+    }, sha256, localTypes);
 }
 
 function mappingDocument() {
@@ -877,6 +1004,57 @@ function main() {
     const localBaseOutput = api.emitSemanticProgram(localBaseProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(localBaseOutput.code, /import \{ Base \} from "\.\.\/base\/Base";/);
     assert.match(localBaseOutput.code, /export class Demo extends Base/);
+    const localOverrideProgram = adaptLocal(api, authority, { localOverride: true });
+    const localOverrideOutput = api.emitSemanticProgram(localOverrideProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localOverrideOutput.code,
+        /protected override run\(value: __as3Vector<number> \| null\): string \| null/);
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalOverride: true }),
+        "HARDENED_LOCAL_MEMBER_SIGNATURE");
+    assertErrorCode(() => adaptLocal(api, authority, { localOverride: true, withoutMemberAuthority: true }),
+        "HARDENED_LOCAL_MEMBER_AUTHORITY");
+    const localSuperArgumentOutput = api.emitSemanticProgram(adaptLocal(api, authority, { superArgument: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localSuperArgumentOutput.code, /super\(1\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { superArgument: true, badSuperArgument: true }),
+        "HARDENED_LOCAL_CONSTRUCTOR_TYPE");
+    const localNewOutput = api.emitSemanticProgram(adaptLocal(api, authority, { localNew: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localNewOutput.code, /private created: Base \| null = new Base\(1\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalNew: true }),
+        "HARDENED_LOCAL_CONSTRUCTOR_TYPE");
+    const inheritedCallOutput = api.emitSemanticProgram(adaptLocal(api, authority, { inheritedCall: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(inheritedCallOutput.code,
+        /this\.run\(new __as3Vector<number>\(__as3VectorPolicies\.int\)\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { badInheritedCall: true }),
+        "HARDENED_LOCAL_CALL_TYPE");
+    const inheritedMembersOutput = api.emitSemanticProgram(adaptLocal(api, authority, { inheritedMembers: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(inheritedMembersOutput.code, /this\.count = 1;/);
+    assert.match(inheritedMembersOutput.code, /var label: string \| null = this\.title;/);
+    assert.match(inheritedMembersOutput.code, /this\.title = "updated";/);
+    const packageSymbolProgram = adaptLocal(api, authority, { withPackageSymbols: true });
+    const packageSymbolOutput = api.emitSemanticProgram(packageSymbolProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(packageSymbolOutput.code, /import \{ SCore \} from "\.\.\/base\/SCore";/);
+    assert.match(packageSymbolOutput.code, /import \{ InternalSpace \} from "\.\.\/base\/InternalSpace";/);
+    assert.match(packageSymbolOutput.code, /var shared: Base \| null = SCore;/);
+    assert.doesNotMatch(packageSymbolOutput.code, /InternalSpace function/);
+    const localNormalizedForMembers = flatten(buildLocalBaseTree());
+    const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
+    const localMembers = localMemberAuthority(api, localTypesForMembers);
+    assert.ok(Object.isFrozen(localMembers));
+    assert.ok(Object.isFrozen(localMembers.entries));
+    assert.equal(localMembers.completeCount, 2);
+    assert.equal(localMembers.entriesByIdentity["application\u0000lobby.base.Base"]
+        .declaration.members[1].parameters[0].type, "Vector.<int>");
+    assertErrorCode(() => api.loadLocalMemberAuthority({
+        expectedCompleteCount: 2, expectedDeclarationWorkerSha256: "a".repeat(64), expectedEntryCount: 2,
+        expectedHeldCount: 0, expectedLocalTypeMapSha256: "b".repeat(64), json: "{}\n", sha256: sha256("{}\n"),
+    }, sha256, localTypesForMembers), "HARDENED_LOCAL_MEMBER_SCHEMA");
+    assertErrorCode(() => localMemberAuthority(api, localTypesForMembers,
+        entries => { entries[0].sourceContentSha256 = "c".repeat(64); }), "HARDENED_LOCAL_MEMBER_ENTRY");
     const samePackageBaseProgram = adaptLocal(api, authority, { samePackage: true });
     assert.equal(samePackageBaseProgram.imports[0].sourceQualifiedName, "lobby.ui.Base");
     assert.equal(samePackageBaseProgram.imports[0].authorityKind, "local");
