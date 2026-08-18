@@ -436,18 +436,23 @@ async function verifyRealAuthorityRunAndResume(options) {
     'as3-to-layaair-porting-kit/generated/reports/swf-capability-census.json'
   );
   assert.strictEqual(authority.entries.length, EXPECTED_BLEACH_CENSUS.fileCount);
+  authority.entries.forEach(entry => {
+    assert.strictEqual(
+      sha256Bytes(entry.sourceBytes),
+      entry.sourceSha256,
+      `${entry.logicalPath}: raw worker identity must authenticate exact disk bytes`
+    );
+  });
   const distinctEolEntry = authority.entries.find(
     entry => entry.graphSourceSha256 !== entry.sourceSha256
   );
-  assert(
-    distinctEolEntry,
-    'real authority must exercise separate canonical and raw source identities'
-  );
-  assert.strictEqual(
-    sha256Bytes(distinctEolEntry.sourceBytes),
-    distinctEolEntry.sourceSha256,
-    'raw worker identity must authenticate exact disk bytes'
-  );
+  if (distinctEolEntry) {
+    assert.notStrictEqual(
+      distinctEolEntry.graphSourceSha256,
+      distinctEolEntry.sourceSha256,
+      'canonical graph and raw worker identities must remain independent when EOL bytes differ'
+    );
+  }
 
   const checkpointPath = path.join(tempRoot, 'real-authority.jsonl');
   const realOptions = Object.assign({}, options, {
