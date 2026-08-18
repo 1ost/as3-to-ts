@@ -13,7 +13,7 @@ authorities agree on the exact maintained corpus:
 - canonical-LF source-set SHA-256
   `45ae512fe7ef44e01199e4aaeb95722cf5afd287da1084626e25366790c03790`
 - complete semantic dependency-graph SHA-256
-  `3d0d7e0717708e2931bb9cf81de913aa21f5fe4b24babb2703edd9abdcb8f593`
+  `78957409f5bf7ec6894ad7c73af7bd3a2dcccfce930090f980f1e2d1d1db806f`
 
 `game-client/swc/tapplication/src` is an excluded shell mirror and is refused as
 an authority entry or maintained root.
