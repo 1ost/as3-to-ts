@@ -755,10 +755,19 @@ function buildLocalBaseTree(options = {}) {
     }
     if (options.localStaticCall || options.badLocalStaticCall || options.localStaticField
         || options.badLocalStaticWrite) imports.push(n("IMPORT", "lobby.base.Utility"));
+    const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
+        || options.localInstanceMembers || options.badLocalInstanceReadonly
+        || options.badLocalInstancePrivate || options.badLocalInstanceClosure;
+    if (localInstanceWorkpack) imports.push(n("IMPORT", "lobby.base.Worker"));
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
     const superArguments = options.superArgument ? [n("LITERAL", options.badSuperArgument ? '"bad"' : "1")] : [];
     const members = [constructor([call(n("IDENTIFIER", "super"), superArguments)])];
+    if (localInstanceWorkpack) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "worker"), type("Worker"),
+        ])]));
+    }
     if (options.localOverride || options.badLocalOverride) {
         members.push(method("run", [vectorParameter("value", options.badLocalOverride ? "uint" : "int")],
             "String", [n("RETURN", null, [n("LITERAL", '"ok"')])], ["protected", "override"]));
@@ -833,6 +842,25 @@ function buildLocalBaseTree(options = {}) {
         assignment(dot(n("IDENTIFIER", "Utility"), "VERSION"), n("LITERAL", '"changed"')),
         n("RETURN"),
     ]));
+    if (options.localInstanceCall || options.badLocalInstanceCall) members.push(
+        method("useLocalInstance", [], "String", [n("RETURN", null, [
+            call(dot(n("IDENTIFIER", "worker"), "process"), [
+                n("LITERAL", options.badLocalInstanceCall ? '"wrong"' : "1.5"),
+            ]),
+        ])]));
+    if (options.localInstanceMembers) members.push(method("useLocalInstanceMembers", [], "String", [
+        assignment(dot(n("IDENTIFIER", "worker"), "label"), n("LITERAL", '"ready"')),
+        n("RETURN", null, [dot(n("IDENTIFIER", "worker"), "label")]),
+    ]));
+    if (options.badLocalInstanceReadonly) members.push(method("writeReadonlyInstance", [], "void", [
+        assignment(dot(n("IDENTIFIER", "worker"), "CODE"), n("LITERAL", '"changed"')), n("RETURN"),
+    ]));
+    if (options.badLocalInstancePrivate) members.push(method("readPrivateInstance", [], "String", [
+        n("RETURN", null, [dot(n("IDENTIFIER", "worker"), "secret")]),
+    ]));
+    if (options.badLocalInstanceClosure) members.push(method("readInstanceClosure", [], "Function", [
+        n("RETURN", null, [dot(n("IDENTIFIER", "worker"), "process")]),
+    ]));
     classChildren.push(n("CONTENT", null, members));
     return n("COMPILATION_UNIT", null, [
         n("PACKAGE", null, [n("NAME", "lobby.ui"), n("CONTENT", null,
@@ -844,6 +872,9 @@ function buildLocalBaseTree(options = {}) {
 function localAuthority(api, normalized, options = {}) {
     const baseNodeId = "0000000000000001";
     const currentNodeId = "0000000000000002";
+    const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
+        || options.localInstanceMembers || options.badLocalInstanceReadonly
+        || options.badLocalInstancePrivate || options.badLocalInstanceClosure;
     const entries = [
         {
             componentId: "scc-00001", importable: options.baseImportable !== false, module: options.baseModule || "application",
@@ -891,6 +922,14 @@ function localAuthority(api, normalized, options = {}) {
             targetPath: "game-client/layaair/src/application/lobby/base/Utility.ts", topologicalLevel: 0,
             typeKind: "class",
         }] : []),
+        ...(localInstanceWorkpack ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "f".repeat(64), nodeId: "0000000000000007", prerequisites: [],
+            qname: "lobby.base.Worker", sourceContentSha256: "0".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/Worker.as",
+            targetPath: "game-client/layaair/src/application/lobby/base/Worker.ts", topologicalLevel: 0,
+            typeKind: "class",
+        }] : []),
         {
             componentId: "scc-00002", graphSourceSha256: "8".repeat(64), importable: true,
             module: "application", nodeId: currentNodeId,
@@ -899,7 +938,8 @@ function localAuthority(api, normalized, options = {}) {
                 .concat(options.withPackageSymbols ? ["0000000000000004"] : [])
                 .concat(options.withPackageSymbols || options.withNamespace ? ["0000000000000005"] : [])
                 .concat(options.localStaticCall || options.badLocalStaticCall || options.localStaticField
-                    || options.badLocalStaticWrite ? ["0000000000000006"] : []), qname: "lobby.ui.Demo",
+                    || options.badLocalStaticWrite ? ["0000000000000006"] : [])
+                .concat(localInstanceWorkpack ? ["0000000000000007"] : []), qname: "lobby.ui.Demo",
             sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
             sourceContentSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
             targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
@@ -958,6 +998,22 @@ function localMemberAuthority(api, localTypes, mutate = null) {
             }, {
                 kind: "field", name: "VERSION", modifiers: ["public", "static"], namespaceName: null,
                 parameters: [], returnType: null, fieldType: "String", readonly: true,
+            }] : entry.qname.endsWith(".Worker") ? [{
+                kind: "constructor", name: "Worker", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: null, readonly: false,
+            }, {
+                kind: "method", name: "process", modifiers: ["public"], namespaceName: null,
+                parameters: [{ name: "value", type: "int", optional: false, rest: false }],
+                returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "field", name: "label", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "String", readonly: false,
+            }, {
+                kind: "field", name: "CODE", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "String", readonly: true,
+            }, {
+                kind: "field", name: "secret", modifiers: ["private"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "String", readonly: false,
             }] : entry.qname.endsWith(".Base") ? [{
                 kind: "constructor", name: "Base", modifiers: ["public"], namespaceName: null,
                 parameters: [{ name: "value", type: "int", optional: true, rest: false }],
@@ -1218,6 +1274,21 @@ function main() {
             utility.declaration.members.find(member => member.name === "describe").modifiers = ["private", "static"];
         },
     }), "HARDENED_LOCAL_STATIC_VISIBILITY");
+    const localInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localInstanceCall: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localInstanceOutput.code, /return this\.worker!\.process\(__as3Int\(1\.5\)\);/);
+    const localInstanceMembersOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localInstanceMembers: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localInstanceMembersOutput.code, /this\.worker!\.label = "ready";/);
+    assert.match(localInstanceMembersOutput.code, /return this\.worker!\.label;/);
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalInstanceCall: true }),
+        "HARDENED_LOCAL_CALL_TYPE");
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalInstanceReadonly: true }),
+        "HARDENED_LOCAL_INSTANCE_WRITE");
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalInstancePrivate: true }),
+        "HARDENED_LOCAL_MEMBER_VISIBILITY");
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalInstanceClosure: true }),
+        "HARDENED_LOCAL_METHOD_CLOSURE");
     const localNormalizedForMembers = flatten(buildLocalBaseTree());
     const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
     const localMembers = localMemberAuthority(api, localTypesForMembers);
