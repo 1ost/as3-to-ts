@@ -20,6 +20,7 @@ const MAX_AUTHORITY_BYTES = 64 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
 const COMPILED_AUTHORITY_LOCK_SHA256 = "e667d8cd027d2f21457fb4bbd32bcf066e9ddb929661d95302224a55a2a442ca";
 const COMPILED_LOCAL_TYPE_MAP_SHA256 = "fe557887a0ea87d4549536c0a3afd708ac4877583dbf22a4ff77f4e5655869bf";
+const COMPILED_NATIVE_TIMER_AUTHORITY_SHA256 = "1db6dff27b308bf4081c06d4e45d50ee1f8ebe36614024e5b1bd2a99af252e79";
 const COMPILED_LOCAL_TYPE_COUNT = 2923;
 const COMPILED_DEPENDENCY_GRAPH_RAW_SHA256 = "05fe9549851f46366f4636ad4a5327876feb640fd815561bb0637c05dafd3d16";
 const COMPILED_DEPENDENCY_GRAPH_SEMANTIC_SHA256 = "78957409f5bf7ec6894ad7c73af7bd3a2dcccfce930090f980f1e2d1d1db806f";
@@ -52,6 +53,7 @@ export interface TranspileAuthority {
     targetCapabilitiesSha256: string;
     capabilityMappingSha256: string;
     runtimeTypeSources: readonly RuntimeAuthorityClassSource[];
+    nativeTimerAuthoritySha256: string;
 }
 
 function sha256(bytes: string): string {
@@ -127,6 +129,27 @@ export function loadTranspileAuthority(
     const localMemberJson = readRegularUtf8(join(configRoot, "local-member-map.json"), "local member map");
     const runtimeTypeLockJson = readRegularUtf8(join(configRoot, "runtime-type-authority-lock.json"), "runtime type authority lock");
     const runtimeTypePredicatesJson = readRegularUtf8(join(configRoot, "runtime-type-predicates.json"), "runtime type predicate authority");
+    const nativeTimerAuthorityJson = readRegularUtf8(join(configRoot, "native-timer-authority.json"),
+        "native timer authority");
+    if (sha256(nativeTimerAuthorityJson) !== COMPILED_NATIVE_TIMER_AUTHORITY_SHA256) {
+        throw new CliError("native timer authority bytes do not match the compiled trust root", 6);
+    }
+    let nativeTimerReceipt: unknown;
+    try {
+        nativeTimerReceipt = JSON.parse(nativeTimerAuthorityJson);
+    } catch {
+        throw new CliError("native timer authority is not JSON", 6);
+    }
+    if (!nativeTimerReceipt || typeof nativeTimerReceipt !== "object" || Array.isArray(nativeTimerReceipt)
+        || (nativeTimerReceipt as Record<string, unknown>).sourcePath !== "src/hardened-runtime/AS3Timer.ts"
+        || typeof (nativeTimerReceipt as Record<string, unknown>).sourceSha256 !== "string") {
+        throw new CliError("native timer authority does not identify the compiled target source", 6);
+    }
+    const nativeTimerSource = readRegularUtf8(join(configRoot, "..", "src", "hardened-runtime", "AS3Timer.ts"),
+        "native timer target source");
+    if (sha256(nativeTimerSource) !== (nativeTimerReceipt as Record<string, unknown>).sourceSha256) {
+        throw new CliError("native timer target source does not match its authenticated receipt", 6);
+    }
     if (sha256(lockJson) !== COMPILED_AUTHORITY_LOCK_SHA256) {
         throw new CliError("local authority lock bytes do not match the compiled trust root", 6);
     }
@@ -169,6 +192,8 @@ export function loadTranspileAuthority(
             targetCapabilitiesSha256: COMPILED_AUTHORITY_LOCK.targetCapabilitiesSha256,
             mappingJson,
             mappingSha256: COMPILED_AUTHORITY_LOCK.capabilityMappingSha256,
+            nativeTimerAuthorityJson,
+            nativeTimerAuthoritySha256: COMPILED_NATIVE_TIMER_AUTHORITY_SHA256,
         }, sha256);
         const localTypes = loadLocalTypeAuthority({
             json: localTypeJson,
@@ -203,6 +228,7 @@ export function loadTranspileAuthority(
             targetCapabilitiesSha256: COMPILED_AUTHORITY_LOCK.targetCapabilitiesSha256,
             capabilityMappingSha256: COMPILED_AUTHORITY_LOCK.capabilityMappingSha256,
             runtimeTypeSources,
+            nativeTimerAuthoritySha256: COMPILED_NATIVE_TIMER_AUTHORITY_SHA256,
         });
     } catch (error) {
         if (error instanceof CliError) throw error;

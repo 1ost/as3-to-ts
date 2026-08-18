@@ -71,9 +71,11 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Dictionary.ts": "307af295f7cd3e7c6f32423b799ab8920fb1f84e254181256a5673dfffd45814",
     "AS3MethodClosure.ts": "05329f4fa2a7034f49ab70ed87311350e71e997dca7976f8f7a44b364ca3dd9a",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
+    "AS3Timer.ts": "eb8344d3dcc26b061a130865eed61b51ca7e08693ed92517facf946b72a74e17",
     "AS3Type.ts": "6389bd794913de410607f2bcdc91c485a309a8bdfdea7b9c783ea705734fdd73",
     "AS3Vector.ts": "5deedf01b46703ae7ae0d0f98ed6cfa680a39496ddd6ab747ee48c3bb5ec1101",
     "internal/AS3TypeRegistry.ts": "35a524b9a65fe9c83e6f530c58e33b898090500b7af68046dd765b96d5f2276e",
+    "internal/AS3TimerRuntime.ts": "97333f36e33e29318b9c1a9ef34ebe2b10337734f25a7ed0eb284457a1239d00",
 });
 
 function runtimeCommonJs(code: string, fileName: string): string {
@@ -180,14 +182,28 @@ function runtimeSourceTemplates(): ReadonlyArray<{ path: string; code: string }>
 
 function runtimePackageJson(): string {
     const entries = ["AS3Array", "AS3ByteArray", "AS3Coerce", "AS3Dictionary", "AS3MethodClosure",
-        "AS3OwnRecord", "AS3Type", "AS3Vector"];
+        "AS3OwnRecord", "AS3Timer", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
-    entries.forEach(name => { exports[`./${name}`] = "./AS3Authority.generated.js"; });
+    entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"
+        ? "./AS3Timer.js" : "./AS3Authority.generated.js"; });
     exports["./AS3Authority"] = "./AS3Authority.generated.js";
     exports["./ApplicationEntry"] = "./ApplicationEntry.generated.js";
     return `${JSON.stringify({ name: "@bleach/as3-runtime", version: "0.1.0", private: true,
-        type: "commonjs", exports, files: ["AS3Authority.generated.js", "ApplicationEntry.generated.js",
+        type: "commonjs", exports, files: ["AS3Authority.generated.js", "AS3Timer.js", "ApplicationEntry.generated.js",
             "application/**/*.js"] }, null, 2)}\n`;
+}
+
+function runtimeTimerFacadeJavaScript(): string {
+    return [
+        '"use strict";',
+        'const runtime = require("./AS3Authority.generated.js");',
+        "Object.setPrototypeOf(module.exports, null);",
+        "for (const key of [\"clearTimeout\", \"setTimeout\"]) {",
+        "  Object.defineProperty(module.exports, key, { value: runtime[key], enumerable: true, writable: false, configurable: false });",
+        "}",
+        "Object.freeze(module.exports);",
+        "",
+    ].join("\n");
 }
 
 function astPathFor(sourcePath: string): string {
@@ -426,6 +442,12 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
             }
             writeArtifact(publication, runtimeAuthorityPath, authorityJavaScript);
+            const timerFacadeJavaScript = runtimeTimerFacadeJavaScript();
+            totalOutputBytes += Buffer.byteLength(timerFacadeJavaScript, "utf8");
+            if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
+                throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
+            }
+            writeArtifact(publication, "__as3_runtime/AS3Timer.js", timerFacadeJavaScript);
             applicationEntry = emitRuntimeApplicationEntry(transpiledFiles.map(item =>
                 item.typescriptPath.slice("__as3_runtime/".length)),
                 value => sha256(value));
@@ -473,6 +495,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             runtimeAuthorityQNames: runtimeAuthority!.qnames,
             applicationEntryPath: `__as3_runtime/${applicationEntry!.path}`,
             applicationEntrySha256: applicationEntry!.sha256,
+            nativeTimerAuthoritySha256: transpileAuthority!.nativeTimerAuthoritySha256,
             classification: "capability-authenticated-typescript-proposal",
             files: transpiledFiles,
         } : {
@@ -486,6 +509,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             sourceCapabilitySha256: transpileAuthority!.sourceCensusSha256,
             targetCapabilitySha256: transpileAuthority!.targetCapabilitiesSha256,
             capabilityMappingSha256: transpileAuthority!.capabilityMappingSha256,
+            nativeTimerAuthoritySha256: transpileAuthority!.nativeTimerAuthoritySha256,
             generatedTypeScriptMaterialized: false,
             counts: qualificationCounts,
             files: qualificationFiles,

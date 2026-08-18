@@ -19,6 +19,7 @@
     "config/runtime-type-authority-lock.json",
     "config/runtime-type-predicates.json",
     "src/hardened-runtime/**/*.ts",
+    "config/native-timer-authority.json",
     "src/hardened-cli/THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {

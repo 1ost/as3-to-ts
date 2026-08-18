@@ -33,6 +33,12 @@ to its public `laya/flash/display/Sprite` module specifier.
 `emitSemanticProgram` receives an exact TypeScript compiler API from its
 caller. It builds imports, declarations, types, statements, and expressions
 with `ts.factory`, then prints with LF using the TypeScript printer and reparses
-the result. Admitted instance method closures are bound exactly once after
-`super()` in the explicit constructor, and all closure uses reuse that stable
-identity. It never constructs TypeScript source with text templates.
+the result. Admitted instance method closures pass through the shared
+`AS3MethodClosure` weak cache after `super()` in the explicit constructor. The
+cache maps both the original method and its receiver-bound closure to the same
+callable, so base/derived constructor admission is idempotent and listener or
+timer removal sees stable identity. It never constructs TypeScript source with
+text templates.
+
+The separately authenticated native timer lowering and its maintained-source
+scope are documented in `NATIVE_TIMER_AUTHORITY.md`.

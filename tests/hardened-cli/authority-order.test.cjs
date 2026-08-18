@@ -23,12 +23,12 @@ function canonical(value) {
 function member(kind,name,{modifiers=["public"],fieldType=null,returnType=null,parameters=[]}={}) {
     return { fieldType,kind,modifiers,name,namespaceName:null,parameters,readonly:false,returnType };
 }
-function fixtureCli(t, files, declarations, prerequisites) {
+function fixtureCli(t, files, declarations, prerequisites, mutateMemberMap=null) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "as3-authority-order-"));
     t.after(() => fs.rmSync(root,{recursive:true,force:true}));
     for (const directory of ["bin","config","lib","source"]) fs.mkdirSync(path.join(root,directory),{recursive:true});
     fs.cpSync(path.join(ROOT,"src","hardened-runtime"),path.join(root,"src","hardened-runtime"),{recursive:true});
-    for (const name of ["authority-lock.json","capability-map.json","runtime-type-authority-lock.json","runtime-type-predicates.json"]) {
+    for (const name of ["authority-lock.json","capability-map.json","native-timer-authority.json","runtime-type-authority-lock.json","runtime-type-predicates.json"]) {
         fs.copyFileSync(path.join(ROOT,"config",name),path.join(root,"config",name));
     }
     for (const name of ["parser-worker.js","declaration-worker.js"]) {
@@ -39,7 +39,10 @@ function fixtureCli(t, files, declarations, prerequisites) {
     const memberMap=JSON.parse(fs.readFileSync(path.join(ROOT,"config","local-member-map.json"),"utf8"));
     const rows=[]; const memberRows=[]; let ordinal=0;
     for(const [relative,source] of Object.entries(files)) {
-        const qname=`cycle.${path.basename(relative,".as")}`; const declaration=declarations[qname];
+        const typeName=path.basename(relative,".as");
+        const matches=Object.keys(declarations).filter(qname=>qname.endsWith(`.${typeName}`));
+        assert.equal(matches.length,1,`fixture declaration identity for ${relative}`);
+        const qname=matches[0]; const declaration=declarations[qname];
         const nodeId=sha256(qname).slice(0,16); const sourceContentSha256=sha256(source);
         rows.push({componentId:`scc-${String(99000+ordinal).padStart(5,"0")}`,graphSourceSha256:sha256(`graph:${qname}`),
             importable:true,module:"application",nodeId,prerequisites:(prerequisites[qname]||[]).map(name=>sha256(name).slice(0,16)).sort(),qname,
@@ -54,14 +57,19 @@ function fixtureCli(t, files, declarations, prerequisites) {
     typeMap.entries.push(...rows); typeMap.entries.sort(compareIdentity);
     typeMap.entryCount=typeMap.entries.length; const typeBytes=`${canonical(typeMap)}\n`; const typeSha=sha256(typeBytes);
     memberMap.entries.push(...memberRows); memberMap.entries.sort(compareIdentity);
-    memberMap.entryCount=memberMap.entries.length; memberMap.completeCount+=memberRows.length; memberMap.localTypeMapSha256=typeSha;
+    if(mutateMemberMap!==null)mutateMemberMap(memberMap);
+    memberMap.entryCount=memberMap.entries.length;
+    memberMap.completeCount=memberMap.entries.filter(entry=>entry.status==="complete").length;
+    memberMap.heldCount=memberMap.entries.filter(entry=>entry.status==="held").length;
+    memberMap.localTypeMapSha256=typeSha;
     const memberBytes=`${canonical(memberMap)}\n`; const memberSha=sha256(memberBytes);
     fs.writeFileSync(path.join(root,"config","local-type-map.json"),typeBytes,"utf8");
     fs.writeFileSync(path.join(root,"config","local-member-map.json"),memberBytes,"utf8");
     let command=fs.readFileSync(path.join(ROOT,"lib","command.js"),"utf8");
     command=command.replace(OLD_TYPE_SHA,typeSha).replace(OLD_MEMBER_SHA,memberSha)
         .replace("var COMPILED_LOCAL_TYPE_COUNT = 2923;",`var COMPILED_LOCAL_TYPE_COUNT = ${typeMap.entryCount};`)
-        .replace("var COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = 2884;",`var COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = ${memberMap.completeCount};`);
+        .replace("var COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = 2884;",`var COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = ${memberMap.completeCount};`)
+        .replace("var COMPILED_LOCAL_MEMBER_HELD_COUNT = 39;",`var COMPILED_LOCAL_MEMBER_HELD_COUNT = ${memberMap.heldCount};`);
     fs.writeFileSync(path.join(root,"lib","command.js"),command,"utf8");
     return root;
 }
@@ -81,6 +89,13 @@ function invoke(root) {
     const capabilities=process.env.HARDENED_TARGET_CAPABILITIES;
     assert.ok(census&&capabilities,"exact capability authorities are required");
     return childProcess.spawnSync(process.execPath,[path.join(root,"bin","as3-frontend"),"transpile",path.join(root,"source"),path.join(root,"out"),
+        "--source-census",census,"--target-capabilities",capabilities],{cwd:root,encoding:"utf8",timeout:30_000,windowsHide:true});
+}
+function qualify(root) {
+    const census=process.env.HARDENED_SOURCE_CAPABILITY_CENSUS;
+    const capabilities=process.env.HARDENED_TARGET_CAPABILITIES;
+    assert.ok(census&&capabilities,"exact capability authorities are required");
+    return childProcess.spawnSync(process.execPath,[path.join(root,"bin","as3-frontend"),"qualify",path.join(root,"source"),path.join(root,"qualification"),
         "--source-census",census,"--target-capabilities",capabilities],{cwd:root,encoding:"utf8",timeout:30_000,windowsHide:true});
 }
 function createLayaPackage(packageRoot) {
@@ -407,6 +422,126 @@ test("local field authority rejects inherited slot aliases and base-method colli
         const root=fixtureCli(t,files,declarations,{"cycle.Derived":["cycle.Base"]});const result=invoke(root);
         assert.equal(result.status,4,`${label}: ${result.stderr}`);assert.match(result.stderr,/HARDENED_LOCAL_FIELD_ANCESTRY/);
         assert.equal(fs.existsSync(path.join(root,"out")),false,label);
+    }
+});
+
+test("native timer import resolution rejects every inherited visible local member kind",t=>{
+    const kinds=["field","getter","setter","method"];
+    const timers=["setTimeout","clearTimeout"];
+    for(const timerName of timers){
+        for(const kind of kinds){
+            const suffix=`${timerName}_${kind}`;const baseName=`Base_${suffix}`;const derivedName=`Derived_${suffix}`;
+            let declaration;let sourceMember;
+            if(kind==="field"){
+                declaration=member("field",timerName,{fieldType:"Function"});
+                sourceMember=`public var ${timerName}:Function;`;
+            }else if(kind==="getter"){
+                declaration=member("getter",timerName,{returnType:"Function"});
+                sourceMember=`public function get ${timerName}():Function { return null; }`;
+            }else if(kind==="setter"){
+                declaration=member("setter",timerName,{returnType:"void",parameters:[{name:"value",type:"Function",optional:false,rest:false}]});
+                sourceMember=`public function set ${timerName}(value:Function):void {}`;
+            }else{
+                declaration=timerName==="setTimeout"
+                    ? member("method",timerName,{returnType:"uint",parameters:[
+                        {name:"closure",type:"Function",optional:false,rest:false},
+                        {name:"delay",type:"Number",optional:false,rest:false}]})
+                    : member("method",timerName,{returnType:"void",parameters:[
+                        {name:"id",type:"uint",optional:false,rest:false}]});
+                sourceMember=timerName==="setTimeout"
+                    ? `public function ${timerName}(closure:Function, delay:Number):uint { return 1; }`
+                    : `public function ${timerName}(id:uint):void {}`;
+            }
+            const call=timerName==="setTimeout"?`${timerName}(function():void {}, 0);`:`${timerName}(1);`;
+            const baseQName=`cycle.${baseName}`;const derivedQName=`cycle.${derivedName}`;
+            const files={
+                [`cycle/${baseName}.as`]:`package cycle { public class ${baseName} { ${sourceMember} public function ${baseName}() {} } }\n`,
+                [`cycle/${derivedName}.as`]:`package cycle { import flash.utils.${timerName}; public class ${derivedName} extends ${baseName} { public function arm():void { ${call} } } }\n`,
+            };
+            const declarations={
+                [baseQName]:classDeclaration(baseName,[declaration]),
+                [derivedQName]:classDeclaration(derivedName,[],[baseQName],false),
+            };
+            const root=fixtureCli(t,files,declarations,{[derivedQName]:[baseQName]});const result=invoke(root);
+            assert.equal(result.status,4,`${timerName}/${kind}: ${result.stderr}`);
+            assert.match(result.stderr,/HARDENED_NATIVE_TIMER_INHERITED_SHADOW/,`${timerName}/${kind}`);
+            assert.equal(fs.existsSync(path.join(root,"out")),false,`${timerName}/${kind}`);
+        }
+    }
+});
+
+test("native timer inherited shadow resolution distinguishes inaccessible internal and private members",t=>{
+    for(const timerName of ["setTimeout","clearTimeout"]){
+        const call=timerName==="setTimeout"?`${timerName}(function():void {}, 0);`:`${timerName}(1);`;
+        for(const visibility of ["internal","private"]){
+            const baseName=`Base_${timerName}_${visibility}`;const derivedName=`Derived_${timerName}_${visibility}`;
+            const baseQName=`basepkg.${baseName}`;const derivedQName=`otherpkg.${derivedName}`;
+            const modifier=visibility==="private"?"private ":"";
+            const files={
+                [`basepkg/${baseName}.as`]:`package basepkg { public class ${baseName} { ${modifier}var ${timerName}:Function; public function ${baseName}() {} } }\n`,
+                [`otherpkg/${derivedName}.as`]:`package otherpkg { import basepkg.${baseName}; import flash.utils.${timerName}; public class ${derivedName} extends ${baseName} { public function arm():void { ${call} } } }\n`,
+            };
+            const declarations={
+                [baseQName]:classDeclaration(baseName,[member("field",timerName,{modifiers:visibility==="private"?["private"]:[],fieldType:"Function"})]),
+                [derivedQName]:classDeclaration(derivedName,[],[baseQName],false),
+            };
+            const root=fixtureCli(t,files,declarations,{[derivedQName]:[baseQName]});const result=invoke(root);
+            if(visibility==="internal"){
+                assert.equal(result.status,4,`${timerName}/${visibility}: ${result.stderr}`);
+                assert.match(result.stderr,/HARDENED_LOCAL_MEMBER_VISIBILITY/,`${timerName}/${visibility}`);
+                assert.equal(fs.existsSync(path.join(root,"out")),false,`${timerName}/${visibility}`);
+            }else{
+                assert.equal(result.status,0,`${timerName}/${visibility}: ${result.stderr}`);
+                const output=fs.readFileSync(path.join(root,"out","__as3_runtime","application","otherpkg",`${derivedName}.ts`),"utf8");
+                assert.match(output,new RegExp(`import \\{ ${timerName} \\} from "@bleach/as3-runtime/AS3Timer";`));
+                assert.match(output,new RegExp(`${timerName}\\(`));
+            }
+        }
+    }
+});
+
+test("native timer inherited provenance fails closed on held and ambiguous local lineage",t=>{
+    {
+        const baseQName="cycle.HeldTimerBase";const derivedQName="cycle.HeldTimerDerived";
+        const files={
+            "cycle/HeldTimerBase.as":"package cycle { public class HeldTimerBase { public function HeldTimerBase() {} } }\n",
+            "cycle/HeldTimerDerived.as":"package cycle { import flash.utils.setTimeout; public class HeldTimerDerived extends HeldTimerBase { public function arm():void { setTimeout(function():void {}, 0); } } }\n",
+        };
+        const declarations={
+            [baseQName]:classDeclaration("HeldTimerBase"),
+            [derivedQName]:classDeclaration("HeldTimerDerived",[],[baseQName],false),
+        };
+        const root=fixtureCli(t,files,declarations,{[derivedQName]:[baseQName]},memberMap=>{
+            const entry=memberMap.entries.find(item=>item.qname===baseQName);
+            entry.declaration=null;entry.holdCode="TEST_HELD_LINEAGE";entry.holdSha256=sha256(baseQName);entry.status="held";
+        });
+        const result=qualify(root);assert.equal(result.status,0,result.stderr);
+        const report=JSON.parse(fs.readFileSync(path.join(root,"qualification","manifest.json"),"utf8"));
+        const derived=report.files.find(item=>item.sourcePath==="cycle/HeldTimerDerived.as");
+        assert.equal(derived.code,"HARDENED_LOCAL_MEMBER_HELD");
+    }
+    {
+        const firstQName="cycle.TimerParentOne";const secondQName="cycle.TimerParentTwo";
+        const baseQName="cycle.AmbiguousTimerBase";const derivedQName="cycle.AmbiguousTimerDerived";
+        const files={
+            "cycle/TimerParentOne.as":"package cycle { public class TimerParentOne { public function TimerParentOne() {} } }\n",
+            "cycle/TimerParentTwo.as":"package cycle { public class TimerParentTwo { public function TimerParentTwo() {} } }\n",
+            "cycle/AmbiguousTimerBase.as":"package cycle { public class AmbiguousTimerBase { public function AmbiguousTimerBase() {} } }\n",
+            "cycle/AmbiguousTimerDerived.as":"package cycle { import flash.utils.clearTimeout; public class AmbiguousTimerDerived extends AmbiguousTimerBase { public function cancel():void { clearTimeout(1); } } }\n",
+        };
+        const declarations={
+            [firstQName]:classDeclaration("TimerParentOne"),[secondQName]:classDeclaration("TimerParentTwo"),
+            [baseQName]:classDeclaration("AmbiguousTimerBase"),
+            [derivedQName]:classDeclaration("AmbiguousTimerDerived",[],[baseQName],false),
+        };
+        const root=fixtureCli(t,files,declarations,{[derivedQName]:[baseQName]},memberMap=>{
+            const entry=memberMap.entries.find(item=>item.qname===baseQName);
+            entry.declaration.baseQNames=[firstQName,secondQName];
+        });
+        const result=qualify(root);assert.equal(result.status,0,result.stderr);
+        const report=JSON.parse(fs.readFileSync(path.join(root,"qualification","manifest.json"),"utf8"));
+        const derived=report.files.find(item=>item.sourcePath==="cycle/AmbiguousTimerDerived.as");
+        assert.equal(derived.code,"HARDENED_LOCAL_MEMBER_BASE");
     }
 });
 

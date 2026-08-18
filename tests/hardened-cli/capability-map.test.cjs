@@ -293,6 +293,7 @@ test("capability loader authenticates bitmap holds, numeric nullability, and con
     const source = JSON.parse(sourceJson);
     const target = JSON.parse(targetJson);
     const baseMapping = JSON.parse(normalized(path.join(repository, "config", "capability-map.json")));
+    const nativeTimerAuthorityJson = normalized(path.join(repository, "config", "native-timer-authority.json"));
     const key = item => [item.sourceQName, item.sourceMember ? item.sourceMember.access : "",
         item.sourceMember ? item.sourceMember.name : "", item.sourceMember ? item.sourceMember.signature : ""].join("\u0000");
     const load = (mapping, sourceValue = source, targetValue = target) => {
@@ -307,6 +308,8 @@ test("capability loader authenticates bitmap holds, numeric nullability, and con
         targetCapabilitiesSha256: sha256(forgedTargetJson),
         mappingJson,
         mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256: sha256(nativeTimerAuthorityJson),
     }, sha256);
     };
     assert.doesNotThrow(() => load(structuredClone(baseMapping)));

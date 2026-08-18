@@ -355,7 +355,7 @@ test("parse failure cannot expose a partial output tree", t => {
     assert.deepEqual(publicationDebris(root), []);
 });
 
-test("production bundles exclude legacy emitter, visitors, wrappers, and runtime dependencies", () => {
+test("production bundles exclude legacy emitter, visitors, wrappers, and third-party runtime dependencies", () => {
     const command = fs.readFileSync(path.join(repository, "lib", "command.js"), "utf8");
     const worker = fs.readFileSync(path.join(repository, "lib", "parser-worker.js"), "utf8");
     for (const forbidden of ["custom-visitors", "ConversionUtils", "readline-sync", "minimist", "fs-extra", "emit/emitter"]) {
@@ -380,6 +380,7 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and runtime
         "config/runtime-type-authority-lock.json",
         "config/runtime-type-predicates.json",
         "src/hardened-runtime/**/*.ts",
+        "config/native-timer-authority.json",
         "src/hardened-cli/THIRD_PARTY_NOTICES.md",
     ]);
 

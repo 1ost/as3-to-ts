@@ -144,13 +144,37 @@ function authority(api) {
                     roles: ["constructor", "import", "instance-member", "wildcard-resolution"],
                     preserve: { apiName: true, signature: true },
                 },
+                {
+                    qname: "flash.utils.clearTimeout", classification: "layaair-flash-api-bridge",
+                    roles: ["import", "package-function", "wildcard-resolution"],
+                    preserve: { apiName: true, signature: true },
+                },
+                {
+                    qname: "flash.utils.setTimeout", classification: "layaair-flash-api-bridge",
+                    roles: ["import", "package-function", "wildcard-resolution"],
+                    preserve: { apiName: true, signature: true },
+                },
             ],
-            memberUses: [{
-                qname: "flash.display.Sprite", member: "Sprite", access: "call",
-                context: "constructor", classification: "layaair-flash-api-bridge",
-                preserveNameAndSignature: true,
-                signatures: [{ signature: "public function Sprite()", minArgs: 0, maxArgs: 0 }],
-            }],
+            memberUses: [
+                {
+                    qname: "flash.display.Sprite", member: "Sprite", access: "call",
+                    context: "constructor", classification: "layaair-flash-api-bridge",
+                    preserveNameAndSignature: true,
+                    signatures: [{ signature: "public function Sprite()", minArgs: 0, maxArgs: 0 }],
+                },
+                {
+                    qname: "flash.utils.clearTimeout", member: "<call>", access: "call",
+                    context: "package-function", classification: "layaair-flash-api-bridge",
+                    preserveNameAndSignature: true,
+                    signatures: [{ signature: "public function clearTimeout(id:uint) : void", minArgs: 1, maxArgs: 1 }],
+                },
+                {
+                    qname: "flash.utils.setTimeout", member: "<call>", access: "call",
+                    context: "package-function", classification: "layaair-flash-api-bridge",
+                    preserveNameAndSignature: true,
+                    signatures: [{ signature: "public function setTimeout(closure:Function, delay:Number, ... arguments) : uint", minArgs: 2, maxArgs: null }],
+                },
+            ],
         },
     };
     const target = {
@@ -182,6 +206,8 @@ function authority(api) {
     const sourceJson = JSON.stringify(source);
     const targetJson = JSON.stringify(target);
     const mappingJson = api.canonicalMappingJson(mappings);
+    const nativeTimerAuthorityJson = fs.readFileSync(
+        path.join(ROOT, "config", "native-timer-authority.json"), "utf8").replace(/\r\n?/g, "\n");
     return api.loadCapabilityAuthority({
         sourceCensusJson: sourceJson,
         sourceCensusSha256: sha256(sourceJson),
@@ -189,6 +215,8 @@ function authority(api) {
         targetCapabilitiesSha256: sha256(targetJson),
         mappingJson,
         mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256: sha256(nativeTimerAuthorityJson),
     }, sha256);
 }
 

@@ -115,6 +115,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3MethodClosure.ts"), path.join(runtime, "AS3MethodClosure.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Vector.ts"), path.join(runtime, "AS3Vector.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Coerce.ts"), path.join(runtime, "AS3Coerce.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3MethodClosure.ts"), path.join(runtime, "AS3MethodClosure.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Dictionary.ts"), path.join(runtime, "AS3Dictionary.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3ByteArray.ts"), path.join(runtime, "AS3ByteArray.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Array.ts"), path.join(runtime, "AS3Array.ts"));
@@ -1396,6 +1397,9 @@ function main() {
     const sourceCensusJson = fs.readFileSync(requiredEnvironmentPath("HARDENED_SOURCE_CAPABILITY_CENSUS"), "utf8");
     const targetCapabilitiesJson = fs.readFileSync(requiredEnvironmentPath("HARDENED_TARGET_CAPABILITIES"), "utf8")
         .replace(/\r\n?/g, "\n");
+    const nativeTimerAuthorityJson = fs.readFileSync(
+        path.join(__dirname, "../../config/native-timer-authority.json"), "utf8").replace(/\r\n?/g, "\n");
+    const nativeTimerAuthoritySha256 = sha256(nativeTimerAuthorityJson);
     const sourceRepo = requiredEnvironmentPath("HARDENED_SOURCE_REPO", "directory");
     const targetRepo = requiredEnvironmentPath("HARDENED_TARGET_REPO", "directory");
     assert.equal(git(sourceRepo, "rev-parse", "HEAD"), EXPECTED_SOURCE_HEAD);
@@ -1405,6 +1409,19 @@ function main() {
     assert.equal(sha256(sourceCensusJson), EXPECTED_SOURCE_SHA256);
     assert.equal(sha256(targetCapabilitiesJson), EXPECTED_TARGET_SHA256);
     assertMaintainedArrayReadEvidence(sourceRepo);
+    const receiverEvidenceRoot = path.join(sourceRepo,
+        "as3-to-layaair-porting-kit/tests/native-runtime/avm2-function-receiver");
+    const receiverProvenance = JSON.parse(fs.readFileSync(
+        path.join(receiverEvidenceRoot, "pepper-flash-26.json"), "utf8"));
+    const receiverGolden = fs.readFileSync(path.join(receiverEvidenceRoot, "pepper-flash-26.txt"), "utf8")
+        .replace(/\r\n?/g, "\n");
+    assert.equal(receiverProvenance.oracle, "Pepper Flash 26.0.0.131");
+    assert.equal(sha256(receiverGolden), receiverProvenance.result_sha256);
+    assert.equal(sha256(fs.readFileSync(path.join(receiverEvidenceRoot, "FunctionReceiverDefinition.as"), "utf8")
+        .replace(/\r\n?/g, "\n")), receiverProvenance.fixture_sources["FunctionReceiverDefinition.as"]);
+    assert.match(receiverGolden, /ordinary\.call\.global=call-global:caller-global/);
+    assert.match(receiverGolden, /ordinary\.callproplex=callproplex:definition-global/);
+    assert.match(receiverGolden, /methodClosure\.call\.global=call-global:method-owner/);
     const mappingJson = api.canonicalMappingJson(mappingDocument());
     const authority = api.loadCapabilityAuthority({
         sourceCensusJson,
@@ -1413,6 +1430,8 @@ function main() {
         targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
         mappingJson,
         mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
     }, sha256);
 
     const program = adapt(api, buildTree(), authority);
@@ -1430,6 +1449,7 @@ function main() {
     assert.equal(program.outputModulePath, "lobby/ui/Demo.ts");
     assert.equal(program.sourceCapabilitySha256, EXPECTED_SOURCE_SHA256);
     assert.equal(program.targetCapabilitySha256, EXPECTED_TARGET_SHA256);
+    assert.equal(program.nativeTimerAuthoritySha256, nativeTimerAuthoritySha256);
     const fields = program.declaration.members.filter((member) => member.kind === "field");
     assert.deepEqual(fields.map((field) => field.name), ["a", "b"]);
     assert.equal(fields[0].sharedDeclarationNodeId, fields[1].sharedDeclarationNodeId);
@@ -2108,11 +2128,26 @@ function main() {
         addEventListener(_type, listener) { this.listener = listener; }
     }
     const runtimeModule = { exports: {} };
+    const closureCache = new WeakMap();
+    const bindMethod = (receiver, method) => {
+        let byMethod = closureCache.get(receiver);
+        if (!byMethod) {
+            byMethod = new WeakMap();
+            closureCache.set(receiver, byMethod);
+        }
+        const existing = byMethod.get(method);
+        if (existing) return existing;
+        const closure = method.bind(receiver);
+        byMethod.set(method, closure);
+        byMethod.set(closure, closure);
+        return closure;
+    };
+    assert.match(emitted.code, /as3BindMethod as __as3BindMethod/);
+    assert.doesNotMatch(emitted.code, /\.bind\(this\)/);
     Function("require", "module", "exports", runnable)(
         (specifier) => specifier.endsWith("/Sprite") ? { Sprite: MockSprite }
-            : specifier.endsWith("/AS3MethodClosure") ? {
-                as3BindMethod(receiver, method) { return method.bind(receiver); },
-            } : specifier.endsWith("/AS3Type") ? {
+            : specifier.endsWith("/AS3MethodClosure") ? { as3BindMethod: bindMethod }
+            : specifier.endsWith("/AS3Type") ? {
                 as3PrepareConstruction(){return [];},as3CancelPreparedConstruction(){},as3EnterConstruction(){},
                 as3RejectConstructorArity(){throw new TypeError("arity");},as3InitializeInstanceFields(){},as3AbortConstruction(){},as3CompleteConstruction(){},
             } : { Event: class Event {} },
@@ -2215,6 +2250,8 @@ function main() {
         targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
         mappingJson,
         mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
     }, sha256), "HARDENED_SOURCE_CENSUS_HASH");
     const weakenedIntrinsic = JSON.parse(sourceCensusJson);
     const dictionaryApi = weakenedIntrinsic.as3SourceCapabilities.apis
@@ -2228,6 +2265,8 @@ function main() {
         targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
         mappingJson,
         mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
     }, sha256), "HARDENED_SOURCE_INTRINSIC");
     const alteredByteArrayMember = JSON.parse(sourceCensusJson);
     const bytesAvailable = alteredByteArrayMember.as3SourceCapabilities.memberUses.find(item =>
@@ -2241,7 +2280,62 @@ function main() {
         targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
         mappingJson,
         mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
     }, sha256), "HARDENED_SOURCE_INTRINSIC_MEMBER");
+
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson,
+        sourceCensusSha256: EXPECTED_SOURCE_SHA256,
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256: "0".repeat(64),
+    }, sha256), "HARDENED_NATIVE_TIMER_AUTHORITY_HASH");
+    const alteredNativeTimer = JSON.parse(nativeTimerAuthorityJson);
+    alteredNativeTimer.exports.find(item => item.name === "setTimeout").signature = "(closure: Function) => number";
+    const alteredNativeTimerJson = JSON.stringify(alteredNativeTimer);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson,
+        sourceCensusSha256: EXPECTED_SOURCE_SHA256,
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson: alteredNativeTimerJson,
+        nativeTimerAuthoritySha256: sha256(alteredNativeTimerJson),
+    }, sha256), "HARDENED_NATIVE_TIMER_PARITY");
+    const blockedTimerSource = JSON.parse(sourceCensusJson);
+    blockedTimerSource.as3SourceCapabilities.apis.find(item =>
+        item.qname === "flash.utils.setTimeout").classification = "blocking";
+    const blockedTimerSourceJson = JSON.stringify(blockedTimerSource);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson: blockedTimerSourceJson,
+        sourceCensusSha256: sha256(blockedTimerSourceJson),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256), "HARDENED_NATIVE_TIMER_SOURCE");
+    const timerWithoutImportRole = JSON.parse(sourceCensusJson);
+    const timerWithoutImport = timerWithoutImportRole.as3SourceCapabilities.apis.find(item =>
+        item.qname === "flash.utils.clearTimeout");
+    timerWithoutImport.roles = timerWithoutImport.roles.filter(role => role !== "import");
+    const timerWithoutImportRoleJson = JSON.stringify(timerWithoutImportRole);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson: timerWithoutImportRoleJson,
+        sourceCensusSha256: sha256(timerWithoutImportRoleJson),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256), "HARDENED_NATIVE_TIMER_SOURCE");
 
     const internal = mappingDocument();
     internal.mappings.push({
@@ -2272,6 +2366,8 @@ function main() {
         targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
         mappingJson: internalJson,
         mappingSha256: sha256(internalJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
     }, sha256), "HARDENED_TARGET_MEMBER_MAPPING");
 
     fs.rmSync(compiled.output, { recursive: true, force: true });

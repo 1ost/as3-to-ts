@@ -3,6 +3,7 @@ import {
     CapabilityMapping,
     CapabilityMappingDocument,
     LoadedCapabilityAuthority,
+    NativeTimerFunctionMapping,
     HardenedSemanticError,
 } from "./contracts";
 
@@ -36,6 +37,26 @@ const INTRINSIC_TYPES = Object.freeze([Object.freeze({
     targetKind: "class" as "class",
     targetSignature: "static endian constants",
 })]);
+
+const NATIVE_TIMER_FUNCTIONS: readonly Readonly<NativeTimerFunctionMapping>[] = Object.freeze([
+    Object.freeze({
+        sourceQName: "flash.utils.clearTimeout" as "flash.utils.clearTimeout",
+        sourceRoles: Object.freeze(["import", "package-function", "wildcard-resolution"]) as unknown as string[],
+        sourceSignature: "public function clearTimeout(id:uint) : void",
+        minArgs: 1, maxArgs: 1, parameterTypes: Object.freeze(["uint"]) as unknown as string[], restType: null,
+        returnType: "void", targetModule: "@bleach/as3-runtime/AS3Timer",
+        targetExport: "clearTimeout" as "clearTimeout", targetSignature: "(id: number) => void",
+    }),
+    Object.freeze({
+        sourceQName: "flash.utils.setTimeout" as "flash.utils.setTimeout",
+        sourceRoles: Object.freeze(["import", "package-function", "wildcard-resolution"]) as unknown as string[],
+        sourceSignature: "public function setTimeout(closure:Function, delay:Number, ... arguments) : uint",
+        minArgs: 2, maxArgs: null, parameterTypes: Object.freeze(["Function", "Number"]) as unknown as string[], restType: "*",
+        returnType: "uint", targetModule: "@bleach/as3-runtime/AS3Timer",
+        targetExport: "setTimeout" as "setTimeout",
+        targetSignature: "(closure: Function, delay: number, ...args: unknown[]) => number",
+    }),
+]);
 
 interface IntrinsicMemberDefinition {
     sourceQName: string;
@@ -170,6 +191,39 @@ function requireHash(bytes: string, expected: string, sha256: Sha256Function, co
     if (!SHA256.test(expected) || sha256(bytes) !== expected) {
         throw new HardenedSemanticError(code, "capability authority bytes do not match the required SHA-256");
     }
+}
+
+interface NativeTimerAuthority {
+    module: "@bleach/as3-runtime/AS3Timer";
+    sourcePath: "src/hardened-runtime/AS3Timer.ts";
+    sourceSha256: string;
+    exports: Array<{ name: string; signature: string }>;
+}
+
+function parseNativeTimerAuthority(raw: unknown): NativeTimerAuthority {
+    if (!isObject(raw) || !exactKeys(raw, ["exports", "module", "schema", "sourcePath", "sourceSha256"])
+        || raw.schema !== "bleach-native-timer-authority@1"
+        || raw.module !== "@bleach/as3-runtime/AS3Timer"
+        || raw.sourcePath !== "src/hardened-runtime/AS3Timer.ts"
+        || typeof raw.sourceSha256 !== "string" || !SHA256.test(raw.sourceSha256)
+        || !Array.isArray(raw.exports)) {
+        throw new HardenedSemanticError("HARDENED_NATIVE_TIMER_AUTHORITY",
+            "native timer authority has the wrong closed schema");
+    }
+    const exports = raw.exports.map((value: unknown) => {
+        if (!isObject(value) || !exactKeys(value, ["name", "signature"])
+            || !IDENTIFIER.test(String(value.name)) || String(value.name).startsWith("_")
+            || typeof value.signature !== "string" || value.signature.length === 0) {
+            throw new HardenedSemanticError("HARDENED_NATIVE_TIMER_EXPORT",
+                "native timer authority export is invalid");
+        }
+        return { name: String(value.name), signature: String(value.signature) };
+    });
+    if (exports.some((value, index) => index > 0 && exports[index - 1]!.name >= value.name)) {
+        throw new HardenedSemanticError("HARDENED_NATIVE_TIMER_EXPORT",
+            "native timer authority exports must be unique and sorted");
+    }
+    return { module: raw.module, sourcePath: raw.sourcePath, sourceSha256: raw.sourceSha256, exports };
 }
 
 function parseMapping(raw: unknown): CapabilityMappingDocument {
@@ -634,6 +688,47 @@ function intrinsicMembers(source: { [key: string]: unknown },
     return Object.freeze(result);
 }
 
+function nativeTimerFunctions(source: { [key: string]: unknown }, target: NativeTimerAuthority):
+    LoadedCapabilityAuthority["nativeTimerFunctionsBySource"] {
+    const section = source.as3SourceCapabilities;
+    if (!isObject(section) || !Array.isArray(section.apis) || !Array.isArray(section.memberUses)) {
+        throw new HardenedSemanticError("HARDENED_SOURCE_CENSUS_SCHEMA",
+            "source census lacks native timer-function authority");
+    }
+    if (target.exports.length !== NATIVE_TIMER_FUNCTIONS.length) {
+        throw new HardenedSemanticError("HARDENED_NATIVE_TIMER_PARITY",
+            "native timer table and target authority count differ");
+    }
+    const apis = section.apis as unknown[];
+    const memberUses = section.memberUses as unknown[];
+    const result: LoadedCapabilityAuthority["nativeTimerFunctionsBySource"] = Object.create(null);
+    NATIVE_TIMER_FUNCTIONS.forEach(definition => {
+        if (target.module !== definition.targetModule || !target.exports.some(item =>
+            item.name === definition.targetExport && item.signature === definition.targetSignature)) {
+            throw new HardenedSemanticError("HARDENED_NATIVE_TIMER_PARITY",
+                `native timer target is not authenticated: ${definition.sourceQName}`);
+        }
+        const api = apis.find(value => isObject(value) && value.qname === definition.sourceQName);
+        if (!isObject(api) || api.classification !== "layaair-flash-api-bridge" || !Array.isArray(api.roles)
+            || !definition.sourceRoles.every(role => (api.roles as unknown[]).indexOf(role) >= 0)
+            || !isObject(api.preserve) || api.preserve.apiName !== true || api.preserve.signature !== true) {
+            throw new HardenedSemanticError("HARDENED_NATIVE_TIMER_SOURCE",
+                `native timer lacks exact bridge-classified source identity: ${definition.sourceQName}`);
+        }
+        const uses = memberUses.filter(value => isObject(value) && value.qname === definition.sourceQName
+            && value.member === "<call>" && value.access === "call" && value.context === "package-function");
+        if (uses.length === 0 || !uses.every(use => isObject(use) && use.preserveNameAndSignature === true
+            && Array.isArray(use.signatures) && use.signatures.some((signature: unknown) => isObject(signature)
+                && signature.signature === definition.sourceSignature && signature.minArgs === definition.minArgs
+                && signature.maxArgs === definition.maxArgs))) {
+            throw new HardenedSemanticError("HARDENED_NATIVE_TIMER_SIGNATURE",
+                `native timer signature is not census-authenticated: ${definition.sourceQName}`);
+        }
+        result[definition.sourceQName] = definition as NativeTimerFunctionMapping;
+    });
+    return Object.freeze(result);
+}
+
 function findTargetCapability(target: { [key: string]: unknown }, mapping: CapabilityMapping): void {
     if (target.schema !== "laya-authored-content-capabilities@1" || !Array.isArray(target.capabilities)) {
         throw new HardenedSemanticError("HARDENED_TARGET_CAPABILITIES_SCHEMA", "target Laya capability document has the wrong schema");
@@ -705,9 +800,13 @@ export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256:
     requireHash(input.sourceCensusJson, input.sourceCensusSha256, sha256, "HARDENED_SOURCE_CENSUS_HASH");
     requireHash(input.targetCapabilitiesJson, input.targetCapabilitiesSha256, sha256, "HARDENED_TARGET_CAPABILITIES_HASH");
     requireHash(input.mappingJson, input.mappingSha256, sha256, "HARDENED_CAPABILITY_MAPPING_HASH");
+    requireHash(input.nativeTimerAuthorityJson, input.nativeTimerAuthoritySha256, sha256,
+        "HARDENED_NATIVE_TIMER_AUTHORITY_HASH");
     const source = parseJson(input.sourceCensusJson, "HARDENED_SOURCE_CENSUS_JSON");
     const target = parseJson(input.targetCapabilitiesJson, "HARDENED_TARGET_CAPABILITIES_JSON");
     const mappingDocument = parseMapping(parseJson(input.mappingJson, "HARDENED_CAPABILITY_MAPPING_JSON"));
+    const nativeTimerAuthority = parseNativeTimerAuthority(parseJson(input.nativeTimerAuthorityJson,
+        "HARDENED_NATIVE_TIMER_AUTHORITY_JSON"));
     if (canonicalMappingJson(mappingDocument) !== input.mappingJson || !isObject(source) || !isObject(target)) {
         throw new HardenedSemanticError("HARDENED_CAPABILITY_MAPPING_CANONICAL", "capability mapping must be canonical sorted JSON with one trailing LF");
     }
@@ -744,10 +843,12 @@ export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256:
         sourceCensusSha256: input.sourceCensusSha256,
         targetCapabilitiesSha256: input.targetCapabilitiesSha256,
         mappingSha256: input.mappingSha256,
+        nativeTimerAuthoritySha256: input.nativeTimerAuthoritySha256,
         typeMappingsBySource,
         memberMappingsByKey,
         intrinsicTypesBySource,
         intrinsicMembersByKey: intrinsicMembers(source, intrinsicTypesBySource),
+        nativeTimerFunctionsBySource: nativeTimerFunctions(source, nativeTimerAuthority),
     });
     LOADED_AUTHORITIES.add(authority);
     return authority;

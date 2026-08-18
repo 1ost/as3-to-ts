@@ -58,12 +58,15 @@ export interface CapabilityAuthorityInput {
     targetCapabilitiesSha256: string;
     mappingJson: string;
     mappingSha256: string;
+    nativeTimerAuthorityJson: string;
+    nativeTimerAuthoritySha256: string;
 }
 
 export interface LoadedCapabilityAuthority {
     sourceCensusSha256: string;
     targetCapabilitiesSha256: string;
     mappingSha256: string;
+    nativeTimerAuthoritySha256: string;
     typeMappingsBySource: { [qualifiedName: string]: CapabilityMapping };
     memberMappingsByKey: { [memberKey: string]: CapabilityMapping };
     intrinsicTypesBySource: { [qualifiedName: string]: {
@@ -83,6 +86,21 @@ export interface LoadedCapabilityAuthority {
         returnType: string;
         sourceSignature: string;
     } };
+    nativeTimerFunctionsBySource: { [qualifiedName: string]: NativeTimerFunctionMapping };
+}
+
+export interface NativeTimerFunctionMapping {
+    sourceQName: "flash.utils.clearTimeout" | "flash.utils.setTimeout";
+    sourceRoles: string[];
+    sourceSignature: string;
+    minArgs: number;
+    maxArgs: number | null;
+    parameterTypes: string[];
+    restType: string | null;
+    returnType: string;
+    targetModule: "@bleach/as3-runtime/AS3Timer";
+    targetExport: "clearTimeout" | "setTimeout";
+    targetSignature: string;
 }
 
 export interface SemanticIdentity {
@@ -101,7 +119,7 @@ export interface SemanticType extends SemanticIdentity {
 export type SemanticModifier = "public" | "private" | "protected" | "static" | "override";
 
 export interface SemanticImport extends SemanticIdentity {
-    authorityKind: "flash" | "local" | "intrinsic";
+    authorityKind: "flash" | "local" | "intrinsic" | "native-timer-function";
     localNodeId: string | null;
     runtimeConstructible: boolean;
     runtimeInterface: boolean;
@@ -129,6 +147,8 @@ export interface IntrinsicConstantExpression extends SemanticIdentity {
 export interface IdentifierExpression extends SemanticIdentity {
     kind: "identifier";
     name: string;
+    bindingKind: "import" | "local" | "parameter";
+    bindingSourceQualifiedName: string | null;
 }
 
 export interface ThisExpression extends SemanticIdentity {
@@ -581,6 +601,7 @@ export interface SemanticProgram extends SemanticIdentity {
     sourceCapabilitySha256: string;
     targetCapabilitySha256: string;
     capabilityMappingSha256: string;
+    nativeTimerAuthoritySha256: string;
 }
 
 export class HardenedSemanticError extends Error {

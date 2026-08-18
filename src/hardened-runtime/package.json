@@ -11,12 +11,14 @@
     "./AS3Dictionary": "./AS3Authority.generated.js",
     "./AS3MethodClosure": "./AS3Authority.generated.js",
     "./AS3OwnRecord": "./AS3Authority.generated.js",
+    "./AS3Timer": "./AS3Timer.js",
     "./AS3Type": "./AS3Authority.generated.js",
     "./AS3Vector": "./AS3Authority.generated.js",
     "./ApplicationEntry": "./ApplicationEntry.generated.js"
   },
   "files": [
     "AS3Authority.generated.js",
+    "AS3Timer.js",
     "ApplicationEntry.generated.js",
     "application/**/*.js"
   ]

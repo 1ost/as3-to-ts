@@ -7,6 +7,7 @@ import {
     LocalDeclarationMember,
     LocalMemberAuthorityEntry,
     LocalTypeMapping,
+    NativeTimerFunctionMapping,
     NormalizedParserAst,
     NormalizedParserNode,
     SemanticClass,
@@ -75,6 +76,7 @@ interface AdapterContext {
     mappingsBySource: { [name: string]: CapabilityMapping };
     memberMappingsByKey: { [name: string]: CapabilityMapping };
     intrinsicMembersByKey: LoadedCapabilityAuthority["intrinsicMembersByKey"];
+    nativeTimerFunctionsBySource: { [name: string]: NativeTimerFunctionMapping };
     baseSourceQName: string | null;
     baseLocalQName: string | null;
     localTypeAuthority: LoadedLocalTypeAuthority | null;
@@ -598,6 +600,19 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
             targetModule: mapping.targetModule, targetExport: mapping.targetExport,
         });
     };
+    const nativeTimerImport = (qname: string, node: TreeNode): SemanticImport => {
+        const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
+        const mapping = authority.nativeTimerFunctionsBySource[qname];
+        if (!mapping || mapping.sourceRoles.indexOf("import") < 0) {
+            fail("HARDENED_NATIVE_TIMER_IMPORT", "native timer lacks exact import authority", node);
+        }
+        return Object.assign(identity(node), {
+            authorityKind: "native-timer-function" as "native-timer-function", localNodeId: null,
+            runtimeConstructible: false, runtimeInterface: false, localValueType: null,
+            compileTimeNamespace: false, sourceQualifiedName: qname, sourceLocalName: localName,
+            targetModule: mapping.targetModule, targetExport: mapping.targetExport,
+        });
+    };
     const localImport = (target: LocalTypeMapping, currentLocal: CurrentLocalType,
         node: TreeNode): SemanticImport => {
         return localSemanticImport(target, currentLocal, node, localMemberAuthority);
@@ -612,9 +627,14 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
             const intrinsicMatches = Object.keys(authority.intrinsicTypesBySource)
                 .filter(candidate => candidate.startsWith(prefix) && !candidate.slice(prefix.length).includes("."))
                 .sort(compareUtf8);
-            if (flashMatches.length > 0 || intrinsicMatches.length > 0) {
+            const nativeTimerMatches = Object.keys(authority.nativeTimerFunctionsBySource)
+                .filter(candidate => candidate.startsWith(prefix) && !candidate.slice(prefix.length).includes(".")
+                    && authority.nativeTimerFunctionsBySource[candidate]!.sourceRoles.indexOf("wildcard-resolution") >= 0)
+                .sort(compareUtf8);
+            if (flashMatches.length > 0 || intrinsicMatches.length > 0 || nativeTimerMatches.length > 0) {
                 flashMatches.forEach(candidate => append(flashImport(candidate, node), node));
                 intrinsicMatches.forEach(candidate => append(intrinsicImport(candidate, node), node));
+                nativeTimerMatches.forEach(candidate => append(nativeTimerImport(candidate, node), node));
                 return;
             }
             if (qname.startsWith("flash.")) return;
@@ -639,6 +659,8 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
             item = flashImport(qname, node);
         } else if (authority.intrinsicTypesBySource[qname]) {
             item = intrinsicImport(qname, node);
+        } else if (authority.nativeTimerFunctionsBySource[qname]) {
+            item = nativeTimerImport(qname, node);
         } else {
             if (qname.startsWith("flash.")) {
                 fail("HARDENED_FLASH_IMPORT_UNMAPPED",
@@ -1082,6 +1104,49 @@ function assertNoInheritedLocalValueShadow(context: AdapterContext, name: string
         if (entry.declaration.baseQNames.length > 1) {
             fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
                 `${name} intrinsic lookup encountered an ambiguous local base lineage`, node);
+        }
+        qname = entry.declaration.baseQNames.length === 1 ? entry.declaration.baseQNames[0]! : null;
+    }
+}
+
+function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: string, node: TreeNode): void {
+    if (context.baseLocalQName === null) return;
+    if (context.localTypeAuthority === null || context.localMemberAuthority === null
+        || context.resolveCurrentLocal === null) {
+        fail("HARDENED_LOCAL_MEMBER_AUTHORITY",
+            `${name} native timer lookup requires the complete local base declaration authority`, node);
+    }
+    assertLoadedLocalMemberAuthority(context.localMemberAuthority);
+    const moduleName = context.resolveCurrentLocal().entry.module;
+    const visited = new Set<string>();
+    let qname: string | null = context.baseLocalQName;
+    while (qname !== null) {
+        if (visited.has(qname) || visited.size >= 1024) {
+            fail("HARDENED_LOCAL_MEMBER_CYCLE", "native timer base-member lineage is cyclic or exceeds its bound", node);
+        }
+        visited.add(qname);
+        if (!context.localTypeAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`]) {
+            if (context.runtimeReferenceParentsByQName.has(qname)) return;
+            fail("HARDENED_LOCAL_MEMBER_AUTHORITY",
+                `native timer lookup encountered unauthenticated base ${qname}`, node);
+        }
+        const entry: LocalMemberAuthorityEntry | undefined =
+            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+        if (!entry || entry.status !== "complete" || entry.declaration === null) {
+            fail("HARDENED_LOCAL_MEMBER_HELD",
+                `local member authority for ${qname} is held by ${entry?.holdCode || "unknown"}`, node);
+        }
+        const members = entry.declaration.members.filter(member => member.name === name
+            && member.modifiers.indexOf("static") < 0 && member.modifiers.indexOf("private") < 0
+            && (member.kind === "field" || member.kind === "getter"
+                || member.kind === "setter" || member.kind === "method"));
+        if (members.length > 0) {
+            members.forEach(member => assertInheritedVisibility(member, qname!, context, node));
+            fail("HARDENED_NATIVE_TIMER_INHERITED_SHADOW",
+                `native timer import is shadowed by inherited local member ${qname}.${name}`, node);
+        }
+        if (entry.declaration.baseQNames.length > 1) {
+            fail("HARDENED_LOCAL_MEMBER_BASE", `class ${qname} has an ambiguous base lineage`, node);
         }
         qname = entry.declaration.baseQNames.length === 1 ? entry.declaration.baseQNames[0]! : null;
     }
@@ -2164,8 +2229,27 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (context.importsByLocal[name]?.compileTimeNamespace) {
             fail("HARDENED_NAMESPACE_VALUE", "compile-time namespace cannot be used as a runtime value", node);
         }
-        if (context.locals[name] || context.parameters[name] || context.importsByLocal[name]) {
-            return Object.assign(identity(node), { kind: "identifier" as "identifier", name });
+        const imported = context.importsByLocal[name];
+        if (imported?.authorityKind === "native-timer-function"
+            && (context.locals[name] || context.parameters[name] || context.fields[name]
+                || context.accessors[name] || context.methods[name])) {
+            fail("HARDENED_NATIVE_TIMER_SHADOW",
+                "native timer import is shadowed by a lexical or class binding", node);
+        }
+        if (imported?.authorityKind === "native-timer-function") {
+            assertNoInheritedNativeTimerShadow(context, name, node);
+        }
+        if (context.locals[name]) {
+            return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
+                bindingKind: "local" as "local", bindingSourceQualifiedName: null });
+        }
+        if (context.parameters[name]) {
+            return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
+                bindingKind: "parameter" as "parameter", bindingSourceQualifiedName: null });
+        }
+        if (imported) {
+            return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
+                bindingKind: "import" as "import", bindingSourceQualifiedName: imported.sourceQualifiedName });
         }
         if (context.fields[name]) {
             if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
@@ -2643,8 +2727,26 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 .forEach((argument, index) => {
                     args[index] = adaptAssignmentValue(signature.parameters[index]!.type, argument, context,
                         node.children[1]!.children[index]!);
-                });
+            });
             resultType = signature.returnType;
+        } else if (callee.kind === "identifier" && callee.bindingKind === "import"
+            && context.importsByLocal[callee.name]?.authorityKind === "native-timer-function"
+            && callee.bindingSourceQualifiedName === context.importsByLocal[callee.name]!.sourceQualifiedName) {
+            const imported = context.importsByLocal[callee.name]!;
+            const mapping = context.nativeTimerFunctionsBySource[imported.sourceQualifiedName];
+            if (!mapping || args.length < mapping.minArgs
+                || (mapping.maxArgs !== null && args.length > mapping.maxArgs)) {
+                fail("HARDENED_NATIVE_TIMER_ARITY",
+                    "native timer call does not match its exact source signature", node);
+            }
+            mapping.parameterTypes.forEach((parameterType, index) => {
+                if (parameterType === "*") return;
+                args[index] = adaptAssignmentValue(authoritySemanticType(parameterType, context, node),
+                    args[index]!, context, node.children[1]!.children[index]!);
+            });
+            capabilitySource = mapping.sourceQName;
+            capabilityMember = "<call>";
+            resultType = authoritySemanticType(mapping.returnType, context, node);
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {
             const parameters = context.methods[callee.name]!.parameters;
             if (!admittedArity(parameters, args.length)) {
@@ -3097,7 +3199,8 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                     fail("HARDENED_FORIN_TARGET", "for-in variable lacks its predeclared identity", declaration);
                 }
                 targetType = header.type;
-                target = Object.assign(identity(nameNode), { kind: "identifier" as "identifier", name });
+                target = Object.assign(identity(nameNode), { kind: "identifier" as "identifier", name,
+                    bindingKind: "local" as "local", bindingSourceQualifiedName: null });
                 declaresTarget = true;
             } else {
                 target = parseExpression(targetOwner, context, false, false, true);
@@ -3583,7 +3686,9 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         className: name, classQualifiedName: qname, extendsType: null,
         importsByLocal: parsedImports.importsByLocal, resolveImportedType: resolveImplicitLocalType,
         mappingsBySource: authority.typeMappingsBySource, memberMappingsByKey: authority.memberMappingsByKey,
-        intrinsicMembersByKey: authority.intrinsicMembersByKey, baseSourceQName: null, baseLocalQName: null,
+        intrinsicMembersByKey: authority.intrinsicMembersByKey,
+        nativeTimerFunctionsBySource: authority.nativeTimerFunctionsBySource,
+        baseSourceQName: null, baseLocalQName: null,
         localTypeAuthority: localAuthority, localMemberAuthority, resolveCurrentLocal,
         fields: Object.create(null), methods: Object.create(null),
         runtimeReferenceParentsByQName: new Map(), currentInterfaceQNames: [],
@@ -3609,6 +3714,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         sourceCapabilitySha256: authority.sourceCensusSha256,
         targetCapabilitySha256: authority.targetCapabilitiesSha256,
         capabilityMappingSha256: authority.mappingSha256,
+        nativeTimerAuthoritySha256: authority.nativeTimerAuthoritySha256,
     });
     deepFreeze(program);
     ADAPTED_PROGRAMS.add(program);
@@ -3740,6 +3846,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         mappingsBySource: authority.typeMappingsBySource,
         memberMappingsByKey: authority.memberMappingsByKey,
         intrinsicMembersByKey: authority.intrinsicMembersByKey,
+        nativeTimerFunctionsBySource: authority.nativeTimerFunctionsBySource,
         baseSourceQName: null,
         baseLocalQName: null,
         localTypeAuthority: localAuthority || null,
@@ -3847,6 +3954,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             sourceCapabilitySha256: authority.sourceCensusSha256,
             targetCapabilitySha256: authority.targetCapabilitiesSha256,
             capabilityMappingSha256: authority.mappingSha256,
+            nativeTimerAuthoritySha256: authority.nativeTimerAuthoritySha256,
         });
         deepFreeze(program);
         ADAPTED_PROGRAMS.add(program);
@@ -4035,6 +4143,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         sourceCapabilitySha256: authority.sourceCensusSha256,
         targetCapabilitySha256: authority.targetCapabilitiesSha256,
         capabilityMappingSha256: authority.mappingSha256,
+        nativeTimerAuthoritySha256: authority.nativeTimerAuthoritySha256,
     });
     deepFreeze(program);
     ADAPTED_PROGRAMS.add(program);
