@@ -21,7 +21,99 @@ const INTRINSIC_TYPES = Object.freeze([Object.freeze({
     targetExport: "AS3Dictionary",
     targetKind: "class" as "class",
     targetSignature: "new (weakKeys?: boolean): AS3Dictionary",
+}), Object.freeze({
+    sourceQName: "flash.utils.ByteArray",
+    sourceRoles: Object.freeze(["base-type", "constructor", "import", "instance-member", "wildcard-resolution"]),
+    targetModule: "@bleach/as3-runtime/AS3ByteArray",
+    targetExport: "AS3ByteArray",
+    targetKind: "class" as "class",
+    targetSignature: "new (): AS3ByteArray",
+}), Object.freeze({
+    sourceQName: "flash.utils.Endian",
+    sourceRoles: Object.freeze(["import", "static-member", "wildcard-resolution"]),
+    targetModule: "@bleach/as3-runtime/AS3ByteArray",
+    targetExport: "AS3Endian",
+    targetKind: "class" as "class",
+    targetSignature: "static endian constants",
 })]);
+
+interface IntrinsicMemberDefinition {
+    sourceQName: string;
+    name: string;
+    access: "call" | "read" | "write";
+    minArgs: number;
+    maxArgs: number;
+    parameterTypes: string[];
+    returnType: string;
+    sourceSignature: string;
+}
+
+const INTRINSIC_MEMBERS: readonly IntrinsicMemberDefinition[] = [
+    { sourceQName: "flash.utils.ByteArray", name: "ByteArray", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "ByteArray", sourceSignature: "public function ByteArray()" },
+    { sourceQName: "flash.utils.Endian", name: "BIG_ENDIAN", access: "read", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "String", sourceSignature: "public static const BIG_ENDIAN:String = \"bigEndian\";" },
+    { sourceQName: "flash.utils.Endian", name: "LITTLE_ENDIAN", access: "read", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "String", sourceSignature: "public static const LITTLE_ENDIAN:String = \"littleEndian\";" },
+    { sourceQName: "flash.utils.ByteArray", name: "bytesAvailable", access: "read", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "uint", sourceSignature: "public native function get bytesAvailable() : uint;" },
+    { sourceQName: "flash.utils.ByteArray", name: "clear", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "void", sourceSignature: "public native function clear() : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "endian", access: "write", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["String"], returnType: "void", sourceSignature: "public native function set endian(param1:String) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "length", access: "read", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "uint", sourceSignature: "public native function get length() : uint;" },
+    { sourceQName: "flash.utils.ByteArray", name: "length", access: "write", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["uint"], returnType: "void", sourceSignature: "public native function set length(param1:uint) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "position", access: "read", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "uint", sourceSignature: "public native function get position() : uint;" },
+    { sourceQName: "flash.utils.ByteArray", name: "position", access: "write", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["uint"], returnType: "void", sourceSignature: "public native function set position(param1:uint) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readBoolean", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "Boolean", sourceSignature: "public native function readBoolean() : Boolean;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readByte", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "int", sourceSignature: "public native function readByte() : int;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readBytes", access: "call", minArgs: 1, maxArgs: 3,
+        parameterTypes: ["ByteArray", "uint", "uint"], returnType: "void",
+        sourceSignature: "public native function readBytes(param1:ByteArray, param2:uint = 0, param3:uint = 0) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readDouble", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "Number", sourceSignature: "public native function readDouble() : Number;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readFloat", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "Number", sourceSignature: "public native function readFloat() : Number;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readInt", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "int", sourceSignature: "public native function readInt() : int;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readShort", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "int", sourceSignature: "public native function readShort() : int;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readUTF", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "String", sourceSignature: "public native function readUTF() : String;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readUTFBytes", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["uint"], returnType: "String", sourceSignature: "public native function readUTFBytes(param1:uint) : String;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readUnsignedByte", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "uint", sourceSignature: "public native function readUnsignedByte() : uint;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readUnsignedInt", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "uint", sourceSignature: "public native function readUnsignedInt() : uint;" },
+    { sourceQName: "flash.utils.ByteArray", name: "readUnsignedShort", access: "call", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "uint", sourceSignature: "public native function readUnsignedShort() : uint;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeBoolean", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["Boolean"], returnType: "void", sourceSignature: "public native function writeBoolean(param1:Boolean) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeByte", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["int"], returnType: "void", sourceSignature: "public native function writeByte(param1:int) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeBytes", access: "call", minArgs: 1, maxArgs: 3,
+        parameterTypes: ["ByteArray", "uint", "uint"], returnType: "void",
+        sourceSignature: "public native function writeBytes(param1:ByteArray, param2:uint = 0, param3:uint = 0) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeDouble", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["Number"], returnType: "void", sourceSignature: "public native function writeDouble(param1:Number) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeInt", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["int"], returnType: "void", sourceSignature: "public native function writeInt(param1:int) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeShort", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["int"], returnType: "void", sourceSignature: "public native function writeShort(param1:int) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeUTF", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["String"], returnType: "void", sourceSignature: "public native function writeUTF(param1:String) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeUTFBytes", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["String"], returnType: "void", sourceSignature: "public native function writeUTFBytes(param1:String) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "writeUnsignedInt", access: "call", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["uint"], returnType: "void", sourceSignature: "public native function writeUnsignedInt(param1:uint) : void;" },
+];
 
 function isObject(value: unknown): value is { [key: string]: unknown } {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -230,6 +322,53 @@ function intrinsicTypes(source: { [key: string]: unknown }): LoadedCapabilityAut
     return Object.freeze(result);
 }
 
+function intrinsicMemberKey(sourceQName: string, access: string, name: string): string {
+    return `${sourceQName}\u0000${access}\u0000${name}`;
+}
+
+function intrinsicMembers(source: { [key: string]: unknown },
+    intrinsicTypesBySource: LoadedCapabilityAuthority["intrinsicTypesBySource"]): LoadedCapabilityAuthority["intrinsicMembersByKey"] {
+    const section = source.as3SourceCapabilities;
+    if (!isObject(section) || !Array.isArray(section.memberUses)) {
+        throw new HardenedSemanticError("HARDENED_SOURCE_CENSUS_SCHEMA", "source census lacks intrinsic member authority");
+    }
+    const result: LoadedCapabilityAuthority["intrinsicMembersByKey"] = Object.create(null);
+    INTRINSIC_MEMBERS.forEach(definition => {
+        if (!intrinsicTypesBySource[definition.sourceQName]) return;
+        const uses = (section.memberUses as unknown[]).filter((value: unknown) => isObject(value)
+            && value.qname === definition.sourceQName && value.member === definition.name
+            && value.access === definition.access && value.preserveNameAndSignature === true);
+        const authenticated = uses.some(value => isObject(value) && Array.isArray(value.signatures)
+            && value.signatures.some((signature: unknown) => isObject(signature)
+                && signature.signature === definition.sourceSignature
+                && typeof signature.returnType === "string"
+                && signature.returnType.split(".").pop() === definition.returnType
+                && signature.minArgs === definition.minArgs
+                && (definition.access === "read" ? signature.maxArgs === null || signature.maxArgs === 0
+                    : signature.maxArgs === definition.maxArgs)));
+        if (!authenticated) {
+            throw new HardenedSemanticError("HARDENED_SOURCE_INTRINSIC_MEMBER",
+                `source intrinsic member ${definition.sourceQName}.${definition.name} lacks its exact census signature`);
+        }
+        const key = intrinsicMemberKey(definition.sourceQName, definition.access, definition.name);
+        if (result[key]) {
+            throw new HardenedSemanticError("HARDENED_SOURCE_INTRINSIC_MEMBER",
+                "source intrinsic member authority contains a duplicate identity");
+        }
+        result[key] = Object.freeze({
+            sourceQName: definition.sourceQName,
+            name: definition.name,
+            access: definition.access,
+            minArgs: definition.minArgs,
+            maxArgs: definition.maxArgs,
+            parameterTypes: Object.freeze(definition.parameterTypes.slice()) as unknown as string[],
+            returnType: definition.returnType,
+            sourceSignature: definition.sourceSignature,
+        });
+    });
+    return Object.freeze(result);
+}
+
 function findTargetCapability(target: { [key: string]: unknown }, mapping: CapabilityMapping): void {
     if (target.schema !== "laya-authored-content-capabilities@1" || !Array.isArray(target.capabilities)) {
         throw new HardenedSemanticError("HARDENED_TARGET_CAPABILITIES_SCHEMA", "target Laya capability document has the wrong schema");
@@ -296,13 +435,15 @@ export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256:
     });
     Object.freeze(typeMappingsBySource);
     Object.freeze(memberMappingsByKey);
+    const intrinsicTypesBySource = intrinsicTypes(source);
     const authority: LoadedCapabilityAuthority = Object.freeze({
         sourceCensusSha256: input.sourceCensusSha256,
         targetCapabilitiesSha256: input.targetCapabilitiesSha256,
         mappingSha256: input.mappingSha256,
         typeMappingsBySource,
         memberMappingsByKey,
-        intrinsicTypesBySource: intrinsicTypes(source),
+        intrinsicTypesBySource,
+        intrinsicMembersByKey: intrinsicMembers(source, intrinsicTypesBySource),
     });
     LOADED_AUTHORITIES.add(authority);
     return authority;

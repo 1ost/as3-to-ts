@@ -26,10 +26,11 @@ test("capability map regenerates byte-identically from both authorities", t => {
         lock,
     ], { cwd: os.tmpdir(), encoding: "utf8", timeout: 20_000, windowsHide: true });
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(fs.readFileSync(mapping, "utf8"),
-        fs.readFileSync(path.join(repository, "config", "capability-map.json"), "utf8"));
-    assert.equal(fs.readFileSync(lock, "utf8"),
-        fs.readFileSync(path.join(repository, "config", "authority-lock.json"), "utf8"));
+    const canonical = value => value.replace(/\r\n?/g, "\n");
+    assert.equal(canonical(fs.readFileSync(mapping, "utf8")),
+        canonical(fs.readFileSync(path.join(repository, "config", "capability-map.json"), "utf8")));
+    assert.equal(canonical(fs.readFileSync(lock, "utf8")),
+        canonical(fs.readFileSync(path.join(repository, "config", "authority-lock.json"), "utf8")));
     const document = JSON.parse(fs.readFileSync(mapping, "utf8"));
     const typeMappings = document.mappings.filter(item => item.sourceMember === null);
     const memberMappings = document.mappings.filter(item => item.sourceMember !== null);

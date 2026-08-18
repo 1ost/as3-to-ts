@@ -1,0 +1,116 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const childProcess = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const test = require("node:test");
+
+const ROOT = path.resolve(__dirname, "../..");
+const OUTPUT = fs.mkdtempSync(path.join(os.tmpdir(), "as3-bytearray-runtime-"));
+const CONFIG = path.join(OUTPUT, "tsconfig.json");
+fs.writeFileSync(CONFIG, JSON.stringify({
+    compilerOptions: {
+        target: "ES2022", module: "CommonJS", moduleResolution: "Node", strict: true,
+        skipLibCheck: true, rootDir: path.join(ROOT, "src"), outDir: OUTPUT,
+    },
+    files: [path.join(ROOT, "src/hardened-runtime/AS3ByteArray.ts")],
+}), "utf8");
+childProcess.execFileSync(process.execPath,
+    [path.join(ROOT, "node_modules/typescript-4-9/bin/tsc"), "-p", CONFIG], { cwd: ROOT, stdio: "inherit" });
+const { AS3ByteArray, AS3Endian } = require(path.join(OUTPUT, "hardened-runtime/AS3ByteArray.js"));
+
+test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
+
+test("ByteArray preserves Flash endian, integer, floating point, and Boolean semantics", () => {
+    const bytes = new AS3ByteArray();
+    assert.equal(bytes.endian, AS3Endian.BIG_ENDIAN);
+    bytes.writeInt(-2);
+    bytes.writeUnsignedInt(0xfedcba98);
+    bytes.writeShort(-3);
+    bytes.writeByte(-4);
+    bytes.writeBoolean(true);
+    bytes.writeFloat(1.25);
+    bytes.writeDouble(-3.5);
+    assert.equal(bytes.length, 24);
+    assert.equal(bytes.position, 24);
+    bytes.position = 0;
+    assert.equal(bytes.readInt(), -2);
+    assert.equal(bytes.readUnsignedInt(), 0xfedcba98);
+    assert.equal(bytes.readShort(), -3);
+    assert.equal(bytes.readByte(), -4);
+    assert.equal(bytes.readBoolean(), true);
+    assert.equal(bytes.readFloat(), 1.25);
+    assert.equal(bytes.readDouble(), -3.5);
+    assert.equal(bytes.bytesAvailable, 0);
+    assert.throws(() => bytes.readUnsignedByte(), /exceeds bytesAvailable/);
+});
+
+test("little endian and UTF operations preserve byte order and UTF-8 length", () => {
+    const bytes = new AS3ByteArray();
+    bytes.endian = AS3Endian.LITTLE_ENDIAN;
+    bytes.writeUnsignedInt(0x01020304);
+    bytes.writeUTF("hé");
+    bytes.writeUTFBytes("世界");
+    assert.deepEqual([...new Uint8Array(bytes.toArrayBuffer()).slice(0, 4)], [4, 3, 2, 1]);
+    bytes.position = 0;
+    assert.equal(bytes.readUnsignedInt(), 0x01020304);
+    assert.equal(bytes.readUTF(), "hé");
+    assert.equal(bytes.readUTFBytes(bytes.bytesAvailable), "世界");
+    assert.throws(() => { bytes.endian = "middleEndian"; }, /must be Endian/);
+});
+
+test("length, position, gaps, and byte copies are deterministic", () => {
+    const source = new AS3ByteArray();
+    source.writeUTFBytes("abcdef");
+    source.position = 1;
+    const target = new AS3ByteArray();
+    target.length = 2;
+    target.position = 9;
+    target.writeByte(7);
+    assert.equal(target.length, 10);
+    assert.deepEqual([...new Uint8Array(target.toArrayBuffer()).slice(2, 9)], [0, 0, 0, 0, 0, 0, 0]);
+    source.readBytes(target, 2, 3);
+    assert.equal(source.position, 4);
+    assert.equal(target.position, 10, "readBytes does not mutate destination position");
+    target.position = 2;
+    assert.equal(target.readUTFBytes(3), "bcd");
+
+    const copy = new AS3ByteArray();
+    copy.writeBytes(source, 0, 0);
+    assert.deepEqual([...new Uint8Array(copy.toArrayBuffer())], [...new TextEncoder().encode("abcdef")]);
+    copy.position = 2;
+    copy.writeBytes(copy, 0, 3);
+    copy.position = 0;
+    assert.equal(copy.readUTFBytes(copy.length), "ababcf");
+
+    copy.length = 2;
+    copy.length = 5;
+    assert.deepEqual([...new Uint8Array(copy.toArrayBuffer())], [97, 98, 0, 0, 0]);
+    copy.clear();
+    assert.equal(copy.length, 0);
+    assert.equal(copy.position, 0);
+});
+
+test("host ArrayBuffer seams copy bytes without exposing mutable storage", () => {
+    const raw = new Uint8Array([1, 2, 3]);
+    const bytes = AS3ByteArray.fromArrayBuffer(raw);
+    raw[0] = 9;
+    assert.deepEqual([...new Uint8Array(bytes.toArrayBuffer())], [1, 2, 3]);
+    const exported = new Uint8Array(bytes.toArrayBuffer());
+    exported[1] = 8;
+    assert.deepEqual([...new Uint8Array(bytes.toArrayBuffer())], [1, 2, 3]);
+    assert.equal("readObject" in bytes, false);
+    assert.equal("writeObject" in bytes, false);
+    assert.equal("uncompress" in bytes, false);
+});
+
+test("ByteArray rejects hostile allocation ranges before allocating or mutating content", () => {
+    const bytes = AS3ByteArray.fromArrayBuffer(new Uint8Array([1, 2, 3]));
+    assert.throws(() => { bytes.length = -1; }, /resource limit/);
+    assert.equal(bytes.length, 3);
+    bytes.position = -1;
+    assert.throws(() => bytes.writeByte(4), /write range is invalid/);
+    assert.deepEqual([...new Uint8Array(bytes.toArrayBuffer())], [1, 2, 3]);
+});

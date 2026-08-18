@@ -9,7 +9,7 @@ const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "../..");
 const EXPECTED_SOURCE_SHA256 = "2144b14090e51a1c0525ec3a35bfb8e532c6a19bb7ab355428ce70b4db7bde90";
-const EXPECTED_TARGET_SHA256 = "c364d4a0fce5df16033980a3eba4e7a72d658993eef0f3675ea9771c9eba86d2";
+const EXPECTED_TARGET_SHA256 = "109405663cc7ee936008d29732026fc82a06460aff1e9f341cd761e6d12b5b54";
 const EXPECTED_SOURCE_HEAD = "a42bf2c73dce4ca0922bc603c5647a5ef0e515dd";
 const EXPECTED_SOURCE_BLOB = "524d7e4143adff105799334f81b0fba1004a0cfd";
 const EXPECTED_TARGET_HEAD = "4b9d9ae1b5cded82a2ea90ce97725c2682f514fe";
@@ -83,13 +83,17 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.mkdirSync(runtime, { recursive: true });
         fs.mkdirSync(stubs, { recursive: true });
         fs.mkdirSync(generated, { recursive: true });
+        fs.mkdirSync(path.join(root, "base"), { recursive: true });
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Type.ts"), path.join(runtime, "AS3Type.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Vector.ts"), path.join(runtime, "AS3Vector.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Coerce.ts"), path.join(runtime, "AS3Coerce.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Dictionary.ts"), path.join(runtime, "AS3Dictionary.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3ByteArray.ts"), path.join(runtime, "AS3ByteArray.ts"));
         fs.writeFileSync(path.join(stubs, "Sprite.ts"),
             "export class Sprite { public addEventListener(_type:string,_listener:Function,_capture=false,_priority=0,_weak=false):void {} }\n", "utf8");
         fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
+        fs.writeFileSync(path.join(root, "base", "Base.ts"),
+            "export class Base { public constructor(_value:number=0) {} }\n", "utf8");
         outputs.forEach((code, index) => fs.writeFileSync(path.join(generated, `Fixture${index}.ts`), code, "utf8"));
         const config = path.join(root, "tsconfig.json");
         fs.writeFileSync(config, JSON.stringify({
@@ -236,6 +240,11 @@ function buildTree(options = {}) {
             n("NAME", "dictionary"), type("Dictionary"), n("INIT", null, [
                 construct("Dictionary", options.badDictionaryConstructor ? [n("LITERAL", "1")] : [n("LITERAL", "true")]),
             ]),
+        ]));
+    }
+    if (options.byteArrayWorkpack || options.heldByteArrayMember) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "bytes"), type("ByteArray"), n("INIT", null, [construct("ByteArray")]),
         ]));
     }
     if (options.vectorWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack
@@ -527,6 +536,19 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
+    if (options.byteArrayWorkpack || options.heldByteArrayMember) {
+        onEventBody = options.heldByteArrayMember ? [
+            call(dot(n("IDENTIFIER", "bytes"), "uncompress")), n("RETURN"),
+        ] : [
+            assignment(dot(n("IDENTIFIER", "bytes"), "endian"),
+                dot(n("IDENTIFIER", "Endian"), "LITTLE_ENDIAN")),
+            call(dot(n("IDENTIFIER", "bytes"), "writeInt"), [n("LITERAL", "1")]),
+            assignment(dot(n("IDENTIFIER", "bytes"), "position"), n("LITERAL", "0")),
+            localDeclaration("VAR_LIST", "decoded", "uint",
+                call(dot(n("IDENTIFIER", "bytes"), "readUnsignedInt"))),
+            n("RETURN"),
+        ];
+    }
     const members = [
         field,
         constructor(body),
@@ -603,6 +625,9 @@ function buildTree(options = {}) {
     if (options.dictionaryWorkpack || options.badDictionaryConstructor) {
         imports.push(n("IMPORT", "flash.utils.Dictionary"));
     }
+    if (options.byteArrayWorkpack || options.heldByteArrayMember) {
+        imports.push(n("IMPORT", "flash.utils.ByteArray"), n("IMPORT", "flash.utils.Endian"));
+    }
     if (options.unmappedFlashImport) imports.push(n("IMPORT", "flash.geom.Point"));
     if (options.unusedWildcard) imports.push(n("IMPORT", "flash.geom.*"));
     if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
@@ -675,9 +700,9 @@ function canonicalJson(value) {
 function buildLocalBaseTree(options = {}) {
     const imports = options.samePackage ? []
         : options.wildcardImports ? [n("IMPORT", "lobby.base.*")] : [n("IMPORT", "lobby.base.Base")];
-    if (options.withPackageSymbols) {
-        imports.push(n("IMPORT", "lobby.base.SCore"), n("IMPORT", "lobby.base.InternalSpace"),
-            n("USE", "InternalSpace"));
+    if (options.withPackageSymbols) imports.push(n("IMPORT", "lobby.base.SCore"));
+    if (options.withPackageSymbols || options.withNamespace) {
+        imports.push(n("IMPORT", "lobby.base.InternalSpace"), n("USE", "InternalSpace"));
     }
     if (options.withInterface && !options.wildcardImports && !options.samePackage) {
         imports.push(n("IMPORT", "lobby.base.IReady"));
@@ -716,6 +741,8 @@ function buildLocalBaseTree(options = {}) {
         members.push(method("usePackageConstant", [], "void", [
             localDeclaration("VAR_LIST", "shared", "Base", n("IDENTIFIER", "SCore")), n("RETURN"),
         ]));
+    }
+    if (options.withPackageSymbols || options.withNamespace) {
         members.push(method("packageNamespaced", [], "void", [n("RETURN")], ["InternalSpace"]));
     }
     if (options.withInterface) members.push(method("check", [parameter("value", "Object")], "void", [
@@ -765,7 +792,8 @@ function localAuthority(api, normalized, options = {}) {
             sourcePath: "game-client/tapplication_main/src/lobby/base/SCore.as",
             targetPath: "game-client/layaair/src/application/lobby/base/SCore.ts", topologicalLevel: 1,
             typeKind: "package",
-        }, {
+        }] : []),
+        ...(options.withPackageSymbols || options.withNamespace ? [{
             componentId: "scc-00001", importable: true, module: "application",
             graphSourceSha256: "b".repeat(64), nodeId: "0000000000000005", prerequisites: [],
             qname: "lobby.base.InternalSpace", sourceContentSha256: "c".repeat(64),
@@ -778,7 +806,8 @@ function localAuthority(api, normalized, options = {}) {
             module: "application", nodeId: currentNodeId,
             prerequisites: options.withEdge === false ? [] : [baseNodeId]
                 .concat(options.withInterface ? ["0000000000000003"] : [])
-                .concat(options.withPackageSymbols ? ["0000000000000004", "0000000000000005"] : []), qname: "lobby.ui.Demo",
+                .concat(options.withPackageSymbols ? ["0000000000000004"] : [])
+                .concat(options.withPackageSymbols || options.withNamespace ? ["0000000000000005"] : []), qname: "lobby.ui.Demo",
             sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
             sourceContentSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
             targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
@@ -957,7 +986,8 @@ function main() {
     const compiled = compileHardenedSources(ts);
     const api = compiled.api;
     const sourceCensusJson = fs.readFileSync(requiredEnvironmentPath("HARDENED_SOURCE_CAPABILITY_CENSUS"), "utf8");
-    const targetCapabilitiesJson = fs.readFileSync(requiredEnvironmentPath("HARDENED_TARGET_CAPABILITIES"), "utf8");
+    const targetCapabilitiesJson = fs.readFileSync(requiredEnvironmentPath("HARDENED_TARGET_CAPABILITIES"), "utf8")
+        .replace(/\r\n?/g, "\n");
     const sourceRepo = requiredEnvironmentPath("HARDENED_SOURCE_REPO", "directory");
     const targetRepo = requiredEnvironmentPath("HARDENED_TARGET_REPO", "directory");
     assert.equal(git(sourceRepo, "rev-parse", "HEAD"), EXPECTED_SOURCE_HEAD);
@@ -1015,12 +1045,12 @@ function main() {
         "HARDENED_LOCAL_MEMBER_AUTHORITY");
     const localSuperArgumentOutput = api.emitSemanticProgram(adaptLocal(api, authority, { superArgument: true }),
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(localSuperArgumentOutput.code, /super\(1\);/);
+    assert.match(localSuperArgumentOutput.code, /super\(__as3Int\(1\)\);/);
     assertErrorCode(() => adaptLocal(api, authority, { superArgument: true, badSuperArgument: true }),
         "HARDENED_LOCAL_CONSTRUCTOR_TYPE");
     const localNewOutput = api.emitSemanticProgram(adaptLocal(api, authority, { localNew: true }),
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(localNewOutput.code, /private created: Base \| null = new Base\(1\);/);
+    assert.match(localNewOutput.code, /private created: Base \| null = new Base\(__as3Int\(1\)\);/);
     assertErrorCode(() => adaptLocal(api, authority, { badLocalNew: true }),
         "HARDENED_LOCAL_CONSTRUCTOR_TYPE");
     const inheritedCallOutput = api.emitSemanticProgram(adaptLocal(api, authority, { inheritedCall: true }),
@@ -1031,16 +1061,15 @@ function main() {
         "HARDENED_LOCAL_CALL_TYPE");
     const inheritedMembersOutput = api.emitSemanticProgram(adaptLocal(api, authority, { inheritedMembers: true }),
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(inheritedMembersOutput.code, /this\.count = 1;/);
+    assert.match(inheritedMembersOutput.code, /this\.count = __as3Int\(1\);/);
     assert.match(inheritedMembersOutput.code, /var label: string \| null = this\.title;/);
     assert.match(inheritedMembersOutput.code, /this\.title = "updated";/);
-    const packageSymbolProgram = adaptLocal(api, authority, { withPackageSymbols: true });
-    const packageSymbolOutput = api.emitSemanticProgram(packageSymbolProgram,
+    assertErrorCode(() => adaptLocal(api, authority, { withPackageSymbols: true }),
+        "HARDENED_LOCAL_PACKAGE_OUTPUT");
+    const namespaceProgram = adaptLocal(api, authority, { withNamespace: true });
+    const localNamespaceOutput = api.emitSemanticProgram(namespaceProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(packageSymbolOutput.code, /import \{ SCore \} from "\.\.\/base\/SCore";/);
-    assert.match(packageSymbolOutput.code, /import \{ InternalSpace \} from "\.\.\/base\/InternalSpace";/);
-    assert.match(packageSymbolOutput.code, /var shared: Base \| null = SCore;/);
-    assert.doesNotMatch(packageSymbolOutput.code, /InternalSpace function/);
+    assert.doesNotMatch(localNamespaceOutput.code, /InternalSpace/);
     const localNormalizedForMembers = flatten(buildLocalBaseTree());
     const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
     const localMembers = localMemberAuthority(api, localTypesForMembers);
@@ -1134,8 +1163,8 @@ function main() {
     const vectorOutput = api.emitSemanticProgram(vectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(vectorOutput.code, /AS3Vector as __as3Vector/);
     assert.match(vectorOutput.code, /private values: __as3Vector<number> \| null = new __as3Vector<number>\(__as3VectorPolicies\.int, 2, false\);/);
-    assert.match(vectorOutput.code, /this\.values!\[0\] = 4;/);
-    assert.match(vectorOutput.code, /this\.values!\.push\(5\);/);
+    assert.match(vectorOutput.code, /this\.values!\[0\] = __as3Int\(4\);/);
+    assert.match(vectorOutput.code, /this\.values!\.push\(__as3Int\(5\)\);/);
     assert.match(vectorOutput.code, /var copy: __as3Vector<number> \| null = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
     const shortVectorProgram = adapt(api, buildTree({ shortVectorWorkpack: true }), authority);
     const shortVectorOutput = api.emitSemanticProgram(shortVectorProgram,
@@ -1182,7 +1211,7 @@ function main() {
     const existingForEachProgram = adapt(api, buildTree({ existingForEachWorkpack: true }), authority);
     const existingForEachOutput = api.emitSemanticProgram(existingForEachProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(existingForEachOutput.code, /var existingItem: number = 0;/);
+    assert.match(existingForEachOutput.code, /var existingItem: number = __as3Int\(0\);/);
     assert.match(existingForEachOutput.code, /for \(existingItem of this\.values!\)/);
     assert.doesNotMatch(existingForEachOutput.code, /for \(var existingItem of/);
     assert.match(iterationOutput.code, /this\.values!\.indexOf\(item\);/);
@@ -1215,7 +1244,7 @@ function main() {
     const negativeDefaultProgram = adapt(api, buildTree({ negativeDefaultWorkpack: true }), authority);
     const negativeDefaultOutput = api.emitSemanticProgram(negativeDefaultProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(negativeDefaultOutput.code, /configureIndex\(index: number = -1\): void/);
+    assert.match(negativeDefaultOutput.code, /configureIndex\(index: number = __as3Int\(-1\)\): void/);
     assertErrorCode(() => adapt(api, buildTree({ badNegativeDefault: true }), authority),
         "HARDENED_UNARY_NUMBER");
     const nestedExpressionProgram = adapt(api, buildTree({ nestedExpressionWorkpack: true }), authority);
@@ -1245,20 +1274,16 @@ function main() {
     assert.match(restParameterOutput.code, /collect\(prefix: string \| null, \.\.\.values: unknown\[\]\): void/);
     assert.match(restParameterOutput.code, /this\.collect\("p", 1, "two"\);/);
     assertErrorCode(() => adapt(api, buildTree({ badRestPosition: true }), authority), "HARDENED_PARAMETER_REST");
-    const namespaceProgram = adapt(api, buildTree({ namespaceWorkpack: true }), authority);
-    const namespaceMember = namespaceProgram.declaration.members.find(member => member.kind === "method"
-        && member.name === "namespaced");
-    assert.equal(namespaceMember.namespaceName, "ResourcesSpace");
-    const namespaceOutput = api.emitSemanticProgram(namespaceProgram,
-        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(namespaceOutput.code, /namespaced\(\): void/);
-    assert.doesNotMatch(namespaceOutput.code, /ResourcesSpace/);
-    assertErrorCode(() => adapt(api, buildTree({ namespaceCollision: true }), authority), "HARDENED_METHOD_DUPLICATE");
-    assertErrorCode(() => adapt(api, buildTree({ namespaceAccessCollision: true }), authority), "HARDENED_NAMESPACE_MODIFIER");
+    assertErrorCode(() => adapt(api, buildTree({ namespaceWorkpack: true }), authority),
+        "HARDENED_NAMESPACE_AUTHORITY");
+    assertErrorCode(() => adapt(api, buildTree({ namespaceCollision: true }), authority),
+        "HARDENED_NAMESPACE_AUTHORITY");
+    assertErrorCode(() => adapt(api, buildTree({ namespaceAccessCollision: true }), authority),
+        "HARDENED_NAMESPACE_AUTHORITY");
     const overrideProgram = adapt(api, buildTree({ overrideWorkpack: true }), authority);
     const overrideOutput = api.emitSemanticProgram(overrideProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(overrideOutput.code, /public override addEventListener\(type: string \| null, listener: Function \| null, useCapture: boolean = false, priority: number = 0, useWeakReference: boolean = false\): void/);
+    assert.match(overrideOutput.code, /public override addEventListener\(type: string \| null, listener: Function \| null, useCapture: boolean = false, priority: number = __as3Int\(0\), useWeakReference: boolean = false\): void/);
     assertErrorCode(() => adapt(api, buildTree({ fieldModifiers: ["override"] }), authority), "HARDENED_OVERRIDE_TARGET");
     const forInProgram = adapt(api, buildTree({ forInWorkpack: true }), authority);
     const forInOutput = api.emitSemanticProgram(forInProgram,
@@ -1297,6 +1322,19 @@ function main() {
     assert.match(dictionaryOutput.code, /for \(key of this\.dictionary!\.keys\(\)\)/);
     assertErrorCode(() => adapt(api, buildTree({ badDictionaryConstructor: true }), authority),
         "HARDENED_DICTIONARY_CONSTRUCTOR");
+    const byteArrayProgram = adapt(api, buildTree({ byteArrayWorkpack: true }), authority);
+    const byteArrayOutput = api.emitSemanticProgram(byteArrayProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(byteArrayOutput.code,
+        /import \{ AS3ByteArray as ByteArray \} from "@bleach\/as3-runtime\/AS3ByteArray";/);
+    assert.match(byteArrayOutput.code,
+        /import \{ AS3Endian as Endian \} from "@bleach\/as3-runtime\/AS3ByteArray";/);
+    assert.match(byteArrayOutput.code, /private bytes: ByteArray \| null = new ByteArray\(\);/);
+    assert.match(byteArrayOutput.code, /this\.bytes!\.endian = Endian\.LITTLE_ENDIAN;/);
+    assert.match(byteArrayOutput.code, /this\.bytes!\.writeInt\(__as3Int\(1\)\);/);
+    assert.match(byteArrayOutput.code, /var decoded: number = this\.bytes!\.readUnsignedInt\(\);/);
+    assertErrorCode(() => adapt(api, buildTree({ heldByteArrayMember: true }), authority),
+        "HARDENED_INTRINSIC_MEMBER");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
     const compoundOutput = api.emitSemanticProgram(compoundProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1310,8 +1348,8 @@ function main() {
         existingForEachOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,
         nestedExpressionOutput.code,
-        labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code,
-        nullableOutput.code, lambdaOutput.code, dictionaryOutput.code]);
+        labelOutput.code, interfaceOutput.code, localNamespaceOutput.code, overrideOutput.code, forInOutput.code,
+        nullableOutput.code, lambdaOutput.code, dictionaryOutput.code, byteArrayOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
     const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(assignedOutput.code, /this\.b = "changed";/);
@@ -1532,6 +1570,19 @@ function main() {
         mappingJson,
         mappingSha256: sha256(mappingJson),
     }, sha256), "HARDENED_SOURCE_INTRINSIC");
+    const alteredByteArrayMember = JSON.parse(sourceCensusJson);
+    const bytesAvailable = alteredByteArrayMember.as3SourceCapabilities.memberUses.find(item =>
+        item.receiverType === "flash.utils.ByteArray" && item.member === "bytesAvailable" && item.access === "read");
+    bytesAvailable.signatures[0].returnType = "int";
+    const alteredByteArrayMemberJson = JSON.stringify(alteredByteArrayMember);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson: alteredByteArrayMemberJson,
+        sourceCensusSha256: sha256(alteredByteArrayMemberJson),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+    }, sha256), "HARDENED_SOURCE_INTRINSIC_MEMBER");
 
     const internal = mappingDocument();
     internal.mappings.push({

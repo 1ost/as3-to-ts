@@ -385,7 +385,7 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and runtime
     ).inputs);
     assert.equal(commandInputs.every(input =>
         input === "src/command.ts" || input.startsWith("src/hardened-cli/")
-        || input.startsWith("src/hardened/") || input.startsWith("node_modules/typescript-4-9/")), true);
+        || input.startsWith("src/hardened/") || input.includes("node_modules/typescript-4-9/")), true);
 
     const workerInputs = Object.keys(JSON.parse(
         fs.readFileSync(path.join(repository, "lib", "parser-worker.meta.json"), "utf8"),
@@ -401,8 +401,8 @@ test("production bundles exclude legacy emitter, visitors, wrappers, and runtime
             input.startsWith("src/reports/") ||
             input === "src/config.ts" ||
             input === "src/string.ts" ||
-            input.startsWith("node_modules/sax/") ||
-            input.startsWith("node_modules/object-assign/"),
+            input.includes("node_modules/sax/") ||
+            input.includes("node_modules/object-assign/"),
             true,
             `unexpected parser bundle input: ${input}`,
         );

@@ -781,7 +781,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (!ts || ts.version !== options.expectedTypeScriptVersion || !ts.factory || typeof ts.createPrinter !== "function") {
         throw new HardenedSemanticError("HARDENED_TYPESCRIPT_VERSION", "structural emitter requires the exact configured modern TypeScript compiler API");
     }
-    const imports = program.imports.map((item) => importNode(item, ts));
+    const imports = program.imports.filter((item) => !item.compileTimeNamespace).map((item) => importNode(item, ts));
     if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
     if (programUsesRuntimeType(program) || program.declaration.implementsTypes.length > 0) imports.push(runtimeTypeImport(ts));
     if (programHasKind(program, "coercion")) imports.push(coercionRuntimeImport(ts));

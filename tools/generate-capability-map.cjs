@@ -15,11 +15,13 @@ function sha256(bytes) {
 }
 
 function readJson(file) {
-    const bytes = fs.readFileSync(file);
-    const text = bytes.toString("utf8");
-    if (Buffer.from(text, "utf8").compare(bytes) !== 0) {
+    const diskBytes = fs.readFileSync(file);
+    const diskText = diskBytes.toString("utf8");
+    if (Buffer.from(diskText, "utf8").compare(diskBytes) !== 0) {
         throw new Error(`${file} is not canonical UTF-8`);
     }
+    const text = diskText.replace(/\r\n?/g, "\n");
+    const bytes = Buffer.from(text, "utf8");
     return { bytes, value: JSON.parse(text) };
 }
 

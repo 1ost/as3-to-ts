@@ -17,7 +17,7 @@ import { CliError } from "./errors";
 
 const MAX_AUTHORITY_BYTES = 64 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
-const COMPILED_AUTHORITY_LOCK_SHA256 = "e64a5446511f0b0f773decc8d83282045d745a350770651a5f087ac516178ebd";
+const COMPILED_AUTHORITY_LOCK_SHA256 = "db7a64a6d4f9951ecec4dadf122f7d102a7b7b02dff0950f525c0eef2bb7cb58";
 const COMPILED_LOCAL_TYPE_MAP_SHA256 = "1aab9ad6ba12187853af3668719e539108b0677d37c8de18649529a48214159f";
 const COMPILED_LOCAL_TYPE_COUNT = 2923;
 const COMPILED_DEPENDENCY_GRAPH_RAW_SHA256 = "11604f7e274113e26d14a4426364e278526efa8001e27d8dfd5a0e54b4caa184";
@@ -33,7 +33,7 @@ const COMPILED_AUTHORITY_LOCK = Object.freeze({
     upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
     typeScriptVersion: "4.9.5",
     sourceCensusSha256: "2144b14090e51a1c0525ec3a35bfb8e532c6a19bb7ab355428ce70b4db7bde90",
-    targetCapabilitiesSha256: "c364d4a0fce5df16033980a3eba4e7a72d658993eef0f3675ea9771c9eba86d2",
+    targetCapabilitiesSha256: "109405663cc7ee936008d29732026fc82a06460aff1e9f341cd761e6d12b5b54",
     capabilityMappingSha256: "cde1bd197ce4c67e3613f9ca8ee1e7eb96aa702744fe8b222c754fe1d0d13c8a",
     mappedTypeCount: 12,
     mappedMemberCount: 73,
@@ -91,7 +91,7 @@ function readRegularUtf8(fileArgument: string, label: string): string {
         if (Buffer.from(content, "utf8").compare(bytes.subarray(0, offset)) !== 0) {
             throw new CliError(`${label} must be exact UTF-8`, 3);
         }
-        return content;
+        return content.replace(/\r\n?/g, "\n");
     } finally {
         closeSync(descriptor);
     }

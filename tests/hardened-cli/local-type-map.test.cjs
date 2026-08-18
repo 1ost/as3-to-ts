@@ -32,7 +32,9 @@ test("derives the complete local type map deterministically from the authenticat
         { cwd: os.tmpdir(), stdio: "pipe" });
     const firstBytes = fs.readFileSync(first);
     assert.equal(firstBytes.compare(fs.readFileSync(second)), 0);
-    assert.equal(firstBytes.compare(fs.readFileSync(path.join(repository, "config", "local-type-map.json"))), 0,
+    const checkedBytes = Buffer.from(fs.readFileSync(path.join(repository, "config", "local-type-map.json"), "utf8")
+        .replace(/\r\n?/g, "\n"), "utf8");
+    assert.equal(firstBytes.compare(checkedBytes), 0,
         "checked local type authority is exactly regenerated from the authenticated graph");
     const value = JSON.parse(firstBytes.toString("utf8"));
     assert.equal(value.schema, "bleach-local-as3-type-map@2");

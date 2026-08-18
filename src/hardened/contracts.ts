@@ -73,6 +73,16 @@ export interface LoadedCapabilityAuthority {
         targetKind: "class";
         targetSignature: string;
     } };
+    intrinsicMembersByKey: { [memberKey: string]: {
+        sourceQName: string;
+        name: string;
+        access: "call" | "read" | "write";
+        minArgs: number;
+        maxArgs: number;
+        parameterTypes: string[];
+        returnType: string;
+        sourceSignature: string;
+    } };
 }
 
 export interface SemanticIdentity {

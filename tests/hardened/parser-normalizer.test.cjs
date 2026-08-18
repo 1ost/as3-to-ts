@@ -176,7 +176,6 @@ try {
         "    import flash.display.Sprite;",
         "    import flash.events.Event;",
         "    import flash.utils.Dictionary;",
-        "    use namespace ResourcesSpace;",
         "    public class Demo extends Sprite {",
         "        private const label:String = \"ok\";",
         "        private var status:String = \"old\";",
@@ -194,7 +193,6 @@ try {
         "        public function optional(enabled:Boolean = true,index:int = -1):void { }",
         "        public function collect(prefix:String,...values):void { }",
         "        public function labelled():void { outer: while (true) { break outer; } }",
-        "        ResourcesSpace function namespaced():void { status = \"namespace\"; }",
         "        public function enumerate():void { var values:Object = {\"a\":1}; for (var key:String in values) { if (key === \"done\") { continue; } } }",
         "        public function closures():void { var offset:Number = 1; var handler:Function = function(value:Number):Number { return value + offset; }; var result:Number = handler(2); }",
         "        public function dictionaries():void { var dictionary:Dictionary = new Dictionary(true); var key:Object = {\"id\":1}; dictionary[key] = \"value\"; var removed:Boolean = delete dictionary[key]; }",
@@ -269,7 +267,7 @@ try {
         ["flash.display.Sprite", "flash.events.Event", "flash.utils.Dictionary"]);
     assert.equal(semantic.declaration.name, "Demo");
     assert.deepEqual(semantic.declaration.members.map((member) => member.kind),
-        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
+        ["field", "field", "field", "field", "getter", "setter", "constructor", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method", "method"]);
     assert.equal(semantic.declaration.members[0].name, "label");
     assert.equal(semantic.declaration.members[0].readonly, true);
     assert.equal(semantic.declaration.members[1].name, "status");
@@ -337,37 +335,43 @@ try {
     assert.equal(objectInitializer.kind, "object");
     assert.deepEqual(objectInitializer.properties.map(property => property.name), ["alpha", "label"]);
     assert.equal(semantic.declaration.members[13].parameters[0].defaultValue.value, true);
-    assert.equal(semantic.declaration.members[13].parameters[1].defaultValue.kind, "unary");
-    assert.equal(semantic.declaration.members[13].parameters[1].defaultValue.operator, "-");
+    assert.equal(semantic.declaration.members[13].parameters[1].defaultValue.kind, "coercion");
+    assert.equal(semantic.declaration.members[13].parameters[1].defaultValue.argument.kind, "unary");
+    assert.equal(semantic.declaration.members[13].parameters[1].defaultValue.argument.operator, "-");
     assert.equal(semantic.declaration.members[14].parameters[1].rest, true);
     assert.equal(semantic.declaration.members[14].parameters[1].type.sourceName, "*");
     assert.equal(semantic.declaration.members[15].body[0].kind, "label");
     assert.equal(semantic.declaration.members[15].body[0].statement.kind, "while");
     assert.ok(normalized.nodes.some(node => node.kind === "LAMBDA"), "real parser preserves anonymous functions");
-    const closureMethod = semantic.declaration.members[18];
+    const closureMethod = semantic.declaration.members[17];
     assert.equal(closureMethod.name, "closures");
     assert.equal(closureMethod.body[1].declarations[0].initializer.kind, "lambda");
     assert.equal(closureMethod.body[2].declarations[0].initializer.kind, "call");
-    const dictionaryMethod = semantic.declaration.members[19];
+    const dictionaryMethod = semantic.declaration.members[18];
     assert.equal(dictionaryMethod.name, "dictionaries");
     assert.equal(dictionaryMethod.body[2].expression.target.accessKind, "dictionary");
     assert.equal(dictionaryMethod.body[3].declarations[0].initializer.kind, "delete");
     assert.ok(normalized.nodes.some(node => node.kind === "DELETE"), "real parser preserves Dictionary delete");
-    const shortVectorMethod = semantic.declaration.members[20];
+    const shortVectorMethod = semantic.declaration.members[19];
     assert.equal(shortVectorMethod.name, "shortVectors");
     assert.equal(shortVectorMethod.body[0].declarations[0].initializer.kind, "vectorConversion");
     assert.ok(normalized.nodes.some(node => node.kind === "SHORT_VECTOR"),
         "real parser preserves short Vector literals");
     assert.equal(semantic.declaration.members[15].body[0].statement.statements[0].label, "outer");
-    assert.equal(semantic.declaration.members[16].name, "namespaced");
-    assert.equal(semantic.declaration.members[16].namespaceName, "ResourcesSpace");
-    assert.deepEqual(semantic.declaration.members[16].modifiers, []);
-    assert.equal(semantic.declaration.members[17].name, "enumerate");
-    assert.equal(semantic.declaration.members[17].body[1].kind, "forIn");
-    assert.equal(semantic.declaration.members[17].body[1].declaresTarget, true);
-    assert.equal(semantic.declaration.members[17].body[1].targetType.sourceName, "String");
+    assert.equal(semantic.declaration.members[16].name, "enumerate");
+    assert.equal(semantic.declaration.members[16].body[1].kind, "forIn");
+    assert.equal(semantic.declaration.members[16].body[1].declaresTarget, true);
+    assert.equal(semantic.declaration.members[16].body[1].targetType.sourceName, "String");
     assert.ok(normalized.nodes.some(node => node.kind === "FORIN"));
-    assert.ok(normalized.nodes.some(node => node.kind === "USE" && node.text === "ResourcesSpace"));
+
+    const forgedNamespaceSource = "package p { use namespace ResourcesSpace; public class C { ResourcesSpace function hidden():void {} } }";
+    const forgedNamespaceTree = built.parse("fixtures/ForgedNamespace.as", forgedNamespaceSource);
+    const forgedNamespaceNormalized = built.normalizer.normalizeParserAst(
+        forgedNamespaceTree, forgedNamespaceSource, sha256,
+    );
+    assert.throws(() => built.adapter.adaptNormalizedParserAst(
+        forgedNamespaceNormalized, authority(built.ledger), forgedNamespaceSource, sha256,
+    ), error => error && error.code === "HARDENED_NAMESPACE_AUTHORITY");
 
     const packageFunctionSource = "package p { public function helper():void {} }";
     const packageFunctionTree = built.parse("fixtures/PackageFunction.as", packageFunctionSource);
