@@ -88,6 +88,7 @@ interface AdapterContext {
     labels: Array<{ name: string; continuable: boolean }>;
     namespaceNames: { [name: string]: true };
     lambdaDepth: number;
+    currentCallable: MethodHeader | null;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -1786,8 +1787,30 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children.length !== 2 || node.children[1]!.kind !== "LITERAL") {
             fail("HARDENED_MEMBER_SHAPE", "member expression has the wrong normalized shape", node);
         }
-        const target = parseExpression(node.children[0]!, context, false);
         const name = validateIdentifier(requiredText(node.children[1]!, "member name"), node.children[1]!);
+        let target: SemanticExpression;
+        let superOwnerQName: string | null = null;
+        if (node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "super") {
+            const callable = context.currentCallable;
+            if (callable === null || callable.modifiers.indexOf("static") >= 0 || context.lambdaDepth > 0
+                || context.baseLocalQName === null) {
+                fail("HARDENED_SUPER_CONTEXT",
+                    "super member access requires a non-static callable with one authenticated local base", node.children[0]!);
+            }
+            const inherited = localInheritedMember(context, name, "method", null, node);
+            if (inherited.member === null || inherited.ownerQName === null) {
+                fail("HARDENED_SUPER_MEMBER", "super method lacks one exact inherited local declaration", node);
+            }
+            assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
+            if (valuePosition) {
+                fail("HARDENED_LOCAL_METHOD_CLOSURE",
+                    "super method closures remain held until their stable identity is proven", node);
+            }
+            target = Object.assign(identity(node.children[0]!), { kind: "super" as "super" });
+            superOwnerQName = inherited.ownerQName;
+        } else {
+            target = parseExpression(node.children[0]!, context, false);
+        }
         if (target.kind === "this" && context.methods[name] && valuePosition) {
             if (!allowMethodClosure) {
                 fail("HARDENED_METHOD_CLOSURE_INITIALIZER", "method closures in field initializers are not admitted before per-instance binding", node);
@@ -1798,9 +1821,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
         }
-        let capabilitySource: string | null = null;
+        let capabilitySource: string | null = superOwnerQName;
         let targetNullable = false;
-        if (target.kind === "this") {
+        if (target.kind === "super") {
+            // The exact local inherited method was resolved above before the
+            // otherwise-context-free SuperExpression entered semantic IR.
+        } else if (target.kind === "this") {
             if (context.methods[name] && (context.methods[name].constructor
                 || context.methods[name].modifiers.indexOf("static") >= 0)) {
                 fail("HARDENED_METHOD_INSTANCE_SCOPE", "constructor or static method cannot be resolved through this", node);
@@ -1946,6 +1972,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else if (args.length !== 0) {
                 fail("HARDENED_SUPER_ARITY", "Flash base constructor arguments remain outside the typed bridge subset", node);
             }
+        } else if (callee.kind === "member" && callee.target.kind === "super") {
+            if (callee.capabilitySource === null) {
+                fail("HARDENED_SUPER_MEMBER", "super method call lacks authenticated owner identity", node);
+            }
+            const inherited = localInheritedMember(context, callee.name, "method", null, node);
+            if (inherited.member === null || inherited.ownerQName !== callee.capabilitySource) {
+                fail("HARDENED_SUPER_MEMBER", "super method call differs from its inherited declaration", node);
+            }
+            assertInheritedVisibility(inherited.member, inherited.ownerQName!, context, node);
+            assertLocalMethodCall(inherited.member, args, node.children[1]!.children, context, node);
+            resultType = authoritySemanticType(inherited.member.returnType!, context, node);
         } else if (callee.kind === "identifier" && context.locals[callee.name]?.lambdaSignature) {
             const signature = context.locals[callee.name]!.lambdaSignature!;
             calleeNullable = context.locals[callee.name]!.type.nullable;
@@ -2841,6 +2878,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         localMemberAuthority, resolveCurrentLocal, fields: Object.create(null), methods: Object.create(null),
         accessors: Object.create(null), parameters: Object.create(null), locals: Object.create(null),
         loopDepth: 0, breakableDepth: 0, labels: [], namespaceNames: Object.create(null), lambdaDepth: 0,
+        currentCallable: null,
     };
     const type = parseType(oneType(declarator), context, false);
     const init = one(declarator, "INIT")!;
@@ -3004,6 +3042,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         labels: [],
         namespaceNames,
         lambdaDepth: 0,
+        currentCallable: null,
     };
     if (classNode.kind === "INTERFACE") {
         const modifiers = parseModifiers(classNode, true);
@@ -3195,13 +3234,20 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 : placeholder.methods[callableName]!;
             const oldParameters = placeholder.parameters;
             const oldLocals = placeholder.locals;
+            const oldCallable = placeholder.currentCallable;
             placeholder.parameters = Object.create(null);
             placeholder.locals = Object.create(null);
+            placeholder.currentCallable = header;
             header.parameters.forEach((parameter) => { placeholder.parameters[parameter.name] = parameter; });
             predeclareLocals(header.block, placeholder);
-            const body = parseBlock(header.block, placeholder, header.constructor, extendsType !== null, header.returnType);
-            placeholder.parameters = oldParameters;
-            placeholder.locals = oldLocals;
+            let body: SemanticStatement[];
+            try {
+                body = parseBlock(header.block, placeholder, header.constructor, extendsType !== null, header.returnType);
+            } finally {
+                placeholder.parameters = oldParameters;
+                placeholder.locals = oldLocals;
+                placeholder.currentCallable = oldCallable;
+            }
             if (header.constructor) {
                 const count = body.filter(superCall).length;
                 if (extendsType !== null && (count !== 1 || !superCall(body[0]!))) {

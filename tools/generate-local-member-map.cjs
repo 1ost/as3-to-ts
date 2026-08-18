@@ -77,14 +77,21 @@ if (!sourceCensus || sourceCensus.schema !== "swf-capability-census@1"
     throw new Error("source capability census must be the exact canonical v1 authority");
 }
 const flashDefinitions = new Set();
+const flashApis = new Set();
 for (const [index, api] of sourceCensus.as3SourceCapabilities.apis.entries()) {
     if (!api || typeof api !== "object" || typeof api.qname !== "string"
         || !/^flash(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$/.test(api.qname)
         || !Array.isArray(api.roles) || api.roles.some(role => typeof role !== "string")
-        || flashDefinitions.has(api.qname)) {
+        || new Set(api.roles).size !== api.roles.length || flashApis.has(api.qname)) {
         throw new Error(`source capability API ${index} has an invalid or duplicate definition`);
     }
-    flashDefinitions.add(api.qname);
+    flashApis.add(api.qname);
+    // Wildcard-resolution is the census-owned lexical authority. Package
+    // functions are runtime values, never declaration types, even though the
+    // census tracks their wildcard imports for call-site analysis.
+    if (api.roles.includes("wildcard-resolution") && !api.roles.includes("package-function")) {
+        flashDefinitions.add(api.qname);
+    }
 }
 
 function readSource(entry) {

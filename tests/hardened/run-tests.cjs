@@ -793,6 +793,24 @@ function buildLocalBaseTree(options = {}) {
     if (options.withPackageSymbols || options.withNamespace) {
         members.push(method("packageNamespaced", [], "void", [n("RETURN")], ["InternalSpace"]));
     }
+    if (options.superMethodCall || options.badSuperMethodCall || options.staticSuperMethodCall
+        || options.lambdaSuperMethodCall) {
+        const superRun = () => call(dot(n("IDENTIFIER", "super"), "run"), [
+            n("NEW", null, [call(vectorType(options.badSuperMethodCall ? "uint" : "int"), [])]),
+        ]);
+        const body = options.lambdaSuperMethodCall ? [
+            localDeclaration("VAR_LIST", "callback", "Function", lambda([], "void", [superRun(), n("RETURN")])),
+            n("RETURN"),
+        ] : [superRun(), n("RETURN")];
+        members.push(method("invokeSuperMethod", [], "void", body,
+            options.staticSuperMethodCall ? ["public", "static"] : ["public"]));
+    }
+    if (options.superMethodField) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "superMethod"), type("Function"),
+            n("INIT", null, [dot(n("IDENTIFIER", "super"), "run")]),
+        ])]));
+    }
     if (options.localNamespaceOverride) {
         members.push(method("namespacedRun", [], "void", [n("RETURN")], ["override", "InternalSpace"]));
     }
@@ -1148,6 +1166,18 @@ function main() {
         /this\.run\(new __as3Vector<number>\(__as3VectorPolicies\.int\)\);/);
     assertErrorCode(() => adaptLocal(api, authority, { badInheritedCall: true }),
         "HARDENED_LOCAL_CALL_TYPE");
+    const superMethodOutput = api.emitSemanticProgram(adaptLocal(api, authority, { superMethodCall: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(superMethodOutput.code,
+        /super\.run\(new __as3Vector<number>\(__as3VectorPolicies\.int\)\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { badSuperMethodCall: true }),
+        "HARDENED_LOCAL_CALL_TYPE");
+    assertErrorCode(() => adaptLocal(api, authority, { staticSuperMethodCall: true }),
+        "HARDENED_SUPER_CONTEXT");
+    assertErrorCode(() => adaptLocal(api, authority, { lambdaSuperMethodCall: true }),
+        "HARDENED_SUPER_CONTEXT");
+    assertErrorCode(() => adaptLocal(api, authority, { superMethodField: true }),
+        "HARDENED_SUPER_CONTEXT");
     const inheritedMembersOutput = api.emitSemanticProgram(adaptLocal(api, authority, { inheritedMembers: true }),
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(inheritedMembersOutput.code, /this\.count = __as3Int\(1\);/);

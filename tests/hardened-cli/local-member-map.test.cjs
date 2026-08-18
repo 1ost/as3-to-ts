@@ -116,6 +116,42 @@ test("local member map is deterministic and resolves authenticated inheritance s
         const ambiguous = JSON.parse(fs.readFileSync(ambiguousOutput, "utf8"));
         assert.equal(ambiguous.entries.find(item => item.qname === "p.Base").holdCode,
             "LOCAL_MEMBER_TYPE_RESOLUTION");
+
+        const nonTypeSource = baseSource.replace("import flash.geom.*;",
+            "import flash.geom.*; import flash.utils.*;").replace(
+            "public var bounds:Rectangle;", "public var bounds:Rectangle; public var bad:getDefinitionByName;");
+        fs.writeFileSync(path.join(root, ...sources[0][0].split("/")), nonTypeSource, "utf8");
+        const nonTypeMap = JSON.parse(JSON.stringify(map));
+        nonTypeMap.entries.find(item => item.qname === "p.Base").sourceContentSha256 = sha256(nonTypeSource);
+        fs.writeFileSync(mapPath, `${canonical(nonTypeMap)}\n`, "utf8");
+        const packageFunctionCensus = {
+            as3SourceCapabilities: { apis: [
+                { qname: "flash.geom.Rectangle", roles: ["wildcard-resolution"] },
+                { qname: "flash.utils.getDefinitionByName", roles: ["package-function", "wildcard-resolution"] },
+            ] },
+            schema: "swf-capability-census@1",
+        };
+        const packageFunctionText = `${canonical(packageFunctionCensus)}\n`;
+        fs.writeFileSync(censusPath, packageFunctionText, "utf8");
+        const packageFunctionOutput = path.join(root, "members-package-function.json");
+        childProcess.execFileSync(process.execPath, [GENERATOR, mapPath, packageFunctionOutput, root, WORKER,
+            censusPath, sha256(packageFunctionText)], { cwd: ROOT, stdio: "pipe", timeout: 15000 });
+        assert.equal(JSON.parse(fs.readFileSync(packageFunctionOutput, "utf8")).entries
+            .find(item => item.qname === "p.Base").holdCode, "LOCAL_MEMBER_TYPE_RESOLUTION");
+
+        fs.writeFileSync(path.join(root, ...sources[0][0].split("/")), baseSource, "utf8");
+        fs.writeFileSync(mapPath, `${canonical(map)}\n`, "utf8");
+        const missingWildcardRoleCensus = {
+            as3SourceCapabilities: { apis: [{ qname: "flash.geom.Rectangle", roles: ["constructor"] }] },
+            schema: "swf-capability-census@1",
+        };
+        const missingWildcardRoleText = `${canonical(missingWildcardRoleCensus)}\n`;
+        fs.writeFileSync(censusPath, missingWildcardRoleText, "utf8");
+        const missingWildcardRoleOutput = path.join(root, "members-missing-wildcard-role.json");
+        childProcess.execFileSync(process.execPath, [GENERATOR, mapPath, missingWildcardRoleOutput, root, WORKER,
+            censusPath, sha256(missingWildcardRoleText)], { cwd: ROOT, stdio: "pipe", timeout: 15000 });
+        assert.equal(JSON.parse(fs.readFileSync(missingWildcardRoleOutput, "utf8")).entries
+            .find(item => item.qname === "p.Base").holdCode, "LOCAL_MEMBER_TYPE_RESOLUTION");
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
