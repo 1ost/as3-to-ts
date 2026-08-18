@@ -1019,7 +1019,8 @@ function localMemberAuthority(api, localTypes, mutate = null, options = {}) {
             packageInitializer: entry.qname.endsWith(".InternalSpace") ? null
                 : { kind: "new", targetQName: "lobby.base.Base", argumentCount: 0 },
         } : {
-            baseQNames: entry.qname.endsWith(".Demo") ? [entry.qname.replace(/\.Demo$/, ".Base")]
+            baseQNames: entry.qname.endsWith(".Demo")
+                ? [options.samePackage ? entry.qname.replace(/\.Demo$/, ".Base") : "lobby.base.Base"]
                 : entry.qname.endsWith(".Worker") && options.localInstanceFlashBase ? ["flash.display.Sprite"]
                     : entry.qname.endsWith(".Worker") && options.multipleLocalBases
                         ? ["lobby.base.Base", "flash.display.Sprite"] : [],

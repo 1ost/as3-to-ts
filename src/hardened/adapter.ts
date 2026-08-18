@@ -2051,6 +2051,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (receiverQName !== null) {
                     const lookup = localInstanceNamedMembers(context, receiverQName, name, node);
                     if (lookup.members.length === 0 || lookup.ownerQName === null) {
+                        if (lookup.terminalFlashQNames.length === 0) {
+                            fail("HARDENED_LOCAL_INSTANCE_MEMBER",
+                                "local receiver member lacks an authenticated declaration", node);
+                        }
                         const mapping = terminalFlashMemberMapping(context, lookup.terminalFlashQNames,
                             "call", name, node);
                         if (mapping === null || mapping.sourceMember === null) {
