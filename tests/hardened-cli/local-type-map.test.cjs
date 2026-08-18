@@ -41,7 +41,7 @@ test("derives the complete local type map deterministically from the authenticat
     assert.equal(value.entryCount, 2923);
     assert.equal(value.entries.length, 2923);
     assert.equal(value.dependencyGraphSemanticSha256,
-        "3d0d7e0717708e2931bb9cf81de913aa21f5fe4b24babb2703edd9abdcb8f593");
+        "78957409f5bf7ec6894ad7c73af7bd3a2dcccfce930090f980f1e2d1d1db806f");
     assert.match(value.dependencyGraphRawSha256, /^[0-9a-f]{64}$/);
     assert.match(value.sourceManifestSha256, /^[0-9a-f]{64}$/);
     const identities = value.entries.map(entry => `${entry.module}\u0000${entry.qname}`);

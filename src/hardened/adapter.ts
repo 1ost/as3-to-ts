@@ -343,6 +343,112 @@ function memberMapping(context: AdapterContext, sourceQName: string, access: str
     return matches.length === 1 ? matches[0]! : null;
 }
 
+interface AuthenticatedSourceMemberSignature {
+    parameterTypes: string[];
+    returnType: string;
+}
+
+function splitSignatureParameters(text: string, node: TreeNode): string[] {
+    if (text.trim() === "") return [];
+    const result: string[] = [];
+    let start = 0;
+    let depth = 0;
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index]!;
+        if ("(<[{".indexOf(char) >= 0) depth += 1;
+        else if (")>]}".indexOf(char) >= 0) depth -= 1;
+        else if (char === "," && depth === 0) {
+            result.push(text.slice(start, index).trim());
+            start = index + 1;
+        }
+        if (depth < 0) fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "source member parameter syntax is unbalanced", node);
+    }
+    if (depth !== 0) fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "source member parameter syntax is unbalanced", node);
+    result.push(text.slice(start).trim());
+    return result;
+}
+
+function authenticatedSourceMemberSignature(mapping: CapabilityMapping, node: TreeNode): AuthenticatedSourceMemberSignature {
+    if (mapping.sourceMember === null) {
+        fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "member mapping lacks its source signature", node);
+    }
+    const member = mapping.sourceMember!;
+    const escapedName = member.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const callable = new RegExp(`^public (?:native )?function (?:(?:get|set) )?${escapedName}\\((.*)\\)\\s*:\\s*([^;\\s]+)\\s*;?$`)
+        .exec(member.signature);
+    const constructor = new RegExp(`^public function ${escapedName}\\((.*)\\)$`).exec(member.signature);
+    const variable = new RegExp(`^public (?:static )?(?:const|var) ${escapedName}:([^;\\s]+);$`).exec(member.signature);
+    if (variable) {
+        const type = variable[1]!;
+        return { parameterTypes: member.access === "write" ? [type] : [], returnType: type };
+    }
+    const match = callable || constructor;
+    if (!match) {
+        fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "source member signature is outside the closed AS3 callable/property grammar", node);
+    }
+    const parameters = splitSignatureParameters(match![1]!, node).map(parameter => {
+        const parameterMatch = /^(?:\.\.\.)?[A-Za-z_$][A-Za-z0-9_$]*\s*:\s*([^=\s]+)(?:\s*=.*)?$/.exec(parameter);
+        if (!parameterMatch) {
+            fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "source member parameter lacks one exact source type", node);
+        }
+        return parameterMatch![1]!;
+    });
+    const returnType = constructor ? mapping.sourceQName : callable![2]!;
+    if (parameters.length !== member.maxArgs || member.minArgs > parameters.length) {
+        fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "source member signature and authenticated arity disagree", node);
+    }
+    return { parameterTypes: parameters, returnType };
+}
+
+function mappedFlashQNameForType(type: SemanticType, context: AdapterContext): string | null {
+    const imported = context.importsByLocal[type.sourceName];
+    return imported?.authorityKind === "flash" ? imported.sourceQualifiedName : null;
+}
+
+function mappedMemberType(mapping: CapabilityMapping, access: "read" | "write",
+    context: AdapterContext, node: TreeNode): SemanticType {
+    const signature = authenticatedSourceMemberSignature(mapping, node);
+    const typeName = access === "write" ? signature.parameterTypes[0] : signature.returnType;
+    if (!typeName) {
+        fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "mapped property lacks its authenticated source value type", node);
+    }
+    return authoritySemanticType(typeName!, context, node);
+}
+
+function adaptMappedCall(mapping: CapabilityMapping, argumentsList: SemanticExpression[], argumentNodes: TreeNode[],
+    context: AdapterContext, node: TreeNode): SemanticType {
+    if (mapping.sourceMember === null || argumentsList.length < mapping.sourceMember.minArgs
+        || argumentsList.length > mapping.sourceMember.maxArgs) {
+        fail("HARDENED_CAPABILITY_CALL_ARITY", "Flash bridge call does not match its double-pinned source arity", node);
+    }
+    const signature = authenticatedSourceMemberSignature(mapping, node);
+    argumentsList.forEach((argument, index) => {
+        const parameterType = signature.parameterTypes[index];
+        if (!parameterType) {
+            fail("HARDENED_CAPABILITY_CALL_TYPE", `Flash bridge argument ${index} lacks an authenticated source type`,
+                argumentNodes[index] || node);
+        }
+        try {
+            const expected = authoritySemanticType(parameterType!, context, node);
+            const valueType = assignmentType(argument, context, argumentNodes[index] || node);
+            const adapted = adaptAssignmentValue(expected, argument, context, argumentNodes[index] || node);
+            argumentsList[index] = expected.nullable && valueType.nullable
+                && !["Object", "*"].includes(expected.sourceName)
+                ? Object.assign(identity(argumentNodes[index] || node), {
+                    kind: "nonNull" as "nonNull", expression: adapted,
+                    resultType: withNullability(expected, false),
+                }) : adapted;
+        } catch (error) {
+            if (error instanceof HardenedSemanticError) {
+                fail("HARDENED_CAPABILITY_CALL_TYPE", `Flash bridge argument ${index} does not match its authenticated source type`,
+                    argumentNodes[index] || node);
+            }
+            throw error;
+        }
+    });
+    return authoritySemanticType(signature.returnType, context, node);
+}
+
 function intrinsicMember(context: AdapterContext, sourceQName: string, access: "call" | "read" | "write",
     name: string): LoadedCapabilityAuthority["intrinsicMembersByKey"][string] | null {
     return context.intrinsicMembersByKey[`${sourceQName}\u0000${access}\u0000${name}`] || null;
@@ -1220,7 +1326,16 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
                     context, node);
             }
         }
-        const receiverQName = localQNameForExpression(expression.target, context, node);
+        const targetType = assignmentType(expression.target, context, node);
+        const flashQName = mappedFlashQNameForType(targetType, context);
+        if (flashQName !== null && expression.capabilitySource === flashQName) {
+            const mapping = memberMapping(context, flashQName, "read", expression.name, node);
+            if (mapping === null) {
+                fail("HARDENED_MEMBER_UNMAPPED", "Flash property read lacks an exact double-pinned mapping", node);
+            }
+            return mappedMemberType(mapping!, "read", context, node);
+        }
+        const receiverQName = localQNameForType(targetType, context);
         if (receiverQName !== null && expression.capabilitySource !== null) {
             const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node);
             const readable = lookup.members.filter(member => member.kind === "getter" || member.kind === "field");
@@ -1236,7 +1351,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             const member = intrinsicMember(context, expression.capabilitySource, "read", expression.name);
             if (member !== null) return authoritySemanticType(member.returnType, context, node);
         }
-        const ownerType = assignmentType(expression.target, context, node);
+        const ownerType = targetType;
         if (vectorElement(ownerType) !== null) {
             if (expression.name === "length") return semanticType(node, "uint", "number");
             if (expression.name === "fixed") return semanticType(node, "Boolean", "boolean");
@@ -1272,7 +1387,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "unary") {
         return expression.resultType;
     }
-    if (expression.kind === "parenthesized") {
+    if (expression.kind === "parenthesized" || expression.kind === "nonNull") {
         return expression.resultType;
     }
     if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index") {
@@ -1344,7 +1459,16 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
                     : member.parameters[0]!.type, context, node);
             }
         }
-        const receiverQName = localQNameForExpression(expression.target, context, node);
+        const targetType = assignmentType(expression.target, context, node);
+        const flashQName = mappedFlashQNameForType(targetType, context);
+        if (flashQName !== null && expression.capabilitySource === flashQName) {
+            const mapping = memberMapping(context, flashQName, "write", expression.name, node);
+            if (mapping === null) {
+                fail("HARDENED_MEMBER_UNMAPPED", "Flash property write lacks an exact double-pinned mapping", node);
+            }
+            return mappedMemberType(mapping!, "write", context, node);
+        }
+        const receiverQName = localQNameForType(targetType, context);
         if (receiverQName !== null && expression.capabilitySource !== null) {
             const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node);
             const writable = lookup.members.filter(member => member.kind === "setter"
@@ -1363,7 +1487,7 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
                 return authoritySemanticType(member.parameterTypes[0]!, context, node);
             }
         }
-        const ownerType = assignmentType(expression.target, context, node);
+        const ownerType = targetType;
         if (vectorElement(ownerType) !== null) {
             if (expression.name === "length") return semanticType(node, "uint", "number");
             if (expression.name === "fixed") return semanticType(node, "Boolean", "boolean");
@@ -1566,21 +1690,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (!imported || !typeMapping || typeMapping.sourceRoles.indexOf("constructor") < 0) {
                 fail("HARDENED_NEW_AUTHORITY", "constructor target lacks a double-pinned source and target constructor", nameNode);
             }
-            if (args.length !== 0) {
-                fail("HARDENED_NEW_ARGUMENT_TYPES",
-                    "imported constructor arguments remain held until every source parameter type is structurally mapped", call);
-            }
-            const matches = Object.keys(context.memberMappingsByKey)
-                .map((key) => context.memberMappingsByKey[key])
-                .filter((mapping): mapping is CapabilityMapping => mapping !== undefined)
-                .filter((mapping) => mapping.sourceQName === imported.sourceQualifiedName
-                    && mapping.sourceRoles.indexOf("constructor") >= 0
-                    && mapping.sourceMember !== null && mapping.sourceMember.name === name
-                    && mapping.targetMember !== null && mapping.targetMember.kind === "constructor"
-                    && args.length >= mapping.sourceMember.minArgs && args.length <= mapping.sourceMember.maxArgs);
-            if (matches.length !== 1) {
+            const mapping = memberMapping(context, imported.sourceQualifiedName, "call", name, call);
+            if (mapping === null || mapping.sourceRoles.indexOf("constructor") < 0
+                || mapping.targetMember === null || mapping.targetMember.kind !== "constructor"
+                || args.length < mapping.sourceMember!.minArgs || args.length > mapping.sourceMember!.maxArgs) {
                 fail("HARDENED_NEW_ARITY", "constructor arity lacks one exact double-pinned signature", call);
             }
+            adaptMappedCall(mapping!, args, call.children[1]!.children, context, call);
             sourceType = semanticType(nameNode, name, name);
         }
         return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
@@ -2132,7 +2248,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const targetType = assignmentType(target, context, node.children[0]!);
             targetNullable = targetType.nullable;
             const intrinsicSource = intrinsicSourceForType(targetType, context);
-            if (intrinsicSource !== null) {
+            const flashSource = mappedFlashQNameForType(targetType, context);
+            if (flashSource !== null) {
+                const accesses = valuePosition ? ["read"] : ["call", "write", "read"];
+                const mappings = accesses.map(access => memberMapping(context, flashSource, access, name, node))
+                    .filter((mapping): mapping is CapabilityMapping => mapping !== null);
+                if (mappings.length === 0) {
+                    fail("HARDENED_MEMBER_TARGET", "Flash receiver member lacks an exact bridge mapping", node);
+                }
+                capabilitySource = flashSource;
+            } else if (intrinsicSource !== null) {
                 if (intrinsicMember(context, intrinsicSource, "read", name) === null
                     && intrinsicMember(context, intrinsicSource, "write", name) === null
                     && intrinsicMember(context, intrinsicSource, "call", name) === null) {
@@ -2302,12 +2427,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 resultType = authoritySemanticType(method.returnType!, context, node);
             } else {
                 const mapping = memberMapping(context, callee.capabilitySource, "call", callee.name, node);
-                if (mapping === null || mapping.sourceMember === null
-                    || args.length < mapping.sourceMember.minArgs || args.length > mapping.sourceMember.maxArgs) {
-                    fail("HARDENED_CAPABILITY_CALL_ARITY", "Flash bridge call does not match the double-pinned source signature", node);
-                }
+                if (mapping === null) fail("HARDENED_CAPABILITY_CALL_ARITY",
+                    "Flash bridge call does not match the double-pinned source signature", node);
+                resultType = adaptMappedCall(mapping!, args, node.children[1]!.children, context, node);
                 capabilitySource = mapping.sourceQName;
-                capabilityMember = mapping.sourceMember.name;
+                capabilityMember = mapping.sourceMember!.name;
             }
         } else if (callee.kind === "member" && callee.target.kind === "identifier"
             && context.importsByLocal[callee.target.name]?.authorityKind === "local"
@@ -2335,18 +2459,27 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else if (methods.length === 0) {
                 const mapping = terminalFlashMemberMapping(context, lookup.terminalFlashQNames,
                     "call", callee.name, node);
-                if (mapping === null || mapping.sourceMember === null
-                    || mapping.sourceQName !== callee.capabilitySource
-                    || args.length < mapping.sourceMember.minArgs || args.length > mapping.sourceMember.maxArgs) {
+                if (mapping === null || mapping.sourceQName !== callee.capabilitySource) {
                     fail("HARDENED_CAPABILITY_CALL_ARITY",
                         "terminal Flash receiver call does not match its exact bridge signature", node);
                 }
+                resultType = adaptMappedCall(mapping!, args, node.children[1]!.children, context, node);
                 capabilitySource = mapping.sourceQName;
-                capabilityMember = mapping.sourceMember.name;
+                capabilityMember = mapping.sourceMember!.name;
             } else {
                 fail("HARDENED_LOCAL_INSTANCE_CALL",
                     "local receiver call requires one exact authenticated method", node);
             }
+        } else if (callee.kind === "member" && callee.capabilitySource !== null
+            && mappedFlashQNameForType(assignmentType(callee.target, context, rawCallee), context)
+                === callee.capabilitySource) {
+            const mapping = memberMapping(context, callee.capabilitySource, "call", callee.name, node);
+            if (mapping === null) {
+                fail("HARDENED_CAPABILITY_CALL_ARITY", "Flash receiver call lacks an exact bridge mapping", node);
+            }
+            resultType = adaptMappedCall(mapping!, args, node.children[1]!.children, context, node);
+            capabilitySource = mapping.sourceQName;
+            capabilityMember = mapping.sourceMember!.name;
         } else if (callee.kind === "member" && callee.capabilitySource !== null
             && intrinsicMember(context, callee.capabilitySource, "call", callee.name) !== null) {
             const member = intrinsicMember(context, callee.capabilitySource, "call", callee.name)!;

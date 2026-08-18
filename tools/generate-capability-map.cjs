@@ -71,6 +71,129 @@ function constructorArity(signature) {
     return { minArgs: optional < 0 ? parts.length : optional, maxArgs: parts.length };
 }
 
+function callableArity(signature) {
+    const match = /^\((.*)\) => .+$/.exec(signature);
+    if (!match) return null;
+    const text = match[1].trim();
+    if (text === "") return { minArgs: 0, maxArgs: 0 };
+    const parts = [];
+    let start = 0;
+    let depth = 0;
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        if ("([{<".includes(char)) depth += 1;
+        else if (")]}>".includes(char)) depth -= 1;
+        else if (char === "," && depth === 0) {
+            parts.push(text.slice(start, index).trim());
+            start = index + 1;
+        }
+        if (depth < 0) return null;
+    }
+    if (depth !== 0) return null;
+    parts.push(text.slice(start).trim());
+    if (parts.some(part => part === "" || part.startsWith("..."))) return null;
+    const optional = parts.findIndex(part => /^[A-Za-z_$][A-Za-z0-9_$]*\?\s*:/.test(part));
+    if (optional >= 0 && parts.slice(optional).some(part => !/^[A-Za-z_$][A-Za-z0-9_$]*\?\s*:/.test(part))) return null;
+    return { minArgs: optional < 0 ? parts.length : optional, maxArgs: parts.length };
+}
+
+function sourceArity(sourceUse, signature) {
+    if (sourceUse.access === "read") return { minArgs: 0, maxArgs: 0 };
+    if (sourceUse.access === "write") return { minArgs: 1, maxArgs: 1 };
+    return { minArgs: signature.minArgs, maxArgs: signature.maxArgs };
+}
+
+const HELD_BEHAVIORAL_MEMBERS = new Set(["getBounds", "getRect", "scrollRect"]);
+const GEOMETRY_QNAMES = new Set(["flash.geom.Point", "flash.geom.Rectangle"]);
+const HELD_MEMBER_QNAMES = new Set([
+    "flash.display.Bitmap",
+    "flash.display.BitmapData",
+    "flash.display.BitmapDataChannel",
+    "flash.display.PixelSnapping",
+]);
+
+function splitParameters(text) {
+    if (text.trim() === "") return [];
+    const result = [];
+    let start = 0;
+    let depth = 0;
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        if ("([{<".includes(char)) depth += 1;
+        else if (")]}>".includes(char)) depth -= 1;
+        else if (char === "," && depth === 0) {
+            result.push(text.slice(start, index).trim());
+            start = index + 1;
+        }
+        if (depth < 0) return null;
+    }
+    if (depth !== 0) return null;
+    result.push(text.slice(start).trim());
+    return result;
+}
+
+function canonicalSourceType(type) {
+    const local = type.split(".").pop();
+    return ({ Number: "number", Boolean: "boolean", String: "string" })[local] || local;
+}
+
+function targetTypeDescriptor(type) {
+    const parts = type.split("|").map(part => part.trim());
+    const withoutNullable = parts.filter(part => part !== "null");
+    if (withoutNullable.length !== 1 || parts.some(part => part === "")) return null;
+    return { type: withoutNullable[0].split(".").pop(), nullable: parts.includes("null") };
+}
+
+const NON_NULLABLE_SOURCE_TYPES = new Set(["number", "boolean", "int", "uint", "void"]);
+
+function exactSourceTargetType(sourceType, targetType) {
+    return targetType !== null && sourceType === targetType.type
+        && (!targetType.nullable || !NON_NULLABLE_SOURCE_TYPES.has(sourceType));
+}
+
+function sourceCallableTypes(signature) {
+    const match = /^public (?:native )?function (?:[A-Za-z_$][A-Za-z0-9_$]*|(?:get|set) [A-Za-z_$][A-Za-z0-9_$]*)\((.*)\)\s*:\s*([^;\s]+)\s*;?$/.exec(signature);
+    if (!match) return null;
+    const parts = splitParameters(match[1]);
+    if (!parts) return null;
+    const parameters = parts.map(part => {
+        const parameter = /^(?:\.\.\.)?[A-Za-z_$][A-Za-z0-9_$]*\s*:\s*([^=\s]+)(?:\s*=.*)?$/.exec(part);
+        return parameter ? canonicalSourceType(parameter[1]) : null;
+    });
+    if (parameters.some(type => type === null)) return null;
+    return { parameters, returnType: canonicalSourceType(match[2]) };
+}
+
+function targetCallableTypes(signature) {
+    const match = /^\((.*)\) => (.+)$/.exec(signature);
+    if (!match) return null;
+    const parts = splitParameters(match[1]);
+    if (!parts) return null;
+    const parameters = parts.map(part => {
+        const parameter = /^[A-Za-z_$][A-Za-z0-9_$]*\?*\s*:\s*(.+)$/.exec(part);
+        return parameter ? targetTypeDescriptor(parameter[1]) : null;
+    });
+    const returnType = targetTypeDescriptor(match[2]);
+    if (parameters.some(type => type === null) || returnType === null) return null;
+    return { parameters, returnType };
+}
+
+function exactCallableTypes(sourceSignature, targetSignature) {
+    const source = sourceCallableTypes(sourceSignature);
+    const target = targetCallableTypes(targetSignature);
+    return source !== null && target !== null && exactSourceTargetType(source.returnType, target.returnType)
+        && source.parameters.length === target.parameters.length
+        && source.parameters.every((type, index) => exactSourceTargetType(type, target.parameters[index]));
+}
+
+function sourcePropertyType(signature, access) {
+    const variable = /^public (?:static )?(?:const|var) [A-Za-z_$][A-Za-z0-9_$]*:([^;\s]+);$/.exec(signature);
+    if (variable) return canonicalSourceType(variable[1]);
+    const callable = sourceCallableTypes(signature);
+    if (!callable) return null;
+    return access === "write" ? callable.parameters[0] || null : callable.returnType;
+}
+
 function targetMemberFor(sourceUse, sourceSignature, obligation) {
     if (sourceUse.context === "constructor") {
         const constructors = Array.isArray(obligation.constructors) ? obligation.constructors : [];
@@ -85,12 +208,23 @@ function targetMemberFor(sourceUse, sourceSignature, obligation) {
     const scope = sourceUse.context === "event-constant" || sourceUse.context === "static-member"
         ? "static" : "instance";
     const admittedKinds = sourceUse.access === "call" ? new Set(["method"])
-        : sourceUse.access === "read" ? new Set(["get", "property"])
-        : sourceUse.access === "write" ? new Set(["property", "set"])
+        : sourceUse.access === "read" ? new Set(["get", "get+set", "property"])
+        : sourceUse.access === "write" ? new Set(["get+set", "property", "set"])
         : new Set();
     const matches = (obligation.members || []).filter(member => member.name === sourceUse.member
         && member.scope === scope && admittedKinds.has(member.kind) && !member.name.startsWith("_"));
-    return matches.length === 1 ? matches[0] : null;
+    if (matches.length !== 1) return null;
+    if (sourceUse.access === "call" && GEOMETRY_QNAMES.has(sourceUse.qname)) {
+        const targetArity = callableArity(matches[0].signature);
+        if (!targetArity || targetArity.minArgs !== sourceSignature.minArgs
+            || targetArity.maxArgs !== sourceSignature.maxArgs) return null;
+        if (!exactCallableTypes(sourceSignature.signature, matches[0].signature)) return null;
+    } else if (sourceUse.access !== "call" && GEOMETRY_QNAMES.has(sourceUse.qname)) {
+        const sourceType = sourcePropertyType(sourceSignature.signature, sourceUse.access);
+        if (sourceType === null || !exactSourceTargetType(sourceType,
+            targetTypeDescriptor(matches[0].signature))) return null;
+    }
+    return matches[0];
 }
 
 const source = readJson(path.resolve(sourcePath));
@@ -140,17 +274,19 @@ const memberKeys = new Set();
 for (const use of sourceCapabilities.memberUses) {
     if (use.classification !== "layaair-flash-api-bridge" || use.preserveNameAndSignature !== true
         || typeof use.qname !== "string" || !mappedTypes.has(use.qname)
-        || use.access !== "call" || !Array.isArray(use.signatures) || use.signatures.length === 0) continue;
+        || !["call", "read", "write"].includes(use.access)
+        || (use.access !== "call" && !GEOMETRY_QNAMES.has(use.qname))
+        || HELD_MEMBER_QNAMES.has(use.qname)
+        || HELD_BEHAVIORAL_MEMBERS.has(use.member)
+        || !Array.isArray(use.signatures) || use.signatures.length === 0) continue;
     const targetMatch = mappedTypes.get(use.qname);
-    const ordinaryTargetMember = use.context === "constructor"
-        ? null : targetMemberFor(use, null, targetMatch.obligation);
-    if (use.context !== "constructor" && !ordinaryTargetMember) continue;
     for (const signature of use.signatures) {
-        if (!signature || typeof signature.signature !== "string" || !Number.isInteger(signature.minArgs)
-            || !Number.isInteger(signature.maxArgs) || signature.minArgs < 0 || signature.maxArgs < signature.minArgs) {
-            throw new Error(`invalid source member signature for ${use.qname}.${use.member}`);
+        const arity = sourceArity(use, signature || {});
+        if (!signature || typeof signature.signature !== "string" || !Number.isInteger(arity.minArgs)
+            || !Number.isInteger(arity.maxArgs) || arity.minArgs < 0 || arity.maxArgs < arity.minArgs) {
+            continue;
         }
-        const targetMember = ordinaryTargetMember || targetMemberFor(use, signature, targetMatch.obligation);
+        const targetMember = targetMemberFor(use, { ...arity, signature: signature.signature }, targetMatch.obligation);
         if (!targetMember) continue;
         const key = [use.qname, use.access, use.member, signature.signature].join("\u0000");
         if (memberKeys.has(key)) continue;
@@ -161,8 +297,8 @@ for (const use of sourceCapabilities.memberUses) {
             sourceMember: {
                 name: use.member,
                 access: use.access,
-                minArgs: signature.minArgs,
-                maxArgs: signature.maxArgs,
+                minArgs: arity.minArgs,
+                maxArgs: arity.maxArgs,
                 signature: signature.signature,
             },
             targetCapabilityId: targetMatch.capabilityId,

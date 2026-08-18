@@ -325,6 +325,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "parenthesized") {
         return ts.factory.createParenthesizedExpression(expressionNode(expression.expression, ts));
     }
+    if (expression.kind === "nonNull") {
+        return ts.factory.createNonNullExpression(expressionNode(expression.expression, ts));
+    }
     if (expression.kind === "conditional") {
         return ts.factory.createConditionalExpression(
             expressionNode(expression.condition, ts),
@@ -535,7 +538,7 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.right);
         } else if (expression.kind === "unary") {
             inspectExpression(expression.operand);
-        } else if (expression.kind === "parenthesized") {
+        } else if (expression.kind === "parenthesized" || expression.kind === "nonNull") {
             inspectExpression(expression.expression);
         } else if (expression.kind === "conditional") {
             inspectExpression(expression.condition);
@@ -707,6 +710,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "binary") return visitExpression(expression.left) || visitExpression(expression.right);
         if (expression.kind === "unary") return visitExpression(expression.operand);
         if (expression.kind === "parenthesized") return visitExpression(expression.expression);
+        if (expression.kind === "nonNull") return visitExpression(expression.expression);
         if (expression.kind === "conditional") return visitExpression(expression.condition)
             || visitExpression(expression.whenTrue) || visitExpression(expression.whenFalse);
         if (expression.kind === "update") return visitExpression(expression.target);

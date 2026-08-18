@@ -340,6 +340,12 @@ export interface ParenthesizedExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
+export interface NonNullExpression extends SemanticIdentity {
+    kind: "nonNull";
+    expression: SemanticExpression;
+    resultType: SemanticType;
+}
+
 export interface ConditionalExpression extends SemanticIdentity {
     kind: "conditional";
     condition: SemanticExpression;
@@ -358,7 +364,7 @@ export interface UpdateExpression extends SemanticIdentity {
 
 export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
-    NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression |
+    NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |
     RuntimeTypeExpression | CoercionExpression;
 

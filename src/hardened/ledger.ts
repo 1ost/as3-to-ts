@@ -274,6 +274,135 @@ function parseMapping(raw: unknown): CapabilityMappingDocument {
     return { schema: "as3-source-to-laya-capability-map@1", mappings };
 }
 
+function splitSignatureParameters(text: string): string[] | null {
+    if (text.trim() === "") return [];
+    const result: string[] = [];
+    let start = 0;
+    let depth = 0;
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index]!;
+        if ("([{<".indexOf(char) >= 0) depth += 1;
+        else if (")]>}".indexOf(char) >= 0) depth -= 1;
+        else if (char === "," && depth === 0) {
+            result.push(text.slice(start, index).trim());
+            start = index + 1;
+        }
+        if (depth < 0) return null;
+    }
+    if (depth !== 0) return null;
+    result.push(text.slice(start).trim());
+    return result;
+}
+
+function canonicalSourceType(type: string): string {
+    const local = type.split(".").pop()!;
+    const primitives: { [name: string]: string } = { Number: "number", Boolean: "boolean", String: "string" };
+    return primitives[local] || local;
+}
+
+interface TargetTypeDescriptor {
+    type: string;
+    nullable: boolean;
+}
+
+function targetTypeDescriptor(type: string): TargetTypeDescriptor | null {
+    const parts = type.split("|").map(item => item.trim());
+    const withoutNullable = parts.filter(item => item !== "null");
+    return withoutNullable.length === 1 && !parts.some(item => item === "")
+        ? { type: withoutNullable[0]!.split(".").pop()!, nullable: parts.includes("null") }
+        : null;
+}
+
+const NON_NULLABLE_SOURCE_TYPES = new Set(["number", "boolean", "int", "uint", "void"]);
+const HELD_EXACT_MEMBER_QNAMES = new Set([
+    "flash.display.Bitmap",
+    "flash.display.BitmapData",
+    "flash.display.BitmapDataChannel",
+    "flash.display.PixelSnapping",
+]);
+
+function exactSourceTargetType(sourceType: string, targetType: TargetTypeDescriptor | null): boolean {
+    return targetType !== null && sourceType === targetType.type
+        && (!targetType.nullable || !NON_NULLABLE_SOURCE_TYPES.has(sourceType));
+}
+
+function sourceCallableTypes(signature: string): { parameters: string[]; returnType: string | null } | null {
+    const callable = /^public (?:native )?function (?:[A-Za-z_$][A-Za-z0-9_$]*|(?:get|set) [A-Za-z_$][A-Za-z0-9_$]*)\((.*)\)\s*:\s*([^;\s]+)\s*;?$/.exec(signature);
+    const constructor = /^public function [A-Za-z_$][A-Za-z0-9_$]*\((.*)\)$/.exec(signature);
+    const match = callable || constructor;
+    if (!match) return null;
+    const parts = splitSignatureParameters(match[1]!);
+    if (parts === null) return null;
+    const parameters = parts.map(part => {
+        const parameter = /^(?:\.\.\.)?[A-Za-z_$][A-Za-z0-9_$]*\s*:\s*([^=\s]+)(?:\s*=.*)?$/.exec(part);
+        return parameter ? canonicalSourceType(parameter[1]!) : "";
+    });
+    if (parameters.some(type => type === "")) return null;
+    return { parameters, returnType: callable ? canonicalSourceType(callable[2]!) : null };
+}
+
+function targetCallableTypes(signature: string): { parameters: TargetTypeDescriptor[]; returnType: TargetTypeDescriptor } | null {
+    const callable = /^\((.*)\) => (.+)$/.exec(signature);
+    const constructor = /^new \((.*)\): ([A-Za-z_$][A-Za-z0-9_$]*)$/.exec(signature);
+    const match = callable || constructor;
+    if (!match) return null;
+    const parts = splitSignatureParameters(match[1]!);
+    if (parts === null) return null;
+    const parameters = parts.map(part => {
+        const parameter = /^[A-Za-z_$][A-Za-z0-9_$]*\?*\s*:\s*(.+)$/.exec(part);
+        return parameter ? targetTypeDescriptor(parameter[1]!) : null;
+    });
+    const returnType = targetTypeDescriptor(match[2]!);
+    if (parameters.some(type => type === null) || returnType === null) return null;
+    return { parameters: parameters as TargetTypeDescriptor[], returnType };
+}
+
+function exactCallableTypes(sourceSignature: string, targetSignature: string, constructor: boolean): boolean {
+    const source = sourceCallableTypes(sourceSignature);
+    const target = targetCallableTypes(targetSignature);
+    return source !== null && target !== null
+        && (constructor || (source.returnType !== null && exactSourceTargetType(source.returnType, target.returnType)))
+        && source.parameters.length === target.parameters.length
+        && source.parameters.every((type, index) => exactSourceTargetType(type, target.parameters[index]!));
+}
+
+function geometryPropertyType(signature: string, access: "call" | "read" | "write"): string | null {
+    if (access === "call") return null;
+    const variable = /^public (?:static )?(?:const|var) [A-Za-z_$][A-Za-z0-9_$]*:([^;\s]+);$/.exec(signature);
+    if (variable) return canonicalSourceType(variable[1]!);
+    const callable = sourceCallableTypes(signature);
+    if (callable === null) return null;
+    return access === "write" ? callable.parameters[0] || null : callable.returnType;
+}
+
+function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
+    if (mapping.sourceMember === null || mapping.targetMember === null) return;
+    if (HELD_EXACT_MEMBER_QNAMES.has(mapping.sourceQName)) {
+        throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+            "bitmap members require their dedicated exact signature and behavioral authority");
+    }
+    if (mapping.sourceMember.name === "getBounds" || mapping.sourceMember.name === "getRect"
+        || mapping.sourceMember.name === "scrollRect") {
+        throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+            "Flash member is an explicit behavioral hold and cannot be mapped to an inherited native surface");
+    }
+    const exactGeometry = mapping.sourceQName === "flash.geom.Point" || mapping.sourceQName === "flash.geom.Rectangle";
+    if (mapping.sourceMember.access === "call" && (exactGeometry || mapping.sourceMember.name === "getBounds")) {
+        if (!exactCallableTypes(mapping.sourceMember.signature, mapping.targetMember.signature,
+            mapping.targetMember.kind === "constructor")) {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_SIGNATURE",
+                "Flash and target callable parameter/result types are not exact");
+        }
+    } else if (exactGeometry) {
+        const sourceType = geometryPropertyType(mapping.sourceMember.signature, mapping.sourceMember.access);
+        const targetType = targetTypeDescriptor(mapping.targetMember.signature);
+        if (sourceType === null || !exactSourceTargetType(sourceType, targetType)) {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_SIGNATURE",
+                "Flash and target property value types are not exact");
+        }
+    }
+}
+
 function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMapping): void {
     const section = source.as3SourceCapabilities;
     if (!isObject(section) || !Array.isArray(section.apis) || !Array.isArray(section.memberUses)) {
@@ -293,8 +422,12 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
         if (!isObject(use) || use.preserveNameAndSignature !== true || !Array.isArray(use.signatures)
             || !use.signatures.some((signature: unknown) => isObject(signature)
                 && signature.signature === mapping.sourceMember!.signature
-                && signature.minArgs === mapping.sourceMember!.minArgs
-                && signature.maxArgs === mapping.sourceMember!.maxArgs)) {
+                && (mapping.sourceMember!.access === "read" ? mapping.sourceMember!.minArgs === 0
+                    && mapping.sourceMember!.maxArgs === 0
+                    : mapping.sourceMember!.access === "write" ? mapping.sourceMember!.minArgs === 1
+                        && mapping.sourceMember!.maxArgs === 1
+                        : signature.minArgs === mapping.sourceMember!.minArgs
+                            && signature.maxArgs === mapping.sourceMember!.maxArgs))) {
             throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY", "source Flash member signature is not census-authenticated");
         }
     }
@@ -422,6 +555,7 @@ export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256:
         }
         findSourceApi(source, mapping);
         findTargetCapability(target, mapping);
+        assertMappedMemberCompatibility(mapping);
         Object.freeze(mapping.sourceRoles);
         if (mapping.sourceMember !== null) {
             Object.freeze(mapping.sourceMember);
