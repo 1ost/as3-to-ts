@@ -829,7 +829,8 @@ function authorityTypeName(type: SemanticType, context: AdapterContext, node: Tr
 }
 
 function localInheritedMember(context: AdapterContext, name: string,
-    kind: "method" | "getter" | "setter" | "field", node: TreeNode): LocalInheritedMemberLookup {
+    kind: "method" | "getter" | "setter" | "field", namespaceName: string | null,
+    node: TreeNode): LocalInheritedMemberLookup {
     if (context.baseLocalQName === null || context.localMemberAuthority === null
         || context.resolveCurrentLocal === null) {
         fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "local inheritance requires the loaded member authority", node);
@@ -851,6 +852,7 @@ function localInheritedMember(context: AdapterContext, name: string,
                 `local member authority for ${qname} is held by ${entry.holdCode || "unknown"}`, node);
         }
         const matches = entry.declaration.members.filter((member: LocalDeclarationMember) => member.kind === kind && member.name === name
+            && member.namespaceName === namespaceName
             && member.modifiers.indexOf("static") < 0 && member.modifiers.indexOf("private") < 0);
         if (matches.length > 1) {
             fail("HARDENED_LOCAL_MEMBER_AMBIGUOUS", `local member ${qname}.${name} is duplicated`, node);
@@ -2622,7 +2624,7 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     }
     if (modifiers.indexOf("override") >= 0
         && (context.extendsType === null || modifiers.indexOf("static") >= 0
-            || memberModifiers.namespaceName !== null)) {
+        )) {
         fail("HARDENED_OVERRIDE_TARGET", "override requires a derived instance method or accessor", node);
     }
     if (accessor === "getter" && (parameters.length !== 0 || returnType === null || returnType.sourceName === "void")) {
@@ -2638,12 +2640,8 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
         const localKind = accessor === "getter" ? "getter" : accessor === "setter" ? "setter" : "method";
         let flashBaseQName = context.baseSourceQName;
         if (context.baseLocalQName !== null) {
-            const inherited = localInheritedMember(context, name, localKind, node);
+            const inherited = localInheritedMember(context, name, localKind, memberModifiers.namespaceName, node);
             if (inherited.member !== null) {
-                if (inherited.member.namespaceName !== null) {
-                    fail("HARDENED_LOCAL_MEMBER_NAMESPACE",
-                        "custom-namespace local overrides remain outside the admitted lowering", node);
-                }
                 assertLocalOverride(inherited.member, parameters, returnType, modifiers, context, node);
                 flashBaseQName = null;
             } else {

@@ -779,6 +779,9 @@ function buildLocalBaseTree(options = {}) {
     if (options.withPackageSymbols || options.withNamespace) {
         members.push(method("packageNamespaced", [], "void", [n("RETURN")], ["InternalSpace"]));
     }
+    if (options.localNamespaceOverride) {
+        members.push(method("namespacedRun", [], "void", [n("RETURN")], ["override", "InternalSpace"]));
+    }
     if (options.withInterface) members.push(method("check", [parameter("value", "Object")], "void", [
         localDeclaration("VAR_LIST", "ready", "IReady",
             n("RELATION", null, [n("IDENTIFIER", "value"), n("AS", "as"), n("IDENTIFIER", "IReady")])),
@@ -901,6 +904,9 @@ function localMemberAuthority(api, localTypes, mutate = null) {
                 kind: "method", name: "run", modifiers: ["protected"], namespaceName: null,
                 parameters: [{ name: "value", type: "Vector.<int>", optional: false, rest: false }],
                 returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "method", name: "namespacedRun", modifiers: [], namespaceName: "InternalSpace",
+                parameters: [], returnType: "void", fieldType: null, readonly: false,
             }, {
                 kind: "field", name: "count", modifiers: ["protected"], namespaceName: null,
                 parameters: [], returnType: null, fieldType: "int", readonly: false,
@@ -1115,6 +1121,11 @@ function main() {
     const localNamespaceOutput = api.emitSemanticProgram(namespaceProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.doesNotMatch(localNamespaceOutput.code, /InternalSpace/);
+    const namespaceOverrideOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { withNamespace: true, localNamespaceOverride: true }),
+    { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(namespaceOverrideOutput.code, /override namespacedRun\(\): void/);
+    assert.doesNotMatch(namespaceOverrideOutput.code, /InternalSpace/);
     const localNormalizedForMembers = flatten(buildLocalBaseTree());
     const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
     const localMembers = localMemberAuthority(api, localTypesForMembers);
