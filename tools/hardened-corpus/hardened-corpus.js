@@ -206,6 +206,13 @@ function runWorker(request, limits) {
     }
     child.stdout.on('data', chunk => { stdout = collect(stdout, chunk); });
     child.stderr.on('data', chunk => { stderr = collect(stderr, chunk); });
+    child.stdin.on('error', () => {
+      if (settled) return;
+      if (!forcedStatus) {
+        forcedStatus = 'protocol_failed';
+        child.kill('SIGKILL');
+      }
+    });
     child.on('error', error => {
       if (settled) return;
       settled = true;

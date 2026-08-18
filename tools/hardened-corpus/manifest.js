@@ -50,14 +50,20 @@ function loadAuthority(bleachRoot, manifestRelativePath, censusRelativePath, exp
     if (typeof node.source_path !== 'string' || !node.source_path.endsWith('.as')) return;
     const logicalPath = normalizeLogicalPath(node.source_path);
     assertMaintainedPath(logicalPath, node.module);
-    const sourceSha256 = requireSha256(node.source_sha256, logicalPath);
+    const graphSourceSha256 = requireSha256(
+      node.source_sha256,
+      logicalPath
+    );
     const existing = byPath.get(logicalPath) || {
       logicalPath,
       module: node.module,
-      sourceSha256,
+      graphSourceSha256,
       authorityNodes: []
     };
-    if (existing.module !== node.module || existing.sourceSha256 !== sourceSha256) {
+    if (
+      existing.module !== node.module ||
+      existing.graphSourceSha256 !== graphSourceSha256
+    ) {
       throw new Error(`conflicting authority entries for ${logicalPath}`);
     }
     existing.authorityNodes.push(normalizeAuthorityNode(node));
@@ -78,10 +84,15 @@ function loadAuthority(bleachRoot, manifestRelativePath, censusRelativePath, exp
     const absolutePath = resolveInside(root, entry.logicalPath);
     requireRegularFileWithoutSymlink(absolutePath, root);
     const bytes = fs.readFileSync(absolutePath);
-    const digest = sha256Bytes(bytes);
-    if (digest !== entry.sourceSha256) {
-      throw new Error(`source SHA-256 mismatch for ${entry.logicalPath}: authority=${entry.sourceSha256} actual=${digest}`);
+    const graphDigest = sha256Bytes(canonicalCrlfBytes(bytes));
+    if (graphDigest !== entry.graphSourceSha256) {
+      throw new Error(
+        `canonical-CRLF graph source SHA-256 mismatch for ` +
+        `${entry.logicalPath}: authority=${entry.graphSourceSha256} ` +
+        `actual=${graphDigest}`
+      );
     }
+    entry.sourceSha256 = sha256Bytes(bytes);
     entry.sourceSize = bytes.length;
     entry.sourceBytes = bytes;
     entry.absolutePath = absolutePath;
@@ -467,10 +478,8 @@ function validateCensusAuthority(authority, expected) {
 
 function computeCanonicalLfSourceSet(entries) {
   const rows = entries.map(entry => {
-    const raw = entry.sourceBytes;
-    const canonicalLf = Buffer.from(raw.toString('binary').replace(/\r\n/g, '\n').replace(/\r/g, '\n'), 'binary');
     return {
-      canonicalLfSha256: sha256Bytes(canonicalLf),
+      canonicalLfSha256: sha256Bytes(canonicalLfBytes(entry.sourceBytes)),
       path: entry.logicalPath
     };
   }).sort((left, right) => {
@@ -479,6 +488,18 @@ function computeCanonicalLfSourceSet(entries) {
   });
   const basis = rows.map(row => `${row.path}\0${row.canonicalLfSha256}\n`).join('');
   return sha256Bytes(Buffer.from(basis, 'utf8'));
+}
+
+function canonicalLfBytes(raw) {
+  return Buffer.from(
+    raw.toString('binary').replace(/\r\n/g, '\n').replace(/\r/g, '\n'),
+    'binary'
+  );
+}
+
+function canonicalCrlfBytes(raw) {
+  const lf = raw.toString('binary').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return Buffer.from(lf.replace(/\n/g, '\r\n'), 'binary');
 }
 
 function normalizeAuthorityNode(node) {
@@ -494,6 +515,7 @@ function normalizeAuthorityNode(node) {
 function publicEntry(entry) {
   return {
     authorityNodes: entry.authorityNodes,
+    graphSourceSha256: entry.graphSourceSha256,
     module: entry.module,
     path: entry.logicalPath,
     sourceSha256: entry.sourceSha256,

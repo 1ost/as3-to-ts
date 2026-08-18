@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const { runHarness, runWorker } = require('../../tools/hardened-corpus/hardened-corpus');
 const { compareUtf8, sha256Bytes, stringify } = require('../../tools/hardened-corpus/canonical');
 const {
+  EXPECTED_BLEACH_CENSUS,
   EXPECTED_DEPENDENCY_GRAPH_SHA256,
   authenticateDependencyGraph,
   loadAuthority
@@ -190,6 +191,7 @@ async function run() {
   assert.throws(() => loadFixtureAuthority(changedEdge, originalAuthority.dependencyGraphSha256), /policy SHA-256 mismatch/);
 
   verifyRealDependencyGraphAdversaries();
+  await verifyRealAuthorityRunAndResume(options);
 
   const excluded = createFixtureRepository(path.join(tempRoot, 'excluded'), false, true);
   await assertRejects(() => runHarness(Object.assign({}, options, {
@@ -423,6 +425,48 @@ function verifyRealDependencyGraphAdversaries() {
   });
   splitComponent.summary.component_count++;
   assert.throws(() => authenticateDependencyGraph(splitComponent), /strongly connected and maximal|prerequisite_components|dependent_components/);
+}
+
+async function verifyRealAuthorityRunAndResume(options) {
+  const bleachRoot = process.env.BLEACH_REPO_ROOT;
+  assert(bleachRoot, 'BLEACH_REPO_ROOT is required for real authority tests');
+  const authority = loadAuthority(
+    bleachRoot,
+    'as3-to-layaair-porting-kit/generated/dependency-graph/bleach-as3-dependency-graph.json',
+    'as3-to-layaair-porting-kit/generated/reports/swf-capability-census.json'
+  );
+  assert.strictEqual(authority.entries.length, EXPECTED_BLEACH_CENSUS.fileCount);
+  const distinctEolEntry = authority.entries.find(
+    entry => entry.graphSourceSha256 !== entry.sourceSha256
+  );
+  assert(
+    distinctEolEntry,
+    'real authority must exercise separate canonical and raw source identities'
+  );
+  assert.strictEqual(
+    sha256Bytes(distinctEolEntry.sourceBytes),
+    distinctEolEntry.sourceSha256,
+    'raw worker identity must authenticate exact disk bytes'
+  );
+
+  const checkpointPath = path.join(tempRoot, 'real-authority.jsonl');
+  const realOptions = Object.assign({}, options, {
+    bleachRoot,
+    checkpointPath,
+    maxOutputBytes: 1024,
+    timeoutMs: 1
+  });
+  const first = await runHarness(realOptions);
+  assert.strictEqual(first.sealed, true);
+  assert.strictEqual(first.fileCount, EXPECTED_BLEACH_CENSUS.fileCount);
+  const sealedBytes = fs.readFileSync(checkpointPath);
+  const resumed = await runHarness(realOptions);
+  assert.strictEqual(resumed.sealed, true);
+  assert.deepStrictEqual(
+    fs.readFileSync(checkpointPath),
+    sealedBytes,
+    'real sealed resume must not rewrite the checkpoint'
+  );
 }
 
 function assertGraphMutationRejected(original, mutate, pattern) {

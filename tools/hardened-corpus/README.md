@@ -43,7 +43,7 @@ well.
 - The census and dependency manifest are parsed as semantic authorities, then
   every maintained path, raw SHA-256, size, and canonical-LF source-set hash is
   independently recomputed.
-- The dependency seal covers all graph nodes, 55,482 sorted edges, each node's
+- The dependency seal covers all graph nodes, 60,750 sorted edges, each node's
   prerequisite and dependent facts, all SCC membership/prerequisite/dependent
   sets, edge semantics, and unresolved-reference/adapter/ordering/wildcard
   summaries. SCCs are recomputed for strong connectivity and maximality;
@@ -54,6 +54,10 @@ well.
 - Disk `.as` paths must exactly equal the sorted authority set. Symlinks,
   non-files, missing paths, extras, unsafe paths, and the excluded mirror abort
   the run.
+- Graph source hashes are verified against canonical-CRLF bytes, while the
+  census source-set hash remains canonical-LF. Exact disk bytes, raw SHA-256,
+  and raw size are captured separately and sealed for worker input, resume
+  validation, and mutation detection.
 - One source file is evaluated per child process. Each child has a hard timeout
   and a combined stdout/stderr byte cap. Source bytes are captured with their
   authority hash, passed directly to the worker, verified again by the worker,
