@@ -18,9 +18,9 @@ import { CliError } from "./errors";
 
 const MAX_AUTHORITY_BYTES = 64 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
-const COMPILED_AUTHORITY_LOCK_SHA256 = "c57e00f847df143d68bbf99727bc7a01b24343e40bfef4aabf5776fdcc109ccc";
+const COMPILED_AUTHORITY_LOCK_SHA256 = "ee7edaeddf974f67a029561f2295d0c6d27a6c2dd0501012bf388cc5572fc210";
 const COMPILED_LOCAL_TYPE_MAP_SHA256 = "fe557887a0ea87d4549536c0a3afd708ac4877583dbf22a4ff77f4e5655869bf";
-const COMPILED_NATIVE_TIMER_AUTHORITY_SHA256 = "1db6dff27b308bf4081c06d4e45d50ee1f8ebe36614024e5b1bd2a99af252e79";
+const COMPILED_NATIVE_TIMER_AUTHORITY_SHA256 = "04b91e7075f8eba0c4e20be272c28513010df48e2954db521369146cc89c2d77";
 const COMPILED_LOCAL_TYPE_COUNT = 2923;
 const COMPILED_DEPENDENCY_GRAPH_RAW_SHA256 = "05fe9549851f46366f4636ad4a5327876feb640fd815561bb0637c05dafd3d16";
 const COMPILED_DEPENDENCY_GRAPH_SEMANTIC_SHA256 = "78957409f5bf7ec6894ad7c73af7bd3a2dcccfce930090f980f1e2d1d1db806f";
@@ -29,19 +29,19 @@ const COMPILED_LOCAL_MEMBER_MAP_SHA256 = "663beb2c386797966f1acf8b5248eae41e2b0a
 const COMPILED_DECLARATION_WORKER_SHA256 = "87f04afe96e2713595eb8ed2998f158d43f57a65cbebb03d3a12be499f112db7";
 const COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = 2884;
 const COMPILED_LOCAL_MEMBER_HELD_COUNT = 39;
-const COMPILED_RUNTIME_TYPE_AUTHORITY_LOCK_SHA256 = "030721c45b89abbb7459c744ee191ec2d61b81e57526968313276b37b4a49824";
-const COMPILED_RUNTIME_TYPE_PREDICATES_SHA256 = "7f42c4891177a400981b68793c6b637044c9354eb7401c36fa095ce870267ea0";
-const COMPILED_LAYA_RUNTIME_REVISION = "7cdca8ac8c91d7cf1b21c0ec0c55b3b078c2f8fc";
+const COMPILED_RUNTIME_TYPE_AUTHORITY_LOCK_SHA256 = "b7b1269ed917a945f0215a264c814a7282d735ba870b9b2b958b61f047965a29";
+const COMPILED_RUNTIME_TYPE_PREDICATES_SHA256 = "6e97bb0b9f46c7e112408f69da2683d6c5c49276a4322f14e772c4bc215fa976";
+const COMPILED_LAYA_RUNTIME_REVISION = "ecade82aa369d890730c4dc847f9d769d74e8878";
 
 const COMPILED_AUTHORITY_LOCK = Object.freeze({
     schema: "bleach-local-as3-authority-lock@1",
     upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
     typeScriptVersion: "4.9.5",
     sourceCensusSha256: "69f054d0bd30b6a0955a4dae4b7ad3ce2d8d2e05958a37fed566778a8ec29858",
-    targetCapabilitiesSha256: "50f96dd47947d6c223e3a3dd2877b6dff617770310e95b5e747cf6a535822bec",
-    capabilityMappingSha256: "69325101c9375cffd866a0e7dad5d5abe2540e9c78e3d423103e44f82a0c94ad",
-    mappedTypeCount: 34,
-    mappedMemberCount: 146,
+    targetCapabilitiesSha256: "4c641d5beda0f3acbb517517ff76fa14019ddf2dc17b933b896853818a9a27e2",
+    capabilityMappingSha256: "a9d355200aab8c78453d9d53e8f9b55c3b0c6340753538403e6edeae3c252b42",
+    mappedTypeCount: 40,
+    mappedMemberCount: 152,
 });
 
 export interface TranspileAuthority {
@@ -174,7 +174,7 @@ export function loadTranspileAuthority(
     const runtimeLock = runtimeTypeLock as Record<string, unknown>;
     if (runtimeLock.layaRevision !== COMPILED_LAYA_RUNTIME_REVISION
         || !Array.isArray(runtimeLock.predicateAuthorityQNames)
-        || runtimeLock.predicateAuthorityQNames.length !== 27
+        || runtimeLock.predicateAuthorityQNames.length !== 28
         || runtimeLock.predicateAuthorityQNames.some(name => typeof name !== "string")) {
         throw new CliError("runtime type authority lock does not match the compiled Laya identity set", 6);
     }

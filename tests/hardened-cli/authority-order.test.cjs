@@ -427,7 +427,7 @@ test("local field authority rejects inherited slot aliases and base-method colli
 
 test("native timer import resolution rejects every inherited visible local member kind",t=>{
     const kinds=["field","getter","setter","method"];
-    const timers=["setTimeout","clearTimeout"];
+    const timers=["clearInterval","clearTimeout","getTimer","setInterval","setTimeout"];
     for(const timerName of timers){
         for(const kind of kinds){
             const suffix=`${timerName}_${kind}`;const baseName=`Base_${suffix}`;const derivedName=`Derived_${suffix}`;
@@ -442,17 +442,23 @@ test("native timer import resolution rejects every inherited visible local membe
                 declaration=member("setter",timerName,{returnType:"void",parameters:[{name:"value",type:"Function",optional:false,rest:false}]});
                 sourceMember=`public function set ${timerName}(value:Function):void {}`;
             }else{
-                declaration=timerName==="setTimeout"
+                declaration=timerName==="setTimeout"||timerName==="setInterval"
                     ? member("method",timerName,{returnType:"uint",parameters:[
                         {name:"closure",type:"Function",optional:false,rest:false},
                         {name:"delay",type:"Number",optional:false,rest:false}]})
+                    : timerName==="getTimer"
+                    ? member("method",timerName,{returnType:"int"})
                     : member("method",timerName,{returnType:"void",parameters:[
                         {name:"id",type:"uint",optional:false,rest:false}]});
-                sourceMember=timerName==="setTimeout"
+                sourceMember=timerName==="setTimeout"||timerName==="setInterval"
                     ? `public function ${timerName}(closure:Function, delay:Number):uint { return 1; }`
+                    : timerName==="getTimer"
+                    ? `public function ${timerName}():int { return 1; }`
                     : `public function ${timerName}(id:uint):void {}`;
             }
-            const call=timerName==="setTimeout"?`${timerName}(function():void {}, 0);`:`${timerName}(1);`;
+            const call=timerName==="setTimeout"||timerName==="setInterval"
+                ?`${timerName}(function():void {}, 0);`
+                :timerName==="getTimer"?`${timerName}();`:`${timerName}(1);`;
             const baseQName=`cycle.${baseName}`;const derivedQName=`cycle.${derivedName}`;
             const files={
                 [`cycle/${baseName}.as`]:`package cycle { public class ${baseName} { ${sourceMember} public function ${baseName}() {} } }\n`,
@@ -471,8 +477,10 @@ test("native timer import resolution rejects every inherited visible local membe
 });
 
 test("native timer inherited shadow resolution distinguishes inaccessible internal and private members",t=>{
-    for(const timerName of ["setTimeout","clearTimeout"]){
-        const call=timerName==="setTimeout"?`${timerName}(function():void {}, 0);`:`${timerName}(1);`;
+    for(const timerName of ["clearInterval","clearTimeout","getTimer","setInterval","setTimeout"]){
+        const call=timerName==="setTimeout"||timerName==="setInterval"
+            ?`${timerName}(function():void {}, 0);`
+            :timerName==="getTimer"?`${timerName}();`:`${timerName}(1);`;
         for(const visibility of ["internal","private"]){
             const baseName=`Base_${timerName}_${visibility}`;const derivedName=`Derived_${timerName}_${visibility}`;
             const baseQName=`basepkg.${baseName}`;const derivedQName=`otherpkg.${derivedName}`;

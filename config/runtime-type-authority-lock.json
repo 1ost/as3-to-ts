@@ -1,9 +1,9 @@
 {
   "schema": "bleach-as3-runtime-type-authority-lock@1",
-  "layaRevision": "7cdca8ac8c91d7cf1b21c0ec0c55b3b078c2f8fc",
+  "layaRevision": "ecade82aa369d890730c4dc847f9d769d74e8878",
   "predicateAuthorityPath": "docTool/architecture/flash-runtime-type-predicates.json",
-  "predicateAuthorityCanonicalLfSha256": "7f42c4891177a400981b68793c6b637044c9354eb7401c36fa095ce870267ea0",
-  "predicateAuthorityEntryCount": 27,
+  "predicateAuthorityCanonicalLfSha256": "6e97bb0b9f46c7e112408f69da2683d6c5c49276a4322f14e772c4bc215fa976",
+  "predicateAuthorityEntryCount": 28,
   "predicateAuthorityQNames": [
     "flash.display.Bitmap",
     "flash.display.BitmapData",
@@ -31,7 +31,8 @@
     "flash.geom.Point",
     "flash.geom.Rectangle",
     "flash.net.URLRequest",
-    "flash.text.TextField"
+    "flash.text.TextField",
+    "flash.utils.Timer"
   ],
   "localAuthorityPath": "config/local-type-map.json",
   "installation": "generated-package-internal-central-authority-before-application-entry"

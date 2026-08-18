@@ -40,12 +40,37 @@ const INTRINSIC_TYPES = Object.freeze([Object.freeze({
 
 const NATIVE_TIMER_FUNCTIONS: readonly Readonly<NativeTimerFunctionMapping>[] = Object.freeze([
     Object.freeze({
+        sourceQName: "flash.utils.clearInterval" as "flash.utils.clearInterval",
+        sourceRoles: Object.freeze(["import", "package-function", "wildcard-resolution"]) as unknown as string[],
+        sourceSignature: "public function clearInterval(id:uint) : void",
+        minArgs: 1, maxArgs: 1, parameterTypes: Object.freeze(["uint"]) as unknown as string[], restType: null,
+        returnType: "void", targetModule: "@bleach/as3-runtime/AS3Timer",
+        targetExport: "clearInterval" as "clearInterval", targetSignature: "(id: number) => void",
+    }),
+    Object.freeze({
         sourceQName: "flash.utils.clearTimeout" as "flash.utils.clearTimeout",
         sourceRoles: Object.freeze(["import", "package-function", "wildcard-resolution"]) as unknown as string[],
         sourceSignature: "public function clearTimeout(id:uint) : void",
         minArgs: 1, maxArgs: 1, parameterTypes: Object.freeze(["uint"]) as unknown as string[], restType: null,
         returnType: "void", targetModule: "@bleach/as3-runtime/AS3Timer",
         targetExport: "clearTimeout" as "clearTimeout", targetSignature: "(id: number) => void",
+    }),
+    Object.freeze({
+        sourceQName: "flash.utils.getTimer" as "flash.utils.getTimer",
+        sourceRoles: Object.freeze(["import", "package-function"]) as unknown as string[],
+        sourceSignature: "public native function getTimer() : int;",
+        minArgs: 0, maxArgs: 0, parameterTypes: Object.freeze([]) as unknown as string[], restType: null,
+        returnType: "int", targetModule: "@bleach/as3-runtime/AS3Timer",
+        targetExport: "getTimer" as "getTimer", targetSignature: "() => number",
+    }),
+    Object.freeze({
+        sourceQName: "flash.utils.setInterval" as "flash.utils.setInterval",
+        sourceRoles: Object.freeze(["import", "package-function", "wildcard-resolution"]) as unknown as string[],
+        sourceSignature: "public function setInterval(closure:Function, delay:Number, ... arguments) : uint",
+        minArgs: 2, maxArgs: null, parameterTypes: Object.freeze(["Function", "Number"]) as unknown as string[], restType: "*",
+        returnType: "uint", targetModule: "@bleach/as3-runtime/AS3Timer",
+        targetExport: "setInterval" as "setInterval",
+        targetSignature: "(closure: Function, delay: number, ...args: unknown[]) => number",
     }),
     Object.freeze({
         sourceQName: "flash.utils.setTimeout" as "flash.utils.setTimeout",

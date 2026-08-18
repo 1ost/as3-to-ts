@@ -50,12 +50,13 @@ const semanticIdentity={sourceNodeId:"test",sourceSpan:null};
 const methodReturningNew=(name,runtimeName)=>({...semanticIdentity,kind:"method",name,modifiers:["public"],namespaceName:null,parameters:[],
     returnType:typeRef(runtimeName),body:[{...semanticIdentity,kind:"return",expression:{...semanticIdentity,kind:"new",sourceType:typeRef(runtimeName),arguments:[]}}]});
 
-test("mapped Laya predicate authority is pinned as one exact 27-type capability input",()=>{
+test("mapped Laya predicate authority is pinned as one exact 28-type capability input",()=>{
     const lock=JSON.parse(fs.readFileSync(path.join(ROOT,"config/runtime-type-authority-lock.json"),"utf8"));
-    assert.equal(lock.layaRevision,"7cdca8ac8c91d7cf1b21c0ec0c55b3b078c2f8fc");
-    assert.equal(lock.predicateAuthorityCanonicalLfSha256,"7f42c4891177a400981b68793c6b637044c9354eb7401c36fa095ce870267ea0");
-    assert.equal(lock.predicateAuthorityEntryCount,27);
-    assert.equal(lock.predicateAuthorityQNames.length,27);
+    assert.equal(lock.layaRevision,"ecade82aa369d890730c4dc847f9d769d74e8878");
+    assert.equal(lock.predicateAuthorityCanonicalLfSha256,"6e97bb0b9f46c7e112408f69da2683d6c5c49276a4322f14e772c4bc215fa976");
+    assert.equal(lock.predicateAuthorityEntryCount,28);
+    assert.equal(lock.predicateAuthorityQNames.length,28);
+    assert.equal(lock.predicateAuthorityQNames.at(-1),"flash.utils.Timer");
     assert.equal(lock.installation,"generated-package-internal-central-authority-before-application-entry");
     const inventory=JSON.parse(fs.readFileSync(path.join(ROOT,"package.json"),"utf8")).files;
     assert.ok(inventory.includes("config/runtime-type-authority-lock.json"));

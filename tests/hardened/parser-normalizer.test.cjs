@@ -145,7 +145,22 @@ function authority(api) {
                     preserve: { apiName: true, signature: true },
                 },
                 {
+                    qname: "flash.utils.clearInterval", classification: "layaair-flash-api-bridge",
+                    roles: ["import", "package-function", "wildcard-resolution"],
+                    preserve: { apiName: true, signature: true },
+                },
+                {
                     qname: "flash.utils.clearTimeout", classification: "layaair-flash-api-bridge",
+                    roles: ["import", "package-function", "wildcard-resolution"],
+                    preserve: { apiName: true, signature: true },
+                },
+                {
+                    qname: "flash.utils.getTimer", classification: "layaair-flash-api-bridge",
+                    roles: ["import", "package-function"],
+                    preserve: { apiName: true, signature: true },
+                },
+                {
+                    qname: "flash.utils.setInterval", classification: "layaair-flash-api-bridge",
                     roles: ["import", "package-function", "wildcard-resolution"],
                     preserve: { apiName: true, signature: true },
                 },
@@ -163,10 +178,28 @@ function authority(api) {
                     signatures: [{ signature: "public function Sprite()", minArgs: 0, maxArgs: 0 }],
                 },
                 {
+                    qname: "flash.utils.clearInterval", member: "<call>", access: "call",
+                    context: "package-function", classification: "layaair-flash-api-bridge",
+                    preserveNameAndSignature: true,
+                    signatures: [{ signature: "public function clearInterval(id:uint) : void", minArgs: 1, maxArgs: 1 }],
+                },
+                {
                     qname: "flash.utils.clearTimeout", member: "<call>", access: "call",
                     context: "package-function", classification: "layaair-flash-api-bridge",
                     preserveNameAndSignature: true,
                     signatures: [{ signature: "public function clearTimeout(id:uint) : void", minArgs: 1, maxArgs: 1 }],
+                },
+                {
+                    qname: "flash.utils.getTimer", member: "<call>", access: "call",
+                    context: "package-function", classification: "layaair-flash-api-bridge",
+                    preserveNameAndSignature: true,
+                    signatures: [{ signature: "public native function getTimer() : int;", minArgs: 0, maxArgs: 0 }],
+                },
+                {
+                    qname: "flash.utils.setInterval", member: "<call>", access: "call",
+                    context: "package-function", classification: "layaair-flash-api-bridge",
+                    preserveNameAndSignature: true,
+                    signatures: [{ signature: "public function setInterval(closure:Function, delay:Number, ... arguments) : uint", minArgs: 2, maxArgs: null }],
                 },
                 {
                     qname: "flash.utils.setTimeout", member: "<call>", access: "call",

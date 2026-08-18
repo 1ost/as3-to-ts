@@ -1181,26 +1181,71 @@ function assertNoInheritedLocalValueShadow(context: AdapterContext, name: string
 }
 
 function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: string, node: TreeNode): void {
-    if (context.baseLocalQName === null) return;
-    if (context.localTypeAuthority === null || context.localMemberAuthority === null
-        || context.resolveCurrentLocal === null) {
-        fail("HARDENED_LOCAL_MEMBER_AUTHORITY",
-            `${name} native timer lookup requires the complete local base declaration authority`, node);
-    }
-    assertLoadedLocalMemberAuthority(context.localMemberAuthority);
-    const moduleName = context.resolveCurrentLocal().entry.module;
+    if (context.baseLocalQName === null && context.baseSourceQName === null) return;
+    const moduleName = context.resolveCurrentLocal === null ? null : context.resolveCurrentLocal().entry.module;
     const visited = new Set<string>();
-    let qname: string | null = context.baseLocalQName;
+    let qname: string | null = context.baseLocalQName || context.baseSourceQName;
     while (qname !== null) {
         if (visited.has(qname) || visited.size >= 1024) {
             fail("HARDENED_LOCAL_MEMBER_CYCLE", "native timer base-member lineage is cyclic or exceeds its bound", node);
         }
         visited.add(qname);
-        if (!context.localTypeAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`]) {
-            if (context.runtimeReferenceParentsByQName.has(qname)) return;
-            fail("HARDENED_LOCAL_MEMBER_AUTHORITY",
-                `native timer lookup encountered unauthenticated base ${qname}`, node);
+        const localType = moduleName === null || context.localTypeAuthority === null ? undefined
+            : context.localTypeAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+        if (!localType) {
+            const parents = context.runtimeReferenceParentsByQName.get(qname);
+            const mappedType = context.mappingsBySource[qname];
+            if (parents === undefined || !mappedType || mappedType.sourceMember !== null
+                || mappedType.targetKind !== "class") {
+                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                    `native timer lookup encountered unauthenticated mapped base ${qname}`, node);
+            }
+            const mappedMembers = Object.keys(context.memberMappingsByKey)
+                .map(key => context.memberMappingsByKey[key])
+                .filter((mapping): mapping is CapabilityMapping => mapping !== undefined
+                    && mapping.sourceQName === qname && mapping.sourceMember !== null
+                    && mapping.sourceMember.name === name);
+            const inherited = mappedMembers.filter(mapping => mapping.sourceRoles.length === 1
+                && mapping.sourceRoles[0] === "instance-member" && mapping.targetMember !== null
+                && mapping.targetMember.scope === "instance");
+            if (inherited.length !== mappedMembers.length) {
+                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                    `mapped member authority for ${qname}.${name} is incomplete`, node);
+            }
+            const visibilities = new Set(inherited.map(mapping => {
+                const match = /^(public|protected|private|internal)\s+/.exec(mapping.sourceMember!.signature.trim());
+                if (match) return match[1]!;
+                if (/^(?:native\s+)?(?:function|var|const)\s+/.test(mapping.sourceMember!.signature.trim())) {
+                    return "internal";
+                }
+                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                    `mapped member visibility for ${qname}.${name} is unauthenticated`, node);
+            }));
+            if (visibilities.size > 1) {
+                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_AMBIGUOUS",
+                    `mapped member visibility for ${qname}.${name} is ambiguous`, node);
+            }
+            const visibility = visibilities.values().next().value as string | undefined;
+            if (visibility === "internal") {
+                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_VISIBILITY",
+                    `mapped internal member ${qname}.${name} is not provably visible`, node);
+            }
+            if (visibility === "public" || visibility === "protected") {
+                fail("HARDENED_NATIVE_TIMER_INHERITED_SHADOW",
+                    `native timer import is shadowed by inherited mapped member ${qname}.${name}`, node);
+            }
+            if (parents.length > 1 || new Set(parents).size !== parents.length) {
+                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_AMBIGUOUS",
+                    `mapped base ${qname} has an ambiguous parent lineage`, node);
+            }
+            fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                `mapped base ${qname} lacks exhaustive negative source-member authority for ${name}`, node);
         }
+        if (context.localMemberAuthority === null || context.localTypeAuthority === null || moduleName === null) {
+            fail("HARDENED_LOCAL_MEMBER_AUTHORITY",
+                `${name} native timer lookup requires the complete local base declaration authority`, node);
+        }
+        assertLoadedLocalMemberAuthority(context.localMemberAuthority);
         const entry: LocalMemberAuthorityEntry | undefined =
             context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
         if (!entry || entry.status !== "complete" || entry.declaration === null) {

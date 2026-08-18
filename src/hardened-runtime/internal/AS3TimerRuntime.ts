@@ -1,11 +1,15 @@
 export type AS3TimerClosure = Function;
 
 export interface AS3TimerHost {
-    schedule(callback: () => void, delay: number): unknown;
-    cancel(handle: unknown): void;
+    scheduleTimeout(callback: () => void, delay: number): unknown;
+    cancelTimeout(handle: unknown): void;
+    scheduleInterval(callback: () => void, delay: number): unknown;
+    cancelInterval(handle: unknown): void;
+    now?(): number;
 }
 
 interface TimerEntry {
+    kind: "timeout" | "interval";
     hostHandle: unknown;
     closure: AS3TimerClosure;
     args: unknown[];
@@ -23,27 +27,68 @@ function normalizeDelay(value: number): number {
 
 export class AS3TimerRuntime {
     private readonly entries = new Map<number, TimerEntry>();
+    private readonly epoch: number | null;
+    private lastNow: number | null;
     private nextId = 1;
 
-    public constructor(private readonly host: AS3TimerHost, private readonly maximumId: number = UINT_MAX) {
-        if (!host || typeof host.schedule !== "function" || typeof host.cancel !== "function"
+    public constructor(private readonly host: AS3TimerHost, private readonly maximumId: number = UINT_MAX,
+        epoch: number | null = null) {
+        if (!host || typeof host.scheduleTimeout !== "function" || typeof host.cancelTimeout !== "function"
+            || typeof host.scheduleInterval !== "function" || typeof host.cancelInterval !== "function"
             || !Number.isSafeInteger(maximumId) || maximumId < 1 || maximumId > UINT_MAX) {
             throw new TypeError("AS3 timer runtime requires a host and a bounded uint id range");
         }
+        if (epoch !== null && !Number.isFinite(epoch)) {
+            throw new TypeError("AS3 timer runtime epoch must be a finite monotonic reading");
+        }
+        this.epoch = epoch;
+        this.lastNow = epoch;
     }
 
     public setTimeout(closure: AS3TimerClosure, delay: number, ...args: unknown[]): number {
-        if (typeof closure !== "function") throw new TypeError("setTimeout closure must be a Function");
+        return this.schedule("timeout", closure, delay, args);
+    }
+
+    public clearTimeout(id: number): void {
+        this.clear(id);
+    }
+
+    public getTimer(): number {
+        if (this.epoch === null || this.lastNow === null || typeof this.host.now !== "function") {
+            throw new TypeError("AS3 getTimer requires a captured epoch and monotonic clock");
+        }
+        const current = Number(this.host.now());
+        if (!Number.isFinite(current) || current < this.lastNow) {
+            throw new RangeError("AS3 getTimer requires a finite nondecreasing monotonic clock");
+        }
+        this.lastNow = current;
+        return Math.trunc(current - this.epoch) | 0;
+    }
+
+    public setInterval(closure: AS3TimerClosure, delay: number, ...args: unknown[]): number {
+        return this.schedule("interval", closure, delay, args);
+    }
+
+    public clearInterval(id: number): void {
+        this.clear(id);
+    }
+
+    private schedule(kind: "timeout" | "interval", closure: AS3TimerClosure, delay: number,
+        args: unknown[]): number {
+        if (typeof closure !== "function") throw new TypeError(`${kind} closure must be a Function`);
         const id = this.allocateId();
-        const entry: TimerEntry = { hostHandle: null, closure, args: args.slice() };
+        const entry: TimerEntry = { kind, hostHandle: null, closure, args: args.slice() };
         this.entries.set(id, entry);
         try {
-            entry.hostHandle = this.host.schedule(() => {
+            const callback = () => {
                 const current = this.entries.get(id);
                 if (current !== entry) return;
-                this.entries.delete(id);
+                if (current.kind === "timeout") this.entries.delete(id);
                 Reflect.apply(current.closure, undefined, current.args);
-            }, normalizeDelay(delay));
+            };
+            entry.hostHandle = kind === "timeout"
+                ? this.host.scheduleTimeout(callback, normalizeDelay(delay))
+                : this.host.scheduleInterval(callback, normalizeDelay(delay));
         } catch (error) {
             this.entries.delete(id);
             throw error;
@@ -51,12 +96,13 @@ export class AS3TimerRuntime {
         return id;
     }
 
-    public clearTimeout(id: number): void {
+    private clear(id: number): void {
         const normalized = Number(id) >>> 0;
         const entry = this.entries.get(normalized);
         if (!entry) return;
         this.entries.delete(normalized);
-        this.host.cancel(entry.hostHandle);
+        if (entry.kind === "timeout") this.host.cancelTimeout(entry.hostHandle);
+        else this.host.cancelInterval(entry.hostHandle);
     }
 
     private allocateId(): number {

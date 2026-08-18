@@ -120,7 +120,7 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     assert.ok(manifest.runtimeAuthorityQNames.includes("lobby.ui.Demo"));
     assert.equal(manifest.files[0].typescriptPath, "__as3_runtime/application/lobby/ui/Demo.ts");
     assert.equal(manifest.nativeTimerAuthoritySha256,
-        "1db6dff27b308bf4081c06d4e45d50ee1f8ebe36614024e5b1bd2a99af252e79");
+        "04b91e7075f8eba0c4e20be272c28513010df48e2954db521369146cc89c2d77");
     assert.equal(manifest.files[0].normalizedFingerprintSha256.length, 64);
     const authorityCode=fs.readFileSync(path.join(first,manifest.runtimeAuthorityPath),"utf8");
     const entryCode=fs.readFileSync(path.join(first,manifest.applicationEntryPath),"utf8");
@@ -172,12 +172,19 @@ test("lowers maintained-style Flash timeout calls through the authenticated nati
         "package timer.fixture {",
         "    import flash.utils.setTimeout;",
         "    import flash.utils.clearTimeout;",
+        "    import flash.utils.getTimer;",
+        "    import flash.utils.setInterval;",
+        "    import flash.utils.clearInterval;",
         "    public class TimerDemo {",
         "        private var id:uint = 0;",
+        "        private var intervalId:uint = 0;",
         "        public var result:String = \"\";",
         "        public function TimerDemo() {}",
         "        public function arm():void { id = setTimeout(this.onTimer, 10, \"ok\"); }",
         "        public function cancel():void { clearTimeout(id); }",
+        "        public function armInterval():void { intervalId = setInterval(this.onTimer, 10, \"tick\"); }",
+        "        public function cancelInterval():void { clearInterval(intervalId); }",
+        "        public function now():int { return getTimer(); }",
         "        private function onTimer(value:String):void { result = value; }",
         "    }",
         "}",
@@ -193,9 +200,15 @@ test("lowers maintained-style Flash timeout calls through the authenticated nati
     assert.equal(firstCode, secondCode, "timer lowering must be cross-CWD deterministic");
     assert.match(firstCode, /import \{ setTimeout \} from "@bleach\/as3-runtime\/AS3Timer";/);
     assert.match(firstCode, /import \{ clearTimeout \} from "@bleach\/as3-runtime\/AS3Timer";/);
+    assert.match(firstCode, /import \{ getTimer \} from "@bleach\/as3-runtime\/AS3Timer";/);
+    assert.match(firstCode, /import \{ setInterval \} from "@bleach\/as3-runtime\/AS3Timer";/);
+    assert.match(firstCode, /import \{ clearInterval \} from "@bleach\/as3-runtime\/AS3Timer";/);
     assert.match(firstCode, /this\.onTimer = __as3BindMethod\(this, this\.onTimer\);/);
     assert.match(firstCode, /this\.id = setTimeout\(this\.onTimer, 10, "ok"\);/);
     assert.match(firstCode, /clearTimeout\(this\.id\);/);
+    assert.match(firstCode, /this\.intervalId = setInterval\(this\.onTimer, 10, "tick"\);/);
+    assert.match(firstCode, /clearInterval\(this\.intervalId\);/);
+    assert.match(firstCode, /return getTimer\(\);/);
 
     const declarations = path.join(root, "runtime.d.ts");
     fs.writeFileSync(declarations, [
@@ -203,6 +216,9 @@ test("lowers maintained-style Flash timeout calls through the authenticated nati
         "declare module \"@bleach/as3-runtime/AS3Timer\" {",
         "  export function setTimeout(closure: Function, delay: number, ...args: unknown[]): number;",
         "  export function clearTimeout(id: number): void;",
+        "  export function getTimer(): number;",
+        "  export function setInterval(closure: Function, delay: number, ...args: unknown[]): number;",
+        "  export function clearInterval(id: number): void;",
         "}",
         "declare module \"@bleach/as3-runtime/AS3MethodClosure\" {",
         "  export function as3BindMethod<A extends unknown[], R>(receiver: object, method: (...args: A) => R): (...args: A) => R;",
@@ -262,17 +278,26 @@ test("timer lowering requires the exact imported lexical binding", t => {
         "public function arm(setTimeout:Function):void { setTimeout(function():void {}, 0); }"));
     write(source, "ClearShadow.as", unit("ClearShadow", ["flash.utils.clearTimeout"],
         "public function cancel(clearTimeout:Function):void { clearTimeout(1); }"));
+    write(source, "IntervalShadow.as", unit("IntervalShadow", ["flash.utils.setInterval"],
+        "public function arm(setInterval:Function):void { setInterval(function():void {}, 1); }"));
+    write(source, "GetTimerShadow.as", unit("GetTimerShadow", ["flash.utils.getTimer"],
+        "public function now(getTimer:Function):int { return getTimer(); }"));
+    write(source, "GetTimerWildcardDenied.as", unit("GetTimerWildcardDenied", ["flash.utils.*"],
+        "public function now():int { return getTimer(); }"));
     const result = qualify(source, output, os.tmpdir());
     assert.equal(result.status, 0, result.stderr);
     const report = JSON.parse(fs.readFileSync(path.join(output, "manifest.json"), "utf8"));
-    assert.equal(report.files.length, 8);
+    assert.equal(report.files.length, 11);
     assert.equal(report.files.every(item => item.status === "held"), true,
         JSON.stringify(report.files.map(item => ({ sourcePath: item.sourcePath, status: item.status, code: item.code }))));
     assert.deepEqual(Object.fromEntries(report.files.map(item => [item.sourcePath, item.code])), {
         "CatchShadow.as": "HARDENED_NATIVE_TIMER_SHADOW",
         "ClearShadow.as": "HARDENED_NATIVE_TIMER_SHADOW",
         "FieldShadow.as": "HARDENED_NATIVE_TIMER_SHADOW",
+        "GetTimerShadow.as": "HARDENED_NATIVE_TIMER_SHADOW",
+        "GetTimerWildcardDenied.as": "HARDENED_IDENTIFIER_SCOPE",
         "ImportedAlias.as": "HARDENED_ASSIGNMENT_TYPE",
+        "IntervalShadow.as": "HARDENED_NATIVE_TIMER_SHADOW",
         "LocalShadow.as": "HARDENED_NATIVE_TIMER_SHADOW",
         "MethodShadow.as": "HARDENED_NATIVE_TIMER_SHADOW",
         "ParameterShadow.as": "HARDENED_NATIVE_TIMER_SHADOW",

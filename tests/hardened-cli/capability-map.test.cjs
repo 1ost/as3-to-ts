@@ -47,9 +47,9 @@ test("capability map regenerates byte-identically from both authorities", t => {
     const document = JSON.parse(fs.readFileSync(mapping, "utf8"));
     const typeMappings = document.mappings.filter(item => item.sourceMember === null);
     const memberMappings = document.mappings.filter(item => item.sourceMember !== null);
-    assert.equal(typeMappings.length, 34);
-    assert.equal(memberMappings.length, 146);
-    assert.equal(memberMappings.filter(item => item.targetMember.kind === "constructor").length, 13);
+    assert.equal(typeMappings.length, 40);
+    assert.equal(memberMappings.length, 152);
+    assert.equal(memberMappings.filter(item => item.targetMember.kind === "constructor").length, 14);
     assert.equal(memberMappings.filter(item => ["getBounds", "getRect", "scrollRect"]
         .includes(item.sourceMember.name)).length, 0);
     assert.equal(memberMappings.filter(item => item.sourceQName === "flash.geom.Point").length, 6);
@@ -71,6 +71,11 @@ test("capability map regenerates byte-identically from both authorities", t => {
     assert.deepEqual(memberMappings.filter(item => item.sourceQName === "flash.display.BitmapDataChannel")
         .map(item => `${item.sourceMember.name}:${item.targetMember.signature}`).sort(), ["ALPHA:8", "RED:1"]);
     assert.equal(memberMappings.some(item => ["draw", "applyFilter"].includes(item.sourceMember.name)), false);
+    assert.deepEqual(memberMappings.filter(item => item.sourceQName === "flash.utils.Timer")
+        .map(item => `${item.sourceMember.name}:${item.targetMember.kind}`).sort(), [
+        "Timer:constructor", "addEventListener:method", "removeEventListener:method", "reset:method",
+        "start:method", "stop:method",
+    ]);
     assert.deepEqual(memberMappings.filter(item => item.sourceQName === "flash.text.TextField")
         .map(item => item.sourceMember.name).sort(), ["TextField", "addEventListener", "appendText", "getCharBoundaries",
         "getCharIndexAtPoint", "getLineLength", "getLineOffset", "getTextFormat", "removeEventListener", "replaceText",
@@ -104,7 +109,7 @@ test("capability map regenerates byte-identically from both authorities", t => {
     assert.equal(baselineDocument.mappings.length, 130);
     assert.equal(baselineDocument.mappings.every(item => currentKeys.has(mappingKey(item))), true,
         "the exact accepted 01f mapping key set must be preserved");
-    assert.equal(document.mappings.length - baselineDocument.mappings.length, 50);
+    assert.equal(document.mappings.length - baselineDocument.mappings.length, 62);
     for (const item of document.mappings) {
         assert.match(item.targetModule, /^src\/layaAir\/flash\//);
         assert.doesNotMatch(item.targetExport, /^_/);

@@ -72,11 +72,11 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Dictionary.ts": "307af295f7cd3e7c6f32423b799ab8920fb1f84e254181256a5673dfffd45814",
     "AS3MethodClosure.ts": "05329f4fa2a7034f49ab70ed87311350e71e997dca7976f8f7a44b364ca3dd9a",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
-    "AS3Timer.ts": "eb8344d3dcc26b061a130865eed61b51ca7e08693ed92517facf946b72a74e17",
+    "AS3Timer.ts": "639a0e3776611b3fd736305994d709b47af8465509bb9d2de440bc611a985851",
     "AS3Type.ts": "6389bd794913de410607f2bcdc91c485a309a8bdfdea7b9c783ea705734fdd73",
     "AS3Vector.ts": "5deedf01b46703ae7ae0d0f98ed6cfa680a39496ddd6ab747ee48c3bb5ec1101",
     "internal/AS3TypeRegistry.ts": "35a524b9a65fe9c83e6f530c58e33b898090500b7af68046dd765b96d5f2276e",
-    "internal/AS3TimerRuntime.ts": "97333f36e33e29318b9c1a9ef34ebe2b10337734f25a7ed0eb284457a1239d00",
+    "internal/AS3TimerRuntime.ts": "3204d4ee73defe74f71fd43f1e146f4ef21ee80784ba585ff52698c97f90285e",
 });
 
 function runtimeCommonJs(code: string, fileName: string): string {
@@ -199,7 +199,7 @@ function runtimeTimerFacadeJavaScript(): string {
         '"use strict";',
         'const runtime = require("./AS3Authority.generated.js");',
         "Object.setPrototypeOf(module.exports, null);",
-        "for (const key of [\"clearTimeout\", \"setTimeout\"]) {",
+        "for (const key of [\"clearInterval\", \"clearTimeout\", \"getTimer\", \"setInterval\", \"setTimeout\"]) {",
         "  Object.defineProperty(module.exports, key, { value: runtime[key], enumerable: true, writable: false, configurable: false });",
         "}",
         "Object.freeze(module.exports);",

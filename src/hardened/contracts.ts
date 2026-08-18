@@ -90,7 +90,8 @@ export interface LoadedCapabilityAuthority {
 }
 
 export interface NativeTimerFunctionMapping {
-    sourceQName: "flash.utils.clearTimeout" | "flash.utils.setTimeout";
+    sourceQName: "flash.utils.clearInterval" | "flash.utils.clearTimeout" | "flash.utils.getTimer"
+        | "flash.utils.setInterval" | "flash.utils.setTimeout";
     sourceRoles: string[];
     sourceSignature: string;
     minArgs: number;
@@ -99,7 +100,7 @@ export interface NativeTimerFunctionMapping {
     restType: string | null;
     returnType: string;
     targetModule: "@bleach/as3-runtime/AS3Timer";
-    targetExport: "clearTimeout" | "setTimeout";
+    targetExport: "clearInterval" | "clearTimeout" | "getTimer" | "setInterval" | "setTimeout";
     targetSignature: string;
 }
 

@@ -8,12 +8,12 @@ const os = require("node:os");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "../..");
-const EXPECTED_SOURCE_SHA256 = "2144b14090e51a1c0525ec3a35bfb8e532c6a19bb7ab355428ce70b4db7bde90";
-const EXPECTED_TARGET_SHA256 = "109405663cc7ee936008d29732026fc82a06460aff1e9f341cd761e6d12b5b54";
-const EXPECTED_SOURCE_HEAD = "a42bf2c73dce4ca0922bc603c5647a5ef0e515dd";
-const EXPECTED_SOURCE_BLOB = "524d7e4143adff105799334f81b0fba1004a0cfd";
-const EXPECTED_TARGET_HEAD = "4b9d9ae1b5cded82a2ea90ce97725c2682f514fe";
-const EXPECTED_TARGET_BLOB = "4fb1c723f01ab54e953473d2943f25e6c33bf594";
+const EXPECTED_SOURCE_SHA256 = "69f054d0bd30b6a0955a4dae4b7ad3ce2d8d2e05958a37fed566778a8ec29858";
+const EXPECTED_TARGET_SHA256 = "4c641d5beda0f3acbb517517ff76fa14019ddf2dc17b933b896853818a9a27e2";
+const EXPECTED_SOURCE_HEAD = "f96e325da3a5806d9c3bbd84df71b6c279fcddd2";
+const EXPECTED_SOURCE_BLOB = "80cd3254ca58f402f1d2ae4adf6a978ec1b912c3";
+const EXPECTED_TARGET_HEAD = "ecade82aa369d890730c4dc847f9d769d74e8878";
+const EXPECTED_TARGET_BLOB = "8c27b094532af6a26db3bdc4a3a03811e61506fc";
 
 function sha256(bytes) {
     return crypto.createHash("sha256").update(bytes, "utf8").digest("hex");
@@ -686,6 +686,14 @@ function buildTree(options = {}) {
             options.superInMethod ? [call(n("IDENTIFIER", "super"))] : onEventBody,
             options.staticMethod ? ["public", "static"] : ["public"]),
     ];
+    if (options.nativeTimerName) {
+        const timerArguments = options.nativeTimerName === "setTimeout" || options.nativeTimerName === "setInterval"
+            ? [lambda([], "void", [n("RETURN")]), n("LITERAL", "0")]
+            : options.nativeTimerName === "getTimer" ? [] : [n("LITERAL", "1")];
+        members.push(method("timerProbe", [], "void", [
+            call(n("IDENTIFIER", options.nativeTimerName), timerArguments), n("RETURN"),
+        ]));
+    }
     if (options.vectorCallbackWorkpack || options.badVectorCallback || options.staleVectorCallbackProof) {
         members.push(
             method("compareValues", [parameter("left", "int"), parameter("right", "int")],
@@ -765,6 +773,7 @@ function buildTree(options = {}) {
     if (options.byteArrayWorkpack || options.heldByteArrayMember) {
         imports.push(n("IMPORT", "flash.utils.ByteArray"), n("IMPORT", "flash.utils.Endian"));
     }
+    if (options.nativeTimerName) imports.push(n("IMPORT", `flash.utils.${options.nativeTimerName}`));
     if (options.unmappedFlashImport) imports.push(n("IMPORT", "flash.geom.Point"));
     if (options.unusedWildcard) imports.push(n("IMPORT", "flash.geom.*"));
     if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
@@ -974,6 +983,7 @@ function buildLocalBaseTree(options = {}) {
     if (options.localStaticCall || options.badLocalStaticCall || options.localStaticField
         || options.badLocalStaticWrite) imports.push(n("IMPORT", "lobby.base.Utility"));
     if (options.importedArrayShadow) imports.push(n("IMPORT", "lobby.base.Array"));
+    if (options.nativeTimerName) imports.push(n("IMPORT", `flash.utils.${options.nativeTimerName}`));
     const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
         || options.localInstanceMembers || options.badLocalInstanceReadonly
         || options.badLocalInstancePrivate || options.badLocalInstanceClosure
@@ -983,6 +993,14 @@ function buildLocalBaseTree(options = {}) {
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
     const superArguments = options.superArgument ? [n("LITERAL", options.badSuperArgument ? '"bad"' : "1")] : [];
     const members = [constructor([call(n("IDENTIFIER", "super"), superArguments)])];
+    if (options.nativeTimerName) {
+        const timerArguments = options.nativeTimerName === "setTimeout" || options.nativeTimerName === "setInterval"
+            ? [lambda([], "void", [n("RETURN")]), n("LITERAL", "0")]
+            : options.nativeTimerName === "getTimer" ? [] : [n("LITERAL", "1")];
+        members.push(method("timerProbe", [], "void", [
+            call(n("IDENTIFIER", options.nativeTimerName), timerArguments), n("RETURN"),
+        ]));
+    }
     if (options.vectorConcatLocal) {
         members.unshift(
             n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
@@ -1258,7 +1276,7 @@ function adaptLocal(api, authority, options = {}) {
     const members = options.withoutMemberAuthority ? undefined : localMemberAuthority(api, locals,
         options.mutateMemberAuthority || null, options);
     return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
-        locals, options.logicalPath || "lobby/ui/Demo.as", members);
+        locals, options.logicalPath || "lobby/ui/Demo.as", members, options.runtimeReferenceAuthority);
 }
 
 function localMemberAuthority(api, localTypes, mutate = null, options = {}) {
@@ -1450,6 +1468,122 @@ function mappingDocument() {
     };
 }
 
+function mappedTimerSpecification(name, kind, visibility = "public") {
+    const prefix = visibility === "internal" ? "internal" : visibility;
+    if (kind === "field") return {
+        name, access: "read", minArgs: 0, maxArgs: 0, sourceKind: "var", returnType: "Function",
+        sourceSignature: `${prefix} var ${name}:Function;`, targetKind: "property", targetSignature: "Function",
+    };
+    if (kind === "getter") return {
+        name, access: "read", minArgs: 0, maxArgs: 0, sourceKind: "get", returnType: "Function",
+        sourceSignature: `${prefix} function get ${name}() : Function;`, targetKind: "get", targetSignature: "Function",
+    };
+    if (kind === "setter") return {
+        name, access: "write", minArgs: 1, maxArgs: 1, sourceKind: "set", returnType: "void",
+        sourceSignature: `${prefix} function set ${name}(value:Function) : void;`, targetKind: "set",
+        targetSignature: "(value: Function) => void",
+    };
+    const set = name === "setTimeout" || name === "setInterval";
+    const get = name === "getTimer";
+    return {
+        name, access: "call", minArgs: set ? 2 : get ? 0 : 1, maxArgs: set ? 2 : get ? 0 : 1,
+        sourceKind: "method", returnType: set ? "uint" : get ? "int" : "void",
+        sourceSignature: set ? `${prefix} function ${name}(closure:Function, delay:Number) : uint`
+            : get ? `${prefix} function ${name}() : int` : `${prefix} function ${name}(id:uint) : void`,
+        targetKind: "method", targetSignature: set ? "(closure: Function, delay: number) => number"
+            : get ? "() => number" : "(id: number) => void",
+    };
+}
+
+function appendMappedTimerSourceUse(source, specification) {
+    source.as3SourceCapabilities.memberUses.push({
+        access: specification.access,
+        argumentCount: specification.access === "call" ? specification.minArgs : null,
+        classification: "layaair-flash-api-bridge", context: "instance-member", count: 1,
+        evidence: { line: 1, path: "synthetic/MappedTimerBase.as" }, member: specification.name,
+        preserveNameAndSignature: true, qname: "flash.display.Sprite", receiverType: "flash.display.Sprite",
+        signatures: [{ declaredBy: "flash.display.Sprite", kind: specification.sourceKind,
+            maxArgs: specification.maxArgs, minArgs: specification.minArgs,
+            returnType: specification.returnType, signature: specification.sourceSignature, static: false }],
+    });
+}
+
+function capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson, targetCapabilitiesJson,
+    nativeTimerAuthorityJson, specifications) {
+    const source = JSON.parse(sourceCensusJson);
+    const target = JSON.parse(targetCapabilitiesJson);
+    const spriteApi = source.as3SourceCapabilities.apis.find(item => item.qname === "flash.display.Sprite");
+    assert.ok(spriteApi && spriteApi.roles.includes("instance-member"));
+    const display = target.capabilities.find(item => item.id === "api.flash.display");
+    const sprite = display.obligations.find(item => item.module === "src/layaAir/flash/display/Sprite.ts"
+        && item.export === "Sprite");
+    assert.ok(sprite);
+    const document = mappingDocument();
+    for (const specification of specifications) {
+        appendMappedTimerSourceUse(source, specification);
+        const targetMember = { abstract: false, kind: specification.targetKind, name: specification.name,
+            scope: "instance", optional: false, readonly: false, signature: specification.targetSignature };
+        if (!sprite.members.some(item => JSON.stringify(item) === JSON.stringify(targetMember))) {
+            sprite.members.push(targetMember);
+        }
+        document.mappings.push({
+            sourceQName: "flash.display.Sprite", sourceRoles: ["instance-member"],
+            sourceMember: { access: specification.access, name: specification.name,
+                minArgs: specification.minArgs, maxArgs: specification.maxArgs,
+                signature: specification.sourceSignature },
+            targetCapabilityId: "api.flash.display", targetModule: "src/layaAir/flash/display/Sprite.ts",
+            targetExport: "Sprite", targetKind: "class", targetSignature: "typeof Sprite",
+            targetMember: { name: specification.name, kind: specification.targetKind,
+                scope: "instance", signature: specification.targetSignature },
+        });
+    }
+    const sourceJson = JSON.stringify(source);
+    const targetJson = JSON.stringify(target);
+    const mappingJson = api.canonicalMappingJson(document);
+    return api.loadCapabilityAuthority({
+        sourceCensusJson: sourceJson, sourceCensusSha256: sha256(sourceJson),
+        targetCapabilitiesJson: targetJson, targetCapabilitiesSha256: sha256(targetJson),
+        mappingJson, mappingSha256: sha256(mappingJson), nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256: sha256(nativeTimerAuthorityJson),
+    }, sha256);
+}
+
+function capabilityAuthorityWithUnmappedTimerMembers(api, sourceCensusJson, targetCapabilitiesJson,
+    nativeTimerAuthorityJson, specifications) {
+    const source = JSON.parse(sourceCensusJson);
+    const spriteApi = source.as3SourceCapabilities.apis.find(item => item.qname === "flash.display.Sprite");
+    assert.ok(spriteApi && spriteApi.roles.includes("instance-member"));
+    for (const specification of specifications) appendMappedTimerSourceUse(source, specification);
+    const sourceJson = JSON.stringify(source);
+    const mappingJson = api.canonicalMappingJson(mappingDocument());
+    return api.loadCapabilityAuthority({
+        sourceCensusJson: sourceJson, sourceCensusSha256: sha256(sourceJson),
+        targetCapabilitiesJson, targetCapabilitiesSha256: sha256(targetCapabilitiesJson),
+        mappingJson, mappingSha256: sha256(mappingJson), nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256: sha256(nativeTimerAuthorityJson),
+    }, sha256);
+}
+
+function mappedSpriteRuntimeAuthority(api) {
+    const document = { schema: "laya-flash-runtime-type-predicates@1", hashMode: "canonical-lf-utf8", types: [{
+        sourceQName: "flash.display.Sprite", targetCapabilityId: "api.flash.display",
+        targetModule: "src/layaAir/flash/display/Sprite.ts", constructorExport: "Sprite",
+        constructorSignature: "typeof Sprite", constructSignatures: ["new (): Sprite"],
+        predicateExport: "isFlashSprite", predicateSignature: "(value: unknown) => value is Sprite",
+        heritageClosure: [], moduleSha256: "1".repeat(64),
+    }] };
+    const json = JSON.stringify(document);
+    const lock = JSON.stringify({ schema: "bleach-as3-runtime-type-authority-lock@1",
+        predicateAuthorityCanonicalLfSha256: sha256(json), predicateAuthorityEntryCount: 1 });
+    return api.loadMappedRuntimeTypeAuthority(lock, json, ["flash.display.Sprite"], sha256);
+}
+
+function adaptMappedTimer(api, authority, runtimeAuthority, name) {
+    const normalized = flatten(buildTree({ nativeTimerName: name }));
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
+        undefined, undefined, undefined, runtimeAuthority);
+}
+
 function assertErrorCode(fn, code) {
     assert.throws(fn, (error) => error && error.code === code, code);
 }
@@ -1519,6 +1653,87 @@ function main() {
     assert.equal(fields[0].sharedDeclarationNodeId, fields[1].sharedDeclarationNodeId);
     assert.notEqual(fields[0].sourceNodeId, fields[1].sourceNodeId);
     assert.equal(fields[0].readonly, false);
+
+    const mappedTimerRuntime = mappedSpriteRuntimeAuthority(api);
+    const timerNames = ["clearInterval", "clearTimeout", "getTimer", "setInterval", "setTimeout"];
+    for (const kind of ["field", "getter", "setter", "method"]) {
+        const mappedShadowAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+            targetCapabilitiesJson, nativeTimerAuthorityJson,
+            timerNames.map(name => mappedTimerSpecification(name, kind)));
+        for (const name of timerNames) {
+            assertErrorCode(() => adaptMappedTimer(api, mappedShadowAuthority, mappedTimerRuntime, name),
+                "HARDENED_NATIVE_TIMER_INHERITED_SHADOW");
+        }
+    }
+    const mappedTerminalAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+        targetCapabilitiesJson, nativeTimerAuthorityJson,
+        timerNames.map(name => mappedTimerSpecification(name, "method")));
+    for (const name of timerNames) {
+        assertErrorCode(() => adaptLocal(api, mappedTerminalAuthority, {
+            nativeTimerName: name, runtimeReferenceAuthority: mappedTimerRuntime,
+            mutateMemberAuthority(entries) {
+                const base = entries.find(entry => entry.qname === "lobby.base.Base");
+                base.declaration.baseQNames = ["flash.display.Sprite"];
+            },
+        }), "HARDENED_NATIVE_TIMER_INHERITED_SHADOW");
+    }
+    for (const visibility of ["protected", "internal", "private"]) {
+        const mappedVisibilityAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+            targetCapabilitiesJson, nativeTimerAuthorityJson,
+            timerNames.map(name => mappedTimerSpecification(name, "method", visibility)));
+        for (const name of timerNames) {
+            if (visibility === "internal") {
+                assertErrorCode(() => adaptMappedTimer(api, mappedVisibilityAuthority, mappedTimerRuntime, name),
+                    "HARDENED_NATIVE_TIMER_MAPPED_BASE_VISIBILITY");
+            } else if (visibility === "private") {
+                assertErrorCode(() => adaptMappedTimer(api, mappedVisibilityAuthority, mappedTimerRuntime, name),
+                    "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+            } else {
+                assertErrorCode(() => adaptMappedTimer(api, mappedVisibilityAuthority, mappedTimerRuntime, name),
+                    "HARDENED_NATIVE_TIMER_INHERITED_SHADOW");
+            }
+        }
+    }
+    const heldSpecification = mappedTimerSpecification("setTimeout", "method");
+    heldSpecification.sourceSignature = "custom function setTimeout(closure:Function, delay:Number) : uint";
+    const mappedHeldAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+        targetCapabilitiesJson, nativeTimerAuthorityJson, [heldSpecification]);
+    assertErrorCode(() => adaptMappedTimer(api, mappedHeldAuthority, mappedTimerRuntime, "setTimeout"),
+        "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+    const mappedAmbiguousAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+        targetCapabilitiesJson, nativeTimerAuthorityJson, [
+            mappedTimerSpecification("setTimeout", "getter", "public"),
+            mappedTimerSpecification("setTimeout", "setter", "protected"),
+        ]);
+    assertErrorCode(() => adaptMappedTimer(api, mappedAmbiguousAuthority, mappedTimerRuntime, "setTimeout"),
+        "HARDENED_NATIVE_TIMER_MAPPED_BASE_AMBIGUOUS");
+    const unmappedTimerAuthority = capabilityAuthorityWithUnmappedTimerMembers(api, sourceCensusJson,
+        targetCapabilitiesJson, nativeTimerAuthorityJson,
+        timerNames.map(name => mappedTimerSpecification(name, "method")));
+    for (const name of timerNames) {
+        assertErrorCode(() => adaptMappedTimer(api, unmappedTimerAuthority, mappedTimerRuntime, name),
+            "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+        assertErrorCode(() => adaptLocal(api, unmappedTimerAuthority, {
+            nativeTimerName: name, runtimeReferenceAuthority: mappedTimerRuntime,
+            mutateMemberAuthority(entries) {
+                const base = entries.find(entry => entry.qname === "lobby.base.Base");
+                base.declaration.baseQNames = ["flash.display.Sprite"];
+            },
+        }), "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+    }
+    const cyclicDocument = { schema: "laya-flash-runtime-type-predicates@1", hashMode: "canonical-lf-utf8",
+        types: ["CycleA", "CycleB"].map((name, index) => ({
+            sourceQName: `flash.display.${name}`, targetCapabilityId: "api.flash.display",
+            targetModule: `src/layaAir/flash/display/${name}.ts`, constructorExport: name,
+            constructorSignature: `typeof ${name}`, constructSignatures: [`new (): ${name}`],
+            predicateExport: `is${name}`, predicateSignature: `(value: unknown) => value is ${name}`,
+            heritageClosure: [`flash.display.Cycle${index === 0 ? "B" : "A"}`], moduleSha256: "2".repeat(64),
+        })) };
+    const cyclicJson = JSON.stringify(cyclicDocument);
+    const cyclicLock = JSON.stringify({ schema: "bleach-as3-runtime-type-authority-lock@1",
+        predicateAuthorityCanonicalLfSha256: sha256(cyclicJson), predicateAuthorityEntryCount: 2 });
+    assertErrorCode(() => api.loadMappedRuntimeTypeAuthority(cyclicLock, cyclicJson,
+        ["flash.display.CycleA", "flash.display.CycleB"], sha256), "HARDENED_TYPE_AUTHORITY_HERITAGE");
 
     const localBaseProgram = adaptLocal(api, authority);
     assert.equal(localBaseProgram.imports[0].authorityKind, "local");
