@@ -377,7 +377,8 @@ function authenticatedSourceMemberSignature(mapping: CapabilityMapping, node: Tr
     const callable = new RegExp(`^public (?:native )?function (?:(?:get|set) )?${escapedName}\\((.*)\\)\\s*:\\s*([^;\\s]+)\\s*;?$`)
         .exec(member.signature);
     const constructor = new RegExp(`^public function ${escapedName}\\((.*)\\)$`).exec(member.signature);
-    const variable = new RegExp(`^public (?:static )?(?:const|var) ${escapedName}:([^;\\s]+);$`).exec(member.signature);
+    const variable = new RegExp(`^public (?:static )?(?:const|var) ${escapedName}:([^;\\s]+)(?:\\s*=\\s*[^;]+)?;$`)
+        .exec(member.signature);
     if (variable) {
         const type = variable[1]!;
         return { parameterTypes: member.access === "write" ? [type] : [], returnType: type };
@@ -1313,6 +1314,14 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "member") {
         if (expression.target.kind === "identifier") {
             const imported = context.importsByLocal[expression.target.name];
+            if (imported?.authorityKind === "flash" && imported.localValueType === null) {
+                const mapping = memberMapping(context, imported.sourceQualifiedName, "read", expression.name, node);
+                if (mapping === null || mapping.targetMember === null || mapping.targetMember.scope !== "static"
+                    || expression.capabilitySource !== imported.sourceQualifiedName) {
+                    fail("HARDENED_STATIC_MEMBER", "Flash static read requires one exact authenticated member", node);
+                }
+                return mappedMemberType(mapping, "read", context, node);
+            }
             if (imported?.authorityKind === "local" && imported.localValueType === null) {
                 const members = localStaticNamedMembers(context, imported.sourceQualifiedName,
                     expression.name, node);
@@ -2217,7 +2226,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
             }
         } else if (target.kind === "identifier" && context.importsByLocal[target.name]
-            && (context.importsByLocal[target.name]!.authorityKind === "intrinsic"
+            && (context.importsByLocal[target.name]!.authorityKind === "flash"
+                || context.importsByLocal[target.name]!.authorityKind === "intrinsic"
                 || (context.importsByLocal[target.name]!.authorityKind === "local"
                     && context.importsByLocal[target.name]!.localValueType === null))) {
             const imported = context.importsByLocal[target.name]!;
@@ -2237,10 +2247,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         "local static method closure identity remains held", node);
                 }
                 capabilitySource = imported.sourceQualifiedName;
-            } else {
+            } else if (imported.authorityKind === "intrinsic") {
                 const member = intrinsicMember(context, imported.sourceQualifiedName, "read", name);
                 if (member === null) {
                     fail("HARDENED_STATIC_MEMBER", "static members require an explicit authenticated member", node);
+                }
+                capabilitySource = imported.sourceQualifiedName;
+            } else {
+                const mapping = memberMapping(context, imported.sourceQualifiedName, "read", name, node);
+                if (mapping === null || mapping.targetMember === null || mapping.targetMember.scope !== "static") {
+                    fail("HARDENED_STATIC_MEMBER", "Flash static read requires an exact authenticated member", node);
                 }
                 capabilitySource = imported.sourceQualifiedName;
             }

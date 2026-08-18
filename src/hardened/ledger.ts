@@ -197,7 +197,8 @@ function parseMapping(raw: unknown): CapabilityMappingDocument {
         }
         let sourceMember = null;
         if (value.sourceMember !== null) {
-            if (!isObject(value.sourceMember) || !exactKeys(value.sourceMember, ["access", "maxArgs", "minArgs", "name", "signature"])
+            if (!isObject(value.sourceMember) || !exactKeys(value.sourceMember,
+                ["access", "maxArgs", "minArgs", "name", "signature"])
                 || ["call", "read", "write"].indexOf(String(value.sourceMember.access)) < 0
                 || !IDENTIFIER.test(String(value.sourceMember.name)) || typeof value.sourceMember.signature !== "string"
                 || value.sourceMember.signature.length === 0 || !Number.isInteger(value.sourceMember.minArgs)
@@ -294,9 +295,10 @@ function splitSignatureParameters(text: string): string[] | null {
     return result;
 }
 
-function canonicalSourceType(type: string): string {
+function canonicalSourceType(type: string, bitmapNumeric = false): string {
     const local = type.split(".").pop()!;
-    const primitives: { [name: string]: string } = { Number: "number", Boolean: "boolean", String: "string" };
+    const primitives: { [name: string]: string } = { Number: "number", Boolean: "boolean", String: "string",
+        ...(bitmapNumeric ? { int: "number", uint: "number" } : {}) };
     return primitives[local] || local;
 }
 
@@ -314,19 +316,40 @@ function targetTypeDescriptor(type: string): TargetTypeDescriptor | null {
 }
 
 const NON_NULLABLE_SOURCE_TYPES = new Set(["number", "boolean", "int", "uint", "void"]);
-const HELD_EXACT_MEMBER_QNAMES = new Set([
-    "flash.display.Bitmap",
-    "flash.display.BitmapData",
-    "flash.display.BitmapDataChannel",
-    "flash.display.PixelSnapping",
-]);
+const BITMAP_QNAMES = new Set(["flash.display.Bitmap", "flash.display.BitmapData", "flash.display.BitmapDataChannel"]);
+const BITMAP_SOURCE_QNAMES = new Set([...BITMAP_QNAMES, "flash.display.PixelSnapping"]);
+const TEXT_FILTER_QNAMES = new Set(["flash.text.TextField", "flash.text.TextFormat", "flash.filters.BitmapFilter",
+    "flash.filters.BlurFilter", "flash.filters.ColorMatrixFilter", "flash.filters.DropShadowFilter", "flash.filters.GlowFilter"]);
+const STRICT_SOURCE_QNAMES = new Set([...BITMAP_SOURCE_QNAMES, ...TEXT_FILTER_QNAMES]);
+const BITMAP_ALLOWED_MEMBERS: { [qname: string]: Set<string> } = Object.freeze({
+    "flash.display.Bitmap": new Set(["bitmapData", "smoothing"]),
+    "flash.display.BitmapData": new Set(["BitmapData", "clone", "copyChannel", "copyPixels", "dispose", "fillRect",
+        "getColorBoundsRect", "getPixel", "getPixel32", "height", "lock", "rect", "threshold", "unlock", "width"]),
+    "flash.display.BitmapDataChannel": new Set(["ALPHA", "RED"]),
+});
+const BITMAP_CHANNEL_VALUES: { [name: string]: number } = Object.freeze({ ALPHA: 8, RED: 1 });
+const TEXT_FILTER_ALLOWED_MEMBERS: { [qname: string]: Set<string> } = Object.freeze({
+    "flash.text.TextField": new Set(["TextField", "addEventListener", "appendText", "getCharBoundaries",
+        "getCharIndexAtPoint", "getLineLength", "getLineOffset", "getTextFormat", "removeEventListener", "replaceText",
+        "setSelection", "setTextFormat"]),
+    "flash.filters.BlurFilter": new Set(["BlurFilter"]),
+    "flash.filters.DropShadowFilter": new Set(["DropShadowFilter"]),
+    "flash.filters.GlowFilter": new Set(["GlowFilter"]),
+});
+const EXACT_TEXT_FIELD_MEMBERS = new Set(["appendText", "getCharBoundaries", "getCharIndexAtPoint", "getLineLength",
+    "getLineOffset", "getTextFormat", "replaceText", "setTextFormat"]);
+
+function exactCallMember(qname: string, name: string): boolean {
+    return BITMAP_QNAMES.has(qname) || (qname === "flash.text.TextField" && EXACT_TEXT_FIELD_MEMBERS.has(name))
+        || ["flash.filters.BlurFilter", "flash.filters.DropShadowFilter", "flash.filters.GlowFilter"].indexOf(qname) >= 0;
+}
 
 function exactSourceTargetType(sourceType: string, targetType: TargetTypeDescriptor | null): boolean {
     return targetType !== null && sourceType === targetType.type
         && (!targetType.nullable || !NON_NULLABLE_SOURCE_TYPES.has(sourceType));
 }
 
-function sourceCallableTypes(signature: string): { parameters: string[]; returnType: string | null } | null {
+function sourceCallableTypes(signature: string, bitmapNumeric = false): { parameters: string[]; returnType: string | null } | null {
     const callable = /^public (?:native )?function (?:[A-Za-z_$][A-Za-z0-9_$]*|(?:get|set) [A-Za-z_$][A-Za-z0-9_$]*)\((.*)\)\s*:\s*([^;\s]+)\s*;?$/.exec(signature);
     const constructor = /^public function [A-Za-z_$][A-Za-z0-9_$]*\((.*)\)$/.exec(signature);
     const match = callable || constructor;
@@ -335,10 +358,10 @@ function sourceCallableTypes(signature: string): { parameters: string[]; returnT
     if (parts === null) return null;
     const parameters = parts.map(part => {
         const parameter = /^(?:\.\.\.)?[A-Za-z_$][A-Za-z0-9_$]*\s*:\s*([^=\s]+)(?:\s*=.*)?$/.exec(part);
-        return parameter ? canonicalSourceType(parameter[1]!) : "";
+        return parameter ? canonicalSourceType(parameter[1]!, bitmapNumeric) : "";
     });
     if (parameters.some(type => type === "")) return null;
-    return { parameters, returnType: callable ? canonicalSourceType(callable[2]!) : null };
+    return { parameters, returnType: callable ? canonicalSourceType(callable[2]!, bitmapNumeric) : null };
 }
 
 function targetCallableTypes(signature: string): { parameters: TargetTypeDescriptor[]; returnType: TargetTypeDescriptor } | null {
@@ -357,8 +380,9 @@ function targetCallableTypes(signature: string): { parameters: TargetTypeDescrip
     return { parameters: parameters as TargetTypeDescriptor[], returnType };
 }
 
-function exactCallableTypes(sourceSignature: string, targetSignature: string, constructor: boolean): boolean {
-    const source = sourceCallableTypes(sourceSignature);
+function exactCallableTypes(sourceSignature: string, targetSignature: string, constructor: boolean,
+    bitmapNumeric = false): boolean {
+    const source = sourceCallableTypes(sourceSignature, bitmapNumeric);
     const target = targetCallableTypes(targetSignature);
     return source !== null && target !== null
         && (constructor || (source.returnType !== null && exactSourceTargetType(source.returnType, target.returnType)))
@@ -366,20 +390,51 @@ function exactCallableTypes(sourceSignature: string, targetSignature: string, co
         && source.parameters.every((type, index) => exactSourceTargetType(type, target.parameters[index]!));
 }
 
-function geometryPropertyType(signature: string, access: "call" | "read" | "write"): string | null {
+function mappedPropertyType(signature: string, access: "call" | "read" | "write", bitmapNumeric = false): string | null {
     if (access === "call") return null;
-    const variable = /^public (?:static )?(?:const|var) [A-Za-z_$][A-Za-z0-9_$]*:([^;\s]+);$/.exec(signature);
-    if (variable) return canonicalSourceType(variable[1]!);
-    const callable = sourceCallableTypes(signature);
+    const variable = /^public (?:static )?(?:const|var) [A-Za-z_$][A-Za-z0-9_$]*:([^;\s]+)(?:\s*=\s*[^;]+)?;$/.exec(signature);
+    if (variable) return canonicalSourceType(variable[1]!, bitmapNumeric);
+    const callable = sourceCallableTypes(signature, bitmapNumeric);
     if (callable === null) return null;
     return access === "write" ? callable.parameters[0] || null : callable.returnType;
 }
 
 function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
     if (mapping.sourceMember === null || mapping.targetMember === null) return;
-    if (HELD_EXACT_MEMBER_QNAMES.has(mapping.sourceQName)) {
+    const constructorRole = mapping.sourceRoles.length === 1 && mapping.sourceRoles[0] === "constructor";
+    const admittedKinds = constructorRole ? ["constructor"] : mapping.sourceMember.access === "call" ? ["method"]
+        : mapping.sourceMember.access === "read" ? ["get", "get+set", "property"]
+            : ["get+set", "property", "set"];
+    const staticRole = constructorRole || (mapping.sourceRoles.length === 1
+        && ["static-member", "event-constant"].indexOf(mapping.sourceRoles[0]!) >= 0);
+    if (mapping.sourceRoles.length !== 1 || admittedKinds.indexOf(mapping.targetMember.kind) < 0
+        || mapping.targetMember.scope !== (staticRole ? "static" : "instance")) {
         throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
-            "bitmap members require their dedicated exact signature and behavioral authority");
+            "source member context and access must preserve exact target kind and scope");
+    }
+    const bitmap = BITMAP_QNAMES.has(mapping.sourceQName);
+    const allowedBitmapMembers = BITMAP_ALLOWED_MEMBERS[mapping.sourceQName];
+    if (mapping.sourceQName === "flash.display.PixelSnapping" || (bitmap
+        && (!allowedBitmapMembers || !allowedBitmapMembers.has(mapping.sourceMember.name)))) {
+        throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+            "bitmap member is outside the exact CPU behavioral allowlist");
+    }
+    if (TEXT_FILTER_QNAMES.has(mapping.sourceQName)) {
+        const allowed = TEXT_FILTER_ALLOWED_MEMBERS[mapping.sourceQName];
+        if (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
+            || (mapping.sourceQName === "flash.text.TextField" ? mapping.sourceMember.name === "TextField"
+                ? mapping.sourceRoles[0] !== "constructor" : mapping.sourceRoles[0] !== "instance-member"
+                : mapping.sourceRoles[0] !== "constructor" || mapping.sourceMember.name !== mapping.targetExport)) {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+                "text/filter member is outside the exact behavioral allowlist");
+        }
+    }
+    if (mapping.sourceMember.name === mapping.targetExport) {
+        if (mapping.sourceRoles.indexOf("constructor") < 0 || mapping.sourceMember.access !== "call"
+            || mapping.targetMember.kind !== "constructor" || mapping.targetMember.scope !== "static") {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+                "bitmap source constructor identity must remain a target constructor");
+        }
     }
     if (mapping.sourceMember.name === "getBounds" || mapping.sourceMember.name === "getRect"
         || mapping.sourceMember.name === "scrollRect") {
@@ -387,14 +442,27 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
             "Flash member is an explicit behavioral hold and cannot be mapped to an inherited native surface");
     }
     const exactGeometry = mapping.sourceQName === "flash.geom.Point" || mapping.sourceQName === "flash.geom.Rectangle";
-    if (mapping.sourceMember.access === "call" && (exactGeometry || mapping.sourceMember.name === "getBounds")) {
+    if (bitmap && mapping.sourceQName === "flash.display.BitmapDataChannel") {
+        const expected = BITMAP_CHANNEL_VALUES[mapping.sourceMember.name];
+        const source = /^public static const ([A-Za-z_$][A-Za-z0-9_$]*):uint\s*=\s*([0-9]+);$/.exec(
+            mapping.sourceMember.signature);
+        if (mapping.sourceMember.access !== "read" || mapping.targetMember.scope !== "static"
+            || mapping.targetMember.kind !== "property" || expected === undefined || source === null
+            || source[1] !== mapping.sourceMember.name || Number(source[2]) !== expected
+            || mapping.targetMember.signature !== String(expected)) {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_SIGNATURE",
+                "BitmapDataChannel constants require exact source and target literal identity");
+        }
+    } else if (mapping.sourceMember.access === "call" && (exactGeometry
+        || exactCallMember(mapping.sourceQName, mapping.sourceMember.name)
+        || mapping.sourceMember.name === "getBounds")) {
         if (!exactCallableTypes(mapping.sourceMember.signature, mapping.targetMember.signature,
-            mapping.targetMember.kind === "constructor")) {
+            mapping.targetMember.kind === "constructor", exactCallMember(mapping.sourceQName, mapping.sourceMember.name))) {
             throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_SIGNATURE",
                 "Flash and target callable parameter/result types are not exact");
         }
-    } else if (exactGeometry) {
-        const sourceType = geometryPropertyType(mapping.sourceMember.signature, mapping.sourceMember.access);
+    } else if (exactGeometry || bitmap) {
+        const sourceType = mappedPropertyType(mapping.sourceMember.signature, mapping.sourceMember.access, bitmap);
         const targetType = targetTypeDescriptor(mapping.targetMember.signature);
         if (sourceType === null || !exactSourceTargetType(sourceType, targetType)) {
             throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_SIGNATURE",
@@ -403,31 +471,92 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
     }
 }
 
+function exactOwnedSourceMetadata(mapping: CapabilityMapping, use: { [key: string]: unknown },
+    signature: { [key: string]: unknown }): boolean {
+    if (mapping.sourceMember === null || !exactCallMember(mapping.sourceQName, mapping.sourceMember.name)) return true;
+    const constructor = mapping.sourceMember.name === mapping.targetExport;
+    const expectedKind = constructor ? "constructor"
+        : mapping.sourceQName === "flash.display.BitmapDataChannel" ? "const"
+            : mapping.sourceMember.access === "call" ? "method" : mapping.sourceMember.access === "read" ? "get" : "set";
+    const callable = sourceCallableTypes(mapping.sourceMember.signature, true);
+    const expectedReturn = constructor ? mapping.targetExport
+        : mapping.sourceQName === "flash.display.BitmapDataChannel"
+            ? mappedPropertyType(mapping.sourceMember.signature, mapping.sourceMember.access, true)
+            : mapping.sourceMember.access === "write" ? "void" : callable?.returnType || null;
+    return use.classification === "layaair-flash-api-bridge" && use.receiverType === mapping.sourceQName
+        && signature.declaredBy === mapping.sourceQName && signature.kind === expectedKind
+        && signature.static === (mapping.sourceQName === "flash.display.BitmapDataChannel")
+        && typeof signature.returnType === "string"
+        && canonicalSourceType(signature.returnType, true) === expectedReturn;
+}
+
 function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMapping): void {
     const section = source.as3SourceCapabilities;
     if (!isObject(section) || !Array.isArray(section.apis) || !Array.isArray(section.memberUses)) {
         throw new HardenedSemanticError("HARDENED_SOURCE_CENSUS_SCHEMA", "source census lacks as3SourceCapabilities authority");
     }
-    const api = section.apis.find((value: unknown) => isObject(value) && value.qname === mapping.sourceQName);
+    const apis = section.apis.filter((value: unknown) => isObject(value) && value.qname === mapping.sourceQName);
+    if (STRICT_SOURCE_QNAMES.has(mapping.sourceQName) && apis.length !== 1) {
+        throw new HardenedSemanticError("HARDENED_SOURCE_CAPABILITY",
+            "owned source API identity is absent or ambiguous", null);
+    }
+    const api = apis.length === 1 ? apis[0] : null;
+    const bitmapApiRoles = isObject(api) && Array.isArray(api.roles)
+        ? api.roles.slice().sort() : [];
+    const exactBitmapTypeRoles = STRICT_SOURCE_QNAMES.has(mapping.sourceQName) && mapping.sourceMember === null
+        && bitmapApiRoles.length === mapping.sourceRoles.length
+        && mapping.sourceRoles.every((role, index) => bitmapApiRoles[index] === role);
     if (!isObject(api) || api.classification !== "layaair-flash-api-bridge" || !Array.isArray(api.roles)
         || !mapping.sourceRoles.every((role) => (api.roles as unknown[]).indexOf(role) >= 0) || !isObject(api.preserve)
+        || (STRICT_SOURCE_QNAMES.has(mapping.sourceQName) && mapping.sourceMember === null && !exactBitmapTypeRoles)
         || api.preserve.apiName !== true || api.preserve.signature !== true) {
         throw new HardenedSemanticError("HARDENED_SOURCE_CAPABILITY", "source Flash API use is absent or not bridge-classified", null);
     }
     if (mapping.sourceMember !== null) {
-        const use = section.memberUses.find((value: unknown) => isObject(value)
+        const uses = section.memberUses.filter((value: unknown) => isObject(value)
             && value.qname === mapping.sourceQName && value.member === mapping.sourceMember!.name
             && value.access === mapping.sourceMember!.access
-            && (mapping.sourceRoles.indexOf("constructor") < 0 || value.context === "constructor"));
-        if (!isObject(use) || use.preserveNameAndSignature !== true || !Array.isArray(use.signatures)
-            || !use.signatures.some((signature: unknown) => isObject(signature)
+            && mapping.sourceRoles.length === 1 && value.context === mapping.sourceRoles[0]);
+        if (STRICT_SOURCE_QNAMES.has(mapping.sourceQName)) {
+            const argumentCounts = new Set<string>();
+            let signatureTuple: string | null = null;
+            for (const value of uses) {
+                if (!isObject(value) || value.classification !== "layaair-flash-api-bridge"
+                    || value.preserveNameAndSignature !== true || value.receiverType !== mapping.sourceQName
+                    || !Array.isArray(value.signatures) || value.signatures.length !== 1
+                    || !isObject(value.signatures[0]) || !exactKeys(value.signatures[0],
+                        ["declaredBy", "kind", "maxArgs", "minArgs", "returnType", "signature", "static"])
+                    || !exactOwnedSourceMetadata(mapping, value, value.signatures[0])) {
+                    throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY",
+                        "bitmap source member evidence is conflicting or incomplete");
+                }
+                const argumentIdentity = JSON.stringify(value.argumentCount);
+                const tuple = JSON.stringify(value.signatures[0]);
+                if (argumentCounts.has(argumentIdentity) || (signatureTuple !== null && signatureTuple !== tuple)) {
+                    throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY",
+                        "bitmap source member evidence is ambiguous");
+                }
+                argumentCounts.add(argumentIdentity);
+                signatureTuple = tuple;
+            }
+            if (uses.length === 0) {
+                throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY",
+                    "bitmap source member evidence is absent");
+            }
+        }
+        const authenticatedUses = uses.filter((value: unknown) => isObject(value)
+            && value.classification === "layaair-flash-api-bridge" && mapping.sourceRoles.length === 1
+            && mapping.sourceRoles[0] === value.context && value.preserveNameAndSignature === true
+            && Array.isArray(value.signatures) && value.signatures.some((signature: unknown) => isObject(signature)
                 && signature.signature === mapping.sourceMember!.signature
+                && exactOwnedSourceMetadata(mapping, value, signature)
                 && (mapping.sourceMember!.access === "read" ? mapping.sourceMember!.minArgs === 0
                     && mapping.sourceMember!.maxArgs === 0
                     : mapping.sourceMember!.access === "write" ? mapping.sourceMember!.minArgs === 1
                         && mapping.sourceMember!.maxArgs === 1
                         : signature.minArgs === mapping.sourceMember!.minArgs
-                            && signature.maxArgs === mapping.sourceMember!.maxArgs))) {
+                            && signature.maxArgs === mapping.sourceMember!.maxArgs)));
+        if (authenticatedUses.length === 0) {
             throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY", "source Flash member signature is not census-authenticated");
         }
     }
@@ -509,25 +638,63 @@ function findTargetCapability(target: { [key: string]: unknown }, mapping: Capab
     if (target.schema !== "laya-authored-content-capabilities@1" || !Array.isArray(target.capabilities)) {
         throw new HardenedSemanticError("HARDENED_TARGET_CAPABILITIES_SCHEMA", "target Laya capability document has the wrong schema");
     }
-    const capability = target.capabilities.find((value: unknown) => isObject(value) && value.id === mapping.targetCapabilityId);
+    const strict = STRICT_SOURCE_QNAMES.has(mapping.sourceQName);
+    const capabilities = target.capabilities.filter((value: unknown) => isObject(value)
+        && value.id === mapping.targetCapabilityId);
+    if (capabilities.length !== 1) {
+        throw new HardenedSemanticError("HARDENED_TARGET_CAPABILITY", "target Laya capability identity is absent or ambiguous");
+    }
+    const capability = capabilities[0];
     if (!isObject(capability) || capability.status !== "typescript-obligation" || !Array.isArray(capability.obligations)) {
         throw new HardenedSemanticError("HARDENED_TARGET_CAPABILITY", "target Laya capability is not admitted as a TypeScript obligation");
     }
-    const obligation = capability.obligations.find((value: unknown) => isObject(value)
-        && value.module === mapping.targetModule && value.export === mapping.targetExport
-        && value.kind === mapping.targetKind && value.signature === mapping.targetSignature);
+    const globalBitmapObligations = strict ? target.capabilities.flatMap((candidate: unknown) =>
+        isObject(candidate) && candidate.status === "typescript-obligation" && Array.isArray(candidate.obligations)
+            ? candidate.obligations.filter((value: unknown) => isObject(value)
+                && value.export === mapping.targetExport).map((value: unknown) => ({ capability: candidate, obligation: value }))
+            : []) : [];
+    if (strict && globalBitmapObligations.length !== 1) {
+        throw new HardenedSemanticError("HARDENED_TARGET_EXPORT",
+            "bitmap target export identity is absent or ambiguous across capabilities");
+    }
+    const obligations = capability.obligations.filter((value: unknown) => isObject(value)
+        && value.export === mapping.targetExport
+        && (strict || value.module === mapping.targetModule));
+    if (strict && (obligations.length !== 1
+        || globalBitmapObligations[0]!.capability !== capability
+        || globalBitmapObligations[0]!.obligation !== obligations[0])) {
+        throw new HardenedSemanticError("HARDENED_TARGET_EXPORT", "bitmap target module/export identity is absent or ambiguous");
+    }
+    const obligation = obligations.length === 1 && obligations[0]!.module === mapping.targetModule
+        && obligations[0]!.kind === mapping.targetKind && obligations[0]!.signature === mapping.targetSignature
+        ? obligations[0] : null;
     if (!isObject(obligation)) {
         throw new HardenedSemanticError("HARDENED_TARGET_EXPORT", "target Laya module/export/signature is not capability-authenticated");
     }
+    if (strict && (!Array.isArray(obligation.constructors)
+        || obligation.constructors.some((signature: unknown) => typeof signature !== "string")
+        || obligation.constructors.length > 1)) {
+        throw new HardenedSemanticError("HARDENED_TARGET_MEMBER",
+            "bitmap target constructor authority is malformed or ambiguous");
+    }
     if (mapping.targetMember !== null) {
+        const namedBitmapMembers = strict && Array.isArray(obligation.members)
+            ? obligation.members.filter((member: unknown) => isObject(member)
+                && member.name === mapping.targetMember!.name) : [];
+        if (strict && mapping.targetMember.kind !== "constructor" && namedBitmapMembers.length !== 1) {
+            throw new HardenedSemanticError("HARDENED_TARGET_MEMBER", "bitmap target member identity is absent or ambiguous");
+        }
         const constructor = mapping.targetMember.kind === "constructor"
             && mapping.targetMember.scope === "static"
             && mapping.targetMember.name === mapping.targetExport
             && Array.isArray(obligation.constructors)
-            && obligation.constructors.indexOf(mapping.targetMember.signature) >= 0;
+            && obligation.constructors.length === 1
+            && obligation.constructors[0] === mapping.targetMember.signature;
         const ordinary = Array.isArray(obligation.members) && obligation.members.some((member: unknown) => isObject(member)
             && member.name === mapping.targetMember!.name && member.kind === mapping.targetMember!.kind
-            && member.scope === mapping.targetMember!.scope && member.signature === mapping.targetMember!.signature);
+            && member.scope === mapping.targetMember!.scope && member.signature === mapping.targetMember!.signature
+            && (mapping.sourceMember?.access !== "write" || member.readonly !== true)
+            && (mapping.sourceQName !== "flash.display.BitmapDataChannel" || member.readonly === true));
         if (!constructor && !ordinary) {
             throw new HardenedSemanticError("HARDENED_TARGET_MEMBER", "target Laya public member signature is not capability-authenticated");
         }

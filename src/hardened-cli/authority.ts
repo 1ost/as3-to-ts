@@ -17,7 +17,7 @@ import { CliError } from "./errors";
 
 const MAX_AUTHORITY_BYTES = 64 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
-const COMPILED_AUTHORITY_LOCK_SHA256 = "59b81dfc6e2fb1969d90605e0bebd315a53a8b8d1c5dcbb9377438f86eca1b89";
+const COMPILED_AUTHORITY_LOCK_SHA256 = "e667d8cd027d2f21457fb4bbd32bcf066e9ddb929661d95302224a55a2a442ca";
 const COMPILED_LOCAL_TYPE_MAP_SHA256 = "fe557887a0ea87d4549536c0a3afd708ac4877583dbf22a4ff77f4e5655869bf";
 const COMPILED_LOCAL_TYPE_COUNT = 2923;
 const COMPILED_DEPENDENCY_GRAPH_RAW_SHA256 = "05fe9549851f46366f4636ad4a5327876feb640fd815561bb0637c05dafd3d16";
@@ -33,10 +33,10 @@ const COMPILED_AUTHORITY_LOCK = Object.freeze({
     upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
     typeScriptVersion: "4.9.5",
     sourceCensusSha256: "69f054d0bd30b6a0955a4dae4b7ad3ce2d8d2e05958a37fed566778a8ec29858",
-    targetCapabilitiesSha256: "da8bd6ab909ce6f29083e6a4f2eb5b1eda26d755f79a8d11df2d082b55ecf53e",
-    capabilityMappingSha256: "ab5c02d373a3750cf1a33b8fb0af17c98a098c5a88132cbbcffcf3a5c149d647",
-    mappedTypeCount: 24,
-    mappedMemberCount: 106,
+    targetCapabilitiesSha256: "50f96dd47947d6c223e3a3dd2877b6dff617770310e95b5e747cf6a535822bec",
+    capabilityMappingSha256: "b082f8adfc0436b2a61a008ff6dd88e4683064e14917676fc4dbb14b21883560",
+    mappedTypeCount: 30,
+    mappedMemberCount: 138,
 });
 
 export interface TranspileAuthority {
