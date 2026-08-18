@@ -114,6 +114,8 @@ test("indexed ByteArray access preserves cipher-style unsigned byte mutation wit
     assert.equal(0 in bytes, true);
     assert.equal(6 in bytes, false);
     assert.throws(() => bytes[6], /index exceeds length/);
+    assert.throws(() => { bytes[0xffffffff] = 1; }, RangeError);
+    assert.equal(bytes.length, 6, "rejected uint-max write cannot mutate length");
 });
 
 test("writeMultiByte keeps explicit UTF-8 and host-authenticated default code pages distinct", () => {

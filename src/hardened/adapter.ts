@@ -1692,6 +1692,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 ? Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument: binary })
                 : binary;
         }
+        // A Function local's callback proof belongs to its exact initializer.
+        // Once mutable source code assigns the local, conservatively revoke that
+        // proof: otherwise a later method closure can inherit a stale lambda
+        // signature and bypass Vector's method-closure thisObject rule.
+        if (target.kind === "identifier" && context.locals[target.name]) {
+            context.locals[target.name]!.lambdaSignature = null;
+        }
         return Object.assign(identity(node), {
             kind: "assignment" as "assignment", operator: "=" as "=", target, value,
         });

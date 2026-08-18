@@ -248,7 +248,8 @@ function buildTree(options = {}) {
         ]));
     }
     if (options.vectorWorkpack || options.vectorNumericWorkpack || options.vectorRuntimeWorkpack
-        || options.vectorCallbackWorkpack || options.badVectorCallback || options.iterationWorkpack
+        || options.vectorCallbackWorkpack || options.badVectorCallback || options.staleVectorCallbackProof
+        || options.iterationWorkpack
         || options.existingForEachWorkpack || options.badForEachType) {
         field.children.push(n("NAME_TYPE_INIT", null, [
             n("NAME", "values"), vectorType("int"),
@@ -382,6 +383,17 @@ function buildTree(options = {}) {
                 n("IDENTIFIER", options.badVectorCallback ? "onEvent" : "compareValues"),
             ]),
             call(dot(n("IDENTIFIER", "values"), "forEach"), [n("IDENTIFIER", "visitValue")]),
+            n("RETURN"),
+        ];
+    }
+    if (options.staleVectorCallbackProof) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "callback", "Function",
+                lambda([parameter("value", "int")], "void", [n("RETURN")])),
+            assignment(n("IDENTIFIER", "callback"), n("IDENTIFIER", "visitValue")),
+            call(dot(n("IDENTIFIER", "values"), "forEach"), [
+                n("IDENTIFIER", "callback"), n("LITERAL", "1"),
+            ]),
             n("RETURN"),
         ];
     }
@@ -583,7 +595,7 @@ function buildTree(options = {}) {
             options.superInMethod ? [call(n("IDENTIFIER", "super"))] : onEventBody,
             options.staticMethod ? ["public", "static"] : ["public"]),
     ];
-    if (options.vectorCallbackWorkpack || options.badVectorCallback) {
+    if (options.vectorCallbackWorkpack || options.badVectorCallback || options.staleVectorCallbackProof) {
         members.push(
             method("compareValues", [parameter("left", "int"), parameter("right", "int")],
                 "Number", [n("RETURN", null, [n("LITERAL", "0")])]),
@@ -1235,6 +1247,8 @@ function main() {
     assert.match(vectorCallbackOutput.code, /this\.values!\.forEach\(this\.visitValue\);/);
     assertErrorCode(() => adapt(api, buildTree({ badVectorCallback: true }), authority),
         "HARDENED_VECTOR_CALLBACK_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ staleVectorCallbackProof: true }), authority),
+        "HARDENED_VECTOR_CALLBACK_IDENTITY");
     const shortVectorProgram = adapt(api, buildTree({ shortVectorWorkpack: true }), authority);
     const shortVectorOutput = api.emitSemanticProgram(shortVectorProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });

@@ -351,6 +351,13 @@ export class AS3ByteArray {
     }
 
     private _setIndex(index: number, value: unknown): void {
+        // The largest canonical uint index cannot be represented as a ByteArray
+        // length: adding one would wrap through the source-visible uint coercion.
+        // Reject it before checkedLength rather than silently treating the write
+        // as an empty/no-op extension.
+        if (index >= MAX_BYTEARRAY_LENGTH) {
+            throw new RangeError("ByteArray indexed write exceeds the native ByteArray resource limit");
+        }
         const end = checkedLength(index + 1, "ByteArray indexed write");
         this._ensureCapacity(end);
         if (index > this._length) this._bytes.fill(0, this._length, index);
