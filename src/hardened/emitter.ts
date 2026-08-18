@@ -80,6 +80,9 @@ function baseTypeNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
     if (type.emittedName === "null") {
         return ts.factory.createLiteralTypeNode(ts.factory.createNull());
     }
+    if (type.emittedName === "Array") {
+        return ts.factory.createArrayTypeNode(ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword));
+    }
     return ts.factory.createTypeReferenceNode(ts.factory.createIdentifier(type.emittedName),
         type.typeArguments.length === 0 ? undefined : type.typeArguments.map(argument => typeNode(argument, ts)));
 }
@@ -102,6 +105,7 @@ function vectorPolicyNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
     }
     const names: { [sourceName: string]: string } = {
         int: "int", uint: "uint", Number: "number", Boolean: "boolean", String: "string", Object: "object",
+        Array: "array", Class: "class", Function: "function",
     };
     const policy = names[element.sourceName];
     if (policy) {

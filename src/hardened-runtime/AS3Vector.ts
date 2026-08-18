@@ -29,11 +29,19 @@ function lengthValue(value: unknown): number {
 function arrayIndex(property: PropertyKey): number | null {
     if (typeof property !== "string" || !ARRAY_INDEX.test(property)) return null;
     const value = Number(property);
-    return Number.isSafeInteger(value) && value <= 0xffffffff - 1 ? value : null;
+    return Number.isSafeInteger(value) && value <= 0xffffffff ? value : null;
 }
 
 function scalarPolicy<T>(name: string, fallback: T, coerce: (value: unknown) => T): AS3VectorElementPolicy<T> {
     return Object.freeze({ name, defaultValue: () => fallback, coerce });
+}
+
+function referenceScalar<T>(name: string, accept: (value: unknown) => value is T): AS3VectorElementPolicy<T | null> {
+    return scalarPolicy<T | null>(name, null, value => {
+        if (value === null || value === undefined) return null;
+        if (!accept(value)) throw new TypeError(`AS3 Vector.<${name}> rejected an incompatible value`);
+        return value;
+    });
 }
 
 export const AS3VectorPolicies = Object.freeze({
@@ -43,6 +51,9 @@ export const AS3VectorPolicies = Object.freeze({
     boolean: scalarPolicy<boolean>("Boolean", false, value => Boolean(value)),
     string: scalarPolicy<string | null>("String", null, value => value === null || value === undefined ? null : String(value)),
     object: scalarPolicy<unknown>("Object", null, value => value),
+    array: referenceScalar<unknown[]>("Array", Array.isArray),
+    class: referenceScalar<Function>("Class", (value): value is Function => typeof value === "function"),
+    function: referenceScalar<Function>("Function", (value): value is Function => typeof value === "function"),
 });
 
 export function as3VectorReference<T extends object>(name: string,

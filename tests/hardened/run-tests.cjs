@@ -271,6 +271,14 @@ function buildTree(options = {}) {
             n("INIT", null, [n("NEW", null, [call(nestedVectorType("int"), [n("LITERAL", "1")])])]),
         ]));
     }
+    if (options.vectorBuiltinReferenceWorkpack) {
+        for (const [name, element] of [["classes", "Class"], ["routines", "Function"], ["rows", "Array"]]) {
+            field.children.push(n("NAME_TYPE_INIT", null, [
+                n("NAME", name), vectorType(element),
+                n("INIT", null, [n("NEW", null, [call(vectorType(element))])]),
+            ]));
+        }
+    }
     let onEventBody = options.returnValue ? [n("RETURN", null, [n("LITERAL", "1")])] : [n("RETURN")];
     if (options.assignment) {
         const target = n("IDENTIFIER", options.assignmentTarget || "b");
@@ -1236,6 +1244,15 @@ function main() {
     const nestedVectorOutput = api.emitSemanticProgram(nestedVectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(nestedVectorOutput.code,
         /private matrix: __as3Vector<__as3Vector<number> \| null> \| null = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), __as3Uint\(1\)\);/);
+    const vectorBuiltinReferenceProgram = adapt(api, buildTree({ vectorBuiltinReferenceWorkpack: true }), authority);
+    const vectorBuiltinReferenceOutput = api.emitSemanticProgram(vectorBuiltinReferenceProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorBuiltinReferenceOutput.code,
+        /private classes: __as3Vector<Function \| null> \| null = new __as3Vector<Function \| null>\(__as3VectorPolicies\.class\);/);
+    assert.match(vectorBuiltinReferenceOutput.code,
+        /private routines: __as3Vector<Function \| null> \| null = new __as3Vector<Function \| null>\(__as3VectorPolicies\.function\);/);
+    assert.match(vectorBuiltinReferenceOutput.code,
+        /private rows: __as3Vector<unknown\[] \| null> \| null = new __as3Vector<unknown\[] \| null>\(__as3VectorPolicies\.array\);/);
     const coercionProgram = adapt(api, buildTree({ coercionWorkpack: true }), authority);
     const coercionOutput = api.emitSemanticProgram(coercionProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(coercionOutput.code, /as3Int as __as3Int/);
@@ -1398,7 +1415,7 @@ function main() {
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, vectorNumericOutput.code, vectorCallbackOutput.code,
         shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
-        nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code,
+        nestedVectorOutput.code, vectorBuiltinReferenceOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code,
         existingForEachOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,
         nestedExpressionOutput.code,

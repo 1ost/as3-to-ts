@@ -26,7 +26,7 @@ function checkedLength(value: number, label: string): number {
 function arrayIndex(property: PropertyKey): number | null {
     if (typeof property !== "string" || !ARRAY_INDEX.test(property)) return null;
     const value = Number(property);
-    return Number.isSafeInteger(value) && value < MAX_BYTEARRAY_LENGTH ? value : null;
+    return Number.isSafeInteger(value) && value <= 0xffffffff ? value : null;
 }
 
 export class AS3EOFError extends Error {
@@ -251,8 +251,7 @@ export class AS3ByteArray {
 
     public writeBytes(bytes: AS3ByteArray, offset: number = 0, length: number = 0): void {
         if (!(bytes instanceof AS3ByteArray)) throw new TypeError("writeBytes source must be ByteArray");
-        const sourceOffset = uint32(offset, "writeBytes offset");
-        if (sourceOffset > bytes._length) throw new RangeError("writeBytes offset exceeds source length");
+        const sourceOffset = Math.min(uint32(offset, "writeBytes offset"), bytes._length);
         const available = bytes._length - sourceOffset;
         const requested = length === 0 ? available : uint32(length, "writeBytes length");
         const count = Math.min(requested, available);
@@ -342,7 +341,7 @@ export class AS3ByteArray {
 
     private _requireReadable(count: number): void {
         if (!Number.isSafeInteger(count) || count < 0 || this._position + count > this._length) {
-            throw new AS3EOFError("ByteArray read exceeds bytesAvailable");
+            throw new AS3EOFError();
         }
     }
 

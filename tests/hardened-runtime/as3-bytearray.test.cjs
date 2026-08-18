@@ -46,7 +46,8 @@ test("ByteArray preserves Flash endian, integer, floating point, and Boolean sem
     assert.equal(bytes.readDouble(), -3.5);
     assert.equal(bytes.bytesAvailable, 0);
     assert.throws(() => bytes.readUnsignedByte(), error => error instanceof AS3EOFError
-        && error.name === "EOFError" && error.errorID === 2030 && /exceeds bytesAvailable/.test(error.message));
+        && error.name === "EOFError" && error.errorID === 2030
+        && error.message === "End of file was encountered.");
 });
 
 test("little endian and UTF operations preserve byte order and UTF-8 length", () => {
@@ -89,6 +90,8 @@ test("length, position, gaps, and byte copies are deterministic", () => {
 
     const clamped = new AS3ByteArray();
     clamped.writeBytes(source, 5, 99);
+    assert.deepEqual([...new Uint8Array(clamped.toArrayBuffer())], [102]);
+    clamped.writeBytes(source, 99, 1);
     assert.deepEqual([...new Uint8Array(clamped.toArrayBuffer())], [102]);
 
     copy.length = 2;
@@ -147,4 +150,6 @@ test("ByteArray rejects hostile allocation ranges before allocating or mutating 
     bytes.position = -1;
     assert.throws(() => bytes.writeByte(4), /write range is invalid/);
     assert.deepEqual([...new Uint8Array(bytes.toArrayBuffer())], [1, 2, 3]);
+    assert.throws(() => { bytes[256 * 1024 * 1024] = 1; }, /resource limit/);
+    assert.equal(Object.prototype.hasOwnProperty.call(bytes, String(256 * 1024 * 1024)), false);
 });

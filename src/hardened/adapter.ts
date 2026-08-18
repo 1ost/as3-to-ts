@@ -625,7 +625,8 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
             fail("HARDENED_VECTOR_TYPE", "Vector must have exactly one structurally admitted element type", node);
         }
         const element = parseType(node.children[0]!, context, false);
-        const primitivePolicy = ["int", "uint", "Number", "Boolean", "String", "Object"].includes(element.sourceName);
+        const primitivePolicy = ["int", "uint", "Number", "Boolean", "String", "Object", "Array", "Class", "Function"]
+            .includes(element.sourceName);
         const imported = context.importsByLocal[element.sourceName];
         if (!primitivePolicy && element.sourceName !== context.className && element.emittedName !== "AS3Vector"
             && (!imported || !imported.runtimeConstructible)) {

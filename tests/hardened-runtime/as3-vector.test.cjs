@@ -34,6 +34,8 @@ test("typed defaults, coercion, bounds, iteration, and stable method closures", 
     assert.equal(vector.push, vector.push);
     assert.throws(() => vector[3], RangeError);
     assert.throws(() => { vector[3] = 1; }, RangeError);
+    assert.throws(() => { vector[0xffffffff] = 2; }, RangeError);
+    assert.equal(Object.prototype.hasOwnProperty.call(vector, "4294967295"), false);
     assert.equal(0 in vector, true);
     assert.equal(3 in vector, false);
 });
@@ -105,6 +107,19 @@ test("specialized Vector runtime types preserve element policy identity", () => 
     assert.equal(as3Is(uints, intType), false);
     assert.equal(as3As(ints, intType), ints);
     assert.equal(as3As([], intType), null);
+});
+
+test("Array, Class, and Function specializations retain distinct runtime policies", () => {
+    class Item {}
+    const arrays = AS3Vector.from(AS3VectorPolicies.array, [[1], null]);
+    const classes = AS3Vector.from(AS3VectorPolicies.class, [Item]);
+    const functions = AS3Vector.from(AS3VectorPolicies.function, [() => 1]);
+    assert.deepEqual(arrays[0], [1]);
+    assert.equal(classes[0], Item);
+    assert.equal(typeof functions[0], "function");
+    assert.throws(() => arrays.push({}), /Vector\.<Array>/);
+    assert.equal(as3Is(classes, as3VectorType(AS3VectorPolicies.class)), true);
+    assert.equal(as3Is(classes, as3VectorType(AS3VectorPolicies.function)), false);
 });
 
 test("nested vectors preserve their complete recursive element specialization", () => {
