@@ -753,6 +753,8 @@ function buildLocalBaseTree(options = {}) {
     if (options.withInterface && !options.wildcardImports && !options.samePackage) {
         imports.push(n("IMPORT", "lobby.base.IReady"));
     }
+    if (options.localStaticCall || options.badLocalStaticCall || options.localStaticField
+        || options.badLocalStaticWrite) imports.push(n("IMPORT", "lobby.base.Utility"));
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
     const superArguments = options.superArgument ? [n("LITERAL", options.badSuperArgument ? '"bad"' : "1")] : [];
@@ -799,6 +801,18 @@ function buildLocalBaseTree(options = {}) {
             n("RELATION", null, [n("IDENTIFIER", "value"), n("AS", "as"), n("IDENTIFIER", "IReady")])),
         localDeclaration("VAR_LIST", "matches", "Boolean",
             n("RELATION", null, [n("IDENTIFIER", "value"), n("OP", "is"), n("IDENTIFIER", "IReady")])),
+        n("RETURN"),
+    ]));
+    if (options.localStaticCall || options.badLocalStaticCall) members.push(method("useLocalStatic", [], "String", [
+        n("RETURN", null, [call(dot(n("IDENTIFIER", "Utility"), "describe"), [
+            n("LITERAL", options.badLocalStaticCall ? '"wrong"' : "1.5"),
+        ])]),
+    ]));
+    if (options.localStaticField) members.push(method("readLocalStatic", [], "String", [
+        n("RETURN", null, [dot(n("IDENTIFIER", "Utility"), "VERSION")]),
+    ]));
+    if (options.badLocalStaticWrite) members.push(method("writeLocalStatic", [], "void", [
+        assignment(dot(n("IDENTIFIER", "Utility"), "VERSION"), n("LITERAL", '"changed"')),
         n("RETURN"),
     ]));
     classChildren.push(n("CONTENT", null, members));
@@ -850,13 +864,24 @@ function localAuthority(api, normalized, options = {}) {
             targetPath: "game-client/layaair/src/application/lobby/base/InternalSpace.ts", topologicalLevel: 0,
             typeKind: "package",
         }] : []),
+        ...(options.localStaticCall || options.badLocalStaticCall || options.localStaticField
+            || options.badLocalStaticWrite ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "d".repeat(64), nodeId: "0000000000000006", prerequisites: [],
+            qname: "lobby.base.Utility", sourceContentSha256: "e".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/Utility.as",
+            targetPath: "game-client/layaair/src/application/lobby/base/Utility.ts", topologicalLevel: 0,
+            typeKind: "class",
+        }] : []),
         {
             componentId: "scc-00002", graphSourceSha256: "8".repeat(64), importable: true,
             module: "application", nodeId: currentNodeId,
             prerequisites: options.withEdge === false ? [] : [baseNodeId]
                 .concat(options.withInterface ? ["0000000000000003"] : [])
                 .concat(options.withPackageSymbols ? ["0000000000000004"] : [])
-                .concat(options.withPackageSymbols || options.withNamespace ? ["0000000000000005"] : []), qname: "lobby.ui.Demo",
+                .concat(options.withPackageSymbols || options.withNamespace ? ["0000000000000005"] : [])
+                .concat(options.localStaticCall || options.badLocalStaticCall || options.localStaticField
+                    || options.badLocalStaticWrite ? ["0000000000000006"] : []), qname: "lobby.ui.Demo",
             sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
             sourceContentSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
             targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
@@ -908,7 +933,14 @@ function localMemberAuthority(api, localTypes, mutate = null) {
         } : {
             baseQNames: entry.qname.endsWith(".Demo") ? [entry.qname.replace(/\.Demo$/, ".Base")] : [],
             interfaceQNames: [],
-            members: entry.qname.endsWith(".Base") ? [{
+            members: entry.qname.endsWith(".Utility") ? [{
+                kind: "method", name: "describe", modifiers: ["public", "static"], namespaceName: null,
+                parameters: [{ name: "value", type: "int", optional: false, rest: false }],
+                returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "field", name: "VERSION", modifiers: ["public", "static"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "String", readonly: true,
+            }] : entry.qname.endsWith(".Base") ? [{
                 kind: "constructor", name: "Base", modifiers: ["public"], namespaceName: null,
                 parameters: [{ name: "value", type: "int", optional: true, rest: false }],
                 returnType: null, fieldType: null, readonly: false,
@@ -1140,6 +1172,22 @@ function main() {
     { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(namespaceOverrideOutput.code, /override namespacedRun\(\): void/);
     assert.doesNotMatch(namespaceOverrideOutput.code, /InternalSpace/);
+    const localStaticOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localStaticCall: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localStaticOutput.code, /return Utility\.describe\(__as3Int\(1\.5\)\);/);
+    const localStaticFieldOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localStaticField: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localStaticFieldOutput.code, /return Utility\.VERSION;/);
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalStaticCall: true }),
+        "HARDENED_LOCAL_CALL_TYPE");
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalStaticWrite: true }),
+        "HARDENED_LOCAL_STATIC_WRITE");
+    assertErrorCode(() => adaptLocal(api, authority, { localStaticCall: true,
+        mutateMemberAuthority: entries => {
+            const utility = entries.find(entry => entry.qname === "lobby.base.Utility");
+            utility.declaration.members.find(member => member.name === "describe").modifiers = ["private", "static"];
+        },
+    }), "HARDENED_LOCAL_STATIC_VISIBILITY");
     const localNormalizedForMembers = flatten(buildLocalBaseTree());
     const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
     const localMembers = localMemberAuthority(api, localTypesForMembers);

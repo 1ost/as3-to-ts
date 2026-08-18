@@ -929,6 +929,24 @@ function localDeclaration(context: AdapterContext, qname: string, node: TreeNode
     return entry;
 }
 
+function localStaticNamedMembers(context: AdapterContext, qname: string, name: string,
+    node: TreeNode): LocalDeclarationMember[] {
+    const entry = localDeclaration(context, qname, node);
+    const currentPackage = context.classQualifiedName.slice(0,
+        Math.max(0, context.classQualifiedName.lastIndexOf(".")));
+    const ownerPackage = qname.slice(0, Math.max(0, qname.lastIndexOf(".")));
+    const matches = entry.declaration!.members.filter(member => member.name === name
+        && member.kind !== "constructor" && member.modifiers.indexOf("static") >= 0);
+    matches.forEach(member => {
+        const visibility = memberVisibility(member.modifiers);
+        if (visibility !== "public" && !(visibility === "internal" && currentPackage === ownerPackage)) {
+            fail("HARDENED_LOCAL_STATIC_VISIBILITY",
+                `local static member ${qname}.${name} is not visible to the current source package`, node);
+        }
+    });
+    return matches;
+}
+
 function localConstructor(context: AdapterContext, qname: string, node: TreeNode): LocalDeclarationMember | null {
     const entry = localDeclaration(context, qname, node);
     const constructors = entry.declaration!.members.filter(member => member.kind === "constructor");
@@ -1032,6 +1050,21 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         }
     }
     if (expression.kind === "member") {
+        if (expression.target.kind === "identifier") {
+            const imported = context.importsByLocal[expression.target.name];
+            if (imported?.authorityKind === "local" && imported.localValueType === null) {
+                const members = localStaticNamedMembers(context, imported.sourceQualifiedName,
+                    expression.name, node);
+                const readable = members.filter(member => member.kind === "getter" || member.kind === "field");
+                if (readable.length !== 1) {
+                    fail("HARDENED_LOCAL_STATIC_READ",
+                        "local static read requires one exact authenticated field or getter", node);
+                }
+                const member = readable[0]!;
+                return authoritySemanticType(member.kind === "field" ? member.fieldType! : member.returnType!,
+                    context, node);
+            }
+        }
         if (expression.capabilitySource !== null) {
             const member = intrinsicMember(context, expression.capabilitySource, "read", expression.name);
             if (member !== null) return authoritySemanticType(member.returnType, context, node);
@@ -1122,6 +1155,22 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
         }
     }
     if (expression.kind === "member") {
+        if (expression.target.kind === "identifier") {
+            const imported = context.importsByLocal[expression.target.name];
+            if (imported?.authorityKind === "local" && imported.localValueType === null) {
+                const members = localStaticNamedMembers(context, imported.sourceQualifiedName,
+                    expression.name, node);
+                const writable = members.filter(member => member.kind === "setter"
+                    || (member.kind === "field" && !member.readonly));
+                if (writable.length !== 1) {
+                    fail("HARDENED_LOCAL_STATIC_WRITE",
+                        "local static write requires one exact authenticated field or setter", node);
+                }
+                const member = writable[0]!;
+                return authoritySemanticType(member.kind === "field" ? member.fieldType!
+                    : member.parameters[0]!.type, context, node);
+            }
+        }
         if (expression.capabilitySource !== null) {
             const member = intrinsicMember(context, expression.capabilitySource, "write", expression.name);
             if (member !== null && member.parameterTypes.length === 1) {
@@ -1780,12 +1829,30 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         } else if (target.kind === "identifier" && context.importsByLocal[target.name]) {
             const imported = context.importsByLocal[target.name]!;
-            const member = imported.authorityKind === "intrinsic"
-                ? intrinsicMember(context, imported.sourceQualifiedName, "read", name) : null;
-            if (member === null) {
-                fail("HARDENED_STATIC_MEMBER", "Flash static members require an explicit authenticated member", node);
+            if (imported.authorityKind === "local" && imported.localValueType === null) {
+                const members = localStaticNamedMembers(context, imported.sourceQualifiedName, name, node);
+                const methods = members.filter(member => member.kind === "method");
+                const readable = members.filter(member => member.kind === "field" || member.kind === "getter");
+                const writable = members.filter(member => member.kind === "setter"
+                    || (member.kind === "field" && !member.readonly));
+                if (members.length === 0 || methods.length > 1 || readable.length > 1 || writable.length > 1
+                    || (methods.length > 0 && (readable.length > 0 || writable.length > 0))) {
+                    fail("HARDENED_LOCAL_STATIC_MEMBER",
+                        "local static member identity is absent or ambiguous", node);
+                }
+                if (valuePosition && methods.length > 0) {
+                    fail("HARDENED_LOCAL_STATIC_METHOD_CLOSURE",
+                        "local static method closure identity remains held", node);
+                }
+                capabilitySource = imported.sourceQualifiedName;
+            } else {
+                const member = imported.authorityKind === "intrinsic"
+                    ? intrinsicMember(context, imported.sourceQualifiedName, "read", name) : null;
+                if (member === null) {
+                    fail("HARDENED_STATIC_MEMBER", "static members require an explicit authenticated member", node);
+                }
+                capabilitySource = imported.sourceQualifiedName;
             }
-            capabilitySource = imported.sourceQualifiedName;
         } else {
             const targetType = assignmentType(target, context, node.children[0]!);
             targetNullable = targetType.nullable;
@@ -1925,6 +1992,20 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 capabilitySource = mapping.sourceQName;
                 capabilityMember = mapping.sourceMember.name;
             }
+        } else if (callee.kind === "member" && callee.target.kind === "identifier"
+            && context.importsByLocal[callee.target.name]?.authorityKind === "local"
+            && context.importsByLocal[callee.target.name]?.localValueType === null) {
+            const imported = context.importsByLocal[callee.target.name]!;
+            if (callee.capabilitySource !== imported.sourceQualifiedName) {
+                fail("HARDENED_LOCAL_STATIC_CALL", "static call authority does not match its local class", node);
+            }
+            const methods = localStaticNamedMembers(context, imported.sourceQualifiedName, callee.name, node)
+                .filter(member => member.kind === "method");
+            if (methods.length !== 1) {
+                fail("HARDENED_LOCAL_STATIC_CALL", "local static call lacks one exact method declaration", node);
+            }
+            assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node);
+            resultType = authoritySemanticType(methods[0]!.returnType!, context, node);
         } else if (callee.kind === "member" && callee.capabilitySource !== null
             && intrinsicMember(context, callee.capabilitySource, "call", callee.name) !== null) {
             const member = intrinsicMember(context, callee.capabilitySource, "call", callee.name)!;
