@@ -148,6 +148,12 @@ function method(name, parameters, returnType, body, modifierValues = ["public"])
     ]);
 }
 
+function expressionParameter(name, typeName, defaultExpression) {
+    return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, [
+        n("NAME", name), type(typeName), n("INIT", null, [defaultExpression]),
+    ])]);
+}
+
 function restParameter(name) {
     return n("PARAMETER", null, [n("REST", name)]);
 }
@@ -526,6 +532,11 @@ function buildTree(options = {}) {
     ];
     if (options.defaultParameterWorkpack) {
         members.push(method("configure", [parameter("enabled", "Boolean", "true")], "void", [n("RETURN")]));
+    }
+    if (options.negativeDefaultWorkpack || options.badNegativeDefault) {
+        const operand = options.badNegativeDefault ? n("LITERAL", '"bad"') : n("LITERAL", "1");
+        members.push(method("configureIndex", [expressionParameter("index", "int",
+            n("MINUS", null, [operand]))], "void", [n("RETURN")]));
     }
     if (options.restParameterWorkpack || options.badRestPosition) {
         const parameters = options.badRestPosition
@@ -1023,6 +1034,12 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(defaultParameterOutput.code, /configure\(enabled: boolean = true\): void/);
     assert.match(defaultParameterOutput.code, /this\.configure\(\);/);
+    const negativeDefaultProgram = adapt(api, buildTree({ negativeDefaultWorkpack: true }), authority);
+    const negativeDefaultOutput = api.emitSemanticProgram(negativeDefaultProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(negativeDefaultOutput.code, /configureIndex\(index: number = -1\): void/);
+    assertErrorCode(() => adapt(api, buildTree({ badNegativeDefault: true }), authority),
+        "HARDENED_UNARY_NUMBER");
     const nestedExpressionProgram = adapt(api, buildTree({ nestedExpressionWorkpack: true }), authority);
     const nestedExpressionOutput = api.emitSemanticProgram(nestedExpressionProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1113,7 +1130,8 @@ function main() {
     assertGeneratedRuntimeTypechecks([vectorOutput.code, shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code,
         existingForEachOutput.code, tryOutput.code,
-        bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
+        bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,
+        nestedExpressionOutput.code,
         labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code,
         nullableOutput.code, lambdaOutput.code, dictionaryOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);

@@ -189,7 +189,7 @@ try {
         "        public function guarded():void { try { throw \"bad\"; } catch (error:Error) { throw error; } finally { status = \"done\"; } }",
         "        public function bits():void { var flags:int = 1 | 2; var shifted:uint = flags >>> 1; var inverted:int = ~flags; var active:Boolean = true; flags >>>= 1; active &&= false; ++flags; --flags; }",
         "        public function objectConfig():void { var config:Object = {\"alpha\":1,\"label\":\"ready\"}; }",
-        "        public function optional(enabled:Boolean = true):void { }",
+        "        public function optional(enabled:Boolean = true,index:int = -1):void { }",
         "        public function collect(prefix:String,...values):void { }",
         "        public function labelled():void { outer: while (true) { break outer; } }",
         "        ResourcesSpace function namespaced():void { status = \"namespace\"; }",
@@ -322,6 +322,8 @@ try {
     assert.equal(objectInitializer.kind, "object");
     assert.deepEqual(objectInitializer.properties.map(property => property.name), ["alpha", "label"]);
     assert.equal(semantic.declaration.members[13].parameters[0].defaultValue.value, true);
+    assert.equal(semantic.declaration.members[13].parameters[1].defaultValue.kind, "unary");
+    assert.equal(semantic.declaration.members[13].parameters[1].defaultValue.operator, "-");
     assert.equal(semantic.declaration.members[14].parameters[1].rest, true);
     assert.equal(semantic.declaration.members[14].parameters[1].type.sourceName, "*");
     assert.equal(semantic.declaration.members[15].body[0].kind, "label");

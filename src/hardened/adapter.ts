@@ -570,13 +570,24 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
         let defaultValue: SemanticExpression | null = null;
         if (init !== null) {
             if (init.children.length !== 1 || (init.children[0]!.kind !== "LITERAL"
-                && init.children[0]!.kind !== "IDENTIFIER")) {
+                && init.children[0]!.kind !== "IDENTIFIER" && init.children[0]!.kind !== "MINUS")) {
                 fail("HARDENED_PARAMETER_DEFAULT", "default parameter must be one admitted scalar literal", init);
             }
             const rawDefault = init.children[0]!;
-            defaultValue = parseLiteral(rawDefault.kind === "IDENTIFIER"
-                ? Object.assign({}, rawDefault, { kind: "LITERAL" }) : rawDefault);
-            if (defaultValue.kind !== "literal") {
+            if (rawDefault.kind === "MINUS") {
+                if (rawDefault.children.length !== 1 || rawDefault.children[0]!.kind !== "LITERAL") {
+                    fail("HARDENED_PARAMETER_DEFAULT", "negative default requires exactly one numeric literal", rawDefault);
+                }
+                defaultValue = parseExpression(rawDefault, context, true);
+                if (defaultValue.kind !== "unary" || defaultValue.operator !== "-"
+                    || defaultValue.operand.kind !== "literal" || typeof defaultValue.operand.value !== "number") {
+                    fail("HARDENED_PARAMETER_DEFAULT", "negative default requires exactly one finite numeric literal", rawDefault);
+                }
+            } else {
+                defaultValue = parseLiteral(rawDefault.kind === "IDENTIFIER"
+                    ? Object.assign({}, rawDefault, { kind: "LITERAL" }) : rawDefault);
+            }
+            if (defaultValue.kind !== "literal" && defaultValue.kind !== "unary") {
                 fail("HARDENED_PARAMETER_DEFAULT", "default parameter must normalize to one scalar literal", init);
             }
             assertAssignmentCompatible(parameterType, assignmentType(defaultValue, context, init.children[0]!), init);
