@@ -47,8 +47,8 @@ test("capability map regenerates byte-identically from both authorities", t => {
     const document = JSON.parse(fs.readFileSync(mapping, "utf8"));
     const typeMappings = document.mappings.filter(item => item.sourceMember === null);
     const memberMappings = document.mappings.filter(item => item.sourceMember !== null);
-    assert.equal(typeMappings.length, 30);
-    assert.equal(memberMappings.length, 138);
+    assert.equal(typeMappings.length, 34);
+    assert.equal(memberMappings.length, 146);
     assert.equal(memberMappings.filter(item => item.targetMember.kind === "constructor").length, 13);
     assert.equal(memberMappings.filter(item => ["getBounds", "getRect", "scrollRect"]
         .includes(item.sourceMember.name)).length, 0);
@@ -57,7 +57,8 @@ test("capability map regenerates byte-identically from both authorities", t => {
     assert.equal(memberMappings.some(item => item.sourceQName === "flash.text.TextField"
         && item.sourceMember.name === "autoSize" && item.sourceMember.access === "write"), false);
     assert.equal(memberMappings.some(item => !["flash.geom.Point", "flash.geom.Rectangle", "flash.display.Bitmap",
-        "flash.display.BitmapData", "flash.display.BitmapDataChannel"].includes(item.sourceQName)
+        "flash.display.BitmapData", "flash.display.BitmapDataChannel", "flash.text.AntiAliasType",
+        "flash.text.TextFieldAutoSize", "flash.text.TextFieldType", "flash.text.TextFormatAlign"].includes(item.sourceQName)
         && item.sourceMember.access !== "call"), false);
     for (const qname of ["flash.display.Bitmap", "flash.display.BitmapData",
         "flash.display.BitmapDataChannel", "flash.display.PixelSnapping"]) {
@@ -75,6 +76,18 @@ test("capability map regenerates byte-identically from both authorities", t => {
         "getCharIndexAtPoint", "getLineLength", "getLineOffset", "getTextFormat", "removeEventListener", "replaceText",
         "setSelection", "setTextFormat"]);
     assert.equal(memberMappings.some(item => item.sourceQName === "flash.text.TextFormat"), false);
+    assert.deepEqual(memberMappings.filter(item => ["flash.text.AntiAliasType", "flash.text.TextFieldAutoSize",
+        "flash.text.TextFieldType", "flash.text.TextFormatAlign"].includes(item.sourceQName))
+        .map(item => `${item.sourceQName}:${item.sourceMember.name}:${item.targetMember.signature}`).sort(), [
+        "flash.text.AntiAliasType:ADVANCED:\"advanced\"",
+        "flash.text.TextFieldAutoSize:CENTER:\"center\"",
+        "flash.text.TextFieldAutoSize:LEFT:\"left\"",
+        "flash.text.TextFieldAutoSize:NONE:\"none\"",
+        "flash.text.TextFieldType:DYNAMIC:\"dynamic\"",
+        "flash.text.TextFieldType:INPUT:\"input\"",
+        "flash.text.TextFormatAlign:CENTER:\"center\"",
+        "flash.text.TextFormatAlign:LEFT:\"left\"",
+    ]);
     assert.deepEqual(memberMappings.filter(item => item.sourceQName.startsWith("flash.filters."))
         .map(item => `${item.sourceQName}:${item.sourceMember.name}`).sort(), [
         "flash.filters.BlurFilter:BlurFilter", "flash.filters.DropShadowFilter:DropShadowFilter",
@@ -91,7 +104,7 @@ test("capability map regenerates byte-identically from both authorities", t => {
     assert.equal(baselineDocument.mappings.length, 130);
     assert.equal(baselineDocument.mappings.every(item => currentKeys.has(mappingKey(item))), true,
         "the exact accepted 01f mapping key set must be preserved");
-    assert.equal(document.mappings.length - baselineDocument.mappings.length, 38);
+    assert.equal(document.mappings.length - baselineDocument.mappings.length, 50);
     for (const item of document.mappings) {
         assert.match(item.targetModule, /^src\/layaAir\/flash\//);
         assert.doesNotMatch(item.targetExport, /^_/);
@@ -265,6 +278,40 @@ test("bitmap generation rejects duplicate source and target authority identities
         .find(item => item.export === "TextField");
     duplicateTextField.members.push(structuredClone(duplicateTextField.members.find(item => item.name === "appendText")));
     assert.notEqual(run("duplicate-text-member", baseSource, duplicateTextMember).status, 0);
+
+    const duplicateTextConstantUse = structuredClone(baseSource);
+    duplicateTextConstantUse.as3SourceCapabilities.memberUses.push(structuredClone(
+        duplicateTextConstantUse.as3SourceCapabilities.memberUses.find(item =>
+            item.qname === "flash.text.TextFieldAutoSize" && item.member === "LEFT")));
+    assert.notEqual(run("duplicate-text-constant-use", duplicateTextConstantUse, baseTarget).status, 0);
+
+    const parallelTextConstantArgument = structuredClone(baseSource);
+    const parallelLeft = structuredClone(parallelTextConstantArgument.as3SourceCapabilities.memberUses.find(item =>
+        item.qname === "flash.text.TextFieldAutoSize" && item.member === "LEFT"));
+    parallelLeft.argumentCount = 0;
+    parallelTextConstantArgument.as3SourceCapabilities.memberUses.push(parallelLeft);
+    assert.notEqual(run("parallel-text-constant-argument", parallelTextConstantArgument, baseTarget).status, 0);
+
+    for (const [name, field, value] of [["text-constant-min-args", "minArgs", 1],
+        ["text-constant-max-args", "maxArgs", 0]]) {
+        const mutatedTextConstantArity = structuredClone(baseSource);
+        mutatedTextConstantArity.as3SourceCapabilities.memberUses.find(item =>
+            item.qname === "flash.text.TextFieldAutoSize" && item.member === "LEFT").signatures[0][field] = value;
+        assert.notEqual(run(name, mutatedTextConstantArity, baseTarget).status, 0);
+    }
+
+    const duplicateTextConstantMember = structuredClone(baseTarget);
+    const autoSize = duplicateTextConstantMember.capabilities.flatMap(item => item.obligations || [])
+        .find(item => item.export === "TextFieldAutoSize");
+    autoSize.members.push(structuredClone(autoSize.members.find(item => item.name === "LEFT")));
+    assert.notEqual(run("duplicate-text-constant-member", baseSource, duplicateTextConstantMember).status, 0);
+
+    const changedTextConstant = structuredClone(baseTarget);
+    changedTextConstant.capabilities.flatMap(item => item.obligations || [])
+        .find(item => item.export === "TextFieldType").members.find(item => item.name === "INPUT").signature = "\"edit\"";
+    assert.equal(run("changed-text-constant", baseSource, changedTextConstant).status, 0);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(output, "changed-text-constant-map.json"), "utf8")).mappings
+        .some(item => item.sourceQName === "flash.text.TextFieldType" && item.sourceMember?.name === "INPUT"), false);
 
     const nullableFilterConstructor = structuredClone(baseTarget);
     nullableFilterConstructor.capabilities.flatMap(item => item.obligations || []).find(item => item.export === "BlurFilter")
@@ -483,6 +530,39 @@ test("capability loader authenticates bitmap holds, numeric nullability, and con
         .find(item => item.export === "BitmapDataChannel").members.find(item => item.name === "RED").readonly = false;
     assert.throws(() => load(structuredClone(baseMapping), source, unreadonlyConstant),
         error => error?.code === "HARDENED_TARGET_MEMBER");
+
+    const unreadonlyTextConstant = structuredClone(target);
+    unreadonlyTextConstant.capabilities.flatMap(item => item.obligations || [])
+        .find(item => item.export === "TextFieldAutoSize").members.find(item => item.name === "LEFT").readonly = false;
+    assert.throws(() => load(structuredClone(baseMapping), source, unreadonlyTextConstant),
+        error => error?.code === "HARDENED_TARGET_MEMBER");
+
+    const parallelTextConstantSource = structuredClone(source);
+    const parallelLeftUse = structuredClone(parallelTextConstantSource.as3SourceCapabilities.memberUses.find(item =>
+        item.qname === "flash.text.TextFieldAutoSize" && item.member === "LEFT"));
+    parallelLeftUse.argumentCount = 0;
+    parallelTextConstantSource.as3SourceCapabilities.memberUses.push(parallelLeftUse);
+    assert.throws(() => load(structuredClone(baseMapping), parallelTextConstantSource, target),
+        error => error?.code === "HARDENED_SOURCE_MEMBER_CAPABILITY");
+
+    for (const [field, value] of [["minArgs", 1], ["maxArgs", 0]]) {
+        const mutatedTextConstantArity = structuredClone(source);
+        mutatedTextConstantArity.as3SourceCapabilities.memberUses.find(item =>
+            item.qname === "flash.text.TextFieldAutoSize" && item.member === "LEFT").signatures[0][field] = value;
+        assert.throws(() => load(structuredClone(baseMapping), mutatedTextConstantArity, target),
+            error => error?.code === "HARDENED_SOURCE_MEMBER_CAPABILITY");
+    }
+
+    const mutatedTextConstant = structuredClone(baseMapping);
+    const mutatedTextConstantSource = structuredClone(source);
+    const leftMapping = mutatedTextConstant.mappings.find(item => item.sourceQName === "flash.text.TextFieldAutoSize"
+        && item.sourceMember?.name === "LEFT");
+    leftMapping.sourceMember.signature = leftMapping.sourceMember.signature.replace("= \"left\";", "= \"forged\";");
+    mutatedTextConstantSource.as3SourceCapabilities.memberUses.find(item =>
+        item.qname === "flash.text.TextFieldAutoSize" && item.member === "LEFT").signatures[0].signature
+        = leftMapping.sourceMember.signature;
+    assert.throws(() => load(mutatedTextConstant, mutatedTextConstantSource, target),
+        error => error?.code === "HARDENED_CAPABILITY_MEMBER_SIGNATURE");
 
     const mutatedConstant = structuredClone(baseMapping);
     const mutatedConstantSource = structuredClone(source);

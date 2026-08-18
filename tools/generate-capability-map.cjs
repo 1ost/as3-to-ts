@@ -38,7 +38,9 @@ function canonical(value) {
 function exactTarget(sourceQName, obligations) {
     const parts = sourceQName.split(".");
     const targetExport = parts.pop();
-    const targetModule = `src/layaAir/${parts.join("/")}/${targetExport}.ts`;
+    const targetModule = TEXT_CONSTANT_QNAMES.has(sourceQName)
+        ? "src/layaAir/flash/text/TextFormat.ts"
+        : `src/layaAir/${parts.join("/")}/${targetExport}.ts`;
     const matches = obligations.filter(item => item.obligation.export === targetExport
         && (STRICT_SOURCE_QNAMES.has(sourceQName) || item.obligation.module === targetModule));
     if (matches.length > 1) throw new Error(`ambiguous target obligation for ${sourceQName}`);
@@ -109,7 +111,14 @@ const BITMAP_QNAMES = new Set(["flash.display.Bitmap", "flash.display.BitmapData
 const BITMAP_SOURCE_QNAMES = new Set([...BITMAP_QNAMES, "flash.display.PixelSnapping"]);
 const TEXT_FILTER_QNAMES = new Set(["flash.text.TextField", "flash.text.TextFormat", "flash.filters.BitmapFilter",
     "flash.filters.BlurFilter", "flash.filters.ColorMatrixFilter", "flash.filters.DropShadowFilter", "flash.filters.GlowFilter"]);
-const STRICT_SOURCE_QNAMES = new Set([...BITMAP_SOURCE_QNAMES, ...TEXT_FILTER_QNAMES]);
+const TEXT_CONSTANT_VALUES = Object.freeze({
+    "flash.text.AntiAliasType": Object.freeze({ ADVANCED: "advanced" }),
+    "flash.text.TextFieldAutoSize": Object.freeze({ CENTER: "center", LEFT: "left", NONE: "none" }),
+    "flash.text.TextFieldType": Object.freeze({ DYNAMIC: "dynamic", INPUT: "input" }),
+    "flash.text.TextFormatAlign": Object.freeze({ CENTER: "center", LEFT: "left" }),
+});
+const TEXT_CONSTANT_QNAMES = new Set(Object.keys(TEXT_CONSTANT_VALUES));
+const STRICT_SOURCE_QNAMES = new Set([...BITMAP_SOURCE_QNAMES, ...TEXT_FILTER_QNAMES, ...TEXT_CONSTANT_QNAMES]);
 const BITMAP_ALLOWED_MEMBERS = Object.freeze({
     "flash.display.Bitmap": new Set(["bitmapData", "smoothing"]),
     "flash.display.BitmapData": new Set(["BitmapData", "clone", "copyChannel", "copyPixels", "dispose", "fillRect",
@@ -147,6 +156,10 @@ function admittedBitmapMember(use) {
 }
 
 function admittedTextFilterMember(use) {
+    if (TEXT_CONSTANT_QNAMES.has(use.qname)) {
+        return Object.hasOwn(TEXT_CONSTANT_VALUES[use.qname], use.member)
+            && use.context === "static-member" && use.access === "read";
+    }
     const members = TEXT_FILTER_ALLOWED_MEMBERS[use.qname];
     if (!members || !members.has(use.member) || use.access !== "call") return false;
     return use.qname === "flash.text.TextField" ? use.member === "TextField"
@@ -242,6 +255,12 @@ function sourcePropertyType(signature, access, bitmapNumeric = false) {
 }
 
 function exactOwnedSourceMetadata(sourceUse, signature, targetExport) {
+    if (TEXT_CONSTANT_QNAMES.has(sourceUse.qname)) {
+        return sourceUse.argumentCount === null && sourceUse.receiverType === sourceUse.qname
+            && signature.declaredBy === sourceUse.qname && signature.kind === "const"
+            && signature.static === true && signature.returnType === "String"
+            && signature.minArgs === 0 && signature.maxArgs === null;
+    }
     if (!exactCallMember(sourceUse.qname, sourceUse.member)) return true;
     const constructor = sourceUse.member === targetExport;
     const expectedKind = constructor ? "constructor"
@@ -264,6 +283,15 @@ function exactBitmapChannelConstant(sourceUse, sourceSignature, targetMember) {
     return expected !== undefined && source !== null && source[1] === sourceUse.member
         && Number(source[2]) === expected && targetMember.kind === "property" && targetMember.scope === "static"
         && targetMember.readonly === true && targetMember.signature === String(expected);
+}
+
+function exactTextConstant(sourceUse, sourceSignature, targetMember) {
+    const expected = TEXT_CONSTANT_VALUES[sourceUse.qname]?.[sourceUse.member];
+    const source = /^public static const ([A-Za-z_$][A-Za-z0-9_$]*):String\s*=\s*"([^"]*)";$/.exec(
+        sourceSignature.signature);
+    return expected !== undefined && source !== null && source[1] === sourceUse.member && source[2] === expected
+        && targetMember.kind === "property" && targetMember.scope === "static" && targetMember.readonly === true
+        && targetMember.signature === JSON.stringify(expected);
 }
 
 function targetMemberFor(sourceUse, sourceSignature, obligation) {
@@ -299,6 +327,8 @@ function targetMemberFor(sourceUse, sourceSignature, obligation) {
     if (matches.length !== 1) return null;
     if (sourceUse.qname === "flash.display.BitmapDataChannel") {
         if (!exactBitmapChannelConstant(sourceUse, sourceSignature, matches[0])) return null;
+    } else if (TEXT_CONSTANT_QNAMES.has(sourceUse.qname)) {
+        if (!exactTextConstant(sourceUse, sourceSignature, matches[0])) return null;
     } else if (sourceUse.access === "call" && (GEOMETRY_QNAMES.has(sourceUse.qname)
         || exactCallMember(sourceUse.qname, sourceUse.member))) {
         const targetArity = callableArity(matches[0].signature);
@@ -332,19 +362,25 @@ for (const qname of STRICT_SOURCE_QNAMES) {
 }
 const bitmapUseGroups = new Map();
 for (const use of sourceCapabilities.memberUses.filter(item => item && (BITMAP_QNAMES.has(item.qname)
-    ? admittedBitmapMember(item) : TEXT_FILTER_QNAMES.has(item.qname) && admittedTextFilterMember(item)))) {
+    ? admittedBitmapMember(item) : (TEXT_FILTER_QNAMES.has(item.qname) || TEXT_CONSTANT_QNAMES.has(item.qname))
+        && admittedTextFilterMember(item)))) {
     const groupKey = [use.qname, use.member, use.access, use.context].join("\u0000");
     if (!bitmapUseGroups.has(groupKey)) bitmapUseGroups.set(groupKey, []);
     bitmapUseGroups.get(groupKey).push(use);
 }
 for (const [groupKey, uses] of bitmapUseGroups) {
+    const textConstant = TEXT_CONSTANT_QNAMES.has(uses[0]?.qname);
+    if (textConstant && uses.length !== 1) {
+        throw new Error(`text constant source member evidence is absent or ambiguous: ${groupKey}`);
+    }
     const argumentCounts = new Set();
     let signatureTuple = null;
     for (const use of uses) {
         const argumentIdentity = canonical(use.argumentCount);
         if (argumentCounts.has(argumentIdentity) || use.classification !== "layaair-flash-api-bridge"
             || use.preserveNameAndSignature !== true || use.receiverType !== use.qname
-            || !Array.isArray(use.signatures) || use.signatures.length !== 1) {
+            || !Array.isArray(use.signatures) || use.signatures.length !== 1
+            || (textConstant && use.argumentCount !== null)) {
             throw new Error(`bitmap source member evidence is absent or ambiguous: ${groupKey}`);
         }
         argumentCounts.add(argumentIdentity);
@@ -352,6 +388,9 @@ for (const [groupKey, uses] of bitmapUseGroups) {
         const signatureKeys = ["declaredBy", "kind", "maxArgs", "minArgs", "returnType", "signature", "static"];
         if (!signature || Object.keys(signature).sort().join("\u0000") !== signatureKeys.join("\u0000")) {
             throw new Error(`bitmap source signature tuple is invalid: ${groupKey}`);
+        }
+        if (textConstant && (signature.minArgs !== 0 || signature.maxArgs !== null)) {
+            throw new Error(`text constant source signature tuple is invalid: ${groupKey}`);
         }
         const tuple = canonical(signature);
         if (signatureTuple !== null && signatureTuple !== tuple) {
@@ -411,11 +450,12 @@ for (const api of sourceCapabilities.apis) {
 const memberKeys = new Map();
 for (const use of sourceCapabilities.memberUses) {
     const bitmapMember = BITMAP_QNAMES.has(use.qname);
-    const textFilterMember = TEXT_FILTER_QNAMES.has(use.qname);
+    const textFilterMember = TEXT_FILTER_QNAMES.has(use.qname) || TEXT_CONSTANT_QNAMES.has(use.qname);
     if (use.classification !== "layaair-flash-api-bridge" || use.preserveNameAndSignature !== true
         || typeof use.qname !== "string" || !mappedTypes.has(use.qname)
         || !["call", "read", "write"].includes(use.access)
-        || (use.access !== "call" && !GEOMETRY_QNAMES.has(use.qname) && !bitmapMember)
+        || (use.access !== "call" && !GEOMETRY_QNAMES.has(use.qname) && !bitmapMember
+            && !TEXT_CONSTANT_QNAMES.has(use.qname))
         || (bitmapMember && !admittedBitmapMember(use))
         || (textFilterMember && !admittedTextFilterMember(use))
         || use.qname === "flash.display.PixelSnapping"
