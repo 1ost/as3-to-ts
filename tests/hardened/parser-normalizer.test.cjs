@@ -185,7 +185,7 @@ try {
         "        public function Demo() { super(); }",
         "        public function onEvent(event:Event):void { var total:Number = 1 + 2; var active:Boolean = !(total === 0); var chosen:Number = active ? total : 0; var reduced:Number = total - 1; while (total > 0) { total--; if (total === 1) { continue; } break; } status = \"changed\"; return; }",
         "        public function flow(value:Number):void { var active:Boolean = true; switch (value) { case 1: value = 2; break; default: value = 3; } do { active = false; } while (active); throw \"done\"; }",
-        "        public function iteration():void { var values:Vector.<int> = new Vector.<int>(); for (var i:Number = 0; i < 2; i++) { values.push(int(i)); } for each (var item:int in values) { values.indexOf(item); } }",
+        "        public function iteration():void { var values:Vector.<int> = new Vector.<int>(); for (var i:Number = 0; i < 2; i++) { values.push(int(i)); } for each (var item:int in values) { values.indexOf(item); } var existing:int = 0; for each (existing in values) { values.indexOf(existing); } }",
         "        public function guarded():void { try { throw \"bad\"; } catch (error:Error) { throw error; } finally { status = \"done\"; } }",
         "        public function bits():void { var flags:int = 1 | 2; var shifted:uint = flags >>> 1; var inverted:int = ~flags; var active:Boolean = true; flags >>>= 1; active &&= false; ++flags; --flags; }",
         "        public function objectConfig():void { var config:Object = {\"alpha\":1,\"label\":\"ready\"}; }",
@@ -295,6 +295,10 @@ try {
     assert.equal(semantic.declaration.members[8].body[3].kind, "throw");
     assert.equal(semantic.declaration.members[9].body[1].kind, "for");
     assert.equal(semantic.declaration.members[9].body[2].kind, "forEach");
+    assert.equal(semantic.declaration.members[9].body[2].declaresBinding, true);
+    assert.equal(semantic.declaration.members[9].body[3].kind, "local");
+    assert.equal(semantic.declaration.members[9].body[4].kind, "forEach");
+    assert.equal(semantic.declaration.members[9].body[4].declaresBinding, false);
     ["FOR", "FOREACH", "IN", "ITER"].forEach(kind =>
         assert.ok(normalized.nodes.some(node => node.kind === kind), `real parser preserves ${kind}`));
     assert.equal(semantic.declaration.members[10].body[0].kind, "try");

@@ -228,7 +228,8 @@ function buildTree(options = {}) {
             ]),
         ]));
     }
-    if (options.vectorWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack || options.badForEachType) {
+    if (options.vectorWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack
+        || options.existingForEachWorkpack || options.badForEachType) {
         field.children.push(n("NAME_TYPE_INIT", null, [
             n("NAME", "values"), vectorType("int"),
             n("INIT", null, [n("NEW", null, [call(vectorType("int"), [n("LITERAL", "2"), n("LITERAL", "false")])])]),
@@ -376,8 +377,11 @@ function buildTree(options = {}) {
             n("THROW", null, [n("LITERAL", '"done"')]),
         ];
     }
-    if (options.iterationWorkpack || options.badForEachType) {
+    if (options.iterationWorkpack || options.existingForEachWorkpack || options.badForEachType) {
         const bindingType = options.badForEachType ? "String" : "int";
+        const forEachBinding = options.existingForEachWorkpack
+            ? n("NAME", "existingItem")
+            : n("VAR", null, [n("NAME_TYPE_INIT", null, [n("NAME", "item"), type(bindingType)])]);
         onEventBody = [
             n("FOR", null, [
                 n("INIT", null, [localDeclaration("VAR_LIST", "i", "Number", n("LITERAL", "0"))]),
@@ -385,10 +389,14 @@ function buildTree(options = {}) {
                 n("ITER", null, [n("POST_INC", null, [n("IDENTIFIER", "i")])]),
                 n("BLOCK", null, [call(dot(n("IDENTIFIER", "values"), "push"), [call(n("IDENTIFIER", "int"), [n("IDENTIFIER", "i")])])]),
             ]),
+            ...(options.existingForEachWorkpack
+                ? [localDeclaration("VAR_LIST", "existingItem", "int", n("LITERAL", "0"))] : []),
             n("FOREACH", null, [
-                n("VAR", null, [n("NAME_TYPE_INIT", null, [n("NAME", "item"), type(bindingType)])]),
+                forEachBinding,
                 n("IN", null, [n("IDENTIFIER", "values")]),
-                n("BLOCK", null, [call(dot(n("IDENTIFIER", "values"), "indexOf"), [n("IDENTIFIER", "item")])]),
+                n("BLOCK", null, [call(dot(n("IDENTIFIER", "values"), "indexOf"), [
+                    n("IDENTIFIER", options.existingForEachWorkpack ? "existingItem" : "item"),
+                ])]),
             ]),
             n("RETURN"),
         ];
@@ -982,6 +990,12 @@ function main() {
     const iterationOutput = api.emitSemanticProgram(iterationProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(iterationOutput.code, /for \(var i: number = 0; i < 2; i\+\+\)/);
     assert.match(iterationOutput.code, /for \(var item of this\.values!\)/);
+    const existingForEachProgram = adapt(api, buildTree({ existingForEachWorkpack: true }), authority);
+    const existingForEachOutput = api.emitSemanticProgram(existingForEachProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(existingForEachOutput.code, /var existingItem: number = 0;/);
+    assert.match(existingForEachOutput.code, /for \(existingItem of this\.values!\)/);
+    assert.doesNotMatch(existingForEachOutput.code, /for \(var existingItem of/);
     assert.match(iterationOutput.code, /this\.values!\.indexOf\(item\);/);
     assertErrorCode(() => adapt(api, buildTree({ badForEachType: true }), authority),
         "HARDENED_ASSIGNMENT_TYPE");
@@ -1097,7 +1111,8 @@ function main() {
     assertErrorCode(() => adapt(api, buildTree({ badLogicalCompound: true }), authority), "HARDENED_COMPOUND_TYPE");
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
     assertGeneratedRuntimeTypechecks([vectorOutput.code, shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
-        nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code, tryOutput.code,
+        nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code,
+        existingForEachOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, nestedExpressionOutput.code,
         labelOutput.code, interfaceOutput.code, namespaceOutput.code, overrideOutput.code, forInOutput.code,
         nullableOutput.code, lambdaOutput.code, dictionaryOutput.code]);

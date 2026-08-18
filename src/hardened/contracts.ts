@@ -346,6 +346,7 @@ export interface SemanticIterationBinding extends SemanticIdentity {
 export interface ForEachStatement extends SemanticIdentity {
     kind: "forEach";
     binding: SemanticIterationBinding;
+    declaresBinding: boolean;
     iterable: SemanticExpression;
     iterableType: SemanticType;
     statements: SemanticStatement[];

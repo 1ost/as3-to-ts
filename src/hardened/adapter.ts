@@ -1614,13 +1614,27 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             }
         }
         if (node.kind === "FOREACH") {
-            if (node.children.length !== 3 || node.children[0]!.kind !== "VAR"
-                || node.children[1]!.kind !== "IN" || node.children[0]!.children.length !== 1
-                || node.children[1]!.children.length !== 1) {
-                fail("HARDENED_FOREACH_SHAPE", "for each requires one typed var binding and one iterable", node);
+            if (node.children.length !== 3 || !["VAR", "NAME"].includes(node.children[0]!.kind)
+                || node.children[1]!.kind !== "IN" || node.children[1]!.children.length !== 1) {
+                fail("HARDENED_FOREACH_SHAPE", "for each requires one declared or existing local binding and one iterable", node);
             }
-            const declaration = node.children[0]!.children[0]!;
-            const header = Object.values(context.locals).find(local => local.node === declaration);
+            const declaresBinding = node.children[0]!.kind === "VAR";
+            let declaration: TreeNode;
+            let header: LocalHeader | undefined;
+            if (declaresBinding) {
+                if (node.children[0]!.children.length !== 1) {
+                    fail("HARDENED_FOREACH_BINDING", "for each declares exactly one local identity", node.children[0]!);
+                }
+                declaration = node.children[0]!.children[0]!;
+                header = Object.values(context.locals).find(local => local.node === declaration);
+            } else {
+                declaration = node.children[0]!;
+                const name = validateIdentifier(requiredText(declaration, "for each binding"), declaration);
+                header = context.locals[name];
+                if (header?.readonly) {
+                    fail("HARDENED_FOREACH_BINDING", "for each cannot assign a readonly local identity", declaration);
+                }
+            }
             if (!header) fail("HARDENED_FOREACH_BINDING", "for each binding lacks its predeclared local identity", declaration);
             const iterable = parseExpression(node.children[1]!.children[0]!, context, true);
             const iterableType = assignmentType(iterable, context, node.children[1]!.children[0]!);
@@ -1634,7 +1648,7 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 return Object.assign(identity(node), {
                     kind: "forEach" as "forEach", binding: Object.assign(identity(declaration), {
                         name: header.name, type: header.type,
-                    }), iterable, iterableType,
+                    }), declaresBinding, iterable, iterableType,
                     statements: body.kind === "BLOCK"
                         ? parseBlock(body, context, constructor, derived, expectedReturn, false)
                         : [parseStatementNode(body, context, constructor, derived, expectedReturn, false)],

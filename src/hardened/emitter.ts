@@ -381,11 +381,13 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
     if (statement.kind === "forEach") {
-        const declaration = ts.factory.createVariableDeclarationList([
-            ts.factory.createVariableDeclaration(statement.binding.name, undefined, undefined, undefined),
-        ], ts.NodeFlags.None);
+        const binding = statement.declaresBinding
+            ? ts.factory.createVariableDeclarationList([
+                ts.factory.createVariableDeclaration(statement.binding.name, undefined, undefined, undefined),
+            ], ts.NodeFlags.None)
+            : ts.factory.createIdentifier(statement.binding.name);
         const iterable = expressionNode(statement.iterable, ts);
-        return ts.factory.createForOfStatement(undefined, declaration,
+        return ts.factory.createForOfStatement(undefined, binding,
             statement.iterableType.nullable ? ts.factory.createNonNullExpression(iterable) : iterable,
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
