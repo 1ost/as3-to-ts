@@ -60,6 +60,18 @@ test("conversion and mutators preserve the element policy", () => {
     assert.equal(vector.join("|"), "1|7|8|3");
 });
 
+test("constructor and indexed-range methods apply their declared AS3 int and uint coercions", () => {
+    const sized = new AS3Vector(AS3VectorPolicies.int, 1.5);
+    assert.equal(sized.length, 1);
+    const vector = AS3Vector.from(AS3VectorPolicies.int, [1, 2, 3, 4]);
+    assert.deepEqual([...vector.slice(0, 4294967295)], [1, 2, 3]);
+    assert.equal(vector.indexOf(3.9, 1.5), 2);
+    assert.equal(vector.lastIndexOf(2.9, 4294967295), 1);
+    const removed = vector.splice(1.9, 4294967295);
+    assert.deepEqual([...removed], [2, 3, 4]);
+    assert.deepEqual([...vector], [1]);
+});
+
 test("reference policies default to null and fail closed on incompatible writes", () => {
     class Item { constructor(readonly) { this.value = readonly; } }
     const policy = as3VectorReference("Item", Item);

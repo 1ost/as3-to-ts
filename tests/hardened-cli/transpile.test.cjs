@@ -15,6 +15,8 @@ const targetCapabilities = process.env.HARDENED_TARGET_CAPABILITIES
     || "C:/Users/admin/Desktop/GITHUB REPO/LayaAir/docTool/architecture/authored-content-capabilities.json";
 const layaRoot = process.env.HARDENED_TARGET_REPO
     || "C:/Users/admin/Desktop/GITHUB REPO/LayaAir";
+const sourceRepository = process.env.HARDENED_SOURCE_REPO
+    || "C:/Users/admin/Desktop/GITHUB REPO/bleach-services";
 
 function temporaryDirectory(t) {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "as3-transpile-test-"));
@@ -133,6 +135,20 @@ test("unsupported syntax fails closed without publishing", t => {
     const result = invoke(source, output, root);
     assert.equal(result.status, 4, result.stderr);
     assert.match(result.stderr, /HARDENED_TYPE_UNMAPPED/);
+    assert.equal(fs.existsSync(output), false);
+});
+
+test("package runtime values cannot publish an import whose local constructor module is absent", t => {
+    const root = temporaryDirectory(t);
+    const source = path.join(root, "source");
+    const output = path.join(root, "output");
+    const portable = "Externals/SExternalCore.as";
+    fs.mkdirSync(source);
+    write(source, portable, fs.readFileSync(path.join(sourceRepository,
+        "game-client/tapplication_main/src", ...portable.split("/")), "utf8"));
+    const result = invoke(source, output, root);
+    assert.equal(result.status, 4, result.stderr);
+    assert.match(result.stderr, /local dependency has no emitted output.*TExternalCore\.ts/);
     assert.equal(fs.existsSync(output), false);
 });
 

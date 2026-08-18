@@ -66,7 +66,8 @@ function readGraph(argument) {
     if (Buffer.from(text, "utf8").compare(bytes) !== 0) {
         throw new Error("dependency graph must be exact UTF-8");
     }
-    return { bytes, value: JSON.parse(text) };
+    if (text.startsWith("\uFEFF")) throw new Error("dependency graph must not contain a UTF-8 BOM");
+    return { bytes: Buffer.from(text.replace(/\r\n?/g, "\n"), "utf8"), value: JSON.parse(text) };
 }
 
 function requireString(value, label) {

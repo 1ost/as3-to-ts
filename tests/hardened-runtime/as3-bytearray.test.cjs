@@ -19,7 +19,8 @@ fs.writeFileSync(CONFIG, JSON.stringify({
 }), "utf8");
 childProcess.execFileSync(process.execPath,
     [path.join(ROOT, "node_modules/typescript-4-9/bin/tsc"), "-p", CONFIG], { cwd: ROOT, stdio: "inherit" });
-const { AS3ByteArray, AS3Endian } = require(path.join(OUTPUT, "hardened-runtime/AS3ByteArray.js"));
+const { AS3ByteArray, AS3Endian, AS3EOFError, configureAS3SystemCodePageEncoder } =
+    require(path.join(OUTPUT, "hardened-runtime/AS3ByteArray.js"));
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
 
@@ -44,7 +45,8 @@ test("ByteArray preserves Flash endian, integer, floating point, and Boolean sem
     assert.equal(bytes.readFloat(), 1.25);
     assert.equal(bytes.readDouble(), -3.5);
     assert.equal(bytes.bytesAvailable, 0);
-    assert.throws(() => bytes.readUnsignedByte(), /exceeds bytesAvailable/);
+    assert.throws(() => bytes.readUnsignedByte(), error => error instanceof AS3EOFError
+        && error.name === "EOFError" && error.errorID === 2030 && /exceeds bytesAvailable/.test(error.message));
 });
 
 test("little endian and UTF operations preserve byte order and UTF-8 length", () => {
@@ -85,12 +87,44 @@ test("length, position, gaps, and byte copies are deterministic", () => {
     copy.position = 0;
     assert.equal(copy.readUTFBytes(copy.length), "ababcf");
 
+    const clamped = new AS3ByteArray();
+    clamped.writeBytes(source, 5, 99);
+    assert.deepEqual([...new Uint8Array(clamped.toArrayBuffer())], [102]);
+
     copy.length = 2;
     copy.length = 5;
     assert.deepEqual([...new Uint8Array(copy.toArrayBuffer())], [97, 98, 0, 0, 0]);
     copy.clear();
     assert.equal(copy.length, 0);
     assert.equal(copy.position, 0);
+});
+
+test("indexed ByteArray access preserves cipher-style unsigned byte mutation without moving position", () => {
+    const bytes = AS3ByteArray.fromArrayBuffer(new Uint8Array([1, 2, 255]));
+    bytes.position = 2;
+    assert.equal(bytes[0], 1);
+    bytes[1] = 258;
+    bytes[5] = -1;
+    assert.equal(bytes.position, 2);
+    assert.equal(bytes.length, 6);
+    assert.deepEqual([...new Uint8Array(bytes.toArrayBuffer())], [1, 2, 255, 0, 0, 255]);
+    assert.equal(0 in bytes, true);
+    assert.equal(6 in bytes, false);
+    assert.throws(() => bytes[6], /index exceeds length/);
+});
+
+test("writeMultiByte keeps explicit UTF-8 and host-authenticated default code pages distinct", () => {
+    const utf8 = new AS3ByteArray();
+    utf8.writeMultiByte("hé", "utf-8");
+    assert.deepEqual([...new Uint8Array(utf8.toArrayBuffer())], [...new TextEncoder().encode("hé")]);
+
+    const missing = new AS3ByteArray();
+    assert.throws(() => missing.writeMultiByte("mail", ""), /requires an installed native encoder/);
+    configureAS3SystemCodePageEncoder(value => new Uint8Array([...value].map(character => character.charCodeAt(0))));
+    const system = new AS3ByteArray();
+    system.writeMultiByte("mail", "");
+    assert.deepEqual([...new Uint8Array(system.toArrayBuffer())], [109, 97, 105, 108]);
+    assert.throws(() => system.writeMultiByte("x", "shift-jis"), /charset is not admitted/);
 });
 
 test("host ArrayBuffer seams copy bytes without exposing mutable storage", () => {

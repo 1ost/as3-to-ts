@@ -247,17 +247,21 @@ function buildTree(options = {}) {
             n("NAME", "bytes"), type("ByteArray"), n("INIT", null, [construct("ByteArray")]),
         ]));
     }
-    if (options.vectorWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack
+    if (options.vectorWorkpack || options.vectorNumericWorkpack || options.vectorRuntimeWorkpack || options.iterationWorkpack
         || options.existingForEachWorkpack || options.badForEachType) {
         field.children.push(n("NAME_TYPE_INIT", null, [
             n("NAME", "values"), vectorType("int"),
-            n("INIT", null, [n("NEW", null, [call(vectorType("int"), [n("LITERAL", "2"), n("LITERAL", "false")])])]),
+            n("INIT", null, [n("NEW", null, [call(vectorType("int"), [
+                n("LITERAL", options.vectorNumericWorkpack ? "1.5" : "2"), n("LITERAL", "false")])])]),
         ]));
         if (options.vectorWorkpack) {
             body.push(
                 assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "values"), n("LITERAL", "0")]), n("LITERAL", "4")),
                 call(dot(n("IDENTIFIER", "values"), "push"), [n("LITERAL", "5")]),
             );
+        }
+        if (options.vectorNumericWorkpack) {
+            body.push(call(dot(n("IDENTIFIER", "values"), "slice"), [n("LITERAL", "4294967295")]));
         }
     }
     if (options.nestedVectorWorkpack) {
@@ -546,6 +550,11 @@ function buildTree(options = {}) {
             assignment(dot(n("IDENTIFIER", "bytes"), "position"), n("LITERAL", "0")),
             localDeclaration("VAR_LIST", "decoded", "uint",
                 call(dot(n("IDENTIFIER", "bytes"), "readUnsignedInt"))),
+            assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "bytes"), n("LITERAL", "1.5")]),
+                n("LITERAL", "258")),
+            localDeclaration("VAR_LIST", "indexed", "uint",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "bytes"), n("LITERAL", "1")])),
+            call(dot(n("IDENTIFIER", "bytes"), "writeMultiByte"), [n("LITERAL", '"mail"'), n("LITERAL", '""')]),
             n("RETURN"),
         ];
     }
@@ -854,6 +863,8 @@ function localMemberAuthority(api, localTypes, mutate = null) {
                 kind: "field", name: "SCore", modifiers: ["public"], namespaceName: null,
                 parameters: [], returnType: null, fieldType: "lobby.base.Base", readonly: true,
             }],
+            packageInitializer: entry.qname.endsWith(".InternalSpace") ? null
+                : { kind: "new", targetQName: "lobby.base.Base", argumentCount: 0 },
         } : {
             baseQNames: entry.qname.endsWith(".Demo") ? [entry.qname.replace(/\.Demo$/, ".Base")] : [],
             interfaceQNames: [],
@@ -879,6 +890,7 @@ function localMemberAuthority(api, localTypes, mutate = null) {
                 kind: "constructor", name: "Demo", modifiers: ["public"], namespaceName: null,
                 parameters: [], returnType: null, fieldType: null, readonly: false,
             }],
+            packageInitializer: null,
         },
     }));
     if (mutate) mutate(entries);
@@ -1064,8 +1076,16 @@ function main() {
     assert.match(inheritedMembersOutput.code, /this\.count = __as3Int\(1\);/);
     assert.match(inheritedMembersOutput.code, /var label: string \| null = this\.title;/);
     assert.match(inheritedMembersOutput.code, /this\.title = "updated";/);
-    assertErrorCode(() => adaptLocal(api, authority, { withPackageSymbols: true }),
-        "HARDENED_LOCAL_PACKAGE_OUTPUT");
+    const packageValueOutput = api.emitSemanticProgram(adaptLocal(api, authority, { withPackageSymbols: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(packageValueOutput.code, /import \{ SCore \} from "\.\.\/base\/SCore";/);
+    assert.match(packageValueOutput.code, /var shared: Base \| null = SCore;/);
+    assertErrorCode(() => adaptLocal(api, authority, { withPackageSymbols: true,
+        mutateMemberAuthority: entries => {
+            const base = entries.find(entry => entry.qname === "lobby.base.Base");
+            base.declaration.members.find(member => member.kind === "constructor").parameters[0].optional = false;
+        },
+    }), "HARDENED_LOCAL_PACKAGE_INITIALIZER_ARITY");
     const namespaceProgram = adaptLocal(api, authority, { withNamespace: true });
     const localNamespaceOutput = api.emitSemanticProgram(namespaceProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1162,10 +1182,16 @@ function main() {
     const vectorProgram = adapt(api, buildTree({ vectorWorkpack: true }), authority);
     const vectorOutput = api.emitSemanticProgram(vectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(vectorOutput.code, /AS3Vector as __as3Vector/);
-    assert.match(vectorOutput.code, /private values: __as3Vector<number> \| null = new __as3Vector<number>\(__as3VectorPolicies\.int, 2, false\);/);
-    assert.match(vectorOutput.code, /this\.values!\[0\] = __as3Int\(4\);/);
+    assert.match(vectorOutput.code, /private values: __as3Vector<number> \| null = new __as3Vector<number>\(__as3VectorPolicies\.int, __as3Uint\(2\), false\);/);
+    assert.match(vectorOutput.code, /this\.values!\[__as3Uint\(0\)\] = __as3Int\(4\);/);
     assert.match(vectorOutput.code, /this\.values!\.push\(__as3Int\(5\)\);/);
     assert.match(vectorOutput.code, /var copy: __as3Vector<number> \| null = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
+    const vectorNumericProgram = adapt(api, buildTree({ vectorNumericWorkpack: true }), authority);
+    const vectorNumericOutput = api.emitSemanticProgram(vectorNumericProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorNumericOutput.code,
+        /new __as3Vector<number>\(__as3VectorPolicies\.int, __as3Uint\(1\.5\), false\)/);
+    assert.match(vectorNumericOutput.code, /this\.values!\.slice\(__as3Int\(4294967295\)\);/);
     const shortVectorProgram = adapt(api, buildTree({ shortVectorWorkpack: true }), authority);
     const shortVectorOutput = api.emitSemanticProgram(shortVectorProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1185,7 +1211,7 @@ function main() {
     const nestedVectorProgram = adapt(api, buildTree({ nestedVectorWorkpack: true }), authority);
     const nestedVectorOutput = api.emitSemanticProgram(nestedVectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(nestedVectorOutput.code,
-        /private matrix: __as3Vector<__as3Vector<number> \| null> \| null = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), 1\);/);
+        /private matrix: __as3Vector<__as3Vector<number> \| null> \| null = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), __as3Uint\(1\)\);/);
     const coercionProgram = adapt(api, buildTree({ coercionWorkpack: true }), authority);
     const coercionOutput = api.emitSemanticProgram(coercionProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(coercionOutput.code, /as3Int as __as3Int/);
@@ -1333,6 +1359,9 @@ function main() {
     assert.match(byteArrayOutput.code, /this\.bytes!\.endian = Endian\.LITTLE_ENDIAN;/);
     assert.match(byteArrayOutput.code, /this\.bytes!\.writeInt\(__as3Int\(1\)\);/);
     assert.match(byteArrayOutput.code, /var decoded: number = this\.bytes!\.readUnsignedInt\(\);/);
+    assert.match(byteArrayOutput.code, /this\.bytes!\[__as3Uint\(1\.5\)\] = __as3Uint\(258\);/);
+    assert.match(byteArrayOutput.code, /var indexed: number = this\.bytes!\[__as3Uint\(1\)\];/);
+    assert.match(byteArrayOutput.code, /this\.bytes!\.writeMultiByte\("mail", ""\);/);
     assertErrorCode(() => adapt(api, buildTree({ heldByteArrayMember: true }), authority),
         "HARDENED_INTRINSIC_MEMBER");
     const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
@@ -1343,7 +1372,7 @@ function main() {
     assert.match(compoundOutput.code, /active = active && false;/);
     assertErrorCode(() => adapt(api, buildTree({ badLogicalCompound: true }), authority), "HARDENED_COMPOUND_TYPE");
     assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
-    assertGeneratedRuntimeTypechecks([vectorOutput.code, shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
+    assertGeneratedRuntimeTypechecks([vectorOutput.code, vectorNumericOutput.code, shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
         nestedVectorOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code,
         existingForEachOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,

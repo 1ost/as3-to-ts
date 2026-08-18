@@ -54,12 +54,13 @@ if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()
 const worker = readCanonicalFile(workerArgument, MAX_MAP_BYTES, "declaration worker");
 const workerSha256 = sha256(worker.bytes);
 const typeMapFile = readCanonicalFile(typeMapArgument, MAX_MAP_BYTES, "local type map");
-const typeMap = JSON.parse(typeMapFile.text);
+const typeMapText = typeMapFile.text.replace(/\r\n?/g, "\n");
+const typeMap = JSON.parse(typeMapText);
 if (!typeMap || typeMap.schema !== "bleach-local-as3-type-map@2" || !Array.isArray(typeMap.entries)
-    || typeMap.entryCount !== typeMap.entries.length || `${stringify(typeMap)}\n` !== typeMapFile.text) {
+    || typeMap.entryCount !== typeMap.entries.length || `${stringify(typeMap)}\n` !== typeMapText) {
     throw new Error("local type map must be the exact canonical v2 authority");
 }
-const localTypeMapSha256 = sha256(typeMapFile.bytes);
+const localTypeMapSha256 = sha256(Buffer.from(typeMapText, "utf8"));
 const byIdentity = new Map(typeMap.entries.map(entry => [`${entry.module}\u0000${entry.qname}`, entry]));
 
 function readSource(entry) {
@@ -166,12 +167,27 @@ function canonicalizeExtract(entry, extract) {
             namespaceName: member.namespaceName, parameters, returnType, fieldType, readonly: member.readonly,
         });
     }
+    let packageInitializer = null;
+    if (entry.typeKind === "package" && members.length === 1 && members[0].kind === "field") {
+        const raw = extract.packageInitializer;
+        if (!raw || raw.kind !== "new" || raw.argumentCount !== 0 || typeof raw.typeName !== "string") {
+            return { holdCode: "LOCAL_PACKAGE_INITIALIZER" };
+        }
+        const targetQName = resolveQName(entry, extract, raw.typeName, "class");
+        if (targetQName === null || members[0].fieldType !== targetQName) {
+            return { holdCode: "LOCAL_PACKAGE_INITIALIZER" };
+        }
+        packageInitializer = { kind: "new", targetQName, argumentCount: 0 };
+    } else if (extract.packageInitializer !== null) {
+        return { holdCode: "LOCAL_PACKAGE_INITIALIZER" };
+    }
     return {
         holdCode: null,
         declaration: {
             baseQNames: baseNames,
             interfaceQNames: interfaceNames,
             members,
+            packageInitializer,
         },
     };
 }

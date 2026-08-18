@@ -24,6 +24,7 @@ import {
     SemanticMethod,
     SemanticModifier,
     SemanticParameter,
+    SemanticPackageField,
     SemanticProgram,
     SemanticSetter,
     SemanticStatement,
@@ -362,6 +363,33 @@ function relativeLocalModule(currentModulePath: string, target: LocalTypeMapping
     return relative.startsWith(".") ? relative : `./${relative}`;
 }
 
+function assertPackageRuntimeValue(authority: LoadedLocalMemberAuthority, module: "application" | "bootstrap",
+    entry: LocalMemberAuthorityEntry, node: TreeNode): void {
+    const declaration = entry.declaration;
+    if (declaration === null || declaration.members.length !== 1 || declaration.packageInitializer === null) {
+        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package runtime value lacks one authenticated initializer", node);
+    }
+    const field = declaration.members[0]!;
+    const initializer = declaration.packageInitializer!;
+    if (field.kind !== "field" || field.fieldType === null || initializer.targetQName !== field.fieldType
+        || initializer.argumentCount !== 0) {
+        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package runtime value initializer disagrees with its exact field type", node);
+    }
+    const target = authority.entriesByIdentity[`${module}\u0000${initializer.targetQName}`];
+    if (!target || target.status !== "complete" || target.typeKind !== "class" || target.declaration === null) {
+        fail("HARDENED_LOCAL_PACKAGE_INITIALIZER_HELD",
+            `package runtime value constructor ${initializer.targetQName} is not complete`, node);
+    }
+    const constructors = target.declaration.members.filter(member => member.kind === "constructor");
+    const constructorParameters = constructors.length === 1 ? constructors[0]!.parameters : [];
+    const required = constructorParameters.filter(parameter => !parameter.optional && !parameter.rest).length;
+    const visibility = constructors.length === 1 ? memberVisibility(constructors[0]!.modifiers) : "public";
+    if (constructors.length > 1 || required !== 0 || visibility === "private" || visibility === "protected") {
+        fail("HARDENED_LOCAL_PACKAGE_INITIALIZER_ARITY",
+            `package runtime value constructor ${initializer.targetQName} is not visible zero-argument construction`, node);
+    }
+}
+
 function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLocalType,
     node: TreeNode, localMemberAuthority: LoadedLocalMemberAuthority | null = null): SemanticImport {
     const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
@@ -382,10 +410,14 @@ function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLoca
             fail("HARDENED_LOCAL_PACKAGE_SYMBOL", "package symbol declaration disagrees with its import identity", node);
         }
         if (member.kind === "field") {
-            fail("HARDENED_LOCAL_PACKAGE_OUTPUT",
-                "package runtime values remain held until the package source itself has a producible TypeScript module", node);
+            if (!member.readonly || member.fieldType === null || member.modifiers.length !== 1
+                || member.modifiers[0] !== "public") {
+                fail("HARDENED_LOCAL_PACKAGE_OUTPUT",
+                    "package runtime value is not one authenticated public const declaration", node);
+            }
+            assertPackageRuntimeValue(localMemberAuthority, target.module, entry, node);
+            localValueType = member.fieldType;
         }
-        localValueType = null;
         compileTimeNamespace = member.kind === "namespace";
     }
     return Object.assign(identity(node), {
@@ -1164,6 +1196,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (!["Number", "int", "uint"].includes(lengthType.sourceName)) {
                     fail("HARDENED_VECTOR_LENGTH", "Vector length must be a proven numeric value", call.children[1]!.children[0]!);
                 }
+                args[0] = adaptAssignmentValue(semanticType(call, "uint", "number"), args[0], context,
+                    call.children[1]!.children[0]!);
             }
             if (args[1] && assignmentType(args[1], context, call.children[1]!.children[1]!).sourceName !== "Boolean") {
                 fail("HARDENED_VECTOR_FIXED", "Vector fixed argument must be a proven Boolean", call.children[1]!.children[1]!);
@@ -1620,21 +1654,26 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const ownerType = assignmentType(target, context, node.children[0]!);
         const element = vectorElement(ownerType);
         const dictionary = isDictionaryType(ownerType);
-        if (!element && !dictionary) {
-            fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Vector or intrinsic Dictionary", node);
+        const byteArray = intrinsicSourceForType(ownerType, context) === "flash.utils.ByteArray";
+        if (!element && !dictionary && !byteArray) {
+            fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Vector, ByteArray, or intrinsic Dictionary", node);
         }
-        const index = parseExpression(node.children[1]!, context, true);
+        let index = parseExpression(node.children[1]!, context, true);
         const indexType = assignmentType(index, context, node.children[1]!);
-        if (element && !["Number", "int", "uint"].includes(indexType.sourceName)) {
-            fail("HARDENED_INDEX_TYPE", "Vector index must be a proven numeric value", node.children[1]!);
+        if ((element || byteArray) && !["Number", "int", "uint"].includes(indexType.sourceName)) {
+            fail("HARDENED_INDEX_TYPE", "Vector or ByteArray index must be a proven numeric value", node.children[1]!);
+        }
+        if (element || byteArray) {
+            index = adaptAssignmentValue(semanticType(node, "uint", "number"), index, context, node.children[1]!);
         }
         if (dictionary && indexType.sourceName === "void") {
             fail("HARDENED_DICTIONARY_KEY", "Dictionary key must be a proven value", node.children[1]!);
         }
         return Object.assign(identity(node), {
-            kind: "index" as "index", accessKind: dictionary ? "dictionary" as "dictionary" : "vector" as "vector",
+            kind: "index" as "index", accessKind: dictionary ? "dictionary" as "dictionary"
+                : byteArray ? "byteArray" as "byteArray" : "vector" as "vector",
             target, targetNullable: ownerType.nullable, index,
-            resultType: element || semanticType(node, "*", "unknown"),
+            resultType: element || (byteArray ? semanticType(node, "uint", "number") : semanticType(node, "*", "unknown")),
         });
     }
     if (node.kind === "DOT") {
@@ -1863,6 +1902,26 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     args[index] = adaptAssignmentValue(element, argument, context,
                         node.children[1]!.children[index]!);
                 });
+            } else if (name === "slice" || name === "indexOf" || name === "lastIndexOf") {
+                if (name !== "slice") {
+                    args[0] = adaptAssignmentValue(element, args[0]!, context, node.children[1]!.children[0]!);
+                }
+                const start = name === "slice" ? 0 : 1;
+                for (let index = start; index < args.length; index += 1) {
+                    args[index] = adaptAssignmentValue(semanticType(node, "int", "number"), args[index]!, context,
+                        node.children[1]!.children[index]!);
+                }
+            } else if (name === "splice") {
+                args[0] = adaptAssignmentValue(semanticType(node, "int", "number"), args[0]!, context,
+                    node.children[1]!.children[0]!);
+                if (args[1]) {
+                    args[1] = adaptAssignmentValue(semanticType(node, "uint", "number"), args[1], context,
+                        node.children[1]!.children[1]!);
+                }
+                for (let index = 2; index < args.length; index += 1) {
+                    args[index] = adaptAssignmentValue(element, args[index]!, context,
+                        node.children[1]!.children[index]!);
+                }
             }
             resultType = name === "pop" || name === "shift" ? element
                 : ["concat", "filter", "map", "reverse", "slice", "sort", "splice"].includes(name) ? ownerType
@@ -2556,6 +2615,107 @@ function modulePath(packageName: string, className: string, node: TreeNode): str
     return segments.concat([className + ".ts"]).join("/");
 }
 
+function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
+    authority: LoadedCapabilityAuthority, sourceText: string, sha256: Sha256Function,
+    packageName: string, packageNameNode: TreeNode, content: TreeNode, fieldList: TreeNode,
+    localAuthority: LoadedLocalTypeAuthority | undefined, sourceLogicalPath: string | undefined,
+    localMemberAuthority: LoadedLocalMemberAuthority | undefined): SemanticProgram {
+    if (!localAuthority || !localMemberAuthority || typeof sourceLogicalPath !== "string" || sourceLogicalPath.length === 0) {
+        fail("HARDENED_LOCAL_SOURCE_AUTHORITY",
+            "package const output requires local type, declaration, and source-path authorities", fieldList);
+    }
+    assertLoadedLocalTypeAuthority(localAuthority);
+    assertLoadedLocalMemberAuthority(localMemberAuthority);
+    onlyKinds(fieldList, ["MOD_LIST", "NAME_TYPE_INIT"]);
+    const declarators = fieldList.children.filter(child => child.kind === "NAME_TYPE_INIT");
+    if (declarators.length !== 1) {
+        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package const output requires exactly one declarator", fieldList);
+    }
+    const modifiers = parseModifiers(fieldList, true);
+    if (modifiers.length !== 1 || modifiers[0] !== "public") {
+        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package const output requires the exact public modifier", fieldList);
+    }
+    const declarator = declarators[0]!;
+    onlyKinds(declarator, ["INIT", "NAME", "TYPE", "VECTOR"]);
+    const nameNode = one(declarator, "NAME")!;
+    const name = validateIdentifier(requiredText(nameNode, "package const name"), nameNode);
+    const outputModulePath = modulePath(packageName, name, packageNameNode);
+    const qname = packageName === "" ? name : `${packageName}.${name}`;
+    const currentSourceSha256 = sha256(sourceText.replace(/\r\n?/g, "\n"));
+    const candidates = (["application", "bootstrap"] as const).map(module =>
+        localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry)
+        .filter(entry => entry.sourcePath === (entry.module === "application"
+            ? `game-client/tapplication_main/src/${sourceLogicalPath}` : `game-client/tmain/src/${sourceLogicalPath}`)
+            && entry.sourceContentSha256 === currentSourceSha256 && entry.typeKind === "package");
+    if (candidates.length !== 1) {
+        fail("HARDENED_LOCAL_SOURCE_AUTHORITY",
+            `package const ${qname} lacks one exact authenticated graph source identity`, fieldList);
+    }
+    const current: CurrentLocalType = { entry: candidates[0]!, outputModulePath };
+    const declarationEntry = localMemberAuthority.entriesByIdentity[`${current.entry.module}\u0000${qname}`];
+    if (!declarationEntry || declarationEntry.status !== "complete" || declarationEntry.declaration === null
+        || declarationEntry.declaration.members.length !== 1) {
+        fail("HARDENED_LOCAL_MEMBER_HELD", "package const lacks one complete declaration authority", fieldList);
+    }
+    const declared = declarationEntry.declaration.members[0]!;
+    if (declared.kind !== "field" || declared.name !== name || !declared.readonly || declared.fieldType === null
+        || declared.modifiers.length !== 1 || declared.modifiers[0] !== "public") {
+        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package declaration authority is not one public const", fieldList);
+    }
+    assertPackageRuntimeValue(localMemberAuthority, current.entry.module, declarationEntry, fieldList);
+    const resolveCurrentLocal = (): CurrentLocalType => current;
+    const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal, localMemberAuthority);
+    const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
+        node: TreeNode): SemanticImport | null => {
+        const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
+        const existing = parsedImports.importsByLocal[localName];
+        if (existing) return existing;
+        const targetQName = sourceName.indexOf(".") >= 0 ? sourceName
+            : packageName === "" ? sourceName : `${packageName}.${sourceName}`;
+        const target = localAuthority.entriesByIdentity[`${current.entry.module}\u0000${targetQName}`];
+        if (!target || !target.importable || target.typeKind === "package"
+            || (expectedKind !== null && target.typeKind !== expectedKind)) return null;
+        if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {
+            fail("HARDENED_LOCAL_IMPORT_EDGE", "package const dependency lacks an authenticated graph edge", node);
+        }
+        const item = localSemanticImport(target, current, node, localMemberAuthority);
+        parsedImports.imports.push(item);
+        parsedImports.importsByLocal[localName] = item;
+        return item;
+    };
+    const context: AdapterContext = {
+        className: name, classQualifiedName: qname, extendsType: null,
+        importsByLocal: parsedImports.importsByLocal, resolveImportedType: resolveImplicitLocalType,
+        mappingsBySource: authority.typeMappingsBySource, memberMappingsByKey: authority.memberMappingsByKey,
+        intrinsicMembersByKey: authority.intrinsicMembersByKey, baseSourceQName: null, baseLocalQName: null,
+        localMemberAuthority, resolveCurrentLocal, fields: Object.create(null), methods: Object.create(null),
+        accessors: Object.create(null), parameters: Object.create(null), locals: Object.create(null),
+        loopDepth: 0, breakableDepth: 0, labels: [], namespaceNames: Object.create(null), lambdaDepth: 0,
+    };
+    const type = parseType(oneType(declarator), context, false);
+    const init = one(declarator, "INIT")!;
+    if (init.children.length !== 1) {
+        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package const requires one explicit initializer", init);
+    }
+    const initializer = adaptAssignmentValue(type,
+        parseExpression(init.children[0]!, context, true, false, false), context, init.children[0]!);
+    const declaration: SemanticPackageField = Object.assign(identity(fieldList), {
+        declarationKind: "packageField" as "packageField", name, modifiers,
+        readonly: true as true, type, initializer,
+    });
+    const program: SemanticProgram = Object.assign(identity(root), {
+        schema: "as3-semantic-ir@1" as "as3-semantic-ir@1", sourceSha256: ast.sourceSha256,
+        fingerprintSha256: ast.fingerprintSha256, packageName, outputModulePath,
+        imports: parsedImports.imports, declaration,
+        sourceCapabilitySha256: authority.sourceCensusSha256,
+        targetCapabilitySha256: authority.targetCapabilitiesSha256,
+        capabilityMappingSha256: authority.mappingSha256,
+    });
+    deepFreeze(program);
+    ADAPTED_PROGRAMS.add(program);
+    return program;
+}
+
 export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: LoadedCapabilityAuthority,
     sourceText: string, sha256: Sha256Function, localAuthority?: LoadedLocalTypeAuthority,
     sourceLogicalPath?: string, localMemberAuthority?: LoadedLocalMemberAuthority): SemanticProgram {
@@ -2580,6 +2740,12 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         fail("HARDENED_IMPORT_ORDER", "source imports and namespace directives must precede the declaration", content);
     }
     const declarations = content.children.filter((child) => child.kind === "CLASS" || child.kind === "INTERFACE");
+    const packageConstLists = content.children.filter(child => child.kind === "CONST_LIST");
+    if (declarations.length === 0 && packageConstLists.length === 1
+        && content.children.every(child => child.kind === "IMPORT" || child.kind === "CONST_LIST")) {
+        return adaptPackageFieldProgram(root, ast, authority, sourceText, sha256, packageName,
+            packageNameNode, content, packageConstLists[0]!, localAuthority, sourceLogicalPath, localMemberAuthority);
+    }
     if (declarations.length !== 1 || content.children.some((child) => child.kind !== "IMPORT" && child.kind !== "USE"
         && child.kind !== "CLASS" && child.kind !== "INTERFACE")) {
         fail("HARDENED_PACKAGE_CONTENT", "semantic adapter requires imports followed by exactly one class or interface", content);

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
+import { posix } from "node:path";
 import ts49 = require("typescript-4-9");
 import { CliError, errorMessage } from "./errors";
 import { discoverInputs, portableCollisionKey, readInput } from "./inputs";
@@ -100,6 +101,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
         const qualificationFiles: QualificationFile[] = [];
         const outputKeys = new Set<string>();
         const qualificationOwners = new Map<string, QualificationFile>();
+        const localOutputDependencies = new Map<QualificationFile | TranspiledManifestFile, string[]>();
         let totalOutputBytes = 0;
 
         for (const file of inputs.files) {
@@ -148,6 +150,11 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     compiler: ts49,
                     expectedTypeScriptVersion: transpileAuthority!.typeScriptVersion,
                 });
+                const requiredLocalModules = semantic.imports.filter(item => item.authorityKind === "local"
+                    && !item.compileTimeNamespace).map(item => {
+                    const resolved = posix.normalize(posix.join(posix.dirname(emitted.modulePath), item.targetModule));
+                    return resolved.endsWith(".ts") ? resolved : `${resolved}.ts`;
+                });
                 const collisionKey = portableCollisionKey(emitted.modulePath);
                 if (options.operation === "qualify") {
                     const current: QualificationFile = {
@@ -178,6 +185,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                         qualificationOwners.set(collisionKey, current);
                     }
                     qualificationFiles.push(current);
+                    localOutputDependencies.set(current, requiredLocalModules);
                     continue;
                 }
                 if (outputKeys.has(collisionKey)) {
@@ -190,7 +198,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
                 }
                 writeArtifact(publication, emitted.modulePath, emitted.code);
-                transpiledFiles.push({
+                const transpiled: TranspiledManifestFile = {
                     sourcePath: file.portablePath,
                     typescriptPath: emitted.modulePath,
                     sourceBytes: source.bytes.byteLength,
@@ -199,7 +207,9 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     normalizedFingerprintSha256: normalized.fingerprintSha256,
                     typescriptBytes: bytes,
                     typescriptSha256: sha256(emitted.code),
-                });
+                };
+                transpiledFiles.push(transpiled);
+                localOutputDependencies.set(transpiled, requiredLocalModules);
             } catch (error) {
                 if (options.operation === "qualify") {
                     const normalized = (() => {
@@ -219,6 +229,36 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 }
                 if (error instanceof CliError) throw error;
                 throw new CliError(`transpile rejected ${file.portablePath}: ${errorMessage(error)}`, 4);
+            }
+        }
+
+        if (options.operation === "qualify") {
+            let changed = true;
+            while (changed) {
+                changed = false;
+                const admittedModules = new Set(qualificationFiles.filter(item => item.status === "admitted"
+                    && item.modulePath !== null).map(item => portableCollisionKey(item.modulePath!)));
+                qualificationFiles.filter(item => item.status === "admitted").forEach(item => {
+                    const missing = (localOutputDependencies.get(item) || [])
+                        .find(modulePath => !admittedModules.has(portableCollisionKey(modulePath)));
+                    if (missing !== undefined) {
+                        item.status = "held";
+                        item.stage = "output";
+                        item.code = "HARDENED_LOCAL_OUTPUT_CLOSURE";
+                        item.message = `local dependency has no admitted output in this source set: ${missing}`;
+                        item.typescriptSha256 = null;
+                        changed = true;
+                    }
+                });
+            }
+        } else if (options.operation === "transpile") {
+            const emittedModules = new Set(transpiledFiles.map(item => portableCollisionKey(item.typescriptPath)));
+            for (const item of transpiledFiles) {
+                const missing = (localOutputDependencies.get(item) || [])
+                    .find(modulePath => !emittedModules.has(portableCollisionKey(modulePath)));
+                if (missing !== undefined) {
+                    throw new CliError(`local dependency has no emitted output in this source set: ${missing}`, 4);
+                }
             }
         }
 

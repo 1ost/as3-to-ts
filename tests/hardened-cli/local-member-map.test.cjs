@@ -39,7 +39,7 @@ test("local member map is deterministic and resolves authenticated inheritance s
     try {
         const baseSource = "package p { public class Base { public function Base(value:int = 0){} protected function run(value:Vector.<int>):String{return null;} } }";
         const childSource = "package p { public class Child extends Base { public function Child(){super();} override protected function run(value:Vector.<int>):String{return null;} } }";
-        const packageSource = "package p { public const Shared:int = 1; }";
+        const packageSource = "package p { public const Shared:Base = new Base(); }";
         const namespaceSource = "package p { public namespace InternalSpace; }";
         const sources = [
             ["game-client/tapplication_main/src/p/Base.as", baseSource],
@@ -55,7 +55,7 @@ test("local member map is deterministic and resolves authenticated inheritance s
         const entries = [
             entry("p.Base", "0000000000000001", sources[0][0], baseSource, []),
             entry("p.Child", "0000000000000002", sources[1][0], childSource, ["0000000000000001"]),
-            entry("p.Shared", "0000000000000003", sources[2][0], packageSource, [], "package"),
+            entry("p.Shared", "0000000000000003", sources[2][0], packageSource, ["0000000000000001"], "package"),
             entry("p.InternalSpace", "0000000000000004", sources[3][0], namespaceSource, [], "package"),
         ];
         const map = {
@@ -83,7 +83,9 @@ test("local member map is deterministic and resolves authenticated inheritance s
         assert.equal(base.declaration.members.find(member => member.name === "run").parameters[0].type,
             "Vector.<int>");
         assert.equal(child.declaration.members.find(member => member.name === "run").modifiers.includes("override"), true);
-        assert.equal(value.entries.find(item => item.qname === "p.Shared").declaration.members[0].fieldType, "int");
+        assert.equal(value.entries.find(item => item.qname === "p.Shared").declaration.members[0].fieldType, "p.Base");
+        assert.deepEqual(value.entries.find(item => item.qname === "p.Shared").declaration.packageInitializer,
+            { kind: "new", targetQName: "p.Base", argumentCount: 0 });
         assert.equal(value.entries.find(item => item.qname === "p.InternalSpace").declaration.members[0].kind,
             "namespace");
     } finally {

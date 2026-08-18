@@ -196,6 +196,22 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
     }
     const imports = content.children.filter(child => child.kind === "IMPORT").map(child => requiredText(child, "import"));
     if (new Set(imports).size !== imports.length) fail("HARDENED_LOCAL_DECLARATION_IMPORT", "import is duplicated", content);
+    let packageInitializer: LocalDeclarationExtract["packageInitializer"] = null;
+    if (declaration.kind === "CONST_LIST") {
+        const declarator = declaration.children.filter(child => child.kind === "NAME_TYPE_INIT")[0]!;
+        const init = one(declarator, "INIT", true);
+        const expression = init !== null && init.children.length === 1 ? init.children[0]! : null;
+        const call = expression?.kind === "NEW" && expression.children.length === 1
+            && expression.children[0]!.kind === "CALL" ? expression.children[0]! : null;
+        if (!call || call.children.length !== 2 || call.children[0]!.kind !== "IDENTIFIER"
+            || call.children[1]!.kind !== "ARGUMENTS" || call.children[1]!.children.length !== 0) {
+            fail("HARDENED_LOCAL_PACKAGE_INITIALIZER",
+                "package const initializer must be one zero-argument direct constructor", init || declarator);
+        }
+        packageInitializer = {
+            kind: "new", typeName: requiredText(call.children[0]!, "package initializer type"), argumentCount: 0,
+        };
+    }
     const result: LocalDeclarationExtract = {
         schema: "as3-local-declaration-extract@1",
         sourceSha256: ast.sourceSha256,
@@ -209,6 +225,7 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
         implementsNames: declarations.length === 0 ? [] : declaration.children.filter(child => child.kind === "IMPLEMENTS_LIST")
             .flatMap(list => list.children.map(child => requiredText(child, "implemented type"))),
         members,
+        packageInitializer,
     };
     return result;
 }

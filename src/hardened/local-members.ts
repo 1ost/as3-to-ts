@@ -128,7 +128,7 @@ function member(raw: unknown): LocalDeclarationMember {
 }
 
 function declaration(raw: unknown): LocalMemberDeclaration {
-    if (!object(raw) || !exactKeys(raw, ["baseQNames", "interfaceQNames", "members"])
+    if (!object(raw) || !exactKeys(raw, ["baseQNames", "interfaceQNames", "members", "packageInitializer"])
         || !Array.isArray(raw.baseQNames) || !Array.isArray(raw.interfaceQNames) || !Array.isArray(raw.members)
         || raw.baseQNames.some(item => typeof item !== "string" || !QNAME.test(item))
         || raw.interfaceQNames.some(item => typeof item !== "string" || !QNAME.test(item))
@@ -136,10 +136,20 @@ function declaration(raw: unknown): LocalMemberDeclaration {
         || new Set(raw.interfaceQNames).size !== raw.interfaceQNames.length) {
         fail("HARDENED_LOCAL_MEMBER_DECLARATION", "local declaration is invalid");
     }
+    let packageInitializer: LocalMemberDeclaration["packageInitializer"] = null;
+    if (raw.packageInitializer !== null) {
+        if (!object(raw.packageInitializer) || !exactKeys(raw.packageInitializer, ["argumentCount", "kind", "targetQName"])
+            || raw.packageInitializer.kind !== "new" || raw.packageInitializer.argumentCount !== 0
+            || typeof raw.packageInitializer.targetQName !== "string" || !QNAME.test(raw.packageInitializer.targetQName)) {
+            fail("HARDENED_LOCAL_MEMBER_DECLARATION", "package initializer authority is invalid");
+        }
+        packageInitializer = { kind: "new", targetQName: raw.packageInitializer.targetQName, argumentCount: 0 };
+    }
     return {
         baseQNames: raw.baseQNames.slice() as string[],
         interfaceQNames: raw.interfaceQNames.slice() as string[],
         members: raw.members.map(member),
+        packageInitializer,
     };
 }
 
@@ -209,7 +219,11 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
                         && parsedDeclaration.members[0]!.kind !== "namespace")) {
                     fail("HARDENED_LOCAL_MEMBER_ENTRY", "package symbol declaration is not exact");
                 }
-            } else if (parsedDeclaration.members.some(item => item.kind === "namespace")) {
+                if ((parsedDeclaration.members[0]!.kind === "field") !== (parsedDeclaration.packageInitializer !== null)) {
+                    fail("HARDENED_LOCAL_MEMBER_ENTRY", "package field initializer authority is not exact");
+                }
+            } else if (parsedDeclaration.packageInitializer !== null
+                || parsedDeclaration.members.some(item => item.kind === "namespace")) {
                 fail("HARDENED_LOCAL_MEMBER_ENTRY", "class or interface declaration contains a package namespace");
             }
             completeCount += 1;

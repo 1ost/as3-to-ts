@@ -471,6 +471,7 @@ function parameterNode(parameter: any, ts: TypeScriptCompilerApi): any {
 }
 
 function boundMethodNames(program: SemanticProgram): string[] {
+    if (program.declaration.declarationKind === "packageField") return [];
     const names: { [name: string]: true } = Object.create(null);
     const inspectExpression = (expression: SemanticExpression): void => {
         if (expression.kind === "methodClosure") {
@@ -712,6 +713,9 @@ function programUsesVector(program: SemanticProgram): boolean {
             || (statement.elseStatements !== null && statement.elseStatements.some(visitStatement));
         return false;
     };
+    if (program.declaration.declarationKind === "packageField") {
+        return visitType(program.declaration.type) || visitExpression(program.declaration.initializer);
+    }
     return visitType(program.declaration.extendsType)
         || program.declaration.interfaceExtendsTypes.some(visitType)
         || program.declaration.members.some(member => {
@@ -783,8 +787,29 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     }
     const imports = program.imports.filter((item) => !item.compileTimeNamespace).map((item) => importNode(item, ts));
     if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
-    if (programUsesRuntimeType(program) || program.declaration.implementsTypes.length > 0) imports.push(runtimeTypeImport(ts));
+    const implementsTypes = program.declaration.declarationKind === "packageField"
+        ? [] : program.declaration.implementsTypes;
+    if (programUsesRuntimeType(program) || implementsTypes.length > 0) imports.push(runtimeTypeImport(ts));
     if (programHasKind(program, "coercion")) imports.push(coercionRuntimeImport(ts));
+    if (program.declaration.declarationKind === "packageField") {
+        const declaration = ts.factory.createVariableStatement(
+            [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
+            ts.factory.createVariableDeclarationList([
+                ts.factory.createVariableDeclaration(program.declaration.name, undefined,
+                    typeNode(program.declaration.type, ts), expressionNode(program.declaration.initializer, ts)),
+            ], ts.NodeFlags.Const),
+        );
+        const empty = ts.createSourceFile(program.outputModulePath, "", ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+        const sourceFile = ts.factory.updateSourceFile(empty, imports.concat([declaration]));
+        const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
+        let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n").replace(/\n*$/, "\n");
+        const reparsed = ts.createSourceFile(program.outputModulePath, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+        if (Array.isArray(reparsed.parseDiagnostics) && reparsed.parseDiagnostics.length !== 0) {
+            throw new HardenedSemanticError("HARDENED_EMIT_SYNTAX", "TypeScript printer output did not parse without diagnostics");
+        }
+        return { schema: "as3-structural-typescript-output@1", modulePath: program.outputModulePath,
+            code, typeScriptVersion: ts.version };
+    }
     const boundMethods = boundMethodNames(program);
     if (boundMethods.length > 0 && !program.declaration.members.some((member) => member.kind === "constructor")) {
         throw new HardenedSemanticError("HARDENED_METHOD_CLOSURE_CONSTRUCTOR",

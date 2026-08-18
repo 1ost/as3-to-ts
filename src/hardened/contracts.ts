@@ -179,7 +179,7 @@ export interface ObjectExpression extends SemanticIdentity {
 
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
-    accessKind: "vector" | "dictionary";
+    accessKind: "vector" | "dictionary" | "byteArray";
     target: SemanticExpression;
     targetNullable: boolean;
     index: SemanticExpression;
@@ -268,12 +268,14 @@ export interface LocalDeclarationExtract {
     extendsNames: string[];
     implementsNames: string[];
     members: LocalDeclarationMember[];
+    packageInitializer: { kind: "new"; typeName: string; argumentCount: 0 } | null;
 }
 
 export interface LocalMemberDeclaration {
     baseQNames: string[];
     interfaceQNames: string[];
     members: LocalDeclarationMember[];
+    packageInitializer: { kind: "new"; targetQName: string; argumentCount: 0 } | null;
 }
 
 export interface LocalMemberAuthorityEntry {
@@ -537,6 +539,17 @@ export interface SemanticClass extends SemanticIdentity {
     members: SemanticMember[];
 }
 
+export interface SemanticPackageField extends SemanticIdentity {
+    declarationKind: "packageField";
+    name: string;
+    modifiers: SemanticModifier[];
+    readonly: true;
+    type: SemanticType;
+    initializer: SemanticExpression;
+}
+
+export type SemanticDeclaration = SemanticClass | SemanticPackageField;
+
 export interface SemanticProgram extends SemanticIdentity {
     schema: "as3-semantic-ir@1";
     sourceSha256: string;
@@ -544,7 +557,7 @@ export interface SemanticProgram extends SemanticIdentity {
     packageName: string;
     outputModulePath: string;
     imports: SemanticImport[];
-    declaration: SemanticClass;
+    declaration: SemanticDeclaration;
     sourceCapabilitySha256: string;
     targetCapabilitySha256: string;
     capabilityMappingSha256: string;

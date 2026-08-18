@@ -19,8 +19,8 @@ function range(message: string): never {
 }
 
 function lengthValue(value: unknown): number {
-    const number = Number(value);
-    if (!Number.isInteger(number) || number < 0 || number > MAX_VECTOR_LENGTH) {
+    const number = Number(value) >>> 0;
+    if (number > MAX_VECTOR_LENGTH) {
         range(`AS3 Vector length must be an integer from 0 through ${MAX_VECTOR_LENGTH}`);
     }
     return number;
@@ -197,14 +197,14 @@ export class AS3Vector<T> implements Iterable<T> {
     public splice(start: number, deleteCount: number = this.length, ...items: unknown[]): AS3Vector<T> {
         const values = items.map(value => this._policy.coerce(value));
         const actualStart = this._relativeIndex(start);
-        const actualDelete = Math.min(Math.max(Number(deleteCount) >> 0, 0), this.length - actualStart);
+        const actualDelete = Math.min(Number(deleteCount) >>> 0, this.length - actualStart);
         this._assertResize(this.length - actualDelete + values.length);
         const removed = this._values.splice(actualStart, actualDelete, ...values);
         return AS3Vector.from(this._policy, removed);
     }
 
     public slice(start: number = 0, end: number = this.length): AS3Vector<T> {
-        return AS3Vector.from(this._policy, this._values.slice(start, end));
+        return AS3Vector.from(this._policy, this._values.slice(this._relativeIndex(start), this._relativeIndex(end)));
     }
 
     public concat(...values: Array<AS3Vector<T> | ReadonlyArray<T>>): AS3Vector<T> {
@@ -214,11 +214,11 @@ export class AS3Vector<T> implements Iterable<T> {
     }
 
     public indexOf(searchElement: T, fromIndex: number = 0): number {
-        return this._values.indexOf(searchElement, fromIndex);
+        return this._values.indexOf(this._policy.coerce(searchElement), Number(fromIndex) >> 0);
     }
 
     public lastIndexOf(searchElement: T, fromIndex: number = this.length - 1): number {
-        return this._values.lastIndexOf(searchElement, fromIndex);
+        return this._values.lastIndexOf(this._policy.coerce(searchElement), Number(fromIndex) >> 0);
     }
 
     public join(separator: string = ","): string { return this._values.join(separator); }

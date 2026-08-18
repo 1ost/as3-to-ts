@@ -44,11 +44,17 @@ held counts. Runtime loading deep-validates and freezes the whole document.
   `Vector.<T>` signatures and non-narrowing visibility;
 - inherited local fields, getters, setters, and method calls with exact owner,
   visibility, arity, argument, and result types.
+- package-level `public const Name:Type = new Type()` values only when the
+  initializer target is the exact authenticated field type and its zero-arg
+  constructor declaration is complete;
+- atomic output closure: every emitted local import must resolve to another
+  admitted module in the same staged source set before anything is published.
 
 Flash bases and members remain independently double-pinned by the source census,
 target capability ledger, and mapping artifact. Inherited local method closures,
-custom-namespace overrides, ambiguous/held declarations, implicit coercions,
-and any missing signature remain explicit HOLDs.
+custom-namespace overrides, ambiguous/held declarations, package expressions
+outside the single proven constructor form, and any missing signature remain
+explicit HOLDs.
 
 ## Mandatory verification
 
