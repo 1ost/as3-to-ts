@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
-import { posix } from "node:path";
+import { readFileSync } from "node:fs";
+import { join, posix, resolve } from "node:path";
 import ts49 = require("typescript-4-9");
 import { CliError, errorMessage } from "./errors";
 import { discoverInputs, portableCollisionKey, readInput } from "./inputs";
@@ -8,8 +9,11 @@ import { assertParserWorkerSha256, captureParserWorkerSha256, parseIsolated } fr
 import { HELP, parseArguments, TOOL_VERSION } from "./options";
 import { loadTranspileAuthority } from "./authority";
 import { adaptNormalizedParserAst } from "../hardened/adapter";
-import type { NormalizedParserAst } from "../hardened/contracts";
+import type { NormalizedParserAst, SemanticProgram } from "../hardened/contracts";
 import { emitSemanticProgram } from "../hardened/emitter";
+import { assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeInterfaceAuthoritySource,
+    localRuntimeTypeAuthoritySource, type EmittedRuntimeApplicationEntry,
+    type EmittedRuntimeAuthority, type RuntimeAuthoritySource } from "../hardened/type-authority";
 import {
     abandon,
     preparePublication,
@@ -60,6 +64,132 @@ function sha256(data: string | Buffer): string {
     return createHash("sha256").update(data).digest("hex");
 }
 
+const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
+    "AS3Array.ts": "6ba7fdddada9093f14a2aa52d044834a366a3ca3a7c6db261949b74d0a6d52dc",
+    "AS3ByteArray.ts": "f6e206784fcab50b8af57d0fb5acdf50696aeef8527ff2e58709c0f06f15bc30",
+    "AS3Coerce.ts": "91549a34ee875997da35e837ad4213bb089a771c8ee67efcecf50670adbed99b",
+    "AS3Dictionary.ts": "307af295f7cd3e7c6f32423b799ab8920fb1f84e254181256a5673dfffd45814",
+    "AS3MethodClosure.ts": "05329f4fa2a7034f49ab70ed87311350e71e997dca7976f8f7a44b364ca3dd9a",
+    "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
+    "AS3Type.ts": "6389bd794913de410607f2bcdc91c485a309a8bdfdea7b9c783ea705734fdd73",
+    "AS3Vector.ts": "5deedf01b46703ae7ae0d0f98ed6cfa680a39496ddd6ab747ee48c3bb5ec1101",
+    "internal/AS3TypeRegistry.ts": "35a524b9a65fe9c83e6f530c58e33b898090500b7af68046dd765b96d5f2276e",
+});
+
+function runtimeCommonJs(code: string, fileName: string): string {
+    const result = ts49.transpileModule(code, { fileName, reportDiagnostics: true, compilerOptions: {
+        target: ts49.ScriptTarget.ES2020, module: ts49.ModuleKind.CommonJS,
+        importsNotUsedAsValues: ts49.ImportsNotUsedAsValues.Remove,
+    } });
+    if ((result.diagnostics || []).some(item => item.category === ts49.DiagnosticCategory.Error)) {
+        throw new CliError(`runtime package transpilation failed for ${fileName}`, 70);
+    }
+    return result.outputText.replace(/\r\n?/g, "\n");
+}
+
+function runtimeEmbeddedCommonJs(code: string, fileName: string): string {
+    return runtimeCommonJs(code, fileName).replace(
+        /^Object\.defineProperty\(exports, "__esModule", \{ value: true \}\);\n/m, "");
+}
+
+function runtimeBundleJavaScript(authorityCode: string): string {
+    const modules = new Map<string, string>();
+    runtimeSourceTemplates().forEach(template => {
+        const moduleId = template.path.slice(0, -3) + ".js";
+        modules.set(moduleId, runtimeEmbeddedCommonJs(template.code, template.path));
+    });
+    modules.set("AS3Authority.generated.js",
+        runtimeEmbeddedCommonJs(authorityCode, "AS3Authority.generated.ts"));
+    const resolveEmbedded = (from: string, specifier: string): string | null => {
+        if (!specifier.startsWith(".")) return modules.has(specifier) ? specifier : null;
+        const candidate = posix.normalize(posix.join(posix.dirname(from), specifier));
+        for (const value of [candidate, `${candidate}.js`, posix.join(candidate, "index.js")]) {
+            if (modules.has(value)) return value;
+        }
+        return null;
+    };
+    const externalByRequest = new Map<string, { variable: string; specifier: string }>();
+    const requirePattern = /\brequire\((['"])([^'"\r\n]+)\1\)/g;
+    modules.forEach((code, from) => {
+        let match: RegExpExecArray | null;
+        while ((match = requirePattern.exec(code)) !== null) {
+            const requested = match[2]!;
+            if (resolveEmbedded(from, requested) !== null) continue;
+            const key = `${from}\u0000${requested}`;
+            if (externalByRequest.has(key)) continue;
+            const target = requested.startsWith(".")
+                ? `./${posix.normalize(posix.join(posix.dirname(from), requested))}` : requested;
+            externalByRequest.set(key, { variable: `__as3External${externalByRequest.size}`, specifier: target });
+        }
+    });
+    const lines = ["\"use strict\";"];
+    externalByRequest.forEach(item => {
+        lines.push(`function ${item.variable}() { return require(${JSON.stringify(item.specifier)}); }`);
+    });
+    lines.push("const __as3Modules = { __proto__: null,");
+    [...modules.entries()].sort(([left], [right]) => left.localeCompare(right)).forEach(([id, code]) => {
+        lines.push(`${JSON.stringify(id)}: function(module, exports, require) {\n${code}\n},`);
+    });
+    lines.push("};", "const __as3Cache = { __proto__: null };");
+    lines.push("function __as3Resolve(from, requested) {",
+        "  if (requested.charAt(0) !== '.') return __as3Modules[requested] === undefined ? null : requested;",
+        "  const base = from.split('/'); base.pop();",
+        "  for (const part of requested.split('/')) { if (part === '.' || part === '') continue; if (part === '..') base.pop(); else base.push(part); }",
+        "  const candidate = base.join('/');",
+        "  for (const value of [candidate, candidate + '.js', candidate + '/index.js']) if (__as3Modules[value] !== undefined) return value;",
+        "  return null;",
+        "}");
+    lines.push("function __as3Load(id) {",
+        "  if (__as3Cache[id] !== undefined) return __as3Cache[id].exports;",
+        "  const factory = __as3Modules[id]; if (!factory) throw new Error('missing embedded AS3 runtime module: ' + id);",
+        "  const module = { exports: { __proto__: null } }; __as3Cache[id] = module;",
+        "  factory(module, module.exports, function(requested) {",
+        "    const embedded = __as3Resolve(id, requested); if (embedded !== null) return __as3Load(embedded);",
+        "    const key = id + '\\u0000' + requested;",
+        "    switch (key) {");
+    externalByRequest.forEach((item, key) => {
+        lines.push(`      case ${JSON.stringify(key)}: return ${item.variable}();`);
+    });
+    lines.push("      default: throw new Error('unauthorized AS3 runtime dependency: ' + requested);",
+        "    }",
+        "  });",
+        "  return module.exports;",
+        "}");
+    lines.push("const __as3Public = module.exports;", "Object.setPrototypeOf(__as3Public, null);",
+        "function __as3Expose(source) { for (const key in source) {",
+        "  if (Object.prototype.hasOwnProperty.call(__as3Public, key)) throw new Error('duplicate AS3 runtime public export: ' + key);",
+        "  Object.defineProperty(__as3Public, key, { value: source[key], enumerable: true, writable: false, configurable: false });",
+        "} }");
+    Object.keys(RUNTIME_SOURCE_SHA256).filter(path => !path.startsWith("internal/")).sort().forEach(path => {
+        lines.push(`__as3Expose(__as3Load(${JSON.stringify(path.slice(0, -3) + ".js")}));`);
+    });
+    lines.push("__as3Expose(__as3Load('AS3Authority.generated.js'));", "Object.freeze(__as3Public);", "");
+    return lines.join("\n");
+}
+
+function runtimeSourceTemplates(): ReadonlyArray<{ path: string; code: string }> {
+    const root = resolve(join(__dirname, "..", "src", "hardened-runtime"));
+    return Object.keys(RUNTIME_SOURCE_SHA256).sort().map(path => {
+        const code = readFileSync(join(root, ...path.split("/")), "utf8").replace(/\r\n?/g, "\n");
+        if (sha256(code) !== RUNTIME_SOURCE_SHA256[path]) {
+            throw new CliError(`runtime package source drifted: ${path}`, 6);
+        }
+        return Object.freeze({ path, code });
+    });
+}
+
+function runtimePackageJson(): string {
+    const entries = ["AS3Array", "AS3ByteArray", "AS3Coerce", "AS3Dictionary", "AS3MethodClosure",
+        "AS3OwnRecord", "AS3Type", "AS3Vector"];
+    const exports: Record<string, string> = Object.create(null) as Record<string, string>;
+    entries.forEach(name => { exports[`./${name}`] = "./AS3Authority.generated.js"; });
+    exports["./AS3Authority"] = "./AS3Authority.generated.js";
+    exports["./ApplicationEntry"] = "./ApplicationEntry.generated.js";
+    return `${JSON.stringify({ name: "@bleach/as3-runtime", version: "0.1.0", private: true,
+        type: "commonjs", exports, files: ["AS3Authority.generated.js", "ApplicationEntry.generated.js",
+            "application/**/*.js"] }, null, 2)}\n`;
+}
+
 function astPathFor(sourcePath: string): string {
     return `ast/${sourcePath.replace(/\.as$/i, ".ast.json")}`;
 }
@@ -102,6 +232,11 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
         const outputKeys = new Set<string>();
         const qualificationOwners = new Map<string, QualificationFile>();
         const localOutputDependencies = new Map<QualificationFile | TranspiledManifestFile, string[]>();
+        let applicationEntry: EmittedRuntimeApplicationEntry | null = null;
+        let runtimeAuthority: EmittedRuntimeAuthority | null = null;
+        const runtimeAuthoritySources: RuntimeAuthoritySource[] = transpileAuthority === null
+            ? [] : [...transpileAuthority.runtimeTypeSources];
+        const localRuntimePrograms: SemanticProgram[] = [];
         let totalOutputBytes = 0;
 
         for (const file of inputs.files) {
@@ -145,7 +280,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 const normalized = JSON.parse(parsedFile.json) as NormalizedParserAst;
                 const semantic = adaptNormalizedParserAst(normalized, transpileAuthority!.authority,
                     source.content, value => sha256(value), transpileAuthority!.localTypes, file.portablePath,
-                    transpileAuthority!.localMembers);
+                    transpileAuthority!.localMembers, transpileAuthority!.runtimeTypeSources);
                 const emitted = emitSemanticProgram(semantic, {
                     compiler: ts49,
                     expectedTypeScriptVersion: transpileAuthority!.typeScriptVersion,
@@ -155,7 +290,9 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     const resolved = posix.normalize(posix.join(posix.dirname(emitted.modulePath), item.targetModule));
                     return resolved.endsWith(".ts") ? resolved : `${resolved}.ts`;
                 });
-                const collisionKey = portableCollisionKey(emitted.modulePath);
+                const packageModulePath = `__as3_runtime/application/${emitted.modulePath}`;
+                const collisionKey = portableCollisionKey(options.operation === "qualify"
+                    ? emitted.modulePath : packageModulePath);
                 if (options.operation === "qualify") {
                     const current: QualificationFile = {
                         sourcePath: file.portablePath,
@@ -192,15 +329,20 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     throw new CliError(`two sources emit the same portable module path: ${emitted.modulePath}`, 4);
                 }
                 outputKeys.add(collisionKey);
+                localRuntimePrograms.push(semantic);
                 const bytes = Buffer.byteLength(emitted.code, "utf8");
                 totalOutputBytes += bytes;
                 if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
                     throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
                 }
-                writeArtifact(publication, emitted.modulePath, emitted.code);
+                writeArtifact(publication, packageModulePath, emitted.code);
+                const javascriptPath = packageModulePath.slice(0, -3) + ".js";
+                const javascript = runtimeCommonJs(emitted.code, packageModulePath);
+                writeArtifact(publication, javascriptPath, javascript);
+                totalOutputBytes += Buffer.byteLength(javascript, "utf8");
                 const transpiled: TranspiledManifestFile = {
                     sourcePath: file.portablePath,
-                    typescriptPath: emitted.modulePath,
+                    typescriptPath: packageModulePath,
                     sourceBytes: source.bytes.byteLength,
                     sourceSha256: sha256(source.bytes),
                     normalizedAstSha256: sha256(parsedFile.json),
@@ -209,7 +351,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     typescriptSha256: sha256(emitted.code),
                 };
                 transpiledFiles.push(transpiled);
-                localOutputDependencies.set(transpiled, requiredLocalModules);
+                localOutputDependencies.set(transpiled, requiredLocalModules.map(path => `__as3_runtime/application/${path}`));
             } catch (error) {
                 if (options.operation === "qualify") {
                     const normalized = (() => {
@@ -260,6 +402,46 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     throw new CliError(`local dependency has no emitted output in this source set: ${missing}`, 4);
                 }
             }
+            try {
+                assertLocalRuntimeDefinitionClosure(localRuntimePrograms, ts49);
+                localRuntimePrograms.forEach(semantic => {
+                    if (semantic.declaration.declarationKind === "class") {
+                        runtimeAuthoritySources.push(localRuntimeTypeAuthoritySource(semantic,
+                            `./application/${semantic.outputModulePath.slice(0, -3)}`));
+                    } else if (semantic.declaration.declarationKind === "interface") {
+                        runtimeAuthoritySources.push(localRuntimeInterfaceAuthoritySource(semantic));
+                    }
+                });
+            } catch (error) {
+                throw new CliError(`transpile rejected runtime authority source set: ${errorMessage(error)}`, 4);
+            }
+            const packageJson = runtimePackageJson();
+            writeArtifact(publication, "__as3_runtime/package.json", packageJson);
+            totalOutputBytes += Buffer.byteLength(packageJson, "utf8");
+            runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value));
+            const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
+            const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code);
+            totalOutputBytes += Buffer.byteLength(authorityJavaScript, "utf8");
+            if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
+                throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
+            }
+            writeArtifact(publication, runtimeAuthorityPath, authorityJavaScript);
+            applicationEntry = emitRuntimeApplicationEntry(transpiledFiles.map(item =>
+                item.typescriptPath.slice("__as3_runtime/".length)),
+                value => sha256(value));
+            const applicationEntryPath = `__as3_runtime/${applicationEntry.path}`;
+            const entryCollisionKey = portableCollisionKey(applicationEntryPath);
+            if (outputKeys.has(entryCollisionKey)) {
+                throw new CliError(`application entry path collides with emitted output: ${applicationEntryPath}`, 4);
+            }
+            const entryBytes = Buffer.byteLength(applicationEntry.code, "utf8");
+            const entryJavaScript = runtimeCommonJs(applicationEntry.code, applicationEntryPath);
+            totalOutputBytes += entryBytes + Buffer.byteLength(entryJavaScript, "utf8");
+            if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
+                throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
+            }
+            writeArtifact(publication, applicationEntryPath, applicationEntry.code);
+            writeArtifact(publication, "__as3_runtime/ApplicationEntry.generated.js", entryJavaScript);
         }
 
         assertParserWorkerSha256(parserWorkerSha256);
@@ -286,6 +468,11 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             sourceCapabilitySha256: transpileAuthority!.sourceCensusSha256,
             targetCapabilitySha256: transpileAuthority!.targetCapabilitiesSha256,
             capabilityMappingSha256: transpileAuthority!.capabilityMappingSha256,
+            runtimeAuthorityPath: "__as3_runtime/AS3Authority.generated.js",
+            runtimeAuthoritySha256: runtimeAuthority!.sha256,
+            runtimeAuthorityQNames: runtimeAuthority!.qnames,
+            applicationEntryPath: `__as3_runtime/${applicationEntry!.path}`,
+            applicationEntrySha256: applicationEntry!.sha256,
             classification: "capability-authenticated-typescript-proposal",
             files: transpiledFiles,
         } : {

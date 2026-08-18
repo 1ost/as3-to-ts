@@ -105,10 +105,14 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         const stubs = path.join(root, "stubs");
         const generated = path.join(root, "generated");
         fs.mkdirSync(runtime, { recursive: true });
+        fs.mkdirSync(path.join(runtime, "internal"), { recursive: true });
         fs.mkdirSync(stubs, { recursive: true });
         fs.mkdirSync(generated, { recursive: true });
         fs.mkdirSync(path.join(root, "base"), { recursive: true });
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Type.ts"), path.join(runtime, "AS3Type.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/internal/AS3TypeRegistry.ts"),
+            path.join(runtime, "internal", "AS3TypeRegistry.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3MethodClosure.ts"), path.join(runtime, "AS3MethodClosure.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Vector.ts"), path.join(runtime, "AS3Vector.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Coerce.ts"), path.join(runtime, "AS3Coerce.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Dictionary.ts"), path.join(runtime, "AS3Dictionary.ts"));
@@ -120,6 +124,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
         fs.writeFileSync(path.join(root, "base", "Base.ts"),
             "export class Base { public constructor(_value:number=0) {} }\n", "utf8");
+        fs.writeFileSync(path.join(root, "base", "IReady.ts"), "export interface IReady {}\n", "utf8");
         outputs.forEach((code, index) => fs.writeFileSync(path.join(generated, `Fixture${index}.ts`), code, "utf8"));
         const config = path.join(root, "tsconfig.json");
         fs.writeFileSync(config, JSON.stringify({
@@ -388,6 +393,20 @@ function buildTree(options = {}) {
                 n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "Event")])),
             localDeclaration("VAR_LIST", "matches", "Boolean",
                 n("RELATION", null, [n("IDENTIFIER", "event"), n("OP", "is"), n("IDENTIFIER", "Event")])),
+            localDeclaration("VAR_LIST", "compatibleInt", "int",
+                n("RELATION", null, [n("LITERAL", "1"), n("AS", "as"), n("IDENTIFIER", "int")])),
+            localDeclaration("VAR_LIST", "castInt", "int",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "int")])),
+            localDeclaration("VAR_LIST", "castUint", "uint",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "uint")])),
+            localDeclaration("VAR_LIST", "castNumber", "Number",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "Number")])),
+            localDeclaration("VAR_LIST", "castBoolean", "Boolean",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "Boolean")])),
+            localDeclaration("VAR_LIST", "rawPrimitive", "Object",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "int")])),
+            localDeclaration("VAR_LIST", "matchesInt", "Boolean",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("OP", "is"), n("IDENTIFIER", "int")])),
             n("RETURN"),
         ];
     }
@@ -889,15 +908,47 @@ function buildLocalBaseTree(options = {}) {
     }
     if (options.localStaticCall || options.badLocalStaticCall || options.localStaticField
         || options.badLocalStaticWrite) imports.push(n("IMPORT", "lobby.base.Utility"));
+    if (options.importedArrayShadow) imports.push(n("IMPORT", "lobby.base.Array"));
     const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
         || options.localInstanceMembers || options.badLocalInstanceReadonly
         || options.badLocalInstancePrivate || options.badLocalInstanceClosure
-        || options.localInstanceFlashBase || options.multipleLocalBases;
+        || options.localInstanceFlashBase || options.multipleLocalBases || options.vectorConcatLocal;
     if (localInstanceWorkpack) imports.push(n("IMPORT", "lobby.base.Worker"));
     const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
     if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
     const superArguments = options.superArgument ? [n("LITERAL", options.badSuperArgument ? '"bad"' : "1")] : [];
     const members = [constructor([call(n("IDENTIFIER", "super"), superArguments)])];
+    if (options.vectorConcatLocal) {
+        members.unshift(
+            n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+                n("NAME", "baseValues"), vectorType("Base"),
+            ])]),
+            n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+                n("NAME", "workerValues"), vectorType("Worker"),
+            ])]),
+        );
+        members.push(method("concatWorkers", [], "void", [
+            call(dot(n("IDENTIFIER", "baseValues"), "concat"), [n("IDENTIFIER", "workerValues")]),
+            n("RETURN"),
+        ]));
+    }
+    if (options.numericSortWorkpack || options.samePackageArrayShadow
+        || options.importedArrayShadow || options.wildcardArrayShadow) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "sortValues"), vectorType("int"),
+            n("INIT", null, [n("NEW", null, [call(vectorType("int"))])]),
+        ])]));
+        members.push(method("sortWithShadow", [], "void", [
+            call(dot(n("IDENTIFIER", "sortValues"), "sort"), [dot(n("IDENTIFIER", "Array"), "NUMERIC")]),
+            n("RETURN"),
+        ]));
+    }
+    if (options.vectorInterface) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "readyItems"), vectorType("IReady"),
+            n("INIT", null, [n("NEW", null, [call(vectorType("IReady"))])]),
+        ])]));
+    }
     if (localInstanceWorkpack) {
         members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
             n("NAME", "worker"), type("Worker"),
@@ -1038,7 +1089,8 @@ function localAuthority(api, normalized, options = {}) {
     const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
         || options.localInstanceMembers || options.badLocalInstanceReadonly
         || options.badLocalInstancePrivate || options.badLocalInstanceClosure
-        || options.localInstanceFlashBase || options.multipleLocalBases;
+        || options.localInstanceFlashBase || options.multipleLocalBases || options.vectorConcatLocal;
+    const arrayShadow = options.samePackageArrayShadow || options.importedArrayShadow || options.wildcardArrayShadow;
     const entries = [
         {
             componentId: "scc-00001", importable: options.baseImportable !== false, module: options.baseModule || "application",
@@ -1094,6 +1146,17 @@ function localAuthority(api, normalized, options = {}) {
             targetPath: "game-client/layaair/src/application/lobby/base/Worker.ts", topologicalLevel: 0,
             typeKind: "class",
         }] : []),
+        ...(arrayShadow ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "1".repeat(64), nodeId: "0000000000000008", prerequisites: [],
+            qname: options.samePackageArrayShadow ? "lobby.ui.Array" : "lobby.base.Array",
+            sourceContentSha256: "2".repeat(64),
+            sourcePath: options.samePackageArrayShadow ? "game-client/tapplication_main/src/lobby/ui/Array.as"
+                : "game-client/tapplication_main/src/lobby/base/Array.as",
+            targetPath: options.samePackageArrayShadow ? "game-client/layaair/src/application/lobby/ui/Array.ts"
+                : "game-client/layaair/src/application/lobby/base/Array.ts",
+            topologicalLevel: 0, typeKind: "class",
+        }] : []),
         {
             componentId: "scc-00002", graphSourceSha256: "8".repeat(64), importable: true,
             module: "application", nodeId: currentNodeId,
@@ -1103,7 +1166,8 @@ function localAuthority(api, normalized, options = {}) {
                 .concat(options.withPackageSymbols || options.withNamespace ? ["0000000000000005"] : [])
                 .concat(options.localStaticCall || options.badLocalStaticCall || options.localStaticField
                     || options.badLocalStaticWrite ? ["0000000000000006"] : [])
-                .concat(localInstanceWorkpack ? ["0000000000000007"] : []), qname: "lobby.ui.Demo",
+                .concat(localInstanceWorkpack ? ["0000000000000007"] : [])
+                .concat(arrayShadow ? ["0000000000000008"] : []), qname: "lobby.ui.Demo",
             sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
             sourceContentSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
             targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
@@ -1156,10 +1220,14 @@ function localMemberAuthority(api, localTypes, mutate = null, options = {}) {
             baseQNames: entry.qname.endsWith(".Demo")
                 ? [options.samePackage ? entry.qname.replace(/\.Demo$/, ".Base") : "lobby.base.Base"]
                 : entry.qname.endsWith(".Worker") && options.localInstanceFlashBase ? ["flash.display.Sprite"]
+                    : entry.qname.endsWith(".Worker") && options.vectorConcatLocal ? ["lobby.base.Base"]
                     : entry.qname.endsWith(".Worker") && options.multipleLocalBases
                         ? ["lobby.base.Base", "flash.display.Sprite"] : [],
             interfaceQNames: [],
-            members: entry.qname.endsWith(".Utility") ? [{
+            members: entry.qname.endsWith(".Array") ? [{
+                kind: "constructor", name: "Array", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: null, readonly: false,
+            }] : entry.qname.endsWith(".Utility") ? [{
                 kind: "method", name: "describe", modifiers: ["public", "static"], namespaceName: null,
                 parameters: [{ name: "value", type: "int", optional: false, rest: false }],
                 returnType: "String", fieldType: null, readonly: false,
@@ -1218,22 +1286,24 @@ function localMemberAuthority(api, localTypes, mutate = null, options = {}) {
         },
     }));
     if (mutate) mutate(entries);
+    const completeCount=entries.filter(entry=>entry.status==="complete").length;
+    const heldCount=entries.filter(entry=>entry.status==="held").length;
     const document = {
-        completeCount: entries.length,
+        completeCount,
         declarationWorkerSha256: "a".repeat(64),
         entries,
         entryCount: entries.length,
-        heldCount: 0,
+        heldCount,
         localTypeMapSha256: "b".repeat(64),
         schema: "bleach-local-as3-member-map@2",
         sourceCensusSha256: "c".repeat(64),
     };
     const json = `${canonicalJson(document)}\n`;
     return api.loadLocalMemberAuthority({
-        expectedCompleteCount: entries.length,
+        expectedCompleteCount: completeCount,
         expectedDeclarationWorkerSha256: document.declarationWorkerSha256,
         expectedEntryCount: entries.length,
-        expectedHeldCount: 0,
+        expectedHeldCount: heldCount,
         expectedLocalTypeMapSha256: document.localTypeMapSha256,
         expectedSourceCensusSha256: document.sourceCensusSha256,
         json,
@@ -1384,12 +1454,14 @@ function main() {
         "HARDENED_LOCAL_MEMBER_AUTHORITY");
     const localSuperArgumentOutput = api.emitSemanticProgram(adaptLocal(api, authority, { superArgument: true }),
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(localSuperArgumentOutput.code, /super\(__as3Int\(1\)\);/);
+    assert.match(localSuperArgumentOutput.code,
+        /const __as3PreparedConstruction = __as3PrepareConstruction\(new\.target, Demo, __as3ConstructionProof\);[\s\S]*super\(__as3Int\(1\), \.\.\.__as3PreparedConstruction\);/);
     assertErrorCode(() => adaptLocal(api, authority, { superArgument: true, badSuperArgument: true }),
         "HARDENED_LOCAL_CONSTRUCTOR_TYPE");
     const localNewOutput = api.emitSemanticProgram(adaptLocal(api, authority, { localNew: true }),
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(localNewOutput.code, /private created: Base \| null = new Base\(__as3Int\(1\)\);/);
+    assert.match(localNewOutput.code, /private created: Base \| null;/);
+    assert.match(localNewOutput.code, /this\.created = new Base\(__as3Int\(1\)\);/);
     assertErrorCode(() => adaptLocal(api, authority, { badLocalNew: true }),
         "HARDENED_LOCAL_CONSTRUCTOR_TYPE");
     const inheritedCallOutput = api.emitSemanticProgram(adaptLocal(api, authority, { inheritedCall: true }),
@@ -1494,6 +1566,20 @@ function main() {
     const multipleBaseOutput = api.emitSemanticProgram(adaptLocal(api, authority,
         { multipleLocalBases: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(multipleBaseOutput.code, /return this\.worker!\.describe\(__as3Int\(1\.5\)\);/);
+    const vectorConcatOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { vectorConcatLocal: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorConcatOutput.code, /this\.baseValues!\.concat\(this\.workerValues\);/);
+    for (const parents of [
+        ["lobby.base.Base", "missing.Side"],
+        ["lobby.base.Base", "lobby.base.Worker"],
+    ]) {
+        assertErrorCode(() => adaptLocal(api, authority, {
+            vectorConcatLocal: true,
+            mutateMemberAuthority: entries => {
+                entries.find(entry => entry.qname === "lobby.base.Worker").declaration.baseQNames = parents;
+            },
+        }), "HARDENED_VECTOR_CONCAT_TYPE");
+    }
     assertErrorCode(() => adaptLocal(api, authority, {
         localInstanceCall: true,
         mutateMemberAuthority: entries => {
@@ -1525,6 +1611,40 @@ function main() {
     /import \{ Base \} from "\.\/Base";/);
     assertErrorCode(() => adaptLocal(api, authority, { samePackage: true, withEdge: false }),
         "HARDENED_LOCAL_IMPORT_EDGE");
+    const numericSortProgram=adaptLocal(api,authority,{numericSortWorkpack:true});
+    const numericSortMethod=numericSortProgram.declaration.members.find(member=>member.kind==="method"
+        && member.name==="sortWithShadow");
+    assert.equal(numericSortMethod.body[0].expression.arguments[0].kind,"intrinsicConstant");
+    assert.equal(numericSortMethod.body[0].expression.arguments[0].identity,"Array.NUMERIC");
+    assert.match(api.emitSemanticProgram(numericSortProgram,
+        {compiler:ts,expectedTypeScriptVersion:"4.9.5"}).code,/this\.sortValues!\.sort\(16\);/);
+    for(const inherited of [
+        {kind:"field",name:"Array",modifiers:["protected"],namespaceName:null,
+            parameters:[],returnType:null,fieldType:"Object",readonly:false},
+        {kind:"getter",name:"Array",modifiers:["public"],namespaceName:null,
+            parameters:[],returnType:"Object",fieldType:null,readonly:false},
+        {kind:"method",name:"Array",modifiers:["public"],namespaceName:null,
+            parameters:[],returnType:"Object",fieldType:null,readonly:false},
+    ]){
+        assertErrorCode(()=>adaptLocal(api,authority,{numericSortWorkpack:true,
+            mutateMemberAuthority:entries=>entries.find(entry=>entry.qname==="lobby.base.Base")
+                .declaration.members.push(inherited)}),"HARDENED_INTRINSIC_IDENTITY_SHADOW");
+    }
+    for(const bases of [["missing.One"],["missing.One","missing.Two"],["lobby.base.Base"]]){
+        assertErrorCode(()=>adaptLocal(api,authority,{numericSortWorkpack:true,
+            mutateMemberAuthority:entries=>{entries.find(entry=>entry.qname==="lobby.base.Base")
+                .declaration.baseQNames=bases;}}),"HARDENED_INTRINSIC_IDENTITY_AUTHORITY");
+    }
+    assertErrorCode(()=>adaptLocal(api,authority,{numericSortWorkpack:true,
+        mutateMemberAuthority:entries=>{const base=entries.find(entry=>entry.qname==="lobby.base.Base");
+            base.status="held";base.holdCode="HARDENED_TEST_HOLD";base.holdSha256="f".repeat(64);base.declaration=null;}}),
+    "HARDENED_LOCAL_MEMBER_HELD");
+    assertErrorCode(() => adaptLocal(api, authority, { samePackageArrayShadow: true }),
+        "HARDENED_INTRINSIC_IDENTITY_SHADOW");
+    assertErrorCode(() => adaptLocal(api, authority, { importedArrayShadow: true }),
+        "HARDENED_LOCAL_STATIC_MEMBER");
+    assertErrorCode(() => adaptLocal(api, authority, { wildcardArrayShadow: true, wildcardImports: true }),
+        "HARDENED_LOCAL_STATIC_MEMBER");
     const samePackageInterfaceProgram = adaptLocal(api, authority, { samePackage: true, withInterface: true });
     assert.deepEqual(samePackageInterfaceProgram.imports.map(item => item.sourceQualifiedName),
         ["lobby.ui.Base", "lobby.ui.IReady"]);
@@ -1535,8 +1655,15 @@ function main() {
     const localInterfaceOutput = api.emitSemanticProgram(localInterfaceProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(localInterfaceOutput.code, /export class Demo extends Base implements IReady/);
-    assert.match(localInterfaceOutput.code, /__as3RegisterInterfaces\(Demo, \[__as3InterfaceType\("lobby\.base\.IReady"\)\]\);/);
+    assert.match(localInterfaceOutput.code, /const __as3ClassInstances: WeakSet<object> = new WeakSet\(\), __as3ConstructionTargets:/);
+    assert.match(localInterfaceOutput.code, /export function isAS3ClassInstance\(value: unknown\): value is Demo/);
+    assert.doesNotMatch(localInterfaceOutput.code, /#__as3NativeClassBrand/);
+    assert.match(localInterfaceOutput.code, /export function isAS3ConstructionProof/);
     assert.match(localInterfaceOutput.code, /__as3As\(value, __as3InterfaceType\("lobby\.base\.IReady"\)\)/);
+    const vectorInterfaceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { withInterface: true, vectorInterface: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorInterfaceOutput.code,
+        /new __as3Vector<IReady \| null>\(__as3VectorReference\("lobby\.base\.IReady", __as3NamedReferenceType\("lobby\.base\.IReady"\)\)\)/);
     const localWildcardProgram = adaptLocal(api, authority, { withInterface: true, wildcardImports: true });
     assert.deepEqual(localWildcardProgram.imports.map(item => item.sourceQualifiedName),
         ["lobby.base.Base", "lobby.base.IReady"]);
@@ -1563,12 +1690,14 @@ function main() {
     assert.equal(emitted.modulePath, "lobby/ui/Demo.ts");
     assert.match(emitted.code, /import \{ Sprite \} from "laya\/flash\/display\/Sprite";/);
     assert.match(emitted.code, /import \{ Event \} from "laya\/flash\/events\/Event";/);
-    assert.match(emitted.code, /private a: number = 1;/);
-    assert.match(emitted.code, /private b: string \| null = "x";/);
-    assert.ok(emitted.code.indexOf("super();") < emitted.code.indexOf("this.addEventListener"));
-    assert.match(emitted.code, /this\.onEvent = this\.onEvent\.bind\(this\);/);
+    assert.match(emitted.code, /private a: number;/);
+    assert.match(emitted.code, /private b: string \| null;/);
+    assert.match(emitted.code, /this\.a = 1;/);
+    assert.match(emitted.code, /this\.b = "x";/);
+    assert.ok(emitted.code.indexOf("__as3PrepareConstruction") < emitted.code.indexOf("this.addEventListener"));
+    assert.match(emitted.code, /this\.onEvent = __as3BindMethod\(this, this\.onEvent\);/);
     assert.match(emitted.code, /this\.addEventListener\("ready", this\.onEvent\);/);
-    assert.equal((emitted.code.match(/this\.onEvent = this\.onEvent\.bind\(this\);/g) || []).length, 1);
+    assert.equal((emitted.code.match(/this\.onEvent = __as3BindMethod\(this, this\.onEvent\);/g) || []).length, 1);
     assert.doesNotMatch(emitted.code, /AVM|ABC|compat|wrapper/i);
     const wildcardProgram = adapt(api, buildTree({ wildcardImports: true }), authority);
     assert.ok(wildcardProgram.imports.some(item => item.sourceQualifiedName === "flash.display.Sprite"));
@@ -1590,12 +1719,15 @@ function main() {
     const constFields = constProgram.declaration.members.filter((member) => member.kind === "field");
     assert.equal(constFields.every((field) => field.readonly), true);
     const constOutput = api.emitSemanticProgram(constProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(constOutput.code, /private readonly a: number = 1;/);
-    assert.match(constOutput.code, /private readonly b: string \| null = "x";/);
+    assert.match(constOutput.code, /private readonly a: number;/);
+    assert.match(constOutput.code, /private readonly b: string \| null;/);
+    assert.match(constOutput.code, /this\.a = 1;/);
+    assert.match(constOutput.code, /this\.b = "x";/);
     const vectorProgram = adapt(api, buildTree({ vectorWorkpack: true }), authority);
     const vectorOutput = api.emitSemanticProgram(vectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(vectorOutput.code, /AS3Vector as __as3Vector/);
-    assert.match(vectorOutput.code, /private values: __as3Vector<number> \| null = new __as3Vector<number>\(__as3VectorPolicies\.int, __as3Uint\(2\), false\);/);
+    assert.match(vectorOutput.code, /private values: __as3Vector<number> \| null;/);
+    assert.match(vectorOutput.code, /this\.values = new __as3Vector<number>\(__as3VectorPolicies\.int, __as3Uint\(2\), false\);/);
     assert.match(vectorOutput.code, /this\.values!\[__as3Uint\(0\)\] = __as3Int\(4\);/);
     assert.match(vectorOutput.code, /this\.values!\.push\(__as3Int\(5\)\);/);
     assert.match(vectorOutput.code, /var copy: __as3Vector<number> \| null = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
@@ -1626,6 +1758,13 @@ function main() {
     assert.match(runtimeTypeOutput.code, /as3As as __as3As/);
     assert.match(runtimeTypeOutput.code, /var cast: Event \| null = __as3As\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
     assert.match(runtimeTypeOutput.code, /var matches: boolean = __as3Is\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
+    assert.match(runtimeTypeOutput.code, /var compatibleInt: number = __as3Int\(__as3As\(1, __as3Types\.int\)\);/);
+    assert.match(runtimeTypeOutput.code, /var castInt: number = __as3Int\(__as3As\(event, __as3Types\.int\)\);/);
+    assert.match(runtimeTypeOutput.code, /var castUint: number = __as3Uint\(__as3As\(event, __as3Types\.uint\)\);/);
+    assert.match(runtimeTypeOutput.code, /var castNumber: number = __as3Number\(__as3As\(event, __as3Types\.Number\)\);/);
+    assert.match(runtimeTypeOutput.code, /var castBoolean: boolean = __as3Boolean\(__as3As\(event, __as3Types\.Boolean\)\);/);
+    assert.match(runtimeTypeOutput.code, /var rawPrimitive: unknown = __as3As\(event, __as3Types\.int\);/);
+    assert.match(runtimeTypeOutput.code, /var matchesInt: boolean = __as3Is\(event, __as3Types\.int\);/);
     const vectorRuntimeProgram = adapt(api, buildTree({ vectorRuntimeWorkpack: true }), authority);
     const vectorRuntimeOutput = api.emitSemanticProgram(vectorRuntimeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(vectorRuntimeOutput.code, /__as3As\(this\.values, __as3VectorType\(__as3VectorPolicies\.int\)\)/);
@@ -1633,16 +1772,16 @@ function main() {
     const nestedVectorProgram = adapt(api, buildTree({ nestedVectorWorkpack: true }), authority);
     const nestedVectorOutput = api.emitSemanticProgram(nestedVectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(nestedVectorOutput.code,
-        /private matrix: __as3Vector<__as3Vector<number> \| null> \| null = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), __as3Uint\(1\)\);/);
+        /this\.matrix = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), __as3Uint\(1\)\);/);
     const vectorBuiltinReferenceProgram = adapt(api, buildTree({ vectorBuiltinReferenceWorkpack: true }), authority);
     const vectorBuiltinReferenceOutput = api.emitSemanticProgram(vectorBuiltinReferenceProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(vectorBuiltinReferenceOutput.code,
-        /private classes: __as3Vector<Function \| null> \| null = new __as3Vector<Function \| null>\(__as3VectorPolicies\.class\);/);
+        /this\.classes = new __as3Vector<__as3ClassValue \| null>\(__as3VectorPolicies\.class\);/);
     assert.match(vectorBuiltinReferenceOutput.code,
-        /private routines: __as3Vector<Function \| null> \| null = new __as3Vector<Function \| null>\(__as3VectorPolicies\.function\);/);
+        /this\.routines = new __as3Vector<Function \| null>\(__as3VectorPolicies\.function\);/);
     assert.match(vectorBuiltinReferenceOutput.code,
-        /private rows: __as3Vector<unknown\[] \| null> \| null = new __as3Vector<unknown\[] \| null>\(__as3VectorPolicies\.array\);/);
+        /this\.rows = new __as3Vector<unknown\[] \| null>\(__as3VectorPolicies\.array\);/);
     const coercionProgram = adapt(api, buildTree({ coercionWorkpack: true }), authority);
     const coercionOutput = api.emitSemanticProgram(coercionProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(coercionOutput.code, /as3Int as __as3Int/);
@@ -1707,7 +1846,7 @@ function main() {
     const nestedExpressionProgram = adapt(api, buildTree({ nestedExpressionWorkpack: true }), authority);
     const nestedExpressionOutput = api.emitSemanticProgram(nestedExpressionProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(nestedExpressionOutput.code, /private a: number = 1 \+ 2;/);
+    assert.match(nestedExpressionOutput.code, /this\.a = 1 \+ 2;/);
     assert.match(nestedExpressionOutput.code, /__as3Int\(4 - 1\);/);
     assertErrorCode(() => adapt(api, buildTree({ badNestedExpression: true }), authority), "HARDENED_EXPRESSION_UNSUPPORTED");
     const labelProgram = adapt(api, buildTree({ labelWorkpack: true }), authority);
@@ -1721,6 +1860,7 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.equal(interfaceProgram.declaration.declarationKind, "interface");
     assert.match(interfaceOutput.code, /export interface IThing/);
+    assert.doesNotMatch(interfaceOutput.code, /as3DefineInterface|as3RegisterClass/);
     assert.match(interfaceOutput.code, /run\(value: number, \.\.\.rest: unknown\[\]\): string \| null;/);
     assert.match(interfaceOutput.code, /get name\(\): string \| null;/);
     assert.match(interfaceOutput.code, /set name\(value: string \| null\);/);
@@ -1751,7 +1891,7 @@ function main() {
     const nullableProgram = adapt(api, buildTree({ nullableWorkpack: true }), authority);
     const nullableOutput = api.emitSemanticProgram(nullableProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(nullableOutput.code, /private maybeSprite: Sprite \| null = null;/);
+    assert.match(nullableOutput.code, /this\.maybeSprite = null;/);
     assert.match(nullableOutput.code, /var maybeEvent: Event \| null = null;/);
     assert.match(nullableOutput.code, /var isMissing: boolean = maybeEvent === null;/);
     assert.match(nullableOutput.code, /var selected: Event \| null = true \? maybeEvent : null;/);
@@ -1772,7 +1912,7 @@ function main() {
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(dictionaryOutput.code,
         /import \{ AS3Dictionary as Dictionary \} from "@bleach\/as3-runtime\/AS3Dictionary";/);
-    assert.match(dictionaryOutput.code, /private dictionary: Dictionary \| null = new Dictionary\(true\);/);
+    assert.match(dictionaryOutput.code, /this\.dictionary = new Dictionary\(true\);/);
     assert.match(dictionaryOutput.code, /this\.dictionary!\.set\(key, "value"\);/);
     assert.match(dictionaryOutput.code, /var found: unknown = this\.dictionary!\.get\(key\);/);
     assert.match(dictionaryOutput.code, /var removed: boolean = this\.dictionary!\.delete\(key\);/);
@@ -1808,7 +1948,7 @@ function main() {
         /import \{ AS3ByteArray as ByteArray \} from "@bleach\/as3-runtime\/AS3ByteArray";/);
     assert.match(byteArrayOutput.code,
         /import \{ AS3Endian as Endian \} from "@bleach\/as3-runtime\/AS3ByteArray";/);
-    assert.match(byteArrayOutput.code, /private bytes: ByteArray \| null = new ByteArray\(\);/);
+    assert.match(byteArrayOutput.code, /this\.bytes = new ByteArray\(\);/);
     assert.match(byteArrayOutput.code, /this\.bytes!\.endian = Endian\.LITTLE_ENDIAN;/);
     assert.match(byteArrayOutput.code, /this\.bytes!\.writeInt\(__as3Int\(1\)\);/);
     assert.match(byteArrayOutput.code, /var decoded: number = this\.bytes!\.readUnsignedInt\(\);/);
@@ -1859,7 +1999,7 @@ function main() {
         existingForEachOutput.code, tryOutput.code,
         bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,
         nestedExpressionOutput.code,
-        labelOutput.code, interfaceOutput.code, localNamespaceOutput.code, overrideOutput.code, forInOutput.code,
+        labelOutput.code, interfaceOutput.code, vectorInterfaceOutput.code, localNamespaceOutput.code, overrideOutput.code, forInOutput.code,
         nullableOutput.code, lambdaOutput.code, dictionaryOutput.code, byteArrayOutput.code,
         arrayOutput.code, recordOutput.code]);
     const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
@@ -1878,10 +2018,10 @@ function main() {
     );
     const constructedProgram = adapt(api, buildTree({ newField: true }), authority);
     const constructedOutput = api.emitSemanticProgram(constructedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(constructedOutput.code, /private sprite: Sprite \| null = new Sprite\(\);/);
+    assert.match(constructedOutput.code, /this\.sprite = new Sprite\(\);/);
     assertErrorCode(
         () => adapt(api, buildTree({ newField: true, newArguments: [n("LITERAL", "1")] }), authority),
-        "HARDENED_NEW_ARGUMENT_TYPES",
+        "HARDENED_NEW_ARITY",
     );
     const accessorProgram = adapt(api, buildTree({ accessors: true, accessorIf: true }), authority);
     const accessorOutput = api.emitSemanticProgram(accessorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
@@ -1969,7 +2109,13 @@ function main() {
     }
     const runtimeModule = { exports: {} };
     Function("require", "module", "exports", runnable)(
-        (specifier) => specifier.endsWith("/Sprite") ? { Sprite: MockSprite } : { Event: class Event {} },
+        (specifier) => specifier.endsWith("/Sprite") ? { Sprite: MockSprite }
+            : specifier.endsWith("/AS3MethodClosure") ? {
+                as3BindMethod(receiver, method) { return method.bind(receiver); },
+            } : specifier.endsWith("/AS3Type") ? {
+                as3PrepareConstruction(){return [];},as3CancelPreparedConstruction(){},as3EnterConstruction(){},
+                as3RejectConstructorArity(){throw new TypeError("arity");},as3InitializeInstanceFields(){},as3AbortConstruction(){},as3CompleteConstruction(){},
+            } : { Event: class Event {} },
         runtimeModule,
         runtimeModule.exports,
     );
@@ -1996,10 +2142,11 @@ function main() {
         () => adapt(api, buildTree({ returnValue: true }), authority),
         "HARDENED_RETURN_VOID",
     );
-    assertErrorCode(
-        () => adapt(api, buildTree({ noConstructor: true }), authority),
-        "HARDENED_DERIVED_CONSTRUCTOR",
-    );
+    const implicitDerivedOutput = api.emitSemanticProgram(adapt(api, buildTree({ noConstructor: true }), authority),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(implicitDerivedOutput.code, /constructor\(\)/);
+    assert.match(implicitDerivedOutput.code,
+        /const __as3PreparedConstruction = __as3PrepareConstruction\(new\.target, Demo, __as3ConstructionProof\);[\s\S]*super\(\.\.\.__as3PreparedConstruction\);/);
     assertErrorCode(
         () => adapt(api, buildTree({ superInMethod: true }), authority),
         "HARDENED_SUPER_CONTEXT",

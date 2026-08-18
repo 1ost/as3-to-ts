@@ -93,6 +93,7 @@ export interface SemanticIdentity {
 export interface SemanticType extends SemanticIdentity {
     sourceName: string;
     emittedName: string;
+    runtimeName: string | null;
     nullable: boolean;
     typeArguments: SemanticType[];
 }
@@ -117,6 +118,12 @@ export type SemanticLiteralValue = string | number | boolean | null;
 export interface LiteralExpression extends SemanticIdentity {
     kind: "literal";
     value: SemanticLiteralValue;
+}
+
+export interface IntrinsicConstantExpression extends SemanticIdentity {
+    kind: "intrinsicConstant";
+    identity: "Array.NUMERIC";
+    value: 16;
 }
 
 export interface IdentifierExpression extends SemanticIdentity {
@@ -362,7 +369,7 @@ export interface UpdateExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = LiteralExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = LiteralExpression | IntrinsicConstantExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |
@@ -502,6 +509,7 @@ export interface SemanticField extends SemanticIdentity {
     readonly: boolean;
     type: SemanticType;
     initializer: SemanticExpression | null;
+    implicitDefault: "zero" | "nan" | "false" | "null" | "undefined" | "constructor-owned" | null;
 }
 
 export interface SemanticMethod extends SemanticIdentity {

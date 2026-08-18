@@ -34,6 +34,29 @@ function entry(qname, nodeId, sourcePath, source, prerequisites, typeKind = "cla
     };
 }
 
+test("current local authority preserves the two inherited case-folded field collisions", () => {
+    const document = JSON.parse(fs.readFileSync(path.join(ROOT, "config/local-member-map.json"), "utf8"));
+    const byQName = new Map(document.entries.map(item => [item.qname, item]));
+    const baseQName = "Processors.Game.Lobby.Activity.HDActivity.TProcessorHDSingleWindowBase";
+    const cases = [
+        ["Processors.Game.Lobby.Activity.HDBleachJigsaw.TProcessorWindowBleachJigsawOld", "FBtn_close", "FBtn_Close"],
+        ["Processors.Game.Lobby.Activity.HDPrivilegeLease.TprocessorHDWindowsPrivilegeLease", "FUiPage", "FUIPage"],
+    ];
+    const base = byQName.get(baseQName);
+    assert.equal(base.status, "complete");
+    for (const [derivedQName, derivedName, baseName] of cases) {
+        const derived = byQName.get(derivedQName);
+        assert.equal(derived.status, "complete", derivedQName);
+        assert.deepEqual(derived.declaration.baseQNames, [baseQName]);
+        const derivedField = derived.declaration.members.find(member => member.kind === "field" && member.name === derivedName);
+        const baseField = base.declaration.members.find(member => member.kind === "field" && member.name === baseName);
+        assert.ok(derivedField && baseField, derivedQName);
+        assert.equal(derivedField.modifiers.includes("protected"), true);
+        assert.equal(baseField.modifiers.includes("protected"), true);
+        assert.equal(derivedName.toLowerCase(), baseName.toLowerCase());
+    }
+});
+
 test("local member map is deterministic and resolves authenticated inheritance signatures", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "local-member-map-"));
     try {

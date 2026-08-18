@@ -1,5 +1,7 @@
 import {
     SemanticExpression,
+    SemanticConstructor,
+    SemanticField,
     SemanticMember,
     SemanticModifier,
     SemanticProgram,
@@ -123,8 +125,14 @@ function vectorPolicyNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
         return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3VectorNested"), undefined,
             [vectorPolicyNode(element, ts)]);
     }
+    if (element.runtimeName === null) {
+        throw new HardenedSemanticError("HARDENED_EMIT_VECTOR_IDENTITY",
+            "Vector reference policy lacks an authenticated runtime identity");
+    }
     return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3VectorReference"), undefined, [
-        ts.factory.createStringLiteral(element.sourceName), ts.factory.createIdentifier(element.emittedName),
+        ts.factory.createStringLiteral(element.runtimeName),
+        ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NamedReferenceType"), undefined,
+            [ts.factory.createStringLiteral(element.runtimeName)]),
     ]);
 }
 
@@ -149,6 +157,9 @@ function runtimeTypeTokenNode(expression: Extract<SemanticExpression, { kind: "r
 }
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
+    if (expression.kind === "intrinsicConstant") {
+        return ts.factory.createNumericLiteral(String(expression.value));
+    }
     if (expression.kind === "literal") {
         if (expression.value === null) {
             return ts.factory.createNull();
@@ -613,33 +624,34 @@ function bindMethodStatement(name: string, ts: TypeScriptCompilerApi): any {
     return ts.factory.createExpressionStatement(ts.factory.createBinaryExpression(
         method,
         ts.factory.createToken(ts.SyntaxKind.EqualsToken),
-        ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(method, "bind"), undefined,
-            [ts.factory.createThis()]),
+        ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindMethod"), undefined,
+            [ts.factory.createThis(), method]),
     ));
 }
 
-function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, boundMethods: string[]): any {
+function fieldDefaultExpression(member: SemanticField, ts: TypeScriptCompilerApi): any {
+    if (member.implicitDefault === "zero") return ts.factory.createNumericLiteral(0);
+    if (member.implicitDefault === "nan") return ts.factory.createBinaryExpression(
+        ts.factory.createNumericLiteral(0), ts.factory.createToken(ts.SyntaxKind.SlashToken), ts.factory.createNumericLiteral(0));
+    if (member.implicitDefault === "false") return ts.factory.createFalse();
+    if (member.implicitDefault === "null") return ts.factory.createNull();
+    if (member.implicitDefault === "undefined") return ts.factory.createVoidZero();
+    throw new HardenedSemanticError("HARDENED_FIELD_DEFAULT", "field lacks one exact AS3 initialization policy", member.sourceNodeId);
+}
+
+function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi): any {
     if (member.kind === "field") {
         const modifiers = modifierTokens(member.modifiers, ts);
         if (member.readonly) modifiers.push(ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword));
+        const isStatic = member.modifiers.includes("static");
         return ts.factory.createPropertyDeclaration(
             modifiers, member.name, undefined, typeNode(member.type, ts),
-            member.initializer === null ? undefined : expressionNode(member.initializer, ts),
+            isStatic ? (member.initializer === null ? fieldDefaultExpression(member, ts)
+                : expressionNode(member.initializer, ts)) : undefined,
         );
     }
-    if (member.kind === "constructor") {
-        const original = member.body.map((statement) => statementNode(statement, ts));
-        const bindings = boundMethods.map((name) => bindMethodStatement(name, ts));
-        const first = member.body[0];
-        const beginsWithSuper = first !== undefined && first.kind === "expression"
-            && first.expression.kind === "call" && first.expression.callee.kind === "super";
-        const body = beginsWithSuper ? [original[0]!].concat(bindings, original.slice(1)) : bindings.concat(original);
-        return ts.factory.createConstructorDeclaration(
-            modifierTokens(member.modifiers, ts),
-            member.parameters.map((parameter) => parameterNode(parameter, ts)),
-            ts.factory.createBlock(body, true),
-        );
-    }
+    if (member.kind === "constructor") throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR",
+        "constructor emission requires its authenticated class context", member.sourceNodeId);
     if (member.kind === "method") {
         return ts.factory.createMethodDeclaration(
             modifierTokens(member.modifiers, ts), undefined, member.name, undefined, undefined,
@@ -660,6 +672,164 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, boundMeth
         );
     }
     throw new HardenedSemanticError("HARDENED_EMIT_MEMBER", "semantic IR contains an unsupported member");
+}
+
+function newTargetExpression(ts: TypeScriptCompilerApi): any {
+    return ts.factory.createMetaProperty(ts.SyntaxKind.NewKeyword, ts.factory.createIdentifier("target"));
+}
+
+function constructorStatementsBindArguments(statements: SemanticStatement[]): boolean {
+    return statements.some((statement) => {
+        if (statement.kind === "local") return statement.declarations.some(local => local.name === "arguments");
+        if (statement.kind === "if") return constructorStatementsBindArguments(statement.thenStatements)
+            || (statement.elseStatements !== null && constructorStatementsBindArguments(statement.elseStatements));
+        if (statement.kind === "while" || statement.kind === "doWhile") {
+            return constructorStatementsBindArguments(statement.statements);
+        }
+        if (statement.kind === "switch") {
+            return statement.cases.some(item => constructorStatementsBindArguments(item.statements));
+        }
+        if (statement.kind === "for") {
+            return (statement.initializer?.kind === "local"
+                && statement.initializer.declarations.some(local => local.name === "arguments"))
+                || constructorStatementsBindArguments(statement.statements);
+        }
+        if (statement.kind === "forEach") {
+            return (statement.declaresBinding && statement.binding.name === "arguments")
+                || constructorStatementsBindArguments(statement.statements);
+        }
+        if (statement.kind === "forIn") {
+            return (statement.declaresTarget && statement.target.kind === "identifier"
+                && statement.target.name === "arguments") || constructorStatementsBindArguments(statement.statements);
+        }
+        if (statement.kind === "try") {
+            return constructorStatementsBindArguments(statement.tryStatements)
+                || (statement.catchClause !== null && (statement.catchClause.name === "arguments"
+                    || constructorStatementsBindArguments(statement.catchClause.statements)))
+                || (statement.finallyStatements !== null
+                    && constructorStatementsBindArguments(statement.finallyStatements));
+        }
+        return statement.kind === "label" && constructorStatementsBindArguments([statement.statement]);
+    });
+}
+
+function constructorArityGuard(className: string, member: SemanticConstructor | null,
+    ts: TypeScriptCompilerApi): any {
+    const parameters = member?.parameters ?? [];
+    if (parameters.some(parameter => parameter.name === "arguments")
+        || (member !== null && constructorStatementsBindArguments(member.body))) {
+        throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR_ARITY",
+            "constructor binding cannot shadow the runtime arguments object", member?.sourceNodeId ?? null);
+    }
+    let minimum = 0;
+    let unbounded = false;
+    parameters.forEach((parameter, index) => {
+        if (parameter.rest) unbounded = true;
+        else if (parameter.defaultValue === null) minimum = index + 1;
+    });
+    const length = ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"), "length");
+    const belowMinimum = ts.factory.createBinaryExpression(length,
+        ts.factory.createToken(ts.SyntaxKind.LessThanToken), ts.factory.createNumericLiteral(minimum));
+    const maximum = parameters.length;
+    const invalid = unbounded ? belowMinimum : minimum === maximum
+        ? ts.factory.createBinaryExpression(length, ts.factory.createToken(ts.SyntaxKind.ExclamationEqualsEqualsToken),
+            ts.factory.createNumericLiteral(minimum))
+        : ts.factory.createBinaryExpression(belowMinimum, ts.factory.createToken(ts.SyntaxKind.BarBarToken),
+            ts.factory.createBinaryExpression(length, ts.factory.createToken(ts.SyntaxKind.GreaterThanToken),
+                ts.factory.createNumericLiteral(maximum)));
+    return ts.factory.createIfStatement(invalid, ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3RejectConstructorArity"), undefined, [
+            ts.factory.createStringLiteral(className), ts.factory.createNumericLiteral(minimum),
+            unbounded ? ts.factory.createNull() : ts.factory.createNumericLiteral(maximum),
+        ])));
+}
+
+function classConstructorNode(program: SemanticProgram, member: SemanticConstructor | null,
+    boundMethods: string[], ts: TypeScriptCompilerApi): any {
+    if (program.declaration.declarationKind === "packageField") {
+        throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR", "package field cannot own a class constructor", program.sourceNodeId);
+    }
+    const classDeclaration = program.declaration;
+    const className = classDeclaration.name;
+    const derived = classDeclaration.extendsType !== null;
+    const original = member === null ? [] : member.body.map(statement => statementNode(statement, ts));
+    const first = member?.body[0];
+    const beginsWithSuper = first !== undefined && first.kind === "expression"
+        && first.expression.kind === "call" && first.expression.callee.kind === "super";
+    const originalSuperStatement = beginsWithSuper ? original.shift()! : derived && member === null
+        ? ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createSuper(), undefined, [])) : null;
+    let prepareStatement: any = null;
+    let superStatement: any = null;
+    if (originalSuperStatement !== null) {
+        const originalCall = originalSuperStatement.expression;
+        prepareStatement = ts.factory.createVariableStatement(undefined, ts.factory.createVariableDeclarationList([
+            ts.factory.createVariableDeclaration("__as3PreparedConstruction", undefined, undefined,
+                ts.factory.createCallExpression(ts.factory.createIdentifier("__as3PrepareConstruction"), undefined,
+                    [newTargetExpression(ts), ts.factory.createIdentifier(className),
+                        ts.factory.createIdentifier("__as3ConstructionProof")]))], ts.NodeFlags.Const));
+        const prepared = ts.factory.createSpreadElement(ts.factory.createIdentifier("__as3PreparedConstruction"));
+        const authenticatedSuper = ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+            originalCall.expression, originalCall.typeArguments, [...originalCall.arguments, prepared]));
+        const cancel = ts.factory.createIfStatement(ts.factory.createBinaryExpression(newTargetExpression(ts),
+            ts.factory.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken), ts.factory.createIdentifier(className)),
+        ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3CancelPreparedConstruction"), undefined,
+            [newTargetExpression(ts), ts.factory.createIdentifier("__as3ConstructionProof"),
+                ts.factory.createIdentifier("__as3PreparedConstruction")])));
+        superStatement = ts.factory.createTryStatement(ts.factory.createBlock([authenticatedSuper], true),
+            ts.factory.createCatchClause(ts.factory.createVariableDeclaration("__as3SuperError"), ts.factory.createBlock([
+                cancel, ts.factory.createThrowStatement(ts.factory.createIdentifier("__as3SuperError"))], true)), undefined);
+    }
+    const prologue: any[] = [ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3EnterConstruction"), undefined,
+        [ts.factory.createThis(), newTargetExpression(ts), ts.factory.createIdentifier(className),
+            ts.factory.createIdentifier("__as3ConstructionProof")])),
+    ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
+        ts.factory.createIdentifier("__as3ConstructionTargets"), "set"), undefined,
+    [ts.factory.createThis(), ts.factory.createAsExpression(newTargetExpression(ts),
+        ts.factory.createTypeQueryNode(ts.factory.createIdentifier(className)))])),
+    ts.factory.createVariableStatement(undefined, ts.factory.createVariableDeclarationList([
+        ts.factory.createVariableDeclaration("__as3ConstructionFailed", undefined, undefined, ts.factory.createFalse()),
+    ], ts.NodeFlags.Let))];
+    const explicitFields = classDeclaration.members.filter((item): item is SemanticField => item.kind === "field"
+        && !item.modifiers.includes("static") && item.initializer !== null).map(field =>
+        ts.factory.createExpressionStatement(ts.factory.createBinaryExpression(
+            ts.factory.createPropertyAccessExpression(ts.factory.createThis(), field.name),
+            ts.factory.createToken(ts.SyntaxKind.EqualsToken), expressionNode(field.initializer!, ts))));
+    const tryBody = [ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3InitializeInstanceFields"), undefined,
+        [ts.factory.createThis(), newTargetExpression(ts)])),
+    ...boundMethods.map(name => bindMethodStatement(name, ts)), ...explicitFields, ...original];
+    const catchClause = ts.factory.createCatchClause(ts.factory.createVariableDeclaration("__as3ConstructionError"),
+        ts.factory.createBlock([ts.factory.createExpressionStatement(ts.factory.createBinaryExpression(
+            ts.factory.createIdentifier("__as3ConstructionFailed"), ts.factory.createToken(ts.SyntaxKind.EqualsToken),
+            ts.factory.createTrue())), ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3AbortConstruction"), undefined,
+            [ts.factory.createThis(), newTargetExpression(ts), ts.factory.createIdentifier(className),
+                ts.factory.createIdentifier("__as3ConstructionProof")])),
+        ts.factory.createThrowStatement(ts.factory.createIdentifier("__as3ConstructionError"))], true));
+    const exactTarget = ts.factory.createBinaryExpression(newTargetExpression(ts),
+        ts.factory.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken), ts.factory.createIdentifier(className));
+    const finallyClause = ts.factory.createBlock([ts.factory.createIfStatement(ts.factory.createBinaryExpression(
+        ts.factory.createPrefixUnaryExpression(ts.SyntaxKind.ExclamationToken,
+            ts.factory.createIdentifier("__as3ConstructionFailed")), ts.factory.createToken(ts.SyntaxKind.AmpersandAmpersandToken),
+        exactTarget), ts.factory.createBlock([ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
+        ts.factory.createIdentifier("__as3ClassInstances"), "add"), undefined, [ts.factory.createThis()])),
+        ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createIdentifier("__as3CompleteConstruction"), undefined,
+            [ts.factory.createThis(), newTargetExpression(ts), ts.factory.createIdentifier(className),
+                ts.factory.createIdentifier("__as3ConstructionProof")]))], true)),
+    ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
+        ts.factory.createIdentifier("__as3ConstructionTargets"), "delete"), undefined, [ts.factory.createThis()]))], true);
+    const body = [constructorArityGuard(className, member, ts),
+        ...(superStatement === null ? [] : [prepareStatement, superStatement])]
+        .concat(prologue, [ts.factory.createTryStatement(
+        ts.factory.createBlock(tryBody, true), catchClause, finallyClause)]);
+    if (derived && superStatement === null) {
+        throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR", "derived constructor lacks its proven first super call", program.sourceNodeId);
+    }
+    return ts.factory.createConstructorDeclaration(member === null ? undefined : modifierTokens(member.modifiers, ts),
+        member === null ? [] : member.parameters.map(parameter => parameterNode(parameter, ts)),
+        ts.factory.createBlock(body, true));
 }
 
 function importNode(item: any, ts: TypeScriptCompilerApi): any {
@@ -793,16 +963,45 @@ function programUsesRuntimeType(program: SemanticProgram): boolean {
     return programHasKind(program, "runtimeType");
 }
 
+function programUsesClassValue(program: SemanticProgram): boolean {
+    const seen = new Set<object>();
+    const visit = (value: unknown): boolean => {
+        if (typeof value !== "object" || value === null) return false;
+        if (seen.has(value)) return false;
+        seen.add(value);
+        const record = value as { [key: string]: unknown };
+        if (record.sourceName === "Class") return true;
+        return Object.keys(record).some(key => visit(record[key]));
+    };
+    return visit(program);
+}
+
 function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
     const names = [
-        ["AS3Types", "__as3Types"], ["as3As", "__as3As"], ["as3Is", "__as3Is"],
+        ["AS3ClassValue", "__as3ClassValue"], ["AS3Types", "__as3Types"], ["as3As", "__as3As"], ["as3Is", "__as3Is"],
         ["as3ClassType", "__as3ClassType"], ["as3InterfaceType", "__as3InterfaceType"],
-        ["as3RegisterInterfaces", "__as3RegisterInterfaces"],
+        ["as3NamedReferenceType", "__as3NamedReferenceType"],
+        ["as3RejectConstructorArity", "__as3RejectConstructorArity"],
+        ["as3InitializeInstanceFields", "__as3InitializeInstanceFields"],
+        ["as3PrepareConstruction", "__as3PrepareConstruction"],
+        ["as3CancelPreparedConstruction", "__as3CancelPreparedConstruction"],
+        ["as3EnterConstruction", "__as3EnterConstruction"],
+        ["as3AbortConstruction", "__as3AbortConstruction"],
+        ["as3CompleteConstruction", "__as3CompleteConstruction"],
     ].map(([exported, local]) => ts.factory.createImportSpecifier(false,
         ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!)));
     return ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports(names)),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Type"), undefined);
+}
+
+function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
+    return ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3BindMethod"),
+                ts.factory.createIdentifier("__as3BindMethod")),
+        ])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3MethodClosure"), undefined);
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
@@ -857,7 +1056,10 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
     const implementsTypes = program.declaration.declarationKind === "packageField"
         ? [] : program.declaration.implementsTypes;
-    if (programUsesRuntimeType(program) || implementsTypes.length > 0) imports.push(runtimeTypeImport(ts));
+    if (program.declaration.declarationKind !== "packageField" || programUsesClassValue(program)
+        || programUsesRuntimeType(program) || implementsTypes.length > 0 || programUsesVector(program)) {
+        imports.push(runtimeTypeImport(ts));
+    }
     if (programHasKind(program, "coercion")) imports.push(coercionRuntimeImport(ts));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
@@ -883,10 +1085,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             code, typeScriptVersion: ts.version };
     }
     const boundMethods = boundMethodNames(program);
-    if (boundMethods.length > 0 && !program.declaration.members.some((member) => member.kind === "constructor")) {
-        throw new HardenedSemanticError("HARDENED_METHOD_CLOSURE_CONSTRUCTOR",
-            "AS3 method closure identity requires one explicit per-instance constructor binding point");
-    }
+    if (boundMethods.length > 0) imports.push(methodClosureRuntimeImport(ts));
     const classModifiers = program.declaration.modifiers.indexOf("public") >= 0
         ? [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)] : [];
     const heritage: any[] = [];
@@ -900,6 +1099,13 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         ts.factory.createHeritageClause(ts.SyntaxKind.ImplementsKeyword,
             program.declaration.implementsTypes.map(item => ts.factory.createExpressionWithTypeArguments(
                 ts.factory.createIdentifier(item.type.emittedName), undefined))));
+    const constructorMember = program.declaration.declarationKind === "class"
+        ? program.declaration.members.find((member): member is SemanticConstructor => member.kind === "constructor") ?? null : null;
+    const classMembers = program.declaration.declarationKind === "class"
+        ? program.declaration.members.filter(member => member.kind !== "constructor").map(member => memberNode(member, ts)) : [];
+    if (program.declaration.declarationKind === "class") {
+        classMembers.push(classConstructorNode(program, constructorMember, boundMethods, ts));
+    }
     const declaration = program.declaration.declarationKind === "interface"
         ? ts.factory.createInterfaceDeclaration(
             classModifiers,
@@ -917,19 +1123,63 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             program.declaration.name,
             undefined,
             heritage.length === 0 ? undefined : heritage,
-            program.declaration.members.map((member) => memberNode(member, ts, boundMethods)),
+            classMembers,
         );
     const empty = ts.createSourceFile(program.outputModulePath, "", ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
-    const registration = program.declaration.implementsTypes.length === 0 ? [] : [
-        ts.factory.createExpressionStatement(ts.factory.createCallExpression(
-            ts.factory.createIdentifier("__as3RegisterInterfaces"), undefined, [
-                ts.factory.createIdentifier(program.declaration.name),
-                ts.factory.createArrayLiteralExpression(program.declaration.implementsTypes.map(item =>
-                    ts.factory.createCallExpression(ts.factory.createIdentifier("__as3InterfaceType"), undefined,
-                        [ts.factory.createStringLiteral(item.runtimeName)]))),
-            ])),
+    const nominalState = program.declaration.declarationKind === "interface" ? [] : [
+        ts.factory.createVariableStatement(undefined,
+            ts.factory.createVariableDeclarationList([
+                ts.factory.createVariableDeclaration("__as3ClassInstances", undefined,
+                    ts.factory.createTypeReferenceNode("WeakSet", [ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword)]),
+                    ts.factory.createNewExpression(ts.factory.createIdentifier("WeakSet"), undefined, [])),
+                ts.factory.createVariableDeclaration("__as3ConstructionTargets", undefined,
+                    ts.factory.createTypeReferenceNode("WeakMap", [
+                        ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword),
+                        ts.factory.createTypeQueryNode(ts.factory.createIdentifier(program.declaration.name)),
+                    ]), ts.factory.createNewExpression(ts.factory.createIdentifier("WeakMap"), undefined, [])),
+                ts.factory.createVariableDeclaration("__as3ConstructionProof", undefined, undefined,
+                    ts.factory.createObjectLiteralExpression([], false)),
+            ], ts.NodeFlags.Const)),
     ];
-    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat([declaration]).concat(registration));
+    const nominalPredicate = program.declaration.declarationKind === "interface" ? [] : [
+        ts.factory.createFunctionDeclaration(
+            [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], undefined, "isAS3ClassInstance", undefined,
+            [ts.factory.createParameterDeclaration(undefined, undefined, "value", undefined,
+                ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword), undefined)],
+            ts.factory.createTypePredicateNode(undefined, ts.factory.createIdentifier("value"),
+                ts.factory.createTypeReferenceNode(program.declaration.name, undefined)),
+            ts.factory.createBlock([ts.factory.createReturnStatement(ts.factory.createCallExpression(
+                ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3ClassInstances"), "has"),
+                undefined, [ts.factory.createAsExpression(ts.factory.createIdentifier("value"),
+                    ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword))]))], true)),
+        ts.factory.createFunctionDeclaration(
+            [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], undefined, "as3ConstructionTarget", undefined,
+            [ts.factory.createParameterDeclaration(undefined, undefined, "value", undefined,
+                ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword), undefined)],
+            ts.factory.createUnionTypeNode([ts.factory.createTypeQueryNode(ts.factory.createIdentifier(program.declaration.name)),
+                ts.factory.createLiteralTypeNode(ts.factory.createNull())]),
+            ts.factory.createBlock([ts.factory.createIfStatement(ts.factory.createBinaryExpression(
+                ts.factory.createBinaryExpression(ts.factory.createTypeOfExpression(ts.factory.createIdentifier("value")),
+                    ts.factory.createToken(ts.SyntaxKind.ExclamationEqualsEqualsToken), ts.factory.createStringLiteral("object")),
+                ts.factory.createToken(ts.SyntaxKind.BarBarToken),
+                ts.factory.createBinaryExpression(ts.factory.createIdentifier("value"),
+                    ts.factory.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken), ts.factory.createNull())),
+            ts.factory.createReturnStatement(ts.factory.createNull())), ts.factory.createReturnStatement(
+                ts.factory.createBinaryExpression(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
+                    ts.factory.createIdentifier("__as3ConstructionTargets"), "get"), undefined,
+                [ts.factory.createAsExpression(ts.factory.createIdentifier("value"),
+                    ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword))]),
+                ts.factory.createToken(ts.SyntaxKind.QuestionQuestionToken), ts.factory.createNull()))], true)),
+        ts.factory.createFunctionDeclaration(
+            [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], undefined, "isAS3ConstructionProof", undefined,
+            [ts.factory.createParameterDeclaration(undefined, undefined, "value", undefined,
+                ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword), undefined)],
+            ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
+            ts.factory.createBlock([ts.factory.createReturnStatement(ts.factory.createBinaryExpression(
+                ts.factory.createIdentifier("value"), ts.factory.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken),
+                ts.factory.createIdentifier("__as3ConstructionProof")))], true)),
+    ];
+    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(nominalState, [declaration], nominalPredicate));
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
     let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n");
     code = code.replace(/\n*$/, "\n");

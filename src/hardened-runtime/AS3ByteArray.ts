@@ -1,3 +1,5 @@
+import { as3BindMethod } from "./AS3MethodClosure";
+
 export class AS3Endian {
     public static readonly BIG_ENDIAN: string = "bigEndian";
     public static readonly LITTLE_ENDIAN: string = "littleEndian";
@@ -67,32 +69,36 @@ export class AS3ByteArray {
     private readonly _closures = new Map<PropertyKey, Function>();
 
     public constructor() {
-        return new Proxy(this, {
+        let proxy: AS3ByteArray;
+        proxy = new Proxy(this, {
             get: (target, property, receiver) => {
+                if (receiver !== proxy) throw new TypeError("AS3 ByteArray method/property receiver is not this byte array");
                 const index = arrayIndex(property);
                 if (index !== null) return target._getIndex(index);
-                const value = Reflect.get(target, property, receiver);
+                const value = Reflect.get(target, property, proxy);
                 if (typeof value !== "function" || property === "constructor") return value;
                 let closure = target._closures.get(property);
                 if (!closure) {
-                    closure = value.bind(receiver) as Function;
+                    closure = as3BindMethod(proxy, value as (...args: unknown[]) => unknown) as Function;
                     target._closures.set(property, closure);
                 }
                 return closure;
             },
             set: (target, property, value, receiver) => {
+                if (receiver !== proxy) throw new TypeError("AS3 ByteArray assignment receiver is not this byte array");
                 const index = arrayIndex(property);
                 if (index !== null) {
                     target._setIndex(index, value);
                     return true;
                 }
-                return Reflect.set(target, property, value, receiver);
+                return Reflect.set(target, property, value, proxy);
             },
             has: (target, property) => {
                 const index = arrayIndex(property);
                 return index === null ? Reflect.has(target, property) : index < target._length;
             },
         });
+        return proxy;
     }
 
     public get bytesAvailable(): number {

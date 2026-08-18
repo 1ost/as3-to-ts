@@ -19,9 +19,14 @@ function compileFocusedSources() {
         "src/parse/index.ts",
         "src/hardened/parser-normalizer.ts",
         "src/hardened/adapter.ts",
+        "src/hardened/emitter.ts",
+        "src/hardened/type-authority.ts",
         "src/hardened/local-declarations.ts",
         "src/hardened/ledger.ts",
         "src/hardened/contracts.ts",
+        "src/hardened-runtime/AS3Coerce.ts",
+        "src/hardened-runtime/AS3Type.ts",
+        "src/hardened-runtime/internal/AS3TypeRegistry.ts",
     ].map((name) => path.join(ROOT, name));
     const config = {
       compilerOptions: {
@@ -57,6 +62,8 @@ function compileFocusedSources() {
         parse: require(path.join(output, "parse/index.js")).default,
         normalizer: require(path.join(output, "hardened/parser-normalizer.js")),
         adapter: require(path.join(output, "hardened/adapter.js")),
+        emitter: require(path.join(output, "hardened/emitter.js")),
+        typeAuthority: require(path.join(output, "hardened/type-authority.js")),
         localDeclarations: require(path.join(output, "hardened/local-declarations.js")),
         ledger: require(path.join(output, "hardened/ledger.js")),
     };
@@ -66,6 +73,17 @@ function authority(api) {
     const mappings = {
         schema: "as3-source-to-laya-capability-map@1",
         mappings: [
+            {
+                sourceQName: "flash.display.DisplayObject",
+                sourceRoles: ["import"],
+                sourceMember: null,
+                targetCapabilityId: "api.flash.display.display-object",
+                targetModule: "src/layaAir/flash/display/DisplayObject.ts",
+                targetExport: "DisplayObject",
+                targetKind: "class",
+                targetSignature: "typeof DisplayObject",
+                targetMember: null,
+            },
             {
                 sourceQName: "flash.display.Sprite",
                 sourceRoles: ["base-type", "constructor", "import"],
@@ -110,6 +128,10 @@ function authority(api) {
         as3SourceCapabilities: {
             apis: [
                 {
+                    qname: "flash.display.DisplayObject", classification: "layaair-flash-api-bridge",
+                    roles: ["import"], preserve: { apiName: true, signature: true },
+                },
+                {
                     qname: "flash.display.Sprite", classification: "layaair-flash-api-bridge",
                     roles: ["base-type", "constructor", "import"], preserve: { apiName: true, signature: true },
                 },
@@ -125,7 +147,7 @@ function authority(api) {
             ],
             memberUses: [{
                 qname: "flash.display.Sprite", member: "Sprite", access: "call",
-                context: "constructor",
+                context: "constructor", classification: "layaair-flash-api-bridge",
                 preserveNameAndSignature: true,
                 signatures: [{ signature: "public function Sprite()", minArgs: 0, maxArgs: 0 }],
             }],
@@ -134,6 +156,13 @@ function authority(api) {
     const target = {
         schema: "laya-authored-content-capabilities@1",
         capabilities: [
+            {
+                id: "api.flash.display.display-object", status: "typescript-obligation",
+                obligations: [{
+                    module: "src/layaAir/flash/display/DisplayObject.ts", export: "DisplayObject",
+                    kind: "class", signature: "typeof DisplayObject", members: [],
+                }],
+            },
             {
                 id: "api.flash.display.sprite", status: "typescript-obligation",
                 obligations: [{
@@ -248,6 +277,82 @@ try {
     const semantic = built.adapter.adaptNormalizedParserAst(
         normalized, authority(built.ledger), source, sha256,
     );
+
+    const primitiveRuntimeSource = [
+        "package p {",
+        "public class PrimitiveRuntime {",
+        "private function acceptInt(value:int):int { return value; }",
+        "public function assignment(value:Object):int { var result:int = value as int; return result; }",
+        "public function argument(value:Object):int { return acceptInt(value as int); }",
+        "public function castInt(value:Object):int { return value as int; }",
+        "public function castUint(value:Object):uint { return value as uint; }",
+        "public function castNumber(value:Object):Number { return value as Number; }",
+        "public function castBoolean(value:Object):Boolean { return value as Boolean; }",
+        "public function raw(value:Object):Object { return value as int; }",
+        "public function matchesInt(value:Object):Boolean { return value is int; }",
+        "}",
+        "}",
+    ].join("\n");
+    const primitiveRuntimeTree = built.parse("fixtures/PrimitiveRuntime.as", primitiveRuntimeSource);
+    const primitiveRuntimeNormalized = built.normalizer.normalizeParserAst(
+        primitiveRuntimeTree, primitiveRuntimeSource, sha256);
+    assert.ok(primitiveRuntimeNormalized.nodes.some(node => node.kind === "AS"));
+    assert.ok(primitiveRuntimeNormalized.nodes.some(node => node.kind === "RELATION"));
+    const primitiveRuntimeSemantic = built.adapter.adaptNormalizedParserAst(
+        primitiveRuntimeNormalized, authority(built.ledger), primitiveRuntimeSource, sha256);
+    const ts49 = require("typescript-4-9");
+    const primitiveRuntimeCode = built.emitter.emitSemanticProgram(primitiveRuntimeSemantic,
+        { compiler: ts49, expectedTypeScriptVersion: "4.9.5" }).code;
+    assert.match(primitiveRuntimeCode, /var result: number = __as3Int\(__as3As\(value, __as3Types\.int\)\);/);
+    assert.match(primitiveRuntimeCode, /this\.acceptInt\(__as3Int\(__as3As\(value, __as3Types\.int\)\)\)/);
+    assert.match(primitiveRuntimeCode, /return __as3Int\(__as3As\(value, __as3Types\.int\)\);/);
+    assert.match(primitiveRuntimeCode, /return __as3Uint\(__as3As\(value, __as3Types\.uint\)\);/);
+    assert.match(primitiveRuntimeCode, /return __as3Number\(__as3As\(value, __as3Types\.Number\)\);/);
+    assert.match(primitiveRuntimeCode, /return __as3Boolean\(__as3As\(value, __as3Types\.Boolean\)\);/);
+    assert.match(primitiveRuntimeCode, /return __as3As\(value, __as3Types\.int\);/);
+    assert.match(primitiveRuntimeCode, /return __as3Is\(value, __as3Types\.int\);/);
+    const primitiveCheckRoot = fs.mkdtempSync(path.join(os.tmpdir(), "primitive-runtime-typecheck-"));
+    try {
+        const generatedPath = path.join(primitiveCheckRoot, "PrimitiveRuntime.ts");
+        fs.writeFileSync(generatedPath, primitiveRuntimeCode, "utf8");
+        const primitiveConfig = path.join(primitiveCheckRoot, "tsconfig.json");
+        fs.writeFileSync(primitiveConfig, JSON.stringify({ compilerOptions: {
+            target: "ES2020", module: "CommonJS", moduleResolution: "node", strict: true,
+            strictNullChecks: true, skipLibCheck: true, noEmit: true, types: [], baseUrl: ROOT,
+            paths: { "@bleach/as3-runtime/*": ["src/hardened-runtime/*"] },
+        }, files: [generatedPath] }), "utf8");
+        childProcess.execFileSync(process.execPath,
+            [path.join(ROOT, "node_modules/typescript-4-9/bin/tsc"), "-p", primitiveConfig],
+            { cwd: ROOT, stdio: "inherit" });
+    } finally {
+        fs.rmSync(primitiveCheckRoot, { recursive: true, force: true });
+    }
+    const executablePrimitiveCode = primitiveRuntimeCode
+        .replaceAll("@bleach/as3-runtime/AS3Coerce", "./hardened-runtime/AS3Coerce")
+        .replaceAll("@bleach/as3-runtime/AS3Type", "./hardened-runtime/AS3Type");
+    const primitiveJavaScript = ts49.transpileModule(executablePrimitiveCode, { compilerOptions: {
+        target: ts49.ScriptTarget.ES2020, module: ts49.ModuleKind.CommonJS,
+    } }).outputText;
+    const primitiveJavaScriptPath = path.join(built.output, "PrimitiveRuntime.generated.js");
+    fs.writeFileSync(primitiveJavaScriptPath, primitiveJavaScript, "utf8");
+    const primitiveModule = require(primitiveJavaScriptPath); const { PrimitiveRuntime } = primitiveModule;
+    const primitiveEntry={kind:"class",qname:"p.PrimitiveRuntime",base:null,interfaces:[],
+        sourceSha256:primitiveRuntimeSemantic.sourceSha256,fields:[],constructor:PrimitiveRuntime,
+        predicate:primitiveModule.isAS3ClassInstance,constructionTarget:primitiveModule.as3ConstructionTarget,
+        constructionProof:primitiveModule.isAS3ConstructionProof};
+    const primitiveMetadata={schema:"as3-runtime-type-authority@1",qnames:[primitiveEntry.qname],entries:[{
+        kind:primitiveEntry.kind,qname:primitiveEntry.qname,base:null,interfaces:[],sourceSha256:primitiveEntry.sourceSha256,fields:[]} ]};
+    require(path.join(built.output,"hardened-runtime/internal/AS3TypeRegistry.js")).installAS3TypeAuthority({
+        schema:primitiveMetadata.schema,sha256:sha256(JSON.stringify(primitiveMetadata)),qnames:primitiveMetadata.qnames,entries:[primitiveEntry]});
+    const primitiveRuntime = new PrimitiveRuntime();
+    for (const method of ["assignment", "argument", "castInt", "castUint", "castNumber"]) {
+        assert.equal(primitiveRuntime[method]({}), 0, `${method} coerces failed as-result null to the AS3 primitive default`);
+    }
+    assert.equal(primitiveRuntime.castBoolean({}), false);
+    assert.equal(primitiveRuntime.castInt(7), 7); assert.equal(primitiveRuntime.castUint(0xffffffff), 0xffffffff);
+    assert.equal(primitiveRuntime.castNumber(1.5), 1.5); assert.equal(primitiveRuntime.castBoolean(true), true);
+    assert.equal(primitiveRuntime.raw({}), null); assert.equal(primitiveRuntime.raw(7), 7);
+    assert.equal(primitiveRuntime.matchesInt(7), true); assert.equal(primitiveRuntime.matchesInt(1.5), false);
     const declarationExtract = built.localDeclarations.extractLocalDeclaration(normalized, source, sha256);
     assert.equal(declarationExtract.schema, "as3-local-declaration-extract@1");
     assert.equal(declarationExtract.qualifiedName, "lobby.ui.Demo");
@@ -401,7 +506,7 @@ try {
     assert.deepEqual(interfaceSemantic.declaration.members.map(member => member.kind), ["method", "getter", "setter"]);
     assert.equal(interfaceSemantic.declaration.members[0].parameters[1].rest, true);
 
-    const vectorSource = "package vectors { public class VectorFixture { public var values:Vector.<int> = new Vector.<int>(2,true); public function VectorFixture(){ values[0] = 3; values.push(4); var copy:Vector.<int> = Vector.<int>([1,2]); var objectValue:Object = values as Object; var matches:Boolean = values is Vector.<int>; } } }";
+    const vectorSource = "package vectors { public class VectorFixture { public var values:Vector.<int> = new Vector.<int>(2,true); public function VectorFixture(){ values[0] = 3; values[values.length] = 5; var pushed:uint = values.push(4); var shifted:uint = values.unshift(2); var vectorLength:uint = values.length; values.length = vectorLength; var found:int = values.indexOf(2); var high:uint = 2147483648; var joined:String = values.join(\",\"); var copy:Vector.<int> = Vector.<int>([1,2]); var objectValue:Object = values as Object; var matches:Boolean = values is Vector.<int>; } } }";
     const vectorTree = built.parse("fixtures/VectorFixture.as", vectorSource);
     const vectorNormalized = built.normalizer.normalizeParserAst(vectorTree, vectorSource, sha256);
     ["VECTOR", "ARRAY", "ARRAY_ACCESSOR", "AS"].forEach(kind =>
@@ -413,8 +518,79 @@ try {
     assert.equal(vectorField.type.sourceName, "Vector.<int>");
     assert.equal(vectorField.initializer.kind, "new");
     assert.equal(vectorSemantic.declaration.members[1].body[0].expression.target.kind, "index");
-    assert.equal(vectorSemantic.declaration.members[1].body[2].declarations[0].initializer.kind, "vectorConversion");
+    assert.equal(vectorSemantic.declaration.members[1].body[1].expression.target.kind, "index");
+    assert.equal(vectorSemantic.declaration.members[1].body[1].expression.target.index.kind, "member");
+    const vectorTypeScript=built.emitter.emitSemanticProgram(vectorSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code;
+    assert.match(vectorTypeScript,/this\.values!\[this\.values!\.length\] = __as3Int\(5\);/);
+    assert.match(vectorTypeScript,/this\.values!\.join\(","\)/);
+    const vectorBody = vectorSemantic.declaration.members[1].body;
+    const vectorLocals = Object.fromEntries(vectorBody.filter(statement => statement.kind === "local")
+        .flatMap(statement => statement.declarations).map(declaration => [declaration.name,declaration]));
+    assert.equal(vectorLocals.pushed.initializer.resultType.sourceName, "uint");
+    assert.equal(vectorLocals.shifted.initializer.resultType.sourceName, "uint");
+    assert.equal(vectorLocals.vectorLength.type.sourceName, "uint");
+    assert.equal(vectorLocals.found.initializer.resultType.sourceName, "int");
+    assert.equal(vectorLocals.high.type.sourceName, "uint");
+    assert.equal(vectorLocals.joined.initializer.resultType.sourceName, "String");
+    assert.equal(vectorLocals.copy.initializer.kind, "vectorConversion");
     assert.equal(semantic.declaration.members[7].body[5].expression.target.name, "status");
+
+    const rejectedSorts = [
+        "values.sort(16);",
+        "values.sort(0);",
+        "values.sort(18);",
+        "var Array:Object = null; values.sort(Array.NUMERIC);",
+        "values.sort(Array.NUMERIC + 2);",
+    ];
+    rejectedSorts.forEach((statement) => {
+        const source = `package vectors { public class SortHold { public var values:Vector.<int> = new Vector.<int>(); public function SortHold(){ ${statement} } } }`;
+        const tree = built.parse("fixtures/SortHold.as", source);
+        const normalizedSort = built.normalizer.normalizeParserAst(tree, source, sha256);
+        assert.throws(() => built.adapter.adaptNormalizedParserAst(
+            normalizedSort, authority(built.ledger), source, sha256), error => error && /^HARDENED_/.test(error.code), statement);
+    });
+    const unauthenticatedNumeric="package vectors { public class SortHold { public var values:Vector.<int> = new Vector.<int>(); public function SortHold(){ values.sort(Array.NUMERIC); } } }";
+    const unauthenticatedTree=built.parse("fixtures/SortHold.as",unauthenticatedNumeric);
+    const unauthenticatedNormalized=built.normalizer.normalizeParserAst(
+        unauthenticatedTree,unauthenticatedNumeric,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(
+        unauthenticatedNormalized,authority(built.ledger),unauthenticatedNumeric,sha256),
+    error=>error&&error.code==="HARDENED_INTRINSIC_IDENTITY_AUTHORITY");
+    for(const badJoin of ["values.join(1);","values.join(true);","values.join({});"]){
+        const source=`package vectors { public class JoinHold { public var values:Vector.<int> = new Vector.<int>(); public function JoinHold(){ ${badJoin} } } }`;
+        const tree=built.parse("fixtures/JoinHold.as",source);
+        const normalizedJoin=built.normalizer.normalizeParserAst(tree,source,sha256);
+        assert.throws(()=>built.adapter.adaptNormalizedParserAst(
+            normalizedJoin,authority(built.ledger),source,sha256),error=>error&&error.code==="HARDENED_ASSIGNMENT_TYPE",badJoin);
+    }
+
+    const concatSource = "package vectors { import flash.display.DisplayObject; import flash.display.Sprite; import flash.events.Event; public class ConcatFixture { public var baseValues:Vector.<DisplayObject>; public var derivedValues:Vector.<Sprite>; public var eventValues:Vector.<Event>; public var objectValues:Vector.<Object>; public var intValues:Vector.<int>; public var nestedValues:Vector.<Vector.<int>>; public var ordinaryArray:Array; public var ordinaryObject:Object; public var sprite:Sprite; public function ConcatFixture(){ baseValues.concat(derivedValues); objectValues.concat(intValues); objectValues.concat(derivedValues); objectValues.concat(nestedValues); } } }";
+    const concatTree = built.parse("fixtures/ConcatFixture.as", concatSource);
+    const concatNormalized = built.normalizer.normalizeParserAst(concatTree, concatSource, sha256);
+    const predicateAuthorityJson=fs.readFileSync(path.join(ROOT,"config/runtime-type-predicates.json"),"utf8");
+    const predicateAuthority=JSON.parse(predicateAuthorityJson);
+    const referenceAuthority=built.typeAuthority.loadMappedRuntimeTypeAuthority(
+        fs.readFileSync(path.join(ROOT,"config/runtime-type-authority-lock.json"),"utf8"),predicateAuthorityJson,
+        predicateAuthority.types.map(row=>row.sourceQName),sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(
+        concatNormalized,authority(built.ledger),concatSource,sha256,undefined,undefined,undefined,[
+            {kind:"class",qname:"flash.display.DisplayObject",base:null,interfaces:[]},
+        ]),error=>error&&error.code==="HARDENED_TYPE_AUTHORITY_SOURCE");
+    const concatSemantic = built.adapter.adaptNormalizedParserAst(
+        concatNormalized, authority(built.ledger), concatSource, sha256, undefined, undefined, undefined,
+        referenceAuthority);
+    assert.equal(concatSemantic.declaration.members.find(member => member.kind === "constructor").body.length,4);
+    for(const badCall of ["derivedValues.concat(baseValues);","baseValues.concat(eventValues);","intValues.concat(objectValues);",
+        "objectValues.concat(ordinaryArray);","objectValues.concat(ordinaryObject);","objectValues.concat(sprite);",
+        "objectValues.concat(null);","objectValues.concat(1);"]){
+        const badSource=concatSource.replace("baseValues.concat(derivedValues); objectValues.concat(intValues); objectValues.concat(derivedValues); objectValues.concat(nestedValues);",badCall);
+        const badTree=built.parse("fixtures/ConcatHold.as",badSource);
+        const badNormalized=built.normalizer.normalizeParserAst(badTree,badSource,sha256);
+        assert.throws(()=>built.adapter.adaptNormalizedParserAst(
+            badNormalized,authority(built.ledger),badSource,sha256,undefined,undefined,undefined,referenceAuthority),
+        error=>error&&error.code==="HARDENED_VECTOR_CONCAT_TYPE",badCall);
+    }
 
     const implementsSource = "package p { import q.IReady; public class C implements IReady {} }";
     const implementsTree = built.parse("fixtures/Implements.as", implementsSource);

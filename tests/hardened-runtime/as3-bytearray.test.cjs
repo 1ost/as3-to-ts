@@ -24,6 +24,18 @@ const { AS3ByteArray, AS3Endian, AS3EOFError, configureAS3SystemCodePageEncoder 
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
 
+test("ByteArray rejects foreign Reflect receivers without poisoning closures or setters",()=>{
+    const a=new AS3ByteArray();const b=new AS3ByteArray();a.writeByte(1);b.writeByte(2);const write=a.writeByte;
+    for(const foreign of [b,{},new Proxy({}, {})]) assert.throws(()=>Reflect.get(a,"writeByte",foreign),/receiver is not this byte array/);
+    let traps=0;const hostile=new Proxy({},{get(){traps+=1;throw new Error("foreign get");},set(){traps+=1;throw new Error("foreign set");}});
+    assert.throws(()=>Reflect.get(a,"writeByte",hostile),/receiver is not this byte array/);
+    assert.equal(traps,0);assert.equal(a.writeByte,write);a.writeByte(3);assert.equal(a.length,2);assert.equal(b.length,1);
+    for(const [name,value] of [["position",0],["length",0],["endian",AS3Endian.LITTLE_ENDIAN]]){
+        for(const foreign of [b,{},hostile]) assert.throws(()=>Reflect.set(a,name,value,foreign),/receiver is not this byte array/);
+    }
+    assert.equal(traps,0);assert.equal(a.length,2);assert.equal(b.length,1);
+});
+
 test("ByteArray preserves Flash endian, integer, floating point, and Boolean semantics", () => {
     const bytes = new AS3ByteArray();
     assert.equal(bytes.endian, AS3Endian.BIG_ENDIAN);

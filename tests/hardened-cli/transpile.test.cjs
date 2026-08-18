@@ -68,17 +68,22 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     const secondRun = invoke(source, second, os.tmpdir());
     assert.equal(firstRun.status, 0, firstRun.stderr);
     assert.equal(secondRun.status, 0, secondRun.stderr);
-    const modulePath = path.join("lobby", "ui", "Demo.ts");
+    const modulePath = path.join("__as3_runtime", "application", "lobby", "ui", "Demo.ts");
     const firstCode = fs.readFileSync(path.join(first, modulePath), "utf8");
     const secondCode = fs.readFileSync(path.join(second, modulePath), "utf8");
     assert.equal(firstCode, secondCode);
     assert.match(firstCode, /import \{ Sprite \} from "laya\/flash\/display\/Sprite";/);
     assert.match(firstCode, /export class Demo extends Sprite/);
-    assert.match(firstCode, /constructor\(\) \{\n\s+super\(\);/);
-    assert.match(firstCode, /super\(\);\n\s+this\.onEvent = this\.onEvent\.bind\(this\);\n\s+this\.addEventListener\("ready", this\.onEvent\);/);
+    assert.match(firstCode, /const __as3ClassInstances: WeakSet<object> = new WeakSet\(\), __as3ConstructionTargets:/);
+    assert.match(firstCode, /export function isAS3ClassInstance\(value: unknown\): value is Demo/);
+    assert.doesNotMatch(firstCode, /#__as3NativeClassBrand/);
+    assert.match(firstCode, /constructor\(\) \{\n\s+if \(arguments\.length !== 0\)[\s\S]*__as3RejectConstructorArity\("Demo", 0, 0\);[\s\S]*try \{/);
+    assert.match(firstCode, /__as3InitializeInstanceFields\(this, new\.target\);[\s\S]*this\.onEvent = __as3BindMethod\(this, this\.onEvent\);[\s\S]*this\.addEventListener\("ready", this\.onEvent\);/);
     assert.match(firstCode, /this\.label = "changed";/);
-    assert.match(firstCode, /private child: Sprite \| null = new Sprite\(\);/);
-    assert.match(firstCode, /private label: string \| null = "ok";/);
+    assert.match(firstCode, /private child: Sprite \| null;/);
+    assert.match(firstCode, /private label: string \| null;/);
+    assert.match(firstCode, /this\.child = new Sprite\(\);/);
+    assert.match(firstCode, /this\.label = "ok";/);
     assert.match(firstCode, /public get value\(\): number/);
     assert.match(firstCode, /if \(this\._value > 0\)/);
     assert.match(firstCode, /public set value\(input: number\)/);
@@ -95,14 +100,32 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     assert.match(manifest.parserWorkerSha256, /^[0-9a-f]{64}$/);
     assert.equal(manifest.typeScriptVersion, "4.9.5");
     assert.equal(manifest.classification, "capability-authenticated-typescript-proposal");
-    assert.equal(manifest.files[0].typescriptPath, "lobby/ui/Demo.ts");
+    assert.equal(manifest.runtimeAuthorityPath, "__as3_runtime/AS3Authority.generated.js");
+    assert.equal(manifest.applicationEntryPath, "__as3_runtime/ApplicationEntry.generated.ts");
+    assert.match(manifest.runtimeAuthoritySha256, /^[0-9a-f]{64}$/);
+    assert.match(manifest.applicationEntrySha256, /^[0-9a-f]{64}$/);
+    assert.ok(manifest.runtimeAuthorityQNames.includes("flash.events.Event"));
+    assert.ok(manifest.runtimeAuthorityQNames.includes("lobby.ui.Demo"));
+    assert.equal(manifest.files[0].typescriptPath, "__as3_runtime/application/lobby/ui/Demo.ts");
     assert.equal(manifest.files[0].normalizedFingerprintSha256.length, 64);
+    const authorityCode=fs.readFileSync(path.join(first,manifest.runtimeAuthorityPath),"utf8");
+    const entryCode=fs.readFileSync(path.join(first,manifest.applicationEntryPath),"utf8");
+    assert.match(authorityCode,/installAS3TypeAuthority/);
+    assert.match(authorityCode,/require\("laya\/flash\/events\/Event"\)/);
+    assert.match(authorityCode,/require\("\.\/application\/lobby\/ui\/Demo"\)/);
+    assert.equal(fs.existsSync(path.join(first,"__as3_runtime/internal/AS3TypeRegistry.ts")),false);
+    assert.equal(fs.existsSync(path.join(first,"__as3_runtime/internal/AS3TypeRegistry.js")),false);
+    assert.equal(entryCode.indexOf("./AS3Authority.generated") < entryCode.indexOf("./application/lobby/ui/Demo"),true);
+    assert.equal(authorityCode,fs.readFileSync(path.join(second,manifest.runtimeAuthorityPath),"utf8"));
+    assert.equal(entryCode,fs.readFileSync(path.join(second,manifest.applicationEntryPath),"utf8"));
 
     const tsconfig = path.join(root, "tsconfig.json");
     const bridgeTypes = path.join(root, "bridge-types.d.ts");
     fs.writeFileSync(bridgeTypes, [
         "declare module \"laya/flash/display/Sprite\" { export class Sprite { addEventListener(type: string, listener: Function): void; } }",
         "declare module \"laya/flash/events/Event\" { export class Event {} }",
+        "declare module \"@bleach/as3-runtime/AS3Type\" { export interface AS3TypeToken<T> { readonly name:string; } export type AS3ClassValue=Function|AS3TypeToken<unknown>; export const AS3Types:unknown; export function as3As<T>(value:unknown,type:AS3TypeToken<T>):T|null; export function as3Is<T>(value:unknown,type:AS3TypeToken<T>):value is T; export function as3ClassType<T extends object>(name:string,ctor:abstract new (...args:any[])=>T):AS3TypeToken<T>; export function as3InterfaceType<T extends object>(name:string):AS3TypeToken<T>; export function as3NamedReferenceType<T extends object>(name:string):AS3TypeToken<T>; export function as3RejectConstructorArity(className:string,minimum:number,maximum:number|null):never; export function as3InitializeInstanceFields(value:object,newTarget:Function):void; export function as3PrepareConstruction(newTarget:unknown,declared:Function,proof:unknown):readonly []; export function as3CancelPreparedConstruction(newTarget:unknown,proof:unknown,frame:unknown):void; export function as3EnterConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; export function as3AbortConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; export function as3CompleteConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; }",
+        "declare module \"@bleach/as3-runtime/AS3MethodClosure\" { export function as3BindMethod<A extends unknown[],R>(receiver:object,method:(...args:A)=>R):(...args:A)=>R; }",
         "",
     ].join("\n"), "utf8");
     fs.writeFileSync(tsconfig, JSON.stringify({

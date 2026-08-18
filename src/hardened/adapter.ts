@@ -34,6 +34,7 @@ import {
 import { assertLoadedCapabilityAuthority, Sha256Function, targetModuleSpecifier } from "./ledger";
 import { assertLoadedLocalTypeAuthority } from "./local-types";
 import { assertLoadedLocalMemberAuthority } from "./local-members";
+import { assertAuthenticatedRuntimeAuthoritySources, type RuntimeAuthoritySource } from "./type-authority";
 
 export interface TreeNode extends NormalizedParserNode {
     children: TreeNode[];
@@ -76,8 +77,11 @@ interface AdapterContext {
     intrinsicMembersByKey: LoadedCapabilityAuthority["intrinsicMembersByKey"];
     baseSourceQName: string | null;
     baseLocalQName: string | null;
+    localTypeAuthority: LoadedLocalTypeAuthority | null;
     localMemberAuthority: LoadedLocalMemberAuthority | null;
     resolveCurrentLocal: (() => CurrentLocalType) | null;
+    runtimeReferenceParentsByQName: ReadonlyMap<string, readonly string[]>;
+    currentInterfaceQNames: readonly string[];
     fields: { [name: string]: SemanticField };
     methods: { [name: string]: MethodHeader };
     accessors: { [name: string]: AccessorPair };
@@ -109,7 +113,7 @@ const PRIMITIVE_TYPES: { [source: string]: string } = {
     Object: "unknown",
     String: "string",
     Array: "Array",
-    Class: "Function",
+    Class: "__as3ClassValue",
     Error: "Error",
     int: "number",
     uint: "number",
@@ -231,6 +235,13 @@ function requiredText(node: TreeNode, label: string): string {
 function validateIdentifier(value: string, node: TreeNode): string {
     if (!IDENTIFIER.test(value) || RESERVED.has(value)) {
         fail("HARDENED_IDENTIFIER", "source identifier is not a valid TypeScript identity", node);
+    }
+    if (value.toLowerCase().startsWith("__as3")) {
+        fail("HARDENED_IDENTIFIER", "source identifier is reserved for the authenticated AS3 emitter", node);
+    }
+    if (value === "WeakSet" || value === "WeakMap" || value === "isAS3ClassInstance"
+        || value === "as3ConstructionTarget" || value === "isAS3ConstructionProof") {
+        fail("HARDENED_IDENTIFIER", "source identifier collides with an authenticated AS3 emitter binding", node);
     }
     return value;
 }
@@ -652,11 +663,11 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
 }
 
 function semanticType(node: TreeNode, sourceName: string, emittedName: string,
-    typeArguments: SemanticType[] = [], nullableOverride?: boolean): SemanticType {
+    typeArguments: SemanticType[] = [], nullableOverride?: boolean, runtimeName: string | null = null): SemanticType {
     const nullable = nullableOverride === undefined
         ? !["Boolean", "Number", "int", "uint", "void"].includes(sourceName)
         : nullableOverride;
-    return Object.assign(identity(node), { sourceName, emittedName, nullable, typeArguments });
+    return Object.assign(identity(node), { sourceName, emittedName, runtimeName, nullable, typeArguments });
 }
 
 function sameUnderlyingType(left: SemanticType, right: SemanticType): boolean {
@@ -676,6 +687,82 @@ function withNullability(type: SemanticType, nullable: boolean): SemanticType {
 
 function vectorElement(type: SemanticType): SemanticType | null {
     return type.emittedName === "AS3Vector" && type.typeArguments.length === 1 ? type.typeArguments[0]! : null;
+}
+
+function referenceParents(qname: string, context: AdapterContext): readonly string[] | null {
+    const mapped = context.runtimeReferenceParentsByQName.get(qname);
+    if (mapped !== undefined) {
+        if (context.localMemberAuthority !== null && context.resolveCurrentLocal !== null) {
+            const moduleName = context.resolveCurrentLocal().entry.module;
+            if (context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`]) return null;
+        }
+        return mapped;
+    }
+    if (qname === context.classQualifiedName) {
+        return Object.freeze((context.extendsType?.runtimeName === null || context.extendsType === null
+            ? [] : [context.extendsType.runtimeName]).concat(context.currentInterfaceQNames));
+    }
+    if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) return null;
+    const moduleName = context.resolveCurrentLocal().entry.module;
+    const entry = context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+    if (!entry || entry.status !== "complete" || entry.declaration === null
+        || (entry.typeKind !== "class" && entry.typeKind !== "interface")) return null;
+    return entry.declaration.baseQNames.concat(entry.declaration.interfaceQNames);
+}
+
+function provenReferenceSubtype(source: SemanticType, target: SemanticType, context: AdapterContext): boolean {
+    if (sameUnderlyingType(source, target)) return true;
+    if (source.runtimeName === null || target.runtimeName === null || source.typeArguments.length !== 0
+        || target.typeArguments.length !== 0) return false;
+    const states = new Map<string, "visiting" | "complete">();
+    const remaining: Array<{ qname: string; exiting: boolean }> = [{ qname: source.runtimeName, exiting: false }];
+    let containsTarget = false;
+    while (remaining.length > 0) {
+        if (states.size >= 4096) return false;
+        const current = remaining.pop()!;
+        if (current.exiting) {
+            states.set(current.qname, "complete");
+            continue;
+        }
+        const state = states.get(current.qname);
+        if (state === "visiting") return false;
+        if (state === "complete") continue;
+        states.set(current.qname, "visiting");
+        if (current.qname === target.runtimeName) containsTarget = true;
+        const parents = referenceParents(current.qname, context);
+        if (parents === null || parents.some(parent => typeof parent !== "string" || parent.length === 0)
+            || new Set(parents).size !== parents.length) return false;
+        remaining.push({ qname: current.qname, exiting: true });
+        for (let index = parents.length - 1; index >= 0; index -= 1) {
+            remaining.push({ qname: parents[index]!, exiting: false });
+        }
+    }
+    return containsTarget;
+}
+
+function runtimeReferenceParents(sources: readonly RuntimeAuthoritySource[] | undefined): ReadonlyMap<string, readonly string[]> {
+    const result = new Map<string, readonly string[]>();
+    if (sources === undefined) return result;
+    assertAuthenticatedRuntimeAuthoritySources(sources);
+    sources.forEach(source => {
+        if (!source || typeof source !== "object" || typeof source.qname !== "string" || source.qname.length === 0
+            || result.has(source.qname)) {
+            throw new HardenedSemanticError("HARDENED_VECTOR_REFERENCE_AUTHORITY", "runtime reference authority contains an invalid or duplicate identity");
+        }
+        const baseNames = source.kind === "interface" ? source.bases : source.base === null ? [] : [source.base];
+        const interfaces = source.kind === "class" ? source.interfaces : [];
+        if (!Array.isArray(baseNames) || !Array.isArray(interfaces)
+            || baseNames.some(name => typeof name !== "string" || name.length === 0)
+            || interfaces.some(name => typeof name !== "string" || name.length === 0)) {
+            throw new HardenedSemanticError("HARDENED_VECTOR_REFERENCE_AUTHORITY", `runtime reference authority ${source.qname} has invalid parents`);
+        }
+        const parents = [...baseNames, ...interfaces];
+        if (new Set(parents).size !== parents.length) {
+            throw new HardenedSemanticError("HARDENED_VECTOR_REFERENCE_AUTHORITY", `runtime reference authority ${source.qname} repeats a parent`);
+        }
+        result.set(source.qname, Object.freeze(parents));
+    });
+    return result;
 }
 
 function isArrayType(type: SemanticType): boolean {
@@ -762,8 +849,9 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
             .includes(element.sourceName);
         const imported = context.importsByLocal[element.sourceName];
         if (!primitivePolicy && element.sourceName !== context.className && element.emittedName !== "AS3Vector"
-            && (!imported || !imported.runtimeConstructible)) {
-            fail("HARDENED_VECTOR_ELEMENT_RUNTIME", "Vector reference element requires a proven runtime class identity", node.children[0]!);
+            && (!imported || (!imported.runtimeConstructible && !imported.runtimeInterface))) {
+            fail("HARDENED_VECTOR_ELEMENT_RUNTIME",
+                "Vector reference element requires a proven runtime class or interface identity", node.children[0]!);
         }
         return semanticType(node, `Vector.<${element.sourceName}>`, "AS3Vector", [element]);
     }
@@ -776,9 +864,11 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
     }
     let semanticSourceName = sourceName;
     let emittedName = PRIMITIVE_TYPES[sourceName];
+    let runtimeName: string | null = emittedName ? sourceName : null;
     if (!emittedName) {
         if (sourceName === context.className) {
             emittedName = sourceName;
+            runtimeName = context.classQualifiedName;
         } else {
             const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
             const imported = context.importsByLocal[localName]
@@ -790,9 +880,10 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
             }
             semanticSourceName = imported.sourceLocalName;
             emittedName = imported.sourceLocalName;
+            runtimeName = imported.sourceQualifiedName;
         }
     }
-    return semanticType(node, semanticSourceName, emittedName);
+    return semanticType(node, semanticSourceName, emittedName, [], undefined, runtimeName);
 }
 
 function parseParameters(list: TreeNode, context: AdapterContext): SemanticParameter[] {
@@ -906,12 +997,17 @@ function authoritySemanticType(typeName: string, context: AdapterContext, node: 
         return semanticType(node, `Vector.<${element.sourceName}>`, "AS3Vector", [element]);
     }
     const primitive = PRIMITIVE_TYPES[typeName];
-    if (primitive) return semanticType(node, typeName, primitive);
+    if (primitive) return semanticType(node, typeName, primitive, [], undefined, typeName);
     if (typeName === "*") return semanticType(node, "*", "unknown");
-    if (typeName === context.classQualifiedName) return semanticType(node, context.className, context.className);
+    if (typeName === context.classQualifiedName) {
+        return semanticType(node, context.className, context.className, [], undefined, context.classQualifiedName);
+    }
     const importedName = Object.keys(context.importsByLocal).find(localName =>
         context.importsByLocal[localName]!.sourceQualifiedName === typeName);
-    if (importedName) return semanticType(node, importedName, importedName);
+    if (importedName) {
+        return semanticType(node, importedName, importedName, [], undefined,
+            context.importsByLocal[importedName]!.sourceQualifiedName);
+    }
     return semanticType(node, typeName, typeName.slice(typeName.lastIndexOf(".") + 1));
 }
 
@@ -947,6 +1043,48 @@ function localInheritedNamedMembers(context: AdapterContext, name: string,
         qname = entry.declaration.baseQNames.length === 1 ? entry.declaration.baseQNames[0]! : null;
     }
     return { members: [], ownerQName: null };
+}
+
+function assertNoInheritedLocalValueShadow(context: AdapterContext, name: string, node: TreeNode): void {
+    if (context.baseLocalQName === null) return;
+    if (context.localTypeAuthority === null || context.localMemberAuthority === null
+        || context.resolveCurrentLocal === null) {
+        fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
+            `${name} intrinsic lookup requires the complete local base declaration authority`, node);
+    }
+    const moduleName = context.resolveCurrentLocal().entry.module;
+    const visited = new Set<string>();
+    let qname: string | null = context.baseLocalQName;
+    while (qname !== null) {
+        if (visited.has(qname) || visited.size >= 1024) {
+            fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
+                `${name} intrinsic lookup encountered a cyclic or over-bound local base lineage`, node);
+        }
+        visited.add(qname);
+        if (!context.localTypeAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`]) {
+            if (context.runtimeReferenceParentsByQName.has(qname)) return;
+            fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
+                `${name} intrinsic lookup encountered an unauthenticated nonlocal base terminal`, node);
+        }
+        const entry: LocalMemberAuthorityEntry | undefined =
+            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+        if (!entry || entry.status !== "complete" || entry.declaration === null) {
+            fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
+                `${name} intrinsic lookup encountered a missing or held local base declaration`, node);
+        }
+        if (entry.declaration.members.some(member => member.name === name
+            && member.modifiers.indexOf("private") < 0
+            && (member.kind === "field" || member.kind === "getter"
+                || member.kind === "setter" || member.kind === "method"))) {
+            fail("HARDENED_INTRINSIC_IDENTITY_SHADOW",
+                `${name} intrinsic is shadowed by an inherited local value declaration`, node);
+        }
+        if (entry.declaration.baseQNames.length > 1) {
+            fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
+                `${name} intrinsic lookup encountered an ambiguous local base lineage`, node);
+        }
+        qname = entry.declaration.baseQNames.length === 1 ? entry.declaration.baseQNames[0]! : null;
+    }
 }
 
 function authorityTypeName(type: SemanticType, context: AdapterContext, node: TreeNode): string {
@@ -1060,6 +1198,53 @@ function localDeclaration(context: AdapterContext, qname: string, node: TreeNode
         fail("HARDENED_LOCAL_MEMBER_HELD", `local declaration authority for ${qname} is absent or held`, node);
     }
     return entry;
+}
+
+function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: readonly SemanticMember[],
+    node: TreeNode): void {
+    if (context.baseLocalQName === null) return;
+    if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) {
+        fail("HARDENED_LOCAL_FIELD_ANCESTRY", "local field ancestry requires the loaded member authority", node);
+    }
+    assertLoadedLocalMemberAuthority(context.localMemberAuthority);
+    const seen = new Map<string, { owner: string; name: string; field: boolean }>();
+    const record = (owner: string, name: string, field: boolean): void => {
+        const identity = name.toLowerCase();
+        const existing = seen.get(identity);
+        if (existing !== undefined && existing.owner !== owner && (existing.field || field)) {
+            fail("HARDENED_LOCAL_FIELD_ANCESTRY",
+                `local instance field ${name} aliases inherited member ${existing.name} between ${existing.owner} and ${owner}`, node);
+        }
+        if (existing === undefined || field) {
+            seen.set(identity, { owner, name, field: existing?.field === true || field });
+        }
+    };
+    members.forEach(member => {
+        if (member.kind !== "constructor" && !member.modifiers.includes("static")) {
+            record(context.classQualifiedName, member.name, member.kind === "field");
+        }
+    });
+    const moduleName = context.resolveCurrentLocal().entry.module;
+    const visited = new Set<string>();
+    let current: string | null = context.baseLocalQName;
+    while (current !== null && !current.startsWith("flash.")) {
+        if (visited.has(current) || visited.size >= 1024) {
+            fail("HARDENED_LOCAL_FIELD_ANCESTRY", "local field ancestry is cyclic or exceeds its bound", node);
+        }
+        visited.add(current);
+        const entry: LocalMemberAuthorityEntry | undefined =
+            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${current}`];
+        if (!entry || entry.status !== "complete" || entry.declaration === null) {
+            fail("HARDENED_LOCAL_FIELD_ANCESTRY", `local field ancestor ${current} is absent or held`, node);
+        }
+        entry.declaration.members.filter(member => member.kind !== "constructor"
+            && member.modifiers.indexOf("static") < 0)
+            .forEach(member => record(current!, member.name, member.kind === "field"));
+        if (entry.declaration.baseQNames.length > 1) {
+            fail("HARDENED_LOCAL_FIELD_ANCESTRY", `local field ancestor ${current} has ambiguous bases`, node);
+        }
+        current = entry.declaration.baseQNames.length === 1 ? entry.declaration.baseQNames[0]! : null;
+    }
 }
 
 function localStaticNamedMembers(context: AdapterContext, qname: string, name: string,
@@ -1284,6 +1469,7 @@ function implicitThisMember(node: TreeNode, name: string, capabilitySource: stri
 }
 
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
         return context.locals[expression.name]!.type;
@@ -1333,6 +1519,10 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
                 const member = readable[0]!;
                 return authoritySemanticType(member.kind === "field" ? member.fieldType! : member.returnType!,
                     context, node);
+            }
+            if (imported?.authorityKind === "intrinsic" && expression.capabilitySource === imported.sourceQualifiedName) {
+                const member = intrinsicMember(context, imported.sourceQualifiedName, "read", expression.name);
+                if (member !== null) return authoritySemanticType(member.returnType, context, node);
             }
         }
         const targetType = assignmentType(expression.target, context, node);
@@ -1546,6 +1736,14 @@ function adaptAssignmentValue(target: SemanticType, expression: SemanticExpressi
             argument: expression,
         });
     }
+    if (["Boolean", "Number", "int", "uint"].includes(target.sourceName)
+        && !target.nullable && value.nullable && sameUnderlyingType(target, value)) {
+        return Object.assign(identity(node), {
+            kind: "coercion" as "coercion",
+            targetType: withNullability(target, false),
+            argument: expression,
+        });
+    }
     assertAssignmentCompatible(target, value, node);
     return expression;
 }
@@ -1746,7 +1944,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else {
             fail("HARDENED_RUNTIME_TYPE_IDENTITY", "runtime type target lacks a proven class or primitive identity", rawTarget);
         }
-        const resultType = operator === "is" ? semanticType(node, "Boolean", "boolean") : targetType;
+        const resultType = operator === "is" ? semanticType(node, "Boolean", "boolean")
+            : withNullability(targetType, true);
         return Object.assign(identity(node), {
             kind: "runtimeType" as "runtimeType", operator, value, targetType, targetKind, runtimeName, resultType,
         });
@@ -2160,6 +2359,35 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_MEMBER_SHAPE", "member expression has the wrong normalized shape", node);
         }
         const name = validateIdentifier(requiredText(node.children[1]!, "member name"), node.children[1]!);
+        if (node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "Array" && name === "NUMERIC"
+            && context.className !== "Array" && context.locals.Array === undefined && context.parameters.Array === undefined
+            && context.fields.Array === undefined && context.methods.Array === undefined && context.accessors.Array === undefined
+            && context.importsByLocal.Array === undefined) {
+            if (context.resolveCurrentLocal === null) {
+                fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
+                    "Array.NUMERIC requires an authenticated current-local authority proving no lexical type shadow",
+                    node.children[0]!);
+            }
+            if (context.localTypeAuthority === null) {
+                fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
+                    "Array.NUMERIC requires the authenticated local type map proving no package type shadow",
+                    node.children[0]!);
+            }
+            assertNoInheritedLocalValueShadow(context, "Array", node.children[0]!);
+            const current = context.resolveCurrentLocal();
+            const packageSeparator = context.classQualifiedName.lastIndexOf(".");
+            const arrayQName = packageSeparator < 0 ? "Array"
+                : `${context.classQualifiedName.slice(0, packageSeparator)}.Array`;
+            if (context.localTypeAuthority.entriesByIdentity[`${current.entry.module}\u0000${arrayQName}`]) {
+                fail("HARDENED_INTRINSIC_IDENTITY_SHADOW",
+                    "Array.NUMERIC is shadowed by an authenticated same-package declaration", node.children[0]!);
+            }
+            if (context.resolveImportedType("Array", null, node.children[0]!) === null) {
+                return Object.assign(identity(node), {
+                    kind: "intrinsicConstant" as "intrinsicConstant", identity: "Array.NUMERIC" as "Array.NUMERIC", value: 16 as 16,
+                });
+            }
+        }
         let target: SemanticExpression;
         let superOwnerQName: string | null = null;
         if (node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "super") {
@@ -2550,17 +2778,29 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     args[index] = adaptAssignmentValue(element, args[index]!, context,
                         node.children[1]!.children[index]!);
                 }
+            } else if (name === "join" && args.length === 1) {
+                args[0] = adaptAssignmentValue(semanticType(node, "String", "string", [], false), args[0]!, context,
+                    node.children[1]!.children[0]!);
             } else if (name === "concat") {
                 args.forEach((argument, index) => {
                     const argumentType = assignmentType(argument, context, node.children[1]!.children[index]!);
-                    if (!sameUnderlyingType(argumentType, ownerType)) {
+                    const argumentElement = vectorElement(argumentType);
+                    if (argumentElement === null || (!sameUnderlyingType(argumentType, ownerType)
+                        && element.sourceName !== "Object"
+                        && !provenReferenceSubtype(argumentElement, element, context))) {
                         fail("HARDENED_VECTOR_CONCAT_TYPE",
-                            "Vector.concat arguments must preserve the exact element specialization", node.children[1]!.children[index]!);
+                            "Vector.concat arguments must preserve the element specialization or prove a reference subtype",
+                            node.children[1]!.children[index]!);
                     }
                 });
             } else if (["every", "filter", "forEach", "map", "some"].includes(name)
                 || (name === "sort" && args.length === 1)) {
-                assertVectorCallback(name, args[0]!, element, ownerType, context, node.children[1]!.children[0]!);
+                const numericSort = name === "sort" && args[0]!.kind === "intrinsicConstant"
+                    && args[0]!.identity === "Array.NUMERIC" && args[0]!.value === 16
+                    && ["int", "uint", "Number"].includes(element.sourceName) && element.emittedName === "number";
+                if (!numericSort) {
+                    assertVectorCallback(name, args[0]!, element, ownerType, context, node.children[1]!.children[0]!);
+                }
                 if (name !== "sort" && args[0]!.kind === "methodClosure" && args[1]
                     && !(args[1]!.kind === "literal" && args[1]!.value === null)) {
                     fail("HARDENED_VECTOR_METHOD_CLOSURE_THIS",
@@ -2572,7 +2812,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     : ["every", "some"].includes(name) ? semanticType(node, "Boolean", "boolean")
                         : name === "join" || name === "toString" ? semanticType(node, "String", "string", [], false)
                             : name === "forEach" ? semanticType(node, "void", "void")
-                                : semanticType(node, "int", "number");
+                                : name === "push" || name === "unshift" ? semanticType(node, "uint", "number")
+                                    : semanticType(node, "int", "number");
         } else {
             fail("HARDENED_CALL_TARGET", "call target is not a proven local method or super", node);
         }
@@ -3173,6 +3414,11 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
         } else if (initializer !== null) {
             initializer = adaptAssignmentValue(fieldType, initializer, context, init!.children[0]!);
         }
+        const implicitDefault: SemanticField["implicitDefault"] = treeNodeRecord ? "constructor-owned"
+            : fieldType.sourceName === "int" || fieldType.sourceName === "uint" ? "zero"
+            : fieldType.sourceName === "Number" ? "nan"
+            : fieldType.sourceName === "Boolean" ? "false"
+            : fieldType.sourceName === "*" ? "undefined" : "null";
         const field: SemanticField = Object.assign(identity(declaration), {
             kind: "field" as "field",
             sharedDeclarationNodeId: list.id,
@@ -3182,6 +3428,7 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
             readonly,
             type: fieldType,
             initializer,
+            implicitDefault,
         });
         context.fields[name] = field;
         return field;
@@ -3337,7 +3584,9 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         importsByLocal: parsedImports.importsByLocal, resolveImportedType: resolveImplicitLocalType,
         mappingsBySource: authority.typeMappingsBySource, memberMappingsByKey: authority.memberMappingsByKey,
         intrinsicMembersByKey: authority.intrinsicMembersByKey, baseSourceQName: null, baseLocalQName: null,
-        localMemberAuthority, resolveCurrentLocal, fields: Object.create(null), methods: Object.create(null),
+        localTypeAuthority: localAuthority, localMemberAuthority, resolveCurrentLocal,
+        fields: Object.create(null), methods: Object.create(null),
+        runtimeReferenceParentsByQName: new Map(), currentInterfaceQNames: [],
         accessors: Object.create(null), parameters: Object.create(null), locals: Object.create(null),
         loopDepth: 0, breakableDepth: 0, labels: [], namespaceNames: Object.create(null), lambdaDepth: 0,
         currentCallable: null, ownRecordTargetDepth: 0, ownRecordInitializations: 0,
@@ -3368,7 +3617,8 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
 
 export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: LoadedCapabilityAuthority,
     sourceText: string, sha256: Sha256Function, localAuthority?: LoadedLocalTypeAuthority,
-    sourceLogicalPath?: string, localMemberAuthority?: LoadedLocalMemberAuthority): SemanticProgram {
+    sourceLogicalPath?: string, localMemberAuthority?: LoadedLocalMemberAuthority,
+    runtimeReferenceAuthority?: readonly RuntimeAuthoritySource[]): SemanticProgram {
     assertLoadedCapabilityAuthority(authority);
     const root = buildTree(ast, sourceText, sha256);
     if (root.kind !== "COMPILATION_UNIT") {
@@ -3492,8 +3742,11 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         intrinsicMembersByKey: authority.intrinsicMembersByKey,
         baseSourceQName: null,
         baseLocalQName: null,
+        localTypeAuthority: localAuthority || null,
         localMemberAuthority: localMemberAuthority || null,
         resolveCurrentLocal,
+        runtimeReferenceParentsByQName: runtimeReferenceParents(runtimeReferenceAuthority),
+        currentInterfaceQNames: [],
         fields: Object.create(null),
         methods: Object.create(null),
         accessors: Object.create(null),
@@ -3526,7 +3779,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 fail("HARDENED_INTERFACE_EXTENDS", "extended interface is duplicated", extendsNode);
             }
             seenExtends.add(imported.sourceQualifiedName);
-            interfaceExtendsTypes.push(semanticType(extendsNode, localName, localName));
+            interfaceExtendsTypes.push(semanticType(extendsNode, localName, localName, [], undefined,
+                imported.sourceQualifiedName));
         });
         const interfaceContent = one(classNode, "CONTENT")!;
         if (interfaceContent.children.some(child => !["FUNCTION", "GET", "SET"].includes(child.kind))) {
@@ -3617,7 +3871,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 fail("HARDENED_BASE_TYPE", "local base type must resolve to an authenticated class", extendsNode);
             }
         }
-        extendsType = semanticType(extendsNode, imported.sourceLocalName, imported.sourceLocalName);
+        extendsType = semanticType(extendsNode, imported.sourceLocalName, imported.sourceLocalName, [], undefined,
+            imported.sourceQualifiedName);
         placeholder.extendsType = extendsType;
         placeholder.baseSourceQName = imported.authorityKind === "flash" ? imported.sourceQualifiedName : null;
         placeholder.baseLocalQName = imported.authorityKind === "local" ? imported.sourceQualifiedName : null;
@@ -3639,9 +3894,11 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             }
             if (seen.has(imported.sourceQualifiedName)) fail("HARDENED_IMPLEMENTS_DUPLICATE", "implemented interface is duplicated", item);
             seen.add(imported.sourceQualifiedName);
-            implementsTypes.push({ type: semanticType(item, localName, localName), runtimeName: imported.sourceQualifiedName });
+            implementsTypes.push({ type: semanticType(item, localName, localName, [], undefined,
+                imported.sourceQualifiedName), runtimeName: imported.sourceQualifiedName });
         });
     }
+    placeholder.currentInterfaceQNames = Object.freeze(implementsTypes.map(item => item.runtimeName));
     const classContent = one(classNode, "CONTENT")!;
     const functionNodes = classContent.children.filter((child) =>
         child.kind === "FUNCTION" || child.kind === "GET" || child.kind === "SET");
@@ -3679,10 +3936,6 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             }
         }
     });
-    if (extendsType !== null && !functionNodes.some((node) =>
-        node.kind === "FUNCTION" && requiredText(one(node, "NAME")!, "method name") === className)) {
-        fail("HARDENED_DERIVED_CONSTRUCTOR", "minimal derived classes require an explicit constructor with proven zero-argument super semantics", classNode);
-    }
     const members: SemanticMember[] = [];
     classContent.children.forEach((node) => {
         if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {
@@ -3762,6 +4015,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         fail("HARDENED_OWN_RECORD_INITIALIZER",
             "TTreeNode.FData requires exactly one authenticated constructor initialization", classNode);
     }
+    assertNoLocalAncestryFieldCollision(placeholder, members, classNode);
     const declaration: SemanticClass = Object.assign(identity(classNode), {
         declarationKind: "class" as "class", name: className,
         modifiers: parseModifiers(classNode, true),

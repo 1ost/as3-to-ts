@@ -64,7 +64,7 @@ test("Point and Rectangle constructors, properties, getters, and typed calls tra
     const output = path.join(root, "output");
     const result = invoke("transpile", source, output, root);
     assert.equal(result.status, 0, result.stderr);
-    const generated = path.join(output, "p", "GeometryDemo.ts");
+    const generated = path.join(output, "__as3_runtime", "application", "p", "GeometryDemo.ts");
     const code = fs.readFileSync(generated, "utf8");
     assert.match(code, /new Point\(1, 2\)/);
     assert.match(code, /new Rectangle\(3, 4, 5, 6\)/);
@@ -76,6 +76,7 @@ test("Point and Rectangle constructors, properties, getters, and typed calls tra
     fs.writeFileSync(declarations, [
         "declare module \"laya/flash/geom/Point\" { export class Point { constructor(x?: number, y?: number); x:number; y:number; readonly length:number; } }",
         "declare module \"laya/flash/geom/Rectangle\" { export class Rectangle { constructor(x?:number,y?:number,width?:number,height?:number); width:number; height:number; inflate(dx:number,dy:number):void; clone():Rectangle; intersection(value:Rectangle):Rectangle; union(value:Rectangle):Rectangle; } }",
+        "declare module \"@bleach/as3-runtime/AS3Type\" { export interface AS3TypeToken<T> {} export type AS3ClassValue<T> = Function; export const AS3Types:Readonly<Record<string,AS3TypeToken<unknown>>>; export function as3As<T>(value:unknown,type:AS3TypeToken<T>):T|null; export function as3Is<T>(value:unknown,type:AS3TypeToken<T>):value is T; export function as3ClassType<T extends object>(name:string,constructor:Function):AS3TypeToken<T>; export function as3InterfaceType<T extends object>(name:string):AS3TypeToken<T>; export function as3NamedReferenceType<T extends object>(name:string):AS3TypeToken<T>; export function as3RejectConstructorArity(className:string,minimum:number,maximum:number|null):never; export function as3InitializeInstanceFields(value:object,newTarget:Function):void; export function as3PrepareConstruction(newTarget:unknown,declared:Function,proof:unknown):readonly []; export function as3CancelPreparedConstruction(newTarget:unknown,proof:unknown,frame:unknown):void; export function as3EnterConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; export function as3AbortConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; export function as3CompleteConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; }",
         "",
     ].join("\n"), "utf8");
     const tsconfig = path.join(root, "tsconfig.json");

@@ -49,7 +49,7 @@ test("owned TextField calls and numeric filter constructors transpile, typecheck
         "--source-census", sourceCensus, "--target-capabilities", targetCapabilities],
     { cwd: root, encoding: "utf8", timeout: 30_000, windowsHide: true });
     assert.equal(result.status, 0, result.stderr);
-    const generated = path.join(output, "p", "TextFilterDemo.ts");
+    const generated = path.join(output, "__as3_runtime", "application", "p", "TextFilterDemo.ts");
     const code = fs.readFileSync(generated, "utf8");
     assert.match(code, /getCharBoundaries\(__as3Int\(3\.9\)\)/);
     assert.match(code, /getLineLength\(__as3Int\(3\.9\)\)/);
@@ -67,6 +67,7 @@ test("owned TextField calls and numeric filter constructors transpile, typecheck
         "declare module \"laya/flash/filters/DropShadowFilter\" { export class DropShadowFilter { constructor(d?:number,a?:number,c?:number,al?:number,x?:number,y?:number,s?:number,q?:number,i?:boolean,k?:boolean,h?:boolean); } }",
         "declare module \"laya/flash/filters/GlowFilter\" { export class GlowFilter { constructor(c?:number,a?:number,x?:number,y?:number,s?:number,q?:number,i?:boolean,k?:boolean); } }",
         "declare module \"@bleach/as3-runtime/AS3Coerce\" { export function as3Boolean(v:unknown):boolean; export function as3Int(v:unknown):number; export function as3Number(v:unknown):number; export function as3String(v:unknown):string; export function as3Uint(v:unknown):number; }",
+        "declare module \"@bleach/as3-runtime/AS3Type\" { export interface AS3TypeToken<T> {} export type AS3ClassValue<T> = Function; export const AS3Types:Readonly<Record<string,AS3TypeToken<unknown>>>; export function as3As<T>(value:unknown,type:AS3TypeToken<T>):T|null; export function as3Is<T>(value:unknown,type:AS3TypeToken<T>):value is T; export function as3ClassType<T extends object>(name:string,constructor:Function):AS3TypeToken<T>; export function as3InterfaceType<T extends object>(name:string):AS3TypeToken<T>; export function as3NamedReferenceType<T extends object>(name:string):AS3TypeToken<T>; export function as3RejectConstructorArity(className:string,minimum:number,maximum:number|null):never; export function as3InitializeInstanceFields(value:object,newTarget:Function):void; export function as3PrepareConstruction(newTarget:unknown,declared:Function,proof:unknown):readonly []; export function as3CancelPreparedConstruction(newTarget:unknown,proof:unknown,frame:unknown):void; export function as3EnterConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; export function as3AbortConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; export function as3CompleteConstruction(value:object,newTarget:unknown,declared:Function,proof:unknown):void; }",
         "",
     ].join("\n"), "utf8");
     const tsconfig = path.join(root, "tsconfig.json");
@@ -87,6 +88,7 @@ test("owned TextField calls and numeric filter constructors transpile, typecheck
     moduleFile("laya/flash/filters/DropShadowFilter", "exports.DropShadowFilter=class{constructor(...a){globalThis.__tf.push(['shadow',...a])}};\n");
     moduleFile("laya/flash/filters/GlowFilter", "exports.GlowFilter=class{constructor(...a){globalThis.__tf.push(['glow',...a])}};\n");
     moduleFile("@bleach/as3-runtime/AS3Coerce", "exports.as3Int=v=>Number(v)|0;exports.as3Uint=v=>Number(v)>>>0;exports.as3Number=Number;exports.as3Boolean=Boolean;exports.as3String=String;\n");
+    moduleFile("@bleach/as3-runtime/AS3Type", "exports.AS3Types={};exports.as3As=v=>v;exports.as3Is=()=>false;exports.as3ClassType=()=>({});exports.as3InterfaceType=()=>({});exports.as3NamedReferenceType=()=>({});exports.as3RejectConstructorArity=()=>{throw new TypeError('arity')};exports.as3InitializeInstanceFields=()=>{};exports.as3PrepareConstruction=()=>[];exports.as3CancelPreparedConstruction=()=>{};exports.as3EnterConstruction=()=>{};exports.as3AbortConstruction=()=>{};exports.as3CompleteConstruction=()=>{};\n");
     const runtimeConfig = path.join(root, "tsconfig.runtime.json");
     const runtimeOutput = path.join(root, "runtime");
     fs.writeFileSync(runtimeConfig, JSON.stringify({ compilerOptions: { target: "ES2020", module: "CommonJS",

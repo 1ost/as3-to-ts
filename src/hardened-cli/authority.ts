@@ -12,6 +12,7 @@ import { join, resolve } from "node:path";
 import { loadCapabilityAuthority } from "../hardened/ledger";
 import { loadLocalTypeAuthority } from "../hardened/local-types";
 import { loadLocalMemberAuthority } from "../hardened/local-members";
+import { loadMappedRuntimeTypeAuthority, type RuntimeAuthorityClassSource } from "../hardened/type-authority";
 import type { LoadedCapabilityAuthority, LoadedLocalMemberAuthority, LoadedLocalTypeAuthority } from "../hardened/contracts";
 import { CliError } from "./errors";
 
@@ -27,6 +28,9 @@ const COMPILED_LOCAL_MEMBER_MAP_SHA256 = "663beb2c386797966f1acf8b5248eae41e2b0a
 const COMPILED_DECLARATION_WORKER_SHA256 = "87f04afe96e2713595eb8ed2998f158d43f57a65cbebb03d3a12be499f112db7";
 const COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = 2884;
 const COMPILED_LOCAL_MEMBER_HELD_COUNT = 39;
+const COMPILED_RUNTIME_TYPE_AUTHORITY_LOCK_SHA256 = "030721c45b89abbb7459c744ee191ec2d61b81e57526968313276b37b4a49824";
+const COMPILED_RUNTIME_TYPE_PREDICATES_SHA256 = "7f42c4891177a400981b68793c6b637044c9354eb7401c36fa095ce870267ea0";
+const COMPILED_LAYA_RUNTIME_REVISION = "7cdca8ac8c91d7cf1b21c0ec0c55b3b078c2f8fc";
 
 const COMPILED_AUTHORITY_LOCK = Object.freeze({
     schema: "bleach-local-as3-authority-lock@1",
@@ -47,6 +51,7 @@ export interface TranspileAuthority {
     sourceCensusSha256: string;
     targetCapabilitiesSha256: string;
     capabilityMappingSha256: string;
+    runtimeTypeSources: readonly RuntimeAuthorityClassSource[];
 }
 
 function sha256(bytes: string): string {
@@ -120,6 +125,8 @@ export function loadTranspileAuthority(
     const mappingJson = readRegularUtf8(join(configRoot, "capability-map.json"), "local capability map");
     const localTypeJson = readRegularUtf8(join(configRoot, "local-type-map.json"), "local type map");
     const localMemberJson = readRegularUtf8(join(configRoot, "local-member-map.json"), "local member map");
+    const runtimeTypeLockJson = readRegularUtf8(join(configRoot, "runtime-type-authority-lock.json"), "runtime type authority lock");
+    const runtimeTypePredicatesJson = readRegularUtf8(join(configRoot, "runtime-type-predicates.json"), "runtime type predicate authority");
     if (sha256(lockJson) !== COMPILED_AUTHORITY_LOCK_SHA256) {
         throw new CliError("local authority lock bytes do not match the compiled trust root", 6);
     }
@@ -130,6 +137,24 @@ export function loadTranspileAuthority(
         throw new CliError("local authority lock is not JSON", 6);
     }
     exactLock(lock);
+    if (sha256(runtimeTypeLockJson) !== COMPILED_RUNTIME_TYPE_AUTHORITY_LOCK_SHA256
+        || sha256(runtimeTypePredicatesJson) !== COMPILED_RUNTIME_TYPE_PREDICATES_SHA256) {
+        throw new CliError("runtime type authority bytes do not match the compiled trust root", 6);
+    }
+    let runtimeTypeLock: unknown;
+    try { runtimeTypeLock = JSON.parse(runtimeTypeLockJson); } catch {
+        throw new CliError("runtime type authority lock is not JSON", 6);
+    }
+    if (!runtimeTypeLock || typeof runtimeTypeLock !== "object" || Array.isArray(runtimeTypeLock)) {
+        throw new CliError("runtime type authority lock has the wrong schema", 6);
+    }
+    const runtimeLock = runtimeTypeLock as Record<string, unknown>;
+    if (runtimeLock.layaRevision !== COMPILED_LAYA_RUNTIME_REVISION
+        || !Array.isArray(runtimeLock.predicateAuthorityQNames)
+        || runtimeLock.predicateAuthorityQNames.length !== 27
+        || runtimeLock.predicateAuthorityQNames.some(name => typeof name !== "string")) {
+        throw new CliError("runtime type authority lock does not match the compiled Laya identity set", 6);
+    }
     const sourceCensusJson = readRegularUtf8(sourceCensusPath, "source capability census");
     const targetCapabilitiesJson = readRegularUtf8(targetCapabilitiesPath, "target capability ledger");
     for (const digest of [COMPILED_AUTHORITY_LOCK.sourceCensusSha256,
@@ -167,6 +192,8 @@ export function loadTranspileAuthority(
             || Object.keys(authority.memberMappingsByKey).length !== COMPILED_AUTHORITY_LOCK.mappedMemberCount) {
             throw new CliError("loaded capability map count does not match the compiled authority lock", 6);
         }
+        const runtimeTypeSources = loadMappedRuntimeTypeAuthority(runtimeTypeLockJson, runtimeTypePredicatesJson,
+            runtimeLock.predicateAuthorityQNames as string[], sha256);
         return Object.freeze({
             authority,
             localTypes,
@@ -175,6 +202,7 @@ export function loadTranspileAuthority(
             sourceCensusSha256: COMPILED_AUTHORITY_LOCK.sourceCensusSha256,
             targetCapabilitiesSha256: COMPILED_AUTHORITY_LOCK.targetCapabilitiesSha256,
             capabilityMappingSha256: COMPILED_AUTHORITY_LOCK.capabilityMappingSha256,
+            runtimeTypeSources,
         });
     } catch (error) {
         if (error instanceof CliError) throw error;
