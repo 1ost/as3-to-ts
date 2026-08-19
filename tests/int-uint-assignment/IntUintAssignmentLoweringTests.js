@@ -142,6 +142,10 @@ const extendedSource = [
   '  public var unsigned:uint;',
   '  public static var staticSigned:int;',
   '  public static var staticUnsigned:uint;',
+  '  public var initializedSigned:int = -1;',
+  '  public var initializedUnsigned:uint = -1;',
+  '  public static var initializedStaticSigned:int = -1;',
+  '  public static var initializedStaticUnsigned:uint = -1;',
   '',
   '  public function negativeDefaults(value:int = -1, unsignedValue:uint = -1):Array {',
   '    var localSigned:int = -1;',
@@ -244,6 +248,10 @@ assert.doesNotMatch(extendedOutput, /= -\(Number\(/);
 
 {
   const subject = new ExtendedSubject();
+  assert.strictEqual(subject.initializedSigned, -1);
+  assert.strictEqual(subject.initializedUnsigned, 4294967295);
+  assert.strictEqual(ExtendedSubject.initializedStaticSigned, -1);
+  assert.strictEqual(ExtendedSubject.initializedStaticUnsigned, 4294967295);
   assert.deepStrictEqual(
     Array.from(subject.negativeDefaults()),
     [
