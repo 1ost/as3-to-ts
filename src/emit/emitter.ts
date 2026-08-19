@@ -79,6 +79,8 @@ class Declaration {
 interface Declaration {
 	name:string;
 	type?:string;
+	/** The source AS3 type before TypeScript remapping (for example int/uint). */
+	as3Type?:string;
 	bound?:string;
 }
 
@@ -116,6 +118,8 @@ const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.CATCH]: emitCatch,
 	[NodeKind.NEW]: emitNew,
 	[NodeKind.RELATION]: emitRelation,
+	[NodeKind.ASSIGN]: emitAssign,
+	[NodeKind.INIT]: emitInit,
 	[NodeKind.OP]: emitOp,
 	[NodeKind.OR]: emitOr,
 	[NodeKind.IDENTIFIER]: emitIdent,
@@ -300,6 +304,7 @@ export default class Emitter {
 
 		if (previousDeclaration) {
 			if (declaration.type !== undefined) previousDeclaration.type = declaration.type;
+			if (declaration.as3Type !== undefined) previousDeclaration.as3Type = declaration.as3Type;
 			if (declaration.bound !== undefined) previousDeclaration.bound = declaration.bound;
 		} else {
 			this.scope.declarations.push(declaration);
@@ -666,6 +671,11 @@ function getDeclarationType(emitter:Emitter, node:Node):string {
 	return declarationType;
 }
 
+function getAS3DeclarationType(node:Node):string {
+	let typeNode = node && node.findChild(NodeKind.TYPE);
+	return typeNode && typeNode.text || null;
+}
+
 function emitInterface(emitter:Emitter, node:Node):void {
 	emitDeclaration(emitter, node);
 
@@ -798,7 +808,8 @@ function getFunctionDeclarations(emitter:Emitter, node:Node):Declaration[] {
 			if (nameTypeInit) {
 				return {
 					name: nameTypeInit.findChild(NodeKind.NAME).text,
-					type: getDeclarationType(emitter, nameTypeInit)
+					type: getDeclarationType(emitter, nameTypeInit),
+					as3Type: getAS3DeclarationType(nameTypeInit)
 				};
 			}
 			let rest = param.findChild(NodeKind.REST);
@@ -814,7 +825,11 @@ function getFunctionDeclarations(emitter:Emitter, node:Node):Declaration[] {
 				result = result.concat(
 					node
 						.findChildren(NodeKind.NAME_TYPE_INIT)
-						.map(node => ({name: node.findChild(NodeKind.NAME).text}))
+						.map(node => ({
+							name: node.findChild(NodeKind.NAME).text,
+							type: getDeclarationType(emitter, node),
+							as3Type: getAS3DeclarationType(node)
+						}))
 				);
 			}
 			if (node.kind !== NodeKind.FUNCTION && node.children && node.children.length) {
@@ -1131,6 +1146,7 @@ function getClassDeclarations(emitter:Emitter, className:string, contentsNode:No
 				let declaration = <Declaration>{
 					name: nameNode.text,
 					type: getDeclarationType(emitter, typeNode),
+					as3Type: getAS3DeclarationType(typeNode),
 					bound: isStatic ? className : 'this'
 				};
 				resultDeclarations.push(declaration);
@@ -1429,7 +1445,8 @@ function emitObjectValue(emitter:Emitter, node:Node):void {
 function emitNameTypeInit(emitter:Emitter, node:Node):void {
 	emitter.declareInScope({
 		name: node.findChild(NodeKind.NAME).text,
-		type: getDeclarationType(emitter, node)
+		type: getDeclarationType(emitter, node),
+		as3Type: getAS3DeclarationType(node)
 	});
 	emitter.catchup(node.start);
 	visitNodes(emitter, node.children);
@@ -1663,7 +1680,8 @@ function emitPropertyDecl(emitter:Emitter, node:Node, isConst = false):void {
 
 			emitter.declareInScope({
 				name: nameTypeInit.findChild(NodeKind.NAME).text,
-				type: getDeclarationType(emitter, node)
+				type: getDeclarationType(emitter, nameTypeInit),
+				as3Type: getAS3DeclarationType(nameTypeInit)
 			});
 			//emitter.catchup(nameTypeInit.start);
 			let nameNode:Node = nameTypeInit.children[0];
@@ -2138,6 +2156,132 @@ function containsClassIdentifier(node:Node) {
 		}
 	}
 	return false;
+}
+
+interface TypedAssignmentTarget {
+    declaration: Declaration;
+    repeatText: string;
+}
+
+function isIntegerAS3Type(type: string): boolean {
+    return type === 'int' || type === 'uint';
+}
+
+function findBoundDeclaration(emitter: Emitter, name: string, bound: string): Declaration {
+    let scope = emitter.scope;
+    while (scope) {
+        for (let i = 0; i < scope.declarations.length; i++) {
+            let declaration = scope.declarations[i];
+            if (declaration.name === name && declaration.bound === bound) {
+                return declaration;
+            }
+        }
+        scope = scope.parent;
+    }
+    return null;
+}
+
+/**
+ * Resolve only targets whose declaration and receiver are statically known.
+ * Arbitrary member/index receivers are deliberately excluded because repeating
+ * them for compound assignment could change evaluation order or side effects.
+ */
+function getTypedAssignmentTarget(emitter: Emitter, node: Node): TypedAssignmentTarget {
+    let declaration: Declaration = null;
+    let repeatText: string = null;
+
+    if (node.kind === NodeKind.IDENTIFIER) {
+        declaration = emitter.findDefInScope(node.text);
+        if (declaration) {
+            let identifier = emitter.getIdentifierRemap(node.text) || node.text;
+            repeatText = declaration.bound
+                ? declaration.bound + '.' + identifier
+                : identifier;
+        }
+    } else if (node.kind === NodeKind.DOT && node.children.length === 2) {
+        let receiver = node.children[0];
+        let property = node.children[1];
+        if (receiver.kind === NodeKind.IDENTIFIER && property.kind === NodeKind.LITERAL &&
+            (receiver.text === 'this' || receiver.text === emitter.currentClassName)) {
+            declaration = findBoundDeclaration(emitter, property.text, receiver.text);
+            repeatText = receiver.text + '.' + property.text;
+        }
+    }
+
+    if (!declaration || !isIntegerAS3Type(declaration.as3Type)) {
+        return null;
+    }
+    return { declaration, repeatText };
+}
+
+function emitIntegerCoercionStart(emitter: Emitter): void {
+    emitter.insert('(Number(');
+}
+
+function emitIntegerCoercionEnd(emitter: Emitter, as3Type: string): void {
+    emitter.insert(as3Type === 'uint' ? ') >>> 0)' : ') | 0)');
+}
+
+function emitInit(emitter: Emitter, node: Node): void {
+    let declarationNode = node.parent;
+    let as3Type = declarationNode && declarationNode.kind === NodeKind.NAME_TYPE_INIT
+        ? getAS3DeclarationType(declarationNode)
+        : null;
+
+    emitter.catchup(node.start);
+    if (!isIntegerAS3Type(as3Type)) {
+        visitNodes(emitter, node.children);
+        return;
+    }
+
+    emitIntegerCoercionStart(emitter);
+    visitNodes(emitter, node.children);
+    emitter.catchup(node.end);
+    emitIntegerCoercionEnd(emitter, as3Type);
+    emitter.skipTo(node.end);
+}
+
+function emitAssign(emitter: Emitter, node: Node): void {
+    if (node.children.length !== 3) {
+        emitter.catchup(node.start);
+        visitNodes(emitter, node.children);
+        return;
+    }
+
+    let left = node.children[0];
+    let operator = node.children[1];
+    let right = node.children[2];
+    let target = getTypedAssignmentTarget(emitter, left);
+    let supportedOperators = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^='];
+    if (!target || supportedOperators.indexOf(operator.text) < 0) {
+        emitter.catchup(node.start);
+        visitNodes(emitter, node.children);
+        return;
+    }
+
+    emitter.catchup(node.start);
+    visitNode(emitter, left);
+    emitter.catchup(left.end);
+
+    if (operator.text === '=') {
+        visitNode(emitter, operator);
+        emitter.catchup(right.start);
+        emitIntegerCoercionStart(emitter);
+        visitNode(emitter, right);
+        emitter.catchup(right.end);
+        emitIntegerCoercionEnd(emitter, target.declaration.as3Type);
+    } else {
+        emitter.catchup(operator.start);
+        emitter.insert('=');
+        emitter.skipTo(operator.end);
+        emitter.catchup(right.start);
+        emitIntegerCoercionStart(emitter);
+        emitter.insert(target.repeatText + ' ' + operator.text.substring(0, operator.text.length - 1) + ' ');
+        visitNode(emitter, right);
+        emitter.catchup(right.end);
+        emitIntegerCoercionEnd(emitter, target.declaration.as3Type);
+    }
+    emitter.skipTo(node.end);
 }
 
 function emitOp(emitter:Emitter, node:Node):void {
