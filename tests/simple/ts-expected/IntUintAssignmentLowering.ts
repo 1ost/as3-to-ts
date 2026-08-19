@@ -33,7 +33,7 @@ public assignAndReturn(data:any):number {
 public compound(data:any):any[] {
     this.signed = (Number(data.startSigned) | 0);
     this.unsigned = (Number(data.startUnsigned) >>> 0);
-    return [this.signed = (Number(this.signed + data.addSigned) | 0), this.unsigned = (Number(this.unsigned + data.addUnsigned) >>> 0), this.signed, this.unsigned];
+    return [this.signed = (Number(this.signed + (data.addSigned)) | 0), this.unsigned = (Number(this.unsigned + (data.addUnsigned)) >>> 0), this.signed, this.unsigned];
   }
 
   @bound

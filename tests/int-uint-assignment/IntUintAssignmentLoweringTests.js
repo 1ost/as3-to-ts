@@ -20,8 +20,8 @@ assert.match(output, /this\.signed = \(Number\(data\.signed\) \| 0\)/);
 assert.match(output, /this\.unsigned = \(Number\(data\.unsigned\) >>> 0\)/);
 assert.match(output, /var localUnsigned:number = \(Number\(data\.initial\) >>> 0\)/);
 assert.match(output, /return value = \(Number\(data\.value\) \| 0\)/);
-assert.match(output, /signed = \(Number\(this\.signed \+ data\.addSigned\) \| 0\)/);
-assert.match(output, /unsigned = \(Number\(this\.unsigned \+ data\.addUnsigned\) >>> 0\)/);
+assert.match(output, /signed = \(Number\(this\.signed \+ \(data\.addSigned\)\) \| 0\)/);
+assert.match(output, /unsigned = \(Number\(this\.unsigned \+ \(data\.addUnsigned\)\) >>> 0\)/);
 assert.match(output, /this\.ordinary = data\.value/);
 assert.match(output, /data\.signed = data\.raw/);
 assert.doesNotMatch(output, /this\.ordinary = \(Number/);
@@ -215,6 +215,39 @@ const extendedSource = [
   '    return signed += data.value;',
   '  }',
   '',
+  '  public function precedence(data:Object):Array {',
+  '    var multiply:int = 2;',
+  '    var conditional:int = 1;',
+  '    var equality:int = 1;',
+  '    var bitwise:int = 10;',
+  '    var nestedOuter:int = 1;',
+  '    var nestedInner:uint = 2;',
+  '    var nestedOuterUnsigned:uint = 1;',
+  '    var nestedInnerSigned:int = 2;',
+  '    var simpleOuter:int = 0;',
+  '    var simpleInner:uint = 0;',
+  '    var simpleOuterUnsigned:uint = 0;',
+  '    var simpleInnerSigned:int = 0;',
+  '    var shiftSigned:int = 1;',
+  '    var shiftUnsigned:uint = 4294967295;',
+  '    return [',
+  '      multiply *= data.a + data.b,',
+  '      conditional += data.flag ? data.whenTrue : data.whenFalse,',
+  '      equality += data.left == data.right,',
+  '      bitwise &= data.maskA | data.maskB,',
+  '      nestedOuter += nestedInner += data.nestedAdd,',
+  '      nestedOuterUnsigned += nestedInnerSigned += data.nestedSignedAdd,',
+  '      simpleOuter = simpleInner = data.simple,',
+  '      simpleOuterUnsigned = simpleInnerSigned = data.simpleUnsigned,',
+  '      shiftSigned <<= data.shiftA + data.shiftB,',
+  '      shiftUnsigned >>= data.shiftRightA + data.shiftRightB,',
+  '      multiply, conditional, equality, bitwise,',
+  '      nestedOuter, nestedInner, nestedOuterUnsigned, nestedInnerSigned,',
+  '      simpleOuter, simpleInner, simpleOuterUnsigned, simpleInnerSigned,',
+  '      shiftSigned, shiftUnsigned',
+  '    ];',
+  '  }',
+  '',
   '  public function exclusions(data:Object, values:Array, index:int):void {',
   '    data.signed = data.raw;',
   '    data.signed += data.raw;',
@@ -353,6 +386,57 @@ assert.doesNotMatch(extendedOutput, /= -\(Number\(/);
   });
   assert.strictEqual(subject.compoundOrder(data), 2);
   assert.deepStrictEqual(events, ['get value', 'convert value']);
+}
+
+{
+  const subject = new ExtendedSubject();
+  const input = tracked({
+    a: 3,
+    b: 4,
+    flag: true,
+    whenTrue: 10,
+    whenFalse: 20,
+    left: 2,
+    right: 2,
+    maskA: 12,
+    maskB: 1,
+    nestedAdd: 4294967295,
+    nestedSignedAdd: -3,
+    simple: -1,
+    simpleUnsigned: 4294967295,
+    shiftA: 1,
+    shiftB: 1,
+    shiftRightA: 1,
+    shiftRightB: 1
+  });
+  assert.deepStrictEqual(
+    Array.from(subject.precedence(input.object)),
+    [
+      14, 11, 2, 8, 2, 0, -1, 4294967295, 4, 4294967295,
+      14, 11, 2, 8,
+      2, 1, 0, -1,
+      -1, 4294967295, 4294967295, -1,
+      4, 4294967295
+    ]
+  );
+  assert.deepStrictEqual(input.reads, {
+    a: 1,
+    b: 1,
+    flag: 1,
+    whenTrue: 1,
+    left: 1,
+    right: 1,
+    maskA: 1,
+    maskB: 1,
+    nestedAdd: 1,
+    nestedSignedAdd: 1,
+    simple: 1,
+    simpleUnsigned: 1,
+    shiftA: 1,
+    shiftB: 1,
+    shiftRightA: 1,
+    shiftRightB: 1
+  });
 }
 
 // This pass deliberately excludes targets whose receiver/index is not proven,

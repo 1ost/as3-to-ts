@@ -2301,9 +2301,10 @@ function emitAssign(emitter: Emitter, node: Node): void {
         emitter.skipTo(operator.end);
         emitter.catchup(getExpressionStart(right));
         emitIntegerCoercionStart(emitter);
-        emitter.insert(target.repeatText + ' ' + operator.text.substring(0, operator.text.length - 1) + ' ');
+        emitter.insert(target.repeatText + ' ' + operator.text.substring(0, operator.text.length - 1) + ' (');
         visitNode(emitter, right);
         emitter.catchup(getEffectiveNodeEnd(right));
+        emitter.insert(')');
         emitIntegerCoercionEnd(emitter, target.declaration.as3Type);
     }
 }
