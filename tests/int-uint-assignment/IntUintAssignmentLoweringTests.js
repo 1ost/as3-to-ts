@@ -363,7 +363,7 @@ assert.match(extendedOutput, /data\.signed <<= data\.raw/);
 assert.match(extendedOutput, /values\[index\] = data\.raw/);
 assert.match(extendedOutput, /values\[index\+\+\] \+= data\.raw/);
 assert.match(extendedOutput, /data\.values\[data\.nextIndex\(\)\] \+= data\.raw/);
-assert.strictEqual((extendedOutput.match(/data\.nextIndex\(\)/g) || []).length, 1);
+assert.strictEqual((extendedOutput.match(/data\.nextIndex\(\)/g) || []).length, 2);
 assert.match(extendedOutput, /this\.signed\+\+/);
 assert.match(extendedOutput, /\+\+this\.signed/);
 assert.match(extendedOutput, /this\.unsigned--/);
