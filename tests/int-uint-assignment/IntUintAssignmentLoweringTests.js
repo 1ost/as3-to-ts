@@ -227,6 +227,11 @@ const extendedSource = [
   '    unsigned--;',
   '    --unsigned;',
   '  }',
+  '',
+  '  public function unprovenOrder(data:Object):void {',
+  '    data.target().signed += data.value;',
+  '    data.values[data.nextIndex()] += data.value;',
+  '  }',
   '}}'
 ].join('\n');
 
@@ -365,5 +370,37 @@ assert.match(extendedOutput, /this\.unsigned--/);
 assert.match(extendedOutput, /--this\.unsigned/);
 assert.doesNotMatch(extendedOutput, /data\.signed = \(Number/);
 assert.doesNotMatch(extendedOutput, /values\[[^\]]+\] = \(Number/);
+
+{
+  const subject = new ExtendedSubject();
+  const target = { signed: 1 };
+  const values = [1];
+  let targetCalls = 0;
+  let indexCalls = 0;
+  let valueReads = 0;
+  const data = {
+    target() {
+      targetCalls++;
+      return target;
+    },
+    values,
+    nextIndex() {
+      indexCalls++;
+      return 0;
+    }
+  };
+  Object.defineProperty(data, 'value', {
+    get() {
+      valueReads++;
+      return 2;
+    }
+  });
+  subject.unprovenOrder(data);
+  assert.strictEqual(targetCalls, 1);
+  assert.strictEqual(indexCalls, 1);
+  assert.strictEqual(valueReads, 2);
+  assert.strictEqual(target.signed, 3);
+  assert.strictEqual(values[0], 3);
+}
 
 console.log('int/uint assignment lowering: all focused tests passed');
