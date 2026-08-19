@@ -2222,6 +2222,33 @@ function emitIntegerCoercionEnd(emitter: Emitter, as3Type: string): void {
     emitter.insert(as3Type === 'uint' ? ') >>> 0)' : ') | 0)');
 }
 
+function getEffectiveNodeEnd(node: Node): number {
+    let end = Math.max(node.start, node.end);
+    if (node.children) {
+        node.children.forEach(child => {
+            end = Math.max(end, getEffectiveNodeEnd(child));
+        });
+    }
+    return end;
+}
+
+function getExpressionStart(node: Node): number {
+    // The parser records unary +/- at node.end and the operand at node.start.
+    // Preserve the prefix inside the destination coercion instead of emitting
+    // it before the wrapper.
+    if ((node.kind === NodeKind.MINUS || node.kind === NodeKind.PLUS) && node.end < node.start) {
+        return node.end;
+    }
+    return node.start;
+}
+
+function emitIntegerCoercedNode(emitter: Emitter, node: Node, as3Type: string): void {
+    emitIntegerCoercionStart(emitter);
+    visitNode(emitter, node);
+    emitter.catchup(getEffectiveNodeEnd(node));
+    emitIntegerCoercionEnd(emitter, as3Type);
+}
+
 function emitInit(emitter: Emitter, node: Node): void {
     let declarationNode = node.parent;
     let as3Type = declarationNode && declarationNode.kind === NodeKind.NAME_TYPE_INIT
@@ -2236,9 +2263,8 @@ function emitInit(emitter: Emitter, node: Node): void {
 
     emitIntegerCoercionStart(emitter);
     visitNodes(emitter, node.children);
-    emitter.catchup(node.end);
+    emitter.catchup(getEffectiveNodeEnd(node));
     emitIntegerCoercionEnd(emitter, as3Type);
-    emitter.skipTo(node.end);
 }
 
 function emitAssign(emitter: Emitter, node: Node): void {
@@ -2252,7 +2278,9 @@ function emitAssign(emitter: Emitter, node: Node): void {
     let operator = node.children[1];
     let right = node.children[2];
     let target = getTypedAssignmentTarget(emitter, left);
-    let supportedOperators = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^='];
+    let supportedOperators = [
+        '=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '>>>='
+    ];
     if (!target || supportedOperators.indexOf(operator.text) < 0) {
         emitter.catchup(node.start);
         visitNodes(emitter, node.children);
@@ -2265,23 +2293,19 @@ function emitAssign(emitter: Emitter, node: Node): void {
 
     if (operator.text === '=') {
         visitNode(emitter, operator);
-        emitter.catchup(right.start);
-        emitIntegerCoercionStart(emitter);
-        visitNode(emitter, right);
-        emitter.catchup(right.end);
-        emitIntegerCoercionEnd(emitter, target.declaration.as3Type);
+        emitter.catchup(getExpressionStart(right));
+        emitIntegerCoercedNode(emitter, right, target.declaration.as3Type);
     } else {
         emitter.catchup(operator.start);
         emitter.insert('=');
         emitter.skipTo(operator.end);
-        emitter.catchup(right.start);
+        emitter.catchup(getExpressionStart(right));
         emitIntegerCoercionStart(emitter);
         emitter.insert(target.repeatText + ' ' + operator.text.substring(0, operator.text.length - 1) + ' ');
         visitNode(emitter, right);
-        emitter.catchup(right.end);
+        emitter.catchup(getEffectiveNodeEnd(right));
         emitIntegerCoercionEnd(emitter, target.declaration.as3Type);
     }
-    emitter.skipTo(node.end);
 }
 
 function emitOp(emitter:Emitter, node:Node):void {
