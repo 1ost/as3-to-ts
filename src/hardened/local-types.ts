@@ -7,6 +7,9 @@ export interface LocalTypeAuthorityInput {
     expectedDependencyGraphRawSha256: string;
     expectedDependencyGraphSemanticSha256: string;
     expectedSourceManifestSha256: string;
+    expectedSchema?: string;
+    expectedSourceRoots?: Readonly<Record<"application" | "bootstrap", string>>;
+    expectedTargetRoots?: Readonly<Record<"application" | "bootstrap", string>>;
 }
 
 export type LocalTypeSha256 = (bytes: string) => string;
@@ -64,10 +67,13 @@ function freeze<T>(value: T): T {
 }
 
 export function loadLocalTypeAuthority(input: LocalTypeAuthorityInput, sha256: LocalTypeSha256): LoadedLocalTypeAuthority {
-    if (!object(input) || !exactKeys(input as unknown as { [key: string]: unknown }, [
+    const profiled = input.expectedSchema === "as3-application-local-type-map@1";
+    const inputKeys = [
         "expectedDependencyGraphRawSha256", "expectedDependencyGraphSemanticSha256", "expectedEntryCount",
         "expectedSourceManifestSha256", "json", "sha256",
-    ]) || typeof input.json !== "string" || typeof input.sha256 !== "string" || !SHA256.test(input.sha256)
+    ].concat(profiled ? ["expectedSchema", "expectedSourceRoots", "expectedTargetRoots"] : []);
+    if (!object(input) || !exactKeys(input as unknown as { [key: string]: unknown }, inputKeys)
+        || typeof input.json !== "string" || typeof input.sha256 !== "string" || !SHA256.test(input.sha256)
         || sha256(input.json) !== input.sha256) {
         fail("HARDENED_LOCAL_AUTHORITY_HASH", "local type authority bytes do not match their exact digest");
     }
@@ -75,10 +81,26 @@ export function loadLocalTypeAuthority(input: LocalTypeAuthorityInput, sha256: L
     try { document = JSON.parse(input.json); } catch (_error) {
         fail("HARDENED_LOCAL_AUTHORITY_JSON", "local type authority is not JSON");
     }
-    if (!object(document) || !exactKeys(document, [
+    const documentKeys = [
         "dependencyGraphRawSha256", "dependencyGraphSemanticSha256", "entries", "entryCount", "schema",
         "sourceManifestSha256",
-    ]) || document.schema !== "bleach-local-as3-type-map@2" || !Array.isArray(document.entries)
+    ].concat(profiled ? ["sourceRoots", "targetRoots"] : []);
+    const legacySourceRoots = { application: "game-client/tapplication_main/src/", bootstrap: "game-client/tmain/src/" };
+    const legacyTargetRoots = { application: "game-client/layaair/src/application/", bootstrap: "game-client/layaair/src/bootstrap/" };
+    const sourceRoots = profiled ? input.expectedSourceRoots : legacySourceRoots;
+    const targetRoots = profiled ? input.expectedTargetRoots : legacyTargetRoots;
+    const validRoots = (value: unknown): value is Readonly<Record<"application" | "bootstrap", string>> =>
+        object(value) && exactKeys(value, ["application", "bootstrap"])
+        && [value.application, value.bootstrap].every(root => typeof root === "string" && root.endsWith("/")
+            && !root.startsWith("/") && !root.includes("\\") && !root.includes("//")
+            && !root.split("/").some((segment, index, all) => index < all.length - 1
+                && (segment === "" || segment === "." || segment === ".." || segment.startsWith("_"))));
+    if (!object(document) || !exactKeys(document, documentKeys)
+        || document.schema !== (profiled ? input.expectedSchema : "bleach-local-as3-type-map@2")
+        || !validRoots(sourceRoots) || !validRoots(targetRoots)
+        || (profiled && (JSON.stringify(document.sourceRoots) !== JSON.stringify(sourceRoots)
+            || JSON.stringify(document.targetRoots) !== JSON.stringify(targetRoots)))
+        || !Array.isArray(document.entries)
         || document.entryCount !== input.expectedEntryCount || document.entries.length !== input.expectedEntryCount
         || document.dependencyGraphRawSha256 !== input.expectedDependencyGraphRawSha256
         || document.dependencyGraphSemanticSha256 !== input.expectedDependencyGraphSemanticSha256
@@ -96,8 +118,8 @@ export function loadLocalTypeAuthority(input: LocalTypeAuthorityInput, sha256: L
         ])) fail("HARDENED_LOCAL_AUTHORITY_ENTRY", `local type entry ${index} has the wrong shape`);
         const entry = raw as unknown as LocalTypeMapping;
         const identity = `${entry.module}\u0000${entry.qname}`;
-        const sourcePrefix = entry.module === "application" ? "game-client/tapplication_main/src/" : "game-client/tmain/src/";
-        const targetPrefix = entry.module === "application" ? "game-client/layaair/src/application/" : "game-client/layaair/src/bootstrap/";
+        const sourcePrefix = sourceRoots[entry.module];
+        const targetPrefix = targetRoots[entry.module];
         if ((entry.module !== "application" && entry.module !== "bootstrap") || !ID.test(entry.nodeId)
             || !/^scc-[0-9]{5}$/.test(entry.componentId) || typeof entry.importable !== "boolean"
             || typeof entry.qname !== "string" || /[\u0000-\u001f\u007f]/.test(entry.qname)
@@ -126,7 +148,8 @@ export function loadLocalTypeAuthority(input: LocalTypeAuthorityInput, sha256: L
     const authority: LoadedLocalTypeAuthority = {
         dependencyGraphRawSha256: String(document.dependencyGraphRawSha256),
         dependencyGraphSemanticSha256: String(document.dependencyGraphSemanticSha256),
-        sourceManifestSha256: String(document.sourceManifestSha256), entries, entriesByIdentity,
+        sourceManifestSha256: String(document.sourceManifestSha256),
+        sourceRoots: { ...sourceRoots }, targetRoots: { ...targetRoots }, entries, entriesByIdentity,
     };
     freeze(authority);
     AUTHORITIES.add(authority);

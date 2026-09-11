@@ -21,6 +21,7 @@ function compileFocusedSources() {
         "src/hardened/adapter.ts",
         "src/hardened/emitter.ts",
         "src/hardened/type-authority.ts",
+        "src/hardened/source-member-authority.ts",
         "src/hardened/local-declarations.ts",
         "src/hardened/ledger.ts",
         "src/hardened/contracts.ts",
@@ -64,6 +65,7 @@ function compileFocusedSources() {
         adapter: require(path.join(output, "hardened/adapter.js")),
         emitter: require(path.join(output, "hardened/emitter.js")),
         typeAuthority: require(path.join(output, "hardened/type-authority.js")),
+        sourceMembers: require(path.join(output, "hardened/source-member-authority.js")),
         localDeclarations: require(path.join(output, "hardened/local-declarations.js")),
         ledger: require(path.join(output, "hardened/ledger.js")),
     };
@@ -417,6 +419,15 @@ try {
     const declarationExtract = built.localDeclarations.extractLocalDeclaration(normalized, source, sha256);
     assert.equal(declarationExtract.schema, "as3-local-declaration-extract@1");
     assert.equal(declarationExtract.qualifiedName, "lobby.ui.Demo");
+    const defaultPackageSource = "package { public class Root {} }";
+    const defaultPackageTree = built.parse("fixtures/Root.as", defaultPackageSource);
+    const defaultPackageNormalized = built.normalizer.normalizeParserAst(
+        defaultPackageTree, defaultPackageSource, sha256,
+    );
+    const defaultPackageDeclaration = built.localDeclarations.extractLocalDeclaration(
+        defaultPackageNormalized, defaultPackageSource, sha256,
+    );
+    assert.equal(defaultPackageDeclaration.qualifiedName, "Root");
     assert.equal(declarationExtract.declarationKind, "class");
     assert.deepEqual(declarationExtract.imports,
         ["flash.display.Sprite", "flash.events.Event", "flash.utils.Dictionary"]);
@@ -634,6 +645,99 @@ try {
     const referenceAuthority=built.typeAuthority.loadMappedRuntimeTypeAuthority(
         fs.readFileSync(path.join(ROOT,"config/runtime-type-authority-lock.json"),"utf8"),predicateAuthorityJson,
         predicateAuthority.types.map(row=>row.sourceQName),sha256);
+    const sourceMemberDocument={entries:[
+        {baseQName:null,ownInstanceMemberNames:["hasOwnProperty"],qname:"Object"},
+        {baseQName:"Object",ownInstanceMemberNames:["alpha"],qname:"flash.display.DisplayObject"},
+        {baseQName:"flash.display.DisplayObject",ownInstanceMemberNames:["graphics"],qname:"flash.display.Sprite"},
+    ],entryCount:3,generator:"air-sdk-swfdump-abc@1",schema:"as3-source-member-authority@1",
+    sourceArtifactSha256:"a".repeat(64)};
+    const sourceMemberJson=JSON.stringify(sourceMemberDocument);
+    const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
+        sourceMemberJson,sha256(sourceMemberJson),sha256);
+    assert.throws(()=>built.sourceMembers.loadSourceMemberAuthority(
+        sourceMemberJson,sha256(sourceMemberJson+" "),sha256),
+    error=>error&&error.code==="HARDENED_SOURCE_MEMBER_AUTHORITY_PIN");
+    const timerSource="package p { import flash.display.Sprite; import flash.utils.setTimeout; public class TimerFixture extends Sprite { public function TimerFixture(){ super(); setTimeout(done,1); } private function done():void {} } }";
+    const timerTree=built.parse("fixtures/TimerFixture.as",timerSource);
+    const timerNormalized=built.normalizer.normalizeParserAst(timerTree,timerSource,sha256);
+    const timerSemantic=built.adapter.adaptNormalizedParserAst(timerNormalized,authority(built.ledger),timerSource,
+        sha256,undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+    assert.equal(timerSemantic.imports.find(item=>item.sourceQualifiedName==="flash.utils.setTimeout").authorityKind,
+        "native-timer-function");
+    const shadowDocument=JSON.parse(sourceMemberJson);
+    shadowDocument.entries[2].ownInstanceMemberNames.push("setTimeout");
+    const shadowJson=JSON.stringify(shadowDocument);
+    const shadowAuthority=built.sourceMembers.loadSourceMemberAuthority(shadowJson,sha256(shadowJson),sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(timerNormalized,authority(built.ledger),timerSource,
+        sha256,undefined,undefined,undefined,referenceAuthority,shadowAuthority),
+    error=>error&&error.code==="HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+    const defaultsSource="package p { public class LocalDefaults { public function run():void { var item:Object; var count:int; var active:Boolean; } } }";
+    const defaultsTree=built.parse("fixtures/LocalDefaults.as",defaultsSource);
+    const defaultsNormalized=built.normalizer.normalizeParserAst(defaultsTree,defaultsSource,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(
+        defaultsNormalized,authority(built.ledger),defaultsSource,sha256),
+    error=>error&&error.code==="HARDENED_LOCAL_INITIALIZER");
+    const defaultsSemantic=built.adapter.adaptNormalizedParserAst(defaultsNormalized,authority(built.ledger),
+        defaultsSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    const defaultLocals=defaultsSemantic.declaration.members.find(member=>member.name==="run").body
+        .flatMap(statement=>statement.kind==="local"?statement.declarations:[]);
+    assert.deepEqual(defaultLocals.map(local=>local.initializer.kind==="coercion"
+        ?local.initializer.argument.value:local.initializer.value),[null,0,false]);
+    for(const heldDefault of ["var amount:Number;","const item:Object;"]){
+        const heldSource=`package p { public class HeldDefault { public function run():void { ${heldDefault} } } }`;
+        const heldTree=built.parse("fixtures/HeldDefault.as",heldSource);
+        const heldNormalized=built.normalizer.normalizeParserAst(heldTree,heldSource,sha256);
+        assert.throws(()=>built.adapter.adaptNormalizedParserAst(heldNormalized,authority(built.ledger),heldSource,
+            sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority),
+        error=>error&&["HARDENED_LOCAL_DEFAULT","HARDENED_LOCAL_INITIALIZER"].includes(error.code),heldDefault);
+    }
+    const staticLambdaSource="package p { public class StaticCapture { public static var ready:Boolean = false; public function run():void { var handler:Function = function():void { ready = true; }; } } }";
+    const staticLambdaTree=built.parse("fixtures/StaticCapture.as",staticLambdaSource);
+    const staticLambdaNormalized=built.normalizer.normalizeParserAst(staticLambdaTree,staticLambdaSource,sha256);
+    const staticLambdaSemantic=built.adapter.adaptNormalizedParserAst(staticLambdaNormalized,
+        authority(built.ledger),staticLambdaSource,sha256,undefined,undefined,undefined,undefined,
+        sourceMemberAuthority);
+    const staticLambdaOutput=built.emitter.emitSemanticProgram(staticLambdaSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
+    assert.match(staticLambdaOutput.code,/StaticCapture\.ready = true;/);
+    const instanceLambdaSource=staticLambdaSource.replace("public static var ready","public var ready");
+    const instanceLambdaTree=built.parse("fixtures/InstanceCapture.as",instanceLambdaSource);
+    const instanceLambdaNormalized=built.normalizer.normalizeParserAst(instanceLambdaTree,instanceLambdaSource,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(instanceLambdaNormalized,
+        authority(built.ledger),instanceLambdaSource,sha256,undefined,undefined,undefined,undefined,
+        sourceMemberAuthority),error=>error&&error.code==="HARDENED_LAMBDA_THIS");
+    const conditionSource="package p { public class TruthyCondition { public function run(item:Object):void { if (item) { return; } } } }";
+    const conditionTree=built.parse("fixtures/TruthyCondition.as",conditionSource);
+    const conditionNormalized=built.normalizer.normalizeParserAst(conditionTree,conditionSource,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(conditionNormalized,authority(built.ledger),
+        conditionSource,sha256),error=>error&&error.code==="HARDENED_IF_BOOLEAN");
+    const conditionSemantic=built.adapter.adaptNormalizedParserAst(conditionNormalized,authority(built.ledger),
+        conditionSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    const conditionOutput=built.emitter.emitSemanticProgram(conditionSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
+    assert.match(conditionOutput.code,/if \(__as3Boolean\(item\)\)/);
+    const arraySource="package p { public class ArrayLiteral { private var values:Array = []; } }";
+    const arrayTree=built.parse("fixtures/ArrayLiteral.as",arraySource);
+    const arrayNormalized=built.normalizer.normalizeParserAst(arrayTree,arraySource,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(arrayNormalized,authority(built.ledger),
+        arraySource,sha256),error=>error&&error.code==="HARDENED_ASSIGNMENT_TYPE");
+    const arraySemantic=built.adapter.adaptNormalizedParserAst(arrayNormalized,authority(built.ledger),
+        arraySource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    const arrayOutput=built.emitter.emitSemanticProgram(arraySemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
+    assert.match(arrayOutput.code,/private values: unknown\[\] \| null;/);
+    assert.match(arrayOutput.code,/this\.values = \[\];/);
+    const typeofSource="package p { public class TypeofCheck { public function run(item:Object):void { if (typeof item !== \"object\") { return; } } } }";
+    const typeofTree=built.parse("fixtures/TypeofCheck.as",typeofSource);
+    const typeofNormalized=built.normalizer.normalizeParserAst(typeofTree,typeofSource,sha256);
+    assert.ok(typeofNormalized.nodes.some(node=>node.kind==="TYPEOF"));
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(typeofNormalized,authority(built.ledger),
+        typeofSource,sha256),error=>error&&error.code==="HARDENED_TYPEOF_PROFILE");
+    const typeofSemantic=built.adapter.adaptNormalizedParserAst(typeofNormalized,authority(built.ledger),
+        typeofSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    const typeofOutput=built.emitter.emitSemanticProgram(typeofSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
+    assert.match(typeofOutput.code,/typeof item !== "object"/);
     assert.throws(()=>built.adapter.adaptNormalizedParserAst(
         concatNormalized,authority(built.ledger),concatSource,sha256,undefined,undefined,undefined,[
             {kind:"class",qname:"flash.display.DisplayObject",base:null,interfaces:[]},

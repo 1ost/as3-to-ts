@@ -18,6 +18,7 @@ export interface LocalMemberAuthorityInput {
     expectedLocalTypeMapSha256: string;
     expectedDeclarationWorkerSha256: string;
     expectedSourceCensusSha256: string;
+    expectedSchema?: string;
 }
 
 export type LocalMemberSha256 = (bytes: string) => string;
@@ -157,10 +158,13 @@ function declaration(raw: unknown): LocalMemberDeclaration {
 export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha256: LocalMemberSha256,
     localTypes: LoadedLocalTypeAuthority): LoadedLocalMemberAuthority {
     assertLoadedLocalTypeAuthority(localTypes);
-    if (!object(input) || !exactKeys(input as unknown as Record<string, unknown>, [
+    const profiled = input.expectedSchema === "as3-application-local-member-map@1";
+    const inputKeys = [
         "expectedCompleteCount", "expectedDeclarationWorkerSha256", "expectedEntryCount", "expectedHeldCount",
         "expectedLocalTypeMapSha256", "expectedSourceCensusSha256", "json", "sha256",
-    ]) || typeof input.json !== "string" || typeof input.sha256 !== "string" || !SHA256.test(input.sha256)
+    ].concat(profiled ? ["expectedSchema"] : []);
+    if (!object(input) || !exactKeys(input as unknown as Record<string, unknown>, inputKeys)
+        || typeof input.json !== "string" || typeof input.sha256 !== "string" || !SHA256.test(input.sha256)
         || sha256(input.json) !== input.sha256) {
         fail("HARDENED_LOCAL_MEMBER_HASH", "local member authority bytes do not match their exact digest");
     }
@@ -171,7 +175,8 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
     if (!object(document) || !exactKeys(document, [
         "completeCount", "declarationWorkerSha256", "entries", "entryCount", "heldCount", "localTypeMapSha256",
         "schema", "sourceCensusSha256",
-    ]) || document.schema !== "bleach-local-as3-member-map@2" || !Array.isArray(document.entries)
+    ]) || document.schema !== (profiled ? input.expectedSchema : "bleach-local-as3-member-map@2")
+        || !Array.isArray(document.entries)
         || document.entryCount !== input.expectedEntryCount || document.entries.length !== input.expectedEntryCount
         || document.completeCount !== input.expectedCompleteCount || document.heldCount !== input.expectedHeldCount
         || document.completeCount + document.heldCount !== document.entryCount

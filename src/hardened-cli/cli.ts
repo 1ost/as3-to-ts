@@ -9,7 +9,7 @@ import { assertParserWorkerSha256, captureParserWorkerSha256, parseIsolated } fr
 import { HELP, parseArguments, TOOL_VERSION } from "./options";
 import { loadTranspileAuthority } from "./authority";
 import { adaptNormalizedParserAst } from "../hardened/adapter";
-import type { NormalizedParserAst, SemanticProgram } from "../hardened/contracts";
+import { HardenedSemanticError, type NormalizedParserAst, type SemanticProgram } from "../hardened/contracts";
 import { emitSemanticProgram } from "../hardened/emitter";
 import { assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeInterfaceAuthoritySource,
     localRuntimeTypeAuthoritySource, type EmittedRuntimeApplicationEntry,
@@ -95,9 +95,9 @@ function runtimeEmbeddedCommonJs(code: string, fileName: string): string {
         /^Object\.defineProperty\(exports, "__esModule", \{ value: true \}\);\n/m, "");
 }
 
-function runtimeBundleJavaScript(authorityCode: string): string {
+function runtimeBundleJavaScript(authorityCode: string, includeBigTurnTableDto: boolean): string {
     const modules = new Map<string, string>();
-    runtimeSourceTemplates().forEach(template => {
+    runtimeSourceTemplates(includeBigTurnTableDto).forEach(template => {
         const moduleId = template.path.slice(0, -3) + ".js";
         modules.set(moduleId, runtimeEmbeddedCommonJs(template.code, template.path));
     });
@@ -163,16 +163,18 @@ function runtimeBundleJavaScript(authorityCode: string): string {
         "  if (Object.prototype.hasOwnProperty.call(__as3Public, key)) throw new Error('duplicate AS3 runtime public export: ' + key);",
         "  Object.defineProperty(__as3Public, key, { value: source[key], enumerable: true, writable: false, configurable: false });",
         "} }");
-    Object.keys(RUNTIME_SOURCE_SHA256).filter(path => !path.startsWith("internal/")).sort().forEach(path => {
+    Object.keys(RUNTIME_SOURCE_SHA256).filter(path => !path.startsWith("internal/")
+        && (includeBigTurnTableDto || path !== "AS3BigTurnTableInnerDto.ts")).sort().forEach(path => {
         lines.push(`__as3Expose(__as3Load(${JSON.stringify(path.slice(0, -3) + ".js")}));`);
     });
     lines.push("__as3Expose(__as3Load('AS3Authority.generated.js'));", "Object.freeze(__as3Public);", "");
     return lines.join("\n");
 }
 
-function runtimeSourceTemplates(): ReadonlyArray<{ path: string; code: string }> {
+function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<{ path: string; code: string }> {
     const root = resolve(join(__dirname, "..", "src", "hardened-runtime"));
-    return Object.keys(RUNTIME_SOURCE_SHA256).sort().map(path => {
+    return Object.keys(RUNTIME_SOURCE_SHA256).filter(path => includeBigTurnTableDto
+        || path !== "AS3BigTurnTableInnerDto.ts").sort().map(path => {
         const code = readFileSync(join(root, ...path.split("/")), "utf8").replace(/\r\n?/g, "\n");
         if (sha256(code) !== RUNTIME_SOURCE_SHA256[path]) {
             throw new CliError(`runtime package source drifted: ${path}`, 6);
@@ -181,15 +183,15 @@ function runtimeSourceTemplates(): ReadonlyArray<{ path: string; code: string }>
     });
 }
 
-function runtimePackageJson(): string {
-    const entries = ["AS3Array", "AS3BigTurnTableInnerDto", "AS3ByteArray", "AS3Coerce", "AS3Dictionary",
+function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): string {
+    const entries = ["AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3Coerce", "AS3Dictionary",
         "AS3MethodClosure", "AS3OwnRecord", "AS3Timer", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
     entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"
         ? "./AS3Timer.js" : "./AS3Authority.generated.js"; });
     exports["./AS3Authority"] = "./AS3Authority.generated.js";
     exports["./ApplicationEntry"] = "./ApplicationEntry.generated.js";
-    return `${JSON.stringify({ name: "@bleach/as3-runtime", version: "0.1.0", private: true,
+    return `${JSON.stringify({ name, version: "0.1.0", private: true,
         type: "commonjs", exports, files: ["AS3Authority.generated.js", "AS3Timer.js", "ApplicationEntry.generated.js",
             "application/**/*.js"] }, null, 2)}\n`;
 }
@@ -238,7 +240,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
     const inputs = discoverInputs(options.sourceDirectory, options.limits);
     const parserWorkerSha256 = captureParserWorkerSha256();
     const transpileAuthority = options.operation !== "parse"
-        ? loadTranspileAuthority(options.sourceCensusPath, options.targetCapabilitiesPath)
+        ? loadTranspileAuthority(options.sourceCensusPath, options.targetCapabilitiesPath, options.profileLockPath)
         : null;
     let publication: Publication | undefined;
     try {
@@ -294,14 +296,28 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 continue;
             }
             try {
+                if (transpileAuthority!.profileSha256 !== null) {
+                    const local = transpileAuthority!.localTypes;
+                    const canonicalSourceSha256 = sha256(source.content.replace(/\r\n?/g, "\n"));
+                    const owners = local.entries.filter(entry =>
+                        entry.sourcePath === `${local.sourceRoots[entry.module]}${file.portablePath}`
+                        && entry.sourceContentSha256 === canonicalSourceSha256);
+                    if (owners.length !== 1) {
+                        throw new HardenedSemanticError("HARDENED_APPLICATION_SOURCE_IDENTITY",
+                            `source ${file.portablePath} does not match one exact application-profile source hash`);
+                    }
+                }
                 const normalized = JSON.parse(parsedFile.json) as NormalizedParserAst;
                 const semantic = adaptNormalizedParserAst(normalized, transpileAuthority!.authority,
                     source.content, value => sha256(value), transpileAuthority!.localTypes, file.portablePath,
-                    transpileAuthority!.localMembers, transpileAuthority!.runtimeTypeSources);
+                    transpileAuthority!.localMembers, transpileAuthority!.runtimeTypeSources,
+                    transpileAuthority!.sourceMembers || undefined);
                 const emitted = emitSemanticProgram(semantic, {
                     compiler: ts49,
                     expectedTypeScriptVersion: transpileAuthority!.typeScriptVersion,
                 });
+                const emittedCode = transpileAuthority!.runtimePackage === "@bleach/as3-runtime" ? emitted.code
+                    : emitted.code.replaceAll("@bleach/as3-runtime", transpileAuthority!.runtimePackage);
                 const requiredLocalModules = semantic.imports.filter(item => item.authorityKind === "local"
                     && !item.compileTimeNamespace).map(item => {
                     const resolved = posix.normalize(posix.join(posix.dirname(emitted.modulePath), item.targetModule));
@@ -321,7 +337,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                         message: null,
                         modulePath: emitted.modulePath,
                         normalizedFingerprintSha256: normalized.fingerprintSha256,
-                        typescriptSha256: sha256(emitted.code),
+                        typescriptSha256: sha256(emittedCode),
                     };
                     const prior = qualificationOwners.get(collisionKey);
                     if (prior) {
@@ -347,14 +363,14 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 }
                 outputKeys.add(collisionKey);
                 localRuntimePrograms.push(semantic);
-                const bytes = Buffer.byteLength(emitted.code, "utf8");
+                const bytes = Buffer.byteLength(emittedCode, "utf8");
                 totalOutputBytes += bytes;
                 if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
                     throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
                 }
-                writeArtifact(publication, packageModulePath, emitted.code);
+                writeArtifact(publication, packageModulePath, emittedCode);
                 const javascriptPath = packageModulePath.slice(0, -3) + ".js";
-                const javascript = runtimeCommonJs(emitted.code, packageModulePath);
+                const javascript = runtimeCommonJs(emittedCode, packageModulePath);
                 writeArtifact(publication, javascriptPath, javascript);
                 totalOutputBytes += Buffer.byteLength(javascript, "utf8");
                 const transpiled: TranspiledManifestFile = {
@@ -365,7 +381,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     normalizedAstSha256: sha256(parsedFile.json),
                     normalizedFingerprintSha256: normalized.fingerprintSha256,
                     typescriptBytes: bytes,
-                    typescriptSha256: sha256(emitted.code),
+                    typescriptSha256: sha256(emittedCode),
                 };
                 transpiledFiles.push(transpiled);
                 localOutputDependencies.set(transpiled, requiredLocalModules.map(path => `__as3_runtime/application/${path}`));
@@ -432,12 +448,14 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             } catch (error) {
                 throw new CliError(`transpile rejected runtime authority source set: ${errorMessage(error)}`, 4);
             }
-            const packageJson = runtimePackageJson();
+            const packageJson = runtimePackageJson(transpileAuthority!.runtimePackage,
+                transpileAuthority!.includeBigTurnTableDto);
             writeArtifact(publication, "__as3_runtime/package.json", packageJson);
             totalOutputBytes += Buffer.byteLength(packageJson, "utf8");
             runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value));
             const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
-            const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code);
+            const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code,
+                transpileAuthority!.includeBigTurnTableDto);
             totalOutputBytes += Buffer.byteLength(authorityJavaScript, "utf8");
             if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
                 throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
@@ -481,7 +499,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             astFormat: "legacy-as3-to-ts-node-v1",
             files: manifestFiles,
         } : options.operation === "transpile" ? {
-            schema: "bleach.as3.transpile-manifest.v1",
+            schema: transpileAuthority!.profileSha256 === null
+                ? "bleach.as3.transpile-manifest.v1" : "as3.application.transpile-manifest.v1",
             toolVersion: TOOL_VERSION,
             upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
             parserWorkerSha256,
@@ -497,10 +516,14 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             applicationEntryPath: `__as3_runtime/${applicationEntry!.path}`,
             applicationEntrySha256: applicationEntry!.sha256,
             nativeTimerAuthoritySha256: transpileAuthority!.nativeTimerAuthoritySha256,
+            applicationId: transpileAuthority!.applicationId,
+            profileLockSha256: transpileAuthority!.profileSha256,
+            runtimePackage: transpileAuthority!.runtimePackage,
             classification: "capability-authenticated-typescript-proposal",
             files: transpiledFiles,
         } : {
-            schema: "bleach.as3.qualification-report.v1",
+            schema: transpileAuthority!.profileSha256 === null
+                ? "bleach.as3.qualification-report.v1" : "as3.application.qualification-report.v1",
             toolVersion: TOOL_VERSION,
             upstreamParserRevision: "fa0b5151ab82758511ddd4b464f0c05b80e06da7",
             parserWorkerSha256,
@@ -511,6 +534,9 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             targetCapabilitySha256: transpileAuthority!.targetCapabilitiesSha256,
             capabilityMappingSha256: transpileAuthority!.capabilityMappingSha256,
             nativeTimerAuthoritySha256: transpileAuthority!.nativeTimerAuthoritySha256,
+            applicationId: transpileAuthority!.applicationId,
+            profileLockSha256: transpileAuthority!.profileSha256,
+            runtimePackage: transpileAuthority!.runtimePackage,
             generatedTypeScriptMaterialized: false,
             counts: qualificationCounts,
             files: qualificationFiles,

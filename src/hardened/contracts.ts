@@ -60,6 +60,8 @@ export interface CapabilityAuthorityInput {
     mappingSha256: string;
     nativeTimerAuthorityJson: string;
     nativeTimerAuthoritySha256: string;
+    runtimePackage?: string;
+    applicationProfile?: boolean;
 }
 
 export interface LoadedCapabilityAuthority {
@@ -99,7 +101,7 @@ export interface NativeTimerFunctionMapping {
     parameterTypes: string[];
     restType: string | null;
     returnType: string;
-    targetModule: "@bleach/as3-runtime/AS3Timer";
+    targetModule: string;
     targetExport: "clearInterval" | "clearTimeout" | "getTimer" | "setInterval" | "setTimeout";
     targetSignature: string;
 }
@@ -148,7 +150,7 @@ export interface IntrinsicConstantExpression extends SemanticIdentity {
 export interface IdentifierExpression extends SemanticIdentity {
     kind: "identifier";
     name: string;
-    bindingKind: "import" | "local" | "parameter";
+    bindingKind: "current-class" | "import" | "local" | "parameter";
     bindingSourceQualifiedName: string | null;
 }
 
@@ -270,6 +272,8 @@ export interface LoadedLocalTypeAuthority {
     dependencyGraphRawSha256: string;
     dependencyGraphSemanticSha256: string;
     sourceManifestSha256: string;
+    sourceRoots: Readonly<Record<LocalTypeModule, string>>;
+    targetRoots: Readonly<Record<LocalTypeModule, string>>;
     entriesByIdentity: { [identity: string]: LocalTypeMapping };
     entries: LocalTypeMapping[];
 }
@@ -358,7 +362,7 @@ export interface BinaryExpression extends SemanticIdentity {
 
 export interface UnaryExpression extends SemanticIdentity {
     kind: "unary";
-    operator: "+" | "-" | "!" | "~";
+    operator: "+" | "-" | "!" | "~" | "typeof";
     operand: SemanticExpression;
     resultType: SemanticType;
 }

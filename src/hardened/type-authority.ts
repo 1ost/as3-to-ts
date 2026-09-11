@@ -81,7 +81,8 @@ export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: 
     try { lock = JSON.parse(lockJson); document = JSON.parse(authorityJson); } catch {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_JSON", "runtime predicate authority JSON is malformed");
     }
-    if (!plainRecord(lock) || lock.schema !== "bleach-as3-runtime-type-authority-lock@1"
+    if (!plainRecord(lock) || (lock.schema !== "bleach-as3-runtime-type-authority-lock@1"
+        && lock.schema !== "as3-application-runtime-type-authority-lock@1")
         || typeof lock.predicateAuthorityCanonicalLfSha256 !== "string"
         || typeof lock.predicateAuthorityEntryCount !== "number" || !plainRecord(document)
         || document.schema !== "laya-flash-runtime-type-predicates@1" || document.hashMode !== "canonical-lf-utf8"
@@ -93,12 +94,18 @@ export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: 
         || new Set(capabilityClassQNames).size !== capabilityClassQNames.length) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_CAPABILITIES", "mapped runtime capability QName set is invalid");
     }
+    const applicationProfile = lock.schema === "as3-application-runtime-type-authority-lock@1";
     const rows = document.types as unknown[];
     const byName = new Map<string, PredicateAuthorityRow>();
     rows.forEach(value => {
-        if (!plainRecord(value) || Object.keys(value).join("\0") !== ["sourceQName", "targetCapabilityId", "targetModule",
-            "constructorExport", "constructorSignature", "constructSignatures", "predicateExport", "predicateSignature",
-            "heritageClosure", "moduleSha256"].join("\0")) {
+        const expectedKeys = ["sourceQName", "targetCapabilityId", "targetModule", "constructorExport",
+            "constructorSignature", "constructSignatures", "predicateExport", "predicateSignature",
+            "heritageClosure", "moduleSha256"];
+        const actualKeys = plainRecord(value) ? Object.keys(value) : [];
+        const exactShape = applicationProfile
+            ? actualKeys.slice().sort().join("\0") === expectedKeys.slice().sort().join("\0")
+            : actualKeys.join("\0") === expectedKeys.join("\0");
+        if (!plainRecord(value) || !exactShape) {
             throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PREDICATE", "mapped runtime predicate row has drifted shape");
         }
         const row = value as unknown as PredicateAuthorityRow;

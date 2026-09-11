@@ -8,11 +8,12 @@ import {
     readSync,
     realpathSync,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { loadCapabilityAuthority } from "../hardened/ledger";
 import { loadLocalTypeAuthority } from "../hardened/local-types";
 import { loadLocalMemberAuthority } from "../hardened/local-members";
 import { loadMappedRuntimeTypeAuthority, type RuntimeAuthorityClassSource } from "../hardened/type-authority";
+import { loadSourceMemberAuthority, type LoadedSourceMemberAuthority } from "../hardened/source-member-authority";
 import type { LoadedCapabilityAuthority, LoadedLocalMemberAuthority, LoadedLocalTypeAuthority } from "../hardened/contracts";
 import { CliError } from "./errors";
 
@@ -53,7 +54,12 @@ export interface TranspileAuthority {
     targetCapabilitiesSha256: string;
     capabilityMappingSha256: string;
     runtimeTypeSources: readonly RuntimeAuthorityClassSource[];
+    sourceMembers: LoadedSourceMemberAuthority | null;
     nativeTimerAuthoritySha256: string;
+    runtimePackage: string;
+    profileSha256: string | null;
+    applicationId: string;
+    includeBigTurnTableDto: boolean;
 }
 
 function sha256(bytes: string): string {
@@ -118,7 +124,7 @@ function exactLock(value: unknown): void {
     }
 }
 
-export function loadTranspileAuthority(
+function loadCompiledTranspileAuthority(
     sourceCensusPath: string,
     targetCapabilitiesPath: string,
 ): TranspileAuthority {
@@ -194,6 +200,7 @@ export function loadTranspileAuthority(
             mappingSha256: COMPILED_AUTHORITY_LOCK.capabilityMappingSha256,
             nativeTimerAuthorityJson,
             nativeTimerAuthoritySha256: COMPILED_NATIVE_TIMER_AUTHORITY_SHA256,
+            runtimePackage: "@bleach/as3-runtime",
         }, sha256);
         const localTypes = loadLocalTypeAuthority({
             json: localTypeJson,
@@ -228,11 +235,185 @@ export function loadTranspileAuthority(
             targetCapabilitiesSha256: COMPILED_AUTHORITY_LOCK.targetCapabilitiesSha256,
             capabilityMappingSha256: COMPILED_AUTHORITY_LOCK.capabilityMappingSha256,
             runtimeTypeSources,
+            sourceMembers: null,
             nativeTimerAuthoritySha256: COMPILED_NATIVE_TIMER_AUTHORITY_SHA256,
+            runtimePackage: "@bleach/as3-runtime",
+            profileSha256: null,
+            applicationId: "bleach",
+            includeBigTurnTableDto: true,
         });
     } catch (error) {
         if (error instanceof CliError) throw error;
         const message = error instanceof Error ? error.message : String(error);
         throw new CliError(`capability authority rejected: ${message}`, 6);
     }
+}
+
+function canonical(value: unknown): string {
+    if (value === null || typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
+    if (typeof value === "number" && Number.isFinite(value)) return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+    if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+        const record = value as Record<string, unknown>;
+        return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`;
+    }
+    throw new CliError("application profile contains a non-JSON value", 6);
+}
+
+function exactKeys(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const actual = Object.keys(value).sort();
+    const expected = [...keys].sort();
+    return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+interface ProfileFile { path: string; sha256: string }
+
+function profileFile(root: string, value: unknown, label: string): string {
+    if (!exactKeys(value, ["path", "sha256"]) || typeof value.path !== "string"
+        || value.path.length === 0 || isAbsolute(value.path) || value.path.includes("\\")
+        || value.path.split("/").some(segment => segment === "" || segment === "." || segment === "..")
+        || typeof value.sha256 !== "string" || !SHA256.test(value.sha256)) {
+        throw new CliError(`${label} profile file reference is invalid`, 6);
+    }
+    const bytes = readRegularUtf8(join(root, ...value.path.split("/")), label);
+    if (sha256(bytes) !== value.sha256) throw new CliError(`${label} bytes do not match the application profile`, 6);
+    return bytes;
+}
+
+function parseProfileDocument(bytes: string, label: string): Record<string, unknown> {
+    let value: unknown;
+    try { value = JSON.parse(bytes); } catch { throw new CliError(`${label} is not JSON`, 6); }
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new CliError(`${label} has the wrong schema`, 6);
+    return value as Record<string, unknown>;
+}
+
+function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapabilitiesPath: string,
+    profileLockPath: string): TranspileAuthority {
+    const profileJson = readRegularUtf8(profileLockPath, "application profile lock");
+    if (`${canonical(JSON.parse(profileJson))}\n` !== profileJson) {
+        throw new CliError("application profile lock must be canonical JSON with one trailing LF", 6);
+    }
+    const profile = parseProfileDocument(profileJson, "application profile lock");
+    if (!exactKeys(profile, ["applicationId", "counts", "files", "runtimePackage", "runtimePredicateQNames",
+        "schema", "sourceCensusSha256", "sourceRoots", "targetCapabilitiesSha256", "targetRoots", "typeScriptVersion"])
+        || profile.schema !== "as3-application-profile-lock@1"
+        || typeof profile.applicationId !== "string" || !/^[a-z][a-z0-9-]{1,63}$/.test(profile.applicationId)
+        || profile.typeScriptVersion !== "4.9.5"
+        || typeof profile.runtimePackage !== "string"
+        || !/^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(profile.runtimePackage)
+        || typeof profile.sourceCensusSha256 !== "string" || !SHA256.test(profile.sourceCensusSha256)
+        || typeof profile.targetCapabilitiesSha256 !== "string" || !SHA256.test(profile.targetCapabilitiesSha256)
+        || !exactKeys(profile.sourceRoots, ["application", "bootstrap"])
+        || !exactKeys(profile.targetRoots, ["application", "bootstrap"])
+        || !exactKeys(profile.files, ["capabilityMapping", "dependencyGraphRaw", "dependencyGraphSemantic",
+            "localMemberMap", "localTypeMap", "nativeTimerAuthority", "runtimeTypeAuthorityLock",
+            "runtimeTypePredicates", "sourceManifest", "sourceMemberAuthority"])
+        || !exactKeys(profile.counts, ["localMembersComplete", "localMembersHeld", "localTypes", "mappedMembers", "mappedTypes", "sourceMemberTypes"])
+        || !Array.isArray(profile.runtimePredicateQNames)
+        || profile.runtimePredicateQNames.some(value => typeof value !== "string")) {
+        throw new CliError("application profile lock has the wrong closed schema", 6);
+    }
+    const sourceRoots = profile.sourceRoots as Record<"application" | "bootstrap", string>;
+    const targetRoots = profile.targetRoots as Record<"application" | "bootstrap", string>;
+    const profileRoot = dirname(resolve(profileLockPath));
+    const files = profile.files as unknown as {
+        capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile;
+        runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
+        sourceMemberAuthority: ProfileFile;
+    };
+    const mappingJson = profileFile(profileRoot, files.capabilityMapping, "profile capability map");
+    const dependencyGraphRawJson = profileFile(profileRoot, files.dependencyGraphRaw, "profile raw dependency graph");
+    const dependencyGraphSemanticJson = profileFile(profileRoot, files.dependencyGraphSemantic,
+        "profile semantic dependency graph");
+    const localTypeJson = profileFile(profileRoot, files.localTypeMap, "profile local type map");
+    const localMemberJson = profileFile(profileRoot, files.localMemberMap, "profile local member map");
+    const nativeTimerAuthorityJson = profileFile(profileRoot, files.nativeTimerAuthority, "profile native timer authority");
+    const runtimeTypeLockJson = profileFile(profileRoot, files.runtimeTypeAuthorityLock, "profile runtime type lock");
+    const runtimeTypePredicatesJson = profileFile(profileRoot, files.runtimeTypePredicates, "profile runtime type predicates");
+    const sourceManifestJson = profileFile(profileRoot, files.sourceManifest, "profile source manifest");
+    const sourceMemberAuthorityJson = profileFile(profileRoot, files.sourceMemberAuthority,
+        "profile source member authority");
+    const sourceCensusJson = readRegularUtf8(sourceCensusPath, "source capability census");
+    const targetCapabilitiesJson = readRegularUtf8(targetCapabilitiesPath, "target capability ledger");
+    if (sha256(sourceCensusJson) !== profile.sourceCensusSha256
+        || sha256(targetCapabilitiesJson) !== profile.targetCapabilitiesSha256) {
+        throw new CliError("application input authority bytes do not match the profile lock", 6);
+    }
+    const localType = parseProfileDocument(localTypeJson, "profile local type map");
+    const localMember = parseProfileDocument(localMemberJson, "profile local member map");
+    const runtimeLock = parseProfileDocument(runtimeTypeLockJson, "profile runtime type lock");
+    const counts = profile.counts as unknown as {
+        localMembersComplete: number; localMembersHeld: number; localTypes: number;
+        mappedMembers: number; mappedTypes: number; sourceMemberTypes: number;
+    };
+    if (!Object.values(counts).every(value => Number.isInteger(value) && value >= 0)
+        || localType.entryCount !== counts.localTypes || localMember.entryCount !== counts.localTypes
+        || localMember.completeCount !== counts.localMembersComplete || localMember.heldCount !== counts.localMembersHeld
+        || localType.dependencyGraphRawSha256 !== sha256(dependencyGraphRawJson)
+        || localType.dependencyGraphSemanticSha256 !== sha256(dependencyGraphSemanticJson)
+        || localType.sourceManifestSha256 !== sha256(sourceManifestJson)
+        || runtimeLock.layaRevision === undefined
+        || JSON.stringify(runtimeLock.predicateAuthorityQNames) !== JSON.stringify(profile.runtimePredicateQNames)) {
+        throw new CliError("application profile counts or runtime identity set do not match its pinned files", 6);
+    }
+    try {
+        const authority = loadCapabilityAuthority({
+            sourceCensusJson, sourceCensusSha256: profile.sourceCensusSha256 as string,
+            targetCapabilitiesJson, targetCapabilitiesSha256: profile.targetCapabilitiesSha256 as string,
+            mappingJson, mappingSha256: files.capabilityMapping.sha256,
+            nativeTimerAuthorityJson, nativeTimerAuthoritySha256: files.nativeTimerAuthority.sha256,
+            runtimePackage: profile.runtimePackage as string, applicationProfile: true,
+        }, sha256);
+        const localTypes = loadLocalTypeAuthority({
+            json: localTypeJson, sha256: files.localTypeMap.sha256,
+            expectedEntryCount: counts.localTypes,
+            expectedDependencyGraphRawSha256: String(localType.dependencyGraphRawSha256),
+            expectedDependencyGraphSemanticSha256: String(localType.dependencyGraphSemanticSha256),
+            expectedSourceManifestSha256: String(localType.sourceManifestSha256),
+            expectedSchema: "as3-application-local-type-map@1", expectedSourceRoots: sourceRoots,
+            expectedTargetRoots: targetRoots,
+        }, sha256);
+        const localMembers = loadLocalMemberAuthority({
+            json: localMemberJson, sha256: files.localMemberMap.sha256,
+            expectedEntryCount: counts.localTypes, expectedCompleteCount: counts.localMembersComplete,
+            expectedHeldCount: counts.localMembersHeld,
+            expectedLocalTypeMapSha256: files.localTypeMap.sha256,
+            expectedDeclarationWorkerSha256: String(localMember.declarationWorkerSha256),
+            expectedSourceCensusSha256: profile.sourceCensusSha256 as string,
+            expectedSchema: "as3-application-local-member-map@1",
+        }, sha256, localTypes);
+        if (Object.keys(authority.typeMappingsBySource).length !== counts.mappedTypes
+            || Object.keys(authority.memberMappingsByKey).length !== counts.mappedMembers) {
+            throw new CliError("application capability counts differ from the profile lock", 6);
+        }
+        const runtimeTypeSources = loadMappedRuntimeTypeAuthority(runtimeTypeLockJson, runtimeTypePredicatesJson,
+            profile.runtimePredicateQNames as string[], sha256);
+        const sourceMembers = loadSourceMemberAuthority(sourceMemberAuthorityJson,
+            files.sourceMemberAuthority.sha256, sha256);
+        if (Object.keys(sourceMembers.entriesByQName).length !== counts.sourceMemberTypes) {
+            throw new CliError("application source member count differs from the profile lock", 6);
+        }
+        return Object.freeze({
+            authority, localTypes, localMembers, typeScriptVersion: profile.typeScriptVersion as string,
+            sourceCensusSha256: profile.sourceCensusSha256 as string,
+            targetCapabilitiesSha256: profile.targetCapabilitiesSha256 as string,
+            capabilityMappingSha256: files.capabilityMapping.sha256, runtimeTypeSources, sourceMembers,
+            nativeTimerAuthoritySha256: files.nativeTimerAuthority.sha256,
+            runtimePackage: profile.runtimePackage as string, profileSha256: sha256(profileJson),
+            applicationId: profile.applicationId as string, includeBigTurnTableDto: false,
+        });
+    } catch (error) {
+        if (error instanceof CliError) throw error;
+        const message = error instanceof Error ? error.message : String(error);
+        throw new CliError(`application capability authority rejected: ${message}`, 6);
+    }
+}
+
+export function loadTranspileAuthority(sourceCensusPath: string, targetCapabilitiesPath: string,
+    profileLockPath?: string): TranspileAuthority {
+    return profileLockPath === undefined
+        ? loadCompiledTranspileAuthority(sourceCensusPath, targetCapabilitiesPath)
+        : loadApplicationTranspileAuthority(sourceCensusPath, targetCapabilitiesPath, profileLockPath);
 }

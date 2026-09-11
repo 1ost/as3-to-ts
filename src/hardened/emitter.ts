@@ -327,6 +327,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "unary") {
+        if (expression.operator === "typeof") {
+            return ts.factory.createTypeOfExpression(expressionNode(expression.operand, ts));
+        }
         const tokens: { [operator: string]: any } = {
             "+": ts.SyntaxKind.PlusToken,
             "-": ts.SyntaxKind.MinusToken,

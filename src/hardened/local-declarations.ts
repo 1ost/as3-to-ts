@@ -144,7 +144,7 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
     if (root.kind !== "COMPILATION_UNIT") fail("HARDENED_LOCAL_DECLARATION_ROOT", "root must be a compilation unit", root);
     const packageNode = one(root, "PACKAGE")!;
     const packageNameNode = one(packageNode, "NAME", true);
-    const packageName = packageNameNode === null || packageNameNode.text === null ? ""
+    const packageName = packageNameNode === null || packageNameNode.text === null || packageNameNode.text === "" ? ""
         : requiredText(packageNameNode, "package name");
     if (packageName !== "" && !QNAME.test(packageName)) {
         fail("HARDENED_LOCAL_DECLARATION_PACKAGE", "package name is invalid", packageNameNode);

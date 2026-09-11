@@ -30,6 +30,7 @@ export interface CapabilityRunOptions extends BaseRunOptions {
     operation: "transpile" | "qualify";
     sourceCensusPath: string;
     targetCapabilitiesPath: string;
+    profileLockPath?: string;
 }
 
 export type RunOptions = ParseRunOptions | CapabilityRunOptions;
@@ -81,7 +82,7 @@ const numericOptions: Readonly<Record<string, keyof Limits>> = {
     "--max-old-space-mb": "maxOldSpaceMb",
 };
 
-const authorityOptions = new Set(["--source-census", "--target-capabilities"]);
+const authorityOptions = new Set(["--source-census", "--target-capabilities", "--profile-lock"]);
 
 function parsePositiveInteger(option: string, value: string, ceiling: number): number {
     if (!/^[1-9][0-9]*$/.test(value)) {
@@ -170,6 +171,7 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
     }
     const sourceCensusPath = authorities["--source-census"];
     const targetCapabilitiesPath = authorities["--target-capabilities"];
+    const profileLockPath = authorities["--profile-lock"];
     if (sourceCensusPath === undefined || targetCapabilitiesPath === undefined) {
         throw new CliError("transpile requires --source-census and --target-capabilities", 2);
     }
@@ -182,14 +184,15 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
             limits,
             sourceCensusPath,
             targetCapabilitiesPath,
+            ...(profileLockPath === undefined ? {} : { profileLockPath }),
         },
     };
 }
 
 export const HELP = `Usage:
   as3-frontend parse <source-directory> <output-directory> [options]
-  as3-frontend transpile <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [options]
-  as3-frontend qualify <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [options]
+  as3-frontend transpile <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [--profile-lock <file>] [options]
+  as3-frontend qualify <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [--profile-lock <file>] [options]
 
 Parse emits deterministic legacy-AST JSON artifacts. Transpile emits only the
 closed, capability-authenticated TypeScript subset. Qualify emits a report of
@@ -209,8 +212,9 @@ Options:
   --max-ast-bytes <n>           Per-file serialized AST cap (default 16777216)
   --max-total-output-bytes <n>  Total serialized AST cap (default 268435456)
   --max-old-space-mb <n>        Parser worker old-generation cap (default 64)
-  --source-census <file>        Exact Bleach AS3 capability census (transpile)
+  --source-census <file>        Exact application AS3 capability census (transpile)
   --target-capabilities <file>  Exact Laya authored capability ledger (transpile)
+  --profile-lock <file>         Optional exact application profile; omitted preserves Bleach defaults
   --help                        Show this help
   --version                     Show the local tool version
 `;

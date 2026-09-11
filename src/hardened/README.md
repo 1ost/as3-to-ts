@@ -42,3 +42,7 @@ text templates.
 
 The separately authenticated native timer lowering and its maintained-source
 scope are documented in `NATIVE_TIMER_AUTHORITY.md`.
+
+Independent fixture profiles and native AIR/Laya comparison are documented in
+[`tools/FIXTURE_PROFILES.md`](../../tools/FIXTURE_PROFILES.md). They use an explicit
+application authority context and preserve the default Bleach lock.

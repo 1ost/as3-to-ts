@@ -58,7 +58,9 @@ const workerSha256 = sha256(worker.bytes);
 const typeMapFile = readCanonicalFile(typeMapArgument, MAX_MAP_BYTES, "local type map");
 const typeMapText = typeMapFile.text.replace(/\r\n?/g, "\n");
 const typeMap = JSON.parse(typeMapText);
-if (!typeMap || typeMap.schema !== "bleach-local-as3-type-map@2" || !Array.isArray(typeMap.entries)
+const applicationProfile = typeMap && typeMap.schema === "as3-application-local-type-map@1";
+const workerTimeoutMs = applicationProfile ? 60000 : WORKER_TIMEOUT_MS;
+if (!typeMap || (!applicationProfile && typeMap.schema !== "bleach-local-as3-type-map@2") || !Array.isArray(typeMap.entries)
     || typeMap.entryCount !== typeMap.entries.length || `${stringify(typeMap)}\n` !== typeMapText) {
     throw new Error("local type map must be the exact canonical v2 authority");
 }
@@ -89,7 +91,8 @@ for (const [index, api] of sourceCensus.as3SourceCapabilities.apis.entries()) {
     // Wildcard-resolution is the census-owned lexical authority. Package
     // functions are runtime values, never declaration types, even though the
     // census tracks their wildcard imports for call-site analysis.
-    if (api.roles.includes("wildcard-resolution") && !api.roles.includes("package-function")) {
+    if ((api.roles.includes("wildcard-resolution") || (applicationProfile && api.roles.includes("import")))
+        && !api.roles.includes("package-function")) {
         flashDefinitions.add(api.qname);
     }
 }
@@ -122,8 +125,13 @@ function runWorker(entry, content) {
         child.stderr.on("data", chunk => { stderrBytes += chunk.length; });
         const timer = setTimeout(() => {
             child.kill();
-            reject(new Error(`declaration worker timed out: ${entry.sourcePath}`));
-        }, WORKER_TIMEOUT_MS);
+            resolve({
+                ok: false,
+                error: `FRONTEND_RESOURCE_LIMIT: declaration worker timed out for ${entry.sourcePath}`,
+                resourceLimit: true,
+                workerSha256,
+            });
+        }, workerTimeoutMs);
         child.once("error", reject);
         child.once("message", message => {
             clearTimeout(timer);
@@ -258,7 +266,7 @@ async function main() {
     }
     entries.sort((left, right) => compareUtf8(`${left.module}\u0000${left.qname}`, `${right.module}\u0000${right.qname}`));
     const output = {
-        schema: "bleach-local-as3-member-map@2",
+        schema: applicationProfile ? "as3-application-local-member-map@1" : "bleach-local-as3-member-map@2",
         sourceCensusSha256,
         localTypeMapSha256,
         declarationWorkerSha256: workerSha256,

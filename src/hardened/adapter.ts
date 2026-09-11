@@ -36,6 +36,7 @@ import { assertLoadedCapabilityAuthority, Sha256Function, targetModuleSpecifier 
 import { assertLoadedLocalTypeAuthority } from "./local-types";
 import { assertLoadedLocalMemberAuthority } from "./local-members";
 import { assertAuthenticatedRuntimeAuthoritySources, type RuntimeAuthoritySource } from "./type-authority";
+import { assertLoadedSourceMemberAuthority, type LoadedSourceMemberAuthority } from "./source-member-authority";
 
 export interface TreeNode extends NormalizedParserNode {
     children: TreeNode[];
@@ -83,6 +84,7 @@ interface AdapterContext {
     localMemberAuthority: LoadedLocalMemberAuthority | null;
     resolveCurrentLocal: (() => CurrentLocalType) | null;
     runtimeReferenceParentsByQName: ReadonlyMap<string, readonly string[]>;
+    sourceMemberAuthority: LoadedSourceMemberAuthority | null;
     currentInterfaceQNames: readonly string[];
     fields: { [name: string]: SemanticField };
     methods: { [name: string]: MethodHeader };
@@ -473,8 +475,9 @@ function intrinsicSourceForType(type: SemanticType, context: AdapterContext): st
     return imported?.authorityKind === "intrinsic" ? imported.sourceQualifiedName : null;
 }
 
-function relativeLocalModule(currentModulePath: string, target: LocalTypeMapping): string {
-    const prefix = target.module === "application" ? "game-client/layaair/src/application/" : "game-client/layaair/src/bootstrap/";
+function relativeLocalModule(currentModulePath: string, target: LocalTypeMapping,
+    authority: LoadedLocalTypeAuthority): string {
+    const prefix = authority.targetRoots[target.module];
     const targetModule = target.targetPath.slice(prefix.length, -3);
     const currentSegments = currentModulePath.split("/");
     currentSegments.pop();
@@ -514,7 +517,8 @@ function assertPackageRuntimeValue(authority: LoadedLocalMemberAuthority, module
 }
 
 function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLocalType,
-    node: TreeNode, localMemberAuthority: LoadedLocalMemberAuthority | null = null): SemanticImport {
+    node: TreeNode, localTypeAuthority: LoadedLocalTypeAuthority,
+    localMemberAuthority: LoadedLocalMemberAuthority | null = null): SemanticImport {
     const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
     let localValueType: string | null = null;
     let compileTimeNamespace = false;
@@ -548,7 +552,7 @@ function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLoca
         runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
         localValueType, compileTimeNamespace,
         sourceQualifiedName: target.qname, sourceLocalName: localName,
-        targetModule: relativeLocalModule(currentLocal.outputModulePath, target), targetExport: localName,
+        targetModule: relativeLocalModule(currentLocal.outputModulePath, target, localTypeAuthority), targetExport: localName,
     });
 }
 
@@ -615,7 +619,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
     };
     const localImport = (target: LocalTypeMapping, currentLocal: CurrentLocalType,
         node: TreeNode): SemanticImport => {
-        return localSemanticImport(target, currentLocal, node, localMemberAuthority);
+        return localSemanticImport(target, currentLocal, node, localAuthority!, localMemberAuthority);
     };
     content.children.filter((child) => child.kind === "IMPORT").forEach((node) => {
         const qname = requiredText(node, "import");
@@ -1193,6 +1197,58 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
         const localType = moduleName === null || context.localTypeAuthority === null ? undefined
             : context.localTypeAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
         if (!localType) {
+            if (context.sourceMemberAuthority !== null) {
+                assertLoadedSourceMemberAuthority(context.sourceMemberAuthority);
+                const sourceEntry = context.sourceMemberAuthority.entriesByQName[qname];
+                if (!sourceEntry) {
+                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                        `source member authority is missing inherited base ${qname}`, node);
+                }
+                const mappedMembers = Object.keys(context.memberMappingsByKey)
+                    .map(key => context.memberMappingsByKey[key])
+                    .filter((mapping): mapping is CapabilityMapping => mapping !== undefined
+                        && mapping.sourceQName === qname && mapping.sourceMember !== null
+                        && mapping.sourceMember.name === name);
+                if (!sourceEntry.ownInstanceMemberNames.includes(name)) {
+                    if (mappedMembers.length !== 0) {
+                        fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                            `mapped member authority disagrees with the source census for ${qname}.${name}`, node);
+                    }
+                    qname = sourceEntry.baseQName;
+                    continue;
+                }
+                const inherited = mappedMembers.filter(mapping => mapping.sourceRoles.length === 1
+                    && mapping.sourceRoles[0] === "instance-member" && mapping.targetMember !== null
+                    && mapping.targetMember.scope === "instance");
+                if (inherited.length === 0 || inherited.length !== mappedMembers.length) {
+                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                        `source member ${qname}.${name} lacks complete mapped member authority`, node);
+                }
+                const visibilities = new Set(inherited.map(mapping => {
+                    const match = /^(public|protected|private|internal)\s+/.exec(mapping.sourceMember!.signature.trim());
+                    if (match) return match[1]!;
+                    if (/^(?:native\s+)?(?:function|var|const)\s+/.test(mapping.sourceMember!.signature.trim())) {
+                        return "internal";
+                    }
+                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                        `mapped member visibility for ${qname}.${name} is unauthenticated`, node);
+                }));
+                if (visibilities.size > 1) {
+                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_AMBIGUOUS",
+                        `mapped member visibility for ${qname}.${name} is ambiguous`, node);
+                }
+                const visibility = visibilities.values().next().value as string | undefined;
+                if (visibility === "internal") {
+                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_VISIBILITY",
+                        `mapped internal member ${qname}.${name} is not provably visible`, node);
+                }
+                if (visibility === "public" || visibility === "protected") {
+                    fail("HARDENED_NATIVE_TIMER_INHERITED_SHADOW",
+                        `native timer import is shadowed by inherited mapped member ${qname}.${name}`, node);
+                }
+                qname = sourceEntry.baseQName;
+                continue;
+            }
             const parents = context.runtimeReferenceParentsByQName.get(qname);
             const mappedType = context.mappingsBySource[qname];
             if (parents === undefined || !mappedType || mappedType.sourceMember !== null
@@ -1649,6 +1705,21 @@ function implicitThisMember(node: TreeNode, name: string, capabilitySource: stri
     });
 }
 
+function currentClassIdentifier(node: TreeNode, context: AdapterContext): SemanticExpression {
+    return Object.assign(identity(node), {
+        kind: "identifier" as "identifier", name: context.className,
+        bindingKind: "current-class" as "current-class",
+        bindingSourceQualifiedName: context.classQualifiedName,
+    });
+}
+
+function currentClassMember(node: TreeNode, context: AdapterContext, name: string): SemanticExpression {
+    return Object.assign(identity(node), {
+        kind: "member" as "member", target: currentClassIdentifier(node, context),
+        targetNullable: false, name, capabilitySource: context.classQualifiedName,
+    });
+}
+
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false);
@@ -1687,6 +1758,16 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
                 "Big Turntable DTO member is outside the authenticated projection", node);
         }
         if (expression.target.kind === "identifier") {
+            if (expression.target.bindingKind === "current-class"
+                && expression.target.bindingSourceQualifiedName === context.classQualifiedName
+                && expression.capabilitySource === context.classQualifiedName) {
+                const field = context.fields[expression.name];
+                const getter = context.accessors[expression.name]?.getter;
+                if (field && field.modifiers.indexOf("static") >= 0) return field.type;
+                if (getter && getter.modifiers.indexOf("static") >= 0) return getter.returnType!;
+                fail("HARDENED_CURRENT_STATIC_READ",
+                    "current-class static read lacks one exact field or getter declaration", node);
+            }
             const imported = context.importsByLocal[expression.target.name];
             if (imported?.authorityKind === "flash" && imported.localValueType === null) {
                 const mapping = memberMapping(context, imported.sourceQualifiedName, "read", expression.name, node);
@@ -1761,6 +1842,9 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "lambda") {
         return semanticType(node, "Function", "Function", [], false);
     }
+    if (expression.kind === "array" && context.sourceMemberAuthority !== null) {
+        return semanticType(node, "Array", "Array", [], false);
+    }
     if (expression.kind === "object") return semanticType(node, "Object", "unknown", [], false);
     if (expression.kind === "ownRecord") {
         return semanticType(node, "Object", "AS3OwnRecord", [expression.valueType], false);
@@ -1831,6 +1915,19 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
     }
     if (expression.kind === "member") {
         if (expression.target.kind === "identifier") {
+            if (expression.target.bindingKind === "current-class"
+                && expression.target.bindingSourceQualifiedName === context.classQualifiedName
+                && expression.capabilitySource === context.classQualifiedName) {
+                const field = context.fields[expression.name];
+                const setter = context.accessors[expression.name]?.setter;
+                if (field && field.modifiers.indexOf("static") >= 0) {
+                    if (field.readonly) fail("HARDENED_ASSIGNMENT_READONLY", "AS3 const fields are not writable", node);
+                    return field.type;
+                }
+                if (setter && setter.modifiers.indexOf("static") >= 0) return setter.parameters[0]!.type;
+                fail("HARDENED_CURRENT_STATIC_WRITE",
+                    "current-class static write lacks one exact writable field or setter declaration", node);
+            }
             const imported = context.importsByLocal[expression.target.name];
             if (imported?.authorityKind === "local" && imported.localValueType === null) {
                 const members = localStaticNamedMembers(context, imported.sourceQualifiedName,
@@ -1891,6 +1988,18 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
         return expression.resultType;
     }
     fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable parameter or instance field", node);
+}
+
+function adaptCondition(expression: SemanticExpression, context: AdapterContext, node: TreeNode,
+    code: string, message: string): SemanticExpression {
+    const sourceType = assignmentType(expression, context, node);
+    if (sourceType.sourceName === "Boolean" && sourceType.emittedName === "boolean") return expression;
+    if (context.sourceMemberAuthority === null || sourceType.sourceName === "void") fail(code, message, node);
+    return Object.assign(identity(node), {
+        kind: "coercion" as "coercion",
+        targetType: semanticType(node, "Boolean", "boolean", [], false),
+        argument: expression,
+    });
 }
 
 function assertAssignmentCompatible(target: SemanticType, value: SemanticType, node: TreeNode): void {
@@ -2209,6 +2318,39 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             left, right, resultType,
         });
     }
+    if (node.kind === "TYPEOF") {
+        if (node.children.length !== 1) {
+            fail("HARDENED_TYPEOF_SHAPE", "typeof expression requires exactly one operand", node);
+        }
+        if (context.sourceMemberAuthority === null) {
+            fail("HARDENED_TYPEOF_PROFILE", "typeof remains outside the legacy admitted subset", node);
+        }
+        const rawOperand = node.children[0]!;
+        const typeofExpression = (operandNode: TreeNode): SemanticExpression => {
+            const operand = parseExpression(operandNode, context, true);
+            assignmentType(operand, context, operandNode);
+            return Object.assign(identity(node), {
+                kind: "unary" as "unary", operator: "typeof" as "typeof", operand,
+                resultType: semanticType(node, "String", "string", [], false),
+            });
+        };
+        if (rawOperand.kind === "EQUALITY" && rawOperand.children.length === 3
+            && rawOperand.children[1]!.kind === "OP"
+            && ["===", "!=="].includes(requiredText(rawOperand.children[1]!, "typeof comparison operator"))) {
+            const left = typeofExpression(rawOperand.children[0]!);
+            const right = parseExpression(rawOperand.children[2]!, context, true);
+            const rightType = assignmentType(right, context, rawOperand.children[2]!);
+            if (rightType.sourceName !== "String" || rightType.emittedName !== "string") {
+                fail("HARDENED_TYPEOF_COMPARISON", "typeof comparison requires an exact String value", rawOperand);
+            }
+            return Object.assign(identity(node), {
+                kind: "binary" as "binary",
+                operator: requiredText(rawOperand.children[1]!, "typeof comparison operator") as "===" | "!==",
+                left, right, resultType: semanticType(node, "Boolean", "boolean", [], false),
+            });
+        }
+        return typeofExpression(rawOperand);
+    }
     if (node.kind === "PLUS" || node.kind === "MINUS" || node.kind === "NOT" || node.kind === "B_NOT") {
         if (node.children.length !== 1) {
             fail("HARDENED_UNARY_SHAPE", "unary expression requires exactly one operand", node);
@@ -2245,11 +2387,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children.length !== 3) {
             fail("HARDENED_CONDITIONAL_SHAPE", "conditional expression requires condition, true, and false branches", node);
         }
-        const condition = parseExpression(node.children[0]!, context, true);
-        const conditionType = assignmentType(condition, context, node.children[0]!);
-        if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
-            fail("HARDENED_CONDITIONAL_BOOLEAN", "conditional expression requires an exact Boolean condition", node.children[0]!);
-        }
+        const condition = adaptCondition(parseExpression(node.children[0]!, context, true), context,
+            node.children[0]!, "HARDENED_CONDITIONAL_BOOLEAN",
+            "conditional expression requires an exact Boolean expression or application-profile AS3 coercion");
         const whenTrue = parseExpression(node.children[1]!, context, true);
         const whenFalse = parseExpression(node.children[2]!, context, true);
         const trueType = assignmentType(whenTrue, context, node.children[1]!);
@@ -2374,11 +2514,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
                 bindingKind: "parameter" as "parameter", bindingSourceQualifiedName: null });
         }
+        if (name === context.className) return currentClassIdentifier(node, context);
         if (imported) {
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
                 bindingKind: "import" as "import", bindingSourceQualifiedName: imported.sourceQualifiedName });
         }
         if (context.fields[name]) {
+            if (context.fields[name]!.modifiers.indexOf("static") >= 0) {
+                return currentClassMember(node, context, name);
+            }
             if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             if (isTreeNodeContext(context) && name === "FData" && context.ownRecordTargetDepth === 0) {
                 fail("HARDENED_OWN_RECORD_ESCAPE", "TTreeNode.FData is confined to authenticated own-record indexing", node);
@@ -2386,30 +2530,41 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return implicitThisMember(node, name);
         }
         if (context.accessors[name]) {
-            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             const accessor = context.accessors[name]!;
             if (valuePosition && !accessor.getter) {
                 fail("HARDENED_ACCESSOR_WRITE_ONLY", "write-only accessor cannot be read", node);
             }
-            if ((accessor.getter?.modifiers.indexOf("static") ?? -1) >= 0
-                || (accessor.setter?.modifiers.indexOf("static") ?? -1) >= 0) {
-                fail("HARDENED_ACCESSOR_STATIC", "static accessors require class-qualified lowering", node);
+            const staticGetter = (accessor.getter?.modifiers.indexOf("static") ?? -1) >= 0;
+            const staticSetter = (accessor.setter?.modifiers.indexOf("static") ?? -1) >= 0;
+            if (staticGetter || staticSetter) {
+                if (staticGetter !== staticSetter && accessor.getter && accessor.setter) {
+                    fail("HARDENED_ACCESSOR_STATIC", "accessor pair has inconsistent static ownership", node);
+                }
+                return currentClassMember(node, context, name);
             }
+            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             return implicitThisMember(node, name);
         }
         if (context.methods[name]) {
-            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             const method = context.methods[name]!;
+            if (method.modifiers.indexOf("static") >= 0) {
+                if (valuePosition) {
+                    fail("HARDENED_LOCAL_STATIC_METHOD_CLOSURE",
+                        "current-class static method closure identity remains held", node);
+                }
+                return currentClassMember(node, context, name);
+            }
+            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             if (valuePosition) {
                 if (!allowMethodClosure) {
                     fail("HARDENED_METHOD_CLOSURE_INITIALIZER", "method closures in field initializers are not admitted before per-instance binding", node);
                 }
-                if (method.constructor || method.modifiers.indexOf("static") >= 0) {
+                if (method.constructor) {
                     fail("HARDENED_METHOD_CLOSURE_SCOPE", "only non-static instance methods have admitted AS3 closure identity", node);
                 }
                 return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
             }
-            if (method.constructor || method.modifiers.indexOf("static") >= 0) {
+            if (method.constructor) {
                 fail("HARDENED_METHOD_INSTANCE_SCOPE", "constructor or static method cannot be resolved through implicit this", node);
             }
             return implicitThisMember(node, name);
@@ -2715,6 +2870,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
                 capabilitySource = imported.sourceQualifiedName;
             }
+        } else if (target.kind === "identifier" && target.bindingKind === "current-class"
+            && target.bindingSourceQualifiedName === context.classQualifiedName) {
+            const field = context.fields[name];
+            const getter = context.accessors[name]?.getter;
+            const setter = context.accessors[name]?.setter;
+            const method = context.methods[name];
+            const declared = [field, getter, setter, method].filter(item => item !== undefined);
+            if (declared.length === 0 || declared.some(item => item!.modifiers.indexOf("static") < 0)) {
+                fail("HARDENED_CURRENT_STATIC_MEMBER",
+                    "current-class member lacks an exact static declaration", node);
+            }
+            if (valuePosition && method) {
+                fail("HARDENED_LOCAL_STATIC_METHOD_CLOSURE",
+                    "current-class static method closure identity remains held", node);
+            }
+            capabilitySource = context.classQualifiedName;
         } else {
             const targetType = assignmentType(target, context, node.children[0]!);
             targetNullable = targetType.nullable;
@@ -2935,6 +3106,26 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 capabilityMember = mapping.sourceMember!.name;
             }
         } else if (callee.kind === "member" && callee.target.kind === "identifier"
+            && callee.target.bindingKind === "current-class"
+            && callee.target.bindingSourceQualifiedName === context.classQualifiedName) {
+            if (callee.capabilitySource !== context.classQualifiedName) {
+                fail("HARDENED_CURRENT_STATIC_CALL", "static call authority does not match the current class", node);
+            }
+            const method = context.methods[callee.name];
+            if (!method || method.modifiers.indexOf("static") < 0) {
+                fail("HARDENED_CURRENT_STATIC_CALL", "current-class static call lacks one exact method declaration", node);
+            }
+            if (!admittedArity(method.parameters, args.length)) {
+                fail("HARDENED_LOCAL_CALL_ARITY", "current-class static call does not match its declared arity", node);
+            }
+            const restIndex = method.parameters.findIndex(parameter => parameter.rest);
+            args.slice(0, restIndex < 0 ? method.parameters.length : restIndex)
+                .forEach((argument, index) => {
+                    args[index] = adaptAssignmentValue(method.parameters[index]!.type, argument, context,
+                        node.children[1]!.children[index]!);
+                });
+            resultType = method.returnType;
+        } else if (callee.kind === "member" && callee.target.kind === "identifier"
             && context.importsByLocal[callee.target.name]?.authorityKind === "local"
             && context.importsByLocal[callee.target.name]?.localValueType === null) {
             const imported = context.importsByLocal[callee.target.name]!;
@@ -3118,11 +3309,9 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             if (conditionOwner.children.length !== 1) {
                 fail("HARDENED_IF_CONDITION", "if statement requires exactly one condition expression", conditionOwner);
             }
-            const condition = parseExpression(conditionOwner.children[0]!, context, true);
-            const conditionType = assignmentType(condition, context, conditionOwner.children[0]!);
-            if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
-                fail("HARDENED_IF_BOOLEAN", "if condition requires an exact Boolean expression", conditionOwner);
-            }
+            const condition = adaptCondition(parseExpression(conditionOwner.children[0]!, context, true), context,
+                conditionOwner.children[0]!, "HARDENED_IF_BOOLEAN",
+                "if condition requires an exact Boolean expression or application-profile AS3 coercion");
             const parseBranch = (branch: TreeNode): SemanticStatement[] => branch.kind === "BLOCK"
                 ? parseBlock(branch, context, constructor, derived, expectedReturn, false)
                 : [parseStatementNode(branch, context, constructor, derived, expectedReturn, false)];
@@ -3140,11 +3329,9 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             if (conditionOwner.children.length !== 1) {
                 fail("HARDENED_WHILE_CONDITION", "while statement requires exactly one condition expression", conditionOwner);
             }
-            const condition = parseExpression(conditionOwner.children[0]!, context, true);
-            const conditionType = assignmentType(condition, context, conditionOwner.children[0]!);
-            if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
-                fail("HARDENED_WHILE_BOOLEAN", "while condition requires an exact Boolean expression", conditionOwner);
-            }
+            const condition = adaptCondition(parseExpression(conditionOwner.children[0]!, context, true), context,
+                conditionOwner.children[0]!, "HARDENED_WHILE_BOOLEAN",
+                "while condition requires an exact Boolean expression or application-profile AS3 coercion");
             const branch = node.children[1]!;
             context.loopDepth += 1;
             context.breakableDepth += 1;
@@ -3168,11 +3355,9 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             if (conditionOwner.children.length !== 1) {
                 fail("HARDENED_DO_CONDITION", "do-while statement requires exactly one condition expression", conditionOwner);
             }
-            const condition = parseExpression(conditionOwner.children[0]!, context, true);
-            const conditionType = assignmentType(condition, context, conditionOwner.children[0]!);
-            if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
-                fail("HARDENED_DO_BOOLEAN", "do-while condition requires an exact Boolean expression", conditionOwner);
-            }
+            const condition = adaptCondition(parseExpression(conditionOwner.children[0]!, context, true), context,
+                conditionOwner.children[0]!, "HARDENED_DO_BOOLEAN",
+                "do-while condition requires an exact Boolean expression or application-profile AS3 coercion");
             const branch = node.children[0]!;
             context.loopDepth += 1;
             context.breakableDepth += 1;
@@ -3439,11 +3624,28 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                     fail("HARDENED_LOCAL_AUTHORITY", "local declaration does not match its predeclared function identity", declaration);
                 }
                 const init = one(declaration, "INIT", true);
-                if (init === null || init.children.length !== 1) {
+                if (init !== null && init.children.length !== 1) {
                     fail("HARDENED_LOCAL_INITIALIZER", "locals require exactly one explicit admitted initializer", declaration);
                 }
-                const initializer = adaptAssignmentValue(header.type,
-                    parseExpression(init.children[0]!, context, true), context, init.children[0]!);
+                let initializer: SemanticExpression;
+                if (init === null) {
+                    if (header.readonly || context.sourceMemberAuthority === null) {
+                        fail("HARDENED_LOCAL_INITIALIZER", "locals require exactly one explicit admitted initializer", declaration);
+                    }
+                    if (header.type.sourceName === "Number" || header.type.sourceName === "*") {
+                        fail("HARDENED_LOCAL_DEFAULT",
+                            "uninitialized Number and wildcard locals require explicit NaN or undefined IR", declaration);
+                    }
+                    const value = header.type.sourceName === "int" || header.type.sourceName === "uint" ? 0
+                        : header.type.sourceName === "Boolean" ? false : null;
+                    const implicit: SemanticExpression = Object.assign(identity(declaration), {
+                        kind: "literal" as "literal", value,
+                    });
+                    initializer = adaptAssignmentValue(header.type, implicit, context, declaration);
+                } else {
+                    initializer = adaptAssignmentValue(header.type,
+                        parseExpression(init.children[0]!, context, true), context, init.children[0]!);
+                }
                 if (initializer.kind === "lambda") {
                     if (header.type.sourceName !== "Function") {
                         fail("HARDENED_LAMBDA_TARGET", "anonymous function initializer requires an exact Function local", declaration);
@@ -3800,7 +4002,8 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
     const candidates = (["application", "bootstrap"] as const).map(module =>
         localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry)
         .filter(entry => entry.sourcePath === (entry.module === "application"
-            ? `game-client/tapplication_main/src/${sourceLogicalPath}` : `game-client/tmain/src/${sourceLogicalPath}`)
+            ? `${localAuthority.sourceRoots.application}${sourceLogicalPath}`
+            : `${localAuthority.sourceRoots.bootstrap}${sourceLogicalPath}`)
             && entry.sourceContentSha256 === currentSourceSha256 && entry.typeKind === "package");
     if (candidates.length !== 1) {
         fail("HARDENED_LOCAL_SOURCE_AUTHORITY",
@@ -3833,7 +4036,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {
             fail("HARDENED_LOCAL_IMPORT_EDGE", "package const dependency lacks an authenticated graph edge", node);
         }
-        const item = localSemanticImport(target, current, node, localMemberAuthority);
+        const item = localSemanticImport(target, current, node, localAuthority, localMemberAuthority);
         parsedImports.imports.push(item);
         parsedImports.importsByLocal[localName] = item;
         return item;
@@ -3847,7 +4050,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         baseSourceQName: null, baseLocalQName: null,
         localTypeAuthority: localAuthority, localMemberAuthority, resolveCurrentLocal,
         fields: Object.create(null), methods: Object.create(null),
-        runtimeReferenceParentsByQName: new Map(), currentInterfaceQNames: [],
+        runtimeReferenceParentsByQName: new Map(), sourceMemberAuthority: null, currentInterfaceQNames: [],
         accessors: Object.create(null), parameters: Object.create(null), locals: Object.create(null),
         loopDepth: 0, breakableDepth: 0, labels: [], namespaceNames: Object.create(null), lambdaDepth: 0,
         currentCallable: null, ownRecordTargetDepth: 0, ownRecordInitializations: 0,
@@ -3880,7 +4083,8 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
 export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: LoadedCapabilityAuthority,
     sourceText: string, sha256: Sha256Function, localAuthority?: LoadedLocalTypeAuthority,
     sourceLogicalPath?: string, localMemberAuthority?: LoadedLocalMemberAuthority,
-    runtimeReferenceAuthority?: readonly RuntimeAuthoritySource[]): SemanticProgram {
+    runtimeReferenceAuthority?: readonly RuntimeAuthoritySource[],
+    sourceMemberAuthority?: LoadedSourceMemberAuthority): SemanticProgram {
     assertLoadedCapabilityAuthority(authority);
     const root = buildTree(ast, sourceText, sha256);
     if (root.kind !== "COMPILATION_UNIT") {
@@ -3941,7 +4145,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             const candidates = (["application", "bootstrap"] as const).map(module =>
                 localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry)
                 .filter(entry => entry.sourcePath === (entry.module === "application"
-                    ? `game-client/tapplication_main/src/${sourceLogicalPath}` : `game-client/tmain/src/${sourceLogicalPath}`)
+                    ? `${localAuthority.sourceRoots.application}${sourceLogicalPath}`
+                    : `${localAuthority.sourceRoots.bootstrap}${sourceLogicalPath}`)
                     && entry.sourceContentSha256 === currentSourceSha256
                     && entry.typeKind === (classNode.kind === "CLASS" ? "class" : "interface"));
             if (candidates.length !== 1) {
@@ -3988,7 +4193,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             fail("HARDENED_LOCAL_IMPORT_EDGE",
                 "same-package type lacks an authenticated dependency edge: " + qname, node);
         }
-        const item = localSemanticImport(target, current, node, localMemberAuthority || null);
+        const item = localSemanticImport(target, current, node, localAuthority, localMemberAuthority || null);
         parsedImports.imports.push(item);
         parsedImports.importsByLocal[localName] = item;
         return item;
@@ -4009,6 +4214,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         localMemberAuthority: localMemberAuthority || null,
         resolveCurrentLocal,
         runtimeReferenceParentsByQName: runtimeReferenceParents(runtimeReferenceAuthority),
+        sourceMemberAuthority: sourceMemberAuthority || null,
         currentInterfaceQNames: [],
         fields: Object.create(null),
         methods: Object.create(null),
