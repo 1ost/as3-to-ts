@@ -165,7 +165,7 @@ function resolveQName(entry, extract, rawName, requiredKind = null) {
         && item.slice(item.lastIndexOf(".") + 1) === localName);
     let candidates = explicit.length === 1 ? explicit.slice() : [];
     if (rawName.includes(".")) candidates.push(rawName);
-    if (!rawName.includes(".") && extract.packageName !== "") candidates.push(`${extract.packageName}.${rawName}`);
+    if (!rawName.includes(".")) candidates.push(extract.packageName ? `${extract.packageName}.${rawName}` : rawName);
     extract.imports.filter(item => item.endsWith(".*")).forEach(item => candidates.push(`${item.slice(0, -1)}${rawName}`));
     candidates = [...new Set(candidates)].filter(qname => {
         if (qname.startsWith("flash.")) return flashDefinitions.has(qname);

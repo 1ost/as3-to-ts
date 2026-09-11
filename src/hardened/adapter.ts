@@ -358,6 +358,23 @@ function memberMapping(context: AdapterContext, sourceQName: string, access: str
     return matches.length === 1 ? matches[0]! : null;
 }
 
+function flashBaseMemberMapping(context: AdapterContext, access: string, name: string, node: TreeNode): CapabilityMapping | null {
+    let qname = context.baseLocalQName || context.baseSourceQName;
+    const seen = new Set<string>();
+    while (qname !== null) {
+        if (seen.has(qname) || seen.size >= 1024) fail("HARDENED_LOCAL_MEMBER_CYCLE", "base member lineage is cyclic", node);
+        seen.add(qname);
+        if (context.mappingsBySource[qname]) return memberMapping(context, qname, access, name, node);
+        const moduleName = context.resolveCurrentLocal?.().entry.module;
+        const local = moduleName ? context.localMemberAuthority?.entriesByIdentity[`${moduleName}\u0000${qname}`] : undefined;
+        if (!local || local.status !== "complete" || !local.declaration)
+            fail("HARDENED_LOCAL_MEMBER_HELD", `base member authority is incomplete for ${qname}`, node);
+        if (local.declaration.baseQNames.length > 1) fail("HARDENED_LOCAL_MEMBER_BASE", "base member lineage is ambiguous", node);
+        qname = local.declaration.baseQNames[0] || null;
+    }
+    return null;
+}
+
 interface AuthenticatedSourceMemberSignature {
     parameterTypes: string[];
     returnType: string;
@@ -955,12 +972,12 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
     if (node.kind !== "TYPE") {
         fail("HARDENED_TYPE_NODE", "only named or Vector source types are admitted", node);
     }
-    const sourceName = requiredText(node, "type");
+    const sourceName = node.text === null && context.sourceMemberAuthority !== null ? "*" : requiredText(node, "type");
     if (sourceName === "void" && !allowVoid) {
         fail("HARDENED_VOID_TYPE", "void is not valid in this type position", node);
     }
     let semanticSourceName = sourceName;
-    let emittedName = PRIMITIVE_TYPES[sourceName];
+    let emittedName = sourceName === "*" && context.sourceMemberAuthority !== null ? "unknown" : PRIMITIVE_TYPES[sourceName];
     let runtimeName: string | null = emittedName ? sourceName : null;
     if (!emittedName) {
         if (sourceName === context.className) {
@@ -1721,6 +1738,11 @@ function currentClassMember(node: TreeNode, context: AdapterContext, name: strin
 }
 
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "member" && (expression.target.kind === "super" || expression.target.kind === "this")
+        && expression.capabilitySource !== null && context.mappingsBySource[expression.capabilitySource]) {
+        const mapping = memberMapping(context, expression.capabilitySource, "read", expression.name, node);
+        if (mapping !== null) return mappedMemberType(mapping, "read", context, node);
+    }
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
@@ -1876,6 +1898,12 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
 }
 
 function assignmentTargetType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "member" && (expression.target.kind === "super" || expression.target.kind === "this")
+        && expression.capabilitySource !== null && context.mappingsBySource[expression.capabilitySource]) {
+        const mapping = memberMapping(context, expression.capabilitySource, "write", expression.name, node);
+        if (mapping !== null) return mappedMemberType(mapping, "write", context, node);
+        fail("HARDENED_MEMBER_UNMAPPED", "Flash property write lacks an exact double-pinned mapping", node);
+    }
     if (expression.kind === "identifier" && context.locals[expression.name]) {
         const local = context.locals[expression.name]!;
         if (local.readonly) fail("HARDENED_ASSIGNMENT_READONLY", "local const is not writable", node);
@@ -2290,7 +2318,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
             || (rightType.sourceName === "null" && leftType.nullable);
         const strictEquality = operator === "===" || operator === "!==";
-        if (!sameType(leftType, rightType)
+        const numericPair = context.sourceMemberAuthority !== null
+            && [leftType, rightType].every(type => ["Number", "int", "uint"].includes(type.sourceName) && type.emittedName === "number");
+        if (!numericPair && !sameType(leftType, rightType)
             && !(strictEquality && (nullComparison || sameUnderlyingType(leftType, rightType)))) {
             fail("HARDENED_BINARY_TYPE", "binary operands require the exact same proven source type", node);
         }
@@ -2298,19 +2328,19 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_BINARY_BOOLEAN", "logical operators require exact Boolean operands", node);
         }
         if (["<", "<=", ">", ">="].indexOf(operator) >= 0
-            && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
+            && !numericPair && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
             fail("HARDENED_BINARY_RELATION", "ordered relations require exact Number or String operands", node);
         }
-        if (["-", "*", "/", "%"].indexOf(operator) >= 0 && leftType.sourceName !== "Number") {
+        if (["-", "*", "/", "%"].indexOf(operator) >= 0 && !numericPair && leftType.sourceName !== "Number") {
             fail("HARDENED_BINARY_NUMBER", "numeric operators require exact Number operands", node);
         }
-        if (operator === "+" && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
+        if (operator === "+" && !numericPair && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
             fail("HARDENED_BINARY_ADD", "addition requires exact Number or exact String operands", node);
         }
         const booleanResult = ["<", "<=", ">", ">=", "===", "!==", "&&", "||"].indexOf(operator) >= 0;
         const resultType = booleanResult
             ? semanticType(node, "Boolean", "boolean")
-            : leftType;
+            : numericPair ? semanticType(node, "Number", "number") : leftType;
         return Object.assign(identity(node), {
             kind: "binary" as "binary",
             operator: operator as "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||" |
@@ -2596,9 +2626,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 return implicitThisMember(node, name, inherited.ownerQName);
             }
         }
-        {
-            fail("HARDENED_IDENTIFIER_SCOPE", "identifier is not a parameter or proven import", node);
+        if (context.baseSourceQName !== null || context.baseLocalQName !== null) {
+            const mapping = flashBaseMemberMapping(context, "read", name, node)
+                || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node)
+                    || flashBaseMemberMapping(context, "call", name, node) : null);
+            if (mapping !== null) {
+                if (context.lambdaDepth > 0 || context.currentCallable?.modifiers.includes("static"))
+                    fail("HARDENED_LAMBDA_THIS", "implicit inherited member requires an instance scope", node);
+                return implicitThisMember(node, name, mapping.sourceQName);
+            }
         }
+        fail("HARDENED_IDENTIFIER_SCOPE", `identifier ${name} is not a parameter or proven import/member`, node);
     }
     if (node.kind === "ASSIGN") {
         if (!allowAssignment || valuePosition || node.children.length !== 3 || node.children[1]!.kind !== "OP") {
@@ -2775,21 +2813,24 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "super") {
             const callable = context.currentCallable;
             if (callable === null || callable.modifiers.indexOf("static") >= 0 || context.lambdaDepth > 0
-                || context.baseLocalQName === null) {
+                || (context.baseLocalQName === null && context.baseSourceQName === null)) {
                 fail("HARDENED_SUPER_CONTEXT",
                     "super member access requires a non-static callable with one authenticated local base", node.children[0]!);
             }
-            const inherited = localInheritedMember(context, name, "method", null, node);
-            if (inherited.member === null || inherited.ownerQName === null) {
-                fail("HARDENED_SUPER_MEMBER", "super method lacks one exact inherited local declaration", node);
-            }
-            assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
-            if (valuePosition) {
-                fail("HARDENED_LOCAL_METHOD_CLOSURE",
-                    "super method closures remain held until their stable identity is proven", node);
+            const inherited = context.baseLocalQName === null ? null
+                : localInheritedMember(context, name, "method", null, node);
+            if (inherited?.member && inherited.ownerQName) {
+                assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
+                if (valuePosition) fail("HARDENED_LOCAL_METHOD_CLOSURE", "super method closures remain held", node);
+                superOwnerQName = inherited.ownerQName;
+            } else {
+                const mapping = flashBaseMemberMapping(context, "read", name, node)
+                    || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node) : null);
+                if (mapping === null || mapping.targetMember?.scope !== "instance")
+                    fail("HARDENED_SUPER_MEMBER", "super property lacks an exact inherited Flash mapping", node);
+                superOwnerQName = mapping.sourceQName;
             }
             target = Object.assign(identity(node.children[0]!), { kind: "super" as "super" });
-            superOwnerQName = inherited.ownerQName;
         } else {
             target = parseExpression(node.children[0]!, context, false);
         }
@@ -2827,8 +2868,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                 }
                 if (capabilitySource === null) {
-                    const mapping = context.baseSourceQName === null ? null
-                        : memberMapping(context, context.baseSourceQName, "call", name, node);
+                    const mapping = flashBaseMemberMapping(context, "read", name, node)
+                        || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node)
+                            || flashBaseMemberMapping(context, "call", name, node) : null);
                     if (mapping === null) {
                         fail("HARDENED_MEMBER_UNMAPPED", "instance member is neither local nor double-pinned in the minimal subset", node);
                     }
@@ -3954,6 +3996,12 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
                 || mapping.targetMember.scope !== "instance" || parameters.some(parameter => parameter.rest)
                 || mapping.sourceMember.minArgs !== required || mapping.sourceMember.maxArgs !== parameters.length) {
                 fail("HARDENED_OVERRIDE_AUTHORITY", "override lacks one exact base member signature and instance bridge mapping", node);
+            }
+            const signature = authenticatedSourceMemberSignature(mapping, node);
+            if (parameters.some((parameter, index) => !sameUnderlyingType(parameter.type,
+                authoritySemanticType(signature.parameterTypes[index]!, context, node)))
+                || !sameUnderlyingType(returnType!, authoritySemanticType(signature.returnType, context, node))) {
+                fail("HARDENED_OVERRIDE_SIGNATURE", "override parameter or return type differs from the native member contract", node);
             }
         }
     }

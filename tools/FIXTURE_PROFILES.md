@@ -25,6 +25,14 @@ censuses require a full application profile. This fixture generator uses a
 bounded source scan for imports and roles; it is not a production census tool.
 Admission of expressions and member access still comes from the hardened adapter.
 
+Primitive Flash properties are recovered from the actual SDK's getter/setter
+signatures through its class ancestry and matched to the pinned Laya public
+surface. This permits original overrides and `super` property reads/writes
+without adding accessors or changing visibility in the AS3 input. Mismatched
+override types and unmapped members remain held. Numeric `int`/`uint`/`Number`
+operations retain numeric expression results and coercion at assignment boundaries.
+Default-package base classes still require their declared local dependency edges.
+
 The profile pins source content, declaration-worker output, capability mapping,
 runtime predicates, Laya capability bytes and AIR SDK member ancestry recovered
 from its actual `airglobal.swc`/`swfdump` output. The retained generator-inputs file

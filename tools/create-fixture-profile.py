@@ -33,6 +33,7 @@ def source_members(sdk, output, qnames):
     (output / "airglobal.abc.txt").write_text(result.stdout)
     class_pattern = re.compile(r"^(?:public|internal)\s+(?:(?:final|dynamic)\s+)*class\s+(?:(?P<package>[\w$.]+)::)?(?P<name>[\w$]+)(?:\s+extends\s+(?P<base>[^\s{]+))?\s*$")
     member_pattern = re.compile(r"^(?:public|protected|private|internal|AS3)\s+(?:(?:final|override|native)\s+)*(?:function\s+(?:get\s+|set\s+)?|var\s+|const\s+)(?:[\w$.]+::)?(?P<name>[\w$]+)\b")
+    property_pattern = re.compile(r'^public\s+(?:(?:final|override|native)\s+)*function\s+(get|set)\s+(\w+)\(([^)]*)\):([^\s]+)$')
     classes, current, depth = {}, None, 0
     for raw in result.stdout.splitlines():
         line = raw.strip()
@@ -45,7 +46,7 @@ def source_members(sdk, output, qnames):
             if current in classes:
                 raise ValueError('Duplicate AIR class ' + current)
             classes[current] = {'qname': current, 'baseQName': match['base'].replace('::', '.') if match['base'] not in (None, '*') else None,
-                                'ownInstanceMemberNames': set()}
+                                'ownInstanceMemberNames': set(), 'properties': []}
             depth = 0
         elif line == '{':
             depth += 1
@@ -54,6 +55,11 @@ def source_members(sdk, output, qnames):
             if depth == 0:
                 current = None
         elif depth == 1:
+            prop = property_pattern.match(line)
+            if prop:
+                access, member, argument, result_type = prop.groups()
+                classes[current]['properties'].append({'access': 'read' if access == 'get' else 'write',
+                    'name': member, 'type': (result_type if access == 'get' else argument).replace('::', '.')})
             match = member_pattern.match(line)
             if match and match['name'] != name:
                 classes[current]['ownInstanceMemberNames'].add(match['name'])
@@ -66,9 +72,9 @@ def source_members(sdk, output, qnames):
         selected.add(qname)
         if row['baseQName']:
             pending.append(row['baseQName'])
-    rows = [{**classes[q], 'ownInstanceMemberNames': sorted(classes[q]['ownInstanceMemberNames'])} for q in sorted(selected)]
+    rows = [{k: (sorted(v) if isinstance(v, set) else v) for k, v in classes[q].items() if k != 'properties'} for q in sorted(selected)]
     return write(output / 'source-members.json', {'schema': 'as3-source-member-authority@1',
-        'generator': 'air-sdk-swfdump-abc@1', 'sourceArtifactSha256': sha(artifact), 'entryCount': len(rows), 'entries': rows}), len(rows)
+        'generator': 'air-sdk-swfdump-abc@1', 'sourceArtifactSha256': sha(artifact), 'entryCount': len(rows), 'entries': rows}), len(rows), classes
 
 
 def main():
@@ -130,7 +136,8 @@ def main():
         'layaRevision': subprocess.check_output(['git', '-C', str(laya), 'rev-parse', 'HEAD'], text=True).strip(),
         'predicateAuthorityCanonicalLfSha256': sha(files['runtimeTypePredicates']),
         'predicateAuthorityEntryCount': len(selected), 'predicateAuthorityQNames': sorted(selected)})
-    apis, mappings = [], []
+    files['sourceMemberAuthority'], member_count, native_classes = source_members(sdk, out, selected)
+    apis, mappings, member_uses = [], [], []
     for q in sorted(set(imports)):
         name = q.rsplit('.', 1)[1]
         roles = ['import']
@@ -147,12 +154,38 @@ def main():
         cap, row = candidates[0]
         mappings.append({'sourceQName': q, 'sourceRoles': roles, 'sourceMember': None, 'targetCapabilityId': cap,
             'targetModule': module, 'targetExport': row['export'], 'targetKind': row['kind'], 'targetSignature': row['signature'], 'targetMember': None})
-    census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': []}})
+        # Recover primitive properties from the actual SDK, including inherited
+        # accessors. Never infer source types from the browser implementation.
+        current, seen = q, set()
+        while current:
+            native_class = native_classes[current]
+            for prop in native_class['properties']:
+                key = (prop['name'], prop['access'])
+                if key in seen: continue
+                seen.add(key)
+                target_type = {'Boolean':'boolean','Number':'number','int':'number','uint':'number','String':'string'}.get(prop['type'])
+                matches = [m for m in row.get('members', []) if m['name'] == prop['name'] and m['scope'] == 'instance'
+                    and m['signature'] == target_type and m['kind'] in ('property','get','set','get+set')
+                    and m['kind'] != ('get' if prop['access'] == 'write' else 'set')
+                    and (prop['access'] != 'write' or not m.get('readonly'))]
+                if target_type is None or len(matches) != 1: continue
+                member = matches[0]; writing = prop['access'] == 'write'
+                signature = (f"public function set {prop['name']}(value:{prop['type']}) : void" if writing
+                             else f"public function get {prop['name']}() : {prop['type']}")
+                source_member = {'access':prop['access'], 'name':prop['name'], 'minArgs':int(writing), 'maxArgs':int(writing), 'signature':signature}
+                mappings.append({'sourceQName':q, 'sourceRoles':['base-type' if 'base-type' in roles else 'import'],
+                    'sourceMember':source_member, 'targetCapabilityId':cap, 'targetModule':module,
+                    'targetExport':row['export'], 'targetKind':row['kind'], 'targetSignature':row['signature'],
+                    'targetMember':{k:member[k] for k in ('kind','name','scope','signature')}})
+                member_uses.append({'qname':q,'member':prop['name'],'access':prop['access'],
+                    'context':'base-type' if 'base-type' in roles else 'import', 'classification':'layaair-flash-api-bridge',
+                    'preserveNameAndSignature':True, 'signatures':[{k:source_member[k] for k in ('signature','minArgs','maxArgs')}]})
+            current = native_class['baseQName']
+    census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': member_uses}})
     files['capabilityMapping'] = write(out / 'mapping.json', {'schema': 'as3-source-to-laya-capability-map@1', 'mappings': mappings})
     files['localMemberMap'] = out / 'local-members.json'
     subprocess.run(['node', str(ROOT / 'tools/generate-local-member-map.cjs'), str(files['localTypeMap']),
         str(files['localMemberMap']), str(source.parent), str(ROOT / 'lib/declaration-worker.js'), str(census), sha(census)], check=True)
-    files['sourceMemberAuthority'], member_count = source_members(sdk, out, selected)
     timer = json.loads((ROOT / 'config/native-timer-authority.json').read_text())
     timer.update(schema='as3-native-timer-authority@1', module='@laya/as3-runtime/AS3Timer', sourceSha256=sha(ROOT / 'src/hardened-runtime/AS3Timer.ts'))
     files['nativeTimerAuthority'] = write(out / 'timer.json', timer)
@@ -161,7 +194,7 @@ def main():
         'runtimePackage': '@laya/as3-runtime', 'typeScriptVersion': '4.9.5', 'sourceRoots': source_roots, 'targetRoots': target_roots,
         'sourceCensusSha256': sha(census), 'targetCapabilitiesSha256': sha(target), 'runtimePredicateQNames': sorted(selected),
         'counts': {'localTypes': 1, 'localMembersComplete': members['completeCount'], 'localMembersHeld': members['heldCount'],
-                   'mappedTypes': len(mappings), 'mappedMembers': 0, 'sourceMemberTypes': member_count},
+                   'mappedTypes': len(apis), 'mappedMembers': len(member_uses), 'sourceMemberTypes': member_count},
         'files': {k: {'path': v.name, 'sha256': sha(v)} for k, v in files.items()}})
     write(out / 'generator-inputs.json', {str(v): sha(v) for v in [Path(__file__).resolve(), entry, target, predicate_input,
         sdk / 'frameworks/libs/air/airglobal.swc', sdk / 'lib/swfdump-cli.jar', ROOT / 'lib/declaration-worker.js']})
