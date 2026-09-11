@@ -77,3 +77,9 @@ TMPDIR=/private/tmp HARDENED_FIXTURE_AIR_SDK=/path/to/AIRSDK \
 The fixture-profile test skips unless both explicit environment paths are set;
 report that skip as unavailable validation. The historical full test suite also
 contains external Bleach/Windows fixture dependencies absent from a fresh clone.
+Full application-profile generators can reuse `source_members()` and
+`primitive_property_mappings()` from `create-fixture-profile.py`. Supply the
+authenticated SDK inventory and the exact target capability row, then retain
+the returned mappings and member uses in the locked application profile. Read
+and write access are checked separately; missing or ambiguous target accessors
+remain unmapped. This uses the same authority logic as the native fixture lane.

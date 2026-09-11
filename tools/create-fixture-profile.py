@@ -77,6 +77,45 @@ def source_members(sdk, output, qnames):
         'generator': 'air-sdk-swfdump-abc@1', 'sourceArtifactSha256': sha(artifact), 'entryCount': len(rows), 'entries': rows}), len(rows), classes
 
 
+def primitive_property_mappings(qname, roles, row, capability_id, native_classes):
+    """Map native primitive accessors for fixture or full application profiles.
+
+    Callers supply the authenticated SDK class inventory and exact target ledger
+    row; the original application's field declarations are never changed.
+    """
+    mappings, member_uses = [], []
+    current, seen, lineage = qname, set(), set()
+    while current:
+        if current in lineage:
+            raise ValueError('Cyclic native property ancestry for ' + qname)
+        lineage.add(current)
+        native_class = native_classes[current]
+        for prop in native_class['properties']:
+            key = (prop['name'], prop['access'])
+            if key in seen: continue
+            seen.add(key)
+            target_type = {'Boolean':'boolean','Number':'number','int':'number','uint':'number','String':'string'}.get(prop['type'])
+            matches = [m for m in row.get('members', []) if m['name'] == prop['name'] and m['scope'] == 'instance'
+                and m['signature'] == target_type and m['kind'] in ('property','get','set','get+set')
+                and m['kind'] != ('get' if prop['access'] == 'write' else 'set')
+                and (prop['access'] != 'write' or not m.get('readonly'))]
+            if target_type is None or len(matches) != 1: continue
+            member = matches[0]; writing = prop['access'] == 'write'
+            signature = (f"public function set {prop['name']}(value:{prop['type']}) : void" if writing
+                         else f"public function get {prop['name']}() : {prop['type']}")
+            source_member = {'access':prop['access'], 'name':prop['name'], 'minArgs':int(writing), 'maxArgs':int(writing), 'signature':signature}
+            context = 'base-type' if 'base-type' in roles else 'import'
+            mappings.append({'sourceQName':qname, 'sourceRoles':[context],
+                'sourceMember':source_member, 'targetCapabilityId':capability_id, 'targetModule':row['module'],
+                'targetExport':row['export'], 'targetKind':row['kind'], 'targetSignature':row['signature'],
+                'targetMember':{k:member[k] for k in ('kind','name','scope','signature')}})
+            member_uses.append({'qname':qname,'member':prop['name'],'access':prop['access'],
+                'context':context, 'classification':'layaair-flash-api-bridge',
+                'preserveNameAndSignature':True, 'signatures':[{k:source_member[k] for k in ('signature','minArgs','maxArgs')}]})
+        current = native_class['baseQName']
+    return mappings, member_uses
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source', type=Path, required=True)
@@ -154,33 +193,9 @@ def main():
         cap, row = candidates[0]
         mappings.append({'sourceQName': q, 'sourceRoles': roles, 'sourceMember': None, 'targetCapabilityId': cap,
             'targetModule': module, 'targetExport': row['export'], 'targetKind': row['kind'], 'targetSignature': row['signature'], 'targetMember': None})
-        # Recover primitive properties from the actual SDK, including inherited
-        # accessors. Never infer source types from the browser implementation.
-        current, seen = q, set()
-        while current:
-            native_class = native_classes[current]
-            for prop in native_class['properties']:
-                key = (prop['name'], prop['access'])
-                if key in seen: continue
-                seen.add(key)
-                target_type = {'Boolean':'boolean','Number':'number','int':'number','uint':'number','String':'string'}.get(prop['type'])
-                matches = [m for m in row.get('members', []) if m['name'] == prop['name'] and m['scope'] == 'instance'
-                    and m['signature'] == target_type and m['kind'] in ('property','get','set','get+set')
-                    and m['kind'] != ('get' if prop['access'] == 'write' else 'set')
-                    and (prop['access'] != 'write' or not m.get('readonly'))]
-                if target_type is None or len(matches) != 1: continue
-                member = matches[0]; writing = prop['access'] == 'write'
-                signature = (f"public function set {prop['name']}(value:{prop['type']}) : void" if writing
-                             else f"public function get {prop['name']}() : {prop['type']}")
-                source_member = {'access':prop['access'], 'name':prop['name'], 'minArgs':int(writing), 'maxArgs':int(writing), 'signature':signature}
-                mappings.append({'sourceQName':q, 'sourceRoles':['base-type' if 'base-type' in roles else 'import'],
-                    'sourceMember':source_member, 'targetCapabilityId':cap, 'targetModule':module,
-                    'targetExport':row['export'], 'targetKind':row['kind'], 'targetSignature':row['signature'],
-                    'targetMember':{k:member[k] for k in ('kind','name','scope','signature')}})
-                member_uses.append({'qname':q,'member':prop['name'],'access':prop['access'],
-                    'context':'base-type' if 'base-type' in roles else 'import', 'classification':'layaair-flash-api-bridge',
-                    'preserveNameAndSignature':True, 'signatures':[{k:source_member[k] for k in ('signature','minArgs','maxArgs')}]})
-            current = native_class['baseQName']
+        properties, uses = primitive_property_mappings(q, roles, row, cap, native_classes)
+        mappings.extend(properties)
+        member_uses.extend(uses)
     census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': member_uses}})
     files['capabilityMapping'] = write(out / 'mapping.json', {'schema': 'as3-source-to-laya-capability-map@1', 'mappings': mappings})
     files['localMemberMap'] = out / 'local-members.json'
