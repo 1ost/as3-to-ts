@@ -251,6 +251,20 @@ function parseNativeTimerAuthority(raw: unknown, runtimePackage: string): Native
     return { module: raw.module, sourcePath: raw.sourcePath, sourceSha256: raw.sourceSha256, exports };
 }
 
+function constructorAritySignature(signature: string): string {
+    // Erased generic defaults may describe storage without affecting construction
+    // (for example Dictionary<K = unknown, V = unknown>). Keep the original
+    // ledger signature for identity checks; normalize only its arity projection.
+    const generic = /^new <([^<>]+)>\((.*)\): ([A-Za-z_$][A-Za-z0-9_$]*)<([^<>]+)>$/.exec(signature);
+    if (!generic) return signature;
+    const declarations = generic[1]!.split(/,\s*/);
+    const names = declarations.map(part => /^([A-Za-z_$][A-Za-z0-9_$]*) = unknown$/.exec(part)?.[1]);
+    if (names.some(name => !name) || new Set(names).size !== names.length
+        || generic[4]!.split(/,\s*/).join(",") !== names.join(",")
+        || names.some(name => generic[2]!.split(/[^A-Za-z0-9_$]+/).includes(name!))) return signature;
+    return `new (${generic[2]}): ${generic[3]}`;
+}
+
 function parseMapping(raw: unknown): CapabilityMappingDocument {
     if (!isObject(raw) || !exactKeys(raw, ["mappings", "schema"])
         || raw.schema !== "as3-source-to-laya-capability-map@1" || !Array.isArray(raw.mappings)) {
@@ -329,7 +343,7 @@ function parseMapping(raw: unknown): CapabilityMappingDocument {
                 "constructor mappings must pair the exact source class call with a static target constructor");
         }
         if (constructorTarget) {
-            const match = /^new \((.*)\): [A-Za-z_$][A-Za-z0-9_$]*$/.exec(targetMember!.signature);
+            const match = /^new \((.*)\): [A-Za-z_$][A-Za-z0-9_$]*$/.exec(constructorAritySignature(targetMember!.signature));
             if (!match) {
                 throw new HardenedSemanticError("HARDENED_TARGET_CONSTRUCTOR_SIGNATURE", "target constructor signature is not canonical");
             }

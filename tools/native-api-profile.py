@@ -185,13 +185,13 @@ def annotate_native_function_signatures(apis, directory):
 
 
 def target_arity(signature):
+    if signature.startswith('new '): signature = signature[4:]
     if signature.startswith('<'):
         for index, character, depth in signature_tokens(signature):
             if character == '>' and depth == 0:
                 signature = signature[index + 1:]
                 break
         else: return None
-    if signature.startswith('new '): signature = signature[4:]
     if not signature.startswith('('): return None
     for index, character, depth in signature_tokens(signature):
         if character == ')' and depth == 0:

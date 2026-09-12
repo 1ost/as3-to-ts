@@ -306,6 +306,46 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             expression.argument === null ? [] : [expressionNode(expression.argument, ts)]);
     }
     if (expression.kind === "assignment") {
+        if (expression.shortCircuit || (expression.resultType && (expression.storageCoercion
+            || (expression.target.kind === "index" && expression.target.accessKind === "dictionary")))) {
+            // AVM2 keeps the uncoerced assignment input on the expression stack.
+            // Capture the lvalue before the RHS, store once, then return that input.
+            const statements: any[] = [];
+            const capture = (name: string, value: SemanticExpression): SemanticExpression => {
+                statements.push(ts.factory.createVariableStatement(undefined, ts.factory.createVariableDeclarationList([
+                    ts.factory.createVariableDeclaration(name, undefined, undefined, expressionNode(value, ts)),
+                ], ts.NodeFlags.Const)));
+                return {kind:"identifier", name, bindingKind:"local", bindingSourceQualifiedName:null,
+                    sourceNodeId:expression.sourceNodeId, sourceSpan:expression.sourceSpan};
+            };
+            let target = expression.target;
+            if (target.kind === "member" && target.target.kind !== "super")
+                target = {...target, target:capture("__as3AssignmentReceiver", target.target)};
+            else if (target.kind === "index")
+                target = {...target, target:capture("__as3AssignmentReceiver", target.target),
+                    index:capture("__as3AssignmentKey", target.index)};
+            let rhs = expression.value;
+            if (expression.shortCircuit) {
+                if (rhs.kind !== "binary" || rhs.operator !== expression.shortCircuit)
+                    throw new HardenedSemanticError("HARDENED_EMIT_ASSIGNMENT", "logical assignment lacks its proven operands");
+                const prior = capture("__as3AssignmentPrior", rhs.left);
+                statements.push(ts.factory.createIfStatement(expression.shortCircuit === "||"
+                    ? expressionNode(prior, ts) : ts.factory.createPrefixUnaryExpression(ts.SyntaxKind.ExclamationToken, expressionNode(prior, ts)),
+                    ts.factory.createReturnStatement(expressionNode(prior, ts))));
+                rhs = rhs.right;
+            }
+            const input = capture("__as3AssignmentValue", rhs);
+            const value: SemanticExpression = expression.storageCoercion
+                ? {...input, ...expression.storageCoercion, kind:"coercion", argument:input} : input;
+            const {resultType, storageCoercion, shortCircuit, ...store} = expression;
+            statements.push(ts.factory.createExpressionStatement(expressionNode(
+                {...store, target, value}, ts)));
+            statements.push(ts.factory.createReturnStatement(expressionNode(input, ts)));
+            return ts.factory.createCallExpression(ts.factory.createParenthesizedExpression(
+                ts.factory.createArrowFunction(undefined, undefined, [], undefined,
+                    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                    ts.factory.createBlock(statements, true))), undefined, []);
+        }
         if (expression.target.kind === "index" && expression.target.accessKind === "object")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectWrite"),undefined,[
                 expressionNode(expression.target.target,ts),expressionNode(expression.target.index,ts),
@@ -1327,9 +1367,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.kind === "call" && value.capabilitySource === "Error" && value.capabilityMember === "toString"
         || value.kind === "call" && value.capabilitySource === "String" && value.capabilityMember === "toLowerCase"
         || Object.values(value).some(primitiveMember));
-    if (programHasKind(program, "coercion") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
+    if (programHasKind(program, "coercion") || programHasKind(program, "assignmentStorageCoercion")
+        || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
     const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
-        value.kind === "functionApply" || value.kind === "globalFunction" || value.kind === "coercion" && value.slot
+        value.kind === "functionApply" || value.kind === "globalFunction"
+        || (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
         || value.kind === "method" && value.parameters.some(nativeParameterSlot)
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,

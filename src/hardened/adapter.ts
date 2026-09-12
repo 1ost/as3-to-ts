@@ -1975,7 +1975,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "runtimeType") return expression.resultType;
     if (expression.kind === "coercion") return expression.targetType;
     if (expression.kind === "assignment") {
-        return assignmentTargetType(expression.target, context, node);
+        return expression.resultType || assignmentTargetType(expression.target, context, node);
     }
     if (expression.kind === "call" && expression.resultType !== null) return expression.resultType;
     fail("HARDENED_ASSIGNMENT_TYPE", "assignment value type is not statically proven in the admitted subset", node);
@@ -2197,6 +2197,16 @@ function builtinMathMember(node: TreeNode, context: AdapterContext): string | nu
 function parseExpression(node: TreeNode, context: AdapterContext, valuePosition: boolean,
     allowSuperCall: boolean = false, allowMethodClosure: boolean = true,
     allowAssignment: boolean = false): SemanticExpression {
+    if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length > 2
+        && node.children[1]!.kind === "ARGUMENTS") {
+        const suffixes = node.children.slice(2);
+        if (suffixes.length > 64 || suffixes.some(child => child.kind !== "ARRAY" || child.children.length !== 1))
+            fail("HARDENED_CALL_SHAPE", "call suffixes require bounded single-key indexed accesses", node);
+        let indexed = {...node, children:node.children.slice(0, 2)};
+        for (const suffix of suffixes)
+            indexed = {...suffix, kind:"ARRAY_ACCESSOR", children:[indexed, suffix.children[0]!]};
+        return parseExpression(indexed, context, valuePosition, allowSuperCall, allowMethodClosure, allowAssignment);
+    }
     if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS"
         && node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "trace"
         && context.className !== "trace" && !context.locals.trace && !context.parameters.trace
@@ -2922,8 +2932,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         fail("HARDENED_IDENTIFIER_SCOPE", `identifier ${name} is not a parameter or proven import/member`, node);
     }
     if (node.kind === "ASSIGN") {
-        if (!allowAssignment || valuePosition || node.children.length !== 3 || node.children[1]!.kind !== "OP") {
-            fail("HARDENED_ASSIGNMENT_CONTEXT", "assignment is admitted only as one top-level expression statement", node);
+        const consumed = valuePosition && context.sourceMemberAuthority !== null && context.currentCallable !== null;
+        if ((!consumed && (!allowAssignment || valuePosition)) || node.children.length !== 3 || node.children[1]!.kind !== "OP") {
+            fail("HARDENED_ASSIGNMENT_CONTEXT", "assignment values require an authenticated callable context", node);
         }
         const operator = requiredText(node.children[1]!, "assignment operator");
         context.ownRecordTargetDepth += 1;
@@ -2939,6 +2950,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const targetType = assignmentTargetType(target, context, node.children[0]!);
         let value = parseExpression(node.children[2]!, context, true);
         const valueType = assignmentType(value, context, node.children[2]!);
+        let input = value;
+        let shortCircuit: "&&" | "||" | undefined;
         if (operator === "=") {
             value = adaptAssignmentValue(targetType, value, context, node.children[2]!);
         } else {
@@ -2962,6 +2975,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 && valueType.sourceName === "String";
             const logical = (binaryOperator === "&&" || binaryOperator === "||")
                 && targetType.sourceName === "Boolean" && valueType.sourceName === "Boolean";
+            if (logical) shortCircuit = binaryOperator as "&&" | "||";
             if (!nativeAdd && !stringAdd && !logical && (!numeric(targetType) || !numeric(valueType))) {
                 fail("HARDENED_COMPOUND_TYPE", "compound assignment requires exact String addition or proven numeric operands", node);
             }
@@ -2975,10 +2989,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 operator: binaryOperator as "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>" | "&&" | "||",
                 left: target, right: value, resultType, ...(nativeAdd ? {additionCoercion:true as const} : {}),
             });
+            input = binary;
             value = nativeAdd ? adaptAssignmentValue(targetType,binary,context,node)
                 : (targetType.sourceName === "int" || targetType.sourceName === "uint")
                 ? Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument: binary })
                 : binary;
+        }
+        let storageCoercion: { kind: "assignmentStorageCoercion"; targetType: SemanticType; slot?: true } | undefined;
+        if (consumed && value !== input) {
+            if (value.kind !== "coercion" || value.argument !== input)
+                fail("HARDENED_ASSIGNMENT_VALUE", "assignment result requires a proven storage conversion", node);
+            storageCoercion = {kind:"assignmentStorageCoercion", targetType: value.targetType, ...(value.slot ? {slot:true as const} : {})};
         }
         // A Function local's callback proof belongs to its exact initializer.
         // Once mutable source code assigns the local, conservatively revoke that
@@ -2988,7 +3009,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             context.locals[target.name]!.lambdaSignature = null;
         }
         return Object.assign(identity(node), {
-            kind: "assignment" as "assignment", operator: "=" as "=", target, value,
+            kind: "assignment" as "assignment", operator: "=" as "=", target, value: consumed ? input : value,
+            ...(shortCircuit ? {shortCircuit} : {}),
+            ...(consumed ? {resultType: assignmentType(input, context, node), ...(storageCoercion ? {storageCoercion} : {})} : {}),
         });
     }
     if (node.kind === "ARRAY_ACCESSOR") {

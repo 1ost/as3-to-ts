@@ -85,6 +85,7 @@ public class Base {
                 api.read_native_declarations(directory)
 
     def test_target_arity_preserves_optional_and_generic_arguments(self):
+        self.assertEqual(api.target_arity('new <K = unknown, V = unknown>(weakKeys?: boolean): Dictionary<K, V>'), (0, 1))
         self.assertEqual(api.target_arity('<T extends LayaNode>(child: T) => T'), (1, 1))
         self.assertEqual(api.target_arity('(x: number, y?: number) => void'), (1, 2))
         self.assertEqual(api.target_arity('(x: number, ...args: unknown[]) => void'), (1, 1000000))

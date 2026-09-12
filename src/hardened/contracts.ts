@@ -392,6 +392,10 @@ export interface AssignmentExpression extends SemanticIdentity {
     operator: "=";
     target: IdentifierExpression | MemberExpression | IndexExpression;
     value: SemanticExpression;
+    /** A consumed AS3 assignment returns its input before storage coercion. */
+    resultType?: SemanticType;
+    storageCoercion?: { kind: "assignmentStorageCoercion"; targetType: SemanticType; slot?: true };
+    shortCircuit?: "&&" | "||";
 }
 
 export interface NewExpression extends SemanticIdentity {

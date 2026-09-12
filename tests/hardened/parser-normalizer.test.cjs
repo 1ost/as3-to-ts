@@ -259,6 +259,21 @@ function authority(api, includeTrace = false) {
     const selection = api.selectCapabilityCandidates(sourceJson, targetJson, mappingJson);
     assert.equal(selection.mappings.length, mappings.mappings.length);
     assert.deepEqual(selection.held, []);
+    for (const [signature, accepted] of [
+        ['new <K = unknown, V = unknown>(): Sprite<K, V>', true],
+        ['new <K = unknown, V = unknown>(): Sprite<V, K>', false],
+        ['new <K = string>(): Sprite<K>', false],
+        ['new <K = unknown>(value?: K): Sprite<K>', false],
+        ['new <K = unknown, K = unknown>(): Sprite<K, K>', false],
+    ]) {
+        const genericTarget = structuredClone(target);
+        genericTarget.capabilities.find(row => row.id === 'api.flash.display.sprite').obligations[0].constructors = [signature];
+        const genericMappings = structuredClone(mappings);
+        genericMappings.mappings.find(row => row.targetMember?.kind === 'constructor').targetMember.signature = signature;
+        const genericSelection = api.selectCapabilityCandidates(sourceJson, JSON.stringify(genericTarget), JSON.stringify(genericMappings));
+        assert.equal(genericSelection.held.length, accepted ? 0 : 1, signature);
+        if (!accepted) assert.equal(genericSelection.held[0].code, 'HARDENED_TARGET_CONSTRUCTOR_SIGNATURE');
+    }
     assert.throws(() => api.assertLoadedCapabilityAuthority(selection), error => error?.code === "HARDENED_CAPABILITY_AUTHORITY_INSTANCE");
     const drifted = JSON.parse(mappingJson);
     const constructor = drifted.mappings.find(row => row.sourceMember !== null);
@@ -786,6 +801,47 @@ try {
             member.initializer.kind==="coercion"?member.initializer.argument.value:member.initializer.value),[16711680,4294967295]);
         assert.throws(() => adapt('package p { public class AccessorGuard { public var wide:Number=0x100000000; } }'),
             error => error?.code === "HARDENED_LITERAL");
+    }
+
+    {
+        const adapt = (source, authenticated = true) => built.adapter.adaptNormalizedParserAst(
+            built.normalizer.normalizeParserAst(built.parse("AssignmentGuard.as", source), source, sha256),
+            authority(built.ledger), source, sha256, undefined, undefined, undefined, referenceAuthority,
+            authenticated ? sourceMemberAuthority : undefined);
+        const source = `package p { public class AssignmentGuard {
+            public var stored:int;
+            public function assign(value:Number):Number { return (stored = value); }
+            public function local(value:Number):Number { var slot:int=0; return (slot = value); }
+            public function compound(value:Number):Number { return (stored += value); }
+            public function wildcard(value:*):* { return (stored = value); }
+        } }`;
+        assert.throws(() => adapt('package p { public class AssignmentGuard { public var stored:int; public function assign(value:Number):Number{return(stored=value);} } }', false),
+            error => error?.code === "HARDENED_ASSIGNMENT_CONTEXT");
+        const semantic = adapt(source);
+        const assignment = semantic.declaration.members.find(member => member.name === "assign").body[0].expression.expression;
+        assert.equal(assignment.resultType.sourceName, "Number");
+        assert.equal(assignment.storageCoercion.targetType.sourceName, "int");
+        const code = built.emitter.emitSemanticProgram(semantic,
+            {compiler:ts49, expectedTypeScriptVersion:"4.9.5"}).code;
+        assert.equal(code, built.emitter.emitSemanticProgram(adapt(source),
+            {compiler:ts49, expectedTypeScriptVersion:"4.9.5"}).code);
+        const outputPath = path.join(built.output, "AssignmentGuard.generated.js");
+        fs.writeFileSync(outputPath, ts49.transpileModule(code.replaceAll("@bleach/as3-runtime/", "./hardened-runtime/"),
+            {compilerOptions:{target:ts49.ScriptTarget.ES2020, module:ts49.ModuleKind.CommonJS}}).outputText);
+        // Exercise generated method bodies; the native pair separately covers construction.
+        const probe = Object.create(require(outputPath).AssignmentGuard.prototype);
+        for (const [input, stored] of [[3.75,3],[-1.75,-1],[4294967297,1]]) {
+            assert.equal(probe.assign(input), input); assert.equal(probe.stored, stored);
+            assert.equal(probe.local(input), input);
+            assert.equal(probe.compound(input), stored + input);
+        }
+        assert.equal(probe.wildcard("7.5"), "7.5"); assert.equal(probe.stored, 7);
+        for (const [body, code] of [
+            ['public const value:int=0; public function run(input:Number):Number{return(value=input);}', 'HARDENED_ASSIGNMENT_READONLY'],
+            ['public function run(input:Number):Number{const value:int=0; return(value=input);}', 'HARDENED_ASSIGNMENT_READONLY'],
+            ['public var value:int=0; public var result:Number=(value=3);', 'HARDENED_ASSIGNMENT_CONTEXT'],
+        ]) assert.throws(() => adapt(`package p { public class AssignmentGuard { ${body} } }`),
+            error => error?.code === code, body);
     }
 
     {
