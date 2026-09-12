@@ -2460,12 +2460,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (node.children.length !== 1) {
             fail("HARDENED_UNARY_SHAPE", "unary expression requires exactly one operand", node);
         }
-        const operand = parseExpression(node.children[0]!, context, true);
+        let operand = parseExpression(node.children[0]!, context, true);
         const operandType = assignmentType(operand, context, node.children[0]!);
         const operator = node.kind === "PLUS" ? "+" : node.kind === "MINUS" ? "-" : node.kind === "NOT" ? "!" : "~";
-        if (operator === "!" && operandType.sourceName !== "Boolean") {
-            fail("HARDENED_UNARY_BOOLEAN", "logical negation requires exact Boolean input", node);
-        }
+        if (operator === "!") operand = adaptCondition(operand, context, node.children[0]!,
+            "HARDENED_UNARY_BOOLEAN", "logical negation requires a proven value and application-profile AS3 coercion");
         if (operator === "~" && (!["Number", "int", "uint"].includes(operandType.sourceName)
             || operandType.emittedName !== "number")) {
             fail("HARDENED_UNARY_BITWISE", "bitwise complement requires a proven numeric input", node);
@@ -2475,7 +2474,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         return Object.assign(identity(node), {
             kind: "unary" as "unary", operator: operator as "+" | "-" | "!" | "~", operand,
-            resultType: operator === "~" ? semanticType(node, "int", "number") : operandType,
+            resultType: operator === "!" ? semanticType(node, "Boolean", "boolean", [], false)
+                : operator === "~" ? semanticType(node, "int", "number") : operandType,
         });
     }
     if (node.kind === "ENCAPSULATED") {
@@ -3584,11 +3584,9 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             let condition: SemanticExpression | null = null;
             if (conditionOwner !== null) {
                 if (conditionOwner.children.length !== 1) fail("HARDENED_FOR_CONDITION", "for condition requires one expression", conditionOwner);
-                condition = parseExpression(conditionOwner.children[0]!, context, true);
-                const conditionType = assignmentType(condition, context, conditionOwner.children[0]!);
-                if (conditionType.sourceName !== "Boolean" || conditionType.emittedName !== "boolean") {
-                    fail("HARDENED_FOR_BOOLEAN", "for condition requires an exact Boolean expression", conditionOwner);
-                }
+                condition = adaptCondition(parseExpression(conditionOwner.children[0]!, context, true), context,
+                    conditionOwner.children[0]!, "HARDENED_FOR_BOOLEAN",
+                    "for condition requires a proven value and application-profile AS3 coercion");
             }
             let update: SemanticExpression | null = null;
             if (updateOwner !== null) {

@@ -772,6 +772,17 @@ try {
         conditionSource,sha256),error=>error&&error.code==="HARDENED_IF_BOOLEAN");
     const conditionSemantic=built.adapter.adaptNormalizedParserAst(conditionNormalized,authority(built.ledger),
         conditionSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    const booleanContextSource = 'package p { public class BooleanContext { public function negate(value:Object):Boolean { return !value; } public function loop(value:Number):void { for (;value;) { break; } } } }';
+    const booleanContextAst = built.normalizer.normalizeParserAst(built.parse("BooleanContext.as", booleanContextSource), booleanContextSource, sha256);
+    assert.throws(() => built.adapter.adaptNormalizedParserAst(booleanContextAst, authority(built.ledger), booleanContextSource, sha256),
+        error => error && error.code === "HARDENED_UNARY_BOOLEAN");
+    const booleanContext = built.adapter.adaptNormalizedParserAst(booleanContextAst, authority(built.ledger), booleanContextSource,
+        sha256, undefined, undefined, undefined, undefined, sourceMemberAuthority);
+    const negation = booleanContext.declaration.members.find(member => member.name === "negate").body[0].expression;
+    assert.equal(negation.operand.kind, "coercion");
+    assert.equal(negation.resultType.sourceName, "Boolean");
+    assert.equal(negation.resultType.nullable, false);
+    assert.equal(booleanContext.declaration.members.find(member => member.name === "loop").body[0].condition.kind, "coercion");
     const conditionOutput=built.emitter.emitSemanticProgram(conditionSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
     assert.match(conditionOutput.code,/if \(__as3Boolean\(item\)\)/);

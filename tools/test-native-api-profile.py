@@ -58,4 +58,18 @@ public class Base {
         row['members'][0]['signature'] = 'get number; set unknown'
         self.assertEqual(len(api.map_native_members(*args)[0]), 1)
 
+    def test_native_string_is_nullable_but_numeric_and_boolean_are_not(self):
+        member = dict(name='value', access='read', scope='instance', constructor=False,
+            signature='public function get value() : String', minArgs=0, maxArgs=0,
+            type='String', parameters=[])
+        classes = {'flash.events.Payload': {'base': None, 'members': [member]}}
+        target = dict(name='value', scope='instance', kind='get+set', signature='string | null')
+        row = dict(module='Payload.ts', export='Payload', kind='class', signature='typeof Payload', members=[target])
+        args = ('flash.events.Payload', ['instance-member'], row, 'capability', classes, {'value'})
+        self.assertEqual(len(api.map_native_members(*args)[0]), 1)
+        for native, target_type in [('Boolean', 'boolean | null'), ('Number', 'number | null'), ('String', 'string | undefined')]:
+            member['type'] = native
+            target['signature'] = target_type
+            self.assertEqual(api.map_native_members(*args), ([], []))
+
 if __name__ == '__main__': unittest.main()

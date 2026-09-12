@@ -158,7 +158,7 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
                 if native['access'] == 'write' and target in ('unknown', 'any'): return True
                 primitive = {'Boolean': 'boolean', 'Number': 'number', 'int': 'number', 'uint': 'number', 'String': 'string'}.get(native['type'])
                 if primitive:
-                    return target == primitive or (native['scope'] == 'static' and native['access'] == 'read'
+                    return target == primitive or (primitive == 'string' and target in ('string | null', 'null | string')) or (native['scope'] == 'static' and native['access'] == 'read'
                         and primitive == 'string' and target.startswith('"'))
                 if native['type'] == 'Array': return bool(re.fullmatch(r'(?:readonly )?[A-Za-z_$][\w$]*(?:\[\])(?: \| null)?', target))
                 if native['type'].startswith('flash.'):
