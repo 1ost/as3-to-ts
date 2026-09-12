@@ -86,3 +86,49 @@ test('Array enumeration keeps receiver identity and coerces each current typed s
  assert.equal(iterator.next().value,'a');as3ArrayCall(original,'shift',[]);
  assert.equal(iterator.next().value,'c');assert.equal(iterator.next().done,true);
 });
+
+test('concat preserves native sparse ownership and ignores named fields and constructors',()=>{
+ const crypto=require('node:crypto');
+ const folder=path.join(process.env.HARDENED_FIXTURE_LAYA,'tests/nativeFlashOracle/array-concat-sparse');
+ const native=JSON.parse(fs.readFileSync(path.join(folder,'native-air.json'),'utf8'));
+ for(const [file,field] of [['ArrayConcatSparseProbe.as','sourceSha256'],['scenario.json','scenarioSha256']])
+  assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(folder,file))).digest('hex'),native[field]);
+ for(const row of native.capture.state.observations){
+  const left=new Array(3);left[1]='middle';
+  const right=new Array(2);right[1]=undefined;
+  if(row.id==='named'){left.extra='ignore';right.extra='ignore';}
+  if(row.id==='constructor')left.constructor=()=>{throw new Error('constructor called');};
+  const joined=as3ArrayCall(left,'concat',row.id==='clone'?[]:[right,'last']);
+  let keys='';for(let i=0;i<joined.length;i++)keys+=Object.hasOwn(joined,i)?'1':'0';
+  assert.deepEqual({length:joined.length,result:String(joined),keys,source:String(left)+':'+String(right)},
+   {length:row.length,result:row.result,keys:row.keys,source:row.source},row.id);
+  assert.equal(Object.hasOwn(joined,'extra'),false);
+  assert.equal(Object.hasOwn(joined,'constructor'),false);
+  assert.notEqual(joined,left);
+ }
+});
+
+test('concat flattens one Array level and preserves references without JS spreadability hooks',()=>{
+ const item={},nested=['nested'],arrayLike={0:'not spread',length:1,[Symbol.isConcatSpreadable]:true};
+ const source=[item,nested],joined=as3ArrayCall(source,'concat',[[nested,item],arrayLike,null,undefined]);
+ assert.deepEqual(joined,[item,nested,nested,item,arrayLike,null,undefined]);
+ assert.equal(joined[1],joined[2]);assert.equal(joined[0],joined[3]);
+ source.push('source only');nested.push('shared');
+ assert.equal(joined.length,7);assert.deepEqual(joined[1],['nested','shared']);
+});
+
+test('concat rejects unsupported Array receivers and accessors without invoking their values',()=>{
+ let reads=0;
+ const getter=[1];Object.defineProperty(getter,'0',{get(){reads++;return 1;}});
+ const hidden=[1];Object.defineProperty(hidden,'0',{enumerable:false});
+ const symbolic=[1];symbolic[Symbol.isConcatSpreadable]=false;
+ for(const value of [getter,hidden,symbolic,new (class extends Array {})(1,2)])
+  assert.throws(()=>as3ArrayCall([],'concat',[value]),AS3ArrayOperationUnavailable);
+ assert.equal(reads,0);
+ const overridden=[];overridden.concat=()=>['wrong'];
+ assert.throws(()=>as3ArrayCall(overridden,'concat',[]),AS3ArrayOperationUnavailable);
+ const full=[];full.length=0xffffffff;
+ assert.throws(()=>as3ArrayCall(full,'concat',[1]),AS3ArrayOperationUnavailable);
+ assert.equal(full.length,0xffffffff);
+ assert.throws(()=>as3ArrayCall(null,'concat',[]),{name:'TypeError',errorID:1009});
+});

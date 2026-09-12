@@ -206,6 +206,16 @@ undefined. Native null-receiver errors are retained. Overridden methods and leng
 overflow remain explicit unsupported boundaries. Indexed writes and other Array
 methods still require shared support.
 
+Array `concat` now returns a fresh native Array, spreads Array arguments one level,
+retains reference identity and preserves sparse holes. It ignores named fields
+and an overridden source constructor rather than consulting JavaScript species.
+The 16-checkpoint ArrayConcatProbe passes native AIR and generated Laya, including
+the `[].concat(message, rest)` pattern from unchanged AP LoggerManager. The
+separate sparse probe's four native captures are replayed against the shared
+runtime; its indexed writes and hasOwnProperty source emission remain separate
+holds. Array subclasses, prototype indices, own symbols, indexed accessors,
+hidden slots, overridden concat and length overflow still fail explicitly.
+
 Strict equality involving Object/wildcard values preserves native type-sensitive
 primitive comparisons and reference identity; loose coercive equality is unchanged.
 Class registration admits recursively literal static Array/Object containers,

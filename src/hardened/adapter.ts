@@ -2101,7 +2101,7 @@ function assertAssignmentCompatible(target: SemanticType, value: SemanticType, n
         || target.sourceName === "Object" || target.sourceName === "*" || sameType(target, value)) {
         return;
     }
-    fail("HARDENED_ASSIGNMENT_TYPE", "assignment requires exact proven source types; implicit AS3 coercion is held", node);
+    fail("HARDENED_ASSIGNMENT_TYPE", `assignment from ${value.sourceName} (${value.emittedName}, nullable=${value.nullable}) to ${target.sourceName} (${target.emittedName}, nullable=${target.nullable}) requires proven AS3 coercion at node ${node.id}`, node);
 }
 
 function adaptAssignmentValue(target: SemanticType, expression: SemanticExpression,
@@ -3259,7 +3259,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
-                        && !valuePosition && ["push","pop","shift","unshift"].includes(name);
+                        && !valuePosition && ["push","pop","shift","unshift","concat"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase"].includes(name);
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
@@ -3592,14 +3592,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
             && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee))) {
             const name = callee.name;
-            if (!["push","pop","shift","unshift"].includes(name)
+            if (!["push","pop","shift","unshift","concat"].includes(name)
                 || (["pop","shift"].includes(name) && args.length !== 0))
                 fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
                 fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
             capabilitySource = "Array";
             capabilityMember = name;
-            resultType = name === "push" || name === "unshift"
+            resultType = name === "concat" ? semanticType(node,"Array","Array",[],false)
+                : name === "push" || name === "unshift"
                 ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && vectorElement(assignmentType(callee.target, context, rawCallee)) !== null) {
             const ownerType = assignmentType(callee.target, context, rawCallee);
