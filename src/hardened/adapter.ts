@@ -2910,7 +2910,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (!["+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>", ">>>", "&&", "||"].includes(binaryOperator)) {
                 fail("HARDENED_ASSIGNMENT_OPERATOR", "compound assignment operator is unsupported", node.children[1]!);
             }
-            if (target.kind === "index" || (target.kind === "member" && target.target.kind !== "this")) {
+            const ownStaticField = target.kind === "member" && target.target.kind === "identifier"
+                && target.target.bindingKind === "current-class"
+                && target.target.bindingSourceQualifiedName === context.classQualifiedName
+                && context.fields[target.name]?.modifiers.includes("static");
+            if (target.kind === "index" || (target.kind === "member" && target.target.kind !== "this" && !ownStaticField)) {
                 fail("HARDENED_COMPOUND_TARGET", "compound assignment requires a once-evaluated local, parameter, or direct this field", node.children[0]!);
             }
             const numeric = (type: SemanticType): boolean => ["Number", "int", "uint"].includes(type.sourceName)
@@ -4217,7 +4221,7 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
         const node = block.children[statementIndex]!;
         if (node.kind !== "TRY") {
             statements.push(parseStatementNode(node, context, constructor, derived, expectedReturn,
-                allowLeadingSuper && constructor && statementIndex === 0));
+                allowLeadingSuper && constructor && statements.every(statement => statement.kind === "local" || statement.kind === "empty")));
             continue;
         }
         if (node.children.length !== 1 || node.children[0]!.kind !== "BLOCK") {
@@ -4460,6 +4464,16 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     }
     return { node, name, modifiers, namespaceName: memberModifiers.namespaceName,
         parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor };
+}
+
+/** Semantic IR is acyclic; reject receiver references in pre-super local initializers. */
+function usesConstructionReceiver(value: unknown): boolean {
+    if (value === null || typeof value !== "object") return false;
+    if (Array.isArray(value)) return value.some(usesConstructionReceiver);
+    const item = value as { [key: string]: unknown };
+    return item.kind === "this" || item.kind === "super"
+        || item.kind === "lambda" && item.lexicalReceiver !== undefined
+        || Object.values(item).some(usesConstructionReceiver);
 }
 
 function superCall(statement: SemanticStatement): boolean {
@@ -4959,15 +4973,16 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             }
             if (header.constructor) {
                 const count = body.filter(superCall).length;
-                if (extendsType !== null && (count !== 1 || !superCall(body[0]!))) {
-                    fail("HARDENED_SUPER_ORDER", "derived constructor requires exactly one first-position super call and it is never reordered", node);
+                const superIndex = body.findIndex(superCall);
+                const leading = body.slice(0, Math.max(0, superIndex));
+                if (count > 1 || extendsType !== null && count !== 1
+                    || leading.some(statement => statement.kind !== "local" && statement.kind !== "empty")) {
+                    fail("HARDENED_SUPER_ORDER", "constructor requires one top-level super call preceded only by local declarations or empty statements", node);
                 }
-                if (extendsType === null) {
-                    if (count > 1 || (count === 1 && !superCall(body[0]!))) {
-                        fail("HARDENED_SUPER_ORDER", "implicit Object constructor permits only one first-position zero-argument super call", node);
-                    }
-                    if (count === 1) body.shift();
+                if (leading.some(usesConstructionReceiver)) {
+                    fail("HARDENED_SUPER_LOCAL_RECEIVER", "local initialization before super cannot access the construction receiver", node);
                 }
+                if (extendsType === null && count === 1) body = body.filter(statement => !superCall(statement));
                 const constructor: SemanticConstructor = Object.assign(identity(node), {
                     kind: "constructor" as "constructor", modifiers: header.modifiers,
                     parameters: header.parameters, body,

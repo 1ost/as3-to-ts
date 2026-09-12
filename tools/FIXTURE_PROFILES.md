@@ -393,3 +393,15 @@ order, first matching case, default placement and fallthrough. The emitted nativ
 JavaScript switch already supplies these proven semantics; no slot coercion is
 inserted into a case label. Other mixed source-type cases keep their existing
 admission boundary.
+
+
+Constructor-local declarations may precede an explicit top-level super call.
+Their initializers execute in source order before construction preparation, so
+values passed to the base and thrown initializers retain native behavior. The
+emitter preserves this order without relocating declarations in original AS3.
+Pre-super this/super references, lexical receiver captures and control flow remain
+held. ConstructorLocalsProbe retains default Number/NaN, null DisplayObject slots,
+ordered static calls, exception propagation and later construction recovery across
+three original classes. Its independent static compound hold also establishes
+current-class static-field updates through the existing coercion path; imported
+receiver expressions and static accessor compounds remain outside this extension.

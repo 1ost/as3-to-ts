@@ -660,6 +660,24 @@ try {
     assert.equal(packageFunctionDeclaration.members[0].kind, "method");
     assert.equal(packageFunctionDeclaration.members[0].name, "helper");
 
+    const adaptConstructor = body => {
+        const source = `package p { import flash.display.Sprite; public class C extends Sprite {
+            public var result:int = 0;
+            public function C() { ${body} }
+        } }`;
+        const tree = built.parse("fixtures/ConstructorLocals.as", source);
+        return built.adapter.adaptNormalizedParserAst(
+            built.normalizer.normalizeParserAst(tree, source, sha256), authority(built.ledger), source, sha256);
+    };
+    const constructorLocals = adaptConstructor("var saved:int = 3; ; super(); result = saved;");
+    assert.deepEqual(constructorLocals.declaration.members.find(m => m.kind === "constructor").body.map(s => s.kind),
+        ["local", "empty", "expression", "expression"]);
+    for (const body of ["var saved:Object = this; super();", "var saved:int = result; super();"])
+        assert.throws(() => adaptConstructor(body), error => error.code === "HARDENED_SUPER_LOCAL_RECEIVER");
+    for (const body of ["super(); super();", "var saved:int = 3; saved = 4; super();",
+        "if (true) { super(); }"])
+        assert.throws(() => adaptConstructor(body), error => error.code === "HARDENED_SUPER_CONTEXT");
+
     const overrideSource = "package p { import flash.display.Sprite; public class C extends Sprite { public function C(){super();} override public function toString():String{return \"C\";} } }";
     const overrideTree = built.parse("fixtures/Override.as", overrideSource);
     const overrideNormalized = built.normalizer.normalizeParserAst(overrideTree, overrideSource, sha256);

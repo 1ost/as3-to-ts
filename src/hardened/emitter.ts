@@ -900,10 +900,11 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
     const className = classDeclaration.name;
     const derived = classDeclaration.extendsType !== null;
     const original = member === null ? [] : member.body.map(statement => statementNode(statement, ts));
-    const first = member?.body[0];
-    const beginsWithSuper = first !== undefined && first.kind === "expression"
-        && first.expression.kind === "call" && first.expression.callee.kind === "super";
-    const originalSuperStatement = beginsWithSuper ? original.shift()! : derived && member === null
+    const superIndex = member?.body.findIndex(statement => statement.kind === "expression"
+        && statement.expression.kind === "call" && statement.expression.callee.kind === "super") ?? -1;
+    // Keep local side effects and failures before preparing the base constructor call.
+    const leadingLocals = superIndex < 0 ? [] : original.splice(0, superIndex);
+    const originalSuperStatement = superIndex >= 0 ? original.shift()! : derived && member === null
         ? ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createSuper(), undefined, [])) : null;
     let prepareStatement: any = null;
     let superStatement: any = null;
@@ -967,12 +968,12 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
                 ts.factory.createIdentifier("__as3ConstructionProof")]))], true)),
     ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
         ts.factory.createIdentifier("__as3ConstructionTargets"), "delete"), undefined, [ts.factory.createThis()]))], true);
-    const body = [constructorArityGuard(className, member, ts),
+    const body = [constructorArityGuard(className, member, ts), ...leadingLocals,
         ...(superStatement === null ? [] : [prepareStatement, superStatement])]
         .concat(prologue, [ts.factory.createTryStatement(
         ts.factory.createBlock(tryBody, true), catchClause, finallyClause)]);
     if (derived && superStatement === null) {
-        throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR", "derived constructor lacks its proven first super call", program.sourceNodeId);
+        throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR", "derived constructor lacks its proven top-level super call", program.sourceNodeId);
     }
     return ts.factory.createConstructorDeclaration(member === null ? undefined : modifierTokens(member.modifiers, ts),
         member === null ? [] : member.parameters.map(parameter => parameterNode(parameter, ts)),
