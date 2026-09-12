@@ -125,8 +125,9 @@ data properties. Wildcard-to-Object assignment converts undefined to null while
 preserving other values; uninitialized wildcard locals use explicit undefined IR and emit function-scoped
 `var` declarations without resetting the value at the declaration site.
 `ObjectValuesProbe` in the shared Laya oracle retains the executable comparison.
-General dynamic Object indexing, trait visibility and prototype methods remain
-held; this literal/slot support does not authorize raw JavaScript class access.
+Authenticated profiles route scalar-key Object/wildcard reads, writes, deletion,
+`in`, `hasOwnProperty` and `toString` through shared Object dispatch. Class reads
+use retained traits and lexical caller identity; no raw JS class access is admitted.
 Uninitialized Number locals and defaults of other local types before their
 declaration remain separate compatibility work.
 
@@ -142,5 +143,11 @@ same-class access can reach a private field while external access fails; `in` an
 `hasOwnProperty` use public names. Do not implement generic indexing using only
 public descriptors, nor infer source privacy from generated JavaScript fields.
 Namespace names retained here are source identities, not resolved namespace URIs.
-The adapter still holds dynamic Object access; the metadata is a prerequisite,
-not an implementation or parity waiver. Dynamic class declarations remain held.
+The dispatcher implements retained sealed-class reads/writes and public presence
+checks; native-only class captures are replayed against the runtime helper. The
+unchanged dynamic-object fixture also passes actual generated Laya execution.
+Mapped classes without traits, protected lookup, resolved named namespaces,
+namespace storage collisions, primitive receivers, Object-valued keys and reference
+slot coercion remain explicit unsupported boundaries. General dynamic calls and
+dynamic class declarations remain held. Helper tests do not establish full class
+execution or application parity.

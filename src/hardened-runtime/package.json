@@ -16,7 +16,8 @@
     "./AS3Timer": "./AS3Timer.js",
     "./AS3Type": "./AS3Authority.generated.js",
     "./AS3Vector": "./AS3Authority.generated.js",
-    "./ApplicationEntry": "./ApplicationEntry.generated.js"
+    "./ApplicationEntry": "./ApplicationEntry.generated.js",
+    "./AS3ObjectDispatch": "./AS3Authority.generated.js"
   },
   "files": [
     "AS3Authority.generated.js",

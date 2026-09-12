@@ -579,3 +579,15 @@ export function lookupObjectClass(value: unknown): Readonly<{qname:string; const
         chain.push(CLASS_OBJECT_ENTRIES.get(current)!);
     return Object.freeze({qname:chain[0]!.qname, constructor:selected, chain:Object.freeze(chain)});
 }
+
+/** Lexical callers come from generated class identity, not the receiver's fields. */
+export function lookupObjectCaller(qname: string): readonly string[] {
+    requireSealed();
+    const owner = CLASS_BY_QNAME.get(qname);
+    if (!owner || !CLASS_OBJECT_ENTRIES.get(owner.constructor)?.traits)
+        throw new TypeError("AS3 Object caller lacks authenticated local traits");
+    const result:string[] = [];
+    for (let current:RuntimeConstructor | null = owner.constructor; current !== null; current = CLASS_BASES.get(current) ?? null)
+        result.push(CLASS_OBJECT_ENTRIES.get(current)!.qname);
+    return Object.freeze(result);
+}

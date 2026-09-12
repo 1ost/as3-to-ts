@@ -219,7 +219,17 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3CreateOwnRecord"),
             [typeNode(expression.valueType, ts)], []);
     }
+    if (expression.kind === "objectOperation") {
+        const key = expressionNode(expression.index,ts), target = expressionNode(expression.target,ts);
+        return ts.factory.createCallExpression(ts.factory.createIdentifier(expression.operation === "has" ? "__as3ObjectIn" : "__as3ObjectCall"),undefined,
+            expression.operation === "has" ? [key,target] : [target,key,
+                ts.factory.createArrayLiteralExpression(expression.arguments.map(argument => expressionNode(argument,ts))),
+                ts.factory.createStringLiteral(expression.callerQName)]);
+    }
     if (expression.kind === "index") {
+        if (expression.accessKind === "object") return ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3ObjectRead"),undefined,[expressionNode(expression.target,ts),
+                expressionNode(expression.index,ts),ts.factory.createStringLiteral(expression.callerQName!)]);
         const target = expressionNode(expression.target, ts);
         const admittedTarget = expression.targetNullable ? ts.factory.createNonNullExpression(target) : target;
         if (expression.accessKind === "bigTurnTableInnerRoot") {
@@ -270,6 +280,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             expression.argument === null ? [] : [expressionNode(expression.argument, ts)]);
     }
     if (expression.kind === "assignment") {
+        if (expression.target.kind === "index" && expression.target.accessKind === "object")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectWrite"),undefined,[
+                expressionNode(expression.target.target,ts),expressionNode(expression.target.index,ts),
+                expressionNode(expression.value,ts),ts.factory.createStringLiteral(expression.target.callerQName!)]);
         if (expression.target.kind === "index" && expression.target.accessKind === "dictionary") {
             const target = expressionNode(expression.target.target, ts);
             const admittedTarget = expression.target.targetNullable
@@ -387,6 +401,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             ts.factory.createBlock(expression.statements.map(statement => statementNode(statement, ts)), true));
     }
     if (expression.kind === "delete") {
+        if (expression.target.accessKind === "object") return ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3ObjectDelete"),undefined,[expressionNode(expression.target.target,ts),
+                expressionNode(expression.target.index,ts),ts.factory.createStringLiteral(expression.target.callerQName!)]);
         const target = expressionNode(expression.target.target, ts);
         const admittedTarget = expression.target.targetNullable
             ? ts.factory.createNonNullExpression(target) : target;
@@ -568,6 +585,9 @@ function boundMethodNames(program: SemanticProgram): string[] {
             expression.elements.forEach(inspectExpression);
         } else if (expression.kind === "object") {
             expression.properties.forEach(property => inspectExpression(property.value));
+        } else if (expression.kind === "objectOperation") {
+            inspectExpression(expression.target); inspectExpression(expression.index);
+            expression.arguments.forEach(inspectExpression);
         } else if (expression.kind === "index") {
             inspectExpression(expression.target);
             inspectExpression(expression.index);
@@ -905,6 +925,8 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "coercion") return expression.argument !== null && visitExpression(expression.argument);
         if (expression.kind === "array") return expression.elements.some(visitExpression);
         if (expression.kind === "object") return expression.properties.some(property => visitExpression(property.value));
+        if (expression.kind === "objectOperation") return visitExpression(expression.target)
+            || visitExpression(expression.index) || expression.arguments.some(visitExpression);
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
         if (expression.kind === "member") return visitExpression(expression.target);
@@ -1158,6 +1180,14 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ObjectLiteral"),
                 ts.factory.createIdentifier("__as3ObjectLiteral"))])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Object"), undefined));
+    const usesObjectDispatch = (value:any):boolean => value !== null && typeof value === "object" && (
+        value.kind === "objectOperation" || value.kind === "index" && value.accessKind === "object"
+        || Object.values(value).some(usesObjectDispatch));
+    if (usesObjectDispatch(program)) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
+            ["as3ObjectRead","as3ObjectWrite","as3ObjectDelete","as3ObjectIn","as3ObjectCall"].map(name =>
+                ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3ObjectDispatch"),undefined));
     const globalCalls = new Map<string, Extract<SemanticExpression, {kind: "globalCall"}>>();
     const collectGlobals = (value: any): void => {
         if (!value || typeof value !== "object") return;

@@ -233,11 +233,22 @@ export interface OwnRecordExpression extends SemanticIdentity {
 
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
-    accessKind: "vector" | "dictionary" | "byteArray" | "array" | "ownRecord"
+    accessKind: "object" | "vector" | "dictionary" | "byteArray" | "array" | "ownRecord"
         | "bigTurnTableInnerRoot" | "bigTurnTableInnerCost";
     target: SemanticExpression;
     targetNullable: boolean;
+    callerQName?: string;
     index: SemanticExpression;
+    resultType: SemanticType;
+}
+
+export interface ObjectOperationExpression extends SemanticIdentity {
+    kind: "objectOperation";
+    operation: "has" | "call";
+    target: SemanticExpression;
+    index: SemanticExpression;
+    arguments: SemanticExpression[];
+    callerQName: string;
     resultType: SemanticType;
 }
 
@@ -415,7 +426,7 @@ export interface UpdateExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |

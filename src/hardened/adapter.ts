@@ -1756,6 +1756,15 @@ function currentClassMember(node: TreeNode, context: AdapterContext, name: strin
     });
 }
 
+function dynamicObjectType(type:SemanticType, context:AdapterContext):boolean {
+    return context.sourceMemberAuthority !== null && type.emittedName === "unknown"
+        && (type.sourceName === "Object" || type.sourceName === "*");
+}
+function assertObjectKey(type:SemanticType,node:TreeNode):void {
+    if (!["String","int","uint","Number","Boolean","null","undefined"].includes(type.sourceName))
+        fail("HARDENED_OBJECT_KEY", "dynamic Object keys require proven scalar ToString input", node);
+}
+
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
     if (expression.kind === "member" && (expression.target.kind === "super" || expression.target.kind === "this")
         && expression.capabilitySource !== null && context.mappingsBySource[expression.capabilitySource]) {
@@ -1905,7 +1914,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "parenthesized" || expression.kind === "nonNull") {
         return expression.resultType;
     }
-    if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index") {
+    if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index" || expression.kind === "objectOperation") {
         return expression.resultType;
     }
     if (expression.kind === "delete") return expression.resultType;
@@ -2067,6 +2076,8 @@ function adaptAssignmentValue(target: SemanticType, expression: SemanticExpressi
     if (target.sourceName === "Object" && target.emittedName === "unknown" && value.sourceName === "*") {
         return Object.assign(identity(node), {kind: "coercion" as "coercion", targetType: target, argument: expression});
     }
+    if (target.sourceName === "Boolean" && value.sourceName === "*" && context.sourceMemberAuthority !== null)
+        return Object.assign(identity(node),{kind:"coercion" as const,targetType:target,argument:expression});
     const recordValue = ownRecordValue(target);
     if (recordValue !== null) {
         if (!isTreeNodeContext(context) || context.currentCallable?.constructor !== true
@@ -2396,6 +2407,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_BINARY_SHAPE", "binary expression must contain exactly one operator and two operands", node);
         }
         const operator = requiredText(node.children[1]!, "binary operator");
+        if (operator === "in") {
+            const index = parseExpression(node.children[0]!,context,true);
+            const target = parseExpression(node.children[2]!,context,true);
+            if (!dynamicObjectType(assignmentType(target,context,node),context))
+                fail("HARDENED_OBJECT_IN", "in requires an authenticated Object target", node);
+            assertObjectKey(assignmentType(index,context,node),node);
+            return Object.assign(identity(node), {kind:"objectOperation" as const,operation:"has" as const,
+                target,index,arguments:[],callerQName:context.classQualifiedName,resultType:semanticType(node,"Boolean","boolean")});
+        }
         const admitted = new Set(["<", "<=", ">", ">=", "==", "!=", "===", "!==", "&&", "||", "+", "-", "*", "/", "%"]);
         if (!admitted.has(operator)) {
             fail("HARDENED_BINARY_OPERATOR", "coercive or runtime-dependent binary operator remains held", node.children[1]!);
@@ -2603,8 +2623,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } finally {
             context.ownRecordTargetDepth -= 1;
         }
-        if (target.kind !== "index" || target.accessKind !== "dictionary") {
-            fail("HARDENED_DELETE_TARGET", "delete is admitted only for an authenticated Dictionary index", node.children[0]!);
+        if (target.kind !== "index" || target.accessKind !== "dictionary" && target.accessKind !== "object") {
+            fail("HARDENED_DELETE_TARGET", "delete requires an authenticated Dictionary or Object index", node.children[0]!);
         }
         return Object.assign(identity(node), {
             kind: "delete" as "delete", target, resultType: semanticType(node, "Boolean", "boolean"),
@@ -2813,6 +2833,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             context.ownRecordTargetDepth -= 1;
         }
         const ownerType = assignmentType(target, context, node.children[0]!);
+        if (dynamicObjectType(ownerType,context)) {
+            const index = parseExpression(node.children[1]!,context,true);
+            assertObjectKey(assignmentType(index,context,node.children[1]!),node.children[1]!);
+            return Object.assign(identity(node),{kind:"index" as const,accessKind:"object" as const,target,
+                targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,resultType:semanticType(node,"*","unknown")});
+        }
         const innerRoot = innerRootTarget(target, context);
         const innerCost = ownerType.sourceName === BIG_TURN_TABLE_INNER_COST_TUPLE;
         const element = vectorElement(ownerType);
@@ -2934,6 +2960,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             target = Object.assign(identity(node.children[0]!), { kind: "super" as "super" });
         } else {
             target = parseExpression(node.children[0]!, context, false);
+        }
+        if (target.kind !== "super" && target.kind !== "this"
+            && (target.kind !== "identifier" || !!context.locals[target.name] || !!context.parameters[target.name]
+                || context.importsByLocal[target.name]?.localValueType != null)
+            && dynamicObjectType(assignmentType(target,context,node.children[0]!),context)) {
+            const index = Object.assign(identity(node.children[1]!),{kind:"literal" as const,value:name});
+            return Object.assign(identity(node),{kind:"index" as const,accessKind:"object" as const,target,
+                targetNullable:true,index,callerQName:context.classQualifiedName,resultType:semanticType(node,"*","unknown")});
         }
         if (target.kind === "this" && context.methods[name] && valuePosition) {
             if (!allowMethodClosure) {
@@ -3157,6 +3191,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         }
         const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
+        if (callee.kind === "index" && callee.accessKind === "object") {
+            if (callee.index.kind !== "literal" || !["hasOwnProperty","toString"].includes(String(callee.index.value)))
+                fail("HARDENED_OBJECT_CALL_TARGET", "dynamic calls require retained native argument and return behavior", node);
+            const expected = callee.index.value === "hasOwnProperty" ? 1 : 0;
+            if (args.length !== expected) fail("HARDENED_OBJECT_CALL_ARITY", "Object builtin call has an unproved arity", node);
+            if (args.length) assertObjectKey(assignmentType(args[0]!,context,node),node);
+            return Object.assign(identity(node),{kind:"objectOperation" as const,operation:"call" as const,
+                target:callee.target,index:callee.index,arguments:args,callerQName:context.classQualifiedName,
+                resultType:semanticType(node,"*","unknown")});
+        }
         let capabilitySource: string | null = null;
         let capabilityMember: string | null = null;
         let resultType: SemanticType | null = null;
