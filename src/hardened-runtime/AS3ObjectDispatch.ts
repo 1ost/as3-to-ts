@@ -1,3 +1,4 @@
+import { AS3ArgumentError } from "./AS3Error";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
 import { lookupObjectClass, lookupObjectCaller, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod, isAS3MethodClosure } from "./AS3MethodClosure";
@@ -226,7 +227,7 @@ function arrayString(value:unknown[], active:Set<object>, separator:string=","):
 }
 function conversionMethod(value:object, name:string, active:Set<object>):unknown {
     const array=Array.isArray(value);
-    const nativeError = value instanceof Error && [Error.prototype,TypeError.prototype,ReferenceError.prototype,
+    const nativeError = value instanceof Error && [Error.prototype,AS3ArgumentError.prototype,TypeError.prototype,ReferenceError.prototype,
         RangeError.prototype,SyntaxError.prototype,URIError.prototype,EvalError.prototype].includes(Object.getPrototypeOf(value));
     if (array && Object.getPrototypeOf(value) !== Array.prototype)
         return unavailable("Array subclass conversion requires authenticated native traits");

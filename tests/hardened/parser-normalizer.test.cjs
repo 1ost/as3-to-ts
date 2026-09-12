@@ -799,6 +799,34 @@ try {
     const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson),sha256);
     {
+        const adaptError = (body, authenticated = true, parameters = "") => {
+            const source = `package p { public class ErrorConstruction {
+                public function fail(${parameters}):Error { ${body} }
+            } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("ErrorConstruction.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,
+                authenticated ? sourceMemberAuthority : undefined);
+        };
+        const admitted = adaptError('return new ArgumentError("missing", -7);');
+        const returned = admitted.declaration.members.find(member=>member.name === "fail").body[0].expression;
+        assert.equal(returned.kind,"new");
+        assert.equal(returned.sourceType.sourceName,"ArgumentError");
+        assert.equal(returned.sourceType.emittedName,"__AS3ArgumentError");
+        const errorSource='package p { public class ErrorRead { public function read(error:Error):* { return error.message + 1; } } }';
+        const message=built.adapter.adaptNormalizedParserAst(
+            built.normalizer.normalizeParserAst(built.parse("ErrorRead.as",errorSource),errorSource,sha256),
+            authority(built.ledger),errorSource,sha256,undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+        const sum=message.declaration.members.find(member=>member.name === "read").body[0].expression;
+        assert.equal(sum.additionCoercion,true);
+
+        assert.throws(()=>adaptError('return new ArgumentError("missing");',false),error=>error?.code === "HARDENED_NEW_AUTHORITY");
+        assert.throws(()=>adaptError('return new ArgumentError("missing");',true,'ArgumentError:Function'),error=>error?.code === "HARDENED_NEW_AUTHORITY");
+        for (const args of ['"message", "id"','"message", 7, 8'])
+            assert.throws(()=>adaptError(`return new ArgumentError(${args});`),error=>error?.code === "HARDENED_ARGUMENT_ERROR_CONSTRUCTOR");
+    }
+
+    {
         const adapt = (expression, authenticated = true) => {
             const source = `package p { import flash.display.Sprite; public class NullableReference {
                 public function choose(flag:Boolean, numeric:Number):Sprite { return ${expression}; }

@@ -69,3 +69,24 @@ reflection-triggered initialization and other Flash runtime versions need
 separate evidence. Array.join admission uses the shared primitive conversion
 owner and keeps unsupported recursive/host array behavior explicit. Ordinary
 TypeScript Laya consumers do not install this compiler runtime.
+
+
+### Native ArgumentError construction
+
+Authenticated application profiles lower an unshadowed `new ArgumentError` to
+shared `AS3Error` runtime construction. The source identity remains ArgumentError;
+the runtime extends Error and preserves its message value until native string
+conversion. Zero through two arguments are supported, with a proven numeric
+second argument converted to int after argument evaluation. Imported, local,
+parameter, field, method and inherited names continue through source resolution.
+Error.message and Error.name retain their SDK wildcard types, including native
+addition and typed String slot conversion. Error.errorID remains int.
+
+The shared Laya oracle retains eleven ArgumentError checkpoints (including exact
+original application failure messages) and six message-value checkpoints. The
+original UIManager/DataLoader constructor holds clear without AS3 edits; their
+remaining dependency and callback holds are separate. Explicit ArgumentError
+type annotations, typed catches, subclass construction, reflection, nonnumeric
+identifier conversion and mutable prototype behavior require additional evidence
+and admission. Original Error construction retains its existing argument bounds.
+Ordinary TypeScript Laya consumers do not need this compiler runtime.

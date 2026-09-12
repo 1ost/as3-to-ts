@@ -408,6 +408,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "new") {
+        if (expression.sourceType.emittedName === "__AS3ArgumentError" && expression.sourceType.runtimeName === "ArgumentError")
+            return ts.factory.createNewExpression(ts.factory.createIdentifier("__AS3ArgumentError"),undefined,
+                expression.arguments.map(argument => expressionNode(argument,ts)));
         if (expression.constructorValue) {
             return ts.factory.createNewExpression(ts.factory.createParenthesizedExpression(ts.factory.createAsExpression(
                 expressionNode(expression.constructorValue, ts), ts.factory.createConstructorTypeNode(undefined, undefined, [],
@@ -1478,6 +1481,14 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || programUsesRuntimeType(program) || implementsTypes.length > 0 || programUsesVector(program)) {
         imports.push(runtimeTypeImport(ts));
     }
+    const argumentError=(value:any):boolean => value !== null && typeof value === "object" && (
+        value.kind === "new" && value.sourceType.emittedName === "__AS3ArgumentError"
+        && value.sourceType.runtimeName === "ArgumentError" || Object.values(value).some(argumentError));
+    if (argumentError(program)) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("AS3ArgumentError"),
+                ts.factory.createIdentifier("__AS3ArgumentError"))])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Error"),undefined));
     const primitiveMember=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "member" && value.capabilitySource === "String" && value.name === "length"
         || value.kind === "member" && value.capabilitySource === "Error" && value.name === "errorID"

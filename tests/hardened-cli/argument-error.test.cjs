@@ -1,0 +1,30 @@
+"use strict";
+const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),os=require("node:os"),test=require("node:test");
+const {spawnSync}=require("node:child_process");
+const ROOT=path.resolve(__dirname,"../.."),sdk=process.env.HARDENED_FIXTURE_AIR_SDK,laya=process.env.HARDENED_FIXTURE_LAYA;
+test("authenticated ArgumentError construction emits an Error-compatible sealed runtime package",{skip:!sdk||!laya},t=>{
+ const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),"argument-error-profile-")));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const source=path.join(root,"source"),profile=path.join(root,"profile");fs.mkdirSync(source);
+ const original='package { public class Probe { public function make():Error { return new ArgumentError("Display asset URL is required",73); } } }\n';
+ fs.writeFileSync(path.join(source,"Probe.as"),original);
+ const generated=spawnSync("python3",[path.join(ROOT,"tools/create-fixture-profile.py"),"--source",source,"--entry","Probe","--air-sdk",sdk,"--laya",laya,"--output",profile],{encoding:"utf8",timeout:60000});
+ assert.equal(generated.status,0,generated.stdout+generated.stderr);
+ const invoke=out=>spawnSync(process.execPath,[path.join(ROOT,"bin/as3-frontend"),"transpile",source,out,"--source-census",path.join(profile,"census.json"),"--target-capabilities",path.join(laya,"docTool/architecture/authored-content-capabilities.json"),"--profile-lock",path.join(profile,"profile-lock.json")],{encoding:"utf8",timeout:30000});
+ const out=path.join(root,"out"),result=invoke(out);assert.equal(result.status,0,result.stdout+result.stderr);
+ const runtime=require(path.join(out,"__as3_runtime/AS3Authority.generated.js"));
+ const {AS3_APPLICATION_MODULES}=require(path.join(out,"__as3_runtime/ApplicationEntry.generated.js"));
+ const error=new AS3_APPLICATION_MODULES[0].Probe().make();
+ assert.ok(error instanceof Error);assert.ok(error instanceof runtime.AS3ArgumentError);
+ assert.equal(error.name,"ArgumentError");assert.equal(error.message,"Display asset URL is required");
+ assert.equal(runtime.as3ErrorID(error),73);
+ assert.equal(runtime.as3ErrorToString(error),"ArgumentError: Display asset URL is required");
+ assert.ok(Object.isFrozen(runtime));assert.equal(Reflect.set(runtime,"AS3ArgumentError",Error),false);
+ const packageJson=JSON.parse(fs.readFileSync(path.join(out,"__as3_runtime/package.json"),"utf8"));
+ assert.equal(packageJson.exports["./AS3Error"],"./AS3Authority.generated.js");
+ const again=path.join(root,"again"),repeat=invoke(again);assert.equal(repeat.status,0,repeat.stdout+repeat.stderr);
+ function compare(dir,relative="") {for(const entry of fs.readdirSync(dir,{withFileTypes:true})) {
+  const rel=path.join(relative,entry.name);if(entry.isDirectory())compare(path.join(dir,entry.name),rel);
+  else if(/\.(?:ts|js)$/.test(entry.name))assert.deepEqual(fs.readFileSync(path.join(out,rel)),fs.readFileSync(path.join(again,rel)),rel);
+ }} compare(out);
+ assert.equal(fs.readFileSync(path.join(source,"Probe.as"),"utf8"),original);
+});

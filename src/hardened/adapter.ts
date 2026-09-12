@@ -791,6 +791,9 @@ function referenceParents(qname: string, context: AdapterContext): readonly stri
 
 function provenReferenceSubtype(source: SemanticType, target: SemanticType, context: AdapterContext): boolean {
     if (sameUnderlyingType(source, target)) return true;
+    if (context.sourceMemberAuthority !== null && source.sourceName === "ArgumentError"
+        && source.emittedName === "__AS3ArgumentError" && source.runtimeName === "ArgumentError"
+        && target.sourceName === "Error" && target.emittedName === "Error") return true;
     if (source.runtimeName === null || target.runtimeName === null || source.typeArguments.length !== 0
         || target.typeArguments.length !== 0) return false;
     const states = new Map<string, "visiting" | "complete">();
@@ -1940,7 +1943,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         if (ownerType.sourceName === "Error" && ownerType.emittedName === "Error"
             && (ownerType.runtimeName === null || ownerType.runtimeName === "Error")
             && ["message","name","errorID"].includes(expression.name)) return expression.name === "errorID"
-                ? semanticType(node,"int","number") : semanticType(node,"String","string");
+                ? semanticType(node,"int","number") : semanticType(node,"*","unknown");
         if (ownerType.sourceName === "String" && expression.name === "length") return semanticType(node,"int","number");
         if (isArrayType(ownerType) && expression.name === "length") {
             return semanticType(node, "uint", "number");
@@ -2284,7 +2287,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const args = node.children[1]!.children.map(child => parseExpression(child, context, true));
         args.forEach((argument, index) => {
             const type = assignmentType(argument, context, node.children[1]!.children[index]!);
-            if (!["String","Number","int","uint","Boolean","null","undefined","Object","*","Array","Function","Class","Error"].includes(type.sourceName)
+            if (!["String","Number","int","uint","Boolean","null","undefined","Object","*","Array","Function","Class","Error","ArgumentError"].includes(type.sourceName)
                 && localQNameForType(type,context) === null)
                 fail("HARDENED_GLOBAL_STRING_CONVERSION", "trace value domain requires native String conversion support", node.children[1]!.children[index]!);
         });
@@ -2415,6 +2418,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             })) fail("HARDENED_ERROR_CONSTRUCTOR", "Error construction requires zero arguments or one proven non-null String",call);
             return Object.assign(identity(node),{kind:"new" as const,sourceType:semanticType(node,"Error","Error",[],false),arguments:args});
         }
+        if (name === "ArgumentError" && context.sourceMemberAuthority !== null && context.className !== name
+            && !context.locals[name] && !context.parameters[name] && !context.fields[name] && !context.methods[name]
+            && !context.accessors[name] && !context.importsByLocal[name] && !context.resolveImportedType(name,null,nameNode)) {
+            assertNoInheritedNativeTimerShadow(context,name,nameNode);
+            if (args.length > 2 || (args[1]
+                && !["Number","int","uint"].includes(assignmentType(args[1],context,call).sourceName)))
+                fail("HARDENED_ARGUMENT_ERROR_CONSTRUCTOR", "ArgumentError requires zero to two arguments and a proven numeric identifier",call);
+            return Object.assign(identity(node), {kind:"new" as const,
+                sourceType:semanticType(node,"ArgumentError","__AS3ArgumentError",[],false,"ArgumentError"),arguments:args});
+        }
         const embedded = context.fields[name]?.embeddedBitmap;
         if (embedded && !context.locals[name] && !context.parameters[name]) {
             if (args.length !== 0) fail("HARDENED_EMBED_CONSTRUCTOR_ARITY", "Embedded bitmap construction currently admits zero arguments", call);
@@ -2481,7 +2494,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             const typeMapping = imported ? context.mappingsBySource[imported.sourceQualifiedName] : undefined;
             if (!imported || !typeMapping || typeMapping.sourceRoles.indexOf("constructor") < 0) {
-                fail("HARDENED_NEW_AUTHORITY", "constructor target lacks a double-pinned source and target constructor", nameNode);
+                fail("HARDENED_NEW_AUTHORITY", `constructor target ${name} lacks a double-pinned source and target constructor at node ${nameNode.id}`, nameNode);
             }
             const mapping = memberMapping(context, imported.sourceQualifiedName, "call", name, call);
             if (mapping === null || mapping.sourceRoles.indexOf("constructor") < 0

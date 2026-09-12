@@ -1,3 +1,4 @@
+import { AS3ArgumentError } from "./AS3Error";
 import { as3IntegerText } from "./internal/AS3ParseInteger";
 import { as3ObjectLiteral } from "./AS3Object";
 import { as3FixedDecimal } from "./internal/AS3NumberFormat";
@@ -82,7 +83,7 @@ export function as3ErrorID(value:unknown):number {
 /** Canonical native Error.toString; custom overrides require their own dispatch evidence. */
 export function as3ErrorToString(value:unknown):string {
     primitiveReceiver(value);
-    if (!(value instanceof Error) || ![Error.prototype,TypeError.prototype,ReferenceError.prototype,
+    if (!(value instanceof Error) || ![Error.prototype,AS3ArgumentError.prototype,TypeError.prototype,ReferenceError.prototype,
         RangeError.prototype,SyntaxError.prototype,URIError.prototype,EvalError.prototype].includes(Object.getPrototypeOf(value))
         || Reflect.get(value,"toString") !== Error.prototype.toString)
         throw new AS3ObjectDispatchUnavailable("Error.toString requires canonical native Error traits");

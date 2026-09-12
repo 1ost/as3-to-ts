@@ -98,3 +98,28 @@ test("native Error IDs default to zero and retain explicit runtime IDs without i
     assert.throws(()=>as3ErrorID(getter),/integer native error slot/);
     assert.throws(()=>as3ErrorID(null),error=>error.errorID === 1009);
 });
+
+
+test("ArgumentError retains raw messages, native IDs and lazy string conversion",()=>{
+    const {AS3ArgumentError}=require(path.join(OUTPUT,"hardened-runtime/AS3Error.js"));
+    const {as3ErrorToString,as3ErrorID}=require(path.join(OUTPUT,"hardened-runtime/AS3Coerce.js"));
+    const empty=new AS3ArgumentError();
+    assert.equal(empty.message,"");assert.equal(as3ErrorToString(empty),"ArgumentError");
+    for(const message of ["", "Missing three-state UI skin: button", null, undefined, 37]) {
+        const error=new AS3ArgumentError(message);
+        assert.ok(error instanceof Error);
+        assert.equal(error.message,message);
+        assert.equal(as3ErrorID(error),0);
+        const expected=message === "" ? "ArgumentError" : "ArgumentError: "+String(message);
+        assert.equal(as3ErrorToString(error),expected);assert.equal(as3String(error),expected);
+    }
+    assert.equal(as3ErrorID(new AS3ArgumentError("identified",-7)),-7);
+    assert.equal(as3ErrorID(new AS3ArgumentError("wrapped",4294967295)),-1);
+    let conversions=0;
+    const message={toString(){conversions++;return "deferred";}};
+    const error=new AS3ArgumentError(message);
+    assert.equal(error.message,message);assert.equal(conversions,0);
+    assert.throws(()=>new AS3ArgumentError("message","id"),/proven numeric/);
+    class Unproved extends AS3ArgumentError {}
+    assert.throws(()=>as3ErrorToString(new Unproved()),/canonical native Error/);
+});
