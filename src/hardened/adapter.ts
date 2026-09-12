@@ -2463,6 +2463,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node),{kind:"binary" as const,
                 operator:operator as "===" | "!==",left,right,resultType:semanticType(node,"Boolean","boolean")});
         }
+        if (["-","*","/","%"].includes(operator) && context.sourceMemberAuthority !== null
+            && [leftType,rightType].some(type => type.sourceName === "*")
+            && [leftType,rightType].every(type => ["*","Number","int","uint"].includes(type.sourceName))) {
+            return Object.assign(identity(node), {kind:"binary" as const,
+                operator:operator as "-" | "*" | "/" | "%", left, right, numericCoercion:true as const,
+                resultType:semanticType(node,"Number","number")});
+        }
         const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
             || (rightType.sourceName === "null" && leftType.nullable);
         const looseEquality = operator === "==" || operator === "!=";

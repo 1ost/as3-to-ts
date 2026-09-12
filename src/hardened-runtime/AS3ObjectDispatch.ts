@@ -203,35 +203,78 @@ function arrayString(value:unknown[], active:Set<object>):string {
         return parts.join(",");
     } finally { active.delete(value); }
 }
+function conversionMethod(value:object, name:string, active:Set<object>):unknown {
+    const array=Array.isArray(value);
+    const nativeError = value instanceof Error && [Error.prototype,TypeError.prototype,ReferenceError.prototype,
+        RangeError.prototype,SyntaxError.prototype,URIError.prototype,EvalError.prototype].includes(Object.getPrototypeOf(value));
+    if (array && Object.getPrototypeOf(value) !== Array.prototype)
+        return unavailable("Array subclass conversion requires authenticated native traits");
+    if (nativeError) {
+        return Object.prototype.hasOwnProperty.call(value,name) ? Reflect.get(value,name)
+            : name === "valueOf" ? function() {return value;}
+                : function() {
+                    const label=nativeString((value as Error).name,active), message=nativeString((value as Error).message,active);
+                    return message === "" ? label : label + ": " + message;
+                };
+    }
+    if (array) {
+        return Object.prototype.hasOwnProperty.call(value,name) ? Reflect.get(value,name)
+            : name === "toString" ? function() {return arrayString(value as unknown[],active);}
+                : function() {return value;};
+    }
+    return as3ObjectRead(value,name,null);
+}
+function nativePrimitive(value:object, hint:"string" | "number", active:Set<object>):unknown {
+    for (const name of hint === "string" ? ["toString","valueOf"] : ["valueOf","toString"]) {
+        const fn=conversionMethod(value,name,active);
+        if (typeof fn !== "function") conversionError(1006,`${name} is not a function.`);
+        const result=Reflect.apply(fn,value,[]);
+        if (convertedPrimitive(result)) return result;
+    }
+    return conversionError(1050,"Cannot convert Object to primitive.");
+}
 function nativeString(value:unknown, active:Set<object>):string {
     const className=lookupStringClassName(value);
     if (className !== null) return `[class ${className.split(".").pop()}]`;
     if (typeof value === "function") return as3ObjectFunctionLabel(value) ?? "function Function() {}";
     if (value === null || typeof value !== "object") return String(value);
-    const array=Array.isArray(value);
-    const nativeError = value instanceof Error && [Error.prototype,TypeError.prototype,ReferenceError.prototype,
-        RangeError.prototype,SyntaxError.prototype,URIError.prototype,EvalError.prototype].includes(Object.getPrototypeOf(value));
-    if (array && Object.getPrototypeOf(value) !== Array.prototype)
-        return unavailable("Array subclass String conversion requires authenticated native traits");
-    for (const name of ["toString","valueOf"]) {
-        let fn:unknown;
-        if (nativeError) {
-            fn=Object.prototype.hasOwnProperty.call(value,name) ? Reflect.get(value,name)
-                : name === "valueOf" ? function() {return value;}
-                    : function() {
-                        const label=nativeString((value as Error).name,active), message=nativeString((value as Error).message,active);
-                        return message === "" ? label : label + ": " + message;
-                    };
-        } else if (array) {
-            fn=Object.prototype.hasOwnProperty.call(value,name) ? Reflect.get(value,name)
-                : name === "toString" ? function() {return arrayString(value,active);}
-                    : function() {return value;};
-        } else fn=as3ObjectRead(value,name,null);
-        if (typeof fn !== "function") conversionError(1006,`${name} is not a function.`);
-        const result=Reflect.apply(fn,value,[]);
-        if (convertedPrimitive(result)) return String(result);
+    return String(nativePrimitive(value,"string",active));
+}
+
+/** AVM numeric text predates JavaScript binary/octal prefixes and accepts signed hex. */
+function numberText(value:string):number {
+    // This is the retained AVM whitespace set, not JavaScript's trim set.
+    const spaces="[\\x09-\\x0d \\u2000-\\u200b\\u2028\\u2029\\u205f\\u3000]";
+    const leading=value.replace(new RegExp("^"+spaces+"+"),"");
+    const text=leading.replace(new RegExp(spaces+"+$"),"");
+    if (text === "") return 0;
+    if (/^[+-]?0[xX][0-9a-fA-F]+$/.test(text)) {
+        const sign=text[0] === "-" ? -1 : 1;
+        return sign * Number(text.replace(/^[+-]/,""));
     }
-    return conversionError(1050,"Cannot convert Object to primitive.");
+    if (new RegExp("^[+-]?Infinity(?:$|"+spaces+")").test(leading))
+        return leading[0] === "-" ? -Infinity : Infinity;
+    // Native decimal scanning stops at a NUL after numeric input. A bare e/e+
+    // has exponent zero; an e- at the physical end of the string is invalid.
+    const decimal=leading.split("\0",1)[0]!.replace(new RegExp(spaces+"+$"),"");
+    const match=/^([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))(?:[eE]([+-]?)([0-9]*))?$/.exec(decimal);
+    if (!match || /[eE]-$/.test(leading)) return NaN;
+    return Number(match[1]+(match[3] ? "e"+match[2]+match[3] : ""));
+}
+
+/** Number-hint conversion uses public valueOf before toString, exactly once each. */
+export function as3NativeNumber(value:unknown):number {
+    if (typeof value === "function" || lookupStringClassName(value) !== null) {
+        if (Object.prototype.hasOwnProperty.call(value,"valueOf") || Object.prototype.hasOwnProperty.call(value,"toString"))
+            return unavailable("Overridden Function/Class numeric conversion requires native dispatch evidence");
+        return NaN;
+    }
+    const primitive=value !== null && typeof value === "object"
+        ? nativePrimitive(value,"number",new Set()) : value;
+    if (typeof primitive === "string") return numberText(primitive);
+    if (typeof primitive === "bigint" || typeof primitive === "symbol")
+        return unavailable("Host-only primitive has no AS3 Number conversion");
+    return Number(primitive);
 }
 
 /** Native String conversion for scalars, Arrays and authenticated local Object traits. */

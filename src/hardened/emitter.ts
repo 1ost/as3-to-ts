@@ -331,6 +331,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "binary") {
+        if (expression.numericCoercion) {
+            if (!["-","*","/","%"].includes(expression.operator))
+                throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "numeric conversion requires a numeric operator");
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NumericBinary"),undefined,
+                [ts.factory.createStringLiteral(expression.operator),expressionNode(expression.left,ts),expressionNode(expression.right,ts)]);
+        }
         const tokens: { [operator: string]: any } = {
             "<": ts.SyntaxKind.LessThanToken,
             "<=": ts.SyntaxKind.LessThanEqualsToken,
@@ -1106,7 +1112,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1216,7 +1222,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || programUsesRuntimeType(program) || implementsTypes.length > 0 || programUsesVector(program)) {
         imports.push(runtimeTypeImport(ts));
     }
-    if (programHasKind(program, "coercion") || globalCalls.size > 0) imports.push(coercionRuntimeImport(ts));
+    if (programHasKind(program, "coercion") || programHasKind(program, "binary") || globalCalls.size > 0) imports.push(coercionRuntimeImport(ts));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
         imports.push(ownRecordRuntimeImport(ts));

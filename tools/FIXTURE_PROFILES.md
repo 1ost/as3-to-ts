@@ -195,3 +195,29 @@ Unshadowed undefined/NaN/Infinity use language constants; local, imported and
 inherited bindings retain precedence. Authenticated local/mapped class identifiers
 have Class value types. Non-void functions ending in throw terminate normally for
 return-path analysis; throwing getters and lambdas use the same shared rule.
+
+
+## Dynamic numeric operations
+
+The authenticated application adapter admits wildcard `-`, `*`, `/` and `%`
+against wildcard or numeric operands. The generated shared runtime evaluates both
+operand expressions before converting left then right; it preserves Number
+results and applies int/uint narrowing only at typed boundaries. Original Object
+field reads therefore retain their native numeric behavior without source casts.
+
+Number/int/uint call conversion uses the shared public valueOf/toString path.
+Explicit `Number(undefined)` differs from omitted `Number()`. Retained AIR 51
+evidence covers signed hex, rejected binary/octal text, the AVM whitespace set,
+empty exponents, null conversion results, non-callable methods and side effects.
+The parsing behavior was cross-checked against Adobe's MathUtils implementation:
+https://github.com/adobe/avmplus/blob/master/core/MathUtils.cpp
+The native captures, not this older source alone, establish the exercised runtime.
+
+Run `HARDENED_FIXTURE_LAYA=/path/to/LayaAir node --test
+tests/hardened-runtime/as3-number.test.cjs` and Laya's paired `dynamic-number`
+case. Its 81 checkpoints execute the same AS3 through AIR and generated Laya.
+This does not establish addition/loose equality, all decimal-rounding edge cases,
+Date/XML/Vector conversion, mapped instance traits, or overridden Function/Class
+conversion. Unregistered objects and unresolved mapped traits remain explicit
+runtime boundaries. Existing typed-slot and other intrinsic conversion paths
+still need their own consumer evidence.

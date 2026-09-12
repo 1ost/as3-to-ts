@@ -384,6 +384,7 @@ export interface NewExpression extends SemanticIdentity {
 
 export interface BinaryExpression extends SemanticIdentity {
     kind: "binary";
+    numericCoercion?: true;
     operator: "<" | "<=" | ">" | ">=" | "==" | "!=" | "===" | "!==" | "&&" | "||" |
         "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>";
     left: SemanticExpression;
