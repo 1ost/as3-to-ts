@@ -680,7 +680,7 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
                 ts.factory.createBlock([ts.factory.createThrowStatement(caught)], true), undefined);
             catchClause = ts.factory.createCatchClause(
                 ts.factory.createVariableDeclaration(statement.catchClause.temporaryName),
-                ts.factory.createBlock([guard, binding].concat(
+                ts.factory.createBlock((statement.catchClause.type.sourceName === "*" ? [binding] : [guard, binding]).concat(
                     statement.catchClause.statements.map(item => statementNode(item, ts))), true));
         }
         return ts.factory.createTryStatement(

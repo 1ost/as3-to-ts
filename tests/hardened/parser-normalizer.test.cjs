@@ -1041,6 +1041,42 @@ try {
     assert.throws(()=>built.adapter.adaptNormalizedParserAst(explicitThisNormalized,
         authority(built.ledger),explicitThisSource,sha256,undefined,undefined,undefined,undefined,
         sourceMemberAuthority),error=>error&&error.code==="HARDENED_LAMBDA_THIS");
+    const methodCaptureSource = "package p { public class MethodCapture { private function complete():void {} public function run():void { var callback:Function=function():void { var inner:Function=function():void { complete(); }; inner(); }; callback(); } } }";
+    const methodCaptureAst=built.normalizer.normalizeParserAst(
+        built.parse("fixtures/MethodCapture.as",methodCaptureSource),methodCaptureSource,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(methodCaptureAst,authority(built.ledger),
+        methodCaptureSource,sha256),error=>error&&error.code==="HARDENED_LAMBDA_THIS");
+    const methodCaptureSemantic=built.adapter.adaptNormalizedParserAst(methodCaptureAst,authority(built.ledger),
+        methodCaptureSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    const methodCaptureOutput=built.emitter.emitSemanticProgram(methodCaptureSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
+    assert.match(methodCaptureOutput.code,/__as3LexicalReceiver2\.complete\(\)/);
+    assert.match(methodCaptureOutput.code,/\}\)\(__as3LexicalReceiver1\)/);
+    for (const heldCaptureSource of [methodCaptureSource.replace("complete();", "this.complete();"),
+        methodCaptureSource.replace("complete();", "var saved:Function=complete;"),
+        methodCaptureSource.replace("public function run", "public static function run")]) {
+        const heldCaptureAst=built.normalizer.normalizeParserAst(
+            built.parse("fixtures/HeldMethodCapture.as",heldCaptureSource),heldCaptureSource,sha256);
+        assert.throws(()=>built.adapter.adaptNormalizedParserAst(heldCaptureAst,authority(built.ledger),
+            heldCaptureSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority),
+            error=>error&&error.code==="HARDENED_LAMBDA_THIS");
+    }
+    const wildcardCatchSource="package p { public class CatchValue { public function run(value:*):* { try { throw value; } catch(caught:*) { return caught; } return null; } } }";
+    const wildcardCatchAst=built.normalizer.normalizeParserAst(
+        built.parse("fixtures/CatchValue.as",wildcardCatchSource),wildcardCatchSource,sha256);
+    const wildcardCatchSemantic=built.adapter.adaptNormalizedParserAst(wildcardCatchAst,authority(built.ledger),
+        wildcardCatchSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    const wildcardCatchOutput=built.emitter.emitSemanticProgram(wildcardCatchSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
+    assert.match(wildcardCatchOutput.code,/const caught: unknown = __as3Caught/);
+    assert.doesNotMatch(wildcardCatchOutput.code,/instanceof unknown/);
+    const typedCatchSource=wildcardCatchSource.replace("caught:*", "caught:Error");
+    const typedCatchAst=built.normalizer.normalizeParserAst(
+        built.parse("fixtures/TypedCatchValue.as",typedCatchSource),typedCatchSource,sha256);
+    const typedCatchSemantic=built.adapter.adaptNormalizedParserAst(typedCatchAst,authority(built.ledger),
+        typedCatchSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    assert.match(built.emitter.emitSemanticProgram(typedCatchSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code,/instanceof Error/);
     const conditionSource="package p { public class TruthyCondition { public function run(item:Object):void { if (item) { return; } } } }";
     const conditionTree=built.parse("fixtures/TruthyCondition.as",conditionSource);
     const conditionNormalized=built.normalizer.normalizeParserAst(conditionTree,conditionSource,sha256);

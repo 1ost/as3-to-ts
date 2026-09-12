@@ -2953,7 +2953,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
                 return currentClassMember(node, context, name);
             }
-            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
+            if (context.lambdaDepth > 0) {
+                if (valuePosition || method.constructor || context.sourceMemberAuthority === null
+                    || !context.currentCallable || context.currentCallable.modifiers.includes("static"))
+                    fail("HARDENED_LAMBDA_THIS", "implicit method calls require an authenticated instance scope; captured method values remain held", node);
+                context.lexicalThisUses++;
+                return Object.assign(identity(node), { kind: "member" as const,
+                    target: Object.assign(identity(node), { kind: "this" as const,
+                        lexicalName: "__as3LexicalReceiver" + context.lambdaDepth }),
+                    targetNullable: false, name, capabilitySource: null });
+            }
             if (valuePosition) {
                 if (!allowMethodClosure) {
                     fail("HARDENED_METHOD_CLOSURE_INITIALIZER", "method closures in field initializers are not admitted before per-instance binding", node);
@@ -4489,8 +4498,10 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
             const catchBlock = one(catchNode, "BLOCK")!;
             const name = validateIdentifier(requiredText(nameNode, "catch binding"), nameNode);
             const type = withNullability(parseType(typeNode, context, false), false);
-            if (type.sourceName !== "Error" || type.emittedName !== "Error") {
-                fail("HARDENED_CATCH_TYPE", "this wave admits only the canonical AS3 Error catch type", typeNode);
+            const wildcardCatch = context.sourceMemberAuthority !== null
+                && type.sourceName === "*" && type.emittedName === "unknown";
+            if (!wildcardCatch && (type.sourceName !== "Error" || type.emittedName !== "Error")) {
+                fail("HARDENED_CATCH_TYPE", "catch requires canonical Error or an authenticated wildcard type", typeNode);
             }
             const temporaryName = `__as3Caught${catchNode.id.slice(1)}`;
             if (context.locals[temporaryName] || context.parameters[temporaryName] || context.fields[temporaryName]

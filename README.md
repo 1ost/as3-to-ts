@@ -85,6 +85,21 @@ tool cannot defend the final scan/rename instant from a non-cooperating process
 running as the same OS user. Do not grant untrusted writers access to that
 parent while a conversion is running.
 
+## Lexical completion callbacks
+
+Authenticated instance methods may call their own declared methods implicitly
+inside anonymous callbacks. The existing lexical receiver capture also handles
+nested functions and returned callbacks invoked with a foreign `Function.apply`
+receiver. Explicit dynamic `this`, inherited method capture, accessor capture and
+retrieving a method closure inside a lambda remain held. Original source bytes
+and class contracts do not change.
+
+Authenticated `catch(value:*)` retains every thrown value without an Error type
+filter, including null, undefined, primitives and object identity. Rethrows and
+finally blocks retain their source order. Typed Error catches keep their filter;
+multiple typed catches and writes to catch bindings remain outside this admission.
+Native evidence lives in LayaAir's `lexical-method` and `wildcard-catch` fixtures.
+
 ## Provenance and licenses
 
 The frozen parser and syntax model derive from `@as3web/as3-to-ts` 0.3.10 at
