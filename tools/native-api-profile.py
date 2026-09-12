@@ -181,7 +181,8 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
             candidates = [m for m in candidates if compatible(m)]
         if len(candidates) != 1: continue
         member = candidates[0]
-        context = 'constructor' if native['constructor'] else 'static-member' if native['scope'] == 'static' else 'base-type' if 'base-type' in roles else 'instance-member'
+        context = ('constructor' if native['constructor'] else 'static-member' if native['scope'] == 'static'
+                   else 'instance-member' if 'instance-member' in roles else 'base-type')
         if context not in roles: continue
         source_member = {k: native[k] for k in ('name', 'access', 'signature', 'minArgs', 'maxArgs')}
         if ' const ' in source_member['signature'] or ' var ' in source_member['signature']:

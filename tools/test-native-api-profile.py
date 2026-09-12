@@ -87,8 +87,9 @@ public class Base {
         classes = {'flash.events.Payload': {'base': None, 'members': [member]}}
         target = dict(name='value', scope='instance', kind='get+set', signature='string | null')
         row = dict(module='Payload.ts', export='Payload', kind='class', signature='typeof Payload', members=[target])
-        args = ('flash.events.Payload', ['instance-member'], row, 'capability', classes, {'value'})
+        args = ('flash.events.Payload', ['base-type', 'instance-member'], row, 'capability', classes, {'value'})
         self.assertEqual(len(api.map_native_members(*args)[0]), 1)
+        self.assertEqual(api.map_native_members(*args)[0][0]['sourceRoles'], ['instance-member'])
         for native, target_type in [('Boolean', 'boolean | null'), ('Number', 'number | null'), ('String', 'string | undefined')]:
             member['type'] = native
             target['signature'] = target_type
