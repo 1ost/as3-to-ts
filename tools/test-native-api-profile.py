@@ -94,4 +94,16 @@ public class Base {
             target['signature'] = target_type
             self.assertEqual(api.map_native_members(*args), ([], []))
 
+    def test_native_constructor_does_not_admit_extra_host_parameters(self):
+        member = dict(name='Loader', access='call', scope='static', constructor=True,
+            signature='public function Loader()', minArgs=0, maxArgs=0,
+            type='flash.display.Loader', parameters=[])
+        classes = {'flash.display.Loader': {'base': None, 'members': [member]}}
+        row = dict(module='Loader.ts', export='Loader', kind='class', signature='typeof Loader',
+            constructors=['new (host?: NativeHost): Loader'])
+        args = ('flash.display.Loader', ['constructor'], row, 'capability', classes, set())
+        self.assertEqual(api.map_native_members(*args), ([], []))
+        row['constructors'].append('new (): Loader')
+        self.assertEqual(len(api.map_native_members(*args)[0]), 1)
+
 if __name__ == '__main__': unittest.main()

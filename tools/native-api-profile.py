@@ -157,7 +157,8 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
         if native['access'] == 'call':
             candidates = [m for m in candidates if m['kind'] == ('constructor' if native['constructor'] else 'method')
                 and target_arity(m['signature']) is not None
-                and target_arity(m['signature'])[0] <= native['minArgs'] and target_arity(m['signature'])[1] >= native['maxArgs']]
+                and (target_arity(m['signature']) == (native['minArgs'], native['maxArgs']) if native['constructor'] else
+                     target_arity(m['signature'])[0] <= native['minArgs'] and target_arity(m['signature'])[1] >= native['maxArgs'])]
         else:
             candidates = [m for m in candidates if m['kind'] in ('property', 'get', 'set', 'get+set')
                 and m['kind'] != ('get' if native['access'] == 'write' else 'set')
