@@ -198,18 +198,11 @@ def main():
             if re.search(r'\bextends\s+' + qname.rsplit('.', 1)[-1] + r'\b', text):
                 used_names.update(m['name'] for m in native_api.native_members(native_signatures, qname)
                                   if m['name'] not in own_names and re.search(r'\b' + re.escape(m['name']) + r'\b', text))
-        pending, closure = list(imports), set(imports)
-        while pending:
-            qname = pending.pop()
-            for member in native_api.native_members(native_signatures, qname):
-                if member['name'] not in used_names: continue
-                for t in [member['declaredBy'], member['type'], *[p['type'] for p in member['parameters']]]:
-                    for dependency in re.findall(r'flash(?:\.[A-Za-z_$][\w$]*)+', t):
-                        if dependency in closure: continue
-                        try: target_for(dependency)
-                        except ValueError: continue
-                        closure.add(dependency); pending.append(dependency)
-        imports = sorted(closure)
+        def has_target(qname):
+            try: target_for(qname)
+            except ValueError: return False
+            return True
+        imports = native_api.native_type_closure(imports, native_signatures, used_names, has_target)
     selected, pending = set(), [q for q in imports if q in by_qname]
     while pending:
         q = pending.pop()

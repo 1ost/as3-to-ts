@@ -122,6 +122,22 @@ def native_members(classes, qname):
         current = row['base']
 
 
+def native_type_closure(roots, classes, used_names, has_target):
+    """Follow real SDK receiver/argument/result types without editing source imports."""
+    closure, pending = set(roots), list(roots)
+    while pending:
+        qname = pending.pop()
+        for member in native_members(classes, qname):
+            if member['name'] not in used_names:
+                continue
+            for value in [member['declaredBy'], member['type'], *[p['type'] for p in member['parameters']]]:
+                for dependency in re.findall(r'flash(?:\.[A-Za-z_$][\w$]*)+', value):
+                    if dependency not in closure and has_target(dependency):
+                        closure.add(dependency)
+                        pending.append(dependency)
+    return sorted(closure)
+
+
 def target_arity(signature):
     if signature.startswith('<'):
         for index, character, depth in signature_tokens(signature):

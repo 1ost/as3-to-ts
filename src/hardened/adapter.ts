@@ -1764,7 +1764,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     }
     if (expression.kind === "math") return semanticType(node, "Number", "number", [], false, "Number");
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
-    if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false);
+    if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false, context.classQualifiedName);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
         return context.locals[expression.name]!.type;
     }
@@ -2250,7 +2250,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 args[index] = adaptAssignmentValue(local.parameters[index]!.type, argument, context,
                     call.children[1]!.children[index]!);
             });
-            sourceType = semanticType(nameNode, name, name);
+            sourceType = semanticType(nameNode, name, name, [], undefined, context.classQualifiedName);
         } else {
             const imported = context.importsByLocal[name];
             if (imported?.authorityKind === "intrinsic"
@@ -2289,7 +2289,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                 }
                 assertLocalCallArguments(constructorMember, args, call.children[1]!.children, context, call);
-                sourceType = semanticType(nameNode, name, name);
+                sourceType = semanticType(nameNode, name, name, [], undefined, imported.sourceQualifiedName);
                 return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
             }
             const typeMapping = imported ? context.mappingsBySource[imported.sourceQualifiedName] : undefined;
@@ -2303,7 +2303,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_NEW_ARITY", "constructor arity lacks one exact double-pinned signature", call);
             }
             adaptMappedCall(mapping!, args, call.children[1]!.children, context, call);
-            sourceType = semanticType(nameNode, name, name);
+            sourceType = semanticType(nameNode, name, name, [], undefined, imported.sourceQualifiedName);
         }
         return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
     }
@@ -3071,7 +3071,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr"].includes(name);
                     if (!arrayLength && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
-                        fail("HARDENED_MEMBER_TARGET", "member target is outside the admitted subset", node);
+                        fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
                     }
                     capabilitySource = targetType.sourceName;
                 }

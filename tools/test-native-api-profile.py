@@ -10,6 +10,17 @@ api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
 
 class NativeSignaturesTest(unittest.TestCase):
+    def test_signature_closure_follows_implicit_receivers_and_keeps_unavailable_types_held(self):
+        def member(name, result):
+            return dict(name=name, access='read', scope='instance', constructor=False, type=result, parameters=[])
+        classes = {
+            'flash.display.Shape': {'base': None, 'members': [member('graphics', 'flash.display.Graphics')]},
+            'flash.display.Graphics': {'base': None, 'members': [member('clear', 'void'), member('unsupported', 'flash.Missing')]},
+        }
+        self.assertEqual(api.native_type_closure(['flash.display.Shape'], classes, {'graphics', 'clear', 'unsupported'}, classes.__contains__),
+                         ['flash.display.Graphics', 'flash.display.Shape'])
+        self.assertEqual(api.native_type_closure(['flash.display.Shape'], classes, {'clear'}, classes.__contains__), ['flash.display.Shape'])
+
     def test_sdk_override_before_public_keeps_the_actual_declaring_class(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

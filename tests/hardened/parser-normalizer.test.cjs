@@ -713,6 +713,17 @@ try {
     const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson),sha256);
     {
+        const source = 'package p { import flash.display.Sprite; import flash.display.DisplayObject; public class DirectSubtype extends Sprite { public function DirectSubtype(){super();} public function make():DisplayObject { return new Sprite(); } public function self():DisplayObject { return this; } } }';
+        const ast = built.normalizer.normalizeParserAst(built.parse("DirectSubtype.as", source), source, sha256);
+        const semantic = built.adapter.adaptNormalizedParserAst(ast, authority(built.ledger), source, sha256,
+            undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);
+        assert.equal(semantic.declaration.members.find(m => m.name === "make").body[0].expression.sourceType.runtimeName, "flash.display.Sprite");
+        const invalid = source.replace('public function make():DisplayObject { return new Sprite(); }', 'public function make(value:Object):DisplayObject { return value; }');
+        const invalidAst = built.normalizer.normalizeParserAst(built.parse("DirectSubtype.as", invalid), invalid, sha256);
+        assert.throws(() => built.adapter.adaptNormalizedParserAst(invalidAst, authority(built.ledger), invalid, sha256,
+            undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority), error => error?.code === "HARDENED_ASSIGNMENT_TYPE");
+    }
+    {
     const inheritedMathSource = "package p { import flash.display.Sprite; public class MathFixture extends Sprite { public function angle():Number { return Math.PI; } } }";
     const inheritedMathAst = built.normalizer.normalizeParserAst(built.parse("MathFixture.as", inheritedMathSource), inheritedMathSource, sha256);
     built.adapter.adaptNormalizedParserAst(inheritedMathAst, authority(built.ledger), inheritedMathSource,
