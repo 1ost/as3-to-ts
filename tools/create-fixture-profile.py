@@ -47,7 +47,7 @@ def source_members(sdk, output, qnames):
             if current in classes:
                 raise ValueError('Duplicate AIR class ' + current)
             classes[current] = {'qname': current, 'baseQName': match['base'].replace('::', '.') if match['base'] not in (None, '*') else None,
-                                'ownInstanceMemberNames': set(), 'properties': []}
+                                'ownInstanceMemberNames': set(), 'dynamic': 'dynamic' in line.split('class',1)[0].split(), 'properties': []}
             depth = 0
         elif line == '{':
             depth += 1
@@ -74,7 +74,7 @@ def source_members(sdk, output, qnames):
         if row['baseQName']:
             pending.append(row['baseQName'])
     rows = [{k: (sorted(v) if isinstance(v, set) else v) for k, v in classes[q].items() if k != 'properties'} for q in sorted(selected)]
-    return write(output / 'source-members.json', {'schema': 'as3-source-member-authority@1',
+    return write(output / 'source-members.json', {'schema': 'as3-source-member-authority@2',
         'generator': 'air-sdk-swfdump-abc@1', 'sourceArtifactSha256': sha(artifact), 'entryCount': len(rows), 'entries': rows}), len(rows), classes
 
 

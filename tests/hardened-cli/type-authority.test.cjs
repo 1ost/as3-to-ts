@@ -19,12 +19,13 @@ function loadTranspiled(file,resolver) {
 }
 const emitterModule=loadTranspiled(path.join(ROOT,"src/hardened/emitter.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}
     :specifier==="./adapter"?adapterModule:require(specifier));
+const sourceMembers=loadTranspiled(path.join(ROOT,"src/hardened/source-member-authority.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}:require(specifier));
 const source = fs.readFileSync(path.join(ROOT, "src/hardened/type-authority.ts"), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020,
     module: ts.ModuleKind.CommonJS } }).outputText;
 const moduleValue = { exports: {} };
 Function("require", "module", "exports", compiled)(specifier=>specifier==="./contracts"?{HardenedSemanticError}
-    :specifier==="./adapter"?adapterModule:specifier==="./emitter"?emitterModule
+    :specifier==="./source-member-authority"?sourceMembers:specifier==="./adapter"?adapterModule:specifier==="./emitter"?emitterModule
         :specifier==="typescript-4-9"?ts:require(specifier),moduleValue,moduleValue.exports);
 const { assertLocalRuntimeDefinitionClosure, emitRuntimeTypeAuthority, loadMappedRuntimeTypeAuthority, localRuntimeTypeAuthoritySource,
     localRuntimeInterfaceAuthoritySource, emitRuntimeApplicationEntry } = moduleValue.exports;
@@ -74,6 +75,22 @@ test("mapped predicate loader rejects QName, heritage, signature, and canonical-
     const loaded=loadMappedRuntimeTypeAuthority(JSON.stringify(lock),bytes,["Base","Child"],sha256);
     assert.deepEqual(loaded.map(value=>[value.qname,value.base]),[["Base",null],["Child","Base"]]);
     assert.deepEqual(loaded.map(value=>value.module),["laya/flash/test/Base","laya/flash/test/Child"]);
+    const censusDocument={schema:"as3-source-member-authority@2",generator:"air-sdk-swfdump-abc@1",
+        sourceArtifactSha256:"c".repeat(64),entryCount:3,entries:[
+            {qname:"Base",baseQName:"Composed",ownInstanceMemberNames:["nativeOnly"],dynamic:false},
+            {qname:"Child",baseQName:"Base",ownInstanceMemberNames:[],dynamic:false},
+            {qname:"Composed",baseQName:null,ownInstanceMemberNames:["composedMethod"],dynamic:false}]};
+    const censusJson=JSON.stringify(censusDocument);
+    const census=sourceMembers.loadSourceMemberAuthority(censusJson,sha256(censusJson),sha256);
+    const enriched=moduleValue.exports.withNativeObjectMemberCensus(loaded,census);
+    assert.deepEqual(enriched[0].nativeObjectTraits,{dynamic:false,names:["composedMethod","nativeOnly"],sourceArtifactSha256:"c".repeat(64)});
+    assert.throws(()=>moduleValue.exports.withNativeObjectMemberCensus(loaded,{...census}),error=>error.code==="HARDENED_SOURCE_MEMBER_AUTHORITY_INSTANCE");
+    const legacy={...censusDocument,schema:"as3-source-member-authority@1",entries:censusDocument.entries.map(({dynamic,...entry})=>entry)};
+    const legacyJson=JSON.stringify(legacy);
+    assert.equal(moduleValue.exports.withNativeObjectMemberCensus(loaded,sourceMembers.loadSourceMemberAuthority(legacyJson,sha256(legacyJson),sha256))[0].nativeObjectTraits.dynamic,null);
+    const forged=JSON.stringify({...censusDocument,entries:censusDocument.entries.map(entry=>({...entry,dynamic:"false"}))});
+    assert.throws(()=>sourceMembers.loadSourceMemberAuthority(forged,sha256(forged),sha256),error=>error.code==="HARDENED_SOURCE_MEMBER_AUTHORITY_ENTRY");
+
     assert.throws(()=>loadMappedRuntimeTypeAuthority(JSON.stringify(lock),bytes,["Base"],sha256),error=>error.code==="HARDENED_TYPE_AUTHORITY_CAPABILITIES");
     const drift=bytes.replace("typeof Child","typeof Object");
     const driftLock={...lock,predicateAuthorityCanonicalLfSha256:sha256(drift)};

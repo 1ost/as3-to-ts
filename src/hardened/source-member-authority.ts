@@ -3,11 +3,12 @@ import { HardenedSemanticError } from "./contracts";
 export interface SourceMemberAuthorityEntry {
     readonly qname: string;
     readonly baseQName: string | null;
+    readonly dynamic?: boolean;
     readonly ownInstanceMemberNames: readonly string[];
 }
 
 export interface LoadedSourceMemberAuthority {
-    readonly schema: "as3-source-member-authority@1";
+    readonly schema: "as3-source-member-authority@1" | "as3-source-member-authority@2";
     readonly sourceArtifactSha256: string;
     readonly entriesByQName: Readonly<Record<string, SourceMemberAuthorityEntry>>;
 }
@@ -26,7 +27,7 @@ function exactKeys(value: unknown, expected: readonly string[]): value is Record
         && Object.keys(value).slice().sort().join("\0") === [...expected].sort().join("\0");
 }
 
-/** Load a complete, hash-pinned source API member census used only for lexical shadow checks. */
+/** Load a complete, hash-pinned source API member census used for lexical shadowing and native member absence checks. */
 export function loadSourceMemberAuthority(json: string, expectedSha256: string,
     sha256: (bytes: string) => string): LoadedSourceMemberAuthority {
     if (!SHA256.test(expectedSha256) || sha256(json) !== expectedSha256) {
@@ -39,7 +40,7 @@ export function loadSourceMemberAuthority(json: string, expectedSha256: string,
             "source member authority is not JSON");
     }
     if (!exactKeys(document, ["entries", "entryCount", "generator", "schema", "sourceArtifactSha256"])
-        || document.schema !== "as3-source-member-authority@1"
+        || (document.schema !== "as3-source-member-authority@1" && document.schema !== "as3-source-member-authority@2")
         || document.generator !== "air-sdk-swfdump-abc@1"
         || typeof document.sourceArtifactSha256 !== "string" || !SHA256.test(document.sourceArtifactSha256)
         || !Number.isSafeInteger(document.entryCount) || (document.entryCount as number) < 1
@@ -50,14 +51,15 @@ export function loadSourceMemberAuthority(json: string, expectedSha256: string,
     const entriesByQName: Record<string, SourceMemberAuthorityEntry> = Object.create(null);
     let previous = "";
     for (const value of document.entries) {
-        if (!exactKeys(value, ["baseQName", "ownInstanceMemberNames", "qname"])) {
+        if (!exactKeys(value, ["baseQName", "ownInstanceMemberNames", "qname", ...(document.schema === "as3-source-member-authority@2" ? ["dynamic"] : [])])) {
             throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_AUTHORITY_ENTRY",
                 "source member authority contains an invalid, duplicate, or unsorted entry");
         }
         const qname = value.qname;
         const baseQName = value.baseQName;
         const names = value.ownInstanceMemberNames;
-        if (typeof qname !== "string" || !QNAME.test(qname) || qname <= previous
+        if (document.schema === "as3-source-member-authority@2" && typeof value.dynamic !== "boolean"
+            || typeof qname !== "string" || !QNAME.test(qname) || qname <= previous
             || (baseQName !== null && (typeof baseQName !== "string" || !QNAME.test(baseQName)))
             || !Array.isArray(names)
             || names.some(name => typeof name !== "string" || !IDENTIFIER.test(name))
@@ -68,6 +70,7 @@ export function loadSourceMemberAuthority(json: string, expectedSha256: string,
         previous = qname;
         entriesByQName[qname] = Object.freeze({
             qname,
+            ...(document.schema === "as3-source-member-authority@2" ? {dynamic:value.dynamic as boolean} : {}),
             baseQName: baseQName as string | null,
             ownInstanceMemberNames: Object.freeze([...(names as string[])]),
         });
@@ -79,7 +82,7 @@ export function loadSourceMemberAuthority(json: string, expectedSha256: string,
         }
     }
     const loaded: LoadedSourceMemberAuthority = Object.freeze({
-        schema: "as3-source-member-authority@1",
+        schema: document.schema as LoadedSourceMemberAuthority["schema"],
         sourceArtifactSha256: document.sourceArtifactSha256 as string,
         entriesByQName: Object.freeze(entriesByQName),
     });

@@ -13,6 +13,15 @@ export function as3CheckFunctionArity(qname:string, actual:number, minimum:numbe
     error.name="ArgumentError"; Object.defineProperty(error,"errorID",{value:1063}); throw error;
 }
 
+/** Reject missing required instance-method arguments before slot conversion or body effects. */
+export function as3CheckMethodMinimumArity(classQName:string, method:string, actual:number, minimum:number):void {
+    if (actual >= minimum) return;
+    const dot=classQName.lastIndexOf(".");
+    const label=dot < 0 ? classQName : classQName.slice(0,dot)+"::"+classQName.slice(dot+1);
+    const error=new Error(`Error #1063: Argument count mismatch on ${label}/${method}(). Expected ${minimum}, got ${actual}.`);
+    error.name="ArgumentError";Object.defineProperty(error,"errorID",{value:1063});throw error;
+}
+
 /** Typed function slots normalize values at the invocation boundary, including dynamic callers. */
 export function as3FunctionArgument(value:unknown, type:string):any {
     switch(type) {

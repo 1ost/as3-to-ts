@@ -11,8 +11,21 @@ const members=[{name:"field",kind:"field",type:"int",visibility:"public",namespa
 class ObjectErrorProbe extends DynamicClassProbe {}
 const rows=[{kind:"class",qname:"DynamicClassProbe",base:null,interfaces:[],sourceSha256:"a".repeat(64),fields:[],objectTraits:{dynamic:false,members}}, {kind:"class",qname:"ExternalDynamicClassProbe",base:null,interfaces:[],sourceSha256:"b".repeat(64),fields:[],objectTraits:{dynamic:false,members:[]}}];
 rows.push({...rows[0],qname:"oracle.probe.ObjectErrorProbe",sourceSha256:"c".repeat(64)});
+const nativeBrands=new WeakSet(),childBrands=new WeakSet(),unknownBrands=new WeakSet();
+class NativeBase {constructor(){nativeBrands.add(this)} nativeOnly(){throw new Error("must not call native host properties")}}
+class LocalChild extends NativeBase {constructor(){super();childBrands.add(this);this.calls=0} dispose(){this.calls++}}
+class UnknownNative extends NativeBase {constructor(){super();unknownBrands.add(this)}}
+rows.push({kind:"class",qname:"NativeBase",base:null,interfaces:[],sourceSha256:"d".repeat(64),fields:[],
+ nativeObjectTraits:{dynamic:false,names:["nativeOnly"],sourceArtifactSha256:"e".repeat(64)}});
+rows.push({kind:"class",qname:"LocalChild",base:"NativeBase",interfaces:[],sourceSha256:"f".repeat(64),fields:[],
+ objectTraits:{dynamic:false,members:[{name:"dispose",kind:"method",type:"Function",visibility:"public",namespaceName:null}]}});
+rows.push({kind:"class",qname:"UnknownNative",base:"NativeBase",interfaces:[],sourceSha256:"1".repeat(64),fields:[],
+ nativeObjectTraits:{dynamic:null,names:[],sourceArtifactSha256:"e".repeat(64)}});
+const constructors=[DynamicClassProbe,ExternalDynamicClassProbe,ObjectErrorProbe,NativeBase,LocalChild,UnknownNative];
+const predicates=[v=>brands.has(v)&&!(v instanceof ObjectErrorProbe),v=>externalBrands.has(v),v=>v instanceof ObjectErrorProbe,
+ v=>nativeBrands.has(v),v=>childBrands.has(v),v=>unknownBrands.has(v)];
 const metadata={schema:"as3-runtime-type-authority@1",qnames:rows.map(row=>row.qname),entries:rows};
-i.installAS3TypeAuthority({schema:metadata.schema,sha256:crypto.createHash("sha256").update(JSON.stringify(metadata)).digest("hex"),qnames:metadata.qnames,entries:rows.map((row,n)=>({...row,constructor:n===2?ObjectErrorProbe:n?ExternalDynamicClassProbe:DynamicClassProbe,predicate:v=>n===2?v instanceof ObjectErrorProbe:n?externalBrands.has(v):brands.has(v)&&!(v instanceof ObjectErrorProbe),constructionTarget:null,constructionProof:null}))});
+i.installAS3TypeAuthority({schema:metadata.schema,sha256:crypto.createHash("sha256").update(JSON.stringify(metadata)).digest("hex"),qnames:metadata.qnames,entries:rows.map((row,n)=>({...row,constructor:constructors[n],predicate:predicates[n],constructionTarget:null,constructionProof:null}))});
 test.after(()=>fs.rmSync(out,{recursive:true,force:true}));
 const string=value=>r.as3ObjectFunctionLabel(value)??String(value);
 
@@ -121,4 +134,17 @@ test("native dynamic keys convert once, preserve fallback errors and check null 
   assert.deepEqual({calls,value},{calls:row.calls,value:row.value},row.id);
  }
  for(const key of [1n,Symbol()])assert.throws(()=>r.as3ObjectRead({},key),{name:"AS3ObjectDispatchUnavailable"});
+});
+
+test("SDK member absence permits local methods without exposing unresolved native methods",()=>{
+ const child=new LocalChild();
+ assert.throws(()=>r.as3ObjectCall({dispose:function(value){}},"dispose",[],"LocalChild"),{name:"AS3ObjectDispatchUnavailable"});
+ r.as3ObjectCall(child,"dispose",[],"LocalChild");assert.equal(child.calls,1);
+ assert.equal(r.as3ObjectRead(child,"dispose","LocalChild"),r.as3ObjectRead(child,"dispose","LocalChild"));
+ for(const receiver of [child,new NativeBase()]) {
+  assert.throws(()=>r.as3ObjectCall(receiver,"nativeOnly",[],"LocalChild"),{name:"AS3ObjectDispatchUnavailable"});
+  assert.throws(()=>r.as3ObjectCall(receiver,"missing",[],"LocalChild"),{name:"ReferenceError",errorID:1069});
+ }
+ assert.throws(()=>r.as3ObjectCall(new UnknownNative(),"missing",[],"LocalChild"),{name:"AS3ObjectDispatchUnavailable"});
+ for(const value of [{dispose:7},{}]) assert.throws(()=>r.as3ObjectCall(value,"dispose",[],"LocalChild"),{name:"TypeError",errorID:1006});
 });

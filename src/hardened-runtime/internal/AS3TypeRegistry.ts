@@ -25,6 +25,12 @@ export interface AS3ObjectTraits {
         readonly visibility: "public" | "private" | "protected" | "internal" | "namespace"; readonly namespaceName:string | null }[];
 }
 
+export interface AS3NativeObjectTraits {
+    readonly dynamic: boolean | null;
+    readonly names: readonly string[];
+    readonly sourceArtifactSha256: string;
+}
+
 export interface AS3ClassAuthorityEntry {
     readonly kind: "class";
     readonly qname: string;
@@ -32,6 +38,7 @@ export interface AS3ClassAuthorityEntry {
     readonly interfaces: readonly string[];
     readonly sourceSha256: string;
     readonly objectTraits?: AS3ObjectTraits;
+    readonly nativeObjectTraits?: AS3NativeObjectTraits;
     readonly fields: readonly { readonly name: string; readonly policy: "zero" | "nan" | "false" | "null" | "undefined" }[];
     readonly constructor: RuntimeConstructor;
     readonly predicate: (value: unknown) => boolean;
@@ -57,7 +64,7 @@ const CLASS_PREDICATES = new WeakMap<Function, (value: unknown) => boolean>();
 const CLASS_CONSTRUCTION_TARGETS = new WeakMap<Function, (value: unknown) => RuntimeConstructor | null>();
 const CLASS_CONSTRUCTION_PROOFS = new WeakMap<Function, (value: unknown) => boolean>();
 const CLASS_FIELD_DEFAULTS = new WeakMap<Function, AS3ClassAuthorityEntry["fields"]>();
-const CLASS_OBJECT_ENTRIES = new WeakMap<Function, Readonly<{qname:string; traits:AS3ObjectTraits | null}>>();
+const CLASS_OBJECT_ENTRIES = new WeakMap<Function, Readonly<{qname:string; traits:AS3ObjectTraits | null; nativeTraits:AS3NativeObjectTraits | null}>>();
 const CLASS_BASES = new WeakMap<Function, RuntimeConstructor | null>();
 const REGISTERED_CLASSES: Function[] = [];
 const INTERFACE_TOKENS = new Map<string, AS3TypeToken<object>>();
@@ -400,7 +407,7 @@ function canonicalAuthorityMetadata(document: AS3TypeAuthorityDocument): string 
         entries: document.entries.map(entry => entry.kind === "interface"
             ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
             : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
-                sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}) }),
+                sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}) }),
     });
 }
 
@@ -492,7 +499,7 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                 }, sealedClosure);
                 INTERFACE_TOKENS.set(entry.qname, token);
             } else if (entry.kind === "class") {
-                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
+                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), ...(entry.nativeObjectTraits ? ["nativeObjectTraits"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
                     `AS3 class ${entry.qname}`);
                 if (entry.base !== null && (!seen.has(entry.base) || !CLASS_BY_QNAME.has(entry.base))) {
                     throw new TypeError(`AS3 class ${entry.qname} has a missing, cyclic, or out-of-order class base`);
@@ -549,7 +556,15 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                         names.add(JSON.stringify([member.name,member.kind,member.visibility,member.namespaceName]));
                     });
                 }
-                CLASS_OBJECT_ENTRIES.set(entry.constructor, Object.freeze({qname:entry.qname, traits:entry.objectTraits
+                if (entry.nativeObjectTraits) {
+                    const traits=entry.nativeObjectTraits;
+                    exactKeys(traits,["dynamic","names","sourceArtifactSha256"],"AS3 native Object census");
+                    if (entry.objectTraits || traits.dynamic !== null && typeof traits.dynamic !== "boolean"
+                        || !/^[a-f0-9]{64}$/.test(traits.sourceArtifactSha256)) throw new TypeError("Invalid AS3 native Object census");
+                    validateQNameList(traits.names,"AS3 native member names");
+                }
+                CLASS_OBJECT_ENTRIES.set(entry.constructor, Object.freeze({qname:entry.qname,
+                    nativeTraits:entry.nativeObjectTraits ? Object.freeze({...entry.nativeObjectTraits,names:Object.freeze([...entry.nativeObjectTraits.names])}) : null, traits:entry.objectTraits
                     ? Object.freeze({dynamic:entry.objectTraits.dynamic,
                         members:Object.freeze(entry.objectTraits.members.map((member:AS3ObjectTraits["members"][number]) => Object.freeze({...member})))}) : null}));
                 CLASS_BASES.set(entry.constructor, entry.base === null ? null : CLASS_BY_QNAME.get(entry.base)!.constructor);
@@ -574,7 +589,7 @@ export function authorityStatus(): Readonly<{ sealed: boolean; sha256: string | 
 
 /** Resolve only registered allocation identities; never infer traits from JS fields. */
 export function lookupObjectClass(value: unknown): Readonly<{qname:string; constructor:RuntimeConstructor;
-    chain:readonly Readonly<{qname:string; traits:AS3ObjectTraits | null}>[]}> | null {
+    chain:readonly Readonly<{qname:string; traits:AS3ObjectTraits | null; nativeTraits:AS3NativeObjectTraits | null}>[]}> | null {
     requireSealed();
     if ((typeof value !== "object" && typeof value !== "function") || value === null) return null;
     let selected: RuntimeConstructor | null = pendingConstructionTarget(value);

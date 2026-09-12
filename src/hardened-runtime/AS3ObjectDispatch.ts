@@ -1,6 +1,6 @@
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
 import { lookupObjectClass, lookupObjectCaller, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
-import { as3BindMethod } from "./AS3MethodClosure";
+import { as3BindMethod, isAS3MethodClosure } from "./AS3MethodClosure";
 
 type Member = AS3ObjectTraits["members"][number];
 type ClassInfo = NonNullable<ReturnType<typeof lookupObjectClass>>;
@@ -40,7 +40,7 @@ function keyName(value:unknown):string {
 function describe(value:object):ClassInfo | null {
     const info = lookupObjectClass(value);
     if (info) {
-        if (info.chain.some(owner => owner.traits === null)) return unavailable("Mapped class traits are unresolved");
+        if (info.chain.some(owner => owner.traits === null && owner.nativeTraits === null)) return unavailable("Mapped class traits are unresolved");
         return info;
     }
     const prototype = Object.getPrototypeOf(value);
@@ -48,12 +48,22 @@ function describe(value:object):ClassInfo | null {
         return unavailable("Unregistered Object receiver identity");
     return null;
 }
+function dynamicClass(info:ClassInfo):boolean {
+    const own=info.chain[0]!;
+    const dynamic=own.traits?.dynamic ?? own.nativeTraits?.dynamic;
+    if (typeof dynamic !== "boolean") return unavailable("Native dynamic class flag is unresolved");
+    return dynamic;
+}
 function packageName(qname:string):string { return qname.slice(0,Math.max(0,qname.lastIndexOf("."))); }
 function findTrait(info:ClassInfo, key:string, caller:string | null, publicOnly:boolean):Member[] {
     const context = caller === null ? [] : lookupObjectCaller(caller);
     const matches:Member[] = [];
     const storage = new Set<string>();
     for (const owner of info.chain) {
+        if (!owner.traits) {
+            if (owner.nativeTraits!.names.includes(key)) return unavailable(`Native member ${owner.qname}.${key} lacks authenticated dynamic dispatch`);
+            continue;
+        }
         for (const member of owner.traits!.members.filter(member => member.name === key)) {
             if (member.namespaceName !== null) return unavailable("Named namespace URIs require authenticated resolution");
             const namespace = member.visibility === "private" ? `private:${owner.qname}`
@@ -93,12 +103,12 @@ BUILTINS.set("toLocaleString",labelFunction(function(this:unknown):unknown {
 },"function Function() {}"));
 BUILTINS.set("propertyIsEnumerable",labelFunction(function(this:unknown,key:unknown):boolean {
     const target=receiver(this), name=keyName(key === undefined ? null : key), info=describe(target);
-    if (info && !info.chain[0]!.traits!.dynamic) return false;
+    if (info && !dynamicClass(info)) return false;
     return Object.getOwnPropertyDescriptor(target,name)?.enumerable === true;
 },"function Function() {}"));
 BUILTINS.set("setPropertyIsEnumerable",labelFunction(function(this:unknown,key:unknown,flag?:unknown):void {
     const target=receiver(this), name=keyName(key === undefined ? null : key), info=describe(target);
-    if (info && !info.chain[0]!.traits!.dynamic) referenceError(1056,name,info.qname);
+    if (info && !dynamicClass(info)) referenceError(1056,name,info.qname);
     const descriptor=Object.getOwnPropertyDescriptor(target,name);
     if (descriptor) Object.defineProperty(target,name,{...descriptor,enumerable:arguments.length < 2 ? true : Boolean(flag)});
 },"function Function() {}"));
@@ -129,7 +139,7 @@ export function as3ObjectRead(value:unknown, key:unknown, caller:string | null =
         const ctor = info?.constructor ?? Object;
         return labelFunction(ctor,`[class ${info ? info.qname.split(".").pop() : "Object"}]`);
     }
-    if (info && !info.chain[0]!.traits!.dynamic) return referenceError(1069,name,info.qname);
+    if (info && !dynamicClass(info)) return referenceError(1069,name,info.qname);
     return undefined;
 }
 function slotValue(type:string,value:unknown):unknown {
@@ -154,7 +164,7 @@ export function as3ObjectWrite(value:unknown,key:unknown,next:unknown,caller:str
         if (writable) { Reflect.set(target,name,slotValue(writable.type,next)); return next; }
         if (members.some(member => member.kind === "method")) return referenceError(1037,name,info.qname);
         if (members.length) return referenceError(1074,name,info.qname);
-        if (!info.chain[0]!.traits!.dynamic) return referenceError(1056,name,info.qname);
+        if (!dynamicClass(info)) return referenceError(1056,name,info.qname);
     }
     Object.defineProperty(target,name,{value:next,writable:true,enumerable:true,configurable:true});
     return next;
@@ -162,7 +172,7 @@ export function as3ObjectWrite(value:unknown,key:unknown,next:unknown,caller:str
 export function as3ObjectHasOwn(value:unknown,key:unknown):boolean {
     const target = receiver(value), name = keyName(key), info = describe(target);
     if (info) return findTrait(info,name,null,true).length > 0
-        || info.chain[0]!.traits!.dynamic && Object.prototype.hasOwnProperty.call(target,name);
+        || dynamicClass(info) && Object.prototype.hasOwnProperty.call(target,name);
     return Object.prototype.hasOwnProperty.call(target,name);
 }
 export function as3ObjectHas(value:unknown,key:unknown):boolean {
@@ -173,12 +183,19 @@ export function as3ObjectHas(value:unknown,key:unknown):boolean {
 export function as3ObjectDelete(value:unknown,key:unknown,caller:string | null = null):boolean {
     const target = receiver(value), name = keyName(key), info = describe(target);
     if (caller !== null) lookupObjectCaller(caller);
-    if (info && (!info.chain[0]!.traits!.dynamic || findTrait(info,name,caller,false).length)) return false;
+    if (info && (!dynamicClass(info) || findTrait(info,name,caller,false).length)) return false;
     return Reflect.deleteProperty(target,name);
 }
 export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:string | null = null):unknown {
-    const fn = as3ObjectRead(value,key,caller);
-    if (typeof fn !== "function") return unavailable("Dynamic non-callable errors require native call evidence");
+    receiver(value);
+    const name=keyName(key);
+    const fn = as3ObjectRead(value,name,caller);
+    if (typeof fn !== "function") {
+        const error=new TypeError(`Error #1006: ${name} is not a function.`);
+        Object.defineProperty(error,"errorID",{value:1006}); throw error;
+    }
+    if (name !== "hasOwnProperty" && name !== "toString" && !isAS3MethodClosure(fn) && ![...BUILTINS.values()].includes(fn))
+        return unavailable("Dynamic function values require authenticated method-closure argument behavior");
     return Reflect.apply(fn,value,args);
 }
 

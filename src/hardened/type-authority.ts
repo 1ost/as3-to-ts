@@ -1,3 +1,4 @@
+import { LoadedSourceMemberAuthority, assertLoadedSourceMemberAuthority } from "./source-member-authority";
 import { HardenedSemanticError, SemanticExpression, SemanticField, SemanticMember, SemanticProgram } from "./contracts";
 import { assertAdaptedSemanticProgram } from "./adapter";
 import { emitSemanticProgram } from "./emitter";
@@ -22,6 +23,7 @@ export interface RuntimeAuthorityClassSource {
     readonly predicateExport: string;
     readonly constructionTargetExport: string | null;
     readonly constructionProofExport: string | null;
+    readonly nativeObjectTraits?: { readonly dynamic: boolean | null; readonly names: readonly string[]; readonly sourceArtifactSha256: string };
     readonly objectTraits?: { readonly dynamic: boolean; readonly members: readonly {
         readonly name: string; readonly kind: "field" | "const" | "method" | "getter" | "setter"; readonly type: string;
         readonly visibility: "public" | "private" | "protected" | "internal" | "namespace"; readonly namespaceName: string | null;
@@ -194,6 +196,32 @@ export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: 
         predicateExport: row.predicateExport, constructionTargetExport: null, constructionProofExport: null,
         fields: Object.freeze([]), evaluationOrder: null })));
 
+}
+
+/** Native member names prove absence only; they never supply callable implementations. */
+export function withNativeObjectMemberCensus(sources: readonly RuntimeAuthoritySource[],
+    census: LoadedSourceMemberAuthority): readonly RuntimeAuthoritySource[] {
+    assertAuthenticatedRuntimeAuthoritySources(sources);
+    assertLoadedSourceMemberAuthority(census);
+    return Object.freeze(sources.map(source => {
+        if (source.kind !== "class" || source.objectTraits || source.evaluationOrder !== null) return source;
+        const row=census.entriesByQName[source.qname];
+        const names=new Set<string>(), visited=new Set<string>();
+        let current:string | null=source.qname;
+        // A shared bridge may compose a native base (DisplayObject/EventDispatcher)
+        // instead of extending its JS constructor. Retain that omitted base's
+        // names as unresolved, rather than pretending those members do not exist.
+        while (current !== source.base && current !== "Object" && current !== null) {
+            const owner:LoadedSourceMemberAuthority["entriesByQName"][string] | undefined=census.entriesByQName[current];
+            if (!owner || visited.has(current))
+                throw new HardenedSemanticError("HARDENED_NATIVE_OBJECT_CENSUS", `native hierarchy is incomplete or cyclic: ${source.qname}`);
+            visited.add(current); owner.ownInstanceMemberNames.forEach(name=>names.add(name)); current=owner.baseQName;
+        }
+        if (!row || source.base !== null && current !== source.base)
+            throw new HardenedSemanticError("HARDENED_NATIVE_OBJECT_CENSUS", `native hierarchy differs from the SDK census: ${source.qname}`);
+        return authenticatedSource({...source, nativeObjectTraits:Object.freeze({dynamic:row.dynamic ?? null,
+            names:Object.freeze([...names].sort()), sourceArtifactSha256:census.sourceArtifactSha256})});
+    }));
 }
 
 /** Derives a local class row only when importing the emitted module is definition-safe. */
@@ -573,7 +601,7 @@ function sourceMetadata(entry: RuntimeAuthoritySource): object {
     return entry.kind === "interface"
         ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
         : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
-            sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}) };
+            sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}) };
 }
 
 function canonicalMetadata(entries: readonly RuntimeAuthoritySource[]): string {
@@ -665,7 +693,7 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
             return `    { kind: "interface", qname: ${quote(source.qname)}, bases: ${JSON.stringify(source.bases)} },`;
         }
         const index = importIndex.get(source)!;
-        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
+        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}${source.nativeObjectTraits ? `nativeObjectTraits: ${JSON.stringify(source.nativeObjectTraits)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
     });
     const qnames = ordered.map(source => source.qname);
     const code = [

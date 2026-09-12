@@ -3503,11 +3503,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         }
         if (callee.kind === "index" && callee.accessKind === "object") {
-            if (callee.index.kind !== "literal" || !["hasOwnProperty","toString"].includes(String(callee.index.value)))
-                fail("HARDENED_OBJECT_CALL_TARGET", "dynamic calls require retained native argument and return behavior", node);
-            const expected = callee.index.value === "hasOwnProperty" ? 1 : 0;
-            if (args.length !== expected) fail("HARDENED_OBJECT_CALL_ARITY", "Object builtin call has an unproved arity", node);
-            if (args.length) assertObjectKey(assignmentType(args[0]!,context,node),node);
+            const builtin = callee.index.kind === "literal" && ["hasOwnProperty","toString"].includes(String(callee.index.value));
+            if (builtin) {
+                const expected = (callee.index as Extract<SemanticExpression,{kind:"literal"}>).value === "hasOwnProperty" ? 1 : 0;
+                if (args.length !== expected) fail("HARDENED_OBJECT_CALL_ARITY", "Object builtin call has an unproved arity", node);
+                if (args.length) assertObjectKey(assignmentType(args[0]!,context,node),node);
+            } else if (args.length !== 0 || callee.index.kind !== "literal" || typeof callee.index.value !== "string") {
+                fail("HARDENED_OBJECT_CALL_TARGET", "dynamic calls with arguments or computed names require retained native evaluation evidence", node);
+            }
             return Object.assign(identity(node),{kind:"objectOperation" as const,operation:"call" as const,
                 target:callee.target,index:callee.index,arguments:args,callerQName:context.classQualifiedName,
                 resultType:semanticType(node,"*","unknown")});

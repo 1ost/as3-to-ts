@@ -405,3 +405,27 @@ ordered static calls, exception propagation and later construction recovery acro
 three original classes. Its independent static compound hold also establishes
 current-class static-field updates through the existing coercion path; imported
 receiver expressions and static accessor compounds remain outside this extension.
+
+
+The SDK member census v2 adds the source `dynamic` class flag to the existing
+member-name/ancestry inventory. The shared runtime uses this census to prove
+that native ancestors do not conflict with a generated local member. It also
+retains names of native bases implemented through bridge composition. These
+names do not admit native member implementations: matching unresolved names
+still raise an explicit dispatch hold. V1 profiles remain accepted; their
+native dynamic flags remain unknown, so missing-member operations on direct
+native receivers cannot infer sealed/dynamic behavior. Generated local classes
+retain their own declared flags independently of native ancestors.
+
+Literal zero-argument dynamic method calls now retain native method-closure
+receivers and errors #1069/#1006. Dynamic calls with arguments or computed
+names remain held pending native evaluation/argument evidence. The native
+`dynamic-method` and `dynamic-method-errors` fixtures retain source, state and
+full diagnostic comparisons, including `Object(value)` after an interface test.
+
+Required instance-method arguments are checked before parameter conversion or
+body effects, including calls through bound method values stored on an Object.
+Native `dynamic-method-arity` retains missing-argument #1063 and omitted optional
+argument defaults. New dynamic calls to unregistered bare function values remain
+explicitly unavailable; method closures carry generated method behavior. This
+does not establish general anonymous-function arity or calls with extra arguments.

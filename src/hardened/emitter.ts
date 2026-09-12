@@ -811,7 +811,7 @@ function parameterSlotStatements(parameters:SemanticParameter[], ts:TypeScriptCo
                 [ts.factory.createIdentifier(parameter.name),ts.factory.createStringLiteral(parameter.type.sourceName)]))));
 }
 
-function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi): any {
+function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQName: string): any {
     if (member.kind === "field") {
         const modifiers = modifierTokens(member.modifiers, ts);
         if (member.readonly) modifiers.push(ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword));
@@ -825,10 +825,20 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi): any {
     if (member.kind === "constructor") throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR",
         "constructor emission requires its authenticated class context", member.sourceNodeId);
     if (member.kind === "method") {
+        const minimum=member.modifiers.includes("static") ? 0 : member.parameters.filter(p=>!p.rest && p.defaultValue === null).length;
+        const arity:any[]=[];
+        if (minimum > 0) {
+            if (member.parameters.some(p=>p.name === "arguments") || constructorStatementsBindArguments(member.body))
+                throw new HardenedSemanticError("HARDENED_EMIT_METHOD_ARITY", "method binding shadows the runtime arguments object", member.sourceNodeId);
+            arity.push(ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+                ts.factory.createIdentifier("__as3CheckMethodMinimumArity"),undefined,[ts.factory.createStringLiteral(classQName),
+                    ts.factory.createStringLiteral(member.name),ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length"),
+                    ts.factory.createNumericLiteral(minimum)])));
+        }
         return ts.factory.createMethodDeclaration(
             modifierTokens(member.modifiers, ts), undefined, member.name, undefined, undefined,
             member.parameters.map((parameter) => parameterNode(parameter, ts)), typeNode(member.returnType, ts),
-            ts.factory.createBlock(parameterSlotStatements(member.parameters,ts).concat(member.body.map((statement) => statementNode(statement, ts))), true),
+            ts.factory.createBlock(arity.concat(parameterSlotStatements(member.parameters,ts),member.body.map((statement) => statementNode(statement, ts))), true),
         );
     }
     if (member.kind === "getter") {
@@ -1398,11 +1408,12 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         value.kind === "functionApply" || value.kind === "globalFunction"
         || (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
             && value.targetType.sourceName !== "Dictionary"
-        || value.kind === "method" && value.parameters.some(nativeParameterSlot)
+        || value.kind === "method" && (value.parameters.some(nativeParameterSlot)
+            || !value.modifiers.includes("static") && value.parameters.some((p:SemanticParameter)=>!p.rest && p.defaultValue === null))
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
-            ["as3FunctionApply","as3FunctionArgument","as3CheckFunctionArity","as3TraceFunction"].map(name =>
+            ["as3FunctionApply","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3TraceFunction"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
     const dictionarySlot = (value:any):boolean => value !== null && typeof value === "object" && (
@@ -1457,7 +1468,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     const constructorMember = program.declaration.declarationKind === "class"
         ? program.declaration.members.find((member): member is SemanticConstructor => member.kind === "constructor") ?? null : null;
     const classMembers = program.declaration.declarationKind === "class"
-        ? program.declaration.members.filter(member => member.kind !== "constructor").map(member => memberNode(member, ts)) : [];
+        ? program.declaration.members.filter(member => member.kind !== "constructor").map(member => memberNode(member, ts, program.packageName ? program.packageName+"."+program.declaration.name : program.declaration.name)) : [];
     if (program.declaration.declarationKind === "class") {
         for (const forward of program.declaration.inheritedAccessors || []) {
             const target = ts.factory.createPropertyAccessExpression(ts.factory.createSuper(), forward.name);

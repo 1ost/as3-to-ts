@@ -12,7 +12,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { loadCapabilityAuthority } from "../hardened/ledger";
 import { loadLocalTypeAuthority } from "../hardened/local-types";
 import { loadLocalMemberAuthority } from "../hardened/local-members";
-import { loadMappedRuntimeTypeAuthority, type RuntimeAuthoritySource } from "../hardened/type-authority";
+import { loadMappedRuntimeTypeAuthority, withNativeObjectMemberCensus, type RuntimeAuthoritySource } from "../hardened/type-authority";
 import { loadSourceMemberAuthority, type LoadedSourceMemberAuthority } from "../hardened/source-member-authority";
 import type { LoadedCapabilityAuthority, LoadedLocalMemberAuthority, LoadedLocalTypeAuthority } from "../hardened/contracts";
 import { CliError } from "./errors";
@@ -399,7 +399,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             authority, localTypes, localMembers, typeScriptVersion: profile.typeScriptVersion as string,
             sourceCensusSha256: profile.sourceCensusSha256 as string,
             targetCapabilitiesSha256: profile.targetCapabilitiesSha256 as string,
-            capabilityMappingSha256: files.capabilityMapping.sha256, runtimeTypeSources, sourceMembers,
+            capabilityMappingSha256: files.capabilityMapping.sha256,
+            runtimeTypeSources: withNativeObjectMemberCensus(runtimeTypeSources, sourceMembers), sourceMembers,
             nativeTimerAuthoritySha256: files.nativeTimerAuthority.sha256,
             runtimePackage: profile.runtimePackage as string, profileSha256: sha256(profileJson),
             applicationId: profile.applicationId as string, includeBigTurnTableDto: false,
