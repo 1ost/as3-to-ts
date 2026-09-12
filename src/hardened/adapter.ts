@@ -2487,6 +2487,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node),{kind:"binary" as const,
                 operator:operator as "===" | "!==",left,right,resultType:semanticType(node,"Boolean","boolean")});
         }
+        if (operator === "+" && context.sourceMemberAuthority !== null
+            && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))
+            && [leftType,rightType].some(type => ["*","Object","Array","Function"].includes(type.sourceName))) {
+            return Object.assign(identity(node), {kind:"binary" as const,operator:"+" as const,
+                left,right,additionCoercion:true as const,resultType:semanticType(node,"*","unknown")});
+        }
         if (["-","*","/","%"].includes(operator) && context.sourceMemberAuthority !== null
             && [leftType,rightType].some(type => type.sourceName === "*")
             && [leftType,rightType].every(type => ["*","Number","int","uint"].includes(type.sourceName))) {
@@ -2879,24 +2885,28 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             const numeric = (type: SemanticType): boolean => ["Number", "int", "uint"].includes(type.sourceName)
                 && type.emittedName === "number";
+            const nativeAdd = binaryOperator === "+" && context.sourceMemberAuthority !== null
+                && [targetType,valueType].every(type => !["void","XML","XMLList"].includes(type.sourceName))
+                && [targetType,valueType].some(type => ["*","Object","Array","Function"].includes(type.sourceName));
             const stringAdd = binaryOperator === "+" && targetType.sourceName === "String"
                 && valueType.sourceName === "String";
             const logical = (binaryOperator === "&&" || binaryOperator === "||")
                 && targetType.sourceName === "Boolean" && valueType.sourceName === "Boolean";
-            if (!stringAdd && !logical && (!numeric(targetType) || !numeric(valueType))) {
+            if (!nativeAdd && !stringAdd && !logical && (!numeric(targetType) || !numeric(valueType))) {
                 fail("HARDENED_COMPOUND_TYPE", "compound assignment requires exact String addition or proven numeric operands", node);
             }
             const bitwise = ["&", "|", "^", "<<", ">>", ">>>"].includes(binaryOperator);
-            const resultType = stringAdd ? semanticType(node, "String", "string")
+            const resultType = nativeAdd ? semanticType(node,"*","unknown") : stringAdd ? semanticType(node, "String", "string")
                 : logical ? semanticType(node, "Boolean", "boolean")
                 : bitwise ? semanticType(node, binaryOperator === ">>>" ? "uint" : "int", "number")
                     : semanticType(node, "Number", "number");
             const binary: SemanticExpression = Object.assign(identity(node), {
                 kind: "binary" as "binary",
                 operator: binaryOperator as "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>" | "&&" | "||",
-                left: target, right: value, resultType,
+                left: target, right: value, resultType, ...(nativeAdd ? {additionCoercion:true as const} : {}),
             });
-            value = (targetType.sourceName === "int" || targetType.sourceName === "uint")
+            value = nativeAdd ? adaptAssignmentValue(targetType,binary,context,node)
+                : (targetType.sourceName === "int" || targetType.sourceName === "uint")
                 ? Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument: binary })
                 : binary;
         }

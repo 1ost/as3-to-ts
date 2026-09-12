@@ -26,6 +26,7 @@ function compileFocusedSources() {
         "src/hardened/ledger.ts",
         "src/hardened/contracts.ts",
         "src/hardened-runtime/AS3Coerce.ts",
+        "src/hardened-runtime/AS3Function.ts",
         "src/hardened-runtime/AS3Type.ts",
         "src/hardened-runtime/internal/AS3TypeRegistry.ts",
     ].map((name) => path.join(ROOT, name));
@@ -478,6 +479,7 @@ try {
     }
     const executablePrimitiveCode = primitiveRuntimeCode
         .replaceAll("@bleach/as3-runtime/AS3Coerce", "./hardened-runtime/AS3Coerce")
+        .replaceAll("@bleach/as3-runtime/AS3Function", "./hardened-runtime/AS3Function")
         .replaceAll("@bleach/as3-runtime/AS3Type", "./hardened-runtime/AS3Type");
     const primitiveJavaScript = ts49.transpileModule(executablePrimitiveCode, { compilerOptions: {
         target: ts49.ScriptTarget.ES2020, module: ts49.ModuleKind.CommonJS,

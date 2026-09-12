@@ -242,6 +242,30 @@ function nativeString(value:unknown, active:Set<object>):string {
     return String(nativePrimitive(value,"string",active));
 }
 
+function additionPrimitive(value:unknown):unknown {
+    if (typeof value === "function" || lookupStringClassName(value) !== null) {
+        if (Object.prototype.hasOwnProperty.call(value,"valueOf") || Object.prototype.hasOwnProperty.call(value,"toString"))
+            return unavailable("Overridden Function/Class addition conversion requires native dispatch evidence");
+        return nativeString(value,new Set());
+    }
+    if (value !== null && typeof value === "object") return nativePrimitive(value,"number",new Set());
+    if (typeof value === "bigint" || typeof value === "symbol")
+        return unavailable("Host-only primitive has no AS3 addition conversion");
+    return value;
+}
+
+/** AIR takes a String-conversion fast path before general primitive conversion. */
+export function as3NativeAdd(left:unknown, right:unknown):string|number {
+    if ([left,right].some(value => typeof value === "bigint" || typeof value === "symbol"))
+        return unavailable("Host-only primitive has no AS3 addition conversion");
+    if (typeof left === "string")
+        return nativeString(left,new Set())+nativeString(right,new Set());
+    const a=additionPrimitive(left), b=additionPrimitive(right);
+    if (typeof a === "string" || typeof b === "string")
+        return nativeString(a,new Set())+nativeString(b,new Set());
+    return as3NativeNumber(a)+as3NativeNumber(b);
+}
+
 /** AVM numeric text predates JavaScript binary/octal prefixes and accepts signed hex. */
 function numberText(value:string):number {
     // This is the retained AVM whitespace set, not JavaScript's trim set.

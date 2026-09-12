@@ -310,3 +310,31 @@ mismatches with JavaScript's BigInt-to-Number rounding before the shared fix.
 Native errors include the exact #1002 name/message and precision validation
 before nonfinite formatting. Numeric method closures and other Number formatting
 methods remain outside this change.
+
+
+### Native wildcard addition and typed method slots
+
+Wildcard/Object/Array/Function `+` and compound `+=` use the shared native addition
+helper. AIR's conversion shortcut is asymmetric: an original left String converts
+the right operand with String conversion, while a right String does not bypass
+the left operand's default primitive conversion. When neither starts as a String
+on the left, both operand expressions evaluate before left-to-right primitive
+conversion. Native null/undefined behavior, numeric results, concatenation and
+exact conversion errors are retained.
+
+Compound assignment preserves existing typed slots and supports local variables,
+parameters and direct `this` fields/accessors. General indexed or computed
+receivers remain held until their evaluation-order lowering is proved. Numeric
+compound operators on wildcard values remain outside this addition change.
+
+Generated ordinary methods normalize supported primitive/Object/Array/Function
+parameters at body entry, including host/callback invocations. This reuses the
+shared function-slot helper; parameter names and declared signatures stay intact.
+The fixture exposed missing Number-slot coercion for an empty-string host input.
+This increment does not qualify general method arity/default semantics, unresolved
+reference-class coercion or every call-site conversion-order path.
+
+The unchanged AddValuesProbe retains 47 native/generated checkpoints, including
+asymmetric custom conversion, class/function labels, null results, exact errors,
+String/Number slots and getter/RHS/setter order. It is a shared language fixture,
+not an application controller replacement.

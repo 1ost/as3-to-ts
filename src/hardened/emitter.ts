@@ -4,6 +4,7 @@ import {
     SemanticField,
     SemanticMember,
     SemanticModifier,
+    SemanticParameter,
     SemanticProgram,
     SemanticStatement,
     SemanticType,
@@ -348,6 +349,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "binary") {
+        if (expression.additionCoercion) {
+            if (expression.operator !== "+") throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "addition conversion requires the plus operator");
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Add"),undefined,
+                [expressionNode(expression.left,ts),expressionNode(expression.right,ts)]);
+        }
         if (expression.numericCoercion) {
             if (!["-","*","/","%"].includes(expression.operator))
                 throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "numeric conversion requires a numeric operator");
@@ -724,6 +730,17 @@ function fieldDefaultExpression(member: SemanticField, ts: TypeScriptCompilerApi
     throw new HardenedSemanticError("HARDENED_FIELD_DEFAULT", "field lacks one exact AS3 initialization policy", member.sourceNodeId);
 }
 
+function nativeParameterSlot(parameter:SemanticParameter):boolean {
+    return !parameter.rest && ["String","Number","int","uint","Boolean","Object","Array","Function"].includes(parameter.type.sourceName);
+}
+
+function parameterSlotStatements(parameters:SemanticParameter[], ts:TypeScriptCompilerApi):any[] {
+    return parameters.filter(nativeParameterSlot).map(parameter => ts.factory.createExpressionStatement(
+        ts.factory.createBinaryExpression(ts.factory.createIdentifier(parameter.name),ts.factory.createToken(ts.SyntaxKind.EqualsToken),
+            ts.factory.createCallExpression(ts.factory.createIdentifier("__as3FunctionArgument"),undefined,
+                [ts.factory.createIdentifier(parameter.name),ts.factory.createStringLiteral(parameter.type.sourceName)]))));
+}
+
 function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi): any {
     if (member.kind === "field") {
         const modifiers = modifierTokens(member.modifiers, ts);
@@ -741,7 +758,7 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi): any {
         return ts.factory.createMethodDeclaration(
             modifierTokens(member.modifiers, ts), undefined, member.name, undefined, undefined,
             member.parameters.map((parameter) => parameterNode(parameter, ts)), typeNode(member.returnType, ts),
-            ts.factory.createBlock(member.body.map((statement) => statementNode(statement, ts)), true),
+            ts.factory.createBlock(parameterSlotStatements(member.parameters,ts).concat(member.body.map((statement) => statementNode(statement, ts))), true),
         );
     }
     if (member.kind === "getter") {
@@ -1168,7 +1185,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase", "as3NumberToFixed"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase", "as3NumberToFixed", "as3Add"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1290,6 +1307,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (programHasKind(program, "coercion") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
     const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "functionApply" || value.kind === "globalFunction" || value.kind === "coercion" && value.slot
+        || value.kind === "method" && value.parameters.some(nativeParameterSlot)
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(

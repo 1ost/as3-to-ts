@@ -1,6 +1,6 @@
 import { as3FixedDecimal } from "./internal/AS3NumberFormat";
 import { AS3_LOWERCASE_BMP } from "./internal/AS3CaseTable";
-import { as3NativeString, as3NativeNumber, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
+import { as3NativeString, as3NativeNumber, as3NativeAdd, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
 
 export function as3Int(value: unknown = 0): number {
     return as3NativeNumber(value) >> 0;
@@ -88,4 +88,9 @@ export function as3NumberToFixed(value:unknown, precision:unknown=0):string {
     primitiveReceiver(value);
     if (typeof value !== "number") throw new AS3ObjectDispatchUnavailable("Number.toFixed requires an original numeric value");
     return as3FixedDecimal(value,as3Int(precision));
+}
+
+/** Both operand expressions evaluate before the native addition conversion. */
+export function as3Add(left:unknown, right:unknown):string|number {
+    return as3NativeAdd(left,right);
 }

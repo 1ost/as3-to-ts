@@ -38,7 +38,7 @@ export function as3FunctionApply(target:unknown, receiver:unknown, argumentsArra
     if (typeof target !== "function" || Reflect.get(target,"apply") !== Function.prototype.apply
         || argumentsArray != null && !Array.isArray(argumentsArray))
         throw new AS3FunctionOperationUnavailable("Function.apply needs a callable and a native Array or null argument list");
-    return Reflect.apply(target,receiver,argumentsArray == null ? [] : argumentsArray);
+    return Reflect.apply(target,receiver,argumentsArray == null ? [] : argumentsArray as unknown[]);
 }
 
 const TRACE_FUNCTIONS=new WeakMap<Function,Function>();
