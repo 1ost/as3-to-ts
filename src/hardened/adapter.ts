@@ -2436,6 +2436,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node),{kind:"binary" as const,
                 operator:operator as "&&" | "||",left,right,resultType});
         }
+        if (["===","!=="].includes(operator) && context.sourceMemberAuthority !== null
+            && [leftType,rightType].some(type => dynamicObjectType(type,context))
+            && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))) {
+            return Object.assign(identity(node),{kind:"binary" as const,
+                operator:operator as "===" | "!==",left,right,resultType:semanticType(node,"Boolean","boolean")});
+        }
         const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
             || (rightType.sourceName === "null" && leftType.nullable);
         const looseEquality = operator === "==" || operator === "!=";
@@ -3133,8 +3139,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                 } else {
                     const arrayLength = isArrayType(targetType) && name === "length";
+                    const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
+                        && !valuePosition && ["push","pop","shift","unshift"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr"].includes(name);
-                    if (!arrayLength && !stringMethod && (vectorElement(targetType) === null
+                    if (!arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
                     }
@@ -3402,6 +3410,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             resultType = authoritySemanticType(member.returnType, context, node);
             capabilitySource = member.sourceQName;
             capabilityMember = member.name;
+        } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
+            && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee))) {
+            const name = callee.name;
+            if (!["push","pop","shift","unshift"].includes(name)
+                || (["pop","shift"].includes(name) && args.length !== 0))
+                fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
+            for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
+                fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
+            capabilitySource = "Array";
+            capabilityMember = name;
+            resultType = name === "push" || name === "unshift"
+                ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && vectorElement(assignmentType(callee.target, context, rawCallee)) !== null) {
             const ownerType = assignmentType(callee.target, context, rawCallee);
             const element = vectorElement(ownerType)!;

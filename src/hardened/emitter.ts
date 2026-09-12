@@ -201,6 +201,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
     }
     if (expression.kind === "call") {
+        if (expression.capabilitySource === "Array" && expression.callee.kind === "member")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayCall"),undefined,[
+                expressionNode(expression.callee.target,ts),ts.factory.createStringLiteral(expression.capabilityMember!),
+                ts.factory.createArrayLiteralExpression(expression.arguments.map(argument => expressionNode(argument,ts)))]);
         const callee = expressionNode(expression.callee, ts);
         return ts.factory.createCallExpression(
             expression.calleeNullable ? ts.factory.createNonNullExpression(callee) : callee, undefined,
@@ -1114,6 +1118,8 @@ function arrayRuntimeImport(ts: TypeScriptCompilerApi): any {
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayIndex"),
                 ts.factory.createIdentifier("__as3ArrayIndex")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayCall"),
+                ts.factory.createIdentifier("__as3ArrayCall")),
         ])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Array"), undefined);
 }
@@ -1125,7 +1131,8 @@ function programUsesArrayIndex(program: SemanticProgram): boolean {
         if (seen.has(value)) return false;
         seen.add(value);
         const record = value as { [key: string]: unknown };
-        if (record.kind === "index" && record.accessKind === "array") return true;
+        if (record.kind === "index" && record.accessKind === "array"
+            || record.kind === "call" && record.capabilitySource === "Array") return true;
         return Object.keys(record).some(key => visit(record[key]));
     };
     return visit(program);

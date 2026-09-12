@@ -159,3 +159,19 @@ Boolean return type, and the emitted operator evaluates the right operand only
 when required. A consuming Boolean context performs its own coercion. The shared
 LogicalValuesProbe retains native null/zero/false/empty/reference/undefined values
 and side-effect counts; XML/XMLList and void operands remain held.
+
+
+Array push/pop/shift/unshift now use shared AS3Array dispatch for all authenticated
+Array receivers, including static fields. Insertions preserve arguments as `*`;
+push/unshift return uint lengths, while removals return the actual value or
+undefined. Native null-receiver errors are retained. Overridden methods and length
+overflow remain explicit unsupported boundaries. Indexed writes and other Array
+methods still require shared support.
+
+Strict equality involving Object/wildcard values preserves native type-sensitive
+primitive comparisons and reference identity; loose coercive equality is unchanged.
+Class registration admits recursively literal static Array/Object containers,
+which cannot call source code or observe another class. Aggregate coercions,
+constructors, source calls and other executable static initialization remain held.
+The ArrayMutationProbe, DynamicEqualityProbe and definition-closure tests retain
+these boundaries. This is not a waiver for general lazy AS3 class initialization.

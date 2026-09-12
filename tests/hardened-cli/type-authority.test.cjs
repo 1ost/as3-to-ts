@@ -209,3 +209,18 @@ test("local authority derives emitted edges, rejects unsafe cycles, and invalida
     assert.throws(()=>localRuntimeTypeAuthoritySource(classProgram("Unproved"),"./Unproved"),
         error=>error.code==="HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE");
 });
+
+test('static literal containers are definition safe but aggregate conversions and source calls are held',()=>{
+ const literal=value=>({...semanticIdentity,kind:'literal',value});
+ const array=elements=>({...semanticIdentity,kind:'array',elements});
+ const object=value=>({...semanticIdentity,kind:'object',properties:[{...semanticIdentity,name:'data',value}]});
+ const program=initializer=>classProgram('StaticContainers',{members:[{...semanticIdentity,kind:'field',name:'state',modifiers:['public','static'],namespaceName:null,
+  readonly:false,type:{...typeRef('Object'),emittedName:'unknown',runtimeName:null},initializer,implicitDefault:null,embeddedBitmap:null}]});
+ for(const initializer of [array([]),array([literal(1),literal(null)]),object(array([literal('x')]))]){
+  const value=program(initializer);prove(value);
+  assert.equal(localRuntimeTypeAuthoritySource(value,'../game/StaticContainers').definitionSafe,true);
+ }
+ const call={...semanticIdentity,kind:'call'};
+ for(const initializer of [array([call]),object(call),{...semanticIdentity,kind:'coercion',targetType:typeRef('String'),argument:array([])}])
+  assert.throws(()=>prove(program(initializer)),error=>error.code==='HARDENED_TYPE_AUTHORITY_STATIC_INIT');
+});

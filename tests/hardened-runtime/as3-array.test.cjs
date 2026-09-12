@@ -41,3 +41,28 @@ test("the read seam admits exactly native AS3 Array index identities", () => {
         assert.throws(() => as3ArrayIndex(rejected), RangeError, String(rejected));
     }
 });
+
+const {as3ArrayCall,AS3ArrayOperationUnavailable} = require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
+test('Array mutations preserve values, identity, ordering and empty results',()=>{
+ const values=[],item={};
+ assert.equal(as3ArrayCall(values,'push',[]),0);
+ assert.equal(as3ArrayCall(values,'push',[undefined,null,item]),3);
+ assert.equal(as3ArrayCall(values,'pop',[]),item);
+ assert.equal(as3ArrayCall(values,'pop',[]),null);
+ assert.equal(as3ArrayCall(values,'pop',[]),undefined);
+ assert.equal(as3ArrayCall(values,'pop',[]),undefined);
+ assert.equal(as3ArrayCall(values,'unshift',['a','b']),2);
+ assert.equal(as3ArrayCall(values,'shift',[]),'a');
+ assert.equal(as3ArrayCall(values,'shift',[]),'b');
+ assert.equal(as3ArrayCall(values,'shift',[]),undefined);
+});
+test('null mutation retains native error and unproved operations remain explicit',()=>{
+ assert.throws(()=>as3ArrayCall(null,'push',[1]),{name:'TypeError',errorID:1009,
+  message:'Error #1009: Cannot access a property or method of a null object reference.'});
+ const overridden=[];overridden.push=()=>1;
+ assert.throws(()=>as3ArrayCall(overridden,'push',[1]),AS3ArrayOperationUnavailable);
+ const full=[];full.length=0xffffffff;
+ assert.throws(()=>as3ArrayCall(full,'push',[1]),AS3ArrayOperationUnavailable);
+ assert.equal(full.length,0xffffffff);
+ assert.throws(()=>as3ArrayCall([],'pop',[1]),AS3ArrayOperationUnavailable);
+});

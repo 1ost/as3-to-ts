@@ -205,9 +205,15 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
 function hasExecutableStaticInitializer(program: SemanticProgram): boolean {
     const literalOnly = (expression: SemanticExpression): boolean => !!expression && (expression.kind === "literal"
         || expression.kind === "coercion" && (expression.argument === null || literalOnly(expression.argument)));
+    // Literal containers allocate private state but cannot execute source code,
+    // observe another class, or require the not-yet-installed type registry.
+    // Coercions stay scalar-only: converting an aggregate can invoke user code.
+    const definitionSafe = (expression:SemanticExpression):boolean => literalOnly(expression)
+        || !!expression && (expression.kind === "array" && expression.elements.every(definitionSafe)
+            || expression.kind === "object" && expression.properties.every(property => definitionSafe(property.value)));
     return program.declaration.declarationKind === "class" && program.declaration.members.some(member =>
         member.kind === "field" && member.modifiers.includes("static") && !member.embeddedBitmap
-        && member.initializer !== null && !literalOnly(member.initializer));
+        && member.initializer !== null && !definitionSafe(member.initializer));
 }
 
 /** Generated Embed classes derive solely from admitted metadata and the mapped Bitmap authority. */
