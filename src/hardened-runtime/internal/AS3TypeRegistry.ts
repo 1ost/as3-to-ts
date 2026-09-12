@@ -591,3 +591,16 @@ export function lookupObjectCaller(qname: string): readonly string[] {
         result.push(CLASS_OBJECT_ENTRIES.get(current)!.qname);
     return Object.freeze(result);
 }
+
+/** Class string labels come only from builtin or authenticated runtime identity. */
+export function lookupStringClassName(value:unknown):string | null {
+    if (typeof value === "function") {
+        const builtin = [Object,Array,Number,Boolean,String,Function].find(item => item === value);
+        if (builtin) return builtin.name;
+        requireSealed();
+        return CLASS_OBJECT_ENTRIES.get(value)?.qname ?? null;
+    }
+    if (value !== null && typeof value === "object" && TYPE_TOKENS.has(value))
+        return (value as AS3TypeToken<unknown>).name;
+    return null;
+}

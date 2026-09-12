@@ -160,7 +160,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "undefined") return ts.factory.createVoidExpression(ts.factory.createNumericLiteral(0));
     if (expression.kind === "globalCall") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3Global_" + expression.name), undefined,
-        expression.arguments.map(argument => expressionNode(argument, ts)));
+        expression.arguments.map(argument => ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3TraceValue"),undefined,[expressionNode(argument,ts)])));
     if (expression.kind === "math") {
         const member = ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("Math"), expression.member);
         return expression.arguments === null ? member : ts.factory.createCallExpression(member, undefined,
@@ -1105,7 +1106,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1215,7 +1216,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || programUsesRuntimeType(program) || implementsTypes.length > 0 || programUsesVector(program)) {
         imports.push(runtimeTypeImport(ts));
     }
-    if (programHasKind(program, "coercion")) imports.push(coercionRuntimeImport(ts));
+    if (programHasKind(program, "coercion") || globalCalls.size > 0) imports.push(coercionRuntimeImport(ts));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
         imports.push(ownRecordRuntimeImport(ts));

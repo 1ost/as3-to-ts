@@ -175,3 +175,23 @@ which cannot call source code or observe another class. Aggregate coercions,
 constructors, source calls and other executable static initialization remain held.
 The ArrayMutationProbe, DynamicEqualityProbe and definition-closure tests retain
 these boundaries. This is not a waiver for general lazy AS3 class initialization.
+
+
+Native String conversion now handles scalar values, plain Objects, Arrays,
+authenticated local instance traits, registered/builtin Class labels, Function
+labels and canonical Error text. Native null-result fallback and errors 1006/1050
+are retained. Unresolved mapped instance traits, cyclic Arrays, overridden Array
+join, XML/XMLList and other unproved value domains remain explicit boundaries.
+
+Generated trace arguments use deferred shared conversion values. The Laya trace
+bridge performs each conversion after the native separator, so failures retain
+already-written text and do not convert later arguments. The original TraceValues
+and TraceErrors probes now pass complete output-stream comparisons, not merely
+state observations. Canonical Error name/message reads and zero/one non-null
+String Error construction support the retained failure path. Error IDs and broader
+Error construction remain outside that bounded constructor admission.
+
+Unshadowed undefined/NaN/Infinity use language constants; local, imported and
+inherited bindings retain precedence. Authenticated local/mapped class identifiers
+have Class value types. Non-void functions ending in throw terminate normally for
+return-path analysis; throwing getters and lambdas use the same shared rule.

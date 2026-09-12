@@ -298,8 +298,8 @@ try {
         assert.throws(() => adapt(source, false), error => error?.code === "HARDENED_GLOBAL_FUNCTION_AUTHORITY");
         const shadow = adapt(source.replace('public function run()', 'private function trace(a:String,b:int,c:Object):void {} public function run()'));
         assert.equal(JSON.stringify(shadow).includes('"globalCall"'), false);
-        assert.throws(() => adapt(source.replace('trace("hello", 1, null)', 'trace(this)')),
-            error => error?.code === "HARDENED_GLOBAL_STRING_CONVERSION");
+        assert.equal(adapt(source.replace('trace("hello", 1, null)', 'trace(this)'))
+            .declaration.members.find(m => m.name === "run").body[0].expression.kind,"globalCall");
         const parameter = source.replace('run():void', 'run(trace:Function):void');
         assert.throws(() => adapt(parameter), error => error?.code !== "HARDENED_GLOBAL_FUNCTION_AUTHORITY");
     }

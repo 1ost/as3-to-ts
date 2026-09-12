@@ -1786,6 +1786,13 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         && context.importsByLocal[expression.name]?.localValueType !== undefined) {
         return authoritySemanticType(context.importsByLocal[expression.name]!.localValueType!, context, node);
     }
+    if (expression.kind === "identifier" && context.sourceMemberAuthority !== null) {
+        const imported=context.importsByLocal[expression.name];
+        if (expression.bindingKind === "current-class" && expression.bindingSourceQualifiedName === context.classQualifiedName
+            || imported && ["local","flash"].includes(imported.authorityKind) && imported.localValueType === null
+                && !imported.runtimeInterface && !imported.compileTimeNamespace)
+            return semanticType(node,"Class","__as3ClassValue",[],false);
+    }
     if (expression.kind === "member" && expression.target.kind === "this" && context.fields[expression.name]) {
         return context.fields[expression.name]!.type;
     }
@@ -1877,6 +1884,9 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             if (expression.name === "length") return semanticType(node, "uint", "number");
             if (expression.name === "fixed") return semanticType(node, "Boolean", "boolean");
         }
+        if (ownerType.sourceName === "Error" && ownerType.emittedName === "Error"
+            && (ownerType.runtimeName === null || ownerType.runtimeName === "Error")
+            && ["message","name"].includes(expression.name)) return semanticType(node,"String","string");
         if (isArrayType(ownerType) && expression.name === "length") {
             return semanticType(node, "uint", "number");
         }
@@ -2139,8 +2149,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const args = node.children[1]!.children.map(child => parseExpression(child, context, true));
         args.forEach((argument, index) => {
             const type = assignmentType(argument, context, node.children[1]!.children[index]!);
-            if (!["String", "Number", "int", "uint", "Boolean", "null", "undefined"].includes(type.sourceName))
-                fail("HARDENED_GLOBAL_STRING_CONVERSION", "trace reference arguments require native String conversion authority", node.children[1]!.children[index]!);
+            if (!["String","Number","int","uint","Boolean","null","undefined","Object","*","Array","Function","Class","Error"].includes(type.sourceName)
+                && localQNameForType(type,context) === null)
+                fail("HARDENED_GLOBAL_STRING_CONVERSION", "trace value domain requires native String conversion support", node.children[1]!.children[index]!);
         });
         return Object.assign(identity(node), {kind: "globalCall" as "globalCall", name: "trace" as "trace",
             targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
@@ -2259,6 +2270,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         const name = validateIdentifier(requiredText(nameNode, "constructor target"), nameNode);
         const args = call.children[1]!.children.map((child) => parseExpression(child, context, true));
+        if (name === "Error" && context.sourceMemberAuthority !== null && context.className !== "Error"
+            && !context.locals.Error && !context.parameters.Error && !context.fields.Error && !context.methods.Error
+            && !context.accessors.Error && !context.importsByLocal.Error && !context.resolveImportedType("Error",null,nameNode)) {
+            assertNoInheritedNativeTimerShadow(context,"Error",nameNode);
+            if (args.length > 1 || args.some(argument => {
+                const type=assignmentType(argument,context,call);
+                return type.sourceName !== "String" || type.nullable;
+            })) fail("HARDENED_ERROR_CONSTRUCTOR", "Error construction requires zero arguments or one proven non-null String",call);
+            return Object.assign(identity(node),{kind:"new" as const,sourceType:semanticType(node,"Error","Error",[],false),arguments:args});
+        }
         const embedded = context.fields[name]?.embeddedBitmap;
         if (embedded && !context.locals[name] && !context.parameters[name]) {
             if (args.length !== 0) fail("HARDENED_EMBED_CONSTRUCTOR_ARITY", "Embedded bitmap construction currently admits zero arguments", call);
@@ -2775,6 +2796,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 return implicitThisMember(node, name, mapping.sourceQName);
             }
         }
+        if (context.sourceMemberAuthority !== null && ["undefined","NaN","Infinity"].includes(name)
+            && !context.resolveImportedType(name,null,node)) {
+            assertNoInheritedNativeTimerShadow(context,name,node);
+            if (name === "undefined") return Object.assign(identity(node),{kind:"undefined" as const});
+            return Object.assign(identity(node),{kind:"binary" as const,operator:"/" as const,
+                left:Object.assign(identity(node),{kind:"literal" as const,value:name === "NaN" ? 0 : 1}),
+                right:Object.assign(identity(node),{kind:"literal" as const,value:0}),resultType:semanticType(node,"Number","number")});
+        }
         fail("HARDENED_IDENTIFIER_SCOPE", `identifier ${name} is not a parameter or proven import/member`, node);
     }
     if (node.kind === "ASSIGN") {
@@ -3138,11 +3167,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         capabilitySource = lookup.ownerQName;
                     }
                 } else {
+                    const errorRead = valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
+                        && (targetType.runtimeName === null || targetType.runtimeName === "Error") && ["message","name"].includes(name);
                     const arrayLength = isArrayType(targetType) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
                         && !valuePosition && ["push","pop","shift","unshift"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr"].includes(name);
-                    if (!arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
+                    if (!errorRead && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
                     }
@@ -4066,7 +4097,7 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
 function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {
     if (statements.length === 0) return false;
     const last = statements[statements.length - 1]!;
-    return last.kind === "return" || (last.kind === "label" && statementsAlwaysReturn([last.statement]))
+    return last.kind === "return" || last.kind === "throw" || (last.kind === "label" && statementsAlwaysReturn([last.statement]))
         || (last.kind === "if" && last.elseStatements !== null
         && statementsAlwaysReturn(last.thenStatements) && statementsAlwaysReturn(last.elseStatements));
 }

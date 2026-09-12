@@ -1,4 +1,4 @@
-import { lookupObjectClass, lookupObjectCaller, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
+import { lookupObjectClass, lookupObjectCaller, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod } from "./AS3MethodClosure";
 
 type Member = AS3ObjectTraits["members"][number];
@@ -180,3 +180,59 @@ export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:st
 
 /** Preserve source evaluation order: the in key evaluates before its receiver. */
 export function as3ObjectIn(key:unknown,value:unknown):boolean { return as3ObjectHas(value,key); }
+
+function conversionError(id:number, description:string):never {
+    const error = new TypeError(`Error #${id}: ${description}`);
+    Object.defineProperty(error,"errorID",{value:id}); throw error;
+}
+function convertedPrimitive(value:unknown):boolean {
+    // Native conversion accepts undefined but retries valueOf after a null result.
+    return value !== null && typeof value !== "object" && typeof value !== "function";
+}
+function arrayString(value:unknown[], active:Set<object>):string {
+    if (active.has(value)) return unavailable("Cyclic Array String conversion requires native recursion evidence");
+    if (Object.prototype.hasOwnProperty.call(value,"join"))
+        return unavailable("Overridden Array join conversion requires native dispatch evidence");
+    active.add(value);
+    try {
+        const parts:string[] = [];
+        for (let i=0;i<value.length;i++) {
+            const element=value[i];
+            parts.push(element === null || element === undefined ? "" : nativeString(element,active));
+        }
+        return parts.join(",");
+    } finally { active.delete(value); }
+}
+function nativeString(value:unknown, active:Set<object>):string {
+    const className=lookupStringClassName(value);
+    if (className !== null) return `[class ${className.split(".").pop()}]`;
+    if (typeof value === "function") return as3ObjectFunctionLabel(value) ?? "function Function() {}";
+    if (value === null || typeof value !== "object") return String(value);
+    const array=Array.isArray(value);
+    const nativeError = value instanceof Error && [Error.prototype,TypeError.prototype,ReferenceError.prototype,
+        RangeError.prototype,SyntaxError.prototype,URIError.prototype,EvalError.prototype].includes(Object.getPrototypeOf(value));
+    if (array && Object.getPrototypeOf(value) !== Array.prototype)
+        return unavailable("Array subclass String conversion requires authenticated native traits");
+    for (const name of ["toString","valueOf"]) {
+        let fn:unknown;
+        if (nativeError) {
+            fn=Object.prototype.hasOwnProperty.call(value,name) ? Reflect.get(value,name)
+                : name === "valueOf" ? function() {return value;}
+                    : function() {
+                        const label=nativeString((value as Error).name,active), message=nativeString((value as Error).message,active);
+                        return message === "" ? label : label + ": " + message;
+                    };
+        } else if (array) {
+            fn=Object.prototype.hasOwnProperty.call(value,name) ? Reflect.get(value,name)
+                : name === "toString" ? function() {return arrayString(value,active);}
+                    : function() {return value;};
+        } else fn=as3ObjectRead(value,name,null);
+        if (typeof fn !== "function") conversionError(1006,`${name} is not a function.`);
+        const result=Reflect.apply(fn,value,[]);
+        if (convertedPrimitive(result)) return String(result);
+    }
+    return conversionError(1050,"Cannot convert Object to primitive.");
+}
+
+/** Native String conversion for scalars, Arrays and authenticated local Object traits. */
+export function as3NativeString(value:unknown):string { return nativeString(value,new Set()); }
