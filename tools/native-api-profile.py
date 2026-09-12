@@ -212,3 +212,14 @@ def decompile_sdk(swf, ffdec, output):
     (output / 'sdk-signatures.json').write_text(json.dumps({'schema': 'native-sdk-signatures@1', 'classes': classes,
         'inputs': {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}}, sort_keys=True) + '\n')
     return classes
+
+
+def select_supported_members(mappings, census_path, target_path, output):
+    """Retain all source uses, but map only members accepted by the real compiler gate."""
+    candidates = output / 'native-api-candidates.json'
+    candidates.write_text(json.dumps({'schema': 'as3-source-to-laya-capability-map@1', 'mappings': mappings},
+                                    sort_keys=True, separators=(',', ':')) + '\n')
+    report = output / 'native-api-selection.json'
+    subprocess.run(['node', str(Path(__file__).with_name('select-native-api-profile.cjs')),
+                    str(census_path), str(target_path), str(candidates), str(report)], check=True, timeout=60)
+    return json.loads(report.read_text())['mappings']

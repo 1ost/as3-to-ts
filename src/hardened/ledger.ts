@@ -883,6 +883,39 @@ function findTargetCapability(target: { [key: string]: unknown }, mapping: Capab
     }
 }
 
+/** Select SDK member candidates with the same checks used during final loading.
+ * This produces no loaded authority and does not waive publication validation.
+ */
+export function selectCapabilityCandidates(sourceJson: string, targetJson: string, mappingJson: string): {
+    mappings: CapabilityMapping[];
+    held: { mapping: unknown; code: string; message: string }[];
+} {
+    const source = parseJson(sourceJson, "HARDENED_SOURCE_CENSUS_JSON");
+    const target = parseJson(targetJson, "HARDENED_TARGET_CAPABILITIES_JSON");
+    const document = parseJson(mappingJson, "HARDENED_CAPABILITY_MAPPING_JSON");
+    if (!isObject(source) || !isObject(target) || !isObject(document)
+        || document.schema !== "as3-source-to-laya-capability-map@1" || !Array.isArray(document.mappings)) {
+        throw new HardenedSemanticError("HARDENED_CAPABILITY_MAPPING_SCHEMA", "candidate selection requires source, target and mapping documents");
+    }
+    const mappings: CapabilityMapping[] = [];
+    const held: { mapping: unknown; code: string; message: string }[] = [];
+    for (const candidate of document.mappings) {
+        try {
+            const mapping = parseMapping({ schema: document.schema, mappings: [candidate] }).mappings[0]!;
+            findSourceApi(source, mapping);
+            findTargetCapability(target, mapping);
+            assertMappedMemberCompatibility(mapping);
+            mappings.push(mapping);
+        } catch (error) {
+            // Type identities must still be valid as a whole. Only unsupported
+            // member candidates can be omitted and reported as explicit holds.
+            if (!(error instanceof HardenedSemanticError) || !isObject(candidate) || !isObject(candidate.sourceMember)) throw error;
+            held.push({ mapping: candidate, code: error.code, message: error.message });
+        }
+    }
+    return { mappings, held };
+}
+
 export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256: Sha256Function): LoadedCapabilityAuthority {
     const runtimePackage = input.runtimePackage || "@bleach/as3-runtime";
     const applicationProfile = input.applicationProfile === true;

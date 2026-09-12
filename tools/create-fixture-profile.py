@@ -246,6 +246,8 @@ def main():
         mappings.extend(properties)
         member_uses.extend(uses)
     census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': member_uses}})
+    if native_signatures is not None:
+        mappings = native_api.select_supported_members(mappings, census, target, out)
     files['capabilityMapping'] = write(out / 'mapping.json', {'schema': 'as3-source-to-laya-capability-map@1', 'mappings': mappings})
     files['localMemberMap'] = out / 'local-members.json'
     subprocess.run(['node', str(ROOT / 'tools/generate-local-member-map.cjs'), str(files['localTypeMap']),
@@ -258,7 +260,7 @@ def main():
         'runtimePackage': '@laya/as3-runtime', 'typeScriptVersion': '4.9.5', 'sourceRoots': source_roots, 'targetRoots': target_roots,
         'sourceCensusSha256': sha(census), 'targetCapabilitiesSha256': sha(target), 'runtimePredicateQNames': sorted(selected),
         'counts': {'localTypes': 1, 'localMembersComplete': members['completeCount'], 'localMembersHeld': members['heldCount'],
-                   'mappedTypes': len(apis), 'mappedMembers': len(member_uses), 'sourceMemberTypes': member_count},
+                   'mappedTypes': len(apis), 'mappedMembers': sum(m['sourceMember'] is not None for m in mappings), 'sourceMemberTypes': member_count},
         'files': {k: {'path': v.name, 'sha256': sha(v)} for k, v in files.items()}})
     write(out / 'generator-inputs.json', {str(v): sha(v) for v in [Path(__file__).resolve(), entry, target, predicate_input,
         sdk / 'frameworks/libs/air/airglobal.swc', sdk / 'lib/swfdump-cli.jar', ROOT / 'lib/declaration-worker.js',

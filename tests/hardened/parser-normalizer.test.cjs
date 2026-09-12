@@ -241,6 +241,19 @@ function authority(api) {
     const sourceJson = JSON.stringify(source);
     const targetJson = JSON.stringify(target);
     const mappingJson = api.canonicalMappingJson(mappings);
+    const selection = api.selectCapabilityCandidates(sourceJson, targetJson, mappingJson);
+    assert.equal(selection.mappings.length, mappings.mappings.length);
+    assert.deepEqual(selection.held, []);
+    assert.throws(() => api.assertLoadedCapabilityAuthority(selection), error => error?.code === "HARDENED_CAPABILITY_AUTHORITY_INSTANCE");
+    const drifted = JSON.parse(mappingJson);
+    const constructor = drifted.mappings.find(row => row.sourceMember !== null);
+    constructor.targetMember.signature = "new (host?: unknown): Sprite";
+    const heldSelection = api.selectCapabilityCandidates(sourceJson, targetJson, JSON.stringify(drifted));
+    assert.equal(heldSelection.held.length, 1);
+    assert.equal(heldSelection.held[0].code, "HARDENED_TARGET_CONSTRUCTOR_ARITY");
+    assert.deepEqual(heldSelection.held[0].mapping, constructor);
+    drifted.mappings.find(row => row.sourceMember === null).targetSignature = "typeof Missing";
+    assert.throws(() => api.selectCapabilityCandidates(sourceJson, targetJson, JSON.stringify(drifted)));
     const nativeTimerAuthorityJson = fs.readFileSync(
         path.join(ROOT, "config", "native-timer-authority.json"), "utf8").replace(/\r\n?/g, "\n");
     return api.loadCapabilityAuthority({
