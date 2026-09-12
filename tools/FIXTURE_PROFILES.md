@@ -445,3 +445,21 @@ node tools/check-native-reference-types.cjs /absolute/path/to/EventAncestryProbe
 
 This bounded regression checks the generated file using the relevant actual
 bridge/runtime declarations. It is not a complete engine or game typecheck.
+
+Native timer package imports in multi-file fixtures require `--ffdec-jar`.
+The generator reads the actual SDK getTimer/setTimeout/setInterval/clearTimeout/clearInterval
+function signatures into package-function member evidence and selects the
+existing shared AS3Timer runtime. It does not replace the strict runtime timer
+signature table or manufacture an application implementation. Original FilterLib
+uses this path; its static-construction probe does not invoke delayed callbacks.
+
+ColorMatrixFilter admits only the source constructor and matrix accessors with
+its shared Array conversion boundary. The bridge accepts untyped Array elements
+and stores detached float32 coefficients. Numeric Array indexed assignments are
+admitted only with source-member authority and the existing integer-index proof.
+Sparse growth and consumed values preserve native behavior; accessor-backed,
+subclass and noncanonical-index writes remain unsupported. Numeric compound
+index writes cache the key, read through the original receiver, evaluate RHS,
+and reevaluate the receiver for the store. The native array-index-write probe
+retains this order. Null compound reads, logical indexed assignments and other
+compound operators require their own evidence before extending admission.

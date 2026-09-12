@@ -165,6 +165,35 @@ def map_native_globals(directory, used_names, target):
     return apis, mappings
 
 
+NATIVE_TIMER_QNAMES = {"flash.utils." + name for name in
+                       ("getTimer", "setTimeout", "setInterval", "clearTimeout", "clearInterval")}
+
+
+def native_timer_member_uses(apis, directory):
+    """Retain SDK package-function signatures for the existing shared timer runtime."""
+    uses = []
+    for api in apis:
+        qname = api['qname']
+        if qname not in NATIVE_TIMER_QNAMES:
+            continue
+        name = qname.rsplit('.', 1)[1]
+        source = Path(directory) / 'scripts' / (qname.replace('.', '/') + '.as')
+        text = source.read_text()
+        declarations = re.findall(r'public (?:native )?function ' + re.escape(name)
+                                  + r'\([^)]*\)\s*:\s*(?:int|uint|void);?', text)
+        if len(declarations) != 1 or not re.search(r'package\s+flash\.utils\s*\{', text):
+            raise ValueError('Native timer SDK declaration is absent or ambiguous: ' + qname)
+        signature = re.sub(r'\s+', ' ', declarations[0]).strip()
+        minimum = 0 if name == 'getTimer' else 1 if name.startswith('clear') else 2
+        maximum = None if name.startswith('set') else minimum
+        api['roles'] = sorted(set(api['roles']) | {'import', 'package-function'})
+        api['signatures'] = [signature]
+        uses.append({'qname': qname, 'member': '<call>', 'access': 'call', 'context': 'package-function',
+                     'classification': 'layaair-flash-api-bridge', 'preserveNameAndSignature': True,
+                     'signatures': [{'signature': signature, 'minArgs': minimum, 'maxArgs': maximum}]})
+    return uses
+
+
 def annotate_native_function_signatures(apis, directory):
     """Authenticate the SDK wrapper and its native implementation together."""
     for api in apis:

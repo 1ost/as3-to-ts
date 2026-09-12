@@ -132,3 +132,15 @@ test('concat rejects unsupported Array receivers and accessors without invoking 
  assert.equal(full.length,0xffffffff);
  assert.throws(()=>as3ArrayCall(null,'concat',[]),{name:'TypeError',errorID:1009});
 });
+
+test('numeric Array writes retain sparse ownership and reject host accessor effects',()=>{
+ const {as3ArrayWrite}=require(path.join(OUTPUT,'hardened-runtime/AS3Array.js'));
+ const values=[],item={};assert.equal(as3ArrayWrite(values,2,item),item);
+ assert.equal(values.length,3);assert.equal(Object.hasOwn(values,0),false);assert.equal(values[2],item);
+ assert.equal(as3ArrayWrite(values,AS3_ARRAY_MAX_INDEX,undefined),undefined);
+ assert.equal(values.length,0xffffffff);assert.equal(Object.hasOwn(values,AS3_ARRAY_MAX_INDEX),true);
+ assert.throws(()=>as3ArrayWrite(null,2,item),error=>error.errorID===1009);
+ let invoked=false;const accessor=[];Object.defineProperty(accessor,'0',{set(){invoked=true;}});
+ assert.throws(()=>as3ArrayWrite(accessor,0,item),AS3ArrayOperationUnavailable);assert.equal(invoked,false);
+ assert.throws(()=>as3ArrayWrite([],1.5,item),RangeError);
+});

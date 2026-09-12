@@ -2125,7 +2125,7 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
         }
     }
     if (expression.kind === "index") {
-        if (expression.accessKind === "array") {
+        if (expression.accessKind === "array" && context.sourceMemberAuthority === null) {
             fail("HARDENED_ARRAY_INDEX_WRITE", "Array indexed writes remain outside the proven read-only slice", node);
         }
         if (expression.accessKind === "bigTurnTableInnerRoot" || expression.accessKind === "bigTurnTableInnerCost") {
@@ -3046,11 +3046,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 && target.target.bindingKind === "current-class"
                 && target.target.bindingSourceQualifiedName === context.classQualifiedName
                 && context.fields[target.name]?.modifiers.includes("static");
-            if (target.kind === "index" || (target.kind === "member" && target.target.kind !== "this" && !ownStaticField
+            if (target.kind === "index" && (target.accessKind !== "array" || context.sourceMemberAuthority === null) || (target.kind === "member" && target.target.kind !== "this" && !ownStaticField
                 && context.sourceMemberAuthority === null)) {
                 fail("HARDENED_COMPOUND_TARGET", "compound assignment requires a once-evaluated local, parameter, or direct this field", node.children[0]!);
             }
-            if (target.kind === "member" && target.target.kind !== "this" && !ownStaticField) deferCompoundStore = true;
+            if (target.kind === "index" && target.accessKind === "array"
+                || target.kind === "member" && target.target.kind !== "this" && !ownStaticField) deferCompoundStore = true;
             const numeric = (type: SemanticType): boolean => ["Number", "int", "uint"].includes(type.sourceName)
                 && type.emittedName === "number";
             const nativeAdd = binaryOperator === "+" && context.sourceMemberAuthority !== null

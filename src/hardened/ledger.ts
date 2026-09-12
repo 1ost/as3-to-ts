@@ -520,6 +520,25 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
         throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
             "source member context and access must preserve exact target kind and scope");
     }
+    if (mapping.sourceQName === "flash.filters.ColorMatrixFilter") {
+        const source=mapping.sourceMember, target=mapping.targetMember;
+        const constructor=constructorRole && source.name === "ColorMatrixFilter" && source.access === "call"
+            && source.minArgs === 0 && source.maxArgs === 1
+            && /^public function ColorMatrixFilter\([A-Za-z_$][A-Za-z0-9_$]*:Array = null\)$/.test(source.signature)
+            && target.signature === "new (matrix?: readonly unknown[] | null): ColorMatrixFilter";
+        const property=mapping.sourceRoles[0] === "instance-member" && source.name === "matrix" && target.name === "matrix"
+            && target.kind === "get+set" && target.signature === "get number[]; set readonly unknown[] | null"
+            && (source.access === "read" && source.minArgs === 0 && source.maxArgs === 0
+                && /^public function get matrix\(\) : Array$/.test(source.signature)
+                || source.access === "write" && source.minArgs === 1 && source.maxArgs === 1
+                && /^public function set matrix\([A-Za-z_$][A-Za-z0-9_$]*:Array\) : void$/.test(source.signature));
+        if (mapping.targetModule !== "src/layaAir/flash/filters/ColorMatrixFilter.ts"
+            || mapping.targetExport !== "ColorMatrixFilter" || mapping.targetCapabilityId !== "api.flash.filters"
+            || !(constructor || property))
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+                "ColorMatrixFilter requires its native constructor or matrix value boundary");
+        return;
+    }
     const bitmap = BITMAP_QNAMES.has(mapping.sourceQName);
     const allowedBitmapMembers = BITMAP_ALLOWED_MEMBERS[mapping.sourceQName];
     if (mapping.sourceQName === "flash.display.PixelSnapping" || (bitmap

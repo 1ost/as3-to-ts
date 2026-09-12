@@ -20,6 +20,24 @@ export class AS3ArrayOperationUnavailable extends Error {
     constructor(message:string) { super(message); this.name = "AS3ArrayOperationUnavailable"; }
 }
 
+/** Numeric-index writes preserve sparse length and the uncoerced assigned value. */
+export function as3ArrayWrite<T>(value: unknown, index: number, item: T): T {
+    if (value === null || value === undefined) {
+        const id=value === null ? 1009 : 1010;
+        const error=new TypeError(`Error #${id}: ${id === 1009 ? "Cannot access a property or method of a null object reference." : "A term is undefined and has no properties."}`);
+        Object.defineProperty(error,"errorID",{value:id});throw error;
+    }
+    const key=as3ArrayIndex(index);
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype)
+        throw new AS3ArrayOperationUnavailable("Array indexed writes require an ordinary native Array");
+    const own=Object.getOwnPropertyDescriptor(value,String(key));
+    if (Object.prototype.hasOwnProperty.call(Array.prototype,String(key))
+        || own && (!("value" in own) || !own.writable) || !Object.getOwnPropertyDescriptor(value,"length")?.writable)
+        throw new AS3ArrayOperationUnavailable("Array accessor and fixed-slot writes require native evidence");
+    value[key]=item;
+    return item;
+}
+
 /** Native push/pop/shift/unshift retain values, identities and uint lengths. */
 export function as3ArrayCall(value:unknown, method:"push" | "unshift", args:unknown[]):number;
 export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown[]):unknown;

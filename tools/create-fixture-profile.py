@@ -258,6 +258,9 @@ def main():
             # The source API remains SDK-authenticated. Omitting the optional
             # bridge mapping selects the compiler's existing sealed intrinsic.
             continue
+        if native_api is not None and q in native_api.NATIVE_TIMER_QNAMES:
+            # The existing timer runtime owns these SDK-authenticated functions.
+            continue
         cap, row = target_for(q)
         module = row['module']
         mapping_start = len(mappings)
@@ -275,6 +278,7 @@ def main():
         apis.extend(global_apis)
         mappings.extend(global_mappings)
         native_api.annotate_native_function_signatures(apis, out / 'sdk-source')
+        member_uses.extend(native_api.native_timer_member_uses(apis, out / 'sdk-source'))
     census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': member_uses}})
     if native_signatures is not None:
         mappings = native_api.select_supported_members(mappings, census, target, out)

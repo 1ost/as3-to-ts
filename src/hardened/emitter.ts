@@ -343,10 +343,17 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             let target = expression.target;
             if (target.kind === "member" && target.target.kind !== "super" && !expression.deferCompoundStore)
                 target = {...target, target:capture("__as3AssignmentReceiver", target.target)};
+            else if (target.kind === "index" && expression.deferCompoundStore)
+                target = {...target, index:capture("__as3AssignmentKey", target.index)};
             else if (target.kind === "index")
                 target = {...target, target:capture("__as3AssignmentReceiver", target.target),
                     index:capture("__as3AssignmentKey", target.index)};
             let rhs = expression.value;
+            if (target.kind === "index" && expression.deferCompoundStore) {
+                if (rhs.kind !== "binary" || rhs.left.kind !== "index")
+                    throw new HardenedSemanticError("HARDENED_EMIT_ASSIGNMENT", "indexed compound store lacks its source read");
+                rhs = {...rhs,left:target};
+            }
             // AIR retains the computed input, then reevaluates a compound
             // member receiver for the store. RHS callbacks can replace it.
             if (expression.shortCircuit) {
@@ -370,6 +377,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                     ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
                     ts.factory.createBlock(statements, true))), undefined, []);
         }
+        if (expression.target.kind === "index" && expression.target.accessKind === "array")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayWrite"),undefined,[
+                expressionNode(expression.target.target,ts),expressionNode(expression.target.index,ts),expressionNode(expression.value,ts)]);
         if (expression.target.kind === "index" && expression.target.accessKind === "object")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectWrite"),undefined,[
                 expressionNode(expression.target.target,ts),expressionNode(expression.target.index,ts),
@@ -1352,6 +1362,8 @@ function arrayRuntimeImport(ts: TypeScriptCompilerApi): any {
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayIndex"),
                 ts.factory.createIdentifier("__as3ArrayIndex")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayWrite"),
+                ts.factory.createIdentifier("__as3ArrayWrite")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayCall"),
                 ts.factory.createIdentifier("__as3ArrayCall")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayValues"),
