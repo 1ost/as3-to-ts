@@ -789,6 +789,26 @@ try {
     const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson),sha256);
     {
+        const adapt = (expression, authenticated = true) => {
+            const source = `package p { import flash.display.Sprite; public class NullableReference {
+                public function choose(flag:Boolean, numeric:Number):Sprite { return ${expression}; }
+            } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("NullableReference.as", source), source, sha256),
+                authority(built.ledger), source, sha256, undefined, undefined, undefined, referenceAuthority,
+                authenticated ? sourceMemberAuthority : undefined);
+        };
+        for (const expression of ["flag ? new Sprite() : null", "flag ? null : new Sprite()"]) {
+            const semantic = adapt(expression);
+            const result = semantic.declaration.members.find(member => member.name === "choose").body[0].expression;
+            assert.equal(result.resultType.sourceName, "Sprite");
+            assert.equal(result.resultType.nullable, true);
+            assert.throws(() => adapt(expression, false), error => error?.code === "HARDENED_CONDITIONAL_TYPE");
+        }
+        for (const expression of ["flag ? 1 : null", "flag ? numeric : null", "flag ? new Sprite() : true"])
+            assert.throws(() => adapt(expression), error => error?.code === "HARDENED_CONDITIONAL_TYPE");
+    }
+    {
         const adapt = source => built.adapter.adaptNormalizedParserAst(
             built.normalizer.normalizeParserAst(built.parse("AccessorGuard.as", source), source, sha256),
             authority(built.ledger), source, sha256, undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);

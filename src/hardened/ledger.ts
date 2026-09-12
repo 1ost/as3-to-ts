@@ -428,8 +428,8 @@ const TEXT_CONSTANT_QNAMES = new Set(Object.keys(TEXT_CONSTANT_VALUES));
 const STRICT_SOURCE_QNAMES = new Set([...BITMAP_SOURCE_QNAMES, ...TEXT_FILTER_QNAMES, ...TEXT_CONSTANT_QNAMES]);
 const BITMAP_ALLOWED_MEMBERS: { [qname: string]: Set<string> } = Object.freeze({
     "flash.display.Bitmap": new Set(["bitmapData", "smoothing"]),
-    "flash.display.BitmapData": new Set(["BitmapData", "clone", "copyChannel", "copyPixels", "dispose", "fillRect",
-        "getColorBoundsRect", "getPixel", "getPixel32", "height", "lock", "rect", "threshold", "unlock", "width"]),
+    "flash.display.BitmapData": new Set(["BitmapData", "clone", "copyChannel", "copyPixels", "dispose", "draw", "fillRect",
+        "getColorBoundsRect", "getPixel", "getPixel32", "height", "lock", "rect", "setPixel32", "threshold", "unlock", "width"]),
     "flash.display.BitmapDataChannel": new Set(["ALPHA", "RED"]),
 });
 const BITMAP_CHANNEL_VALUES: { [name: string]: number } = Object.freeze({ ALPHA: 8, RED: 1 });

@@ -2667,8 +2667,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const whenFalse = parseExpression(node.children[2]!, context, true);
         const trueType = assignmentType(whenTrue, context, node.children[1]!);
         const falseType = assignmentType(whenFalse, context, node.children[2]!);
-        const trueNull = trueType.sourceName === "null" && falseType.nullable;
-        const falseNull = falseType.sourceName === "null" && trueType.nullable;
+        const admitsNull = (type: SemanticType): boolean => type.nullable
+            || (context.sourceMemberAuthority !== null && type.runtimeName !== null
+                && !["Boolean", "Number", "int", "uint", "void"].includes(type.sourceName));
+        const trueNull = trueType.sourceName === "null" && admitsNull(falseType);
+        const falseNull = falseType.sourceName === "null" && admitsNull(trueType);
         const numericBranches = [trueType, falseType].every(type => ["Number", "int", "uint"].includes(type.sourceName));
         if (!sameUnderlyingType(trueType, falseType) && !numericBranches && !trueNull && !falseNull) {
             fail("HARDENED_CONDITIONAL_TYPE", "conditional branches require the exact same proven source type", node);
