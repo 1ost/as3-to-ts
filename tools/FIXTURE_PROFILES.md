@@ -1,7 +1,7 @@
 # Independent native-oracle profiles
 
-`create-fixture-profile.py` creates an explicit application profile for one
-independent AS3 class. It leaves the default Bleach trust root untouched and
+`create-fixture-profile.py` creates an explicit application profile for a bounded
+independent AS3 fixture (1 to 128 source files). It leaves the default Bleach trust root untouched and
 uses the real declaration worker, qualifier and emitter. Build the transpiler
 with `npm ci --ignore-scripts` and `npm run build` first.
 
@@ -19,10 +19,12 @@ node bin/as3-frontend transpile /absolute/path/to/fixture /absolute/path/to/new-
   --profile-lock /absolute/path/to/new-profile/profile-lock.json
 ```
 
-The source directory must contain exactly the requested class and only explicit
-Flash imports. Local dependencies, wildcard imports and application-wide source
-censuses require a full application profile. This fixture generator uses a
-bounded source scan for imports and roles; it is not a production census tool.
+The source directory must contain the requested entry and its complete local
+source closure, with only explicit Flash or included local imports. Multi-file
+identities come from the shared declaration worker, including package functions.
+Wildcard imports and application-wide source censuses require a full application
+profile. This fixture generator uses a bounded source scan for imports and roles;
+it is not a production census tool.
 Admission of expressions and member access still comes from the hardened adapter.
 
 Primitive Flash properties are recovered from the actual SDK's getter/setter
@@ -158,7 +160,8 @@ value domains. The result retains the selected operand rather than inventing a
 Boolean return type, and the emitted operator evaluates the right operand only
 when required. A consuming Boolean context performs its own coercion. The shared
 LogicalValuesProbe retains native null/zero/false/empty/reference/undefined values
-and side-effect counts; XML/XMLList and void operands remain held.
+and side-effect counts; XML/XMLList operands and void operands in value contexts
+remain held. Discarded logical expressions may invoke a void-returning function.
 
 
 Array push/pop/shift/unshift now use shared AS3Array dispatch for all authenticated
@@ -221,3 +224,26 @@ Date/XML/Vector conversion, mapped instance traits, or overridden Function/Class
 conversion. Unregistered objects and unresolved mapped traits remain explicit
 runtime boundaries. Existing typed-slot and other intrinsic conversion paths
 still need their own consumer evidence.
+
+
+## Original package functions
+
+Package-level public functions retain their original QName, parameters, defaults,
+rest arguments and body as callable exports. They are never synthesized into
+classes or registered as class identities. Same-package expression bindings use
+the authenticated dependency graph after local/member bindings. Definition-order
+proofs include function modules and only use roots the runtime loader can load.
+
+Typed slots coerce at function entry, after all argument expressions evaluate.
+Optional defaults distinguish omitted arguments from explicit undefined; runtime
+arity checks also apply through Function.apply. Rest values are native Arrays.
+Global trace as a Function retains identity and the shared deferred trace stream.
+The 19-checkpoint, six-file package-functions AIR/Laya fixture covers direct calls,
+recursion, same-package lookup, apply, defaults, typed conversion, arity errors,
+null receiver errors, trace output and argument evaluation order.
+
+Package-global this, package lexical dynamic-object dispatch, Function.call,
+overridden apply, invalid Array/Function reference coercion and general function
+reflection remain explicit unsupported boundaries. AP can use
+`tools/inspect-source-declarations.cjs` to recover original package identities;
+profiles must not manufacture declarations or modify the AS3 source.

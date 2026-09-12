@@ -151,12 +151,12 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
     }
     const content = one(packageNode, "CONTENT")!;
     const declarations = content.children.filter(child => child.kind === "CLASS" || child.kind === "INTERFACE");
-    const packageSymbols = content.children.filter(child => child.kind === "CONST_LIST" || child.kind === "NAMESPACE");
+    const packageSymbols = content.children.filter(child => child.kind === "CONST_LIST" || child.kind === "NAMESPACE" || child.kind === "FUNCTION");
     if ((declarations.length !== 1 || packageSymbols.length !== 0)
         && (declarations.length !== 0 || packageSymbols.length !== 1)
-        || content.children.some(child => !["IMPORT", "USE", "CLASS", "INTERFACE", "CONST_LIST", "NAMESPACE"].includes(child.kind))) {
+        || content.children.some(child => !["IMPORT", "USE", "CLASS", "INTERFACE", "CONST_LIST", "NAMESPACE", "FUNCTION"].includes(child.kind))) {
         fail("HARDENED_LOCAL_DECLARATION_CONTENT",
-            "package must contain exactly one class, interface, constant declaration, or namespace declaration", content);
+            "package must contain exactly one class, interface, constant, namespace, or function declaration", content);
     }
     const declaration = declarations[0] || packageSymbols[0]!;
     let name: string;
@@ -175,6 +175,8 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
     const members: LocalDeclarationMember[] = [];
     if (declaration.kind === "CONST_LIST") {
         members.push(...fields(declaration));
+    } else if (declaration.kind === "FUNCTION") {
+        members.push(callable(declaration, ""));
     } else if (declaration.kind === "NAMESPACE") {
         const memberModifiers = modifiers(declaration);
         members.push({

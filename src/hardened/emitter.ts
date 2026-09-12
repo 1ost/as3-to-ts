@@ -209,7 +209,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         const callee = expressionNode(expression.callee, ts);
         return ts.factory.createCallExpression(
             expression.calleeNullable ? ts.factory.createNonNullExpression(callee) : callee, undefined,
-            expression.arguments.map((argument) => expressionNode(argument, ts)));
+            expression.arguments.map((argument) => expression.packageFunctionCall
+                ? ts.factory.createAsExpression(expressionNode(argument, ts), ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
+                : expressionNode(argument, ts)));
     }
     if (expression.kind === "array") {
         return ts.factory.createArrayLiteralExpression(expression.elements.map(element => expressionNode(element, ts)), false);
@@ -274,7 +276,14 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             [expressionNode(expression.value, ts), runtimeTypeTokenNode(expression, ts)],
         );
     }
+    if (expression.kind === "globalFunction") return ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3TraceFunction"),undefined,[ts.factory.createIdentifier("__as3Global_"+expression.name)]);
+    if (expression.kind === "functionApply") return ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3FunctionApply"),undefined,[expressionNode(expression.target,ts),
+            expressionNode(expression.receiver,ts),expressionNode(expression.argumentsArray,ts)]);
     if (expression.kind === "coercion") {
+        if (expression.slot) return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3FunctionArgument"),undefined,
+            [expressionNode(expression.argument!,ts),ts.factory.createStringLiteral(expression.targetType.sourceName)]);
         const helper: { [sourceName: string]: string } = {
             int: "__as3Int", uint: "__as3Uint", Number: "__as3Number",
             Boolean: "__as3Boolean", String: "__as3String", Object: "__as3Object",
@@ -574,10 +583,12 @@ function parameterNode(parameter: any, ts: TypeScriptCompilerApi): any {
 }
 
 function boundMethodNames(program: SemanticProgram): string[] {
-    if (program.declaration.declarationKind === "packageField") return [];
+    if (program.declaration.declarationKind === "packageField" || program.declaration.declarationKind === "packageFunction") return [];
     const names: { [name: string]: true } = Object.create(null);
     const inspectExpression = (expression: SemanticExpression): void => {
-        if (expression.kind === "methodClosure") {
+        if (expression.kind === "functionApply") {
+            inspectExpression(expression.target); inspectExpression(expression.receiver); inspectExpression(expression.argumentsArray);
+        } else if (expression.kind === "methodClosure") {
             names[expression.methodName] = true;
         } else if (expression.kind === "member") {
             inspectExpression(expression.target);
@@ -808,9 +819,37 @@ function constructorArityGuard(className: string, member: SemanticConstructor | 
         ])));
 }
 
+function packageFunctionNode(program:SemanticProgram, ts:TypeScriptCompilerApi):any {
+    const declaration=program.declaration;
+    if (declaration.declarationKind !== "packageFunction") throw new Error("Expected package function");
+    const qname=program.packageName ? program.packageName+"."+declaration.name : declaration.name;
+    const count=ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length");
+    const minimum=declaration.parameters.filter(p=>!p.rest && p.defaultValue === null).length;
+    const maximum=declaration.parameters.some(p=>p.rest) ? null : declaration.parameters.length;
+    const prologue=[ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3CheckFunctionArity"),undefined,[ts.factory.createStringLiteral(qname),count,
+            ts.factory.createNumericLiteral(minimum),maximum === null ? ts.factory.createNull() : ts.factory.createNumericLiteral(maximum)]))];
+    const parameters=declaration.parameters.map((parameter,index)=>{
+        const value=ts.factory.createIdentifier(parameter.name);
+        if (parameter.rest) return parameterNode(parameter,ts);
+        let initial:any=value;
+        if (parameter.defaultValue !== null) initial=ts.factory.createConditionalExpression(
+            ts.factory.createBinaryExpression(count,ts.factory.createToken(ts.SyntaxKind.LessThanEqualsToken),ts.factory.createNumericLiteral(index)),
+            ts.factory.createToken(ts.SyntaxKind.QuestionToken),expressionNode(parameter.defaultValue,ts),ts.factory.createToken(ts.SyntaxKind.ColonToken),value);
+        prologue.push(ts.factory.createExpressionStatement(ts.factory.createAssignment(value,ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3FunctionArgument"),undefined,[initial,ts.factory.createStringLiteral(parameter.type.sourceName)]))));
+        return ts.factory.createParameterDeclaration(undefined,undefined,parameter.name,
+            parameter.defaultValue === null ? undefined : ts.factory.createToken(ts.SyntaxKind.QuestionToken),
+            typeNode(parameter.type,ts),undefined);
+    });
+    return ts.factory.createFunctionDeclaration([ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],undefined,
+        declaration.name,undefined,parameters,typeNode(declaration.returnType,ts),
+        ts.factory.createBlock(prologue.concat(declaration.body.map(statement=>statementNode(statement,ts))),true));
+}
+
 function classConstructorNode(program: SemanticProgram, member: SemanticConstructor | null,
     boundMethods: string[], ts: TypeScriptCompilerApi): any {
-    if (program.declaration.declarationKind === "packageField") {
+    if (program.declaration.declarationKind === "packageField" || program.declaration.declarationKind === "packageFunction") {
         throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR", "package field cannot own a class constructor", program.sourceNodeId);
     }
     const classDeclaration = program.declaration;
@@ -933,6 +972,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "new") return visitType(expression.sourceType) || expression.arguments.some(visitExpression);
         if (expression.kind === "vectorConversion") return true;
         if (expression.kind === "runtimeType") return visitType(expression.targetType) || visitExpression(expression.value);
+        if (expression.kind === "functionApply") return visitExpression(expression.target) || visitExpression(expression.receiver) || visitExpression(expression.argumentsArray);
         if (expression.kind === "coercion") return expression.argument !== null && visitExpression(expression.argument);
         if (expression.kind === "array") return expression.elements.some(visitExpression);
         if (expression.kind === "object") return expression.properties.some(property => visitExpression(property.value));
@@ -988,6 +1028,8 @@ function programUsesVector(program: SemanticProgram): boolean {
     if (program.declaration.declarationKind === "packageField") {
         return visitType(program.declaration.type) || visitExpression(program.declaration.initializer);
     }
+    if (program.declaration.declarationKind === "packageFunction") return visitType(program.declaration.returnType)
+        || program.declaration.parameters.some(parameter=>visitType(parameter.type)) || program.declaration.body.some(visitStatement);
     return visitType(program.declaration.extendsType)
         || program.declaration.interfaceExtendsTypes.some(visitType)
         || program.declaration.members.some(member => {
@@ -1205,7 +1247,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     const globalCalls = new Map<string, Extract<SemanticExpression, {kind: "globalCall"}>>();
     const collectGlobals = (value: any): void => {
         if (!value || typeof value !== "object") return;
-        if (value.kind === "globalCall") globalCalls.set(value.name, value);
+        if (value.kind === "globalCall" || value.kind === "globalFunction") globalCalls.set(value.name, value);
         Object.keys(value).forEach(key => collectGlobals(value[key]));
     };
     collectGlobals(program);
@@ -1216,13 +1258,21 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                     ts.factory.createIdentifier("__as3Global_" + name))])),
             ts.factory.createStringLiteral(call.targetModule), undefined));
     if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
-    const implementsTypes = program.declaration.declarationKind === "packageField"
+    const implementsTypes = program.declaration.declarationKind === "packageField" || program.declaration.declarationKind === "packageFunction"
         ? [] : program.declaration.implementsTypes;
     if (program.declaration.declarationKind !== "packageField" || programUsesClassValue(program)
         || programUsesRuntimeType(program) || implementsTypes.length > 0 || programUsesVector(program)) {
         imports.push(runtimeTypeImport(ts));
     }
     if (programHasKind(program, "coercion") || programHasKind(program, "binary") || globalCalls.size > 0) imports.push(coercionRuntimeImport(ts));
+    const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
+        value.kind === "functionApply" || value.kind === "globalFunction" || value.kind === "coercion" && value.slot
+        || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
+    if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
+            ["as3FunctionApply","as3FunctionArgument","as3CheckFunctionArity","as3TraceFunction"].map(name =>
+                ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
         imports.push(ownRecordRuntimeImport(ts));
@@ -1230,8 +1280,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (programUsesBigTurnTableInner(program)) {
         imports.push(bigTurnTableInnerRuntimeImport(ts));
     }
-    if (program.declaration.declarationKind === "packageField") {
-        const declaration = ts.factory.createVariableStatement(
+    if (program.declaration.declarationKind === "packageField" || program.declaration.declarationKind === "packageFunction") {
+        const declaration = program.declaration.declarationKind === "packageFunction" ? packageFunctionNode(program,ts) : ts.factory.createVariableStatement(
             [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
             ts.factory.createVariableDeclarationList([
                 ts.factory.createVariableDeclaration(program.declaration.name, undefined,

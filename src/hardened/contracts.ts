@@ -127,6 +127,7 @@ export interface SemanticImport extends SemanticIdentity {
     runtimeConstructible: boolean;
     runtimeInterface: boolean;
     localValueType: string | null;
+    localFunction?: true;
     compileTimeNamespace: boolean;
     sourceQualifiedName: string;
     sourceLocalName: string;
@@ -165,10 +166,24 @@ export interface GlobalCallExpression extends SemanticIdentity {
     arguments: SemanticExpression[];
 }
 
+export interface GlobalFunctionExpression extends SemanticIdentity {
+    kind: "globalFunction";
+    name: "trace";
+    targetModule: string;
+    targetExport: string;
+}
+export interface FunctionApplyExpression extends SemanticIdentity {
+    kind: "functionApply";
+    target: SemanticExpression;
+    receiver: SemanticExpression;
+    argumentsArray: SemanticExpression;
+    resultType: SemanticType;
+}
+
 export interface IdentifierExpression extends SemanticIdentity {
     kind: "identifier";
     name: string;
-    bindingKind: "current-class" | "import" | "local" | "parameter";
+    bindingKind: "current-class" | "import" | "local" | "parameter" | "package-function";
     bindingSourceQualifiedName: string | null;
 }
 
@@ -198,6 +213,7 @@ export interface CallExpression extends SemanticIdentity {
     kind: "call";
     callee: SemanticExpression;
     calleeNullable: boolean;
+    packageFunctionCall?: true;
     arguments: SemanticExpression[];
     capabilitySource: string | null;
     capabilityMember: string | null;
@@ -276,6 +292,7 @@ export interface RuntimeTypeExpression extends SemanticIdentity {
 
 export interface CoercionExpression extends SemanticIdentity {
     kind: "coercion";
+    slot?: true;
     targetType: SemanticType;
     argument: SemanticExpression | null;
 }
@@ -427,7 +444,7 @@ export interface UpdateExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = GlobalFunctionExpression | FunctionApplyExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |
@@ -637,7 +654,15 @@ export interface SemanticPackageField extends SemanticIdentity {
     initializer: SemanticExpression;
 }
 
-export type SemanticDeclaration = SemanticClass | SemanticPackageField;
+export interface SemanticPackageFunction extends SemanticIdentity {
+    declarationKind: "packageFunction";
+    name: string;
+    modifiers: SemanticModifier[];
+    parameters: SemanticParameter[];
+    returnType: SemanticType;
+    body: SemanticStatement[];
+}
+export type SemanticDeclaration = SemanticClass | SemanticPackageField | SemanticPackageFunction;
 
 export interface SemanticProgram extends SemanticIdentity {
     schema: "as3-semantic-ir@1";

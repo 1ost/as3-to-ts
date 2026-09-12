@@ -26,6 +26,7 @@ import {
     SemanticModifier,
     SemanticParameter,
     SemanticPackageField,
+    SemanticPackageFunction,
     SemanticProgram,
     SemanticSetter,
     SemanticStatement,
@@ -68,6 +69,7 @@ interface LocalHeader {
 }
 
 interface AdapterContext {
+    packageFunction?: true;
     className: string;
     classQualifiedName: string;
     extendsType: SemanticType | null;
@@ -554,6 +556,7 @@ function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLoca
     const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
     let localValueType: string | null = null;
     let compileTimeNamespace = false;
+    let localFunction: true | undefined;
     if (target.typeKind === "package") {
         if (localMemberAuthority === null) {
             fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "package symbol import requires local member authority", node);
@@ -565,7 +568,7 @@ function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLoca
             fail("HARDENED_LOCAL_MEMBER_HELD", `package symbol ${target.qname} lacks one complete declaration`, node);
         }
         const member = entry.declaration.members[0]!;
-        if (member.name !== localName || (member.kind !== "field" && member.kind !== "namespace")) {
+        if (member.name !== localName || (member.kind !== "field" && member.kind !== "namespace" && member.kind !== "method")) {
             fail("HARDENED_LOCAL_PACKAGE_SYMBOL", "package symbol declaration disagrees with its import identity", node);
         }
         if (member.kind === "field") {
@@ -577,12 +580,17 @@ function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLoca
             assertPackageRuntimeValue(localMemberAuthority, target.module, entry, node);
             localValueType = member.fieldType;
         }
+        if (member.kind === "method") {
+            if (member.modifiers.length !== 1 || member.modifiers[0] !== "public" || member.namespaceName !== null)
+                fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package function must retain its public declaration", node);
+            localValueType = "Function"; localFunction = true;
+        }
         compileTimeNamespace = member.kind === "namespace";
     }
     return Object.assign(identity(node), {
         authorityKind: "local" as "local", localNodeId: target.nodeId,
         runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
-        localValueType, compileTimeNamespace,
+        localValueType, compileTimeNamespace, ...(localFunction ? {localFunction} : {}),
         sourceQualifiedName: target.qname, sourceLocalName: localName,
         targetModule: relativeLocalModule(currentLocal.outputModulePath, target, localTypeAuthority), targetExport: localName,
     });
@@ -997,7 +1005,7 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
     let emittedName = sourceName === "*" && context.sourceMemberAuthority !== null ? "unknown" : PRIMITIVE_TYPES[sourceName];
     let runtimeName: string | null = emittedName ? sourceName : null;
     if (!emittedName) {
-        if (sourceName === context.className) {
+        if (sourceName === context.className && !context.packageFunction) {
             emittedName = sourceName;
             runtimeName = context.classQualifiedName;
         } else {
@@ -1757,6 +1765,7 @@ function currentClassMember(node: TreeNode, context: AdapterContext, name: strin
 }
 
 function dynamicObjectType(type:SemanticType, context:AdapterContext):boolean {
+    if (context.packageFunction) return false; // Package lexical namespace dispatch needs its own retained authority.
     return context.sourceMemberAuthority !== null && type.emittedName === "unknown"
         && (type.sourceName === "Object" || type.sourceName === "*");
 }
@@ -1766,6 +1775,10 @@ function assertObjectKey(type:SemanticType,node:TreeNode):void {
 }
 
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "globalFunction" || expression.kind === "identifier" && expression.bindingKind === "package-function")
+        return semanticType(node,"Function","Function",[],false);
+    if (expression.kind === "functionApply") return expression.resultType;
+
     if (expression.kind === "member" && (expression.target.kind === "super" || expression.target.kind === "this")
         && expression.capabilitySource !== null && context.mappingsBySource[expression.capabilitySource]) {
         const mapping = memberMapping(context, expression.capabilitySource, "read", expression.name, node);
@@ -1780,7 +1793,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         return context.locals[expression.name]!.type;
     }
     if (expression.kind === "identifier" && context.parameters[expression.name]) {
-        return context.parameters[expression.name]!.type;
+        return context.parameters[expression.name]!.rest ? semanticType(node,"Array","Array",[],false) : context.parameters[expression.name]!.type;
     }
     if (expression.kind === "identifier" && context.importsByLocal[expression.name]?.localValueType !== null
         && context.importsByLocal[expression.name]?.localValueType !== undefined) {
@@ -1951,7 +1964,7 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
         return local.type;
     }
     if (expression.kind === "identifier" && context.parameters[expression.name]) {
-        return context.parameters[expression.name]!.type;
+        return context.parameters[expression.name]!.rest ? semanticType(node,"Array","Array",[],false) : context.parameters[expression.name]!.type;
     }
     if (expression.kind === "member" && expression.target.kind === "this" && context.fields[expression.name]) {
         const field = context.fields[expression.name]!;
@@ -2083,6 +2096,9 @@ function assertAssignmentCompatible(target: SemanticType, value: SemanticType, n
 function adaptAssignmentValue(target: SemanticType, expression: SemanticExpression,
     context: AdapterContext, node: TreeNode): SemanticExpression {
     const value = assignmentType(expression, context, node);
+    if (context.sourceMemberAuthority !== null && value.sourceName === "*"
+        && ["String","Number","int","uint"].includes(target.sourceName))
+        return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
     if (target.sourceName === "Object" && target.emittedName === "unknown" && value.sourceName === "*") {
         return Object.assign(identity(node), {kind: "coercion" as "coercion", targetType: target, argument: expression});
     }
@@ -2446,7 +2462,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const leftType = assignmentType(left, context, node.children[0]!);
         const rightType = assignmentType(right, context, node.children[2]!);
         if ((operator === "&&" || operator === "||") && context.sourceMemberAuthority !== null) {
-            if ([leftType,rightType].some(type => ["void","XML","XMLList"].includes(type.sourceName)))
+            if ([leftType,rightType].some(type => (valuePosition ? ["void","XML","XMLList"] : ["XML","XMLList"]).includes(type.sourceName)))
                 fail("HARDENED_LOGICAL_TYPE", "logical operands require supported AS3 value domains", node);
             // Native logical operators select an operand, retaining its value and
             // skipping the other expression. Boolean coercion belongs to the consumer.
@@ -2682,6 +2698,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return parseLiteral(Object.assign({}, node, { kind: "LITERAL", text: name }));
         }
         if (name === "this") {
+            if (context.packageFunction) fail("HARDENED_PACKAGE_FUNCTION_THIS", "package function global receiver requires native host authority", node);
             if (context.lambdaDepth > 0) {
                 fail("HARDENED_LAMBDA_THIS", "anonymous functions using dynamic AS3 this remain held", node);
             }
@@ -2711,7 +2728,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
                 bindingKind: "parameter" as "parameter", bindingSourceQualifiedName: null });
         }
-        if (name === context.className) return currentClassIdentifier(node, context);
+        if (name === context.className) return context.packageFunction
+            ? Object.assign(identity(node), {kind:"identifier" as const,name,bindingKind:"package-function" as const,bindingSourceQualifiedName:context.classQualifiedName})
+            : currentClassIdentifier(node, context);
         if (imported) {
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
                 bindingKind: "import" as "import", bindingSourceQualifiedName: imported.sourceQualifiedName });
@@ -2802,6 +2821,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     fail("HARDENED_LAMBDA_THIS", "implicit inherited member requires an instance scope", node);
                 return implicitThisMember(node, name, mapping.sourceQName);
             }
+        }
+        const implicit = context.resolveImportedType(name,null,node);
+        if (implicit) return Object.assign(identity(node), {kind:"identifier" as const,name,
+            bindingKind:"import" as const,bindingSourceQualifiedName:implicit.sourceQualifiedName});
+        if (name === "trace" && context.mappingsBySource.trace?.sourceRoles.includes("global-function")) {
+            assertNoInheritedNativeTimerShadow(context,name,node);
+            const mapping=context.mappingsBySource.trace!;
+            return Object.assign(identity(node), {kind:"globalFunction" as const,name:"trace" as const,
+                targetModule:targetModuleSpecifier(mapping.targetModule),targetExport:mapping.targetExport});
         }
         if (context.sourceMemberAuthority !== null && ["undefined","NaN","Infinity"].includes(name)
             && !context.resolveImportedType(name,null,node)) {
@@ -3230,6 +3258,19 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const argument = rawArguments.length === 0 ? null : parseExpression(rawArguments[0]!, context, true);
             return Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument });
         }
+        if (rawCallee.kind === "DOT" && rawCallee.children.length === 2 && rawCallee.children[1]!.text === "apply") {
+            const target=parseExpression(rawCallee.children[0]!,context,true);
+            if (assignmentType(target,context,rawCallee).sourceName === "Function") {
+                const args=node.children[1]!.children;
+                if (args.length !== 2) fail("HARDENED_FUNCTION_APPLY_ARITY", "Function.apply requires retained receiver and argument-array inputs", node);
+                const receiver=parseExpression(args[0]!,context,true), argumentsArray=parseExpression(args[1]!,context,true);
+                const arrayType=assignmentType(argumentsArray,context,args[1]!);
+                if (!["Array","null","undefined"].includes(arrayType.sourceName))
+                    fail("HARDENED_FUNCTION_APPLY_ARGUMENTS", "Function.apply requires an Array or null argument list", node);
+                return Object.assign(identity(node), {kind:"functionApply" as const,target,receiver,argumentsArray,
+                    resultType:target.kind === "globalFunction" ? semanticType(node,"void","void") : semanticType(node,"*","unknown")});
+            }
+        }
         let callee: SemanticExpression;
         if (rawCallee.kind === "IDENTIFIER" && rawCallee.text === "super") {
             if (!allowSuperCall) {
@@ -3263,6 +3304,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         let capabilityMember: string | null = null;
         let resultType: SemanticType | null = null;
         let calleeNullable = false;
+        let packageFunctionCall: true | undefined;
         if (callee.kind === "super") {
             if (context.baseLocalQName !== null) {
                 const constructorMember = localConstructor(context, context.baseLocalQName, node);
@@ -3304,6 +3346,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             });
             resultType = callee.name === "indexOf" ? semanticType(node, "int", "number")
                 : semanticType(node, "String", "string", [], false);
+        } else if (callee.kind === "identifier" && (callee.bindingKind === "package-function"
+            || context.importsByLocal[callee.name]?.localFunction)) {
+            const qname=callee.bindingSourceQualifiedName!;
+            const current=context.resolveCurrentLocal!();
+            const declaration=context.localMemberAuthority!.entriesByIdentity[`${current.entry.module}\u0000${qname}`]?.declaration;
+            const member=declaration?.members[0];
+            if (!member || member.kind !== "method" || declaration!.members.length !== 1)
+                fail("HARDENED_PACKAGE_FUNCTION_CALL", "package function lacks its authenticated signature", node);
+            // Validate the signature without moving native slot coercion ahead of later argument expressions.
+            assertLocalMethodCall(member,args.slice(),node.children[1]!.children,context,node);
+            packageFunctionCall = true;
+            resultType=authoritySemanticType(member.returnType!,context,node);
         } else if (callee.kind === "identifier" && context.locals[callee.name]?.lambdaSignature) {
             const signature = context.locals[callee.name]!.lambdaSignature!;
             calleeNullable = context.locals[callee.name]!.type.nullable;
@@ -3541,6 +3595,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         const result: CallExpression = Object.assign(identity(node), {
             kind: "call" as "call", callee, calleeNullable, arguments: args,
+            ...(packageFunctionCall ? {packageFunctionCall} : {}),
             capabilitySource, capabilityMember, resultType,
         });
         return result;
@@ -4298,24 +4353,23 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
     authority: LoadedCapabilityAuthority, sourceText: string, sha256: Sha256Function,
     packageName: string, packageNameNode: TreeNode, content: TreeNode, fieldList: TreeNode,
     localAuthority: LoadedLocalTypeAuthority | undefined, sourceLogicalPath: string | undefined,
-    localMemberAuthority: LoadedLocalMemberAuthority | undefined): SemanticProgram {
+    localMemberAuthority: LoadedLocalMemberAuthority | undefined,
+    sourceMemberAuthority?: LoadedSourceMemberAuthority): SemanticProgram {
     if (!localAuthority || !localMemberAuthority || typeof sourceLogicalPath !== "string" || sourceLogicalPath.length === 0) {
         fail("HARDENED_LOCAL_SOURCE_AUTHORITY",
             "package const output requires local type, declaration, and source-path authorities", fieldList);
     }
     assertLoadedLocalTypeAuthority(localAuthority);
     assertLoadedLocalMemberAuthority(localMemberAuthority);
-    onlyKinds(fieldList, ["MOD_LIST", "NAME_TYPE_INIT"]);
-    const declarators = fieldList.children.filter(child => child.kind === "NAME_TYPE_INIT");
-    if (declarators.length !== 1) {
-        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package const output requires exactly one declarator", fieldList);
-    }
+    const functionDeclaration=fieldList.kind === "FUNCTION";
+    onlyKinds(fieldList, functionDeclaration ? ["BLOCK","MOD_LIST","NAME","PARAMETER_LIST","TYPE","VECTOR"] : ["MOD_LIST", "NAME_TYPE_INIT"]);
+    const declarators=functionDeclaration ? [fieldList] : fieldList.children.filter(child => child.kind === "NAME_TYPE_INIT");
+    if (declarators.length !== 1) fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package output requires exactly one declaration", fieldList);
     const modifiers = parseModifiers(fieldList, true);
-    if (modifiers.length !== 1 || modifiers[0] !== "public") {
-        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package const output requires the exact public modifier", fieldList);
-    }
-    const declarator = declarators[0]!;
-    onlyKinds(declarator, ["INIT", "NAME", "TYPE", "VECTOR"]);
+    if (modifiers.length !== 1 || modifiers[0] !== "public")
+        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package output requires the exact public modifier", fieldList);
+    const declarator=declarators[0]!;
+    if (!functionDeclaration) onlyKinds(declarator,["INIT","NAME","TYPE","VECTOR"]);
     const nameNode = one(declarator, "NAME")!;
     const name = validateIdentifier(requiredText(nameNode, "package const name"), nameNode);
     const outputModulePath = modulePath(packageName, name, packageNameNode);
@@ -4338,11 +4392,11 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         fail("HARDENED_LOCAL_MEMBER_HELD", "package const lacks one complete declaration authority", fieldList);
     }
     const declared = declarationEntry.declaration.members[0]!;
-    if (declared.kind !== "field" || declared.name !== name || !declared.readonly || declared.fieldType === null
-        || declared.modifiers.length !== 1 || declared.modifiers[0] !== "public") {
-        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package declaration authority is not one public const", fieldList);
-    }
-    assertPackageRuntimeValue(localMemberAuthority, current.entry.module, declarationEntry, fieldList);
+    if (declared.name !== name || declared.modifiers.length !== 1 || declared.modifiers[0] !== "public"
+        || (functionDeclaration ? declared.kind !== "method" || declared.namespaceName !== null
+            : declared.kind !== "field" || !declared.readonly || declared.fieldType === null))
+        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package declaration does not match its authenticated kind", fieldList);
+    if (!functionDeclaration) assertPackageRuntimeValue(localMemberAuthority,current.entry.module,declarationEntry,fieldList);
     const resolveCurrentLocal = (): CurrentLocalType => current;
     const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal, localMemberAuthority);
     const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
@@ -4353,7 +4407,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         const targetQName = sourceName.indexOf(".") >= 0 ? sourceName
             : packageName === "" ? sourceName : `${packageName}.${sourceName}`;
         const target = localAuthority.entriesByIdentity[`${current.entry.module}\u0000${targetQName}`];
-        if (!target || !target.importable || target.typeKind === "package"
+        if (!target || !target.importable
             || (expectedKind !== null && target.typeKind !== expectedKind)) return null;
         if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {
             fail("HARDENED_LOCAL_IMPORT_EDGE", "package const dependency lacks an authenticated graph edge", node);
@@ -4372,22 +4426,34 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         baseSourceQName: null, baseLocalQName: null,
         localTypeAuthority: localAuthority, localMemberAuthority, resolveCurrentLocal,
         fields: Object.create(null), methods: Object.create(null),
-        runtimeReferenceParentsByQName: new Map(), sourceMemberAuthority: null, currentInterfaceQNames: [],
+        runtimeReferenceParentsByQName: new Map(), sourceMemberAuthority: sourceMemberAuthority || null, currentInterfaceQNames: [],
+        ...(functionDeclaration ? {packageFunction:true as const} : {}),
         accessors: Object.create(null), parameters: Object.create(null), locals: Object.create(null),
         loopDepth: 0, breakableDepth: 0, labels: [], namespaceNames: Object.create(null), lambdaDepth: 0,
         currentCallable: null, ownRecordTargetDepth: 0, ownRecordInitializations: 0,
     };
-    const type = parseType(oneType(declarator), context, false);
-    const init = one(declarator, "INIT")!;
-    if (init.children.length !== 1) {
-        fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package const requires one explicit initializer", init);
+    let declaration:SemanticPackageField | SemanticPackageFunction;
+    if (functionDeclaration) {
+        const header=parseMethodHeader(fieldList,"",context);
+        if (header.parameters.some(parameter => !parameter.rest && !["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(parameter.type.sourceName)))
+            fail("HARDENED_PACKAGE_FUNCTION_PARAMETER", "package function reference parameter needs native coercion authority", fieldList);
+        context.methods[name]=header;
+        context.currentCallable=header;
+        header.parameters.forEach(parameter => context.parameters[parameter.name]=parameter);
+        predeclareLocals(header.block,context);
+        const body=parseBlock(header.block,context,false,false,header.returnType);
+        if (header.returnType!.sourceName !== "void" && !statementsAlwaysReturn(body))
+            fail("HARDENED_RETURN_PATH", "package function must return or throw on every path", fieldList);
+        declaration=Object.assign(identity(fieldList),{declarationKind:"packageFunction" as const,name,modifiers,
+            parameters:header.parameters,returnType:header.returnType!,body});
+    } else {
+        const type = parseType(oneType(declarator), context, false);
+        const init = one(declarator, "INIT")!;
+        if (init.children.length !== 1) fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package const requires one explicit initializer", init);
+        const initializer=adaptAssignmentValue(type,parseExpression(init.children[0]!,context,true,false,false),context,init.children[0]!);
+        declaration=Object.assign(identity(fieldList),{declarationKind:"packageField" as const,name,modifiers,
+            readonly:true as const,type,initializer});
     }
-    const initializer = adaptAssignmentValue(type,
-        parseExpression(init.children[0]!, context, true, false, false), context, init.children[0]!);
-    const declaration: SemanticPackageField = Object.assign(identity(fieldList), {
-        declarationKind: "packageField" as "packageField", name, modifiers,
-        readonly: true as true, type, initializer,
-    });
     const program: SemanticProgram = Object.assign(identity(root), {
         schema: "as3-semantic-ir@1" as "as3-semantic-ir@1", sourceSha256: ast.sourceSha256,
         fingerprintSha256: ast.fingerprintSha256, packageName, outputModulePath,
@@ -4428,11 +4494,11 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         fail("HARDENED_IMPORT_ORDER", "source imports and namespace directives must precede the declaration", content);
     }
     const declarations = content.children.filter((child) => child.kind === "CLASS" || child.kind === "INTERFACE");
-    const packageConstLists = content.children.filter(child => child.kind === "CONST_LIST");
+    const packageConstLists = content.children.filter(child => child.kind === "CONST_LIST" || child.kind === "FUNCTION");
     if (declarations.length === 0 && packageConstLists.length === 1
-        && content.children.every(child => child.kind === "IMPORT" || child.kind === "CONST_LIST")) {
+        && content.children.every(child => child.kind === "IMPORT" || child.kind === "CONST_LIST" || child.kind === "FUNCTION")) {
         return adaptPackageFieldProgram(root, ast, authority, sourceText, sha256, packageName,
-            packageNameNode, content, packageConstLists[0]!, localAuthority, sourceLogicalPath, localMemberAuthority);
+            packageNameNode, content, packageConstLists[0]!, localAuthority, sourceLogicalPath, localMemberAuthority,sourceMemberAuthority);
     }
     if (declarations.length !== 1 || content.children.some((child) => child.kind !== "IMPORT" && child.kind !== "USE"
         && child.kind !== "CLASS" && child.kind !== "INTERFACE")) {
@@ -4520,7 +4586,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         if (candidates.length === 0) return null;
         const current = resolveCurrentLocal();
         const target = localAuthority.entriesByIdentity[`${current.entry.module}\u0000${qname}`];
-        if (!target || !target.importable || target.typeKind === "package"
+        if (!target || !target.importable
             || (expectedKind !== null && target.typeKind !== expectedKind)) return null;
         if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {
             fail("HARDENED_LOCAL_IMPORT_EDGE",

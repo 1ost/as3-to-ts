@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a closed application profile for one independent native-oracle AS3 class.
+"""Create a closed application profile for one bounded native-oracle AS3 source closure.
 
 This does not change the default Bleach authority or admit unsupported syntax.
 The real declaration worker and qualifier still decide whether emission is allowed.
@@ -132,32 +132,50 @@ def main():
     if source == out or source in out.parents or out in source.parents:
         p.error('Source and output must be disjoint')
     entry = source.joinpath(*args.entry.split('.')).with_suffix('.as')
-    if list(source.rglob('*.as')) != [entry]:
-        p.error('This profile requires exactly one independent AS3 class')
-    text = entry.read_text()
-    imports = re.findall(r'\bimport\s+([\w$.*]+)\s*;', text)
-    if any(not q.startswith('flash.') or '*' in q for q in imports):
-        p.error('Fixture imports must be explicit Flash QNames; local dependencies need a full application profile')
+    sources=sorted(source.rglob('*.as'))
+    if entry not in sources or len(sources)>128:
+        p.error('Fixture requires its entry and at most 128 original AS3 source files')
+    text='\n'.join(file.read_text() for file in sources)
+    if len(sources) == 1:
+        declarations=[{'path':entry,'qname':args.entry,'kind':'class'}]
+    else:
+        inspected=json.loads(subprocess.check_output(['node',str(ROOT/'tools/inspect-source-declarations.cjs'),str(source),
+            *[file.relative_to(source).as_posix() for file in sources]],text=True))
+        if any(row['status'] != 'complete' for row in inspected['entries']):
+            raise ValueError('Fixture declaration closure is held: '+json.dumps(inspected))
+        declarations=[{'path':source/row['sourcePath'],'qname':row['declaration']['qualifiedName'],
+            'kind':row['declaration']['declarationKind']} for row in inspected['entries']]
+    qnames={row['qname'] for row in declarations}
+    if len(qnames)!=len(declarations): p.error('Duplicate fixture QName')
+    all_imports=re.findall(r'\bimport\s+([\w$.*]+)\s*;',text)
+    if any('*' in q or not q.startswith('flash.') and q not in qnames for q in all_imports):
+        p.error('Fixture imports must resolve to explicit Flash QNames or retained local sources')
+    imports=sorted({q for q in all_imports if q.startswith('flash.')})
     out.mkdir(parents=True, exist_ok=False)
-    # Paths are relative to the source parent, independently of the consuming repo.
-    source_prefix = source.name + '/'
-    target_prefix = 'generated/application/'
-    source_roots = {k: source_prefix for k in ('application', 'bootstrap')}
-    target_roots = {k: target_prefix for k in ('application', 'bootstrap')}
-    files = {}
-    files['sourceManifest'] = write(out / 'sources.json', {'entry': args.entry, 'sourceSha256': sha(entry)})
-    graph = {'qname': args.entry, 'dependencies': []}
-    files['dependencyGraphRaw'] = write(out / 'graph.json', graph)
-    files['dependencyGraphSemantic'] = write(out / 'semantic-graph.json', {'components': [[args.entry]]})
-    files['localTypeMap'] = write(out / 'local-types.json', {'schema': 'as3-application-local-type-map@1',
-        'sourceRoots': source_roots, 'targetRoots': target_roots, 'entryCount': 1,
-        'sourceManifestSha256': sha(files['sourceManifest']), 'dependencyGraphRawSha256': sha(files['dependencyGraphRaw']),
-        'dependencyGraphSemanticSha256': sha(files['dependencyGraphSemantic']), 'entries': [{
-            'componentId': 'scc-00000', 'graphSourceSha256': sha(files['dependencyGraphRaw']), 'importable': True,
-            'module': 'application', 'nodeId': hashlib.sha256(args.entry.encode()).hexdigest()[:16],
-            'prerequisites': [], 'qname': args.entry, 'sourceContentSha256': sha(entry),
-            'sourcePath': source_prefix + entry.relative_to(source).as_posix(),
-            'targetPath': target_prefix + args.entry.replace('.', '/') + '.ts', 'topologicalLevel': 0, 'typeKind': 'class'}]})
+    source_prefix=source.name+'/'
+    target_prefix='generated/application/'
+    source_roots={k:source_prefix for k in ('application','bootstrap')}
+    target_roots={k:target_prefix for k in ('application','bootstrap')}
+    files={}
+    files['sourceManifest']=write(out/'sources.json',{'entry':args.entry,'sources':[
+        {'qname':row['qname'],'path':row['path'].relative_to(source).as_posix(),'sourceSha256':sha(row['path'])}
+        for row in declarations]})
+    # This bounded fixture profile admits edges within its closed source set.
+    # Runtime evaluation order is independently proved from emitted imports.
+    graph={'entries':[{'qname':q,'dependencies':sorted(qnames-{q})} for q in sorted(qnames)]}
+    files['dependencyGraphRaw']=write(out/'graph.json',graph)
+    files['dependencyGraphSemantic']=write(out/'semantic-graph.json',{'components':[sorted(qnames)]})
+    files['localTypeMap']=write(out/'local-types.json',{'schema':'as3-application-local-type-map@1',
+        'sourceRoots':source_roots,'targetRoots':target_roots,'entryCount':len(declarations),
+        'sourceManifestSha256':sha(files['sourceManifest']),'dependencyGraphRawSha256':sha(files['dependencyGraphRaw']),
+        'dependencyGraphSemanticSha256':sha(files['dependencyGraphSemantic']),'entries':[{
+            'componentId':'scc-00000','graphSourceSha256':sha(files['dependencyGraphRaw']),'importable':True,
+            'module':'application','nodeId':hashlib.sha256(row['qname'].encode()).hexdigest()[:16],
+            'prerequisites':sorted(hashlib.sha256(q.encode()).hexdigest()[:16] for q in qnames-{row['qname']}),
+            'qname':row['qname'],'sourceContentSha256':sha(row['path']),
+            'sourcePath':source_prefix+row['path'].relative_to(source).as_posix(),
+            'targetPath':target_prefix+row['qname'].replace('.','/')+'.ts','topologicalLevel':0,'typeKind':row['kind']}
+            for row in sorted(declarations,key=lambda row:row['qname'])]})
     target = laya / 'docTool/architecture/authored-content-capabilities.json'
     target_doc = json.loads(target.read_text())
     predicate_input = target.parent / 'flash-runtime-type-predicates.json'
@@ -176,6 +194,7 @@ def main():
     own_names = set(re.findall(r'\b(?:function\s+(?:(?:get|set)\s+)?|var\s+|const\s+)([A-Za-z_$][\w$]*)', text))
     member_text = re.sub(r'\bthis\s*\.\s*([A-Za-z_$][\w$]*)',
                          lambda m: ' ' if m[1] in own_names else m[0], text)
+    if len(sources)>1: member_text=text
     used_names = set(re.findall(r'\.\s*([A-Za-z_$][\w$]*)', member_text))
     used_names.update(re.findall(r'\bnew\s+([A-Za-z_$][\w$]*)', text))
     if args.ffdec_jar:
@@ -257,10 +276,10 @@ def main():
     write(out / 'profile-lock.json', {'schema': 'as3-application-profile-lock@1', 'applicationId': 'laya-native-oracle',
         'runtimePackage': '@laya/as3-runtime', 'typeScriptVersion': '4.9.5', 'sourceRoots': source_roots, 'targetRoots': target_roots,
         'sourceCensusSha256': sha(census), 'targetCapabilitiesSha256': sha(target), 'runtimePredicateQNames': sorted(selected),
-        'counts': {'localTypes': 1, 'localMembersComplete': members['completeCount'], 'localMembersHeld': members['heldCount'],
+        'counts': {'localTypes': len(declarations), 'localMembersComplete': members['completeCount'], 'localMembersHeld': members['heldCount'],
                    'mappedTypes': len(apis), 'mappedMembers': sum(m['sourceMember'] is not None for m in mappings), 'sourceMemberTypes': member_count},
         'files': {k: {'path': v.name, 'sha256': sha(v)} for k, v in files.items()}})
-    write(out / 'generator-inputs.json', {str(v): sha(v) for v in [Path(__file__).resolve(), entry, target, predicate_input,
+    write(out / 'generator-inputs.json', {str(v): sha(v) for v in [Path(__file__).resolve(), *sources, ROOT / "tools/inspect-source-declarations.cjs", target, predicate_input,
         sdk / 'frameworks/libs/air/airglobal.swc', sdk / 'lib/swfdump-cli.jar', ROOT / 'lib/declaration-worker.js',
         *([args.ffdec_jar.resolve(), ROOT / 'tools/native-api-profile.py', out / 'sdk-signatures.json'] if native_signatures is not None else [])]})
     print(out / 'profile-lock.json')

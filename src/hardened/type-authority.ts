@@ -156,7 +156,7 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         || !program.declaration.modifiers.includes("public") || !generatedLocalModule(moduleSpecifier)) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_LOCAL", "local runtime identity must be one public authenticated class module");
     }
-    if (hasExecutableStaticInitializer(program)) {
+    if (program.declaration.declarationKind === "class" && hasExecutableStaticInitializer(program)) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_STATIC_INIT",
             `local runtime identity ${program.declaration.name} has static module evaluation and must remain HOLD`);
     }
@@ -327,10 +327,10 @@ export function assertLocalRuntimeDefinitionClosure(programs: readonly SemanticP
         byModule.set(program.outputModulePath, program);
     });
     const definitions = programs.filter(program => program.declaration.declarationKind !== "packageField");
-    const authorities = definitions.filter(program => program.declaration.declarationKind === "class")
+    const authorities = definitions.filter(program => program.declaration.declarationKind === "class" || program.declaration.declarationKind === "packageFunction")
         .sort((left, right) => left.outputModulePath.localeCompare(right.outputModulePath, "en"));
     authorities.forEach(program => {
-        if (hasExecutableStaticInitializer(program)) {
+        if (program.declaration.declarationKind === "class" && hasExecutableStaticInitializer(program)) {
             throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_STATIC_INIT",
                 `local runtime identity ${program.declaration.name} has static module evaluation and must remain HOLD`);
         }
@@ -364,7 +364,8 @@ export function assertLocalRuntimeDefinitionClosure(programs: readonly SemanticP
                 throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE",
                     `local runtime identity ${program.declaration.name} imports missing module ${targetPath}`);
             }
-            if ((imported.localValueType !== null) !== (target.declaration.declarationKind === "packageField")) {
+            if ((imported.localValueType !== null) !== (target.declaration.declarationKind === "packageField" || target.declaration.declarationKind === "packageFunction")
+                || (imported.localFunction === true) !== (target.declaration.declarationKind === "packageFunction")) {
                 throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE",
                     `local runtime import ${targetPath} disagrees with its authenticated declaration kind`);
             }
@@ -383,7 +384,7 @@ export function assertLocalRuntimeDefinitionClosure(programs: readonly SemanticP
                 throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE",
                     `local runtime identity ${program.declaration.name} imports package singleton ${targetPath} before authority seal`);
             }
-            if (target.declaration.declarationKind !== "class") {
+            if (target.declaration.declarationKind !== "class" && target.declaration.declarationKind !== "packageFunction") {
                 throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE",
                     `local runtime identity ${program.declaration.name} emitted a forbidden interface dependency ${targetPath}`);
             }
@@ -432,7 +433,11 @@ export function assertLocalRuntimeDefinitionClosure(programs: readonly SemanticP
         const component = components[componentIndex]!;
         const members = new Set(component);
         const candidates = [...component].sort((left, right) => left.outputModulePath.localeCompare(right.outputModulePath, "en"));
-        const safeRoot = candidates.find(root => {
+        // The authority loader starts with classes. A function-only safe root
+        // cannot prove the evaluation order of a mixed component it never loads first.
+        const roots=candidates.some(program=>program.declaration.declarationKind === "class")
+            ? candidates.filter(program=>program.declaration.declarationKind === "class") : candidates;
+        const safeRoot = roots.find(root => {
             const state = new Map<SemanticProgram, "evaluating" | "complete">();
             let safe = true;
             const execute = (program: SemanticProgram): void => {

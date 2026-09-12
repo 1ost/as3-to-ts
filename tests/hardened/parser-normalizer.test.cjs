@@ -641,9 +641,13 @@ try {
     const packageFunctionNormalized = built.normalizer.normalizeParserAst(
         packageFunctionTree, packageFunctionSource, sha256,
     );
-    assert.throws(() => built.localDeclarations.extractLocalDeclaration(
+    const packageFunctionDeclaration = built.localDeclarations.extractLocalDeclaration(
         packageFunctionNormalized, packageFunctionSource, sha256,
-    ), error => error && error.code === "HARDENED_LOCAL_DECLARATION_CONTENT");
+    );
+    assert.equal(packageFunctionDeclaration.declarationKind, "package");
+    assert.equal(packageFunctionDeclaration.qualifiedName, "p.helper");
+    assert.equal(packageFunctionDeclaration.members[0].kind, "method");
+    assert.equal(packageFunctionDeclaration.members[0].name, "helper");
 
     const overrideSource = "package p { import flash.display.Sprite; public class C extends Sprite { public function C(){super();} override public function toString():String{return \"C\";} } }";
     const overrideTree = built.parse("fixtures/Override.as", overrideSource);

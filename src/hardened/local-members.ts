@@ -224,7 +224,8 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
                     || parsedDeclaration.members.length !== 1
                     || parsedDeclaration.members[0]!.name !== localName
                     || (parsedDeclaration.members[0]!.kind !== "field"
-                        && parsedDeclaration.members[0]!.kind !== "namespace")) {
+                        && parsedDeclaration.members[0]!.kind !== "namespace"
+                        && parsedDeclaration.members[0]!.kind !== "method")) {
                     fail("HARDENED_LOCAL_MEMBER_ENTRY", "package symbol declaration is not exact");
                 }
                 if ((parsedDeclaration.members[0]!.kind === "field") !== (parsedDeclaration.packageInitializer !== null)) {
