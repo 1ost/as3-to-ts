@@ -63,6 +63,8 @@ export interface EmittedRuntimeAuthority {
 }
 
 interface PredicateAuthorityRow {
+    kind?: "class";
+    interfaces?: string[];
     sourceQName: string;
     targetCapabilityId: string;
     targetModule: string;
@@ -75,13 +77,23 @@ interface PredicateAuthorityRow {
     moduleSha256: string;
 }
 
+interface InterfaceAuthorityRow {
+    kind: "interface";
+    sourceQName: string;
+    targetCapabilityId: string;
+    targetModule: string;
+    interfaceExport: string;
+    heritageClosure: string[];
+    moduleSha256: string;
+}
+
 function plainRecord(value: unknown): value is { [key: string]: unknown } {
     return typeof value === "object" && value !== null && Object.getPrototypeOf(value) === Object.prototype;
 }
 
 /** Validates the exact Laya bridge predicate artifact against its pinned lock and capability QName set. */
 export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: string,
-    capabilityClassQNames: readonly string[], sha256: (canonicalUtf8: string) => string): readonly RuntimeAuthorityClassSource[] {
+    capabilityClassQNames: readonly string[], sha256: (canonicalUtf8: string) => string): readonly RuntimeAuthoritySource[] {
     let lock: unknown; let document: unknown;
     try { lock = JSON.parse(lockJson); document = JSON.parse(authorityJson); } catch {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_JSON", "runtime predicate authority JSON is malformed");
@@ -90,7 +102,7 @@ export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: 
         && lock.schema !== "as3-application-runtime-type-authority-lock@1")
         || typeof lock.predicateAuthorityCanonicalLfSha256 !== "string"
         || typeof lock.predicateAuthorityEntryCount !== "number" || !plainRecord(document)
-        || document.schema !== "laya-flash-runtime-type-predicates@1" || document.hashMode !== "canonical-lf-utf8"
+        || !(["laya-flash-runtime-type-predicates@1", "laya-flash-runtime-type-predicates@2"].includes(document.schema as string)) || document.hashMode !== "canonical-lf-utf8"
         || !Array.isArray(document.types) || sha256(authorityJson.replace(/\r\n?/g, "\n")) !== lock.predicateAuthorityCanonicalLfSha256
         || document.types.length !== lock.predicateAuthorityEntryCount) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PIN", "mapped Laya runtime predicate authority does not match its exact lock");
@@ -100,29 +112,45 @@ export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: 
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_CAPABILITIES", "mapped runtime capability QName set is invalid");
     }
     const applicationProfile = lock.schema === "as3-application-runtime-type-authority-lock@1";
+    const version2 = document.schema === "laya-flash-runtime-type-predicates@2";
     const rows = document.types as unknown[];
-    const byName = new Map<string, PredicateAuthorityRow>();
+    const byName = new Map<string, PredicateAuthorityRow | InterfaceAuthorityRow>();
     rows.forEach(value => {
-        const expectedKeys = ["sourceQName", "targetCapabilityId", "targetModule", "constructorExport",
+        const isInterface = version2 && plainRecord(value) && value.kind === "interface";
+        const expectedKeys = isInterface
+            ? ["kind", "sourceQName", "targetCapabilityId", "targetModule", "interfaceExport", "heritageClosure", "moduleSha256"]
+            : ["sourceQName", "targetCapabilityId", "targetModule", "constructorExport",
             "constructorSignature", "constructSignatures", "predicateExport", "predicateSignature",
-            "heritageClosure", "moduleSha256"];
+            "heritageClosure", "moduleSha256", ...(version2 ? ["kind", "interfaces"] : [])];
         const actualKeys = plainRecord(value) ? Object.keys(value) : [];
-        const exactShape = applicationProfile
+        const exactShape = applicationProfile || version2
             ? actualKeys.slice().sort().join("\0") === expectedKeys.slice().sort().join("\0")
             : actualKeys.join("\0") === expectedKeys.join("\0");
         if (!plainRecord(value) || !exactShape) {
             throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PREDICATE", "mapped runtime predicate row has drifted shape");
         }
-        const row = value as unknown as PredicateAuthorityRow;
-        if (!stableName(row.sourceQName) || byName.has(row.sourceQName) || !stableName(row.targetCapabilityId)
-            || !mappedLayaModule(row.targetModule) || !identifier(row.constructorExport) || !identifier(row.predicateExport)
+        const row = value as unknown as PredicateAuthorityRow | InterfaceAuthorityRow;
+        const names = (items: unknown): items is string[] => Array.isArray(items)
+            && items.every(item => typeof item === "string" && stableName(item))
+            && new Set(items).size === items.length;
+        if (typeof row.sourceQName !== "string" || !stableName(row.sourceQName) || byName.has(row.sourceQName)
+            || typeof row.targetCapabilityId !== "string" || !stableName(row.targetCapabilityId)
+            || typeof row.targetModule !== "string" || !mappedLayaModule(row.targetModule)
+            || !names(row.heritageClosure) || typeof row.moduleSha256 !== "string"
+            || !/^[0-9a-f]{64}$/.test(row.moduleSha256)) {
+            throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PREDICATE", "mapped runtime type identity is invalid");
+        }
+        if (row.kind === "interface") {
+            if (typeof row.interfaceExport !== "string" || !identifier(row.interfaceExport))
+                throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PREDICATE", "mapped runtime interface export is invalid");
+        } else if ((version2 && row.kind !== "class") || typeof row.constructorExport !== "string"
+            || !identifier(row.constructorExport) || typeof row.predicateExport !== "string" || !identifier(row.predicateExport)
             || row.constructorSignature !== `typeof ${row.constructorExport}`
             || row.predicateSignature !== `(value: unknown) => value is ${row.constructorExport}`
             || !Array.isArray(row.constructSignatures) || row.constructSignatures.length === 0
             || row.constructSignatures.some(item => typeof item !== "string" || !stableName(item))
-            || !Array.isArray(row.heritageClosure) || row.heritageClosure.some(item => typeof item !== "string" || !stableName(item))
-            || new Set(row.heritageClosure).size !== row.heritageClosure.length || !/^[0-9a-f]{64}$/.test(row.moduleSha256)) {
-            throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PREDICATE", `mapped runtime predicate ${String(row.sourceQName)} is invalid`);
+            || (version2 && !names(row.interfaces))) {
+            throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PREDICATE", `mapped runtime predicate ${row.sourceQName} is invalid`);
         }
         byName.set(row.sourceQName, row);
     });
@@ -132,21 +160,40 @@ export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: 
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_CAPABILITIES", "mapped predicate QName set differs from authenticated capabilities");
     }
     byName.forEach(row => {
-        const base = row.heritageClosure[0];
-        if (base !== undefined) {
-            const baseRow = byName.get(base);
-            if (!baseRow || JSON.stringify(row.heritageClosure.slice(1)) !== JSON.stringify(baseRow.heritageClosure)) {
-                throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_HERITAGE", `mapped predicate ${row.sourceQName} has inconsistent heritage closure`);
+        const interfaceNames = row.kind === "interface" ? row.heritageClosure : row.interfaces ?? [];
+        for (const name of interfaceNames) {
+            if (byName.get(name)?.kind !== "interface" || name === row.sourceQName)
+                throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_HERITAGE", `mapped type ${row.sourceQName} has invalid interface ${name}`);
+        }
+        if (row.kind !== "interface") {
+            const base = row.heritageClosure[0];
+            if (base !== undefined) {
+                const baseRow = byName.get(base);
+                if (!baseRow || baseRow.kind === "interface" || row.heritageClosure.includes(row.sourceQName)
+                    || JSON.stringify(row.heritageClosure.slice(1)) !== JSON.stringify(baseRow.heritageClosure))
+                    throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_HERITAGE", `mapped predicate ${row.sourceQName} has inconsistent heritage closure`);
             }
         }
     });
-    return Object.freeze(Array.from(byName.values()).map(row => authenticatedSource({ kind: "class" as const,
-        qname: row.sourceQName, base: row.heritageClosure[0] ?? null, interfaces: Object.freeze([] as string[]),
+    const visited = new Set<string>(), active = new Set<string>();
+    const visit = (name: string): void => {
+        if (active.has(name)) throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_HERITAGE", `cyclic mapped interface ${name}`);
+        if (visited.has(name)) return;
+        active.add(name);
+        const row = byName.get(name)!;
+        if (row.kind === "interface") row.heritageClosure.forEach(visit);
+        active.delete(name); visited.add(name);
+    };
+    byName.forEach(row => visit(row.sourceQName));
+    return Object.freeze(Array.from(byName.values()).map(row => row.kind === "interface"
+        ? authenticatedSource({kind: "interface" as const, qname: row.sourceQName, bases: Object.freeze([...row.heritageClosure])})
+        : authenticatedSource({ kind: "class" as const,
+        qname: row.sourceQName, base: row.heritageClosure[0] ?? null, interfaces: Object.freeze([...(row.interfaces ?? [])]),
         sourceSha256: row.moduleSha256, definitionSafe: true as const,
         module: mappedLayaRuntimeModule(row.targetModule), constructorExport: row.constructorExport,
         predicateExport: row.predicateExport, constructionTargetExport: null, constructionProofExport: null,
-        fields: Object.freeze([]),
-        evaluationOrder: null })));
+        fields: Object.freeze([]), evaluationOrder: null })));
+
 }
 
 /** Derives a local class row only when importing the emitted module is definition-safe. */

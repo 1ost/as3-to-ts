@@ -229,6 +229,7 @@ def main():
             continue
         selected.add(q)
         pending.extend(by_qname[q]['heritageClosure'])
+        pending.extend(by_qname[q].get('interfaces', []))
     predicates = {**original, 'types': [r for r in original['types'] if r['sourceQName'] in selected]}
     files['runtimeTypePredicates'] = write(out / 'predicates.json', predicates)
     files['runtimeTypeAuthorityLock'] = write(out / 'runtime-lock.json', {
@@ -236,7 +237,7 @@ def main():
         'layaRevision': subprocess.check_output(['git', '-C', str(laya), 'rev-parse', 'HEAD'], text=True).strip(),
         'predicateAuthorityCanonicalLfSha256': sha(files['runtimeTypePredicates']),
         'predicateAuthorityEntryCount': len(selected), 'predicateAuthorityQNames': sorted(selected)})
-    files['sourceMemberAuthority'], member_count, native_classes = source_members(sdk, out, selected)
+    files['sourceMemberAuthority'], member_count, native_classes = source_members(sdk, out, {q for q in selected if by_qname[q].get("kind") != "interface"})
     apis, mappings, member_uses = [], [], []
     for q in sorted(set(imports)):
         name = q.rsplit('.', 1)[1]

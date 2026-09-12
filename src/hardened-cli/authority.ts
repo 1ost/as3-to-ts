@@ -12,7 +12,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { loadCapabilityAuthority } from "../hardened/ledger";
 import { loadLocalTypeAuthority } from "../hardened/local-types";
 import { loadLocalMemberAuthority } from "../hardened/local-members";
-import { loadMappedRuntimeTypeAuthority, type RuntimeAuthorityClassSource } from "../hardened/type-authority";
+import { loadMappedRuntimeTypeAuthority, type RuntimeAuthoritySource } from "../hardened/type-authority";
 import { loadSourceMemberAuthority, type LoadedSourceMemberAuthority } from "../hardened/source-member-authority";
 import type { LoadedCapabilityAuthority, LoadedLocalMemberAuthority, LoadedLocalTypeAuthority } from "../hardened/contracts";
 import { CliError } from "./errors";
@@ -53,7 +53,7 @@ export interface TranspileAuthority {
     sourceCensusSha256: string;
     targetCapabilitiesSha256: string;
     capabilityMappingSha256: string;
-    runtimeTypeSources: readonly RuntimeAuthorityClassSource[];
+    runtimeTypeSources: readonly RuntimeAuthoritySource[];
     sourceMembers: LoadedSourceMemberAuthority | null;
     nativeTimerAuthoritySha256: string;
     runtimePackage: string;

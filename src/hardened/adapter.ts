@@ -2485,7 +2485,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 operator:operator as "&&" | "||",left,right,resultType});
         }
         if (["===","!=="].includes(operator) && context.sourceMemberAuthority !== null
-            && [leftType,rightType].some(type => dynamicObjectType(type,context))
+            && ([leftType,rightType].some(type => dynamicObjectType(type,context))
+                || [leftType,rightType].every(type => type.runtimeName !== null
+                    && (localQNameForType(type,context) !== null || mappedFlashQNameForType(type,context) !== null)))
             && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))) {
             return Object.assign(identity(node),{kind:"binary" as const,
                 operator:operator as "===" | "!==",left,right,resultType:semanticType(node,"Boolean","boolean")});

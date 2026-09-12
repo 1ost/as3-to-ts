@@ -101,6 +101,7 @@ test("central authority emission is deterministic, closed, ordered, hash-pinned,
         fs.mkdirSync(path.join(output,"internal"));
         fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/internal/AS3TypeRegistry.ts"),path.join(output,"internal/AS3TypeRegistry.ts"));
         fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3Type.ts"),path.join(output,"AS3Type.ts"));
+        fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3MethodClosure.ts"),path.join(output,"AS3MethodClosure.ts"));
         fs.writeFileSync(path.join(output,"AS3Authority.generated.ts"),first.code,"utf8");
         fs.writeFileSync(path.join(output,"Base.ts"),"const b=new WeakSet<object>(); export class Base{readonly _b=b.add(this)} export const isAS3ClassInstance=(v:unknown):v is Base=>b.has(v as object); export const as3ConstructionTarget=(_v:unknown):typeof Base|null=>null; export const isAS3ConstructionProof=(_v:unknown):boolean=>false;\n","utf8");
         fs.writeFileSync(path.join(output,"Child.ts"),"import {Base} from './Base'; const b=new WeakSet<object>(); export class Child extends Base{readonly _c=b.add(this)} export const isAS3ClassInstance=(v:unknown):v is Child=>b.has(v as object); export const as3ConstructionTarget=(_v:unknown):typeof Child|null=>null; export const isAS3ConstructionProof=(_v:unknown):boolean=>false;\n","utf8");
@@ -223,4 +224,37 @@ test('static literal containers are definition safe but aggregate conversions an
  const call={...semanticIdentity,kind:'call'};
  for(const initializer of [array([call]),object(call),{...semanticIdentity,kind:'coercion',targetType:typeRef('String'),argument:array([])}])
   assert.throws(()=>prove(program(initializer)),error=>error.code==='HARDENED_TYPE_AUTHORITY_STATIC_INIT');
+});
+
+test("v2 mapped interfaces retain nominal class relationships and reject invalid closures",()=>{
+    const nativeInterface={kind:"interface",sourceQName:"flash.events.IEventDispatcher",targetCapabilityId:"api.flash.events",
+        targetModule:"src/layaAir/flash/events/EventDispatcher.ts",interfaceExport:"IEventDispatcher",heritageClosure:[],moduleSha256:"a".repeat(64)};
+    const dispatcher={kind:"class",sourceQName:"flash.events.EventDispatcher",targetCapabilityId:"api.flash.events",
+        targetModule:"src/layaAir/flash/events/EventDispatcher.ts",constructorExport:"EventDispatcher",
+        constructorSignature:"typeof EventDispatcher",constructSignatures:["new (): EventDispatcher"],
+        predicateExport:"isFlashEventDispatcher",predicateSignature:"(value: unknown) => value is EventDispatcher",
+        heritageClosure:[],interfaces:[nativeInterface.sourceQName],moduleSha256:"b".repeat(64)};
+    const load=types=>{
+        const bytes=JSON.stringify({schema:"laya-flash-runtime-type-predicates@2",hashMode:"canonical-lf-utf8",types});
+        return loadMappedRuntimeTypeAuthority(JSON.stringify({schema:"as3-application-runtime-type-authority-lock@1",
+            predicateAuthorityCanonicalLfSha256:sha256(bytes),predicateAuthorityEntryCount:types.length}),bytes,types.map(row=>row.sourceQName),sha256);
+    };
+    const rows=load([dispatcher,nativeInterface]);
+    assert.deepEqual(rows[0].interfaces,[nativeInterface.sourceQName]);
+    assert.deepEqual(rows[1],{kind:"interface",qname:nativeInterface.sourceQName,bases:[]});
+    const authority=emitRuntimeTypeAuthority(rows,sha256);
+    assert.deepEqual(authority.qnames,[nativeInterface.sourceQName,dispatcher.sourceQName]);
+    assert.equal(authority.code,emitRuntimeTypeAuthority([...rows].reverse(),sha256).code);
+    assert.doesNotMatch(authority.code,/typeof.*addEventListener|in value/);
+    for(const types of [
+        [dispatcher],
+        [{...dispatcher,interfaces:[dispatcher.sourceQName]},nativeInterface],
+        [{...dispatcher,heritageClosure:[nativeInterface.sourceQName]},nativeInterface],
+        [dispatcher,{...nativeInterface,heritageClosure:[nativeInterface.sourceQName]}],
+        [dispatcher,{...nativeInterface,heritageClosure:["flash.events.IChild"]},
+            {...nativeInterface,sourceQName:"flash.events.IChild",heritageClosure:[nativeInterface.sourceQName]}],
+    ]) assert.throws(()=>load(types),error=>error.code==="HARDENED_TYPE_AUTHORITY_HERITAGE");
+    for(const value of [{...nativeInterface,interfaceExport:"bad.export"},{...dispatcher,interfaces:[nativeInterface.sourceQName,nativeInterface.sourceQName]},
+        {...nativeInterface,constructorExport:"IEventDispatcher"},{...dispatcher,kind:"unknown"}])
+        assert.throws(()=>load([value]),error=>error.code==="HARDENED_TYPE_AUTHORITY_PREDICATE");
 });
