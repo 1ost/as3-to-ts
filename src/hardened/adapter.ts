@@ -1939,7 +1939,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         }
         if (ownerType.sourceName === "Error" && ownerType.emittedName === "Error"
             && (ownerType.runtimeName === null || ownerType.runtimeName === "Error")
-            && ["message","name"].includes(expression.name)) return semanticType(node,"String","string");
+            && ["message","name","errorID"].includes(expression.name)) return expression.name === "errorID"
+                ? semanticType(node,"int","number") : semanticType(node,"String","string");
         if (ownerType.sourceName === "String" && expression.name === "length") return semanticType(node,"int","number");
         if (isArrayType(ownerType) && expression.name === "length") {
             return semanticType(node, "uint", "number");
@@ -3398,7 +3399,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                 } else {
                     const errorRead = valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
-                        && (targetType.runtimeName === null || targetType.runtimeName === "Error") && ["message","name"].includes(name);
+                        && (targetType.runtimeName === null || targetType.runtimeName === "Error") && ["message","name","errorID"].includes(name);
                     const errorMethod = !valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && name === "toString";
                     const numberMethod = !valuePosition && ["Number","int","uint"].includes(targetType.sourceName) && name === "toFixed";
@@ -3456,6 +3457,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 parseType(Object.assign({}, rawCallee, { kind: "TYPE" }), context, false), false);
             const argument = rawArguments.length === 0 ? null : parseExpression(rawArguments[0]!, context, true);
             return Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument });
+        }
+        if (rawCallee.kind === "DOT" && rawCallee.children.length === 2 && rawCallee.children[1]!.text === "call") {
+            const target=parseExpression(rawCallee.children[0]!,context,true);
+            if (assignmentType(target,context,rawCallee).sourceName === "Function") {
+                const args=node.children[1]!.children;
+                const receiver=args.length ? parseExpression(args[0]!,context,true)
+                    : Object.assign(identity(node),{kind:"literal" as const,value:null});
+                const argumentsArray=Object.assign(identity(node),{kind:"array" as const,
+                    elements:args.slice(1).map(arg=>parseExpression(arg,context,true))});
+                return Object.assign(identity(node), {kind:"functionApply" as const,invocation:"call" as const,target,receiver,argumentsArray,
+                    resultType:target.kind === "globalFunction" ? semanticType(node,"void","void") : semanticType(node,"*","unknown")});
+            }
         }
         if (rawCallee.kind === "DOT" && rawCallee.children.length === 2 && rawCallee.children[1]!.text === "apply") {
             const target=parseExpression(rawCallee.children[0]!,context,true);
@@ -4102,12 +4115,12 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             const iterable = parseExpression(node.children[1]!.children[0]!, context, true);
             const iterableType = assignmentType(iterable, context, node.children[1]!.children[0]!);
             const elementType = vectorElement(iterableType);
-            if (context.sourceMemberAuthority !== null && isArrayType(iterableType)) {
+            if (context.sourceMemberAuthority !== null && (isArrayType(iterableType) || isDictionaryType(iterableType))) {
                 if (!["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(header.type.sourceName)
                     || declaresBinding && header.type.sourceName !== "*")
-                    fail("HARDENED_FOREACH_ARRAY_BINDING", "Array enumeration requires a retained slot type and existing typed binding", declaration);
+                    fail("HARDENED_FOREACH_ARRAY_BINDING", "Array/Dictionary enumeration requires a retained slot type and existing typed binding", declaration);
             } else {
-                if (elementType === null) fail("HARDENED_FOREACH_ITERABLE", "for each requires an authenticated Array or typed Vector", node.children[1]!);
+                if (elementType === null) fail("HARDENED_FOREACH_ITERABLE", "for each requires an authenticated Array, Dictionary or typed Vector", node.children[1]!);
                 assertAssignmentCompatible(header.type, elementType, declaration);
             }
             const body = node.children[2]!;

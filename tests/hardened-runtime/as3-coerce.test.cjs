@@ -87,3 +87,14 @@ test("explicit Object conversion preserves values and allocates fresh nullish ob
     for (const value of [7,"text",false,[],{},NaN]) assert.equal(as3ObjectConversion(value),value);
     assert.equal(as3Object(undefined),null);
 });
+
+test("native Error IDs default to zero and retain explicit runtime IDs without invoking accessors",()=>{
+    const {as3ErrorID}=require(path.join(OUTPUT,"hardened-runtime/AS3Coerce.js"));
+    assert.equal(as3ErrorID(new Error()),0);
+    assert.equal(as3ErrorID(new Error("message")),0);
+    const error=new TypeError("null");Object.defineProperty(error,"errorID",{value:1009});
+    assert.equal(as3ErrorID(error),1009);
+    const getter=new Error();Object.defineProperty(getter,"errorID",{get(){throw new Error("must not run");}});
+    assert.throws(()=>as3ErrorID(getter),/integer native error slot/);
+    assert.throws(()=>as3ErrorID(null),error=>error.errorID === 1009);
+});

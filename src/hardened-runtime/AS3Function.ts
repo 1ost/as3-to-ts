@@ -39,14 +39,23 @@ export function as3FunctionArgument(value:unknown, type:string):any {
 }
 
 export function as3FunctionApply(target:unknown, receiver:unknown, argumentsArray:unknown):unknown {
+    return invokeFunction(target,receiver,argumentsArray,"apply");
+}
+
+/** Function.call retains bound method identity and shares the invocation boundary with apply. */
+export function as3FunctionCall(target:unknown, receiver:unknown, args:unknown[]):unknown {
+    return invokeFunction(target,receiver,args,"call");
+}
+
+function invokeFunction(target:unknown, receiver:unknown, argumentsArray:unknown, method:"call"|"apply"):unknown {
     if (target === null || target === undefined) {
         const id=target === null ? 1009 : 1010;
         const error=new TypeError(`Error #${id}: ${id === 1009 ? "Cannot access a property or method of a null object reference." : "A term is undefined and has no properties."}`);
         Object.defineProperty(error,"errorID",{value:id}); throw error;
     }
-    if (typeof target !== "function" || Reflect.get(target,"apply") !== Function.prototype.apply
+    if (typeof target !== "function" || Reflect.get(target,method) !== Function.prototype[method]
         || argumentsArray != null && !Array.isArray(argumentsArray))
-        throw new AS3FunctionOperationUnavailable("Function.apply needs a callable and a native Array or null argument list");
+        throw new AS3FunctionOperationUnavailable(`Function.${method} needs a callable and a native Array or null argument list`);
     return Reflect.apply(target,receiver,argumentsArray == null ? [] : argumentsArray as unknown[]);
 }
 

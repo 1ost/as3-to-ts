@@ -66,6 +66,18 @@ export function as3StringLength(value:unknown):number {
     return value.length;
 }
 
+/** Native Error defaults to ID zero; shared runtime errors retain their explicit integer ID. */
+export function as3ErrorID(value:unknown):number {
+    primitiveReceiver(value);
+    if (!(value instanceof Error)) throw new AS3ObjectDispatchUnavailable("Error.errorID requires a native Error");
+    const descriptor=Object.getOwnPropertyDescriptor(value,"errorID");
+    if (!descriptor && !("errorID" in value)) return 0;
+    if (!descriptor || !("value" in descriptor) || !Number.isInteger(descriptor.value)
+        || descriptor.value < -2147483648 || descriptor.value > 2147483647)
+        throw new AS3ObjectDispatchUnavailable("Error.errorID requires an integer native error slot");
+    return descriptor.value;
+}
+
 /** Canonical native Error.toString; custom overrides require their own dispatch evidence. */
 export function as3ErrorToString(value:unknown):string {
     primitiveReceiver(value);

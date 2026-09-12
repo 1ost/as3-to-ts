@@ -19,7 +19,7 @@ fs.writeFileSync(CONFIG, JSON.stringify({
 }), "utf8");
 childProcess.execFileSync(process.execPath,
     [path.join(ROOT, "node_modules/typescript-4-9/bin/tsc"), "-p", CONFIG], { cwd: ROOT, stdio: "inherit" });
-const { AS3Dictionary, as3DictionarySlot } = require(path.join(OUTPUT, "hardened-runtime/AS3Dictionary.js"));
+const { AS3Dictionary, as3DictionarySlot, as3DictionaryValues } = require(path.join(OUTPUT, "hardened-runtime/AS3Dictionary.js"));
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
 
@@ -64,4 +64,34 @@ test("weak dictionaries do not retain object keys through their iterable registr
     assert.equal(dictionary.delete(objectKey), true);
     assert.deepEqual([...dictionary.keys()], ["primitive"]);
     assert.throws(() => new AS3Dictionary(1), /weakKeys must be Boolean/);
+});
+
+test("native value enumeration skips null and retains slot conversion and callback identity", () => {
+    assert.deepEqual([...as3DictionaryValues(null,"int")], []);
+    assert.deepEqual([...as3DictionaryValues(undefined,"int")], []);
+    for (const weak of [false,true]) {
+        const dictionary=new AS3Dictionary(weak);
+        const first={}, second={};
+        dictionary.set(first,7);dictionary.set(second,"8");dictionary.set("primitive",3);
+        const values=[...as3DictionaryValues(dictionary,"int")];
+        assert.equal(values.length,3);assert.equal(values.reduce((a,b)=>a+b,0),18);
+    }
+    const dictionary=new AS3Dictionary(true), callback=()=>{};
+    dictionary.set(callback,callback);
+    assert.deepEqual([...as3DictionaryValues(dictionary,"Function")],[callback]);
+    assert.throws(()=>[...as3DictionaryValues({},"*")], error=>error.errorID === 1034);
+});
+
+test("call and apply retain bound receivers, results and native null errors", () => {
+    const {as3FunctionCall,as3FunctionApply}=require(path.join(OUTPUT,"hardened-runtime/AS3Function.js"));
+    const owner={value:10}, alternate={value:100};
+    const method=function(value=7){return this.value+value;}.bind(owner);
+    assert.equal(as3FunctionCall(method,null,[]),17);
+    assert.equal(as3FunctionCall(method,alternate,[8]),18);
+    assert.equal(as3FunctionApply(method,alternate,[8]),18);
+    for (const invoke of [as3FunctionCall,as3FunctionApply])
+        assert.throws(()=>invoke(null,null,[]),error=>error instanceof TypeError && error.errorID === 1009);
+    const overridden=function(){};
+    overridden.call=()=>{throw new Error("must not execute");};
+    assert.throws(()=>as3FunctionCall(overridden,null,[]),/Function.call needs a callable/);
 });

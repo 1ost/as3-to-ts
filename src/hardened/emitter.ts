@@ -194,6 +194,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     }
     if (expression.kind === "member") {
         const target = expressionNode(expression.target, ts);
+        if (expression.capabilitySource === "Error" && expression.name === "errorID")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ErrorID"),undefined,[target]);
         if (expression.capabilitySource === "String" && expression.name === "length")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringLength"),undefined,[target]);
         return ts.factory.createPropertyAccessExpression(
@@ -291,7 +293,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "globalFunction") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3TraceFunction"),undefined,[ts.factory.createIdentifier("__as3Global_"+expression.name)]);
     if (expression.kind === "functionApply") return ts.factory.createCallExpression(
-        ts.factory.createIdentifier("__as3FunctionApply"),undefined,[expressionNode(expression.target,ts),
+        ts.factory.createIdentifier(expression.invocation === "call" ? "__as3FunctionCall" : "__as3FunctionApply"),undefined,[expressionNode(expression.target,ts),
             expressionNode(expression.receiver,ts),expressionNode(expression.argumentsArray,ts)]);
     if (expression.kind === "coercion") {
         if (expression.objectCall) return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectConversion"), undefined,
@@ -585,8 +587,8 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             : ts.factory.createIdentifier(statement.binding.name);
         const iterable = expressionNode(statement.iterable, ts);
         return ts.factory.createForOfStatement(undefined, binding,
-            statement.iterableType.sourceName === "Array" ? ts.factory.createCallExpression(
-                ts.factory.createIdentifier("__as3ArrayValues"),undefined,[iterable,ts.factory.createStringLiteral(statement.binding.type.sourceName)])
+            ["Array","Dictionary"].includes(statement.iterableType.sourceName) ? ts.factory.createCallExpression(
+                ts.factory.createIdentifier(statement.iterableType.sourceName === "Dictionary" ? "__as3DictionaryValues" : "__as3ArrayValues"),undefined,[iterable,ts.factory.createStringLiteral(statement.binding.type.sourceName)])
                 : statement.iterableType.nullable ? ts.factory.createNonNullExpression(iterable) : iterable,
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
@@ -1278,7 +1280,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1402,6 +1404,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     }
     const primitiveMember=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "member" && value.capabilitySource === "String" && value.name === "length"
+        || value.kind === "member" && value.capabilitySource === "Error" && value.name === "errorID"
         || value.kind === "call" && value.capabilitySource === "Number" && value.capabilityMember === "toFixed"
         || value.kind === "call" && value.capabilitySource === "Error" && value.capabilityMember === "toString"
         || value.kind === "call" && value.capabilitySource === "String" && value.capabilityMember === "toLowerCase"
@@ -1417,16 +1420,19 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
-            ["as3FunctionApply","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3TraceFunction"].map(name =>
+            ["as3FunctionApply","as3FunctionCall","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3TraceFunction"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
     const dictionarySlot = (value:any):boolean => value !== null && typeof value === "object" && (
         (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
-            && value.targetType.sourceName === "Dictionary" || Object.values(value).some(dictionarySlot));
+            && value.targetType.sourceName === "Dictionary"
+        || value.kind === "forEach" && value.iterableType.sourceName === "Dictionary" || Object.values(value).some(dictionarySlot));
     if (dictionarySlot(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3DictionarySlot"),
-                ts.factory.createIdentifier("__as3DictionarySlot"))])),
+                ts.factory.createIdentifier("__as3DictionarySlot")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3DictionaryValues"),
+                ts.factory.createIdentifier("__as3DictionaryValues"))])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Dictionary"), undefined));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {

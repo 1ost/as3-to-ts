@@ -1,3 +1,5 @@
+import { as3FunctionArgument } from "./AS3Function";
+
 function isWeakKey(value: unknown): value is object {
     return value !== null && (typeof value === "object" || typeof value === "function");
 }
@@ -86,4 +88,11 @@ export class AS3Dictionary {
     public *values(): IterableIterator<unknown> {
         for (const key of this.keys()) yield this.get(key);
     }
+}
+
+/** AS3 for-each skips null and converts each value into the retained local slot. */
+export function* as3DictionaryValues(value:unknown, bindingType:string):Generator<any,void,unknown> {
+    const dictionary=as3DictionarySlot(value);
+    if (dictionary === null) return;
+    for (const item of dictionary.values()) yield as3FunctionArgument(item,bindingType);
 }
