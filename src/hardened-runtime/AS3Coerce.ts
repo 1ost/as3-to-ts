@@ -1,4 +1,4 @@
-import { as3NativeString, as3NativeNumber } from "./AS3ObjectDispatch";
+import { as3NativeString, as3NativeNumber, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
 
 export function as3Int(value: unknown = 0): number {
     return as3NativeNumber(value) >> 0;
@@ -40,4 +40,30 @@ export function as3NumericBinary(operator:"-" | "*" | "/" | "%", left:unknown, r
         case "/": return a/b;
         case "%": return a%b;
     }
+}
+
+
+function primitiveReceiver(value:unknown):void {
+    if (value === null || value === undefined) {
+        const id=value === null ? 1009 : 1010;
+        const error=new TypeError(`Error #${id}: ${id === 1009 ? "Cannot access a property or method of a null object reference." : "A term is undefined and has no properties."}`);
+        Object.defineProperty(error,"errorID",{value:id});throw error;
+    }
+}
+
+/** Flash String.length counts UTF-16 code units and retains native null errors. */
+export function as3StringLength(value:unknown):number {
+    primitiveReceiver(value);
+    if (typeof value !== "string") throw new AS3ObjectDispatchUnavailable("String.length requires an original String value");
+    return value.length;
+}
+
+/** Canonical native Error.toString; custom overrides require their own dispatch evidence. */
+export function as3ErrorToString(value:unknown):string {
+    primitiveReceiver(value);
+    if (!(value instanceof Error) || ![Error.prototype,TypeError.prototype,ReferenceError.prototype,
+        RangeError.prototype,SyntaxError.prototype,URIError.prototype,EvalError.prototype].includes(Object.getPrototypeOf(value))
+        || Reflect.get(value,"toString") !== Error.prototype.toString)
+        throw new AS3ObjectDispatchUnavailable("Error.toString requires canonical native Error traits");
+    return as3String(value);
 }

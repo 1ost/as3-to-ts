@@ -66,3 +66,23 @@ test('null mutation retains native error and unproved operations remain explicit
  assert.equal(full.length,0xffffffff);
  assert.throws(()=>as3ArrayCall([],'pop',[1]),AS3ArrayOperationUnavailable);
 });
+
+
+const {as3ArrayValues}=require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
+test('Array enumeration refuses unproved sparse, named, hidden, accessor and subclass values',()=>{
+ const named=[1];named.extra=2;
+ const hidden=[1];Object.defineProperty(hidden,'0',{enumerable:false});
+ const getter=[1];Object.defineProperty(getter,'0',{get(){throw new Error('must not invoke unproved getter');}});
+ const subclass=new (class extends Array {})(1,2);
+ for (const value of [new Array(2),named,hidden,getter,subclass,{}])
+  assert.throws(()=>[...as3ArrayValues(value,'*')],AS3ArrayOperationUnavailable);
+});
+test('Array enumeration keeps receiver identity and coerces each current typed slot',()=>{
+ const values=['7.9',undefined,null,-2.9],seen=[];
+ for (const value of as3ArrayValues(values,'int')) seen.push(value);
+ assert.deepEqual(seen,[7,0,0,-2]);
+ assert.deepEqual([...as3ArrayValues(null,'*')],[]);
+ const original=['a','b','c'];const iterator=as3ArrayValues(original,'*');
+ assert.equal(iterator.next().value,'a');as3ArrayCall(original,'shift',[]);
+ assert.equal(iterator.next().value,'c');assert.equal(iterator.next().done,true);
+});

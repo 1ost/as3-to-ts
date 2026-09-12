@@ -193,6 +193,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     }
     if (expression.kind === "member") {
         const target = expressionNode(expression.target, ts);
+        if (expression.capabilitySource === "String" && expression.name === "length")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringLength"),undefined,[target]);
         return ts.factory.createPropertyAccessExpression(
             expression.targetNullable ? ts.factory.createNonNullExpression(target) : target,
             expression.targetName || expression.name,
@@ -202,6 +204,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
     }
     if (expression.kind === "call") {
+        if (expression.capabilitySource === "Error" && expression.capabilityMember === "toString" && expression.callee.kind === "member")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ErrorToString"),undefined,[expressionNode(expression.callee.target,ts)]);
         if (expression.capabilitySource === "Array" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayCall"),undefined,[
                 expressionNode(expression.callee.target,ts),ts.factory.createStringLiteral(expression.capabilityMember!),
@@ -497,7 +501,9 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             : ts.factory.createIdentifier(statement.binding.name);
         const iterable = expressionNode(statement.iterable, ts);
         return ts.factory.createForOfStatement(undefined, binding,
-            statement.iterableType.nullable ? ts.factory.createNonNullExpression(iterable) : iterable,
+            statement.iterableType.sourceName === "Array" ? ts.factory.createCallExpression(
+                ts.factory.createIdentifier("__as3ArrayValues"),undefined,[iterable,ts.factory.createStringLiteral(statement.binding.type.sourceName)])
+                : statement.iterableType.nullable ? ts.factory.createNonNullExpression(iterable) : iterable,
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
     if (statement.kind === "forIn") {
@@ -1158,7 +1164,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1173,6 +1179,8 @@ function arrayRuntimeImport(ts: TypeScriptCompilerApi): any {
                 ts.factory.createIdentifier("__as3ArrayIndex")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayCall"),
                 ts.factory.createIdentifier("__as3ArrayCall")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayValues"),
+                ts.factory.createIdentifier("__as3ArrayValues")),
         ])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Array"), undefined);
 }
@@ -1185,7 +1193,8 @@ function programUsesArrayIndex(program: SemanticProgram): boolean {
         seen.add(value);
         const record = value as { [key: string]: unknown };
         if (record.kind === "index" && record.accessKind === "array"
-            || record.kind === "call" && record.capabilitySource === "Array") return true;
+            || record.kind === "call" && record.capabilitySource === "Array"
+            || record.kind === "forEach" && (record.iterableType as SemanticType)?.sourceName === "Array") return true;
         return Object.keys(record).some(key => visit(record[key]));
     };
     return visit(program);
@@ -1268,7 +1277,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || programUsesRuntimeType(program) || implementsTypes.length > 0 || programUsesVector(program)) {
         imports.push(runtimeTypeImport(ts));
     }
-    if (programHasKind(program, "coercion") || programHasKind(program, "binary") || globalCalls.size > 0) imports.push(coercionRuntimeImport(ts));
+    const primitiveMember=(value:any):boolean => value !== null && typeof value === "object" && (
+        value.kind === "member" && value.capabilitySource === "String" && value.name === "length"
+        || value.kind === "call" && value.capabilitySource === "Error" && value.capabilityMember === "toString"
+        || Object.values(value).some(primitiveMember));
+    if (programHasKind(program, "coercion") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
     const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "functionApply" || value.kind === "globalFunction" || value.kind === "coercion" && value.slot
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));

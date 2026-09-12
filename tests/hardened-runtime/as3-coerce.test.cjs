@@ -68,3 +68,14 @@ test("AVM object literals preserve duplicate evaluation and special keys", () =>
     }
     assert.equal(value.toString(), "[object Object]");
 });
+
+const {as3StringLength,as3ErrorToString}=require(path.join(OUTPUT,'hardened-runtime/AS3Coerce.js'));
+test('String and Error primitive members retain null errors and reject unsupported receivers',()=>{
+ assert.equal(as3StringLength('a😀b'),4);
+ assert.throws(()=>as3StringLength(null),{name:'TypeError',errorID:1009,
+  message:'Error #1009: Cannot access a property or method of a null object reference.'});
+ assert.throws(()=>as3ErrorToString(null),{name:'TypeError',errorID:1009});
+ assert.throws(()=>as3StringLength({length:4}),{name:'AS3ObjectDispatchUnavailable'});
+ const error=new Error('message');error.toString=()=> 'custom';
+ assert.throws(()=>as3ErrorToString(error),{name:'AS3ObjectDispatchUnavailable'});
+});

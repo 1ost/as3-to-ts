@@ -423,7 +423,7 @@ function authenticatedSourceMemberSignature(mapping: CapabilityMapping, node: Tr
     }
     const member = mapping.sourceMember!;
     const escapedName = member.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const callable = new RegExp(`^public (?:native )?function (?:(?:get|set) )?${escapedName}\\((.*)\\)\\s*:\\s*([^;\\s]+)\\s*;?$`)
+    const callable = new RegExp(`^public (?:static )?(?:native )?function (?:(?:get|set) )?${escapedName}\\((.*)\\)\\s*:\\s*([^;\\s]+)\\s*;?$`)
         .exec(member.signature);
     const constructor = new RegExp(`^public function ${escapedName}\\((.*)\\)$`).exec(member.signature);
     const variable = new RegExp(`^public (?:static )?(?:const|var) ${escapedName}:([^;\\s]+)(?:\\s*=\\s*[^;]+)?;$`)
@@ -434,7 +434,7 @@ function authenticatedSourceMemberSignature(mapping: CapabilityMapping, node: Tr
     }
     const match = callable || constructor;
     if (!match) {
-        fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "source member signature is outside the closed AS3 callable/property grammar", node);
+        fail("HARDENED_SOURCE_MEMBER_SIGNATURE", `source member signature is outside the closed AS3 callable/property grammar: ${mapping.sourceQName}.${member.name}: ${member.signature.slice(0,500)}`, node);
     }
     const parameters = splitSignatureParameters(match![1]!, node).map(parameter => {
         const parameterMatch = /^(?:\.\.\.)?[A-Za-z_$][A-Za-z0-9_$]*\s*:\s*([^=\s]+)(?:\s*=.*)?$/.exec(parameter);
@@ -1900,6 +1900,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         if (ownerType.sourceName === "Error" && ownerType.emittedName === "Error"
             && (ownerType.runtimeName === null || ownerType.runtimeName === "Error")
             && ["message","name"].includes(expression.name)) return semanticType(node,"String","string");
+        if (ownerType.sourceName === "String" && expression.name === "length") return semanticType(node,"int","number");
         if (isArrayType(ownerType) && expression.name === "length") {
             return semanticType(node, "uint", "number");
         }
@@ -3204,11 +3205,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 } else {
                     const errorRead = valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && ["message","name"].includes(name);
+                    const errorMethod = !valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
+                        && (targetType.runtimeName === null || targetType.runtimeName === "Error") && name === "toString";
+                    const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
                         && !valuePosition && ["push","pop","shift","unshift"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr"].includes(name);
-                    if (!errorRead && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
+                    if (!errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
                     }
@@ -3334,6 +3338,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             assertInheritedVisibility(inherited.member, inherited.ownerQName!, context, node);
             assertLocalMethodCall(inherited.member, args, node.children[1]!.children, context, node);
             resultType = authoritySemanticType(inherited.member.returnType!, context, node);
+        } else if (callee.kind === "member" && callee.capabilitySource === "Error" && callee.name === "toString") {
+            if (args.length !== 0) fail("HARDENED_ERROR_CALL_ARITY", "Error.toString requires its retained zero-argument call", node);
+            capabilitySource="Error";capabilityMember="toString";resultType=semanticType(node,"String","string");
         } else if (callee.kind === "member" && callee.capabilitySource === "String"
             && assignmentType(callee.target, context, rawCallee).sourceName === "String") {
             if (!["indexOf", "substr"].includes(callee.name) || args.length < 1 || args.length > 2)
@@ -3609,7 +3616,7 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             if (node.children.length !== 0) fail("HARDENED_EMPTY_STATEMENT", "Empty statement cannot contain executable children", node);
             return Object.assign(identity(node), {kind: "empty" as "empty"});
         }
-        if (node.kind === "CALL" || node.kind === "ASSIGN" || node.kind === "DELETE" || node.kind === "PRE_INC"
+        if (node.kind === "CALL" || node.kind === "ASSIGN" || node.kind === "DELETE" || node.kind === "AND" || node.kind === "OR" || node.kind === "PRE_INC"
             || node.kind === "PRE_DEC" || node.kind === "POST_INC" || node.kind === "POST_DEC") {
             return Object.assign(identity(node), {
                 kind: "expression" as "expression",
@@ -3828,8 +3835,14 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             const iterable = parseExpression(node.children[1]!.children[0]!, context, true);
             const iterableType = assignmentType(iterable, context, node.children[1]!.children[0]!);
             const elementType = vectorElement(iterableType);
-            if (elementType === null) fail("HARDENED_FOREACH_ITERABLE", "for each currently requires a proven typed Vector", node.children[1]!);
-            assertAssignmentCompatible(header.type, elementType, declaration);
+            if (context.sourceMemberAuthority !== null && isArrayType(iterableType)) {
+                if (!["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(header.type.sourceName)
+                    || declaresBinding && header.type.sourceName !== "*")
+                    fail("HARDENED_FOREACH_ARRAY_BINDING", "Array enumeration requires a retained slot type and existing typed binding", declaration);
+            } else {
+                if (elementType === null) fail("HARDENED_FOREACH_ITERABLE", "for each requires an authenticated Array or typed Vector", node.children[1]!);
+                assertAssignmentCompatible(header.type, elementType, declaration);
+            }
             const body = node.children[2]!;
             context.loopDepth += 1;
             context.breakableDepth += 1;

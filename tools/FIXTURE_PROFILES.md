@@ -247,3 +247,25 @@ overridden apply, invalid Array/Function reference coercion and general function
 reflection remain explicit unsupported boundaries. AP can use
 `tools/inspect-source-declarations.cjs` to recover original package identities;
 profiles must not manufacture declarations or modify the AS3 source.
+
+## Startup expression and Array iteration regressions
+
+Discarded `&&`/`||` statements now retain native short circuit behavior, including
+void effects and `trace.apply` calls. String.length reads use shared UTF-16 code
+unit counts and native null errors. Canonical Error.toString reads reuse retained
+native Error formatting; custom Error subclasses/overrides remain explicit holds
+or unavailable runtime behavior. SDK member signatures retain their static modifier
+when matched to existing authenticated bridge mappings.
+
+Array `for each` keeps its original receiver and visits live dense slots in index
+order. Push/pop/shift/unshift during iteration, break/continue, nesting, null arrays,
+and existing typed Object/int/String slots are covered by the 16-case AIR/Laya
+fixture. Declared wildcard bindings retain their function scope. Declared typed
+bindings remain held pending function-wide initialization/hoisting evidence.
+Sparse arrays, named properties, hidden/accessor slots and subclasses remain
+explicit unsupported enumeration domains. Normal dense traversal is linear;
+shape checks do not copy or pre-coerce values ahead of iteration.
+
+The 23-case startup-expressions fixture covers logical effects, complete gated
+trace streams, Unicode String lengths and Error/null text. These are language
+regressions, not proof of a complete application's startup or browser host flows.

@@ -1,3 +1,5 @@
+import { as3FunctionArgument } from "./AS3Function";
+
 /*
  * Native Array index and bounded mutation boundaries.
  * This intentionally does not emulate dynamic Object or display-list properties.
@@ -34,4 +36,26 @@ export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unkno
     if ((method === "push" || method === "unshift") && value.length + args.length > 0xffffffff)
         throw new AS3ArrayOperationUnavailable("Array length overflow requires retained native behavior");
     return Reflect.apply(nativeMethod,value,args);
+}
+
+
+/** Native dense Array for-each retains the receiver and observes live length/index values. */
+export function* as3ArrayValues(value:unknown, bindingType:string):Generator<any,void,unknown> {
+    if (value === null || value === undefined) return;
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || Object.keys(Array.prototype).length !== 0)
+        throw new AS3ArrayOperationUnavailable("Array enumeration requires an ordinary native Array");
+    const validate = ():void => {
+        const keys=Reflect.ownKeys(value);
+        if (keys.length !== value.length + 1 || keys.some(key => typeof key !== "string"
+            || key !== "length" && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)))
+            throw new AS3ArrayOperationUnavailable("Sparse or named Array enumeration requires retained native evidence");
+    };
+    validate();
+    for (let index=0;;index++) {
+        if (index >= value.length) { validate(); return; }
+        const descriptor=Object.getOwnPropertyDescriptor(value,String(index));
+        if (!descriptor || !descriptor.enumerable || !("value" in descriptor))
+            throw new AS3ArrayOperationUnavailable("Array enumeration of hidden or accessor slots requires native evidence");
+        yield as3FunctionArgument(descriptor.value,bindingType);
+    }
 }
