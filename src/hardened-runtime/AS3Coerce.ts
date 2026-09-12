@@ -1,3 +1,4 @@
+import { as3IntegerText } from "./internal/AS3ParseInteger";
 import { as3ObjectLiteral } from "./AS3Object";
 import { as3FixedDecimal } from "./internal/AS3NumberFormat";
 import { AS3_LOWERCASE_BMP } from "./internal/AS3CaseTable";
@@ -116,4 +117,11 @@ export function as3Add(left:unknown, right:unknown):string|number {
 /** Both operand expressions evaluate before native equality conversion starts. */
 export function as3Equals(left:unknown, right:unknown):boolean {
     return as3NativeEquals(left,right);
+}
+
+/** Native global parseInt: evaluate both arguments before String then int conversion. */
+export function as3ParseInt(value?: unknown, radix?: unknown): number {
+    const text = arguments.length === 0 ? "NaN" : as3String(value);
+    const base = arguments.length < 2 ? 0 : as3Int(radix);
+    return as3IntegerText(text, base);
 }

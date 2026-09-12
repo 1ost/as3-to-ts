@@ -63,3 +63,21 @@ test("native Number parsing and toFixed retain all 391 formatting checkpoints",{
   const {id,...expected}=row;assert.deepEqual(actual,expected,id+": "+text+" / "+digits);
  }
 });
+
+test("parseInt retains native numeric values and exact double bits",{skip:!laya},()=>{
+ const {as3ParseInt}=require(path.join(output,"hardened-runtime/AS3Coerce.js"));
+ for (const name of ["parse-int-bits","parse-int-radices"]) {
+  const dir=path.join(laya,"tests/nativeFlashOracle",name);
+  const golden=JSON.parse(fs.readFileSync(path.join(dir,"native-air.json"),"utf8"));
+  const source="ParseIntBitsProbe.as";
+  for(const [file,key] of [[source,"sourceSha256"],["scenario.json","scenarioSha256"]])
+   assert.equal(crypto.createHash("sha256").update(fs.readFileSync(path.join(dir,file))).digest("hex"),golden[key]);
+  const scenario=JSON.parse(fs.readFileSync(path.join(dir,"scenario.json"),"utf8"));
+  for(const row of golden.capture.state.observations) {
+   const [value,radix,mode]=scenario.steps.find(step=>step.id===row.id).calls[0].args;
+   const parsed=mode===0?as3ParseInt():mode===1?as3ParseInt(value):as3ParseInt(value,radix);
+   const view=new DataView(new ArrayBuffer(8));view.setFloat64(0,parsed);
+   assert.deepEqual([view.getUint32(0),view.getUint32(4)],row.result,row.id);
+  }
+ }
+});

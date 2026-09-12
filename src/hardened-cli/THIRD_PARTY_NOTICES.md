@@ -123,3 +123,8 @@ Those sources and the adapted file are licensed under Mozilla Public License
 the runtime. Obtain the license at <https://mozilla.org/MPL/2.0/> and the original
 sources at <https://github.com/adobe/avmplus/tree/858d034a3bd3a54d9b70909386435cf4aec81d21>.
 The rest of this frontend retains its existing licensing.
+
+`src/hardened-runtime/internal/AS3ParseInteger.ts` also adapts the lexical scanner
+and power-of-two radix rounding from `core/MathUtils.cpp` in Adobe AVMplus under
+MPL-2.0. Its macOS AIR 51 fused accumulation and widened float NaN payload are
+checked against retained native AIR captures.

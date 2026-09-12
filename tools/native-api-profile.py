@@ -93,7 +93,9 @@ def read_native_declarations(directory):
                 ('...' if p['rest'] else '') + p['name'] + ':' + p['type'] + (' = ' + p['default'] if p['optional'] else '') for p in parameters) + ')'
             if not is_constructor: signature += ' : ' + rtype
             members.append({'name': member_name, 'access': access, 'scope': 'static' if is_constructor or 'static' in modifiers.split() else 'instance',
-                'constructor': is_constructor, 'signature': signature, 'minArgs': required, 'maxArgs': 1000000 if rest else len(parameters),
+                'constructor': is_constructor, 'signature': signature,
+                'nativeSignature': (match[0].strip() + ';') if 'native' in modifiers.split() and text[match.end():].lstrip().startswith(';') else None,
+                'minArgs': required, 'maxArgs': 1000000 if rest else len(parameters),
                 'type': parameters[0]['type'] if access == 'write' else rtype, 'parameters': parameters})
         for match in re.finditer(r'^\s*public\s+(static\s+)?(const|var)\s+(\w+)\s*:\s*([\w.*<>]+)(?:\s*=\s*([^\r\n;]+))?', text, re.M):
             static, kind, member_name, t, value = match.groups()
@@ -318,6 +320,10 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
                 'maxArgs': None if is_constant else source_member['maxArgs'], 'declaredBy': native['declaredBy'], 'kind': kind,
                 'static': native['scope'] == 'static' and not native['constructor'],
                 'returnType': qname.rsplit('.', 1)[-1] if native['constructor'] else 'void' if native['access'] == 'write' else native['type']}]})
+        # Keep the SDK declaration as well as the normalized bridge signature.
+        # The sealed ByteArray intrinsic authenticates the actual native declaration.
+        if qname == 'flash.utils.ByteArray' and native.get('nativeSignature') and native['nativeSignature'] != source_member['signature']:
+            uses[-1]['signatures'].append({**uses[-1]['signatures'][0], 'signature': native['nativeSignature']})
     return mappings, uses
 
 

@@ -1813,7 +1813,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         if (mapping !== null) return mappedMemberType(mapping, "read", context, node);
     }
     if (expression.kind === "undefined") return semanticType(node, "*", "unknown");
-    if (expression.kind === "math") return semanticType(node, "Number", "number", [], false, "Number");
+    if (expression.kind === "math" || expression.kind === "parseInteger") return semanticType(node, "Number", "number", [], false, "Number");
     if (expression.kind === "globalCall") return semanticType(node, "void", "void", [], false);
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false, context.classQualifiedName);
@@ -2252,6 +2252,25 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         for (const suffix of suffixes)
             indexed = {...suffix, kind:"ARRAY_ACCESSOR", children:[indexed, suffix.children[0]!]};
         return parseExpression(indexed, context, valuePosition, allowSuperCall, allowMethodClosure, allowAssignment);
+    }
+    if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length === 2
+        && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "IDENTIFIER"
+        && node.children[0]!.text === "parseInt" && context.className !== "parseInt"
+        && !context.locals.parseInt && !context.parameters.parseInt && !context.fields.parseInt
+        && !context.methods.parseInt && !context.accessors.parseInt && !context.importsByLocal.parseInt
+        && !context.resolveImportedType("parseInt", null, node)) {
+        assertNoInheritedNativeTimerShadow(context, "parseInt", node);
+        const argumentNodes = node.children[1]!.children;
+        if (argumentNodes.length > 2)
+            fail("HARDENED_PARSE_INTEGER_ARITY", "native parseInt accepts zero through two arguments", node);
+        const args = argumentNodes.map(child => parseExpression(child, context, true));
+        args.forEach((argument, index) => {
+            // Check native String/int parameter assignment without moving conversion before
+            // evaluation of the other argument. The runtime converts after both evaluate.
+            adaptAssignmentValue(authoritySemanticType(index === 0 ? "String" : "int", context, argumentNodes[index]!),
+                argument, context, argumentNodes[index]!);
+        });
+        return Object.assign(identity(node), {kind: "parseInteger" as "parseInteger", arguments: args});
     }
     if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS"
         && node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "trace"

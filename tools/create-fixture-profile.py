@@ -125,7 +125,7 @@ def main():
     p.add_argument('--air-sdk', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--ffdec-jar', type=Path, help='Recover complete native member signatures and optional arguments from this pinned decompiler')
-    p.add_argument('--intrinsic-type', action='append', default=[], choices=['flash.utils.Dictionary'],
+    p.add_argument('--intrinsic-type', action='append', default=[], choices=['flash.utils.Dictionary', 'flash.utils.ByteArray'],
                    help='Exercise the existing shared compiler intrinsic instead of the optional Laya facade')
     args = p.parse_args()
     if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*', args.entry):
@@ -254,18 +254,21 @@ def main():
             if re.search(r'\b' + name + r'\s*\.', text): roles.append('static-member')
         roles.sort()
         apis.append({'qname': q, 'roles': roles, 'classification': 'layaair-flash-api-bridge', 'preserve': {'apiName': True, 'signature': True}})
-        if q in args.intrinsic_type:
+        if q in args.intrinsic_type and q == 'flash.utils.Dictionary':
             # The source API remains SDK-authenticated. Omitting the optional
             # bridge mapping selects the compiler's existing sealed intrinsic.
             continue
         cap, row = target_for(q)
         module = row['module']
+        mapping_start = len(mappings)
         mappings.append({'sourceQName': q, 'sourceRoles': roles, 'sourceMember': None, 'targetCapabilityId': cap,
             'targetModule': module, 'targetExport': row['export'], 'targetKind': row['kind'], 'targetSignature': row['signature'], 'targetMember': None})
         properties, uses = (native_api.map_native_members(q, roles, row, cap, native_signatures, used_names)
                             if native_signatures is not None else primitive_property_mappings(q, roles, row, cap, native_classes))
         mappings.extend(properties)
         member_uses.extend(uses)
+        if q in args.intrinsic_type:
+            del mappings[mapping_start:]
     if native_signatures is not None:
         global_apis, global_mappings = native_api.map_native_globals(out / 'sdk-source',
             set(re.findall(r'\b[A-Za-z_$][\w$]*\b', text)), target_doc)
