@@ -257,6 +257,24 @@ function additionPrimitive(value:unknown):unknown {
     return value;
 }
 
+/** Native abstract equality: reference pairs never invoke primitive conversion. */
+export function as3NativeEquals(left:unknown, right:unknown):boolean {
+    if ([left,right].some(value => typeof value === "bigint" || typeof value === "symbol"))
+        return unavailable("Host-only primitive has no AS3 equality conversion");
+    if (typeof left === typeof right) return left === right;
+    if (left === null || left === undefined) return right === null || right === undefined;
+    if (right === null || right === undefined) return false;
+    if (typeof left === "boolean") return as3NativeEquals(Number(left),right);
+    if (typeof right === "boolean") return as3NativeEquals(left,Number(right));
+    if (typeof left === "number" && typeof right === "string") return left === as3NativeNumber(right);
+    if (typeof left === "string" && typeof right === "number") return as3NativeNumber(left) === right;
+    const reference = (value:unknown):boolean => typeof value === "object" || typeof value === "function";
+    if (reference(left) && reference(right)) return false;
+    if (reference(left)) return as3NativeEquals(additionPrimitive(left),right);
+    if (reference(right)) return as3NativeEquals(left,additionPrimitive(right));
+    return false;
+}
+
 /** AIR takes a String-conversion fast path before general primitive conversion. */
 export function as3NativeAdd(left:unknown, right:unknown):string|number {
     if ([left,right].some(value => typeof value === "bigint" || typeof value === "symbol"))

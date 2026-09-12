@@ -306,7 +306,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             expression.argument === null ? [] : [expressionNode(expression.argument, ts)]);
     }
     if (expression.kind === "assignment") {
-        if (expression.shortCircuit || (expression.resultType && (expression.storageCoercion
+        if (expression.deferCompoundStore || expression.shortCircuit || (expression.resultType && (expression.storageCoercion
             || (expression.target.kind === "index" && expression.target.accessKind === "dictionary")))) {
             // AVM2 keeps the uncoerced assignment input on the expression stack.
             // Capture the lvalue before the RHS, store once, then return that input.
@@ -319,12 +319,14 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                     sourceNodeId:expression.sourceNodeId, sourceSpan:expression.sourceSpan};
             };
             let target = expression.target;
-            if (target.kind === "member" && target.target.kind !== "super")
+            if (target.kind === "member" && target.target.kind !== "super" && !expression.deferCompoundStore)
                 target = {...target, target:capture("__as3AssignmentReceiver", target.target)};
             else if (target.kind === "index")
                 target = {...target, target:capture("__as3AssignmentReceiver", target.target),
                     index:capture("__as3AssignmentKey", target.index)};
             let rhs = expression.value;
+            // AIR retains the computed input, then reevaluates a compound
+            // member receiver for the store. RHS callbacks can replace it.
             if (expression.shortCircuit) {
                 if (rhs.kind !== "binary" || rhs.operator !== expression.shortCircuit)
                     throw new HardenedSemanticError("HARDENED_EMIT_ASSIGNMENT", "logical assignment lacks its proven operands");
@@ -337,7 +339,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             const input = capture("__as3AssignmentValue", rhs);
             const value: SemanticExpression = expression.storageCoercion
                 ? {...input, ...expression.storageCoercion, kind:"coercion", argument:input} : input;
-            const {resultType, storageCoercion, shortCircuit, ...store} = expression;
+            const {resultType, storageCoercion, shortCircuit, deferCompoundStore, ...store} = expression;
             statements.push(ts.factory.createExpressionStatement(expressionNode(
                 {...store, target, value}, ts)));
             statements.push(ts.factory.createReturnStatement(expressionNode(input, ts)));
@@ -392,6 +394,14 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "binary") {
+        if (expression.equalityCoercion) {
+            if (expression.operator !== "==" && expression.operator !== "!=")
+                throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "equality conversion requires an equality operator");
+            const comparison = ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Equals"),undefined,
+                [expressionNode(expression.left,ts),expressionNode(expression.right,ts)]);
+            return expression.operator === "==" ? comparison
+                : ts.factory.createPrefixUnaryExpression(ts.SyntaxKind.ExclamationToken,comparison);
+        }
         if (expression.additionCoercion) {
             if (expression.operator !== "+") throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "addition conversion requires the plus operator");
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Add"),undefined,
@@ -1239,7 +1249,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase", "as3NumberToFixed", "as3Add"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,

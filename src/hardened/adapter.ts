@@ -1907,6 +1907,11 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         const receiverQName = localQNameForType(targetType, context);
         if (receiverQName !== null && expression.capabilitySource !== null) {
             const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node, "read");
+            if (lookup.members.length === 0 && lookup.ownerQName === null) {
+                const mapping = terminalFlashMemberMapping(context,lookup.terminalFlashQNames,"read",expression.name,node);
+                if (mapping && mapping.sourceQName === expression.capabilitySource)
+                    return mappedMemberType(mapping,"read",context,node);
+            }
             const readable = lookup.members.filter(member => member.kind === "getter" || member.kind === "field");
             if ((lookup.ownerQName !== expression.capabilitySource
                 && localInstanceNamedMembers(context, receiverQName, expression.name, node).ownerQName !== expression.capabilitySource) || readable.length !== 1) {
@@ -2080,6 +2085,11 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
         const receiverQName = localQNameForType(targetType, context);
         if (receiverQName !== null && expression.capabilitySource !== null) {
             const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node, "write");
+            if (lookup.members.length === 0 && lookup.ownerQName === null) {
+                const mapping = terminalFlashMemberMapping(context,lookup.terminalFlashQNames,"write",expression.name,node);
+                if (mapping && mapping.sourceQName === expression.capabilitySource)
+                    return mappedMemberType(mapping,"write",context,node);
+            }
             const writable = lookup.members.filter(member => member.kind === "setter"
                 || (member.kind === "field" && !member.readonly));
             if ((lookup.ownerQName !== expression.capabilitySource
@@ -2362,9 +2372,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         let sourceType: SemanticType;
         if (name === context.className) {
             const local = context.methods[name];
-            const implicitObjectConstructor = !local && context.sourceMemberAuthority !== null
-                && context.baseSourceQName === null && context.baseLocalQName === null && args.length === 0;
-            if (!implicitObjectConstructor && (!local || !local.constructor || !admittedArity(local.parameters, args.length))) {
+            // Match imported local classes: an omitted constructor has zero
+            // source arguments, and the emitter owns its implicit super().
+            const implicitConstructor = !local && context.sourceMemberAuthority !== null && args.length === 0;
+            if (!implicitConstructor && (!local || !local.constructor || !admittedArity(local.parameters, args.length))) {
                 fail("HARDENED_NEW_LOCAL_ARITY", "local constructor call does not match its exact declaration", call);
             }
             if (local) args.forEach((argument, index) => {
@@ -2551,6 +2562,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
             || (rightType.sourceName === "null" && leftType.nullable);
         const looseEquality = operator === "==" || operator === "!=";
+        if (looseEquality && context.sourceMemberAuthority !== null) {
+            if ([leftType,rightType].some(type => ["void","XML","XMLList","Namespace","QName"].includes(type.sourceName)))
+                fail("HARDENED_BINARY_COERCION", "Loose equality requires supported native value domains", node);
+            return Object.assign(identity(node), {kind:"binary" as const,
+                operator:operator as "==" | "!=", left,right,equalityCoercion:true as const,
+                resultType:semanticType(node,"Boolean","boolean")});
+        }
         const numericPair = context.sourceMemberAuthority !== null
             && [leftType, rightType].every(type => ["Number", "int", "uint"].includes(type.sourceName) && type.emittedName === "number");
         const sameValueDomain = context.sourceMemberAuthority !== null
@@ -2673,10 +2691,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const trueNull = trueType.sourceName === "null" && admitsNull(falseType);
         const falseNull = falseType.sourceName === "null" && admitsNull(trueType);
         const numericBranches = [trueType, falseType].every(type => ["Number", "int", "uint"].includes(type.sourceName));
-        if (!sameUnderlyingType(trueType, falseType) && !numericBranches && !trueNull && !falseNull) {
+        const referenceBranch = context.sourceMemberAuthority !== null && !numericBranches && !trueNull && !falseNull
+            && !sameUnderlyingType(trueType,falseType)
+            ? provenReferenceSubtype(trueType,falseType,context) ? falseType
+                : provenReferenceSubtype(falseType,trueType,context) ? trueType : null
+            : null;
+        if (!sameUnderlyingType(trueType, falseType) && !numericBranches && !trueNull && !falseNull && referenceBranch === null) {
             fail("HARDENED_CONDITIONAL_TYPE", "conditional branches require the exact same proven source type", node);
         }
         const resultType = numericBranches ? semanticType(node, "Number", "number")
+            : referenceBranch ? withNullability(referenceBranch,trueType.nullable || falseType.nullable)
             : trueNull ? falseType : withNullability(trueType, trueType.nullable || falseType.nullable);
         return Object.assign(identity(node), {
             kind: "conditional" as "conditional", condition, whenTrue, whenFalse,
@@ -2955,6 +2979,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const valueType = assignmentType(value, context, node.children[2]!);
         let input = value;
         let shortCircuit: "&&" | "||" | undefined;
+        let deferCompoundStore: true | undefined;
         if (operator === "=") {
             value = adaptAssignmentValue(targetType, value, context, node.children[2]!);
         } else {
@@ -2966,9 +2991,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 && target.target.bindingKind === "current-class"
                 && target.target.bindingSourceQualifiedName === context.classQualifiedName
                 && context.fields[target.name]?.modifiers.includes("static");
-            if (target.kind === "index" || (target.kind === "member" && target.target.kind !== "this" && !ownStaticField)) {
+            if (target.kind === "index" || (target.kind === "member" && target.target.kind !== "this" && !ownStaticField
+                && context.sourceMemberAuthority === null)) {
                 fail("HARDENED_COMPOUND_TARGET", "compound assignment requires a once-evaluated local, parameter, or direct this field", node.children[0]!);
             }
+            if (target.kind === "member" && target.target.kind !== "this" && !ownStaticField) deferCompoundStore = true;
             const numeric = (type: SemanticType): boolean => ["Number", "int", "uint"].includes(type.sourceName)
                 && type.emittedName === "number";
             const nativeAdd = binaryOperator === "+" && context.sourceMemberAuthority !== null
@@ -2978,6 +3005,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 && valueType.sourceName === "String";
             const logical = (binaryOperator === "&&" || binaryOperator === "||")
                 && targetType.sourceName === "Boolean" && valueType.sourceName === "Boolean";
+            if (logical && deferCompoundStore)
+                fail("HARDENED_COMPOUND_TARGET","logical compound receivers require native conditional-store evidence",node);
             if (logical) shortCircuit = binaryOperator as "&&" | "||";
             if (!nativeAdd && !stringAdd && !logical && (!numeric(targetType) || !numeric(valueType))) {
                 fail("HARDENED_COMPOUND_TYPE", "compound assignment requires exact String addition or proven numeric operands", node);
@@ -3014,6 +3043,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         return Object.assign(identity(node), {
             kind: "assignment" as "assignment", operator: "=" as "=", target, value: consumed ? input : value,
             ...(shortCircuit ? {shortCircuit} : {}),
+            ...(deferCompoundStore ? {deferCompoundStore} : {}),
             ...(consumed ? {resultType: assignmentType(input, context, node), ...(storageCoercion ? {storageCoercion} : {})} : {}),
         });
     }
@@ -3210,7 +3240,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node)
                             || flashBaseMemberMapping(context, "call", name, node) : null);
                     if (mapping === null) {
-                        fail("HARDENED_MEMBER_UNMAPPED", "instance member is neither local nor double-pinned in the minimal subset", node);
+                        fail("HARDENED_MEMBER_UNMAPPED", `instance member ${context.classQualifiedName}.${name} is neither local nor double-pinned in the minimal subset`, node);
                     }
                     capabilitySource = mapping.sourceQName;
                 }
@@ -3306,13 +3336,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                             fail("HARDENED_LOCAL_INSTANCE_MEMBER",
                                 "local receiver member lacks an authenticated declaration", node);
                         }
-                        const mapping = terminalFlashMemberMapping(context, lookup.terminalFlashQNames,
-                            "call", name, node);
-                        if (mapping === null || mapping.sourceMember === null) {
+                        const accesses = valuePosition ? ["read"] : ["call","write","read"];
+                        const mappings = accesses.map(access => terminalFlashMemberMapping(context,
+                            lookup.terminalFlashQNames,access,name,node)).filter((mapping): mapping is CapabilityMapping => mapping !== null);
+                        if (mappings.length === 0) {
                             fail("HARDENED_MEMBER_UNMAPPED",
-                                "terminal Flash receiver member lacks an exact bridge mapping", node);
+                                `terminal Flash receiver ${lookup.terminalFlashQNames.join("|")}.${name} on ${receiverQName} lacks an exact bridge mapping`, node);
                         }
-                        capabilitySource = mapping.sourceQName;
+                        if (new Set(mappings.map(mapping => mapping.targetMember!.name)).size !== 1
+                            || new Set(mappings.map(mapping => mapping.sourceQName)).size !== 1)
+                            fail("HARDENED_MEMBER_TARGET","Inherited Flash accessor mappings disagree on their bridge target",node);
+                        targetName = mappings[0]!.targetMember!.name;
+                        capabilitySource = mappings[0]!.sourceQName;
                     } else {
                         lookup.members.forEach(member =>
                             assertLocalReceiverVisibility(member, lookup.ownerQName!, receiverQName, context, node));

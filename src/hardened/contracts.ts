@@ -396,6 +396,8 @@ export interface AssignmentExpression extends SemanticIdentity {
     resultType?: SemanticType;
     storageCoercion?: { kind: "assignmentStorageCoercion"; targetType: SemanticType; slot?: true };
     shortCircuit?: "&&" | "||";
+    /** AIR evaluates a compound member receiver again after computing its value. */
+    deferCompoundStore?: true;
 }
 
 export interface NewExpression extends SemanticIdentity {
@@ -409,6 +411,7 @@ export interface BinaryExpression extends SemanticIdentity {
     kind: "binary";
     numericCoercion?: true;
     additionCoercion?: true;
+    equalityCoercion?: true;
     operator: "<" | "<=" | ">" | ">=" | "==" | "!=" | "===" | "!==" | "&&" | "||" |
         "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>";
     left: SemanticExpression;

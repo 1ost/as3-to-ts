@@ -807,6 +807,15 @@ try {
         }
         for (const expression of ["flag ? 1 : null", "flag ? numeric : null", "flag ? new Sprite() : true"])
             assert.throws(() => adapt(expression), error => error?.code === "HARDENED_CONDITIONAL_TYPE");
+        for (const expression of ["flag ? this : new Sprite()", "flag ? new Sprite() : this"]) {
+            const source = `package p { import flash.display.Sprite; public class DerivedConditional extends Sprite {
+                public function choose(flag:Boolean):Sprite { return ${expression}; }
+            } }`;
+            const tree = built.normalizer.normalizeParserAst(built.parse("DerivedConditional.as",source),source,sha256);
+            const semantic = built.adapter.adaptNormalizedParserAst(tree,authority(built.ledger),source,sha256,
+                undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+            assert.equal(semantic.declaration.members.find(member => member.name === "choose").body[0].expression.resultType.sourceName,"Sprite");
+        }
     }
     {
         const adapt = source => built.adapter.adaptNormalizedParserAst(
@@ -992,11 +1001,29 @@ try {
     const badDefaultAst = built.normalizer.normalizeParserAst(built.parse("DefaultConstruction.as", badDefaultConstruction), badDefaultConstruction, sha256);
     assert.throws(() => built.adapter.adaptNormalizedParserAst(badDefaultAst, authority(built.ledger), badDefaultConstruction, sha256,
         undefined, undefined, undefined, undefined, sourceMemberAuthority), error => error?.code === "HARDENED_NEW_LOCAL_ARITY");
-    for (const [left, right] of [["Object", "Object"], ["*", "*"], ["String", "Number"]]) {
-        const heldSource = `package p { public class HeldEquality { public function same(a:${left},b:${right}):Boolean { return a == b; } } }`;
-        const heldAst = built.normalizer.normalizeParserAst(built.parse("HeldEquality.as", heldSource), heldSource, sha256);
-        assert.throws(() => built.adapter.adaptNormalizedParserAst(heldAst, authority(built.ledger), heldSource, sha256,
-            undefined, undefined, undefined, undefined, sourceMemberAuthority), error => error?.code === "HARDENED_BINARY_COERCION");
+    const derivedDefault = defaultConstruction.replace('package p { public class DefaultConstruction',
+        'package p { import flash.display.Sprite; public class DefaultConstruction extends Sprite');
+    const derivedDefaultAst = built.normalizer.normalizeParserAst(built.parse("DerivedDefault.as",derivedDefault),derivedDefault,sha256);
+    built.adapter.adaptNormalizedParserAst(derivedDefaultAst,authority(built.ledger),derivedDefault,sha256,
+        undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+    const badDerivedDefault = derivedDefault.replace('new DefaultConstruction()','new DefaultConstruction(1)');
+    const badDerivedAst = built.normalizer.normalizeParserAst(built.parse("BadDerivedDefault.as",badDerivedDefault),badDerivedDefault,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(badDerivedAst,authority(built.ledger),badDerivedDefault,sha256,
+        undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority),error=>error?.code==="HARDENED_NEW_LOCAL_ARITY");
+    for (const [left, right] of [["Object", "Object"], ["*", "*"], ["String", "Number"], ["Object", "NativeEquality"]]) {
+        const equalitySource = `package p { public class NativeEquality {
+            public function same(a:${left},b:${right}):Boolean { return a == b; }
+            public function different(a:${left},b:${right}):Boolean { return a != b; }
+        } }`;
+        const equalityAst = built.normalizer.normalizeParserAst(built.parse("NativeEquality.as", equalitySource), equalitySource, sha256);
+        const equality = built.adapter.adaptNormalizedParserAst(equalityAst, authority(built.ledger), equalitySource, sha256,
+            undefined, undefined, undefined, undefined, sourceMemberAuthority);
+        for (const member of equality.declaration.members) assert.equal(member.body[0].expression.equalityCoercion,true);
+        const emitted = built.emitter.emitSemanticProgram(equality,{compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code;
+        assert.match(emitted,/return __as3Equals\(a, b\);/);
+        assert.match(emitted,/return !__as3Equals\(a, b\);/);
+        if (left === "String") assert.throws(() => built.adapter.adaptNormalizedParserAst(
+            equalityAst,authority(built.ledger),equalitySource,sha256),error => error?.code === "HARDENED_BINARY_COERCION");
     }
     const conditionOutput=built.emitter.emitSemanticProgram(conditionSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
