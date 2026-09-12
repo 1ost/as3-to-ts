@@ -840,8 +840,18 @@ try {
     const instanceLambdaSource=staticLambdaSource.replace("public static var ready","public var ready");
     const instanceLambdaTree=built.parse("fixtures/InstanceCapture.as",instanceLambdaSource);
     const instanceLambdaNormalized=built.normalizer.normalizeParserAst(instanceLambdaTree,instanceLambdaSource,sha256);
-    assert.throws(()=>built.adapter.adaptNormalizedParserAst(instanceLambdaNormalized,
+    const instanceLambdaSemantic=built.adapter.adaptNormalizedParserAst(instanceLambdaNormalized,
         authority(built.ledger),instanceLambdaSource,sha256,undefined,undefined,undefined,undefined,
+        sourceMemberAuthority);
+    const instanceLambdaOutput=built.emitter.emitSemanticProgram(instanceLambdaSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
+    assert.match(instanceLambdaOutput.code,/__as3LexicalReceiver1\.ready = true;/);
+    assert.match(instanceLambdaOutput.code,/=> function/);
+    const explicitThisSource=instanceLambdaSource.replace("ready = true", "this.ready = true");
+    const explicitThisNormalized=built.normalizer.normalizeParserAst(
+        built.parse("fixtures/ExplicitThis.as",explicitThisSource),explicitThisSource,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(explicitThisNormalized,
+        authority(built.ledger),explicitThisSource,sha256,undefined,undefined,undefined,undefined,
         sourceMemberAuthority),error=>error&&error.code==="HARDENED_LAMBDA_THIS");
     const conditionSource="package p { public class TruthyCondition { public function run(item:Object):void { if (item) { return; } } } }";
     const conditionTree=built.parse("fixtures/TruthyCondition.as",conditionSource);

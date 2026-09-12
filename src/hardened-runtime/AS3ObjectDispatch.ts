@@ -31,9 +31,11 @@ function receiver(value:unknown):object {
     return value;
 }
 function keyName(value:unknown):string {
-    if (value !== null && typeof value === "object" || typeof value === "function")
-        return unavailable("Object-valued keys require native public-namespace ToPrimitive");
-    return String(value);
+    if (typeof value === "bigint" || typeof value === "symbol")
+        return unavailable("Host-only primitives are not native Object keys");
+    // Flash property names use the public String-hint conversion protocol.
+    // Retained object-keys evidence includes null-result fallback and errors.
+    return nativeString(value,new Set());
 }
 function describe(value:object):ClassInfo | null {
     const info = lookupObjectClass(value);
@@ -164,8 +166,9 @@ export function as3ObjectHasOwn(value:unknown,key:unknown):boolean {
     return Object.prototype.hasOwnProperty.call(target,name);
 }
 export function as3ObjectHas(value:unknown,key:unknown):boolean {
-    return as3ObjectHasOwn(value,key) || keyName(key) === "constructor"
-        || BUILTINS.has(keyName(key));
+    const target = receiver(value), name = keyName(key);
+    // Convert once even when the name is missing or resolves to a builtin.
+    return as3ObjectHasOwn(target,name) || name === "constructor" || BUILTINS.has(name);
 }
 export function as3ObjectDelete(value:unknown,key:unknown,caller:string | null = null):boolean {
     const target = receiver(value), name = keyName(key), info = describe(target);

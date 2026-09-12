@@ -88,3 +88,37 @@ test("native enumerability and locale string protocol",()=>{
   assert.equal(r.as3ObjectCall(target,"isPrototypeOf",[{}]),row.prototype,row.id);
  }
 });
+
+test("native dynamic keys convert once, preserve fallback errors and check null receivers first",()=>{
+ const folder=path.join(process.env.HARDENED_FIXTURE_LAYA,"tests/nativeFlashOracle/object-keys");
+ const native=JSON.parse(fs.readFileSync(path.join(folder,"native-air.json"),"utf8"));
+ for(const [file,field] of [["ObjectKeysProbe.as","sourceSha256"],["scenario.json","scenarioSha256"]])
+  assert.equal(crypto.createHash("sha256").update(fs.readFileSync(path.join(folder,file))).digest("hex"),native[field]);
+ for(const row of native.capture.state.observations.filter(row=>!row.id.startsWith("scalar-")&&row.id!=="enumerate")) {
+  const [operation,kind]=row.id.split("-");let calls="",value="";
+  let key=as3ObjectLiteral([["toString",()=>{
+   calls+="s";
+   if(kind==="throws")throw new Error("key failed");
+   if(kind==="fallback")return null;
+   if(kind==="invalid")return {};
+   if(kind==="missing")return "missing";
+   if(kind==="builtin")return "toString";
+   return "chosen";
+  }],["valueOf",()=>{calls+="v";return kind==="invalid"?{}:"chosen"; }]]);
+  if(kind==="undefined")key=undefined;
+  if(kind==="array")key=["chosen"];
+  if(kind==="plain")key={};
+  if(kind==="function")key=()=>{};
+  if(kind==="noncallable")key={toString:3};
+  const target=kind==="null"?null:as3ObjectLiteral([["chosen","stored"]]);
+  try {
+   if(operation==="read")value=r.as3NativeString(r.as3ObjectRead(target,key));
+   if(operation==="write"){r.as3ObjectWrite(target,key,"changed");value=r.as3NativeString(r.as3ObjectRead(target,"chosen"));}
+   if(operation==="in")value=String(r.as3ObjectIn(key,target));
+   if(operation==="own")value=String(r.as3ObjectCall(target,"hasOwnProperty",[key]));
+   if(operation==="delete")value=String(r.as3ObjectDelete(target,key));
+  }catch(error){value=error.name+":"+error.message;}
+  assert.deepEqual({calls,value},{calls:row.calls,value:row.value},row.id);
+ }
+ for(const key of [1n,Symbol()])assert.throws(()=>r.as3ObjectRead({},key),{name:"AS3ObjectDispatchUnavailable"});
+});

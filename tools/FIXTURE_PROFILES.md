@@ -165,10 +165,29 @@ The dispatcher implements retained sealed-class reads/writes and public presence
 checks; native-only class captures are replayed against the runtime helper. The
 unchanged dynamic-object fixture also passes actual generated Laya execution.
 Mapped classes without traits, protected lookup, resolved named namespaces,
-namespace storage collisions, primitive receivers, Object-valued keys and reference
+namespace storage collisions, primitive receivers and reference
 slot coercion remain explicit unsupported boundaries. General dynamic calls and
 dynamic class declarations remain held. Helper tests do not establish full class
 execution or application parity.
+
+Object indexing now admits wildcard, Object, Array and Function key domains
+through the existing public String-hint conversion protocol. Native AIR's
+74-checkpoint `object-keys` fixture retains scalar and `for … in` keys, Arrays,
+functions, null-result fallback, thrown conversion errors, builtin names and
+null receivers. Presence checks convert the key once, including misses. Unknown
+host classes, host-only primitives and unsupported conversion protocols still
+fail explicitly; this does not add XML/QName or Dictionary key semantics.
+
+The same unchanged fixture required lexical instance-field capture in anonymous
+functions. An explicit generated closure captures the enclosing instance while
+retaining an ordinary function and its distinct dynamic receiver. Nested
+captures propagate that instance; `lexical-field-apply` invokes both levels with
+different receiver objects and conflicting field names. The separate unchanged
+`lexical-field` Object-indexed invocation fixture remains held on general dynamic
+calls; it is retained rather than rewritten to clear that boundary. Original own fields require an
+authenticated instance scope. Explicit dynamic `this`, implicit accessors,
+methods and inherited members inside anonymous functions remain held. Existing
+own-record confinement still applies before capturing a field.
 
 
 Application profiles also admit value-preserving `&&` and `||` for supported

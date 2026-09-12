@@ -189,6 +189,7 @@ export interface IdentifierExpression extends SemanticIdentity {
 
 export interface ThisExpression extends SemanticIdentity {
     kind: "this";
+    lexicalName?: string;
 }
 
 export interface SuperExpression extends SemanticIdentity {
@@ -225,6 +226,7 @@ export interface LambdaExpression extends SemanticIdentity {
     parameters: SemanticParameter[];
     returnType: SemanticType;
     statements: SemanticStatement[];
+    lexicalReceiver?: { name: string; outerName: string | null; className: string };
 }
 
 export interface ArrayExpression extends SemanticIdentity {

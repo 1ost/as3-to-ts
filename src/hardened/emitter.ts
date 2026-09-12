@@ -187,7 +187,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createIdentifier(expression.name);
     }
     if (expression.kind === "this") {
-        return ts.factory.createThis();
+        return expression.lexicalName ? ts.factory.createIdentifier(expression.lexicalName) : ts.factory.createThis();
     }
     if (expression.kind === "super") {
         return ts.factory.createSuper();
@@ -432,10 +432,20 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             : ts.factory.createPostfixUnaryExpression(expressionNode(expression.target, ts), token);
     }
     if (expression.kind === "lambda") {
-        return ts.factory.createFunctionExpression(undefined, undefined, undefined, undefined,
+        const fn = ts.factory.createFunctionExpression(undefined, undefined, undefined, undefined,
             expression.parameters.map(parameter => parameterNode(parameter, ts)),
             typeNode(expression.returnType, ts),
             ts.factory.createBlock(expression.statements.map(statement => statementNode(statement, ts)), true));
+        if (!expression.lexicalReceiver) return fn;
+        const capture = expression.lexicalReceiver;
+        // Keep an ordinary Function and capture its lexical instance separately
+        // from the dynamic receiver used when the function is called.
+        return ts.factory.createCallExpression(ts.factory.createParenthesizedExpression(
+            ts.factory.createArrowFunction(undefined, undefined, [
+                ts.factory.createParameterDeclaration(undefined, undefined, capture.name, undefined,
+                    ts.factory.createTypeReferenceNode(capture.className, undefined), undefined),
+            ], undefined, ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken), fn)), undefined,
+            [capture.outerName ? ts.factory.createIdentifier(capture.outerName) : ts.factory.createThis()]);
     }
     if (expression.kind === "delete") {
         if (expression.target.accessKind === "object") return ts.factory.createCallExpression(

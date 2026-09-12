@@ -98,6 +98,7 @@ interface AdapterContext {
     labels: Array<{ name: string; continuable: boolean }>;
     namespaceNames: { [name: string]: true };
     lambdaDepth: number;
+    lexicalThisUses: number;
     currentCallable: MethodHeader | null;
     ownRecordTargetDepth: number;
     ownRecordInitializations: number;
@@ -1777,8 +1778,8 @@ function dynamicObjectType(type:SemanticType, context:AdapterContext):boolean {
         && (type.sourceName === "Object" || type.sourceName === "*");
 }
 function assertObjectKey(type:SemanticType,node:TreeNode):void {
-    if (!["String","int","uint","Number","Boolean","null","undefined"].includes(type.sourceName))
-        fail("HARDENED_OBJECT_KEY", "dynamic Object keys require proven scalar ToString input", node);
+    if (!["String","int","uint","Number","Boolean","null","undefined","*","Object","Array","Function"].includes(type.sourceName))
+        fail("HARDENED_OBJECT_KEY", "dynamic Object key type requires native String-conversion authority", node);
 }
 
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
@@ -2664,6 +2665,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const priorLoopDepth = context.loopDepth;
         const priorBreakableDepth = context.breakableDepth;
         const priorLabels = context.labels;
+        const priorLexicalThisUses = context.lexicalThisUses;
         context.parameters = Object.assign(Object.create(null), priorParameters);
         parameters.forEach(parameter => { context.parameters[parameter.name] = parameter; });
         context.locals = Object.assign(Object.create(null), priorLocals);
@@ -2689,6 +2691,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         return Object.assign(identity(node), {
             kind: "lambda" as "lambda", parameters, returnType, statements,
+            ...(context.lexicalThisUses > priorLexicalThisUses ? { lexicalReceiver: {
+                name: "__as3LexicalReceiver" + (context.lambdaDepth + 1),
+                outerName: context.lambdaDepth ? "__as3LexicalReceiver" + context.lambdaDepth : null,
+                className: context.className,
+            }} : {}),
         });
     }
     if (node.kind === "DELETE") {
@@ -2761,9 +2768,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (context.fields[name]!.modifiers.indexOf("static") >= 0) {
                 return currentClassMember(node, context, name);
             }
-            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
             if (isTreeNodeContext(context) && name === "FData" && context.ownRecordTargetDepth === 0) {
                 fail("HARDENED_OWN_RECORD_ESCAPE", "TTreeNode.FData is confined to authenticated own-record indexing", node);
+            }
+            if (context.lambdaDepth > 0) {
+                if (context.sourceMemberAuthority === null || !context.currentCallable
+                    || context.currentCallable.modifiers.includes("static"))
+                    fail("HARDENED_LAMBDA_THIS", "implicit field capture requires an authenticated instance scope", node);
+                context.lexicalThisUses++;
+                return Object.assign(identity(node), { kind: "member" as const,
+                    target: Object.assign(identity(node), { kind: "this" as const,
+                        lexicalName: "__as3LexicalReceiver" + context.lambdaDepth }),
+                    targetNullable: false, name, capabilitySource: null });
             }
             return implicitThisMember(node, name);
         }
@@ -4531,7 +4547,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         runtimeReferenceParentsByQName: new Map(), sourceMemberAuthority: sourceMemberAuthority || null, currentInterfaceQNames: [],
         ...(functionDeclaration ? {packageFunction:true as const} : {}),
         accessors: Object.create(null), parameters: Object.create(null), locals: Object.create(null),
-        loopDepth: 0, breakableDepth: 0, labels: [], namespaceNames: Object.create(null), lambdaDepth: 0,
+        loopDepth: 0, breakableDepth: 0, labels: [], namespaceNames: Object.create(null), lambdaDepth: 0, lexicalThisUses: 0,
         currentCallable: null, ownRecordTargetDepth: 0, ownRecordInitializations: 0,
     };
     let declaration:SemanticPackageField | SemanticPackageFunction;
@@ -4726,7 +4742,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         breakableDepth: 0,
         labels: [],
         namespaceNames,
-        lambdaDepth: 0,
+        lambdaDepth: 0, lexicalThisUses: 0,
         currentCallable: null, ownRecordTargetDepth: 0, ownRecordInitializations: 0,
     };
     if (classNode.kind === "INTERFACE") {
