@@ -687,6 +687,20 @@ try {
     const sourceMemberJson=JSON.stringify(sourceMemberDocument);
     const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson),sha256);
+    {
+    const inheritedMathSource = "package p { import flash.display.Sprite; public class MathFixture extends Sprite { public function angle():Number { return Math.PI; } } }";
+    const inheritedMathAst = built.normalizer.normalizeParserAst(built.parse("MathFixture.as", inheritedMathSource), inheritedMathSource, sha256);
+    built.adapter.adaptNormalizedParserAst(inheritedMathAst, authority(built.ledger), inheritedMathSource,
+        sha256, undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);
+    const shadowDocument = JSON.parse(sourceMemberJson);
+    shadowDocument.entries.find(row => row.qname === "flash.display.Sprite").ownInstanceMemberNames.push("Math");
+    shadowDocument.entries.forEach(row => row.ownInstanceMemberNames.sort());
+    const shadowJson = JSON.stringify(shadowDocument);
+    const shadowAuthority = built.sourceMembers.loadSourceMemberAuthority(shadowJson, sha256(shadowJson), sha256);
+    assert.throws(() => built.adapter.adaptNormalizedParserAst(inheritedMathAst, authority(built.ledger), inheritedMathSource,
+        sha256, undefined, undefined, undefined, referenceAuthority, shadowAuthority),
+        error => error && error.code === "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+    }
     assert.throws(()=>built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson+" "),sha256),
     error=>error&&error.code==="HARDENED_SOURCE_MEMBER_AUTHORITY_PIN");

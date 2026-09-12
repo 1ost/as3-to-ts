@@ -2103,6 +2103,8 @@ function builtinMathMember(node: TreeNode, context: AdapterContext): string | nu
         || node.children[0]!.text !== "Math" || context.className === "Math"
         || context.locals.Math || context.parameters.Math || context.fields.Math || context.methods.Math
         || context.accessors.Math || context.importsByLocal.Math || context.resolveImportedType("Math", null, node)) return null;
+    // Reuse the exhaustive base-member check: an inherited value can shadow a global too.
+    assertNoInheritedNativeTimerShadow(context, "Math", node);
     return requiredText(node.children[1]!, "Math member");
 }
 
