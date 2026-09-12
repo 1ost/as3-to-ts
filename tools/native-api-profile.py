@@ -138,6 +138,31 @@ def native_type_closure(roots, classes, used_names, has_target):
     return sorted(closure)
 
 
+def map_native_globals(directory, used_names, target):
+    """Read package-level native signatures; never manufacture a source implementation."""
+    apis, mappings = [], []
+    if 'trace' not in used_names:
+        return apis, mappings
+    source = Path(directory) / 'scripts/trace.as'
+    text = source.read_text()
+    match = re.fullmatch(r'\s*package\s*\{\s*\[native\("FlashUtilScript::trace"\)\]\s*'
+                         r'(public native function trace\(\.\.\. rest\) : void;)\s*\}\s*', text)
+    if not match:
+        raise ValueError('Native global trace signature is not the supported SDK declaration')
+    rows = [(c['id'], o) for c in target['capabilities'] if c.get('status') == 'typescript-obligation'
+            for o in c.get('obligations', []) if o.get('module') == 'src/layaAir/flash/debug/trace.ts'
+            and o.get('export') == 'trace' and o.get('kind') == 'function']
+    if len(rows) != 1:
+        raise ValueError('Native global trace requires one shared target function')
+    cap, row = rows[0]
+    apis.append({'qname': 'trace', 'roles': ['global-function'], 'classification': 'layaair-flash-api-bridge',
+                 'preserve': {'apiName': True, 'signature': True}, 'signatures': [match[1]]})
+    mappings.append({'sourceQName': 'trace', 'sourceRoles': ['global-function'], 'sourceMember': None,
+                     'targetCapabilityId': cap, 'targetModule': row['module'], 'targetExport': row['export'],
+                     'targetKind': row['kind'], 'targetSignature': row['signature'], 'targetMember': None})
+    return apis, mappings
+
+
 def target_arity(signature):
     if signature.startswith('<'):
         for index, character, depth in signature_tokens(signature):

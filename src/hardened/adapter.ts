@@ -1763,6 +1763,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         if (mapping !== null) return mappedMemberType(mapping, "read", context, node);
     }
     if (expression.kind === "math") return semanticType(node, "Number", "number", [], false, "Number");
+    if (expression.kind === "globalCall") return semanticType(node, "void", "void", [], false);
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false, context.classQualifiedName);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
@@ -2111,6 +2112,25 @@ function builtinMathMember(node: TreeNode, context: AdapterContext): string | nu
 function parseExpression(node: TreeNode, context: AdapterContext, valuePosition: boolean,
     allowSuperCall: boolean = false, allowMethodClosure: boolean = true,
     allowAssignment: boolean = false): SemanticExpression {
+    if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS"
+        && node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "trace"
+        && context.className !== "trace" && !context.locals.trace && !context.parameters.trace
+        && !context.fields.trace && !context.methods.trace && !context.accessors.trace && !context.importsByLocal.trace
+        && !context.resolveImportedType("trace", null, node)) {
+        assertNoInheritedNativeTimerShadow(context, "trace", node);
+        const mapping = context.mappingsBySource.trace;
+        if (!mapping || mapping.sourceRoles.indexOf("global-function") < 0)
+            fail("HARDENED_GLOBAL_FUNCTION_AUTHORITY", "global trace lacks authenticated native and shared target authority", node);
+        const args = node.children[1]!.children.map(child => parseExpression(child, context, true));
+        args.forEach((argument, index) => {
+            const type = assignmentType(argument, context, node.children[1]!.children[index]!);
+            if (!["String", "Number", "int", "uint", "Boolean", "null", "undefined"].includes(type.sourceName))
+                fail("HARDENED_GLOBAL_STRING_CONVERSION", "trace reference arguments require native String conversion authority", node.children[1]!.children[index]!);
+        });
+        return Object.assign(identity(node), {kind: "globalCall" as "globalCall", name: "trace" as "trace",
+            targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
+            arguments: args});
+    }
     if (["ADD", "MINUS", "MULTIPLICATION", "RELATION", "EQUALITY", "AND", "OR", "B_AND", "B_OR", "B_XOR", "SHIFT"].includes(node.kind)
         && node.children.length > 3) {
         if (node.children.length % 2 !== 1 || node.children.length > 257
@@ -4372,7 +4392,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 fail("HARDENED_IMPORT_COLLISION", "implicit signature type conflicts with an existing import", node);
             return existing;
         }
-        if (authority.typeMappingsBySource[sourceName]) {
+        if (authority.typeMappingsBySource[sourceName] && authority.typeMappingsBySource[sourceName]!.targetKind !== "function") {
             const item = flashSemanticImport(authority, sourceName, node);
             if (expectedKind !== null && authority.typeMappingsBySource[sourceName]!.targetKind !== expectedKind) return null;
             parsedImports.imports.push(item);

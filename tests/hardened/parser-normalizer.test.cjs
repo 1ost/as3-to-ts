@@ -71,7 +71,7 @@ function compileFocusedSources() {
     };
 }
 
-function authority(api) {
+function authority(api, includeTrace = false) {
     const mappings = {
         schema: "as3-source-to-laya-capability-map@1",
         mappings: [
@@ -238,6 +238,20 @@ function authority(api) {
             },
         ],
     };
+    if (includeTrace) {
+        source.as3SourceCapabilities.apis.push({qname:"trace", roles:["global-function"],
+            classification:"layaair-flash-api-bridge", preserve:{apiName:true, signature:true},
+            signatures:["public native function trace(... rest) : void;"]});
+        const row = {module:"src/layaAir/flash/debug/trace.ts", export:"trace", kind:"function", signature:"(...values: unknown[]) => void"};
+        target.capabilities.push({id:"api.flash.debug", status:"typescript-obligation", obligations:[row]});
+        mappings.mappings.push({sourceQName:"trace", sourceRoles:["global-function"], sourceMember:null,
+            targetCapabilityId:"api.flash.debug", targetModule:row.module, targetExport:row.export,
+            targetKind:row.kind, targetSignature:row.signature, targetMember:null});
+        const corrupt = structuredClone(source);
+        corrupt.as3SourceCapabilities.apis.find(row => row.qname === "trace").signatures = ["public function trace(value:String):void"];
+        assert.throws(() => api.selectCapabilityCandidates(JSON.stringify(corrupt), JSON.stringify(target), api.canonicalMappingJson(mappings)),
+            error => error?.code === "HARDENED_GLOBAL_FUNCTION_AUTHORITY");
+    }
     const sourceJson = JSON.stringify(source);
     const targetJson = JSON.stringify(target);
     const mappingJson = api.canonicalMappingJson(mappings);
@@ -275,6 +289,20 @@ function expectNormalizationCode(action, code) {
 
 const built = compileFocusedSources();
 try {
+    {
+        const source = 'package p { public class TraceFixture { public function run():void { trace("hello", 1, null); } } }';
+        const adapt = (text, admitted = true) => built.adapter.adaptNormalizedParserAst(
+            built.normalizer.normalizeParserAst(built.parse("TraceFixture.as", text), text, sha256), authority(built.ledger, admitted), text, sha256);
+        const semantic = adapt(source);
+        assert.equal(semantic.declaration.members.find(m => m.name === "run").body[0].expression.kind, "globalCall");
+        assert.throws(() => adapt(source, false), error => error?.code === "HARDENED_GLOBAL_FUNCTION_AUTHORITY");
+        const shadow = adapt(source.replace('public function run()', 'private function trace(a:String,b:int,c:Object):void {} public function run()'));
+        assert.equal(JSON.stringify(shadow).includes('"globalCall"'), false);
+        assert.throws(() => adapt(source.replace('trace("hello", 1, null)', 'trace(this)')),
+            error => error?.code === "HARDENED_GLOBAL_STRING_CONVERSION");
+        const parameter = source.replace('run():void', 'run(trace:Function):void');
+        assert.throws(() => adapt(parameter), error => error?.code !== "HARDENED_GLOBAL_FUNCTION_AUTHORITY");
+    }
     for (const [expression, kind] of [
         ["new Sprite() as Sprite", "RELATION"],
         ["new Sprite() == null", "EQUALITY"],

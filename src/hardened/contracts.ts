@@ -153,6 +153,14 @@ export interface MathExpression extends SemanticIdentity {
     arguments: SemanticExpression[] | null;
 }
 
+export interface GlobalCallExpression extends SemanticIdentity {
+    kind: "globalCall";
+    name: "trace";
+    targetModule: string;
+    targetExport: string;
+    arguments: SemanticExpression[];
+}
+
 export interface IdentifierExpression extends SemanticIdentity {
     kind: "identifier";
     name: string;
@@ -403,7 +411,7 @@ export interface UpdateExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = LiteralExpression | IntrinsicConstantExpression | MathExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = LiteralExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |

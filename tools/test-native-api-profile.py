@@ -10,6 +10,22 @@ api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
 
 class NativeSignaturesTest(unittest.TestCase):
+    def test_global_trace_comes_from_native_sdk_signature(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'scripts').mkdir()
+            source = root / 'scripts/trace.as'
+            source.write_text('package { [native("FlashUtilScript::trace")] public native function trace(... rest) : void; }')
+            row = {'module':'src/layaAir/flash/debug/trace.ts','export':'trace','kind':'function','signature':'(...values: unknown[]) => void'}
+            target = {'capabilities':[{'id':'api.flash.debug','status':'typescript-obligation','obligations':[row]}]}
+            apis, mappings = api.map_native_globals(root, {'trace'}, target)
+            self.assertEqual(apis[0]['signatures'], ['public native function trace(... rest) : void;'])
+            self.assertEqual(mappings[0]['sourceRoles'], ['global-function'])
+            self.assertEqual(api.map_native_globals(root, set(), target), ([], []))
+            source.write_text('package { public function trace(value:String):void {} }')
+            with self.assertRaisesRegex(ValueError, 'SDK declaration'):
+                api.map_native_globals(root, {'trace'}, target)
+
     def test_signature_closure_follows_implicit_receivers_and_keeps_unavailable_types_held(self):
         def member(name, result):
             return dict(name=name, access='read', scope='instance', constructor=False, type=result, parameters=[])

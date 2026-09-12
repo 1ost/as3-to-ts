@@ -238,6 +238,11 @@ def main():
                             if native_signatures is not None else primitive_property_mappings(q, roles, row, cap, native_classes))
         mappings.extend(properties)
         member_uses.extend(uses)
+    if native_signatures is not None:
+        global_apis, global_mappings = native_api.map_native_globals(out / 'sdk-source',
+            set(re.findall(r'\b[A-Za-z_$][\w$]*\b', text)), target_doc)
+        apis.extend(global_apis)
+        mappings.extend(global_mappings)
     census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': member_uses}})
     if native_signatures is not None:
         mappings = native_api.select_supported_members(mappings, census, target, out)

@@ -157,6 +157,9 @@ function runtimeTypeTokenNode(expression: Extract<SemanticExpression, { kind: "r
 }
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
+    if (expression.kind === "globalCall") return ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3Global_" + expression.name), undefined,
+        expression.arguments.map(argument => expressionNode(argument, ts)));
     if (expression.kind === "math") {
         const member = ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("Math"), expression.member);
         return expression.arguments === null ? member : ts.factory.createCallExpression(member, undefined,
@@ -545,7 +548,7 @@ function boundMethodNames(program: SemanticProgram): string[] {
             names[expression.methodName] = true;
         } else if (expression.kind === "member") {
             inspectExpression(expression.target);
-        } else if (expression.kind === "math") {
+        } else if (expression.kind === "math" || expression.kind === "globalCall") {
             expression.arguments?.forEach(inspectExpression);
         } else if (expression.kind === "call") {
             inspectExpression(expression.callee);
@@ -900,7 +903,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
         if (expression.kind === "member") return visitExpression(expression.target);
-        if (expression.kind === "math") return expression.arguments?.some(visitExpression) || false;
+        if (expression.kind === "math" || expression.kind === "globalCall") return expression.arguments?.some(visitExpression) || false;
         if (expression.kind === "call") return visitExpression(expression.callee) || expression.arguments.some(visitExpression);
         if (expression.kind === "assignment") return visitExpression(expression.target) || visitExpression(expression.value);
         if (expression.kind === "binary") return visitExpression(expression.left) || visitExpression(expression.right);
@@ -1145,6 +1148,19 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         throw new HardenedSemanticError("HARDENED_TYPESCRIPT_VERSION", "structural emitter requires the exact configured modern TypeScript compiler API");
     }
     const imports = program.imports.filter((item) => !item.compileTimeNamespace).map((item) => importNode(item, ts));
+    const globalCalls = new Map<string, Extract<SemanticExpression, {kind: "globalCall"}>>();
+    const collectGlobals = (value: any): void => {
+        if (!value || typeof value !== "object") return;
+        if (value.kind === "globalCall") globalCalls.set(value.name, value);
+        Object.keys(value).forEach(key => collectGlobals(value[key]));
+    };
+    collectGlobals(program);
+    for (const [name, call] of [...globalCalls].sort(([left], [right]) => left.localeCompare(right)))
+        imports.push(ts.factory.createImportDeclaration(undefined,
+            ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+                ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(call.targetExport),
+                    ts.factory.createIdentifier("__as3Global_" + name))])),
+            ts.factory.createStringLiteral(call.targetModule), undefined));
     if (programUsesVector(program)) imports.push(vectorRuntimeImport(ts));
     const implementsTypes = program.declaration.declarationKind === "packageField"
         ? [] : program.declaration.implementsTypes;

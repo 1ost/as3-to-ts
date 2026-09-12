@@ -263,7 +263,7 @@ function parseMapping(raw: unknown): CapabilityMappingDocument {
             throw new HardenedSemanticError("HARDENED_CAPABILITY_MAPPING", "capability mapping entry is invalid");
         }
         const sourceRoles = value.sourceRoles;
-        if (!exactKeys(value, keys) || !QNAME.test(String(value.sourceQName))
+        if (!exactKeys(value, keys) || (!QNAME.test(String(value.sourceQName)) && value.sourceQName !== "trace")
             || !Array.isArray(sourceRoles) || sourceRoles.length === 0
             || sourceRoles.some((role: unknown) => typeof role !== "string" || role.length === 0)
             || sourceRoles.slice().sort().some((role: unknown, index: number) => role !== sourceRoles[index])
@@ -615,6 +615,17 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
             "owned source API identity is absent or ambiguous", null);
     }
     const api = apis.length === 1 ? apis[0] : null;
+    if (mapping.sourceQName === "trace" && (!isObject(api)
+        || JSON.stringify(api.signatures) !== JSON.stringify(["public native function trace(... rest) : void;"])
+        || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "global-function"
+        || mapping.sourceMember !== null || mapping.targetMember !== null
+        || mapping.targetKind !== "function" || mapping.targetExport !== "trace"
+        || mapping.targetModule !== "src/layaAir/flash/debug/trace.ts"
+        || mapping.targetCapabilityId !== "api.flash.debug"
+        || mapping.targetSignature !== "(...values: unknown[]) => void")) {
+        throw new HardenedSemanticError("HARDENED_GLOBAL_FUNCTION_AUTHORITY",
+            "trace requires its exact native signature and shared target function");
+    }
     const bitmapApiRoles = isObject(api) && Array.isArray(api.roles)
         ? api.roles.slice().sort() : [];
     const exactBitmapTypeRoles = STRICT_SOURCE_QNAMES.has(mapping.sourceQName) && mapping.sourceMember === null

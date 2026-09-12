@@ -82,12 +82,18 @@ const flashDefinitions = new Set();
 const flashApis = new Set();
 for (const [index, api] of sourceCensus.as3SourceCapabilities.apis.entries()) {
     if (!api || typeof api !== "object" || typeof api.qname !== "string"
-        || !/^flash(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$/.test(api.qname)
+        || (!/^flash(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$/.test(api.qname) && api.qname !== "trace")
         || !Array.isArray(api.roles) || api.roles.some(role => typeof role !== "string")
         || new Set(api.roles).size !== api.roles.length || flashApis.has(api.qname)) {
         throw new Error(`source capability API ${index} has an invalid or duplicate definition`);
     }
     flashApis.add(api.qname);
+    if (api.qname === "trace") {
+        if (JSON.stringify(api.roles) !== '["global-function"]'
+            || JSON.stringify(api.signatures) !== '["public native function trace(... rest) : void;"]')
+            throw new Error("Global trace cannot create a declaration type");
+        continue;
+    }
     // Wildcard-resolution is the census-owned lexical authority. Package
     // functions are runtime values, never declaration types, even though the
     // census tracks their wildcard imports for call-site analysis.
