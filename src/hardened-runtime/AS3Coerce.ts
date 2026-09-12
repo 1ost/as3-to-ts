@@ -121,7 +121,8 @@ export function as3Equals(left:unknown, right:unknown):boolean {
 
 /** Native global parseInt: evaluate both arguments before String then int conversion. */
 export function as3ParseInt(value?: unknown, radix?: unknown): number {
-    const text = arguments.length === 0 ? "NaN" : as3String(value);
+    // Native String parameter coercion maps explicit undefined to null.
+    const text = arguments.length === 0 ? "NaN" : as3String(value === undefined ? null : value);
     const base = arguments.length < 2 ? 0 : as3Int(radix);
     return as3IntegerText(text, base);
 }

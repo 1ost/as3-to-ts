@@ -69,7 +69,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
     "AS3ByteArray.ts": "f6e206784fcab50b8af57d0fb5acdf50696aeef8527ff2e58709c0f06f15bc30",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
-    "AS3Coerce.ts": "953229734542c0eb8adcbd3468b568b2a7be54b10e18aad01e0fdbd438792d8b",
+    "AS3Coerce.ts": "db26bf9fbb2ee3c5967becba9a3f60a6f45af964863383ebae60d2da43f60233",
     "AS3Embed.ts": "41628cd8db111c12c5f12c8a51f036d37c839f8ae609986d0d24796e425d2055",
     "AS3Dictionary.ts": "3b239901a319de7a9aba7d0e199853d09bfbbce9d2042c5a8ad69310a5196595",
     "AS3Function.ts": "ff2a964bcf5249a7f0eb5975a21a33be926ee14a00dea62fb71c60c9e3158979",

@@ -81,3 +81,12 @@ test("parseInt retains native numeric values and exact double bits",{skip:!laya}
   }
  }
 });
+
+test("parseInt retains the native String parameter's explicit undefined coercion",{skip:!laya},()=>{
+ const {as3ParseInt}=require(path.join(output,"hardened-runtime/AS3Coerce.js"));
+ const dir=path.join(laya,"tests/nativeFlashOracle/parse-int-undefined");
+ const golden=JSON.parse(fs.readFileSync(path.join(dir,"native-air.json"),"utf8"));
+ for(const [file,key] of [["ParseIntUndefinedProbe.as","sourceSha256"],["scenario.json","scenarioSha256"]])
+  assert.equal(crypto.createHash("sha256").update(fs.readFileSync(path.join(dir,file))).digest("hex"),golden[key]);
+ assert.deepEqual([as3ParseInt(undefined,36),as3ParseInt(null,36),as3ParseInt(undefined),as3ParseInt("ff",undefined)].map(as3String),golden.capture.state.observations[0].result);
+});
