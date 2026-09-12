@@ -294,6 +294,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         ts.factory.createIdentifier("__as3FunctionApply"),undefined,[expressionNode(expression.target,ts),
             expressionNode(expression.receiver,ts),expressionNode(expression.argumentsArray,ts)]);
     if (expression.kind === "coercion") {
+        if (expression.slot && expression.targetType.sourceName === "Dictionary")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3DictionarySlot"), undefined,
+                [expressionNode(expression.argument!, ts)]);
         if (expression.slot) return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3FunctionArgument"),undefined,
             [expressionNode(expression.argument!,ts),ts.factory.createStringLiteral(expression.targetType.sourceName)]);
         const helper: { [sourceName: string]: string } = {
@@ -1382,6 +1385,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "functionApply" || value.kind === "globalFunction"
         || (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
+            && value.targetType.sourceName !== "Dictionary"
         || value.kind === "method" && value.parameters.some(nativeParameterSlot)
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
@@ -1389,6 +1393,14 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ["as3FunctionApply","as3FunctionArgument","as3CheckFunctionArity","as3TraceFunction"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
+    const dictionarySlot = (value:any):boolean => value !== null && typeof value === "object" && (
+        (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
+            && value.targetType.sourceName === "Dictionary" || Object.values(value).some(dictionarySlot));
+    if (dictionarySlot(program)) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3DictionarySlot"),
+                ts.factory.createIdentifier("__as3DictionarySlot"))])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Dictionary"), undefined));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
         imports.push(ownRecordRuntimeImport(ts));

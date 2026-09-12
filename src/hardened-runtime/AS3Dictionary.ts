@@ -2,6 +2,19 @@ function isWeakKey(value: unknown): value is object {
     return value !== null && (typeof value === "object" || typeof value === "function");
 }
 
+const DICTIONARIES = new WeakSet<object>();
+
+/** AVM typed-slot coercion preserves Dictionary identity and never converts an object. */
+export function as3DictionarySlot(value: unknown): AS3Dictionary | null {
+    if (value === null || value === undefined) return null;
+    if (isWeakKey(value) && DICTIONARIES.has(value)) return value as AS3Dictionary;
+    // AIR includes allocation addresses for rejected objects. Retain its error
+    // category/code without inventing an address or invoking conversion hooks.
+    const error = new TypeError("Error #1034: Type Coercion failed: cannot convert value to flash.utils.Dictionary.");
+    Object.defineProperty(error, "errorID", { value: 1034 });
+    throw error;
+}
+
 export class AS3Dictionary {
     public readonly weakKeys: boolean;
     private readonly strongValues: Map<unknown, unknown>;
@@ -18,6 +31,7 @@ export class AS3Dictionary {
         this.weakReferences = new WeakMap();
         this.liveWeakReferences = new Set();
         this.finalizer = new FinalizationRegistry(reference => this.liveWeakReferences.delete(reference));
+        DICTIONARIES.add(this);
     }
 
     public get(key: unknown): unknown {

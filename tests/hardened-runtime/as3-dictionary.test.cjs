@@ -19,9 +19,21 @@ fs.writeFileSync(CONFIG, JSON.stringify({
 }), "utf8");
 childProcess.execFileSync(process.execPath,
     [path.join(ROOT, "node_modules/typescript-4-9/bin/tsc"), "-p", CONFIG], { cwd: ROOT, stdio: "inherit" });
-const { AS3Dictionary } = require(path.join(OUTPUT, "hardened-runtime/AS3Dictionary.js"));
+const { AS3Dictionary, as3DictionarySlot } = require(path.join(OUTPUT, "hardened-runtime/AS3Dictionary.js"));
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
+
+test("typed Dictionary slots preserve nominal identity and reject conversion hooks", () => {
+    const value = new AS3Dictionary(true);
+    assert.equal(as3DictionarySlot(value), value);
+    assert.equal(as3DictionarySlot(null), null);
+    assert.equal(as3DictionarySlot(undefined), null);
+    let conversions = 0;
+    const fake = { valueOf() { conversions++; return value; }, toString() { conversions++; return "Dictionary"; } };
+    for (const input of [fake, {}, [], 7, "bad", Object.create(AS3Dictionary.prototype)])
+        assert.throws(() => as3DictionarySlot(input), error => error instanceof TypeError && error.errorID === 1034);
+    assert.equal(conversions, 0);
+});
 
 test("strong dictionaries preserve primitive and object key identity", () => {
     const dictionary = new AS3Dictionary();

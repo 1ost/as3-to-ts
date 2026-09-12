@@ -125,6 +125,8 @@ def main():
     p.add_argument('--air-sdk', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--ffdec-jar', type=Path, help='Recover complete native member signatures and optional arguments from this pinned decompiler')
+    p.add_argument('--intrinsic-type', action='append', default=[], choices=['flash.utils.Dictionary'],
+                   help='Exercise the existing shared compiler intrinsic instead of the optional Laya facade')
     args = p.parse_args()
     if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*', args.entry):
         p.error('Entry must be an AS3 class QName')
@@ -151,6 +153,8 @@ def main():
     if any('*' in q or not q.startswith('flash.') and q not in qnames for q in all_imports):
         p.error('Fixture imports must resolve to explicit Flash QNames or retained local sources')
     imports=sorted({q for q in all_imports if q.startswith('flash.')})
+    if set(args.intrinsic_type) - set(imports):
+        p.error('Selected intrinsic must be explicitly imported by the retained fixture')
     out.mkdir(parents=True, exist_ok=False)
     source_prefix=source.name+'/'
     target_prefix='generated/application/'
@@ -250,6 +254,10 @@ def main():
             if re.search(r'\b' + name + r'\s*\.', text): roles.append('static-member')
         roles.sort()
         apis.append({'qname': q, 'roles': roles, 'classification': 'layaair-flash-api-bridge', 'preserve': {'apiName': True, 'signature': True}})
+        if q in args.intrinsic_type:
+            # The source API remains SDK-authenticated. Omitting the optional
+            # bridge mapping selects the compiler's existing sealed intrinsic.
+            continue
         cap, row = target_for(q)
         module = row['module']
         mappings.append({'sourceQName': q, 'sourceRoles': roles, 'sourceMember': None, 'targetCapabilityId': cap,
@@ -279,7 +287,7 @@ def main():
         'runtimePackage': '@laya/as3-runtime', 'typeScriptVersion': '4.9.5', 'sourceRoots': source_roots, 'targetRoots': target_roots,
         'sourceCensusSha256': sha(census), 'targetCapabilitiesSha256': sha(target), 'runtimePredicateQNames': sorted(selected),
         'counts': {'localTypes': len(declarations), 'localMembersComplete': members['completeCount'], 'localMembersHeld': members['heldCount'],
-                   'mappedTypes': len(apis), 'mappedMembers': sum(m['sourceMember'] is not None for m in mappings), 'sourceMemberTypes': member_count},
+                   'mappedTypes': sum(m['sourceMember'] is None for m in mappings), 'mappedMembers': sum(m['sourceMember'] is not None for m in mappings), 'sourceMemberTypes': member_count},
         'files': {k: {'path': v.name, 'sha256': sha(v)} for k, v in files.items()}})
     write(out / 'generator-inputs.json', {str(v): sha(v) for v in [Path(__file__).resolve(), *sources, ROOT / "tools/inspect-source-declarations.cjs", target, predicate_input,
         sdk / 'frameworks/libs/air/airglobal.swc', sdk / 'lib/swfdump-cli.jar', ROOT / 'lib/declaration-worker.js',

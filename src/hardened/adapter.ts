@@ -1910,14 +1910,18 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node, "read");
             if (lookup.members.length === 0 && lookup.ownerQName === null) {
                 const mapping = terminalFlashMemberMapping(context,lookup.terminalFlashQNames,"read",expression.name,node);
-                if (mapping && mapping.sourceQName === expression.capabilitySource)
+                const bound = localInstanceNamedMembers(context, receiverQName, expression.name, node);
+                const inheritedGetter = bound.ownerQName === expression.capabilitySource && bound.members.length > 0
+                    && bound.members.every(member => member.kind === "setter" && !member.modifiers.includes("private"))
+                    && mapping?.targetMember?.name === (expression.targetName ?? expression.name);
+                if (mapping && (mapping.sourceQName === expression.capabilitySource || inheritedGetter))
                     return mappedMemberType(mapping,"read",context,node);
             }
             const readable = lookup.members.filter(member => member.kind === "getter" || member.kind === "field");
             if ((lookup.ownerQName !== expression.capabilitySource
                 && localInstanceNamedMembers(context, receiverQName, expression.name, node).ownerQName !== expression.capabilitySource) || readable.length !== 1) {
                 fail("HARDENED_LOCAL_INSTANCE_READ",
-                    "local instance read requires one exact authenticated field or getter", node);
+                    `local instance read ${receiverQName}.${expression.name} (bound to ${expression.capabilitySource}) requires one exact authenticated field or getter; read owner ${lookup.ownerQName}, members ${readable.length}`, node);
             }
             assertLocalReceiverVisibility(readable[0]!, lookup.ownerQName!, receiverQName, context, node);
             return authoritySemanticType(readable[0]!.kind === "field"
@@ -2088,7 +2092,11 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
             const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node, "write");
             if (lookup.members.length === 0 && lookup.ownerQName === null) {
                 const mapping = terminalFlashMemberMapping(context,lookup.terminalFlashQNames,"write",expression.name,node);
-                if (mapping && mapping.sourceQName === expression.capabilitySource)
+                const bound = localInstanceNamedMembers(context, receiverQName, expression.name, node);
+                const inheritedSetter = bound.ownerQName === expression.capabilitySource && bound.members.length > 0
+                    && bound.members.every(member => member.kind === "getter" && !member.modifiers.includes("private"))
+                    && mapping?.targetMember?.name === (expression.targetName ?? expression.name);
+                if (mapping && (mapping.sourceQName === expression.capabilitySource || inheritedSetter))
                     return mappedMemberType(mapping,"write",context,node);
             }
             const writable = lookup.members.filter(member => member.kind === "setter"
@@ -2151,6 +2159,11 @@ function assertAssignmentCompatible(target: SemanticType, value: SemanticType, n
 function adaptAssignmentValue(target: SemanticType, expression: SemanticExpression,
     context: AdapterContext, node: TreeNode): SemanticExpression {
     const value = assignmentType(expression, context, node);
+    const targetImport = context.importsByLocal[target.sourceName];
+    if (context.sourceMemberAuthority !== null && isDictionaryType(target)
+        && targetImport?.authorityKind === "intrinsic" && targetImport.sourceQualifiedName === "flash.utils.Dictionary"
+        && ["*", "Object", "undefined"].includes(value.sourceName))
+        return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
     if (context.sourceMemberAuthority !== null && value.sourceName === "*"
         && ["String","Number","int","uint"].includes(target.sourceName))
         return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
@@ -3185,14 +3198,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     superOwnerQName = accessor.ownerQName;
                 }
                 const mapping = superOwnerQName !== null ? null : flashBaseMemberMapping(context, "read", name, node)
-                    || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node) : null);
+                    || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node)
+                        || flashBaseMemberMapping(context, "call", name, node) : null);
                 if (superOwnerQName === null && (mapping === null || mapping.targetMember?.scope !== "instance"))
-                    fail("HARDENED_SUPER_MEMBER", "super property lacks an exact inherited Flash mapping", node);
+                    fail("HARDENED_SUPER_MEMBER", `super member ${name} lacks an exact inherited Flash mapping`, node);
                 if (mapping !== null) superOwnerQName = mapping.sourceQName;
             }
             target = Object.assign(identity(node.children[0]!), { kind: "super" as "super" });
         } else {
-            target = parseExpression(node.children[0]!, context, false);
+            // The receiver is evaluated as a value even when the outer member
+            // is a call or assignment target (for example error.message.substr).
+            target = parseExpression(node.children[0]!, context, true);
         }
         if (target.kind !== "super" && target.kind !== "this"
             && (target.kind !== "identifier" || !!context.locals[target.name] || !!context.parameters[target.name]
@@ -3488,13 +3504,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (callee.capabilitySource === null) {
                 fail("HARDENED_SUPER_MEMBER", "super method call lacks authenticated owner identity", node);
             }
-            const inherited = localInheritedMember(context, callee.name, "method", null, node);
-            if (inherited.member === null || inherited.ownerQName !== callee.capabilitySource) {
-                fail("HARDENED_SUPER_MEMBER", "super method call differs from its inherited declaration", node);
+            const inherited = context.baseLocalQName === null ? null
+                : localInheritedMember(context, callee.name, "method", null, node);
+            if (inherited?.member && inherited.ownerQName === callee.capabilitySource) {
+                assertInheritedVisibility(inherited.member, inherited.ownerQName!, context, node);
+                assertLocalMethodCall(inherited.member, args, node.children[1]!.children, context, node);
+                resultType = authoritySemanticType(inherited.member.returnType!, context, node);
+            } else {
+                const mapping = flashBaseMemberMapping(context, "call", callee.name, node);
+                if (!mapping || inherited?.member || mapping.sourceQName !== callee.capabilitySource
+                    || mapping.targetMember?.scope !== "instance" || mapping.targetMember.name !== callee.name)
+                    fail("HARDENED_SUPER_MEMBER", "super method call differs from its authenticated base declaration", node);
+                resultType = adaptMappedCall(mapping, args, node.children[1]!.children, context, node);
+                capabilitySource = mapping.sourceQName;
+                capabilityMember = mapping.sourceMember!.name;
             }
-            assertInheritedVisibility(inherited.member, inherited.ownerQName!, context, node);
-            assertLocalMethodCall(inherited.member, args, node.children[1]!.children, context, node);
-            resultType = authoritySemanticType(inherited.member.returnType!, context, node);
         } else if (callee.kind === "member" && ["Number","int","uint"].includes(callee.capabilitySource || "")
             && callee.name === "toFixed") {
             if (args.length > 1) fail("HARDENED_NUMBER_ARITY", "Number.toFixed requires zero or one precision argument", node);
