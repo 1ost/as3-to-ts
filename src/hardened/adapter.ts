@@ -2754,8 +2754,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const trueType = assignmentType(whenTrue, context, node.children[1]!);
         const falseType = assignmentType(whenFalse, context, node.children[2]!);
         const admitsNull = (type: SemanticType): boolean => type.nullable
-            || (context.sourceMemberAuthority !== null && type.runtimeName !== null
-                && !["Boolean", "Number", "int", "uint", "void"].includes(type.sourceName));
+            || (context.sourceMemberAuthority !== null && (type.sourceName === "String" && type.emittedName === "string"
+                || type.runtimeName !== null && !["Boolean", "Number", "int", "uint", "void"].includes(type.sourceName)));
         const trueNull = trueType.sourceName === "null" && admitsNull(falseType);
         const falseNull = falseType.sourceName === "null" && admitsNull(trueType);
         const numericBranches = [trueType, falseType].every(type => ["Number", "int", "uint"].includes(type.sourceName));
@@ -3587,6 +3587,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                 }
                 assertLocalCallArguments(constructorMember, args, node.children[1]!.children, context, node);
+            } else if (context.sourceMemberAuthority !== null && context.baseSourceQName === "flash.display.Bitmap") {
+                const mapping=memberMapping(context,context.baseSourceQName,"call","Bitmap",node);
+                if (!mapping || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "constructor")
+                    fail("HARDENED_SUPER_CONSTRUCTOR_AUTHORITY", "Bitmap super requires its authenticated native constructor",node);
+                adaptMappedCall(mapping,args,node.children[1]!.children,context,node);
             } else if (args.length !== 0) {
                 fail("HARDENED_SUPER_ARITY", "Flash base constructor arguments remain outside the typed bridge subset", node);
             }
@@ -4439,7 +4444,9 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
         const node = block.children[statementIndex]!;
         if (node.kind !== "TRY") {
             statements.push(parseStatementNode(node, context, constructor, derived, expectedReturn,
-                allowLeadingSuper && constructor && statements.every(statement => statement.kind === "local" || statement.kind === "empty")));
+                allowLeadingSuper && constructor && statements.every(statement => statement.kind === "local" || statement.kind === "empty"
+                    || context.sourceMemberAuthority !== null && context.baseSourceQName === "flash.display.Bitmap"
+                    && statement.kind === "expression" && !superCall(statement))));
             continue;
         }
         if (node.children.length !== 1 || node.children[0]!.kind !== "BLOCK") {
@@ -4693,6 +4700,20 @@ function usesConstructionReceiver(value: unknown): boolean {
     return item.kind === "this" || item.kind === "super"
         || item.kind === "lambda" && item.lexicalReceiver !== undefined
         || Object.values(item).some(usesConstructionReceiver);
+}
+
+/** A staged slot must never expose the not-yet-allocated receiver or execute an accessor. */
+function onlyOwnPreSuperFields(value: unknown, context: AdapterContext): boolean {
+    if (value === null || typeof value !== "object") return true;
+    if (Array.isArray(value)) return value.every(item=>onlyOwnPreSuperFields(item,context));
+    const item=value as {[key:string]:any};
+    if (item.kind === "member" && item.target.kind === "this") {
+        const field=context.fields[item.name];
+        return Boolean(field && !field.modifiers.includes("static") && field.namespaceName === null && !field.embeddedBitmap);
+    }
+    if (item.kind === "this" || item.kind === "super" || item.kind === "methodClosure"
+        || item.kind === "lambda" && item.lexicalReceiver !== undefined) return false;
+    return Object.values(item).every(child=>onlyOwnPreSuperFields(child,context));
 }
 
 function superCall(statement: SemanticStatement): boolean {
@@ -5231,17 +5252,26 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 const count = body.filter(superCall).length;
                 const superIndex = body.findIndex(superCall);
                 const leading = body.slice(0, Math.max(0, superIndex));
+                const stagedBitmap=placeholder.sourceMemberAuthority !== null
+                    && placeholder.baseSourceQName === "flash.display.Bitmap";
                 if (count > 1 || extendsType !== null && count !== 1
-                    || leading.some(statement => statement.kind !== "local" && statement.kind !== "empty")) {
-                    fail("HARDENED_SUPER_ORDER", "constructor requires one top-level super call preceded only by local declarations or empty statements", node);
+                    || leading.some(statement => statement.kind !== "local" && statement.kind !== "empty"
+                        && !(stagedBitmap && statement.kind === "expression"))) {
+                    fail("HARDENED_SUPER_ORDER", "constructor requires one top-level super call and an admitted leading sequence", node);
                 }
-                if (leading.some(usesConstructionReceiver)) {
+                if (stagedBitmap) {
+                    const call=(body[superIndex] as any).expression;
+                    const fields=Object.values(placeholder.fields).filter(field=>!field.modifiers.includes("static"));
+                    if (!onlyOwnPreSuperFields(leading,placeholder) || !onlyOwnPreSuperFields(call.arguments,placeholder)
+                        || fields.some(field=>field.embeddedBitmap || !onlyOwnPreSuperFields(field.initializer,placeholder)))
+                        fail("HARDENED_SUPER_FIELD_RECEIVER", "Bitmap pre-super code may use own field slots but cannot expose this or call receiver methods/accessors",node);
+                } else if (leading.some(usesConstructionReceiver)) {
                     fail("HARDENED_SUPER_LOCAL_RECEIVER", "local initialization before super cannot access the construction receiver", node);
                 }
                 if (extendsType === null && count === 1) body = body.filter(statement => !superCall(statement));
                 const constructor: SemanticConstructor = Object.assign(identity(node), {
                     kind: "constructor" as "constructor", modifiers: header.modifiers,
-                    parameters: header.parameters, body,
+                    parameters: header.parameters, body, ...(stagedBitmap ? {preSuperFieldState:true as const} : {}),
                 });
                 members.push(constructor);
             } else if (header.accessor === "getter") {
@@ -5279,6 +5309,15 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     if (isTreeNodeContext(placeholder) && placeholder.ownRecordInitializations !== 1) {
         fail("HARDENED_OWN_RECORD_INITIALIZER",
             "TTreeNode.FData requires exactly one authenticated constructor initialization", classNode);
+    }
+    // Fields declared after the constructor still initialize before its body.
+    // Validate their final initializers after all member declarations are parsed.
+    if (members.some(member=>member.kind === "constructor" && member.preSuperFieldState)) {
+        for (const field of members) {
+            if (field.kind === "field" && !field.modifiers.includes("static")
+                && (field.embeddedBitmap || !onlyOwnPreSuperFields(field.initializer,placeholder)))
+                fail("HARDENED_SUPER_FIELD_RECEIVER", "Bitmap field initializers cannot expose the construction receiver",classNode);
+        }
     }
     assertNoLocalAncestryFieldCollision(placeholder, members, classNode);
     const declaration: SemanticClass = Object.assign(identity(classNode), {

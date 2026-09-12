@@ -799,6 +799,18 @@ try {
     const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson),sha256);
     {
+        for (const expression of ['flag ? null : "never"','flag ? "never" : null']) {
+            const source=`package p { public class NullableText {public function select(flag:Boolean):String {return ${expression};}} }`;
+            const normalized=built.normalizer.normalizeParserAst(built.parse("NullableText.as",source),source,sha256);
+            const program=built.adapter.adaptNormalizedParserAst(normalized,authority(built.ledger),source,sha256,
+                undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+            const result=program.declaration.members.find(member=>member.name === "select").body[0].expression;
+            assert.equal(result.resultType.sourceName,"String");assert.equal(result.resultType.nullable,true);
+            assert.throws(()=>built.adapter.adaptNormalizedParserAst(normalized,authority(built.ledger),source,sha256),
+                error=>error?.code === "HARDENED_CONDITIONAL_TYPE");
+        }
+    }
+    {
         const adaptError = (body, authenticated = true, parameters = "") => {
             const source = `package p { public class ErrorConstruction {
                 public function fail(${parameters}):Error { ${body} }

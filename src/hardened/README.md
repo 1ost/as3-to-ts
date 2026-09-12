@@ -90,3 +90,29 @@ type annotations, typed catches, subclass construction, reflection, nonnumeric
 identifier conversion and mutable prototype behavior require additional evidence
 and admission. Original Error construction retains its existing argument bounds.
 Ordinary TypeScript Laya consumers do not need this compiler runtime.
+
+
+### Own fields before native Bitmap construction
+
+The authenticated Bitmap boundary admits its original SDK constructor arguments.
+For a direct Bitmap subclass, the compiler evaluates declared field defaults and
+initializers, then original leading assignments/local declarations, before the
+base call. Only accesses to the class's own slots may refer to the construction
+receiver. Their values are staged in a constructor-local record and installed on
+the actual instance after canonical native Bitmap allocation. The original AS3
+class, member names, visibility and constructor remain intact; generated output
+is disposable compiler output.
+
+This boundary relies on the shared Laya Bitmap constructor bypassing overridden
+bitmapData and pixelSnapping setters, as proved by native AIR. Staging must not be
+extended to arbitrary bases that can observe or call the derived receiver before
+returning. Receiver escape, receiver method/accessor calls, inherited slot reads,
+lexical receiver closures, unsupported control flow and embedded instance fields
+remain held. Final field initializers are checked after every declaration has
+been parsed, including fields declared after the constructor. Existing local-base
+constructor-local ordering and proof cancellation remain unchanged.
+
+The native private-slot fixture also proves null/literal-String conditional
+branches and the String slot passed to Bitmap: null must reach the native #2007
+failure instead of inventing a replacement string. Fixture profiles authenticate
+implicit base constructor roles only when the SDK actually declares a constructor.

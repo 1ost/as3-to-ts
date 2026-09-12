@@ -654,6 +654,8 @@ export interface SemanticSetter extends SemanticIdentity {
 
 export interface SemanticConstructor extends SemanticIdentity {
     kind: "constructor";
+    /** Non-escaping own slots evaluated before the authenticated Bitmap constructor. */
+    preSuperFieldState?: true;
     modifiers: SemanticModifier[];
     parameters: SemanticParameter[];
     body: SemanticStatement[];

@@ -427,7 +427,7 @@ const TEXT_CONSTANT_VALUES: { [qname: string]: { [name: string]: string } } = Ob
 const TEXT_CONSTANT_QNAMES = new Set(Object.keys(TEXT_CONSTANT_VALUES));
 const STRICT_SOURCE_QNAMES = new Set([...BITMAP_SOURCE_QNAMES, ...TEXT_FILTER_QNAMES, ...TEXT_CONSTANT_QNAMES]);
 const BITMAP_ALLOWED_MEMBERS: { [qname: string]: Set<string> } = Object.freeze({
-    "flash.display.Bitmap": new Set(["bitmapData", "smoothing"]),
+    "flash.display.Bitmap": new Set(["bitmapData", "pixelSnapping", "smoothing"]),
     "flash.display.BitmapData": new Set(["BitmapData", "clone", "copyChannel", "copyPixels", "dispose", "draw", "fillRect",
         "getColorBoundsRect", "getPixel", "getPixel32", "height", "lock", "rect", "setPixel32", "threshold", "unlock", "width"]),
     "flash.display.BitmapDataChannel": new Set(["ALPHA", "RED"]),
@@ -519,6 +519,16 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
         || mapping.targetMember.scope !== (staticRole ? "static" : "instance")) {
         throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
             "source member context and access must preserve exact target kind and scope");
+    }
+    if (mapping.sourceQName === "flash.display.Bitmap" && constructorRole) {
+        const source=mapping.sourceMember,target=mapping.targetMember;
+        if (mapping.targetModule !== "src/layaAir/flash/display/Bitmap.ts" || mapping.targetExport !== "Bitmap"
+            || mapping.targetCapabilityId !== "api.flash.display" || source.name !== "Bitmap" || source.access !== "call"
+            || source.minArgs !== 0 || source.maxArgs !== 3
+            || !/^public function Bitmap\([A-Za-z_$][A-Za-z0-9_$]*:(?:flash\.display\.)?BitmapData = null, [A-Za-z_$][A-Za-z0-9_$]*:String = "auto", [A-Za-z_$][A-Za-z0-9_$]*:Boolean = false\)$/.test(source.signature)
+            || target.signature !== "new (bitmapData?: BitmapData | null, pixelSnapping?: string, smoothing?: boolean): Bitmap")
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR", "Bitmap requires its exact native constructor boundary");
+        return;
     }
     if (mapping.sourceQName === "flash.filters.ColorMatrixFilter") {
         const source=mapping.sourceMember, target=mapping.targetMember;

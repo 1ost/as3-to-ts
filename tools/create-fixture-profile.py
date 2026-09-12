@@ -247,7 +247,10 @@ def main():
         name = q.rsplit('.', 1)[1]
         roles = ['import']
         if re.search(r'\bextends\s+' + name + r'\b', text): roles.append('base-type')
-        if re.search(r'\bnew\s+' + name + r'\s*\(', text): roles.append('constructor')
+        if (re.search(r'\bnew\s+' + name + r'\s*\(', text)
+                or native_signatures is not None and 'base-type' in roles
+                and any(member['constructor'] for member in native_signatures.get(q, {}).get('members', []))):
+            roles.append('constructor')
         if re.search(r':\s*' + name + r'\b', text): roles.append('instance-member')
         if native_signatures is not None:
             if 'instance-member' not in roles: roles.append('instance-member')

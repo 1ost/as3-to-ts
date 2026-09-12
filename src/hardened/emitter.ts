@@ -1035,6 +1035,16 @@ function packageFunctionNode(program:SemanticProgram, ts:TypeScriptCompilerApi):
         ts.factory.createBlock(prologue.concat(declaration.body.map(statement=>statementNode(statement,ts))),true));
 }
 
+/** Replace only receiver references already proved to be non-escaping own-slot accesses. */
+function stagedConstructorValue<T>(value:T):T {
+    if (value === null || typeof value !== "object") return value;
+    if (Array.isArray(value)) return value.map(stagedConstructorValue) as T;
+    const record=value as {[key:string]:unknown};
+    if (record.kind === "this") return {...record,kind:"identifier",name:"__as3PreSuperFields",
+        bindingKind:"local",bindingSourceQualifiedName:null} as T;
+    return Object.fromEntries(Object.entries(record).map(([key,child])=>[key,stagedConstructorValue(child)])) as T;
+}
+
 function classConstructorNode(program: SemanticProgram, member: SemanticConstructor | null,
     boundMethods: string[], ts: TypeScriptCompilerApi): any {
     if (program.declaration.declarationKind === "packageField" || program.declaration.declarationKind === "packageFunction") {
@@ -1043,9 +1053,22 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
     const classDeclaration = program.declaration;
     const className = classDeclaration.name;
     const derived = classDeclaration.extendsType !== null;
-    const original = member === null ? [] : member.body.map(statement => statementNode(statement, ts));
     const superIndex = member?.body.findIndex(statement => statement.kind === "expression"
         && statement.expression.kind === "call" && statement.expression.callee.kind === "super") ?? -1;
+    const staged=member?.preSuperFieldState === true;
+    const instanceFields=classDeclaration.members.filter((item):item is SemanticField=>item.kind === "field"
+        && !item.modifiers.includes("static"));
+    const original = member === null ? [] : member.body.map((statement,index) => statementNode(
+        staged && index <= superIndex ? stagedConstructorValue(statement) : statement, ts));
+    const stagedFieldSetup:any[]=staged ? [ts.factory.createVariableStatement(undefined,
+        ts.factory.createVariableDeclarationList([ts.factory.createVariableDeclaration("__as3PreSuperFields",undefined,
+            ts.factory.createTypeLiteralNode(instanceFields.map(field=>ts.factory.createPropertySignature(undefined,
+                field.name,undefined,typeNode(field.type,ts)))),
+            ts.factory.createObjectLiteralExpression(instanceFields.map(field=>ts.factory.createPropertyAssignment(field.name,
+                fieldDefaultExpression(field,ts)))))],ts.NodeFlags.Const)),
+        ...instanceFields.filter(field=>field.initializer !== null).map(field=>ts.factory.createExpressionStatement(
+            ts.factory.createAssignment(ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3PreSuperFields"),field.name),
+                expressionNode(stagedConstructorValue(field.initializer!),ts))))] : [];
     // Keep local side effects and failures before preparing the base constructor call.
     const leadingLocals = superIndex < 0 ? [] : original.splice(0, superIndex);
     const originalSuperStatement = superIndex >= 0 ? original.shift()! : derived && member === null
@@ -1083,11 +1106,12 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
     ts.factory.createVariableStatement(undefined, ts.factory.createVariableDeclarationList([
         ts.factory.createVariableDeclaration("__as3ConstructionFailed", undefined, undefined, ts.factory.createFalse()),
     ], ts.NodeFlags.Let))];
-    const explicitFields = classDeclaration.members.filter((item): item is SemanticField => item.kind === "field"
-        && !item.modifiers.includes("static") && item.initializer !== null).map(field =>
+    const explicitFields = instanceFields.filter(field => staged || field.initializer !== null).map(field =>
         ts.factory.createExpressionStatement(ts.factory.createBinaryExpression(
             ts.factory.createPropertyAccessExpression(ts.factory.createThis(), field.name),
-            ts.factory.createToken(ts.SyntaxKind.EqualsToken), expressionNode(field.initializer!, ts))));
+            ts.factory.createToken(ts.SyntaxKind.EqualsToken), staged
+                ? ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3PreSuperFields"),field.name)
+                : expressionNode(field.initializer!, ts))));
     const tryBody = [ts.factory.createExpressionStatement(ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3InitializeInstanceFields"), undefined,
         [ts.factory.createThis(), newTargetExpression(ts)])),
@@ -1113,7 +1137,7 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
     ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
         ts.factory.createIdentifier("__as3ConstructionTargets"), "delete"), undefined, [ts.factory.createThis()]))], true);
     const body = [ts.factory.createExpressionStatement(initializeClassNode(ts.factory.createIdentifier(className), true, ts)),
-        constructorArityGuard(className, member, ts), ...leadingLocals,
+        constructorArityGuard(className, member, ts), ...stagedFieldSetup, ...leadingLocals,
         ...(superStatement === null ? [] : [prepareStatement, superStatement])]
         .concat(prologue, [ts.factory.createTryStatement(
         ts.factory.createBlock(tryBody, true), catchClause, finallyClause)]);
