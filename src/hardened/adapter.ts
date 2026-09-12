@@ -3215,12 +3215,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && ["message","name"].includes(name);
                     const errorMethod = !valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && name === "toString";
+                    const numberMethod = !valuePosition && ["Number","int","uint"].includes(targetType.sourceName) && name === "toFixed";
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
                         && !valuePosition && ["push","pop","shift","unshift"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase"].includes(name);
-                    if (!errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
+                    if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
                     }
@@ -3346,6 +3347,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             assertInheritedVisibility(inherited.member, inherited.ownerQName!, context, node);
             assertLocalMethodCall(inherited.member, args, node.children[1]!.children, context, node);
             resultType = authoritySemanticType(inherited.member.returnType!, context, node);
+        } else if (callee.kind === "member" && ["Number","int","uint"].includes(callee.capabilitySource || "")
+            && callee.name === "toFixed") {
+            if (args.length > 1) fail("HARDENED_NUMBER_ARITY", "Number.toFixed requires zero or one precision argument", node);
+            capabilitySource="Number"; capabilityMember="toFixed"; resultType=semanticType(node,"String","string");
         } else if (callee.kind === "member" && callee.capabilitySource === "Error" && callee.name === "toString") {
             if (args.length !== 0) fail("HARDENED_ERROR_CALL_ARITY", "Error.toString requires its retained zero-argument call", node);
             capabilitySource="Error";capabilityMember="toString";resultType=semanticType(node,"String","string");

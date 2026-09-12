@@ -91,6 +91,7 @@ The frozen parser and syntax model derive from `@as3web/as3-to-ts` 0.3.10 at
 revision `fa0b5151ab82758511ddd4b464f0c05b80e06da7`:
 <https://github.com/as3web/as3-to-ts.git>.
 
-This local fork is licensed under Apache-2.0. Adobe parser notices and bundled
+This local fork is licensed under Apache-2.0, except the MPL-2.0 AVMplus-derived
+number-format runtime file identified in the notices. Adobe parser notices and bundled
 third-party licenses are preserved in
 [`src/hardened-cli/THIRD_PARTY_NOTICES.md`](src/hardened-cli/THIRD_PARTY_NOTICES.md).

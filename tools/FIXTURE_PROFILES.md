@@ -289,7 +289,24 @@ static method-value rejection. Set HARDENED_FIXTURE_AIR_SDK, HARDENED_FIXTURE_LA
 and HARDENED_FIXTURE_FFDEC to the real SDK, Laya checkout and FFDec jar. Configured
 browser host calls and callbacks require their own interaction evidence.
 
-Number.toFixed remains held. Laya retains 256 native Number(text).toFixed
-checkpoints, including tiny fractions, large exponents, precision limits and
-nonfinite values. JavaScript formatting and decimal parsing differ on retained
-cases; no approximate fallback has been admitted.
+The initial Number.toFixed reference retained 256 Number(text).toFixed checkpoints.
+The shared implementation and expanded evidence are documented below; JavaScript
+formatting is not an admitted fallback.
+
+
+### Native fixed decimal formatting
+
+Number.toFixed now lowers into the shared runtime for original Number/int/uint
+receivers, with native precision coercion, range errors and fixed decimal output.
+The decimal magnitude parser preserves AVM integer-power multiplication order
+and the native BigInteger rounding window; it does not use JavaScript's decimal
+parser as a behavioral substitute. The MPL-2.0 adapted runtime file carries its
+upstream provenance and license notice.
+
+The unchanged NumberFormatProbe has 391 retained checkpoints: the initial 256
+remain intact, followed by numeric extremes and long-integer rounding tails.
+Both native and generated-class evidence are required. The tails reproduced six
+mismatches with JavaScript's BigInt-to-Number rounding before the shared fix.
+Native errors include the exact #1002 name/message and precision validation
+before nonfinite formatting. Numeric method closures and other Number formatting
+methods remain outside this change.

@@ -109,3 +109,17 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+## AVMplus decimal conversion
+
+`src/hardened-runtime/internal/AS3NumberFormat.ts` adapts the fixed-precision
+digit generator and decimal magnitude conversion from Adobe AVMplus
+`core/d2a.cpp`, `core/MathUtils.cpp`, `core/BigInteger.cpp` and the macOS frexp convention in
+`platform/unix/MathUtilsUnix-inlines.h`, at revision `858d034a3bd3a54d9b70909386435cf4aec81d21`.
+
+Those sources and the adapted file are licensed under Mozilla Public License
+2.0. The adapted file carries the MPL notice and is distributed as source with
+the runtime. Obtain the license at <https://mozilla.org/MPL/2.0/> and the original
+sources at <https://github.com/adobe/avmplus/tree/858d034a3bd3a54d9b70909386435cf4aec81d21>.
+The rest of this frontend retains its existing licensing.

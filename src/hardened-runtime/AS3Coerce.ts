@@ -1,3 +1,4 @@
+import { as3FixedDecimal } from "./internal/AS3NumberFormat";
 import { AS3_LOWERCASE_BMP } from "./internal/AS3CaseTable";
 import { as3NativeString, as3NativeNumber, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
 
@@ -80,4 +81,11 @@ export function as3StringToLowerCase(value:unknown):string {
         result.push(String.fromCharCode(AS3_LOWERCASE_BMP[unit] ?? unit));
     }
     return result.join("");
+}
+
+/** Native Number method: evaluate arguments first, then convert precision to int. */
+export function as3NumberToFixed(value:unknown, precision:unknown=0):string {
+    primitiveReceiver(value);
+    if (typeof value !== "number") throw new AS3ObjectDispatchUnavailable("Number.toFixed requires an original numeric value");
+    return as3FixedDecimal(value,as3Int(precision));
 }

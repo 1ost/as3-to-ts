@@ -204,6 +204,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
     }
     if (expression.kind === "call") {
+        if (expression.capabilitySource === "Number" && expression.capabilityMember === "toFixed" && expression.callee.kind === "member")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NumberToFixed"),undefined,[expressionNode(expression.callee.target,ts),...expression.arguments.map(argument=>expressionNode(argument,ts))]);
         if (expression.capabilitySource === "String" && expression.capabilityMember === "toLowerCase" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringToLowerCase"),undefined,[expressionNode(expression.callee.target,ts)]);
         if (expression.capabilitySource === "Error" && expression.capabilityMember === "toString" && expression.callee.kind === "member")
@@ -1166,7 +1168,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase", "as3NumberToFixed"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1281,6 +1283,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     }
     const primitiveMember=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "member" && value.capabilitySource === "String" && value.name === "length"
+        || value.kind === "call" && value.capabilitySource === "Number" && value.capabilityMember === "toFixed"
         || value.kind === "call" && value.capabilitySource === "Error" && value.capabilityMember === "toString"
         || value.kind === "call" && value.capabilitySource === "String" && value.capabilityMember === "toLowerCase"
         || Object.values(value).some(primitiveMember));

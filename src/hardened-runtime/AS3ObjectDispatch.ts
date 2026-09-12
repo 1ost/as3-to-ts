@@ -1,3 +1,4 @@
+import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
 import { lookupObjectClass, lookupObjectCaller, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod } from "./AS3MethodClosure";
 
@@ -259,7 +260,10 @@ function numberText(value:string):number {
     const decimal=leading.split("\0",1)[0]!.replace(new RegExp(spaces+"+$"),"");
     const match=/^([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))(?:[eE]([+-]?)([0-9]*))?$/.exec(decimal);
     if (!match || /[eE]-$/.test(leading)) return NaN;
-    return Number(match[1]+(match[3] ? "e"+match[2]+match[3] : ""));
+    let exponent=0;
+    for (const digit of match[3] || "") exponent=(exponent*10+Number(digit))|0;
+    if (match[2] === "-") exponent=(-exponent)|0;
+    return as3DecimalMagnitude(match[1]!, exponent);
 }
 
 /** Number-hint conversion uses public valueOf before toString, exactly once each. */

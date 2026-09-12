@@ -3,7 +3,7 @@ const assert=require("node:assert/strict"),test=require("node:test"),fs=require(
 const root=path.resolve(__dirname,"../.."),output=fs.mkdtempSync(path.join(os.tmpdir(),"as3-number-"));
 fs.writeFileSync(path.join(output,"tsconfig.json"),JSON.stringify({compilerOptions:{target:"ES2022",module:"CommonJS",strict:true,skipLibCheck:true,rootDir:path.join(root,"src"),outDir:output},files:[path.join(root,"src/hardened-runtime/AS3Coerce.ts")]}));
 cp.execFileSync(process.execPath,[path.join(root,"node_modules/typescript-4-9/bin/tsc"),"-p",path.join(output,"tsconfig.json")],{stdio:"inherit"});
-const {as3Number,as3Int,as3Uint,as3String,as3NumericBinary}=require(path.join(output,"hardened-runtime/AS3Coerce.js"));
+const {as3Number,as3Int,as3Uint,as3String,as3NumericBinary,as3NumberToFixed}=require(path.join(output,"hardened-runtime/AS3Coerce.js"));
 const registry=require(path.join(output,"hardened-runtime/internal/AS3TypeRegistry.js"));
 const metadata={schema:"as3-runtime-type-authority@1",qnames:[],entries:[]};
 registry.installAS3TypeAuthority({schema:metadata.schema,sha256:crypto.createHash("sha256").update(JSON.stringify(metadata)).digest("hex"),qnames:[],entries:[]});
@@ -48,4 +48,18 @@ test("native numeric conversion rejects unresolved host identities",()=>{
  assert.throws(()=>as3Number(new (class Unknown {})()),{name:"AS3ObjectDispatchUnavailable"});
  assert.throws(()=>as3Number(Object.assign(()=>{},{valueOf:()=>2})),{name:"AS3ObjectDispatchUnavailable"});
  for(const value of [1n,Symbol()])assert.throws(()=>as3Number(value),{name:"AS3ObjectDispatchUnavailable"});
+});
+
+test("native Number parsing and toFixed retain all 391 formatting checkpoints",{skip:!laya},()=>{
+ const dir=path.join(laya,"tests/nativeFlashOracle/number-format"),golden=JSON.parse(fs.readFileSync(path.join(dir,"native-air.json"),"utf8"));
+ for(const [name,key] of [["NumberFormatProbe.as","sourceSha256"],["scenario.json","scenarioSha256"]])
+  assert.equal(crypto.createHash("sha256").update(fs.readFileSync(path.join(dir,name))).digest("hex"),golden[key]);
+ const scenario=JSON.parse(fs.readFileSync(path.join(dir,"scenario.json"),"utf8"));
+ for(const row of golden.capture.state.observations){
+  const [text,digits]=scenario.steps.find(step=>step.id===row.id).calls[0].args;
+  const actual={result:"",failure:""};
+  try {const value=as3Number(text);actual.result=digits===999?as3NumberToFixed(value):as3NumberToFixed(value,digits);}
+  catch(error){actual.failure=as3String(error);}
+  const {id,...expected}=row;assert.deepEqual(actual,expected,id+": "+text+" / "+digits);
+ }
 });
