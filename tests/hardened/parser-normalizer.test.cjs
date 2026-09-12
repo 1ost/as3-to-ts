@@ -26,6 +26,7 @@ function compileFocusedSources() {
         "src/hardened/ledger.ts",
         "src/hardened/contracts.ts",
         "src/hardened-runtime/AS3Coerce.ts",
+        "src/hardened-runtime/AS3ClassInitialization.ts",
         "src/hardened-runtime/AS3Function.ts",
         "src/hardened-runtime/AS3Type.ts",
         "src/hardened-runtime/internal/AS3TypeRegistry.ts",
@@ -502,6 +503,7 @@ try {
         fs.rmSync(primitiveCheckRoot, { recursive: true, force: true });
     }
     const executablePrimitiveCode = primitiveRuntimeCode
+        .replaceAll("@bleach/as3-runtime/AS3ClassInitialization", "./hardened-runtime/AS3ClassInitialization")
         .replaceAll("@bleach/as3-runtime/AS3Coerce", "./hardened-runtime/AS3Coerce")
         .replaceAll("@bleach/as3-runtime/AS3Function", "./hardened-runtime/AS3Function")
         .replaceAll("@bleach/as3-runtime/AS3Type", "./hardened-runtime/AS3Type");
@@ -982,7 +984,7 @@ try {
         sourceMemberAuthority);
     const staticLambdaOutput=built.emitter.emitSemanticProgram(staticLambdaSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
-    assert.match(staticLambdaOutput.code,/StaticCapture\.ready = true;/);
+    assert.match(staticLambdaOutput.code,/__as3ClassMemberReceiver\(__as3InitializeClass\(StaticCapture, true\)\)\.ready = true;/);
     const instanceLambdaSource=staticLambdaSource.replace("public static var ready","public var ready");
     const instanceLambdaTree=built.parse("fixtures/InstanceCapture.as",instanceLambdaSource);
     const instanceLambdaNormalized=built.normalizer.normalizeParserAst(instanceLambdaTree,instanceLambdaSource,sha256);

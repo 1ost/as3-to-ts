@@ -17,8 +17,16 @@ function loadTranspiled(file,resolver) {
     const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
     const value={exports:{}};Function("require","module","exports",compiled)(resolver,value,value.exports);return value.exports;
 }
+const localModules=new Map();
+function loadLocalModule(file) {
+    if (localModules.has(file)) return localModules.get(file);
+    const value=loadTranspiled(file,specifier=>specifier.startsWith(".")
+        ? loadLocalModule(path.resolve(path.dirname(file),specifier+".ts")) : require(specifier));
+    localModules.set(file,value);return value;
+}
+const staticConstants=loadLocalModule(path.join(ROOT,"src/hardened/static-constants.ts"));
 const emitterModule=loadTranspiled(path.join(ROOT,"src/hardened/emitter.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}
-    :specifier==="./adapter"?adapterModule:require(specifier));
+    :specifier==="./adapter"?adapterModule:specifier==="./static-constants"?staticConstants:require(specifier));
 const sourceMembers=loadTranspiled(path.join(ROOT,"src/hardened/source-member-authority.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}:require(specifier));
 const source = fs.readFileSync(path.join(ROOT, "src/hardened/type-authority.ts"), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020,
@@ -26,7 +34,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.Scri
 const moduleValue = { exports: {} };
 Function("require", "module", "exports", compiled)(specifier=>specifier==="./contracts"?{HardenedSemanticError}
     :specifier==="./source-member-authority"?sourceMembers:specifier==="./adapter"?adapterModule:specifier==="./emitter"?emitterModule
-        :specifier==="typescript-4-9"?ts:require(specifier),moduleValue,moduleValue.exports);
+        :specifier==="./static-constants"?staticConstants:specifier==="typescript-4-9"?ts:require(specifier),moduleValue,moduleValue.exports);
 const { assertLocalRuntimeDefinitionClosure, emitRuntimeTypeAuthority, loadMappedRuntimeTypeAuthority, localRuntimeTypeAuthoritySource,
     localRuntimeInterfaceAuthoritySource, emitRuntimeApplicationEntry } = moduleValue.exports;
 const sha256 = value => crypto.createHash("sha256").update(value).digest("hex");
@@ -160,7 +168,7 @@ test("application entry pins authority evaluation before every application modul
         assert.throws(()=>emitRuntimeApplicationEntry([module],sha256),error=>error.code==="HARDENED_TYPE_AUTHORITY_ENTRY",module));
 });
 
-test("local authority imports admit definition-only public classes and HOLD static module evaluation",()=>{
+test("local authority imports require a fresh definition-only proof",()=>{
     const program=classProgram("Demo");
     prove(program);
     const admitted=localRuntimeTypeAuthoritySource(program,"../game/Demo");
@@ -168,7 +176,7 @@ test("local authority imports admit definition-only public classes and HOLD stat
     ["node:fs","/game/Demo","C:/game/Demo","../game/../Demo","..\\game\\Demo","./game/\u0000Demo"].forEach(module=>
         assert.throws(()=>localRuntimeTypeAuthoritySource(program,module),error=>error.code==="HARDENED_TYPE_AUTHORITY_LOCAL",module));
     const unsafe={...program,declaration:{...program.declaration,members:[{kind:"field",name:"state",modifiers:["static"]}]}};
-    assert.throws(()=>localRuntimeTypeAuthoritySource(unsafe,"../game/Demo"),error=>error.code==="HARDENED_TYPE_AUTHORITY_STATIC_INIT");
+    assert.throws(()=>localRuntimeTypeAuthoritySource(unsafe,"../game/Demo"),error=>error.code==="HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE");
     assert.throws(()=>localRuntimeTypeAuthoritySource({...program,declaration:{...program.declaration,modifiers:[]}},"../game/Demo"),error=>error.code==="HARDENED_TYPE_AUTHORITY_LOCAL");
 });
 
@@ -228,19 +236,25 @@ test("local authority derives emitted edges, rejects unsafe cycles, and invalida
         error=>error.code==="HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE");
 });
 
-test('static literal containers are definition safe but aggregate conversions and source calls are held',()=>{
+test('static source expressions are deferred and malformed emitted registrations remain held',()=>{
  const literal=value=>({...semanticIdentity,kind:'literal',value});
  const array=elements=>({...semanticIdentity,kind:'array',elements});
  const object=value=>({...semanticIdentity,kind:'object',properties:[{...semanticIdentity,name:'data',value}]});
  const program=initializer=>classProgram('StaticContainers',{members:[{...semanticIdentity,kind:'field',name:'state',modifiers:['public','static'],namespaceName:null,
-  readonly:false,type:{...typeRef('Object'),emittedName:'unknown',runtimeName:null},initializer,implicitDefault:null,embeddedBitmap:null}]});
+  readonly:false,type:{...typeRef('Object'),emittedName:'unknown',runtimeName:null},initializer,implicitDefault:"null",embeddedBitmap:null}]});
  for(const initializer of [array([]),array([literal(1),literal(null)]),object(array([literal('x')]))]){
   const value=program(initializer);prove(value);
   assert.equal(localRuntimeTypeAuthoritySource(value,'../game/StaticContainers').definitionSafe,true);
  }
- const call={...semanticIdentity,kind:'call'};
- for(const initializer of [array([call]),object(call),{...semanticIdentity,kind:'coercion',targetType:typeRef('String'),argument:array([])}])
-  assert.throws(()=>prove(program(initializer)),error=>error.code==='HARDENED_TYPE_AUTHORITY_STATIC_INIT');
+ const call={...semanticIdentity,kind:'math',member:'max',arguments:[literal(1),literal(2)]};
+ for(const initializer of [array([call]),object(call),{...semanticIdentity,kind:'coercion',targetType:typeRef('String'),argument:array([])}]) {
+  const value=program(initializer);prove(value);
+  assert.equal(localRuntimeTypeAuthoritySource(value,'../game/StaticContainers').definitionSafe,true);
+ }
+ const corrupt={...ts,createPrinter(options){const printer=ts.createPrinter(options);return {...printer,
+  printFile(file){return printer.printFile(file).replace('__as3DefineClassInitialization(StaticContainers','__as3MissingRegistration(StaticContainers');}};}};
+ assert.throws(()=>assertLocalRuntimeDefinitionClosure([program(array([call]))],corrupt),error=>error.code==='HARDENED_TYPE_AUTHORITY_STATIC_INIT');
+
 });
 
 test("v2 mapped interfaces retain nominal class relationships and reject invalid closures",()=>{

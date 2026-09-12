@@ -11,6 +11,7 @@ import {
     HardenedSemanticError,
 } from "./contracts";
 import { assertAdaptedSemanticProgram } from "./adapter";
+import { staticConstant } from "./static-constants";
 
 export interface TypeScriptCompilerApi {
     version: string;
@@ -157,6 +158,11 @@ function runtimeTypeTokenNode(expression: Pick<Extract<SemanticExpression, { kin
     ]);
 }
 
+function initializeClassNode(value: any, self: boolean, ts: TypeScriptCompilerApi): any {
+    return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3InitializeClass"), undefined,
+        [value, self ? ts.factory.createTrue() : ts.factory.createFalse()]);
+}
+
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
     if (expression.kind === "undefined") return ts.factory.createVoidExpression(ts.factory.createNumericLiteral(0));
     if (expression.kind === "parseInteger") return ts.factory.createCallExpression(
@@ -187,7 +193,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return expression.value ? ts.factory.createTrue() : ts.factory.createFalse();
     }
     if (expression.kind === "identifier") {
-        return ts.factory.createIdentifier(expression.name);
+        const value = ts.factory.createIdentifier(expression.name);
+        return ["current-class", "import"].includes(expression.bindingKind)
+            ? initializeClassNode(value, expression.bindingKind === "current-class", ts) : value;
     }
     if (expression.kind === "this") {
         return expression.lexicalName ? ts.factory.createIdentifier(expression.lexicalName) : ts.factory.createThis();
@@ -196,7 +204,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createSuper();
     }
     if (expression.kind === "member") {
-        const target = expressionNode(expression.target, ts);
+        const rawTarget = expressionNode(expression.target, ts);
+        const target = expression.target.kind === "identifier" && ["current-class", "import"].includes(expression.target.bindingKind)
+            ? ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ClassMemberReceiver"), undefined, [rawTarget]) : rawTarget;
         if (expression.capabilitySource === "Error" && expression.name === "errorID")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ErrorID"),undefined,[target]);
         if (expression.capabilitySource === "String" && expression.name === "length")
@@ -400,7 +410,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                     expression.arguments.map((argument) => expressionNode(argument, ts))));
         }
         return ts.factory.createNewExpression(
-            ts.factory.createIdentifier(expression.sourceType.emittedName),
+            ts.factory.createParenthesizedExpression(initializeClassNode(ts.factory.createIdentifier(expression.sourceType.emittedName),
+                expression.initializationSelf === true, ts)),
             undefined,
             expression.arguments.map((argument) => expressionNode(argument, ts)),
         );
@@ -809,6 +820,23 @@ function fieldDefaultExpression(member: SemanticField, ts: TypeScriptCompilerApi
     throw new HardenedSemanticError("HARDENED_FIELD_DEFAULT", "field lacks one exact AS3 initialization policy", member.sourceNodeId);
 }
 
+function staticFieldDefault(field: SemanticField, fields: readonly SemanticField[], ts: TypeScriptCompilerApi): any {
+    const constant=field.initializer && staticConstant(field.initializer,fields);
+    if (!constant) return fieldDefaultExpression(field,ts);
+    const value=constant.value;
+    if (value === undefined) return ts.factory.createVoidZero();
+    if (value === null) return ts.factory.createNull();
+    if (typeof value === "string") return ts.factory.createStringLiteral(value);
+    if (typeof value === "boolean") return value ? ts.factory.createTrue() : ts.factory.createFalse();
+    if (Number.isNaN(value)) return ts.factory.createBinaryExpression(ts.factory.createNumericLiteral(0),
+        ts.factory.createToken(ts.SyntaxKind.SlashToken),ts.factory.createNumericLiteral(0));
+    if (!Number.isFinite(value)) return ts.factory.createBinaryExpression(
+        value < 0 ? ts.factory.createPrefixUnaryExpression(ts.SyntaxKind.MinusToken,ts.factory.createNumericLiteral(1)) : ts.factory.createNumericLiteral(1),
+        ts.factory.createToken(ts.SyntaxKind.SlashToken),ts.factory.createNumericLiteral(0));
+    return value < 0 || Object.is(value,-0) ? ts.factory.createPrefixUnaryExpression(ts.SyntaxKind.MinusToken,
+        ts.factory.createNumericLiteral(String(Math.abs(value)))) : ts.factory.createNumericLiteral(String(value));
+}
+
 function nativeParameterSlot(parameter:SemanticParameter):boolean {
     return !parameter.rest && ["String","Number","int","uint","Boolean","Object","Array","Function"].includes(parameter.type.sourceName);
 }
@@ -820,22 +848,24 @@ function parameterSlotStatements(parameters:SemanticParameter[], ts:TypeScriptCo
                 [ts.factory.createIdentifier(parameter.name),ts.factory.createStringLiteral(parameter.type.sourceName)]))));
 }
 
-function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQName: string): any {
+function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQName: string, fields: readonly SemanticField[]): any {
     if (member.kind === "field") {
         const modifiers = modifierTokens(member.modifiers, ts);
         if (member.readonly) modifiers.push(ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword));
         const isStatic = member.modifiers.includes("static");
         return ts.factory.createPropertyDeclaration(
             modifiers, member.name, undefined, typeNode(member.type, ts),
-            member.embeddedBitmap ? ts.factory.createIdentifier(member.embeddedBitmap.className) : isStatic ? (member.initializer === null ? fieldDefaultExpression(member, ts)
-                : expressionNode(member.initializer, ts)) : undefined,
+            member.embeddedBitmap ? ts.factory.createIdentifier(member.embeddedBitmap.className) : isStatic
+                ? ts.factory.createAsExpression(ts.factory.createAsExpression(staticFieldDefault(member, fields, ts),
+                    ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword)), typeNode(member.type, ts)) : undefined,
         );
     }
     if (member.kind === "constructor") throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR",
         "constructor emission requires its authenticated class context", member.sourceNodeId);
     if (member.kind === "method") {
         const minimum=member.modifiers.includes("static") ? 0 : member.parameters.filter(p=>!p.rest && p.defaultValue === null).length;
-        const arity:any[]=[];
+        const arity:any[]=member.modifiers.includes("static") ? [ts.factory.createExpressionStatement(
+            initializeClassNode(ts.factory.createIdentifier(classQName.split(".").pop()!), true, ts))] : [];
         if (minimum > 0) {
             if (member.parameters.some(p=>p.name === "arguments") || constructorStatementsBindArguments(member.body))
                 throw new HardenedSemanticError("HARDENED_EMIT_METHOD_ARITY", "method binding shadows the runtime arguments object", member.sourceNodeId);
@@ -853,16 +883,41 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQNam
     if (member.kind === "getter") {
         return ts.factory.createGetAccessorDeclaration(
             modifierTokens(member.modifiers, ts), member.name, [], typeNode(member.returnType, ts),
-            ts.factory.createBlock(member.body.map((statement) => statementNode(statement, ts)), true),
+            ts.factory.createBlock((member.modifiers.includes("static") ? [ts.factory.createExpressionStatement(
+                initializeClassNode(ts.factory.createIdentifier(classQName.split(".").pop()!), true, ts))] : [])
+                .concat(member.body.map((statement) => statementNode(statement, ts))), true),
         );
     }
     if (member.kind === "setter") {
         return ts.factory.createSetAccessorDeclaration(
             modifierTokens(member.modifiers, ts), member.name, [parameterNode(member.parameter, ts)],
-            ts.factory.createBlock(member.body.map((statement) => statementNode(statement, ts)), true),
+            ts.factory.createBlock((member.modifiers.includes("static") ? [ts.factory.createExpressionStatement(
+                initializeClassNode(ts.factory.createIdentifier(classQName.split(".").pop()!), true, ts))] : [])
+                .concat(member.body.map((statement) => statementNode(statement, ts))), true),
         );
     }
     throw new HardenedSemanticError("HARDENED_EMIT_MEMBER", "semantic IR contains an unsupported member");
+}
+
+/** Keep the original static fields as data slots; run original initializers only on class access. */
+function classInitializationNode(program: SemanticProgram, ts: TypeScriptCompilerApi): any {
+    if (program.declaration.declarationKind !== "class") throw new HardenedSemanticError("HARDENED_EMIT_STATIC_INIT", "Static initialization requires a class");
+    const fields = program.declaration.members.filter((member): member is SemanticField => member.kind === "field"
+        && member.modifiers.includes("static"));
+    const owner = ts.factory.createIdentifier(program.declaration.name);
+    const proof = ts.factory.createIdentifier("__as3ConstructionProof");
+    const slots = fields.map(field => ts.factory.createObjectLiteralExpression([
+        ts.factory.createPropertyAssignment("name", ts.factory.createStringLiteral(field.name)),
+        ts.factory.createPropertyAssignment("value", field.embeddedBitmap ? ts.factory.createIdentifier(field.embeddedBitmap.className)
+            : staticFieldDefault(field, fields, ts)),
+        ts.factory.createPropertyAssignment("readonly", field.readonly ? ts.factory.createTrue() : ts.factory.createFalse()),
+    ]));
+    const assignments = fields.filter(field => field.initializer !== null && !field.embeddedBitmap && !staticConstant(field.initializer,fields)).map(field =>
+        ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createIdentifier("__as3InitializeStaticField"),
+            undefined, [owner, proof, ts.factory.createStringLiteral(field.name), expressionNode(field.initializer!, ts)])));
+    return ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createIdentifier("__as3DefineClassInitialization"),
+        undefined, [owner, proof, ts.factory.createArrayLiteralExpression(slots), ts.factory.createArrowFunction(undefined, undefined, [],
+            undefined, ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken), ts.factory.createBlock(assignments, true))]));
 }
 
 function newTargetExpression(ts: TypeScriptCompilerApi): any {
@@ -1044,7 +1099,8 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
                 ts.factory.createIdentifier("__as3ConstructionProof")]))], true)),
     ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
         ts.factory.createIdentifier("__as3ConstructionTargets"), "delete"), undefined, [ts.factory.createThis()]))], true);
-    const body = [constructorArityGuard(className, member, ts), ...leadingLocals,
+    const body = [ts.factory.createExpressionStatement(initializeClassNode(ts.factory.createIdentifier(className), true, ts)),
+        constructorArityGuard(className, member, ts), ...leadingLocals,
         ...(superStatement === null ? [] : [prepareStatement, superStatement])]
         .concat(prologue, [ts.factory.createTryStatement(
         ts.factory.createBlock(tryBody, true), catchClause, finallyClause)]);
@@ -1363,6 +1419,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         throw new HardenedSemanticError("HARDENED_TYPESCRIPT_VERSION", "structural emitter requires the exact configured modern TypeScript compiler API");
     }
     const imports = program.imports.filter((item) => !item.compileTimeNamespace).map((item) => importNode(item, ts));
+    imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports(
+            ["as3InitializeClass", "as3DefineClassInitialization", "as3InitializeStaticField", "as3ClassMemberReceiver"].map(name =>
+                ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(name), ts.factory.createIdentifier("__" + name))))),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3ClassInitialization"), undefined));
     if (program.imports.some(item => item.sourceQualifiedName === "flash.utils.getQualifiedClassName")) {
         for (const [module, exported, local] of [
             ["laya/flash/utils/getQualifiedClassName", "resolveNativeClassName", "__as3ResolveNativeClassName"],
@@ -1480,8 +1541,10 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                 ts.factory.createIdentifier(item.type.emittedName), undefined))));
     const constructorMember = program.declaration.declarationKind === "class"
         ? program.declaration.members.find((member): member is SemanticConstructor => member.kind === "constructor") ?? null : null;
+    const staticFields = program.declaration.declarationKind === "class"
+        ? program.declaration.members.filter((field): field is SemanticField => field.kind === "field" && field.modifiers.includes("static")) : [];
     const classMembers = program.declaration.declarationKind === "class"
-        ? program.declaration.members.filter(member => member.kind !== "constructor").map(member => memberNode(member, ts, program.packageName ? program.packageName+"."+program.declaration.name : program.declaration.name)) : [];
+        ? program.declaration.members.filter(member => member.kind !== "constructor").map(member => memberNode(member, ts, program.packageName ? program.packageName+"."+program.declaration.name : program.declaration.name, staticFields)) : [];
     if (program.declaration.declarationKind === "class") {
         for (const forward of program.declaration.inheritedAccessors || []) {
             const target = ts.factory.createPropertyAccessExpression(ts.factory.createSuper(), forward.name);
@@ -1570,7 +1633,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                 ts.factory.createIdentifier("__as3ConstructionProof")))], true)),
     ];
     const embedded = embeddedBitmapDeclarations(program, imports, ts);
-    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration], nominalPredicate));
+    const deferredInitialization = program.declaration.declarationKind === "class" ? [classInitializationNode(program, ts)] : [];
+    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration], deferredInitialization, nominalPredicate));
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
     let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n");
     code = code.replace(/\n*$/, "\n");

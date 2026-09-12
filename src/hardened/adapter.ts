@@ -2492,7 +2492,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             adaptMappedCall(mapping!, args, call.children[1]!.children, context, call);
             sourceType = semanticType(nameNode, name, name, [], undefined, imported.sourceQualifiedName);
         }
-        return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
+        return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args, initializationSelf: name === context.className });
     }
     if (node.kind === "RELATION" && node.children.length === 3
         && (node.children[1]!.kind === "AS" || (node.children[1]!.kind === "OP"
@@ -3425,7 +3425,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
-                        && !valuePosition && ["push","pop","shift","unshift","concat"].includes(name);
+                        && !valuePosition && ["push","pop","shift","unshift","concat","join"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase"].includes(name);
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
@@ -3800,14 +3800,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
             && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee))) {
             const name = callee.name;
-            if (!["push","pop","shift","unshift","concat"].includes(name)
-                || (["pop","shift"].includes(name) && args.length !== 0))
+            if (!["push","pop","shift","unshift","concat","join"].includes(name)
+                || (["pop","shift"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1))
                 fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
                 fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
             capabilitySource = "Array";
             capabilityMember = name;
-            resultType = name === "concat" ? semanticType(node,"Array","Array",[],false)
+            resultType = name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" ? semanticType(node,"Array","Array",[],false)
                 : name === "push" || name === "unshift"
                 ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && vectorElement(assignmentType(callee.target, context, rawCallee)) !== null) {
@@ -4496,7 +4496,7 @@ function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {
         && statementsAlwaysReturn(last.thenStatements) && statementsAlwaysReturn(last.elseStatements));
 }
 
-function parseField(list: TreeNode, context: AdapterContext, readonly: boolean): SemanticField[] {
+function parseField(list: TreeNode, context: AdapterContext, readonly: boolean, headersOnly: boolean = false): SemanticField[] {
     onlyKinds(list, ["META_LIST", "MOD_LIST", "NAME_TYPE_INIT"]);
     const memberModifiers = parseMemberModifiers(list, context);
     const modifiers = memberModifiers.modifiers;
@@ -4540,7 +4540,8 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
         onlyKinds(declaration, ["INIT", "NAME", "TYPE", "VECTOR"]);
         const nameNode = one(declaration, "NAME")!;
         const name = validateIdentifier(requiredText(nameNode, "field name"), nameNode);
-        if (context.fields[name] || context.methods[name] || context.accessors[name]) {
+        if (context.fields[name] && (headersOnly || context.fields[name]!.sourceNodeId !== declaration.id)
+            || context.methods[name] || context.accessors[name]) {
             fail("HARDENED_MEMBER_DUPLICATE", "class member identity is duplicated", nameNode);
         }
         const init = one(declaration, "INIT", true);
@@ -4549,7 +4550,7 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
             if (init.children.length !== 1) {
                 fail("HARDENED_INITIALIZER_SHAPE", "field initializer has the wrong normalized shape", init);
             }
-            initializer = parseExpression(init.children[0]!, context, true, false, false);
+            if (!headersOnly) initializer = parseExpression(init.children[0]!, context, true, false, false);
         } else if (readonly && embeddedSource === null) {
             fail("HARDENED_CONST_INITIALIZER", "AS3 const fields require an explicit admitted initializer", declaration);
         }
@@ -5181,6 +5182,9 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             }
         }
     }
+    // Bind every original field before any initializer or method body is resolved.
+    classContent.children.filter(node => node.kind === "VAR_LIST" || node.kind === "CONST_LIST")
+        .forEach(node => parseField(node, placeholder, node.kind === "CONST_LIST", true));
     const members: SemanticMember[] = [];
     classContent.children.forEach((node) => {
         if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {

@@ -530,7 +530,8 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
     if (TEXT_FILTER_QNAMES.has(mapping.sourceQName)) {
         const allowed = TEXT_FILTER_ALLOWED_MEMBERS[mapping.sourceQName];
         const textProperty = mapping.sourceQName === "flash.text.TextField" && mapping.sourceMember.access !== "call"
-            && TEXT_FIELD_PROPERTIES.has(mapping.sourceMember.name) && mapping.sourceRoles[0] === "instance-member";
+            && (TEXT_FIELD_PROPERTIES.has(mapping.sourceMember.name) || mapping.sourceMember.name === "textColor" && mapping.sourceMember.access === "read")
+            && mapping.sourceRoles[0] === "instance-member";
         const leadingProperty = mapping.sourceQName === "flash.text.TextFormat"
             && mapping.targetModule === "src/layaAir/flash/text/TextFormat.ts" && mapping.targetExport === "TextFormat"
             && mapping.sourceMember.name === "leading" && mapping.targetMember.name === "leading"

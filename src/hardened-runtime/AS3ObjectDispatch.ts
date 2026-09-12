@@ -210,7 +210,7 @@ function convertedPrimitive(value:unknown):boolean {
     // Native conversion accepts undefined but retries valueOf after a null result.
     return value !== null && typeof value !== "object" && typeof value !== "function";
 }
-function arrayString(value:unknown[], active:Set<object>):string {
+function arrayString(value:unknown[], active:Set<object>, separator:string=","):string {
     if (active.has(value)) return unavailable("Cyclic Array String conversion requires native recursion evidence");
     if (Object.prototype.hasOwnProperty.call(value,"join"))
         return unavailable("Overridden Array join conversion requires native dispatch evidence");
@@ -221,7 +221,7 @@ function arrayString(value:unknown[], active:Set<object>):string {
             const element=value[i];
             parts.push(element === null || element === undefined ? "" : nativeString(element,active));
         }
-        return parts.join(",");
+        return parts.join(separator);
     } finally { active.delete(value); }
 }
 function conversionMethod(value:object, name:string, active:Set<object>):unknown {
@@ -345,3 +345,10 @@ export function as3NativeNumber(value:unknown):number {
 
 /** Native String conversion for scalars, Arrays and authenticated local Object traits. */
 export function as3NativeString(value:unknown):string { return nativeString(value,new Set()); }
+
+/** Native Array.join converts the separator before visiting elements, with undefined defaulting to comma. */
+export function as3NativeArrayJoin(value:unknown[], separator:unknown):string {
+    const active=new Set<object>();
+    const text=separator === undefined ? "," : nativeString(separator,active);
+    return arrayString(value,active,text);
+}

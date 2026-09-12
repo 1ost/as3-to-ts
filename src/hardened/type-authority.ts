@@ -1,3 +1,4 @@
+import { staticConstant } from "./static-constants";
 import { LoadedSourceMemberAuthority, assertLoadedSourceMemberAuthority } from "./source-member-authority";
 import { HardenedSemanticError, SemanticExpression, SemanticField, SemanticMember, SemanticProgram } from "./contracts";
 import { assertAdaptedSemanticProgram } from "./adapter";
@@ -231,10 +232,6 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         || !program.declaration.modifiers.includes("public") || !generatedLocalModule(moduleSpecifier)) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_LOCAL", "local runtime identity must be one public authenticated class module");
     }
-    if (program.declaration.declarationKind === "class" && hasExecutableStaticInitializer(program)) {
-        throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_STATIC_INIT",
-            `local runtime identity ${program.declaration.name} has static module evaluation and must remain HOLD`);
-    }
     const proof = localRuntimeProofs.get(program as unknown as object);
     if (activeLocalRuntimeProof === null || proof?.transaction !== activeLocalRuntimeProof) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE",
@@ -277,18 +274,49 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
     return source;
 }
 
-function hasExecutableStaticInitializer(program: SemanticProgram): boolean {
-    const literalOnly = (expression: SemanticExpression): boolean => !!expression && (expression.kind === "literal"
-        || expression.kind === "coercion" && (expression.argument === null || literalOnly(expression.argument)));
-    // Literal containers allocate private state but cannot execute source code,
-    // observe another class, or require the not-yet-installed type registry.
-    // Coercions stay scalar-only: converting an aggregate can invoke user code.
-    const definitionSafe = (expression:SemanticExpression):boolean => literalOnly(expression)
-        || !!expression && (expression.kind === "array" && expression.elements.every(definitionSafe)
-            || expression.kind === "object" && expression.properties.every(property => definitionSafe(property.value)));
-    return program.declaration.declarationKind === "class" && program.declaration.members.some(member =>
-        member.kind === "field" && member.modifiers.includes("static") && !member.embeddedBitmap
-        && member.initializer !== null && !definitionSafe(member.initializer));
+/** Independently inspect emitted definitions before admitting deferred cinit to the authority closure. */
+function assertDeferredStaticInitialization(program: SemanticProgram, ts49: RuntimeTypeScriptCompiler): void {
+    if (program.declaration.declarationKind !== "class") return;
+    const emitted = emitSemanticProgram(program, {compiler:ts49, expectedTypeScriptVersion:"4.9.5"});
+    const source = ts49.createSourceFile(emitted.modulePath, emitted.code, ts49.ScriptTarget.Latest, true, ts49.ScriptKind.TS);
+    const fields = program.declaration.members.filter((member):member is SemanticField => member.kind === "field" && member.modifiers.includes("static"));
+    const embedded = new Set(fields.filter(field => field.embeddedBitmap).map(field => field.embeddedBitmap!.className));
+    const scalar = (node:import("typescript-4-9").Expression):boolean => {
+        if (ts49.isAsExpression(node) || ts49.isParenthesizedExpression(node)) return scalar(node.expression);
+        return ts49.isNumericLiteral(node) || ts49.isStringLiteral(node) || [ts49.SyntaxKind.NullKeyword,ts49.SyntaxKind.TrueKeyword,ts49.SyntaxKind.FalseKeyword].includes(node.kind)
+            || ts49.isVoidExpression(node) && ts49.isNumericLiteral(node.expression) && node.expression.text === "0"
+            || ts49.isBinaryExpression(node) && node.operatorToken.kind === ts49.SyntaxKind.SlashToken
+                && scalar(node.left) && ts49.isNumericLiteral(node.right) && node.right.text === "0"
+            || ts49.isPrefixUnaryExpression(node) && node.operator === ts49.SyntaxKind.MinusToken && ts49.isNumericLiteral(node.operand)
+            || ts49.isIdentifier(node) && embedded.has(node.text);
+    };
+    const declaration = source.statements.find((node):node is import("typescript-4-9").ClassDeclaration => ts49.isClassDeclaration(node)
+        && node.name?.text === program.declaration.name);
+    const properties = declaration?.members.filter(ts49.isPropertyDeclaration).filter(member => member.modifiers?.some(modifier=>modifier.kind===ts49.SyntaxKind.StaticKeyword)) ?? [];
+    const calls = source.statements.filter(ts49.isExpressionStatement).map(statement=>statement.expression)
+        .filter((node):node is import("typescript-4-9").CallExpression => ts49.isCallExpression(node)
+            && ts49.isIdentifier(node.expression) && node.expression.text === "__as3DefineClassInitialization");
+    const call=calls[0], callback=call?.arguments[3], slots=call?.arguments[2];
+    const expected=fields.filter(field=>field.initializer!==null && !field.embeddedBitmap && !staticConstant(field.initializer,fields));
+    const statements=callback && ts49.isArrowFunction(callback) && ts49.isBlock(callback.body) ? callback.body.statements : null;
+    const valid = declaration && properties.length===fields.length && properties.every(property=>property.initializer && scalar(property.initializer))
+        && calls.length===1 && call && call.arguments.length===4 && ts49.isIdentifier(call.arguments[0]!) && call.arguments[0]!.text===program.declaration.name
+        && ts49.isIdentifier(call.arguments[1]!) && call.arguments[1]!.text==="__as3ConstructionProof"
+        && slots && ts49.isArrayLiteralExpression(slots) && slots.elements.length===fields.length
+        && slots.elements.every((slot,index)=>ts49.isObjectLiteralExpression(slot) && slot.properties.length===3
+            && slot.properties.every(ts49.isPropertyAssignment)
+            && ts49.isStringLiteral(slot.properties[0]!.initializer) && slot.properties[0]!.initializer.text===fields[index]!.name
+            && scalar(slot.properties[1]!.initializer))
+        && statements && statements.length===expected.length && statements.every((statement,index)=>{
+            if (!ts49.isExpressionStatement(statement) || !ts49.isCallExpression(statement.expression)) return false;
+            const assignment=statement.expression;
+            return ts49.isIdentifier(assignment.expression) && assignment.expression.text==="__as3InitializeStaticField"
+                && assignment.arguments.length===4 && ts49.isIdentifier(assignment.arguments[0]!) && assignment.arguments[0]!.text===program.declaration.name
+                && ts49.isIdentifier(assignment.arguments[1]!) && assignment.arguments[1]!.text==="__as3ConstructionProof"
+                && ts49.isStringLiteral(assignment.arguments[2]!) && assignment.arguments[2]!.text===expected[index]!.name;
+        });
+    if (!valid) throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_STATIC_INIT",
+        `local runtime identity ${program.declaration.name} lacks a definition-only static initializer proof`);
 }
 
 /** Generated Embed classes derive solely from admitted metadata and the mapped Bitmap authority. */
@@ -405,10 +433,7 @@ export function assertLocalRuntimeDefinitionClosure(programs: readonly SemanticP
     const authorities = definitions.filter(program => program.declaration.declarationKind === "class" || program.declaration.declarationKind === "packageFunction")
         .sort((left, right) => left.outputModulePath.localeCompare(right.outputModulePath, "en"));
     authorities.forEach(program => {
-        if (program.declaration.declarationKind === "class" && hasExecutableStaticInitializer(program)) {
-            throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_STATIC_INIT",
-                `local runtime identity ${program.declaration.name} has static module evaluation and must remain HOLD`);
-        }
+        assertDeferredStaticInitialization(program, ts49);
     });
     const runtimeModules = new Map<SemanticProgram, readonly string[]>();
     definitions.forEach(program => runtimeModules.set(program, emittedRuntimeLocalModules(program, ts49)));

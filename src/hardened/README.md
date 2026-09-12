@@ -46,3 +46,26 @@ scope are documented in `NATIVE_TIMER_AUTHORITY.md`.
 Independent fixture profiles and native AIR/Laya comparison are documented in
 [`tools/FIXTURE_PROFILES.md`](../../tools/FIXTURE_PROFILES.md). They use an explicit
 application authority context and preserve the default Bleach lock.
+
+### Deferred original class initialization
+
+Original static fields remain data slots and original field/method declarations
+retain their source contracts. Generated modules register class initializers
+without executing application code; sealed construction authority is required
+before class lookup or construction runs them. Native class lookup initializes
+the base first, lexical self lookup remains available during initialization,
+external cyclic lookup returns null, and a failed initializer can retry.
+Constant expressions populate trait defaults before source initializer code;
+executable calls, allocations, conditionals and variable reads retain source
+order. All field headers are bound before initializers and method bodies, so
+original forward references require no source reordering.
+
+The shared Laya native oracle retains class-initialization, cycle, failure,
+self, defaults, constants and mutation probes. They also exercise the original
+TextFormatLib and ColorLib unchanged. These are AIR 51/Chrome state comparisons;
+they do not qualify every Flash class-closure behavior. Escaped class identity
+after initialization failure, cyclic construction, cross-class constant folding,
+reflection-triggered initialization and other Flash runtime versions need
+separate evidence. Array.join admission uses the shared primitive conversion
+owner and keeps unsupported recursive/host array behavior explicit. Ordinary
+TypeScript Laya consumers do not install this compiler runtime.

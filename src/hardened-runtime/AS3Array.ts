@@ -1,3 +1,4 @@
+import { as3NativeArrayJoin } from "./AS3ObjectDispatch";
 import { as3FunctionArgument } from "./AS3Function";
 
 /*
@@ -23,18 +24,23 @@ export class AS3ArrayOperationUnavailable extends Error {
 export function as3ArrayCall(value:unknown, method:"push" | "unshift", args:unknown[]):number;
 export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown[]):unknown;
 export function as3ArrayCall(value:unknown, method:"concat", args:unknown[]):unknown[];
+export function as3ArrayCall(value:unknown, method:"join", args:unknown[]):string;
 export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unknown {
     if (value === null) {
         const error = new TypeError("Error #1009: Cannot access a property or method of a null object reference.");
         Object.defineProperty(error,"errorID",{value:1009}); throw error;
     }
-    if (!Array.isArray(value) || !["push","pop","shift","unshift","concat"].includes(method)
+    if (!Array.isArray(value) || !["push","pop","shift","unshift","concat","join"].includes(method)
         || (["pop","shift"].includes(method) && args.length !== 0))
         throw new AS3ArrayOperationUnavailable("Array mutation requires a supported Array receiver, method and arity");
-    const nativeMethod = Array.prototype[method as "push" | "pop" | "shift" | "unshift" | "concat"];
+    const nativeMethod = Array.prototype[method as "push" | "pop" | "shift" | "unshift" | "concat" | "join"];
     if (Reflect.get(value,method) !== nativeMethod)
         throw new AS3ArrayOperationUnavailable("Overridden Array mutation methods require native dispatch evidence");
     if (method === "concat") return concatArrays(value,args);
+    if (method === "join") {
+        if (args.length > 1) throw new AS3ArrayOperationUnavailable("Array.join accepts at most one separator");
+        return as3NativeArrayJoin(value,args[0]);
+    }
     if ((method === "push" || method === "unshift") && value.length + args.length > 0xffffffff)
         throw new AS3ArrayOperationUnavailable("Array length overflow requires retained native behavior");
     return Reflect.apply(nativeMethod,value,args);

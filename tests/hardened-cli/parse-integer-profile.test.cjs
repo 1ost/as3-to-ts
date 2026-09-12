@@ -31,7 +31,9 @@ test('native parseInt admission retains argument types, arity and lexical shadow
  assert.equal(transpiled.status,0,transpiled.stderr);
  const staticSource=path.join(dir,'static-source');fs.mkdirSync(staticSource);fs.copyFileSync(path.join(source,'Literal.as'),path.join(staticSource,'Literal.as'));
  const staticResult=cp.spawnSync(process.execPath,[path.join(root,'bin/as3-frontend'),'transpile',staticSource,path.join(dir,'static-output'),'--source-census',path.join(profile,'census.json'),'--profile-lock',path.join(profile,'profile-lock.json'),'--target-capabilities',path.join(laya,'docTool/architecture/authored-content-capabilities.json')],{encoding:'utf8',timeout:30000});
- assert.notEqual(staticResult.status,0);assert.match(staticResult.stderr,/HARDENED_TYPE_AUTHORITY_STATIC_INIT/);
+ assert.equal(staticResult.status,0,staticResult.stderr);
+ const staticFiles=fs.readdirSync(path.join(dir,"static-output"),{recursive:true}).filter(p=>p.endsWith("Literal.ts"));
+ assert.equal(staticFiles.length,1);assert.match(fs.readFileSync(path.join(dir,"static-output",staticFiles[0]),"utf8"),/__as3DefineClassInitialization/);
  const files=fs.readdirSync(emitted,{recursive:true}).filter(p=>p.endsWith('Shadow.ts'));
  assert.equal(files.length,1);
  assert.doesNotMatch(fs.readFileSync(path.join(emitted,files[0]),'utf8'),/__as3ParseInt\(/);

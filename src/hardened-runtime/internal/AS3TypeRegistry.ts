@@ -141,7 +141,7 @@ function createTypeToken<T>(kind: AS3RuntimeTypeKind, name: string,
     }
     const token = Object.freeze({ name });
     TYPE_TOKENS.add(token);
-    TYPE_DETAILS.set(token, Object.freeze({ kind, test, referenceClosure }));
+    TYPE_DETAILS.set(token, Object.freeze({ kind, test, ...(referenceClosure === undefined ? {} : {referenceClosure}) }));
     return token;
 }
 
@@ -630,4 +630,12 @@ export function lookupStringClassName(value:unknown):string | null {
     if (value !== null && typeof value === "object" && TYPE_TOKENS.has(value))
         return (value as AS3TypeToken<unknown>).name;
     return null;
+}
+
+/** Authenticate deferred class initialization after the complete type authority seals. */
+export function classInitializationBase(constructor: unknown, proof: unknown): RuntimeConstructor | null {
+    requireSealed();
+    if (typeof constructor !== "function" || !CLASS_TOKENS.has(constructor) || !validConstructionProof(constructor as RuntimeConstructor, proof))
+        throw new TypeError("AS3 class initialization lacks sealed construction authority");
+    return CLASS_BASES.get(constructor) ?? null;
 }
