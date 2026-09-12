@@ -394,6 +394,7 @@ function flashBaseMemberMapping(context: AdapterContext, access: string, name: s
 
 interface AuthenticatedSourceMemberSignature {
     parameterTypes: string[];
+    restParameterType?: string;
     returnType: string;
 }
 
@@ -436,7 +437,11 @@ function authenticatedSourceMemberSignature(mapping: CapabilityMapping, node: Tr
     if (!match) {
         fail("HARDENED_SOURCE_MEMBER_SIGNATURE", `source member signature is outside the closed AS3 callable/property grammar: ${mapping.sourceQName}.${member.name}: ${member.signature.slice(0,500)}`, node);
     }
-    const parameters = splitSignatureParameters(match![1]!, node).map(parameter => {
+    const rawParameters = splitSignatureParameters(match![1]!, node);
+    const restIndex = rawParameters.findIndex(parameter => parameter.startsWith("..."));
+    if (restIndex >= 0 && (restIndex !== rawParameters.length - 1 || rawParameters[restIndex]!.includes("=")))
+        fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "native rest parameter must be final and have no default", node);
+    const parameters = rawParameters.map(parameter => {
         const parameterMatch = /^(?:\.\.\.)?[A-Za-z_$][A-Za-z0-9_$]*\s*:\s*([^=\s]+)(?:\s*=.*)?$/.exec(parameter);
         if (!parameterMatch) {
             fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "source member parameter lacks one exact source type", node);
@@ -444,10 +449,12 @@ function authenticatedSourceMemberSignature(mapping: CapabilityMapping, node: Tr
         return parameterMatch![1]!;
     });
     const returnType = constructor ? mapping.sourceQName : callable![2]!;
-    if (parameters.length !== member.maxArgs || member.minArgs > parameters.length) {
+    const required = rawParameters.filter(parameter => !parameter.startsWith("...") && !parameter.includes("=")).length;
+    if ((restIndex < 0 ? parameters.length : 1000000) !== member.maxArgs || member.minArgs !== required) {
         fail("HARDENED_SOURCE_MEMBER_SIGNATURE", "source member signature and authenticated arity disagree", node);
     }
-    return { parameterTypes: parameters, returnType };
+    return { parameterTypes: parameters, returnType,
+        ...(restIndex < 0 ? {} : {restParameterType:parameters[restIndex]!}) };
 }
 
 function mappedFlashQNameForType(type: SemanticType, context: AdapterContext): string | null {
@@ -473,7 +480,7 @@ function adaptMappedCall(mapping: CapabilityMapping, argumentsList: SemanticExpr
     }
     const signature = authenticatedSourceMemberSignature(mapping, node);
     argumentsList.forEach((argument, index) => {
-        const parameterType = signature.parameterTypes[index];
+        const parameterType = signature.parameterTypes[index] || signature.restParameterType;
         if (!parameterType) {
             fail("HARDENED_CAPABILITY_CALL_TYPE", `Flash bridge argument ${index} lacks an authenticated source type`,
                 argumentNodes[index] || node);
@@ -3125,9 +3132,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
                 capabilitySource = imported.sourceQualifiedName;
             } else {
-                const mapping = memberMapping(context, imported.sourceQualifiedName, "read", name, node);
+                const mapping = memberMapping(context, imported.sourceQualifiedName, "read", name, node)
+                    || (!valuePosition ? memberMapping(context, imported.sourceQualifiedName, "call", name, node) : null);
                 if (mapping === null || mapping.targetMember === null || mapping.targetMember.scope !== "static") {
-                    fail("HARDENED_STATIC_MEMBER", "Flash static read requires an exact authenticated member", node);
+                    fail("HARDENED_STATIC_MEMBER", "Flash static access requires an exact authenticated member", node);
                 }
                 capabilitySource = imported.sourceQualifiedName;
             }
@@ -3211,7 +3219,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const arrayLength = isArrayType(targetType) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
                         && !valuePosition && ["push","pop","shift","unshift"].includes(name);
-                    const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr"].includes(name);
+                    const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase"].includes(name);
                     if (!errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
@@ -3343,7 +3351,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             capabilitySource="Error";capabilityMember="toString";resultType=semanticType(node,"String","string");
         } else if (callee.kind === "member" && callee.capabilitySource === "String"
             && assignmentType(callee.target, context, rawCallee).sourceName === "String") {
-            if (!["indexOf", "substr"].includes(callee.name) || args.length < 1 || args.length > 2)
+            if (callee.name === "toLowerCase") {
+                if (args.length !== 0) fail("HARDENED_STRING_ARITY", "String.toLowerCase requires its native zero-argument call", node);
+                capabilitySource="String"; capabilityMember="toLowerCase";
+            } else if (!["indexOf", "substr"].includes(callee.name) || args.length < 1 || args.length > 2)
                 fail("HARDENED_STRING_ARITY", "String method requires its native one or two arguments", node);
             args.forEach((argument, index) => {
                 const type = assignmentType(argument, context, node.children[1]!.children[index]!);
@@ -3462,6 +3473,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node);
             resultType = authoritySemanticType(methods[0]!.returnType!, context, node);
+        } else if (callee.kind === "member" && callee.target.kind === "identifier"
+            && callee.target.bindingKind === "import"
+            && context.importsByLocal[callee.target.name]?.authorityKind === "flash") {
+            const imported = context.importsByLocal[callee.target.name]!;
+            const mapping = memberMapping(context, imported.sourceQualifiedName, "call", callee.name, node);
+            if (callee.capabilitySource !== imported.sourceQualifiedName || mapping === null
+                || mapping.targetMember?.scope !== "static") {
+                fail("HARDENED_STATIC_CALL", "Flash static call lacks its exact authenticated static method", node);
+            }
+            resultType = adaptMappedCall(mapping!, args, node.children[1]!.children, context, node);
+            capabilitySource = mapping!.sourceQName;
+            capabilityMember = mapping!.sourceMember!.name;
         } else if (callee.kind === "member" && callee.capabilitySource !== null
             && localQNameForExpression(callee.target, context, rawCallee) !== null) {
             const receiverQName = localQNameForExpression(callee.target, context, rawCallee)!;

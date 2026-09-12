@@ -269,3 +269,27 @@ shape checks do not copy or pre-coerce values ahead of iteration.
 The 23-case startup-expressions fixture covers logical effects, complete gated
 trace streams, Unicode String lengths and Error/null text. These are language
 regressions, not proof of a complete application's startup or browser host flows.
+
+
+### Native lowercase and static calls
+
+String.toLowerCase uses the retained AIR scan of all 65,536 UTF-16 units.
+`tools/create-native-case-table.py --fixture <LayaAir>/tests/nativeFlashOracle/string-case-scan --check`
+verifies the generated 739-entry table against its native source and receipt.
+The 22-case sequence fixture covers contextual/expanding Unicode differences from
+JavaScript, supplementary characters, mixed locale text and null errors. The
+original application source and generated classes are never repaired by hand.
+
+Authenticated Flash static method calls now retain their static SDK modifier,
+source/target signature checks and native rest-parameter arity. Point.distance
+and Point.interpolate pass ten native/generated checkpoints alongside the absent
+ExternalInterface host guard. `native-static-profile.test.cjs` additionally checks
+zero/extra rest arguments, missing required arguments, wrong geometry types and
+static method-value rejection. Set HARDENED_FIXTURE_AIR_SDK, HARDENED_FIXTURE_LAYA
+and HARDENED_FIXTURE_FFDEC to the real SDK, Laya checkout and FFDec jar. Configured
+browser host calls and callbacks require their own interaction evidence.
+
+Number.toFixed remains held. Laya retains 256 native Number(text).toFixed
+checkpoints, including tiny fractions, large exponents, precision limits and
+nonfinite values. JavaScript formatting and decimal parsing differ on retained
+cases; no approximate fallback has been admitted.

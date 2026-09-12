@@ -1,3 +1,4 @@
+import { AS3_LOWERCASE_BMP } from "./internal/AS3CaseTable";
 import { as3NativeString, as3NativeNumber, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
 
 export function as3Int(value: unknown = 0): number {
@@ -66,4 +67,17 @@ export function as3ErrorToString(value:unknown):string {
         || Reflect.get(value,"toString") !== Error.prototype.toString)
         throw new AS3ObjectDispatchUnavailable("Error.toString requires canonical native Error traits");
     return as3String(value);
+}
+
+
+/** AIR uses single UTF-16-unit lowercase mappings, without contextual or expanding casing. */
+export function as3StringToLowerCase(value:unknown):string {
+    primitiveReceiver(value);
+    if (typeof value !== "string") throw new AS3ObjectDispatchUnavailable("String.toLowerCase requires an original String value");
+    const result:string[]=[];
+    for (let i=0;i<value.length;i++) {
+        const unit=value.charCodeAt(i);
+        result.push(String.fromCharCode(AS3_LOWERCASE_BMP[unit] ?? unit));
+    }
+    return result.join("");
 }

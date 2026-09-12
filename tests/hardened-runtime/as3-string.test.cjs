@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),test=require('node:test'),fs=require(
 const root=path.resolve(__dirname,'../..'),output=fs.mkdtempSync(path.join(os.tmpdir(),'as3-string-'));
 fs.writeFileSync(path.join(output,'tsconfig.json'),JSON.stringify({compilerOptions:{target:'ES2022',module:'CommonJS',strict:true,skipLibCheck:true,rootDir:path.join(root,'src'),outDir:output},files:[path.join(root,'src/hardened-runtime/AS3Coerce.ts')]}));
 cp.execFileSync(process.execPath,[path.join(root,'node_modules/typescript-4-9/bin/tsc'),'-p',path.join(output,'tsconfig.json')],{stdio:'inherit'});
-const {as3String,as3TraceValue}=require(path.join(output,'hardened-runtime/AS3Coerce.js'));
+const {as3String,as3TraceValue,as3StringToLowerCase}=require(path.join(output,'hardened-runtime/AS3Coerce.js'));
 const registry=require(path.join(output,'hardened-runtime/internal/AS3TypeRegistry.js'));
 class StringConversionProbe {}
 const row={kind:'class',qname:'StringConversionProbe',base:null,interfaces:[],sourceSha256:'a'.repeat(64),fields:[],objectTraits:{dynamic:false,members:[]}};
@@ -11,6 +11,26 @@ const metadata={schema:'as3-runtime-type-authority@1',qnames:[row.qname],entries
 registry.installAS3TypeAuthority({schema:metadata.schema,sha256:crypto.createHash('sha256').update(JSON.stringify(metadata)).digest('hex'),qnames:metadata.qnames,entries:[{...row,constructor:StringConversionProbe,predicate:v=>v instanceof StringConversionProbe,constructionTarget:null,constructionProof:null}]});
 test.after(()=>fs.rmSync(output,{recursive:true,force:true}));
 const laya=process.env.HARDENED_FIXTURE_LAYA;
+test('lowercase matches every BMP unit from the retained native scan',{skip:!laya},()=>{
+ const fixture=path.join(laya,'tests/nativeFlashOracle/string-case-scan');
+ cp.execFileSync('python3',['-B',path.join(root,'tools/create-native-case-table.py'),'--fixture',fixture,'--check'],{stdio:'inherit'});
+ const rows=JSON.parse(fs.readFileSync(path.join(fixture,'native-air.json'),'utf8')).capture.state.observations[0].changes;
+ const expected=new Map(rows.map(row=>[row.from,String.fromCharCode(...row.to)]));
+ for(let unit=0;unit<65536;unit++) assert.equal(as3StringToLowerCase(String.fromCharCode(unit)),expected.get(unit)??String.fromCharCode(unit),unit.toString(16));
+});
+test('native lowercase sequences preserve locale-independent UTF-16 behavior and null errors',{skip:!laya},()=>{
+ const fixture=path.join(laya,'tests/nativeFlashOracle/string-case');
+ const golden=JSON.parse(fs.readFileSync(path.join(fixture,'native-air.json'),'utf8'));
+ for(const [file,hash] of [['StringCaseProbe.as',golden.sourceSha256],['scenario.json',golden.scenarioSha256]])
+  assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(fixture,file))).digest('hex'),hash,file);
+ const scenario=JSON.parse(fs.readFileSync(path.join(fixture,'scenario.json'),'utf8'));
+ for(const checkpoint of golden.capture.state.observations){
+  const step=scenario.steps.find(step=>step.id===checkpoint.id);
+  const actual={result:'',failure:''};
+  try{actual.result=as3StringToLowerCase(step.calls[0].args[0]);}catch(error){actual.failure=as3String(error);}
+  const {id,...expected}=checkpoint;assert.deepEqual(actual,expected,id);
+ }
+});
 test('native String conversion values and exact errors',{skip:!laya},()=>{
  const capture=JSON.parse(fs.readFileSync(path.join(laya,'tests/nativeFlashOracle/string-conversion/native-air.json'),'utf8')).capture;
  const values={object:{},class:new StringConversionProbe(),function:()=>{},constructor:StringConversionProbe,array:[1,null,undefined,['x','y'],{}],

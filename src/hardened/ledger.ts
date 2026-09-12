@@ -444,7 +444,7 @@ function exactSourceTargetType(sourceType: string, targetType: TargetTypeDescrip
 }
 
 function sourceCallableTypes(signature: string, bitmapNumeric = false): { parameters: string[]; returnType: string | null } | null {
-    const callable = /^public (?:native )?function (?:[A-Za-z_$][A-Za-z0-9_$]*|(?:get|set) [A-Za-z_$][A-Za-z0-9_$]*)\((.*)\)\s*:\s*([^;\s]+)\s*;?$/.exec(signature);
+    const callable = /^public (?:static )?(?:native )?function (?:[A-Za-z_$][A-Za-z0-9_$]*|(?:get|set) [A-Za-z_$][A-Za-z0-9_$]*)\((.*)\)\s*:\s*([^;\s]+)\s*;?$/.exec(signature);
     const constructor = /^public function [A-Za-z_$][A-Za-z0-9_$]*\((.*)\)$/.exec(signature);
     const match = callable || constructor;
     if (!match) return null;
