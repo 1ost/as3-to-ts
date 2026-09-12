@@ -893,6 +893,21 @@ try {
         assert.deepEqual(literal.properties.map(property => property.name), ["__proto__", "constructor", "stage", "stage"]);
     }
     {
+        const adaptObject = body => {
+            const source = `package p { public class ObjectConversion { ${body} } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("ObjectConversion.as", source), source, sha256),
+                authority(built.ledger), source, sha256, undefined, undefined, undefined,
+                referenceAuthority, sourceMemberAuthority);
+        };
+        const semantic=adaptObject('public function run(value:*):Object { return Object(value); }');
+        const expression=semantic.declaration.members.find(m=>m.name === "run").body[0].expression;
+        assert.equal(expression.kind,"coercion"); assert.equal(expression.objectCall,true);
+        for (const args of ["", "null, undefined"])
+            assert.throws(()=>adaptObject(`public function run():Object { return Object(${args}); }`),
+                error=>error?.code === "HARDENED_OBJECT_CONVERSION_ARITY");
+    }
+    {
         const source = 'package p { import flash.display.Sprite; import flash.display.DisplayObject; public class DirectSubtype extends Sprite { public function DirectSubtype(){super();} public function make():DisplayObject { return new Sprite(); } public function self():DisplayObject { return this; } } }';
         const ast = built.normalizer.normalizeParserAst(built.parse("DirectSubtype.as", source), source, sha256);
         const semantic = built.adapter.adaptNormalizedParserAst(ast, authority(built.ledger), source, sha256,
@@ -900,8 +915,11 @@ try {
         assert.equal(semantic.declaration.members.find(m => m.name === "make").body[0].expression.sourceType.runtimeName, "flash.display.Sprite");
         const invalid = source.replace('public function make():DisplayObject { return new Sprite(); }', 'public function make(value:Object):DisplayObject { return value; }');
         const invalidAst = built.normalizer.normalizeParserAst(built.parse("DirectSubtype.as", invalid), invalid, sha256);
-        assert.throws(() => built.adapter.adaptNormalizedParserAst(invalidAst, authority(built.ledger), invalid, sha256,
-            undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority), error => error?.code === "HARDENED_ASSIGNMENT_TYPE");
+        const narrowed = built.adapter.adaptNormalizedParserAst(invalidAst, authority(built.ledger), invalid, sha256,
+            undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);
+        const conversion = narrowed.declaration.members.find(m => m.name === "make").body[0].expression;
+        assert.equal(conversion.kind, "coercion");
+        assert.deepEqual(conversion.reference, {targetKind:"class", runtimeName:"flash.display.DisplayObject"});
     }
     {
     const inheritedMathSource = "package p { import flash.display.Sprite; public class MathFixture extends Sprite { public function angle():Number { return Math.PI; } } }";

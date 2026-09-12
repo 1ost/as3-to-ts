@@ -293,10 +293,17 @@ export interface RuntimeTypeExpression extends SemanticIdentity {
 }
 
 export interface CoercionExpression extends SemanticIdentity {
+    objectCall?: true;
     kind: "coercion";
     slot?: true;
+    reference?: ReferenceCoercion;
     targetType: SemanticType;
     argument: SemanticExpression | null;
+}
+
+export interface ReferenceCoercion {
+    targetKind: "class" | "interface";
+    runtimeName: string;
 }
 
 export type LocalTypeModule = "application" | "bootstrap";
@@ -394,7 +401,7 @@ export interface AssignmentExpression extends SemanticIdentity {
     value: SemanticExpression;
     /** A consumed AS3 assignment returns its input before storage coercion. */
     resultType?: SemanticType;
-    storageCoercion?: { kind: "assignmentStorageCoercion"; targetType: SemanticType; slot?: true };
+    storageCoercion?: { kind: "assignmentStorageCoercion"; targetType: SemanticType; slot?: true; reference?: ReferenceCoercion };
     shortCircuit?: "&&" | "||";
     /** AIR evaluates a compound member receiver again after computing its value. */
     deferCompoundStore?: true;

@@ -218,6 +218,18 @@ export function asType<T>(value: unknown, type: AS3TypeToken<T>): T | null {
     return requireToken(type).test(value) ? value : null;
 }
 
+/** Reference slots and explicit class/interface casts use the same nominal test. */
+export function castReference<T extends object>(value: unknown, type: AS3TypeToken<T>): T | null {
+    const details = requireKind(type, ["class", "interface"]);
+    if (value === null || value === undefined) return null;
+    if (details.test(value)) return value;
+    // Native object diagnostic addresses are process-specific. Never invoke
+    // source conversion hooks merely to construct a rejected-cast diagnostic.
+    const error = new TypeError(`Error #1034: Type Coercion failed: cannot convert value to ${type.name}.`);
+    Object.defineProperty(error, "errorID", {value:1034});
+    throw error;
+}
+
 export function referenceType<T extends object>(name: string,
     runtimeValue: RuntimeConstructor<T> | AS3TypeToken<T>): AS3TypeToken<T> {
     if (typeof runtimeValue === "function") return lookupClassType(name, runtimeValue as RuntimeConstructor<T>);

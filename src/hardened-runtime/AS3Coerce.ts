@@ -1,3 +1,4 @@
+import { as3ObjectLiteral } from "./AS3Object";
 import { as3FixedDecimal } from "./internal/AS3NumberFormat";
 import { AS3_LOWERCASE_BMP } from "./internal/AS3CaseTable";
 import { as3NativeString, as3NativeNumber, as3NativeAdd, as3NativeEquals, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
@@ -27,6 +28,11 @@ export function as3Object(value: unknown): unknown {
     return value === undefined ? null : value;
 }
 
+
+/** Native Object(value) creates a fresh object for nullish values, unlike slot conversion. */
+export function as3ObjectConversion(value: unknown): unknown {
+    return value === null || value === undefined ? as3ObjectLiteral([]) : value;
+}
 
 /** Delay conversion until the shared trace bridge reaches this argument. */
 export function as3TraceValue(value:unknown):{toString():string} {

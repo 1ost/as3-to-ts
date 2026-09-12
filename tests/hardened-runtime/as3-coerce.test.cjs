@@ -79,3 +79,11 @@ test('String and Error primitive members retain null errors and reject unsupport
  const error=new Error('message');error.toString=()=> 'custom';
  assert.throws(()=>as3ErrorToString(error),{name:'AS3ObjectDispatchUnavailable'});
 });
+
+const {as3ObjectConversion}=require(path.join(OUTPUT,"hardened-runtime/AS3Coerce.js"));
+test("explicit Object conversion preserves values and allocates fresh nullish objects", () => {
+    const a=as3ObjectConversion(null), b=as3ObjectConversion(undefined);
+    assert.deepEqual(a,{}); assert.deepEqual(b,{}); assert.notEqual(a,b);
+    for (const value of [7,"text",false,[],{},NaN]) assert.equal(as3ObjectConversion(value),value);
+    assert.equal(as3Object(undefined),null);
+});

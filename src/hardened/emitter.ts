@@ -137,7 +137,7 @@ function vectorPolicyNode(type: SemanticType, ts: TypeScriptCompilerApi): any {
     ]);
 }
 
-function runtimeTypeTokenNode(expression: Extract<SemanticExpression, { kind: "runtimeType" }>,
+function runtimeTypeTokenNode(expression: Pick<Extract<SemanticExpression, { kind: "runtimeType" }>, "targetKind" | "runtimeName" | "targetType">,
     ts: TypeScriptCompilerApi): any {
     if (expression.targetKind === "primitive") {
         return ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3Types"),
@@ -294,6 +294,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         ts.factory.createIdentifier("__as3FunctionApply"),undefined,[expressionNode(expression.target,ts),
             expressionNode(expression.receiver,ts),expressionNode(expression.argumentsArray,ts)]);
     if (expression.kind === "coercion") {
+        if (expression.objectCall) return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectConversion"), undefined,
+            [expressionNode(expression.argument!, ts)]);
+        if (expression.reference) return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Cast"), undefined,
+            [expressionNode(expression.argument!, ts), runtimeTypeTokenNode({...expression.reference, targetType:expression.targetType}, ts)]);
         if (expression.slot && expression.targetType.sourceName === "Dictionary")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3DictionarySlot"), undefined,
                 [expressionNode(expression.argument!, ts)]);
@@ -1167,7 +1171,15 @@ function programHasKind(program: SemanticProgram, kind: string): boolean {
 }
 
 function programUsesRuntimeType(program: SemanticProgram): boolean {
-    return programHasKind(program, "runtimeType");
+    const seen = new Set<object>();
+    const visit = (value: any): boolean => {
+        if (value === null || typeof value !== "object" || seen.has(value)) return false;
+        seen.add(value);
+        return value.kind === "runtimeType" || value.reference !== undefined
+            && (value.kind === "coercion" || value.kind === "assignmentStorageCoercion")
+            || Object.values(value).some(visit);
+    };
+    return visit(program);
 }
 
 function programUsesClassValue(program: SemanticProgram): boolean {
@@ -1225,7 +1237,7 @@ function embeddedBitmapDeclarations(program: SemanticProgram, imports: any[], ts
 
 function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
     const names = [
-        ["AS3ClassValue", "__as3ClassValue"], ["AS3Types", "__as3Types"], ["as3As", "__as3As"], ["as3Is", "__as3Is"],
+        ["AS3ClassValue", "__as3ClassValue"], ["AS3Types", "__as3Types"], ["as3As", "__as3As"], ["as3Is", "__as3Is"], ["as3Cast", "__as3Cast"],
         ["as3ClassType", "__as3ClassType"], ["as3InterfaceType", "__as3InterfaceType"],
         ["as3NamedReferenceType", "__as3NamedReferenceType"],
         ["as3RejectConstructorArity", "__as3RejectConstructorArity"],
@@ -1252,7 +1264,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3StringToLowerCase", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,

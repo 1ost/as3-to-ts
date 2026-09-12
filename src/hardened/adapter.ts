@@ -32,6 +32,7 @@ import {
     SemanticSetter,
     SemanticStatement,
     SemanticType,
+    ReferenceCoercion,
     HardenedSemanticError,
 } from "./contracts";
 import { assertLoadedCapabilityAuthority, Sha256Function, targetModuleSpecifier } from "./ledger";
@@ -2156,9 +2157,23 @@ function assertAssignmentCompatible(target: SemanticType, value: SemanticType, n
     fail("HARDENED_ASSIGNMENT_TYPE", `assignment from ${value.sourceName} (${value.emittedName}, nullable=${value.nullable}) to ${target.sourceName} (${target.emittedName}, nullable=${target.nullable}) requires proven AS3 coercion at node ${node.id}`, node);
 }
 
+function referenceCoercionForType(type: SemanticType, context: AdapterContext): ReferenceCoercion | null {
+    if (type.sourceName === context.className)
+        return {targetKind:"class", runtimeName:context.classQualifiedName};
+    const imported = context.importsByLocal[type.sourceName];
+    if (imported?.authorityKind !== "local" && (imported?.authorityKind !== "flash"
+        || !context.runtimeReferenceParentsByQName.has(imported.sourceQualifiedName))) return null;
+    if (imported?.localValueType === null && (imported.runtimeInterface || imported.runtimeConstructible))
+        return {targetKind:imported.runtimeInterface ? "interface" : "class", runtimeName:imported.sourceQualifiedName};
+    return null;
+}
+
 function adaptAssignmentValue(target: SemanticType, expression: SemanticExpression,
     context: AdapterContext, node: TreeNode): SemanticExpression {
     const value = assignmentType(expression, context, node);
+    const reference = context.sourceMemberAuthority !== null ? referenceCoercionForType(target, context) : null;
+    if (reference && ["*", "Object", "undefined"].includes(value.sourceName))
+        return Object.assign(identity(node), {kind:"coercion" as const, reference, targetType:target, argument:expression});
     const targetImport = context.importsByLocal[target.sourceName];
     if (context.sourceMemberAuthority !== null && isDictionaryType(target)
         && targetImport?.authorityKind === "intrinsic" && targetImport.sourceQualifiedName === "flash.utils.Dictionary"
@@ -3041,11 +3056,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 ? Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument: binary })
                 : binary;
         }
-        let storageCoercion: { kind: "assignmentStorageCoercion"; targetType: SemanticType; slot?: true } | undefined;
+        let storageCoercion: { kind: "assignmentStorageCoercion"; targetType: SemanticType; slot?: true; reference?: ReferenceCoercion } | undefined;
         if (consumed && value !== input) {
             if (value.kind !== "coercion" || value.argument !== input)
                 fail("HARDENED_ASSIGNMENT_VALUE", "assignment result requires a proven storage conversion", node);
-            storageCoercion = {kind:"assignmentStorageCoercion", targetType: value.targetType, ...(value.slot ? {slot:true as const} : {})};
+            storageCoercion = {kind:"assignmentStorageCoercion", targetType: value.targetType,
+                ...(value.slot ? {slot:true as const} : {}), ...(value.reference ? {reference:value.reference} : {})};
         }
         // A Function local's callback proof belongs to its exact initializer.
         // Once mutable source code assigns the local, conservatively revoke that
@@ -3467,6 +3483,25 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         }
         const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
+        if (context.sourceMemberAuthority !== null && callee.kind === "identifier"
+            && callee.bindingKind === "builtin-class" && callee.name === "Object") {
+            if (args.length !== 1) fail("HARDENED_OBJECT_CONVERSION_ARITY", "Object conversion requires exactly one value", node);
+            return Object.assign(identity(node), {kind:"coercion" as const, objectCall:true as const,
+                targetType:semanticType(node,"Object","unknown"), argument:args[0]!});
+        }
+        if (context.sourceMemberAuthority !== null && rawCallee.kind === "IDENTIFIER" && callee.kind === "identifier"
+            && (callee.bindingKind === "import" || callee.bindingKind === "current-class")) {
+            const imported = context.importsByLocal[callee.name];
+            if (callee.bindingKind === "current-class" || imported?.runtimeInterface || imported?.runtimeConstructible) {
+                const targetType = parseType({...rawCallee, kind:"TYPE"}, context, false);
+                const reference = referenceCoercionForType(targetType, context);
+                if (reference && reference.runtimeName === callee.bindingSourceQualifiedName) {
+                    if (args.length !== 1) fail("HARDENED_REFERENCE_CAST_ARITY", "reference cast requires exactly one value", node);
+                    return Object.assign(identity(node), {kind:"coercion" as const, reference,
+                        targetType:withNullability(targetType,true), argument:args[0]!});
+                }
+            }
+        }
         if (callee.kind === "index" && callee.accessKind === "object") {
             if (callee.index.kind !== "literal" || !["hasOwnProperty","toString"].includes(String(callee.index.value)))
                 fail("HARDENED_OBJECT_CALL_TARGET", "dynamic calls require retained native argument and return behavior", node);

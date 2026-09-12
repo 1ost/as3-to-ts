@@ -4,6 +4,7 @@ import {
     AS3ClassValue,
     RuntimeConstructor,
     asType,
+    castReference,
     lookupClassType,
     lookupInterfaceType,
     lookupNamedReferenceType,
@@ -50,6 +51,10 @@ export function as3Is<T>(value: unknown, type: AS3TypeToken<T>): value is T {
 
 export function as3As<T>(value: unknown, type: AS3TypeToken<T>): T | null {
     return asType(value, type);
+}
+
+export function as3Cast<T extends object>(value: unknown, type: AS3TypeToken<T>): T | null {
+    return castReference(value, type);
 }
 
 /** Unshadowable generated-constructor failure seam. It never observes application values. */

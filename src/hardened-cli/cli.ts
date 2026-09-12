@@ -68,7 +68,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Array.ts": "c140bb7e5a2f221faaf259793258eee4ad6e324019859abd534d3fd9bb9bbacf",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
     "AS3ByteArray.ts": "f6e206784fcab50b8af57d0fb5acdf50696aeef8527ff2e58709c0f06f15bc30",
-    "AS3Coerce.ts": "8d44070a6362a1d64fcdf6f08ed8a4cc22d2bab3381fd6dadd47da4116936c52",
+    "AS3Coerce.ts": "176e5b15f422006aadabee662d2e2c7104a714aea1f41c840e37592dd914ce9e",
     "AS3Embed.ts": "41628cd8db111c12c5f12c8a51f036d37c839f8ae609986d0d24796e425d2055",
     "AS3Dictionary.ts": "95d56c1fedc5ae6e4e3b9d54e7125b60aef8a6709c3239409b6a4db19172ee08",
     "AS3Function.ts": "9360a9d8807c74ab3ac54bf440f3f40f8126b97ed59602111a804705e6da5c32",
@@ -77,11 +77,11 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
     "AS3Timer.ts": "639a0e3776611b3fd736305994d709b47af8465509bb9d2de440bc611a985851",
-    "AS3Type.ts": "65ebc98ce0aa83a6b10666cc5572e6ee414b5eda28fccec1901768e9c7817dbe",
+    "AS3Type.ts": "98e42e76e2f20bbac836ecf4964afdab0fd75a20bf730edbf080e09020983e38",
     "AS3Vector.ts": "5deedf01b46703ae7ae0d0f98ed6cfa680a39496ddd6ab747ee48c3bb5ec1101",
     "internal/AS3NumberFormat.ts": "c7a2b808bd4bafded492a65acce6041f67601f2e56308fb2724443f8baa58bc4",
     "internal/AS3CaseTable.ts": "ed85937df05d8ba9015e3cd35b8d75ce46e56348547085c0d218426ed0a44fc5",
-    "internal/AS3TypeRegistry.ts": "ae85a3a443adb326dd51c296c1ad3a61b6f59b0ea8afbe15fb3a0ddbab474388",
+    "internal/AS3TypeRegistry.ts": "374625de55765e16862b573283460c956f3f1090afaf4c729b69ba31b4036e3e",
     "internal/AS3TimerRuntime.ts": "3204d4ee73defe74f71fd43f1e146f4ef21ee80784ba585ff52698c97f90285e",
 });
 

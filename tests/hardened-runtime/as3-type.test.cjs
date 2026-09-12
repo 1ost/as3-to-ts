@@ -22,7 +22,7 @@ childProcess.execFileSync(process.execPath,
 const runtime = require(path.join(OUTPUT, "hardened-runtime/AS3Type.js"));
 const internal = require(path.join(OUTPUT, "hardened-runtime/internal/AS3TypeRegistry.js"));
 const { as3BindMethod } = require(path.join(OUTPUT, "hardened-runtime/AS3MethodClosure.js"));
-const { AS3Types, as3As, as3ClassType, as3InterfaceType, as3Is } = runtime;
+const { AS3Types, as3As, as3Cast, as3ClassType, as3InterfaceType, as3Is } = runtime;
 
 const baseBrands = new WeakSet();
 class Base { constructor() { baseBrands.add(this); } }
@@ -120,6 +120,22 @@ test("Class and Function are disjoint and forged tokens fail closed", () => {
     assert.equal(as3Is(ordinary, AS3Types.Function), true);
     assert.equal(as3Is(as3InterfaceType("test.IRunnable"), AS3Types.Class), true);
     assert.throws(() => as3Is({}, Object.freeze({ name: "forged" })), /authenticated token/);
+});
+
+test("reference casts preserve identity, normalize nullish values and reject without hooks", () => {
+    const value = new Child();
+    const type = as3ClassType("test.Base", Base);
+    assert.equal(as3Cast(value, type), value);
+    assert.equal(as3Cast(value, as3InterfaceType("test.IEventSource")), value);
+    assert.equal(as3Cast(undefined, type), null);
+    assert.equal(as3Cast(null, type), null);
+    let conversions = 0;
+    const fake = { valueOf() { conversions++; return value; }, toString() { conversions++; return "Base"; } };
+    for (const input of [fake, {}, 1, "Base", Object.create(Base.prototype)])
+        assert.throws(() => as3Cast(input, type), error => error instanceof TypeError && error.errorID === 1034);
+    assert.equal(conversions, 0);
+    assert.throws(() => as3Cast(null, {name:"test.Base"}), /authenticated token/);
+    assert.throws(() => as3Cast(1, AS3Types.int), /wrong token kind/);
 });
 
 test("standalone method closure cache is shared and idempotent across base and derived constructors", () => {
