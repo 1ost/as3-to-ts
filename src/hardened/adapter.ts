@@ -2424,6 +2424,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const right = parseExpression(node.children[2]!, context, true);
         const leftType = assignmentType(left, context, node.children[0]!);
         const rightType = assignmentType(right, context, node.children[2]!);
+        if ((operator === "&&" || operator === "||") && context.sourceMemberAuthority !== null) {
+            if ([leftType,rightType].some(type => ["void","XML","XMLList"].includes(type.sourceName)))
+                fail("HARDENED_LOGICAL_TYPE", "logical operands require supported AS3 value domains", node);
+            // Native logical operators select an operand, retaining its value and
+            // skipping the other expression. Boolean coercion belongs to the consumer.
+            const resultType = sameUnderlyingType(leftType,rightType)
+                ? withNullability(leftType,leftType.nullable || rightType.nullable)
+                : [leftType,rightType].every(type => ["Number","int","uint"].includes(type.sourceName))
+                    ? semanticType(node,"Number","number") : semanticType(node,"*","unknown");
+            return Object.assign(identity(node),{kind:"binary" as const,
+                operator:operator as "&&" | "||",left,right,resultType});
+        }
         const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
             || (rightType.sourceName === "null" && leftType.nullable);
         const looseEquality = operator === "==" || operator === "!=";

@@ -151,3 +151,11 @@ namespace storage collisions, primitive receivers, Object-valued keys and refere
 slot coercion remain explicit unsupported boundaries. General dynamic calls and
 dynamic class declarations remain held. Helper tests do not establish full class
 execution or application parity.
+
+
+Application profiles also admit value-preserving `&&` and `||` for supported
+value domains. The result retains the selected operand rather than inventing a
+Boolean return type, and the emitted operator evaluates the right operand only
+when required. A consuming Boolean context performs its own coercion. The shared
+LogicalValuesProbe retains native null/zero/false/empty/reference/undefined values
+and side-effect counts; XML/XMLList and void operands remain held.
