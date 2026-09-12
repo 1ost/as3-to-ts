@@ -1820,7 +1820,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "globalCall") return semanticType(node, "void", "void", [], false);
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false, context.classQualifiedName);
-    if (expression.kind === "identifier" && expression.bindingKind === "builtin-class")
+    if (expression.kind === "identifier" && (expression.bindingKind === "builtin-class" || expression.bindingKind === "interface-class"))
         return semanticType(node, "Class", "__as3ClassValue", [], false);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
         return context.locals[expression.name]!.type;
@@ -2410,6 +2410,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         const name = validateIdentifier(requiredText(nameNode, "constructor target"), nameNode);
         const args = call.children[1]!.children.map((child) => parseExpression(child, context, true));
+        if (context.sourceMemberAuthority !== null
+            && (context.locals[name]?.type.sourceName === "Class" || context.parameters[name]?.type.sourceName === "Class")) {
+            const constructorValue=parseExpression(nameNode,context,true);
+            if (assignmentType(constructorValue,context,nameNode).sourceName !== "Class")
+                fail("HARDENED_NEW_DYNAMIC_TYPE", "dynamic construction requires a proven Class value", nameNode);
+            for (const argument of args) if (assignmentType(argument,context,call).sourceName === "void")
+                fail("HARDENED_NEW_DYNAMIC_ARGUMENT", "constructor arguments must produce values", call);
+            return Object.assign(identity(node), {kind:"new" as const,dynamicClass:true as const,
+                sourceType:semanticType(node,"*","unknown"),constructorValue,arguments:args});
+        }
         if (name === "Error" && context.sourceMemberAuthority !== null && context.className !== "Error"
             && !context.locals.Error && !context.parameters.Error && !context.fields.Error && !context.methods.Error
             && !context.accessors.Error && !context.importsByLocal.Error && !context.resolveImportedType("Error",null,nameNode)) {
@@ -2903,6 +2913,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             ? Object.assign(identity(node), {kind:"identifier" as const,name,bindingKind:"package-function" as const,bindingSourceQualifiedName:context.classQualifiedName})
             : currentClassIdentifier(node, context);
         if (imported) {
+            if (valuePosition && imported.runtimeInterface && context.sourceMemberAuthority !== null)
+                return Object.assign(identity(node), {kind:"identifier" as const,name,bindingKind:"interface-class" as const,
+                    bindingSourceQualifiedName:imported.sourceQualifiedName});
             if (imported.sourceQualifiedName === "flash.utils.getQualifiedClassName" && valuePosition)
                 fail("HARDENED_REFLECTION_FUNCTION_VALUE", "native reflection function values require retained closure behavior", node);
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name,

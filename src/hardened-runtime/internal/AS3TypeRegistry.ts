@@ -639,3 +639,13 @@ export function classInitializationBase(constructor: unknown, proof: unknown): R
         throw new TypeError("AS3 class initialization lacks sealed construction authority");
     return CLASS_BASES.get(constructor) ?? null;
 }
+
+
+/** Read-only dynamic construction lookup; never adopts host constructors. */
+export function lookupDynamicConstruction(value:unknown):RuntimeConstructor | string | null {
+    requireSealed();
+    if (typeof value === "function" && CLASS_TOKENS.has(value)) return value as RuntimeConstructor;
+    if (value !== null && typeof value === "object" && TYPE_DETAILS.get(value)?.kind === "interface")
+        return (value as AS3TypeToken<unknown>).name;
+    return null;
+}

@@ -189,7 +189,7 @@ export interface FunctionApplyExpression extends SemanticIdentity {
 export interface IdentifierExpression extends SemanticIdentity {
     kind: "identifier";
     name: string;
-    bindingKind: "current-class" | "import" | "local" | "parameter" | "package-function" | "builtin-class";
+    bindingKind: "current-class" | "import" | "local" | "parameter" | "package-function" | "builtin-class" | "interface-class";
     bindingSourceQualifiedName: string | null;
 }
 
@@ -421,6 +421,7 @@ export interface NewExpression extends SemanticIdentity {
     sourceType: SemanticType;
     arguments: SemanticExpression[];
     constructorValue?: SemanticExpression;
+    dynamicClass?: true;
 }
 
 export interface BinaryExpression extends SemanticIdentity {

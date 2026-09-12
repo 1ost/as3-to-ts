@@ -193,6 +193,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return expression.value ? ts.factory.createTrue() : ts.factory.createFalse();
     }
     if (expression.kind === "identifier") {
+        if (expression.bindingKind === "interface-class") return ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3InterfaceType"),undefined,[ts.factory.createStringLiteral(expression.bindingSourceQualifiedName!)]);
         const value = ts.factory.createIdentifier(expression.name);
         return ["current-class", "import"].includes(expression.bindingKind)
             ? initializeClassNode(value, expression.bindingKind === "current-class", ts) : value;
@@ -417,6 +419,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         if (expression.sourceType.emittedName === "__AS3ArgumentError" && expression.sourceType.runtimeName === "ArgumentError")
             return ts.factory.createNewExpression(ts.factory.createIdentifier("__AS3ArgumentError"),undefined,
                 expression.arguments.map(argument => expressionNode(argument,ts)));
+        if (expression.dynamicClass && expression.constructorValue)
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ConstructClass"),undefined,
+                [expressionNode(expression.constructorValue,ts),ts.factory.createArrayLiteralExpression(expression.arguments.map(argument=>expressionNode(argument,ts)))]);
         if (expression.constructorValue) {
             return ts.factory.createNewExpression(ts.factory.createParenthesizedExpression(ts.factory.createAsExpression(
                 expressionNode(expression.constructorValue, ts), ts.factory.createConstructorTypeNode(undefined, undefined, [],
@@ -1019,7 +1024,7 @@ function constructorArityGuard(className: string, member: SemanticConstructor | 
     return ts.factory.createIfStatement(invalid, ts.factory.createExpressionStatement(ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3RejectConstructorArity"), undefined, [
             ts.factory.createStringLiteral(className), ts.factory.createNumericLiteral(minimum),
-            unbounded ? ts.factory.createNull() : ts.factory.createNumericLiteral(maximum),
+            unbounded ? ts.factory.createNull() : ts.factory.createNumericLiteral(maximum), length,
         ])));
 }
 
@@ -1156,8 +1161,36 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
                 ts.factory.createIdentifier("__as3ConstructionProof")]))], true)),
     ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
         ts.factory.createIdentifier("__as3ConstructionTargets"), "delete"), undefined, [ts.factory.createThis()]))], true);
+    const constructorParameters=(member?.parameters ?? []).map(parameter=>{
+        if (parameter.rest) return parameterNode(parameter,ts);
+        return ts.factory.createParameterDeclaration(undefined,undefined,parameter.name,
+            parameter.defaultValue === null ? undefined : ts.factory.createToken(ts.SyntaxKind.QuestionToken),
+            typeNode(parameter.type,ts),undefined);
+    });
+    const constructorSlots=(member?.parameters ?? []).filter(parameter=>!parameter.rest).flatMap((parameter)=>{
+        const value=ts.factory.createIdentifier(parameter.name),index=member!.parameters.indexOf(parameter);
+        const initial=parameter.defaultValue === null ? value : ts.factory.createConditionalExpression(
+            ts.factory.createBinaryExpression(ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length"),
+                ts.factory.createToken(ts.SyntaxKind.LessThanEqualsToken),ts.factory.createNumericLiteral(index)),
+            ts.factory.createToken(ts.SyntaxKind.QuestionToken),expressionNode(parameter.defaultValue,ts),ts.factory.createToken(ts.SyntaxKind.ColonToken),value);
+        const referenceParameter = parameter.type.runtimeName !== null
+            && (parameter.type.sourceName === className || program.imports.some(item =>
+                item.sourceQualifiedName === parameter.type.runtimeName && item.localValueType === null
+                && (item.authorityKind === "local" || item.authorityKind === "flash")
+                && (item.runtimeConstructible || item.runtimeInterface)));
+        if (!nativeParameterSlot(parameter) && !referenceParameter && parameter.defaultValue === null) return [];
+        const normalized = referenceParameter ? ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3Cast"), undefined, [initial,
+                ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NamedReferenceType"),
+                    [typeNode({...parameter.type, nullable:false},ts)],
+                    [ts.factory.createStringLiteral(parameter.type.runtimeName!)])])
+            : nativeParameterSlot(parameter) ? ts.factory.createCallExpression(ts.factory.createIdentifier("__as3FunctionArgument"),undefined,
+                [initial,ts.factory.createStringLiteral(parameter.type.sourceName)]) : initial;
+        return [ts.factory.createExpressionStatement(ts.factory.createAssignment(value,normalized))];
+    });
+    const constructorQName=program.packageName ? program.packageName+"."+className : className;
     const body = [ts.factory.createExpressionStatement(initializeClassNode(ts.factory.createIdentifier(className), true, ts)),
-        constructorArityGuard(className, member, ts), ...stagedFieldSetup, ...leadingLocals,
+        constructorArityGuard(constructorQName, member, ts), ...constructorSlots, ...stagedFieldSetup, ...leadingLocals,
         ...(superStatement === null ? [] : [prepareStatement, superStatement])]
         .concat(prologue, [ts.factory.createTryStatement(
         ts.factory.createBlock(tryBody, true), catchClause, finallyClause)]);
@@ -1165,7 +1198,7 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
         throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR", "derived constructor lacks its proven top-level super call", program.sourceNodeId);
     }
     return ts.factory.createConstructorDeclaration(member === null ? undefined : modifierTokens(member.modifiers, ts),
-        member === null ? [] : member.parameters.map(parameter => parameterNode(parameter, ts)),
+        constructorParameters,
         ts.factory.createBlock(body, true));
 }
 
@@ -1372,6 +1405,7 @@ function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
         ["AS3ClassValue", "__as3ClassValue"], ["AS3Types", "__as3Types"], ["as3As", "__as3As"], ["as3Is", "__as3Is"], ["as3Cast", "__as3Cast"],
         ["as3ClassType", "__as3ClassType"], ["as3InterfaceType", "__as3InterfaceType"],
         ["as3NamedReferenceType", "__as3NamedReferenceType"],
+        ["as3ConstructClass", "__as3ConstructClass"],
         ["as3RejectConstructorArity", "__as3RejectConstructorArity"],
         ["as3InitializeInstanceFields", "__as3InitializeInstanceFields"],
         ["as3PrepareConstruction", "__as3PrepareConstruction"],
@@ -1550,6 +1584,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.kind === "lambda"
         || (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
             && value.targetType.sourceName !== "Dictionary"
+        || value.kind === "constructor" && value.parameters.some(nativeParameterSlot)
         || value.kind === "method" && (value.parameters.some(nativeParameterSlot)
             || !value.modifiers.includes("static") && value.parameters.some((p:SemanticParameter)=>!p.rest && p.defaultValue === null))
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));

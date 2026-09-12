@@ -218,3 +218,22 @@ test("namespace metadata cannot drift, widen after installation, or install inva
         assert.equal(result.status,0,result.stderr);
     }
 });
+
+test("dynamic Class construction uses sealed identities and retains native non-constructor errors",()=>{
+    const base=runtime.as3ConstructClass(Base,[]),child=runtime.as3ConstructClass(Child,[]);
+    assert.equal(as3Is(base,as3ClassType("test.Base",Base)),true);
+    assert.equal(as3Is(child,as3ClassType("test.Base",Base)),true);
+    assert.notEqual(base,runtime.as3ConstructClass(Base,[]));
+    for(const value of [null,undefined]) assert.throws(()=>runtime.as3ConstructClass(value,[]),{
+        name:"TypeError",errorID:1007,message:"Error #1007: Instantiation attempted on a non-constructor."});
+    assert.throws(()=>runtime.as3ConstructClass(class Forged {},[]),runtime.AS3ClassConstructionUnavailable);
+    assert.throws(()=>runtime.as3ConstructClass(Object,[]),runtime.AS3ClassConstructionUnavailable);
+    assert.throws(()=>runtime.as3ConstructClass(as3InterfaceType("test.IRunnable"),[]),{
+        name:"VerifyError",errorID:1001,message:"Error #1001: The method test::IRunnable() is not implemented."});
+});
+test("constructor arity preserves qualified labels and actual argument counts",()=>{
+    assert.throws(()=>runtime.as3RejectConstructorArity("test.Required",1,1,0),{
+        name:"ArgumentError",errorID:1063,message:"Error #1063: Argument count mismatch on test::Required(). Expected 1, got 0."});
+    assert.throws(()=>runtime.as3RejectConstructorArity("Required",1,1,2),{
+        name:"ArgumentError",errorID:1063,message:"Error #1063: Argument count mismatch on Required(). Expected 1, got 2."});
+});
