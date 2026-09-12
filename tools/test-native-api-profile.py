@@ -135,4 +135,27 @@ public class Base {
         row['constructors'].append('new (): Loader')
         self.assertEqual(len(api.map_native_members(*args)[0]), 1)
 
+    def test_overload_selection_keeps_complete_ledger_identity(self):
+        native = dict(name='getBounds', access='call', scope='instance', constructor=False,
+            signature='public function getBounds(target:flash.display.DisplayObject) : flash.geom.Rectangle',
+            minArgs=1, maxArgs=1, type='flash.geom.Rectangle', parameters=[{'type':'flash.display.DisplayObject'}])
+        classes = {'flash.display.DisplayObject': {'base':None, 'members':[native]}}
+        target = dict(name='getBounds', scope='instance', kind='method',
+            signature='{ (targetCoordinateSpace: DisplayObject): Rectangle; (out?: LayaRectangle): LayaRectangle; }')
+        row = dict(module='DisplayObject.ts', export='DisplayObject', kind='class', signature='typeof DisplayObject', members=[target])
+        args = ('flash.display.DisplayObject', ['instance-member'], row, 'capability', classes, {'getBounds'})
+        mappings, uses = api.map_native_members(*args)
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(mappings[0]['targetMember']['signature'], target['signature'])
+        self.assertEqual(mappings[0]['sourceMember']['signature'], native['signature'])
+        for signature in [
+            '{ (target: DisplayObject): LayaRectangle; (out?: LayaRectangle): LayaRectangle; }',
+            '{ (target: DisplayObject): Rectangle; (other?: DisplayObject): Rectangle; }',
+            '{ (target: DisplayObject, extra: number): Rectangle; (out?: LayaRectangle): LayaRectangle; }',
+            '{ (target: LayaRectangle): Rectangle; (out?: LayaRectangle): LayaRectangle; }',
+            '{ (target: DisplayObject): Rectangle; broken; }',
+        ]:
+            target['signature'] = signature
+            self.assertEqual(api.map_native_members(*args), ([], []), signature)
+
 if __name__ == '__main__': unittest.main()

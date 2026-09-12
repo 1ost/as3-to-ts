@@ -1112,7 +1112,8 @@ function parseLiteral(node: TreeNode): SemanticExpression {
         value = text === "true";
     } else if (text === "null") {
         value = null;
-    } else if (/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(text) || /^0[xX][0-9a-fA-F]{1,8}$/.test(text)) {
+    } else if (/^-?(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*)?|\.[0-9]+)$/.test(text)
+        || /^0[xX][0-9a-fA-F]{1,8}$/.test(text)) {
         value = Number(text);
         if (!Number.isFinite(value)) {
             fail("HARDENED_LITERAL_NUMBER", "numeric literal is outside the finite subset", node);

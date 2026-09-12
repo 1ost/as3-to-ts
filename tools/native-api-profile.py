@@ -204,6 +204,53 @@ def target_arity(signature):
             1000000 if any(p.startswith('...') for p in parameters) else len(parameters))
 
 
+def target_overloads(signature):
+    """Read a bounded TS call-signature set without changing ledger identity."""
+    if not signature.startswith('{ ') or not signature.endswith(' }') or len(signature) > 65536:
+        return []
+    body, start, values = signature[2:-2], 0, []
+    try:
+        for index, character, depth in signature_tokens(body):
+            if character == ';' and depth == 0:
+                values.append(body[start:index].strip())
+                start = index + 1
+        if body[start:].strip() or not 1 < len(values) <= 32:
+            return []
+        return values if all(target_arity(value) is not None for value in values) else []
+    except ValueError:
+        return []
+
+
+def overload_matches_native(signature, native):
+    """Require one complete source-compatible overload, including result type."""
+    arity = target_arity(signature)
+    if arity is None or arity[0] > native['minArgs'] or arity[1] < native['maxArgs']:
+        return False
+    closing = next((index for index, ch, depth in signature_tokens(signature) if ch == ')' and depth == 0), None)
+    if closing is None:
+        return False
+    parameters = split_parameters(signature[1:closing])
+    result = re.sub(r'^(?:: | => )', '', signature[closing + 1:])
+    if len(parameters) != len(native['parameters']) or any(p.startswith('...') for p in parameters):
+        return False
+
+    def matches(target, source):
+        expected = {'Boolean': 'boolean', 'Number': 'number', 'int': 'number', 'uint': 'number',
+                    'String': 'string', 'void': 'void', '*': 'unknown', 'Object': 'unknown',
+                    'Function': 'Function', 'Array': 'unknown[]'}.get(source)
+        if expected is None and source.startswith('flash.'):
+            expected = source.rsplit('.', 1)[-1]
+        if expected is None:
+            return False
+        variants = [part.strip() for part in target.split('|')]
+        nullable = source.startswith('flash.') or source in ('String', 'Object', '*', 'Array', 'Function')
+        return expected in variants and all(part == expected or nullable and part == 'null' for part in variants)
+
+    return (all(matches(parameter.split(':', 1)[1].strip(), source['type'])
+                for parameter, source in zip(parameters, native['parameters']))
+            and matches(result.strip(), native['type']))
+
+
 def map_native_members(qname, roles, row, capability_id, classes, used_names):
     mappings, uses = [], []
     for native in native_members(classes, qname):
@@ -217,10 +264,16 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
                        for signature in row.get('constructors', [])] if native['constructor'] else
                       [m for m in row.get('members', []) if m['name'] == target_name and m['scope'] == native['scope']])
         if native['access'] == 'call':
-            candidates = [m for m in candidates if m['kind'] == ('constructor' if native['constructor'] else 'method')
-                and target_arity(m['signature']) is not None
-                and (target_arity(m['signature']) == (native['minArgs'], native['maxArgs']) if native['constructor'] else
-                     target_arity(m['signature'])[0] <= native['minArgs'] and target_arity(m['signature'])[1] >= native['maxArgs'])]
+            def accepts_call(member):
+                if member['kind'] != ('constructor' if native['constructor'] else 'method'):
+                    return False
+                overloads = target_overloads(member['signature']) if not native['constructor'] else []
+                if overloads:
+                    return sum(overload_matches_native(value, native) for value in overloads) == 1
+                arity = target_arity(member['signature'])
+                return arity is not None and (arity == (native['minArgs'], native['maxArgs']) if native['constructor']
+                    else arity[0] <= native['minArgs'] and arity[1] >= native['maxArgs'])
+            candidates = [m for m in candidates if accepts_call(m)]
         else:
             candidates = [m for m in candidates if m['kind'] in ('property', 'get', 'set', 'get+set')
                 and m['kind'] != ('get' if native['access'] == 'write' else 'set')

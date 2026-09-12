@@ -558,8 +558,28 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
                 "bitmap source constructor identity must remain a target constructor");
         }
     }
-    if (mapping.sourceMember.name === "getBounds" || mapping.sourceMember.name === "getRect"
-        || mapping.sourceMember.name === "scrollRect") {
+    if (mapping.sourceMember.name === "getBounds" || mapping.sourceMember.name === "getRect") {
+        // Only the source-shaped bridge owns coordinate-space conversion. A
+        // similarly named native Laya method is not a Flash implementation.
+        const name = mapping.sourceMember.name;
+        const source = new RegExp(`^public function ${name}\\([A-Za-z_$][A-Za-z0-9_$]*:flash\\.display\\.DisplayObject\\) : flash\\.geom\\.Rectangle$`);
+        const signature = mapping.targetMember.signature;
+        const target = name === "getBounds"
+            ? /^\{ \([A-Za-z_$][A-Za-z0-9_$]*: DisplayObject(?: \| null)?\): Rectangle; \(out\?: LayaRectangle\): LayaRectangle; \}$/
+            : /^\([A-Za-z_$][A-Za-z0-9_$]*: DisplayObject(?: \| null)?\) => Rectangle$/;
+        if (mapping.sourceQName !== "flash.display.DisplayObject"
+            || mapping.targetModule !== "src/layaAir/flash/display/DisplayObject.ts"
+            || mapping.targetExport !== "DisplayObject" || mapping.targetCapabilityId !== "api.flash.display"
+            || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "instance-member"
+            || mapping.sourceMember.access !== "call" || mapping.sourceMember.minArgs !== 1
+            || mapping.sourceMember.maxArgs !== 1 || !source.test(mapping.sourceMember.signature)
+            || !target.test(signature)) {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+                "Flash bounds require the exact source-shaped DisplayObject bridge signature");
+        }
+        return;
+    }
+    if (mapping.sourceMember.name === "scrollRect") {
         throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
             "Flash member is an explicit behavioral hold and cannot be mapped to an inherited native surface");
     }

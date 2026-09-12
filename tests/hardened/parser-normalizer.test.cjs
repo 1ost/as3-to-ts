@@ -675,6 +675,14 @@ try {
     assert.equal(packageFunctionDeclaration.members[0].kind, "method");
     assert.equal(packageFunctionDeclaration.members[0].name, "helper");
 
+    for (const [text, value] of [[".5", .5], ["5.", 5]]) {
+        const source = `package p { public class DecimalProbe { public function run():Number { return ${text}; } } }`;
+        const semantic = built.adapter.adaptNormalizedParserAst(
+            built.normalizer.normalizeParserAst(built.parse("fixtures/DecimalProbe.as", source), source, sha256),
+            authority(built.ledger), source, sha256);
+        assert.equal(semantic.declaration.members.find(m => m.name === "run").body[0].expression.value, value);
+    }
+
     const adaptConstructor = body => {
         const source = `package p { import flash.display.Sprite; public class C extends Sprite {
             public var result:int = 0;
