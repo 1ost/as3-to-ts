@@ -822,6 +822,10 @@ function constructorArityGuard(className: string, member: SemanticConstructor | 
 function packageFunctionNode(program:SemanticProgram, ts:TypeScriptCompilerApi):any {
     const declaration=program.declaration;
     if (declaration.declarationKind !== "packageFunction") throw new Error("Expected package function");
+    if (declaration.name === "arguments" || declaration.parameters.some(parameter => parameter.name === "arguments")
+        || constructorStatementsBindArguments(declaration.body))
+        throw new HardenedSemanticError("HARDENED_EMIT_FUNCTION_ARITY",
+            "package function binding cannot shadow the runtime arguments object", declaration.sourceNodeId);
     const qname=program.packageName ? program.packageName+"."+declaration.name : declaration.name;
     const count=ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length");
     const minimum=declaration.parameters.filter(p=>!p.rest && p.defaultValue === null).length;

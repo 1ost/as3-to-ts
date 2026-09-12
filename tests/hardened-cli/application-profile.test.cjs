@@ -68,4 +68,10 @@ test('package functions remain callable exports in an authenticated multi-file c
     assert.equal(hash(join(out,'__as3_runtime/application/helpers/calc.ts')),hash(join(again,'__as3_runtime/application/helpers/calc.ts')));
     writeFileSync(helper,readFileSync(helper,'utf8').replace('scale:Number = 3','scale:Number = 4'));
     const drift=invoke(join(dir,'drift'));assert.notEqual(drift.status,0);assert.match(drift.stderr,/source|hash|declaration/i);
+    writeFileSync(helper,readFileSync(helper,'utf8').replace('value:int','arguments:int').replace('String(value)','String(arguments)'));
+    const shadowProfile=join(dir,'shadow-profile');
+    const shadowGenerated=spawnSync('python3',[join(ROOT,'tools/create-fixture-profile.py'),'--source',source,'--entry','Probe','--laya',laya,'--air-sdk',sdk,'--output',shadowProfile],{encoding:'utf8',timeout:60000});
+    assert.equal(shadowGenerated.status,0,shadowGenerated.stdout+shadowGenerated.stderr);
+    const shadow=spawnSync(process.execPath,[join(ROOT,'bin/as3-frontend'),'transpile',source,join(dir,'shadow'),'--source-census',join(shadowProfile,'census.json'),'--target-capabilities',join(laya,'docTool/architecture/authored-content-capabilities.json'),'--profile-lock',join(shadowProfile,'profile-lock.json')],{encoding:'utf8',timeout:30000});
+    assert.notEqual(shadow.status,0);assert.match(shadow.stdout+shadow.stderr,/HARDENED_EMIT_FUNCTION_ARITY/);
 });
