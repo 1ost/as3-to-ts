@@ -170,6 +170,13 @@ export function as3ObjectWrite(value:unknown,key:unknown,next:unknown,caller:str
     Object.defineProperty(target,name,{value:next,writable:true,enumerable:true,configurable:true});
     return next;
 }
+/** Update retains receiver/key values but repeats key conversion for the store. */
+export function as3ObjectUpdate(value:unknown,key:unknown,increment:0|1,prefix:boolean,caller:string | null = null):number {
+    const prior=as3NativeNumber(as3ObjectRead(value,key,caller));
+    const next=increment ? prior+1 : prior-1;
+    as3ObjectWrite(value,key,next,caller);
+    return prefix ? next : prior;
+}
 export function as3ObjectHasOwn(value:unknown,key:unknown):boolean {
     const target = receiver(value), name = keyName(key), info = describe(target);
     if (info) return findTrait(info,name,null,true).length > 0

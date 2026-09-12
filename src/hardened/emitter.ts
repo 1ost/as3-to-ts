@@ -302,6 +302,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     }
     if (expression.kind === "globalFunction") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3TraceFunction"),undefined,[ts.factory.createIdentifier("__as3Global_"+expression.name)]);
+    if (expression.kind === "functionApply" && expression.invocation === "direct") return ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3FunctionInvoke"),undefined,
+        [expressionNode(expression.target,ts),expressionNode(expression.argumentsArray,ts)]);
     if (expression.kind === "functionApply") return ts.factory.createCallExpression(
         ts.factory.createIdentifier(expression.invocation === "call" ? "__as3FunctionCall" : "__as3FunctionApply"),undefined,[expressionNode(expression.target,ts),
             expressionNode(expression.receiver,ts),expressionNode(expression.argumentsArray,ts)]);
@@ -325,6 +328,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             expression.argument === null ? [] : [expressionNode(expression.argument, ts)]);
     }
     if (expression.kind === "assignment") {
+        if (expression.arrayLengthStorage) {
+            if (expression.target.kind !== "member" || expression.target.capabilitySource !== "Array" || expression.target.name !== "length")
+                throw new HardenedSemanticError("HARDENED_EMIT_ARRAY_LENGTH", "Array length storage lacks its authenticated target");
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayLengthWrite"),undefined,
+                [expressionNode(expression.target.target,ts),expressionNode(expression.value,ts)]);
+        }
         if (expression.deferCompoundStore || expression.shortCircuit || (expression.resultType && (expression.storageCoercion
             || (expression.target.kind === "index" && expression.target.accessKind === "dictionary")))) {
             // AVM2 keeps the uncoerced assignment input on the expression stack.
@@ -513,16 +522,30 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "update") {
+        if (expression.target.kind === "index" && expression.target.accessKind === "object")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectUpdate"),undefined,[
+                expressionNode(expression.target.target,ts),expressionNode(expression.target.index,ts),
+                ts.factory.createNumericLiteral(expression.operator === "++" ? 1 : 0),
+                expression.prefix ? ts.factory.createTrue() : ts.factory.createFalse(),
+                ts.factory.createStringLiteral(expression.target.callerQName!)]);
         const token = expression.operator === "++" ? ts.SyntaxKind.PlusPlusToken : ts.SyntaxKind.MinusMinusToken;
         return expression.prefix
             ? ts.factory.createPrefixUnaryExpression(token, expressionNode(expression.target, ts))
             : ts.factory.createPostfixUnaryExpression(expressionNode(expression.target, ts), token);
     }
     if (expression.kind === "lambda") {
+        if (expression.parameters.some(p=>p.name === "arguments") || constructorStatementsBindArguments(expression.statements))
+            throw new HardenedSemanticError("HARDENED_EMIT_LAMBDA_ARITY", "anonymous function binding shadows the runtime arguments object", expression.sourceNodeId);
+        const arity=ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3CheckLambdaArity"),undefined,[
+                ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length"),
+                ts.factory.createNumericLiteral(expression.parameters.filter(p=>!p.rest && p.defaultValue === null).length),
+                expression.parameters.some(p=>p.rest) ? ts.factory.createNull() : ts.factory.createNumericLiteral(expression.parameters.length)]));
         const fn = ts.factory.createFunctionExpression(undefined, undefined, undefined, undefined,
             expression.parameters.map(parameter => parameterNode(parameter, ts)),
             typeNode(expression.returnType, ts),
-            ts.factory.createBlock(expression.statements.map(statement => statementNode(statement, ts)), true));
+            ts.factory.createBlock([arity].concat(parameterSlotStatements(expression.parameters,ts),
+                expression.statements.map(statement => statementNode(statement, ts))), true));
         if (!expression.lexicalReceiver) return fn;
         const capture = expression.lexicalReceiver;
         // Keep an ordinary Function and capture its lexical instance separately
@@ -1388,6 +1411,8 @@ function arrayRuntimeImport(ts: TypeScriptCompilerApi): any {
                 ts.factory.createIdentifier("__as3ArrayRead")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayWrite"),
                 ts.factory.createIdentifier("__as3ArrayWrite")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayLengthWrite"),
+                ts.factory.createIdentifier("__as3ArrayLengthWrite")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayCall"),
                 ts.factory.createIdentifier("__as3ArrayCall")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayValues"),
@@ -1403,7 +1428,8 @@ function programUsesArrayIndex(program: SemanticProgram): boolean {
         if (seen.has(value)) return false;
         seen.add(value);
         const record = value as { [key: string]: unknown };
-        if (record.kind === "index" && record.accessKind === "array"
+        if (record.kind === "assignment" && record.arrayLengthStorage
+            || record.kind === "index" && record.accessKind === "array"
             || record.kind === "call" && record.capabilitySource === "Array"
             || record.kind === "forEach" && (record.iterableType as SemanticType)?.sourceName === "Array") return true;
         return Object.keys(record).some(key => visit(record[key]));
@@ -1479,7 +1505,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || Object.values(value).some(usesObjectDispatch));
     if (usesObjectDispatch(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
-            ["as3ObjectRead","as3ObjectWrite","as3ObjectDelete","as3ObjectIn","as3ObjectCall"].map(name =>
+            ["as3ObjectRead","as3ObjectWrite","as3ObjectUpdate","as3ObjectDelete","as3ObjectIn","as3ObjectCall"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3ObjectDispatch"),undefined));
     const globalCalls = new Map<string, Extract<SemanticExpression, {kind: "globalCall"}>>();
@@ -1521,6 +1547,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || programHasKind(program, "parseInteger") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
     const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "functionApply" || value.kind === "globalFunction"
+        || value.kind === "lambda"
         || (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
             && value.targetType.sourceName !== "Dictionary"
         || value.kind === "method" && (value.parameters.some(nativeParameterSlot)
@@ -1528,7 +1555,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
-            ["as3FunctionApply","as3FunctionCall","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3TraceFunction"].map(name =>
+            ["as3FunctionApply","as3FunctionCall","as3FunctionInvoke","as3CheckLambdaArity","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3TraceFunction"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
     const dictionarySlot = (value:any):boolean => value !== null && typeof value === "object" && (

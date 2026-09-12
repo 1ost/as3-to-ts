@@ -38,6 +38,21 @@ export function as3FunctionArgument(value:unknown, type:string):any {
     throw new AS3FunctionOperationUnavailable(`Native function parameter conversion to ${type} requires further evidence`);
 }
 
+/** Unsupported anonymous-function arity diagnostics fail before coercion/body effects. */
+export function as3CheckLambdaArity(actual:number,minimum:number,maximum:number | null):void {
+    if (actual < minimum || maximum !== null && actual > maximum)
+        throw new AS3FunctionOperationUnavailable("Anonymous Function arity requires authenticated native source labels");
+}
+
+/** Direct Function invocation differs from reading/calling its call/apply property. */
+export function as3FunctionInvoke(target:unknown,args:unknown[]):unknown {
+    if (typeof target !== "function") {
+        const error=new TypeError("Error #1006: value is not a function.");
+        Object.defineProperty(error,"errorID",{value:1006});throw error;
+    }
+    return Reflect.apply(target,null,args);
+}
+
 export function as3FunctionApply(target:unknown, receiver:unknown, argumentsArray:unknown):unknown {
     return invokeFunction(target,receiver,argumentsArray,"apply");
 }

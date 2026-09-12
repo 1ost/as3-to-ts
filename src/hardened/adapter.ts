@@ -2137,7 +2137,9 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
         }
         return expression.resultType;
     }
-    fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable parameter or instance field", node);
+    const position=node.span === null ? "" : ` at source offsets ${node.span.start}:${node.span.end}`;
+    const description=expression.kind === "member" ? `member ${expression.capabilitySource || expression.target.kind}.${expression.name}` : expression.kind;
+    fail("HARDENED_ASSIGNMENT_TARGET", `assignment target ${description}${position} is not a writable parameter or instance field`, node);
 }
 
 function adaptCondition(expression: SemanticExpression, context: AdapterContext, node: TreeNode,
@@ -2783,7 +2785,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (parsedTarget.kind !== "identifier" && parsedTarget.kind !== "member" && parsedTarget.kind !== "index") {
             fail("HARDENED_UPDATE_TARGET", "update target must be a proven writable identity", node.children[0]!);
         }
-        const resultType = assignmentTargetType(parsedTarget, context, node.children[0]!);
+        let resultType = assignmentTargetType(parsedTarget, context, node.children[0]!);
+        if (context.sourceMemberAuthority !== null && parsedTarget.kind === "index" && parsedTarget.accessKind === "object")
+            resultType = semanticType(node,"Number","number");
         if (!["Number", "int", "uint"].includes(resultType.sourceName) || resultType.emittedName !== "number") {
             fail("HARDENED_UPDATE_NUMBER", "increment and decrement require an exact writable Number", node);
         }
@@ -3041,6 +3045,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         if (target.kind !== "identifier" && target.kind !== "member" && target.kind !== "index") {
             fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable lvalue", node.children[0]!);
+        }
+        if (context.sourceMemberAuthority !== null && operator === "=" && target.kind === "member"
+            && target.capabilitySource === "Array" && target.name === "length"
+            && isArrayType(assignmentType(target.target,context,node.children[0]!))) {
+            const value=parseExpression(node.children[2]!,context,true);
+            // Validate the uint storage conversion without moving it before the native null check.
+            adaptAssignmentValue(semanticType(node,"uint","number"),value,context,node.children[2]!);
+            return Object.assign(identity(node),{kind:"assignment" as const,operator:"=" as const,
+                arrayLengthStorage:true as const,target,value,
+                ...(consumed ? {resultType:assignmentType(value,context,node.children[2]!)} : {})});
         }
         const targetType = assignmentTargetType(target, context, node.children[0]!);
         let value = parseExpression(node.children[2]!, context, true);
@@ -3527,6 +3541,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         }
         const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
+        if (context.sourceMemberAuthority !== null && callee.kind === "identifier"
+            && (callee.bindingKind === "parameter" || callee.bindingKind === "local")
+            && !context.locals[callee.name]?.lambdaSignature
+            && assignmentType(callee,context,rawCallee).sourceName === "Function") {
+            for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
+                fail("HARDENED_FUNCTION_ARGUMENT", "direct Function arguments must produce values", node);
+            return Object.assign(identity(node), {kind:"functionApply" as const,invocation:"direct" as const,target:callee,
+                receiver:Object.assign(identity(node),{kind:"literal" as const,value:null}),
+                argumentsArray:Object.assign(identity(node),{kind:"array" as const,elements:args}),
+                resultType:semanticType(node,"*","unknown")});
+        }
         if (context.sourceMemberAuthority !== null && callee.kind === "identifier"
             && callee.bindingKind === "builtin-class" && callee.name === "Object") {
             if (args.length !== 1) fail("HARDENED_OBJECT_CONVERSION_ARITY", "Object conversion requires exactly one value", node);

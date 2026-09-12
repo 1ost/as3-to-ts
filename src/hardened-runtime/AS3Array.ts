@@ -1,4 +1,4 @@
-import { as3NativeArrayJoin, as3NativeString } from "./AS3ObjectDispatch";
+import { as3NativeArrayJoin, as3NativeString, as3NativeNumber } from "./AS3ObjectDispatch";
 import { as3FunctionArgument } from "./AS3Function";
 
 /*
@@ -44,6 +44,17 @@ export function as3ArrayRead(value:unknown, index:number):unknown {
         || Object.prototype.hasOwnProperty.call(Object.prototype,key) || own && !("value" in own))
         throw new AS3ArrayOperationUnavailable("Array inherited and accessor indices require native evidence");
     return own?.value;
+}
+
+/** Native Array.length retains the assignment input and stores a coerced uint. */
+export function as3ArrayLengthWrite<T>(value:unknown,input:T):T {
+    const array=ordinaryArray(value);
+    const length=as3NativeNumber(input) >>> 0;
+    if (!Object.getOwnPropertyDescriptor(array,"length")?.writable)
+        throw new AS3ArrayOperationUnavailable("Array length requires ordinary writable storage");
+    if (!Reflect.set(array,"length",length))
+        throw new AS3ArrayOperationUnavailable("Array host storage rejected the length write");
+    return input;
 }
 
 /** Numeric-index writes preserve sparse length and the uncoerced assigned value. */

@@ -179,7 +179,7 @@ export interface GlobalFunctionExpression extends SemanticIdentity {
 }
 export interface FunctionApplyExpression extends SemanticIdentity {
     kind: "functionApply";
-    invocation?: "call";
+    invocation?: "call" | "direct";
     target: SemanticExpression;
     receiver: SemanticExpression;
     argumentsArray: SemanticExpression;
@@ -401,6 +401,8 @@ export interface LoadedLocalMemberAuthority {
 }
 
 export interface AssignmentExpression extends SemanticIdentity {
+    /** Array length coerces the stored uint only after checking the receiver. */
+    arrayLengthStorage?: true;
     kind: "assignment";
     operator: "=";
     target: IdentifierExpression | MemberExpression | IndexExpression;

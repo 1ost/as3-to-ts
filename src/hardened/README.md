@@ -133,3 +133,30 @@ four write-order cases. Array subclass, inherited index and accessor behavior
 remain explicit unavailable operations; String/Object index coercion is not
 admitted by this numeric boundary. Original AS3 is not rewritten or cast merely
 to satisfy the emitted TypeScript types.
+
+
+### Original reference counts and completion callbacks
+
+Dynamic Object prefix/postfix updates retain the receiver and key values once.
+The runtime reads through authenticated Object dispatch, converts the prior value
+with native Number semantics, and writes through the same dispatch. AIR converts
+an object key separately for the read and write, so conversion can select a
+different property for the store. Prefix returns the new Number; postfix returns
+the converted prior Number. Conversion errors stop before the store.
+
+Direct invocation of a Function parameter or mutable Function local uses the shared
+invocation boundary. Argument expressions run before null/noncallable failure
+(TypeError #1006); bound methods retain their receiver and method-entry coercion.
+Anonymous functions now coerce supported primitive/Array/Function parameter slots
+on entry too. Known local lambda signatures retain their existing static checks.
+Dynamic AS3 this and unqualified reference-parameter coercion remain outside this
+slice. Native-only lambda-arguments captures retain source-dependent arity labels;
+known wrong arities remain held, while unqualified dynamic anonymous-function
+arities fail explicitly before coercion/body effects. They are not native error
+parity. No source-dependent label is invented.
+
+Array length assignment retains its original uint storage contract and uncoerced
+expression result. Its receiver is checked after RHS evaluation but before numeric
+storage conversion. Native sparse growth, truncation, wrapping and null order are
+retained. Compound length writes and length updates remain held. The original
+DataLoader's length-zero cleanup needs no source rewrite.
