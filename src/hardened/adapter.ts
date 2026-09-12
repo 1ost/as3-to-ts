@@ -1782,6 +1782,14 @@ function currentClassMember(node: TreeNode, context: AdapterContext, name: strin
     });
 }
 
+function inheritedMethodValue(node:TreeNode, context:AdapterContext, name:string,
+    allowMethodClosure:boolean):SemanticExpression {
+    if (!allowMethodClosure || context.sourceMemberAuthority === null || context.currentCallable === null
+        || context.currentCallable.modifiers.includes("static") || context.lambdaDepth > 0)
+        fail("HARDENED_LOCAL_METHOD_CLOSURE", "inherited method values require an authenticated instance callable after binding setup", node);
+    return Object.assign(identity(node), {kind:"methodClosure" as const, methodName:name, inherited:true as const});
+}
+
 function dynamicObjectType(type:SemanticType, context:AdapterContext):boolean {
     if (context.packageFunction) return false; // Package lexical namespace dispatch needs its own retained authority.
     return context.sourceMemberAuthority !== null && type.emittedName === "unknown"
@@ -1795,10 +1803,10 @@ function assertObjectKey(type:SemanticType,node:TreeNode):void {
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
     if (expression.kind === "member" && expression.target.kind === "super" && context.baseLocalQName !== null
         && expression.capabilitySource !== null && !context.mappingsBySource[expression.capabilitySource]) {
-        const inherited = localInheritedMember(context, expression.name, "getter", null, node);
+        const inherited = localInheritedMember(context, expression.name, expression.superField ? "field" : "getter", null, node);
         if (inherited.member && inherited.ownerQName === expression.capabilitySource) {
             assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
-            return authoritySemanticType(inherited.member.returnType!, context, node);
+            return authoritySemanticType(expression.superField ? inherited.member.fieldType! : inherited.member.returnType!, context, node);
         }
     }
     if (expression.kind === "member" && expression.target.kind === "this") {
@@ -1999,10 +2007,12 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
 function assignmentTargetType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
     if (expression.kind === "member" && expression.target.kind === "super" && context.baseLocalQName !== null
         && expression.capabilitySource !== null && !context.mappingsBySource[expression.capabilitySource]) {
-        const inherited = localInheritedMember(context, expression.name, "setter", null, node);
+        const inherited = localInheritedMember(context, expression.name, expression.superField ? "field" : "setter", null, node);
         if (inherited.member && inherited.ownerQName === expression.capabilitySource) {
             assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
-            return authoritySemanticType(inherited.member.parameters[0]!.type, context, node);
+            if (expression.superField && inherited.member.readonly)
+                fail("HARDENED_ASSIGNMENT_READONLY", "AS3 const fields are not writable", node);
+            return authoritySemanticType(expression.superField ? inherited.member.fieldType! : inherited.member.parameters[0]!.type, context, node);
         }
     }
     if (expression.kind === "member" && expression.target.kind === "this") {
@@ -3005,10 +3015,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     fail("HARDENED_LOCAL_MEMBER_AMBIGUOUS", "inherited local member kind is ambiguous", node);
                 }
                 if (methods.length === 1) {
-                    if (valuePosition) {
-                        fail("HARDENED_LOCAL_METHOD_CLOSURE",
-                            "inherited method closures remain held until their stable identity binding is proven", node);
-                    }
+                    if (valuePosition) return inheritedMethodValue(node,context,name,allowMethodClosure);
                     return implicitThisMember(node, name, inherited.ownerQName);
                 }
                 if ((valuePosition && !readable) || (!valuePosition && !readable && !writable)) {
@@ -3261,6 +3268,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         let target: SemanticExpression;
         let superOwnerQName: string | null = null;
+        let superField = false;
         if (node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "super") {
             const callable = context.currentCallable;
             if (callable === null || callable.modifiers.indexOf("static") >= 0 || context.lambdaDepth > 0
@@ -3280,6 +3288,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (accessor?.member && accessor.ownerQName) {
                     assertInheritedVisibility(accessor.member, accessor.ownerQName, context, node);
                     superOwnerQName = accessor.ownerQName;
+                }
+                if (superOwnerQName === null && context.sourceMemberAuthority !== null && context.baseLocalQName !== null) {
+                    const field = localInheritedMember(context, name, "field", null, node);
+                    if (field.member && field.ownerQName) {
+                        assertInheritedVisibility(field.member, field.ownerQName, context, node);
+                        superOwnerQName = field.ownerQName;
+                        superField = true;
+                    }
                 }
                 const mapping = superOwnerQName !== null ? null : flashBaseMemberMapping(context, "read", name, node)
                     || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node)
@@ -3329,10 +3345,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     if (inherited.members.length > 0 && inherited.ownerQName !== null) {
                         inherited.members.forEach(member =>
                             assertInheritedVisibility(member, inherited.ownerQName!, context, node));
-                        if (valuePosition && inherited.members.some(member => member.kind === "method")) {
-                            fail("HARDENED_LOCAL_METHOD_CLOSURE",
-                                "inherited method closures remain held until their stable identity binding is proven", node);
-                        }
+                        if (valuePosition && inherited.members.some(member => member.kind === "method"))
+                            return inheritedMethodValue(node,context,name,allowMethodClosure);
                         capabilitySource = inherited.ownerQName;
                     }
                 }
@@ -3482,7 +3496,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_OWN_RECORD_ESCAPE", "TTreeNode.FData is confined to authenticated own-record indexing", node);
         }
         return Object.assign(identity(node), {
-            kind: "member" as "member", target, targetNullable, name, ...(targetName ? {targetName} : {}), capabilitySource,
+            kind: "member" as "member", target, targetNullable, name, ...(targetName ? {targetName} : {}),
+            ...(superField ? {superField:true as const} : {}), capabilitySource,
         });
     }
     if (node.kind === "CALL") {
@@ -3989,6 +4004,12 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 expression: parseExpression(node, context, false,
                     allowSuperCall, true, node.kind === "ASSIGN"),
             });
+        }
+        if (node.kind === "DOT" && context.sourceMemberAuthority !== null) {
+            // A discarded property value still performs its read and any getter effects.
+            const expression = parseExpression(node, context, true);
+            assignmentType(expression, context, node);
+            return Object.assign(identity(node), {kind:"expression" as const, expression});
         }
         if (node.kind === "RETURN") {
             if (constructor || expectedReturn === null || expectedReturn.sourceName === "void") {

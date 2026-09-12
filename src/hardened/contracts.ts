@@ -204,6 +204,7 @@ export interface SuperExpression extends SemanticIdentity {
 
 export interface MemberExpression extends SemanticIdentity {
     kind: "member";
+    superField?: true;
     target: SemanticExpression;
     targetNullable: boolean;
     name: string;
@@ -213,6 +214,7 @@ export interface MemberExpression extends SemanticIdentity {
 
 export interface MethodClosureExpression extends SemanticIdentity {
     kind: "methodClosure";
+    inherited?: true;
     methodName: string;
 }
 

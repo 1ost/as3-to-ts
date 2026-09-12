@@ -316,6 +316,7 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
             def compatible(candidate):
                 target = value_type(candidate)
                 if native['access'] == 'write' and target in ('unknown', 'any'): return True
+                if native['access'] == 'read' and native['type'] == '*': return target == 'unknown'
                 primitive = {'Boolean': 'boolean', 'Number': 'number', 'int': 'number', 'uint': 'number', 'String': 'string'}.get(native['type'])
                 if primitive:
                     return target == primitive or (primitive == 'string' and target in ('string | null', 'null | string')) or (native['scope'] == 'static' and native['access'] == 'read'

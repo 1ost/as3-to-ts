@@ -108,6 +108,24 @@ public class Base {
         row['members'][0]['signature'] = 'get number; set unknown'
         self.assertEqual(len(api.map_native_members(*args)[0]), 1)
 
+    def test_wildcard_read_requires_an_explicit_unknown_target(self):
+        member = dict(name='data', access='read', scope='instance', constructor=False,
+            signature='public var data:*;', minArgs=0, maxArgs=0, type='*', parameters=[])
+        classes = {'flash.net.URLLoader': {'base': None, 'members': [member]}}
+        target = dict(name='data', scope='instance', kind='get', signature='unknown')
+        row = dict(module='URLLoader.ts', export='URLLoader', kind='class', signature='typeof URLLoader', members=[target])
+        args = ('flash.net.URLLoader', ['instance-member'], row, 'capability', classes, {'data'})
+        self.assertEqual(len(api.map_native_members(*args)[0]), 1)
+        for signature in ['any', 'string', 'number', 'Function', 'unknown[]']:
+            target['signature'] = signature
+            self.assertEqual(api.map_native_members(*args), ([], []), signature)
+        target['signature'] = 'unknown'
+        target['kind'] = 'set'
+        self.assertEqual(api.map_native_members(*args), ([], []))
+        target['kind'] = 'get'
+        member['access'] = 'write'
+        self.assertEqual(api.map_native_members(*args), ([], []))
+
     def test_native_string_is_nullable_but_numeric_and_boolean_are_not(self):
         member = dict(name='value', access='read', scope='instance', constructor=False,
             signature='public function get value() : String', minArgs=0, maxArgs=0,

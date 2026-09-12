@@ -206,7 +206,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createSuper();
     }
     if (expression.kind === "member") {
-        const rawTarget = expressionNode(expression.target, ts);
+        // AS3 super field references address the inherited instance slot. JS super
+        // property reads search the prototype, which does not contain that field.
+        const rawTarget = expression.superField ? ts.factory.createThis() : expressionNode(expression.target, ts);
         const target = expression.target.kind === "identifier" && ["current-class", "import"].includes(expression.target.bindingKind)
             ? ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ClassMemberReceiver"), undefined, [rawTarget]) : rawTarget;
         if (expression.capabilitySource === "Error" && expression.name === "errorID")
@@ -219,7 +221,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "methodClosure") {
-        return ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
+        const method = ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
+        // A base constructor can call a virtual method before the derived
+        // constructor's binding prologue. The shared cache also covers that read.
+        return expression.inherited ? ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindMethod"),
+            undefined, [ts.factory.createThis(),method]) : method;
     }
     if (expression.kind === "call") {
         if (expression.capabilitySource === "flash.utils.getQualifiedClassName")
