@@ -141,6 +141,10 @@ export interface LiteralExpression extends SemanticIdentity {
     value: SemanticLiteralValue;
 }
 
+export interface UndefinedExpression extends SemanticIdentity {
+    kind: "undefined";
+}
+
 export interface IntrinsicConstantExpression extends SemanticIdentity {
     kind: "intrinsicConstant";
     identity: "Array.NUMERIC";
@@ -411,7 +415,7 @@ export interface UpdateExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = LiteralExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |

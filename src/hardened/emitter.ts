@@ -157,6 +157,7 @@ function runtimeTypeTokenNode(expression: Extract<SemanticExpression, { kind: "r
 }
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
+    if (expression.kind === "undefined") return ts.factory.createVoidExpression(ts.factory.createNumericLiteral(0));
     if (expression.kind === "globalCall") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3Global_" + expression.name), undefined,
         expression.arguments.map(argument => expressionNode(argument, ts)));
@@ -209,9 +210,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createArrayLiteralExpression(expression.elements.map(element => expressionNode(element, ts)), false);
     }
     if (expression.kind === "object") {
-        return ts.factory.createObjectLiteralExpression(expression.properties.map(property =>
-            ts.factory.createPropertyAssignment(ts.factory.createStringLiteral(property.name),
-                expressionNode(property.value, ts))), false);
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectLiteral"), undefined,
+            [ts.factory.createArrayLiteralExpression(expression.properties.map(property =>
+                ts.factory.createArrayLiteralExpression([ts.factory.createStringLiteral(property.name),
+                    expressionNode(property.value, ts)], false)), false)]);
     }
     if (expression.kind === "ownRecord") {
         return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3CreateOwnRecord"),
@@ -260,7 +262,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "coercion") {
         const helper: { [sourceName: string]: string } = {
             int: "__as3Int", uint: "__as3Uint", Number: "__as3Number",
-            Boolean: "__as3Boolean", String: "__as3String",
+            Boolean: "__as3Boolean", String: "__as3String", Object: "__as3Object",
         };
         const name = helper[expression.targetType.sourceName];
         if (!name) throw new HardenedSemanticError("HARDENED_EMIT_COERCION", "unknown AS3 coercion helper");
@@ -440,7 +442,7 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             if (statement.initializer.kind === "local") {
                 initializer = ts.factory.createVariableDeclarationList(statement.initializer.declarations.map(local =>
                     ts.factory.createVariableDeclaration(local.name, undefined, typeNode(local.type, ts),
-                        expressionNode(local.initializer, ts))), ts.NodeFlags.None);
+                        local.initializer.kind === "undefined" ? undefined : expressionNode(local.initializer, ts))), ts.NodeFlags.None);
             } else {
                 initializer = expressionNode(statement.initializer.expression, ts);
             }
@@ -513,7 +515,10 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
     }
     if (statement.kind === "local") {
         const declarations = statement.declarations.map((local) => ts.factory.createVariableDeclaration(
-            local.name, undefined, typeNode(local.type, ts), expressionNode(local.initializer, ts),
+            local.name, undefined, typeNode(local.type, ts),
+            // An uninitialized wildcard is a function-scoped var, not a reset at
+            // the declaration site (which may execute repeatedly in a loop).
+            local.initializer.kind === "undefined" ? undefined : expressionNode(local.initializer, ts),
         ));
         const readonly = statement.declarations.every((local) => local.readonly);
         return ts.factory.createVariableStatement(undefined,
@@ -1074,7 +1079,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint"].map(exported =>
+    const names = ["as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1148,6 +1153,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         throw new HardenedSemanticError("HARDENED_TYPESCRIPT_VERSION", "structural emitter requires the exact configured modern TypeScript compiler API");
     }
     const imports = program.imports.filter((item) => !item.compileTimeNamespace).map((item) => importNode(item, ts));
+    if (programHasKind(program, "object")) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ObjectLiteral"),
+                ts.factory.createIdentifier("__as3ObjectLiteral"))])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Object"), undefined));
     const globalCalls = new Map<string, Extract<SemanticExpression, {kind: "globalCall"}>>();
     const collectGlobals = (value: any): void => {
         if (!value || typeof value !== "object") return;

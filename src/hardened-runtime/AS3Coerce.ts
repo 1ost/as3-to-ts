@@ -17,3 +17,8 @@ export function as3Boolean(value: unknown = false): boolean {
 export function as3String(value?: unknown): string {
     return arguments.length === 0 ? "" : String(value);
 }
+
+/** AVM Object slots preserve primitive/reference values but normalize undefined. */
+export function as3Object(value: unknown): unknown {
+    return value === undefined ? null : value;
+}

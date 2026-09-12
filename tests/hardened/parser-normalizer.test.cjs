@@ -741,6 +741,17 @@ try {
     const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson),sha256);
     {
+        const source = 'package p { public class ObjectFixture { public var value:Object; public function run(input:*):void { value = input; var missing:*; } public function make():Object { return {"__proto__":"data", "constructor":"ctor", "stage":1, "stage":2}; } } }';
+        const semantic = built.adapter.adaptNormalizedParserAst(
+            built.normalizer.normalizeParserAst(built.parse("ObjectFixture.as", source), source, sha256), authority(built.ledger), source, sha256, undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);
+        const assignment = semantic.declaration.members.find(m => m.name === "run").body[0].expression;
+        assert.equal(assignment.value.kind, "coercion");
+        assert.equal(assignment.value.targetType.sourceName, "Object");
+        assert.equal(semantic.declaration.members.find(m => m.name === "run").body[1].declarations[0].initializer.kind, "undefined");
+        const literal = semantic.declaration.members.find(m => m.name === "make").body[0].expression;
+        assert.deepEqual(literal.properties.map(property => property.name), ["__proto__", "constructor", "stage", "stage"]);
+    }
+    {
         const source = 'package p { import flash.display.Sprite; import flash.display.DisplayObject; public class DirectSubtype extends Sprite { public function DirectSubtype(){super();} public function make():DisplayObject { return new Sprite(); } public function self():DisplayObject { return this; } } }';
         const ast = built.normalizer.normalizeParserAst(built.parse("DirectSubtype.as", source), source, sha256);
         const semantic = built.adapter.adaptNormalizedParserAst(ast, authority(built.ledger), source, sha256,

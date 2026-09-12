@@ -1762,6 +1762,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         const mapping = memberMapping(context, expression.capabilitySource, "read", expression.name, node);
         if (mapping !== null) return mappedMemberType(mapping, "read", context, node);
     }
+    if (expression.kind === "undefined") return semanticType(node, "*", "unknown");
     if (expression.kind === "math") return semanticType(node, "Number", "number", [], false, "Number");
     if (expression.kind === "globalCall") return semanticType(node, "void", "void", [], false);
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
@@ -2063,6 +2064,9 @@ function assertAssignmentCompatible(target: SemanticType, value: SemanticType, n
 function adaptAssignmentValue(target: SemanticType, expression: SemanticExpression,
     context: AdapterContext, node: TreeNode): SemanticExpression {
     const value = assignmentType(expression, context, node);
+    if (target.sourceName === "Object" && target.emittedName === "unknown" && value.sourceName === "*") {
+        return Object.assign(identity(node), {kind: "coercion" as "coercion", targetType: target, argument: expression});
+    }
     const recordValue = ownRecordValue(target);
     if (recordValue !== null) {
         if (!isTreeNodeContext(context) || context.currentCallable?.constructor !== true
@@ -2179,7 +2183,6 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         });
     }
     if (node.kind === "OBJECT") {
-        const seen = new Set<string>();
         const properties = node.children.map(property => {
             if (property.kind !== "PROP") fail("HARDENED_OBJECT_PROPERTY", "object literal requires property nodes", property);
             onlyKinds(property, ["NAME", "VALUE"]);
@@ -2198,10 +2201,6 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else {
                 name = validateIdentifier(rawName, nameNode);
             }
-            if (["__proto__", "prototype", "constructor"].includes(name) || seen.has(name)) {
-                fail("HARDENED_OBJECT_NAME", "object property identity is dangerous or duplicated", nameNode);
-            }
-            seen.add(name);
             return Object.assign(identity(property), {
                 name, value: parseExpression(valueNode.children[0]!, context, true),
             });
@@ -3795,15 +3794,15 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                     if (header.readonly || context.sourceMemberAuthority === null) {
                         fail("HARDENED_LOCAL_INITIALIZER", "locals require exactly one explicit admitted initializer", declaration);
                     }
-                    if (header.type.sourceName === "Number" || header.type.sourceName === "*") {
+                    if (header.type.sourceName === "Number") {
                         fail("HARDENED_LOCAL_DEFAULT",
-                            "uninitialized Number and wildcard locals require explicit NaN or undefined IR", declaration);
+                            "uninitialized Number locals require explicit NaN IR", declaration);
                     }
                     const value = header.type.sourceName === "int" || header.type.sourceName === "uint" ? 0
                         : header.type.sourceName === "Boolean" ? false : null;
-                    const implicit: SemanticExpression = Object.assign(identity(declaration), {
-                        kind: "literal" as "literal", value,
-                    });
+                    const implicit: SemanticExpression = header.type.sourceName === "*"
+                        ? Object.assign(identity(declaration), { kind: "undefined" as "undefined" })
+                        : Object.assign(identity(declaration), { kind: "literal" as "literal", value });
                     initializer = adaptAssignmentValue(header.type, implicit, context, declaration);
                 } else {
                     initializer = adaptAssignmentValue(header.type,

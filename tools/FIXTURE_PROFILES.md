@@ -117,3 +117,15 @@ source-typed `indexOf`/`substr`. Loose equality is limited to null comparisons.
 Binary chains preserve left associativity, conditional branches join compatible
 numeric/nullability types, and reference upcasts require authenticated ancestry.
 These are language lowerings, not application-profile implementations.
+
+Object literals use the shared `AS3Object` runtime factory. Native AIR evaluates
+all name/value pairs left-to-right but installs them in reverse, so the first
+value wins for duplicate names. Special names including `__proto__` remain own
+data properties. Wildcard-to-Object assignment converts undefined to null while
+preserving other values; uninitialized wildcard locals use explicit undefined IR and emit function-scoped
+`var` declarations without resetting the value at the declaration site.
+`ObjectValuesProbe` in the shared Laya oracle retains the executable comparison.
+General dynamic Object indexing, trait visibility and prototype methods remain
+held; this literal/slot support does not authorize raw JavaScript class access.
+Uninitialized Number locals and defaults of other local types before their
+declaration remain separate compatibility work.
