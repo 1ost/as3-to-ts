@@ -63,7 +63,7 @@ def read_native_declarations(directory):
             if t in declared: return t
             raise ValueError('Unresolved native signature type ' + qname + ': ' + t)
         members = []
-        for match in re.finditer(r'^\s*public\s+((?:(?:static|override|final|native)\s+)*)function\s+(?:(get|set)\s+)?(\w+)\s*\(([^\n)]*)\)\s*(?::\s*([\w.*<>]+))?', text, re.M):
+        for match in re.finditer(r'^\s*((?:(?:static|override|final|native)\s+)*public\s+(?:(?:static|override|final|native)\s+)*)function\s+(?:(get|set)\s+)?(\w+)\s*\(([^\n)]*)\)\s*(?::\s*([\w.*<>]+))?', text, re.M):
             modifiers, accessor, member_name, raw_parameters, return_type = match.groups()
             parameters, required, rest = [], 0, False
             for raw in split_parameters(raw_parameters):

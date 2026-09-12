@@ -10,6 +10,23 @@ api = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(api)
 
 class NativeSignaturesTest(unittest.TestCase):
+    def test_sdk_override_before_public_keeps_the_actual_declaring_class(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Event.as').write_text('''package flash.events { public class Event {
+ public function clone():Event {}
+ public function toString():String {}
+} }''')
+            (root / 'StatusEvent.as').write_text('''package flash.events { public class StatusEvent extends Event {
+ override public function clone():Event {}
+ public override function toString():String {}
+ private function hidden():void {}
+} }''')
+            members = list(api.native_members(api.read_native_declarations(root), 'flash.events.StatusEvent'))
+            self.assertEqual([(m['name'], m['declaredBy']) for m in members],
+                [('clone', 'flash.events.StatusEvent'), ('toString', 'flash.events.StatusEvent')])
+            self.assertEqual(members[0]['type'], 'flash.events.Event')
+
     def test_wildcard_types_defaults_and_declaring_owner(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
