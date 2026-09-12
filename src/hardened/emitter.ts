@@ -157,6 +157,11 @@ function runtimeTypeTokenNode(expression: Extract<SemanticExpression, { kind: "r
 }
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
+    if (expression.kind === "math") {
+        const member = ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("Math"), expression.member);
+        return expression.arguments === null ? member : ts.factory.createCallExpression(member, undefined,
+            expression.arguments.map(argument => expressionNode(argument, ts)));
+    }
     if (expression.kind === "intrinsicConstant") {
         return ts.factory.createNumericLiteral(String(expression.value));
     }
@@ -185,7 +190,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         const target = expressionNode(expression.target, ts);
         return ts.factory.createPropertyAccessExpression(
             expression.targetNullable ? ts.factory.createNonNullExpression(target) : target,
-            expression.name,
+            expression.targetName || expression.name,
         );
     }
     if (expression.kind === "methodClosure") {
@@ -284,6 +289,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "new") {
+        if (expression.constructorValue) {
+            return ts.factory.createNewExpression(ts.factory.createParenthesizedExpression(ts.factory.createAsExpression(
+                expressionNode(expression.constructorValue, ts), ts.factory.createConstructorTypeNode(undefined, undefined, [],
+                    typeNode(expression.sourceType, ts)))), undefined, expression.arguments.map(argument => expressionNode(argument, ts)));
+        }
         if (expression.sourceType.emittedName === "AS3Vector") {
             return ts.factory.createNewExpression(ts.factory.createIdentifier("__as3Vector"),
                 [vectorElementTypeNode(expression.sourceType.typeArguments[0]!, ts)],
@@ -302,6 +312,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             "<=": ts.SyntaxKind.LessThanEqualsToken,
             ">": ts.SyntaxKind.GreaterThanToken,
             ">=": ts.SyntaxKind.GreaterThanEqualsToken,
+            "==": ts.SyntaxKind.EqualsEqualsToken,
+            "!=": ts.SyntaxKind.ExclamationEqualsToken,
             "===": ts.SyntaxKind.EqualsEqualsEqualsToken,
             "!==": ts.SyntaxKind.ExclamationEqualsEqualsToken,
             "&&": ts.SyntaxKind.AmpersandAmpersandToken,
@@ -532,6 +544,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             names[expression.methodName] = true;
         } else if (expression.kind === "member") {
             inspectExpression(expression.target);
+        } else if (expression.kind === "math") {
+            expression.arguments?.forEach(inspectExpression);
         } else if (expression.kind === "call") {
             inspectExpression(expression.callee);
             expression.arguments.forEach(inspectExpression);
@@ -539,6 +553,7 @@ function boundMethodNames(program: SemanticProgram): string[] {
             inspectExpression(expression.target);
             inspectExpression(expression.value);
         } else if (expression.kind === "new") {
+            if (expression.constructorValue) inspectExpression(expression.constructorValue);
             expression.arguments.forEach(inspectExpression);
         } else if (expression.kind === "array") {
             expression.elements.forEach(inspectExpression);
@@ -655,7 +670,7 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi): any {
         const isStatic = member.modifiers.includes("static");
         return ts.factory.createPropertyDeclaration(
             modifiers, member.name, undefined, typeNode(member.type, ts),
-            isStatic ? (member.initializer === null ? fieldDefaultExpression(member, ts)
+            member.embeddedBitmap ? ts.factory.createIdentifier(member.embeddedBitmap.className) : isStatic ? (member.initializer === null ? fieldDefaultExpression(member, ts)
                 : expressionNode(member.initializer, ts)) : undefined,
         );
     }
@@ -884,6 +899,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
         if (expression.kind === "member") return visitExpression(expression.target);
+        if (expression.kind === "math") return expression.arguments?.some(visitExpression) || false;
         if (expression.kind === "call") return visitExpression(expression.callee) || expression.arguments.some(visitExpression);
         if (expression.kind === "assignment") return visitExpression(expression.target) || visitExpression(expression.value);
         if (expression.kind === "binary") return visitExpression(expression.left) || visitExpression(expression.right);
@@ -983,6 +999,46 @@ function programUsesClassValue(program: SemanticProgram): boolean {
         return Object.keys(record).some(key => visit(record[key]));
     };
     return visit(program);
+}
+
+function embeddedBitmapDeclarations(program: SemanticProgram, imports: any[], ts: TypeScriptCompilerApi): any[] {
+    if (program.declaration.declarationKind !== "class") return [];
+    const fields = program.declaration.members.filter((member): member is SemanticField => member.kind === "field" && !!member.embeddedBitmap);
+    if (fields.length === 0) return [];
+    const bitmap = fields[0]!.embeddedBitmap!;
+    const namedImport = (module: string, exported: string, local: string) => ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported), ts.factory.createIdentifier(local))])),
+        ts.factory.createStringLiteral(module), undefined);
+    imports.push(namedImport(bitmap.bitmapModule, bitmap.bitmapExport, "__as3EmbeddedBitmap"));
+    imports.push(namedImport("@bleach/as3-runtime/AS3Embed", "as3EmbeddedBitmapData", "__as3EmbeddedBitmapData"));
+    return fields.flatMap(field => {
+        const asset = field.embeddedBitmap!, name = asset.className, instances = name + "Instances";
+        const propertyCall = (owner: string, method: string, args: any[]) => ts.factory.createCallExpression(
+            ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(owner), method), undefined, args);
+        return [ts.factory.createVariableStatement(undefined, ts.factory.createVariableDeclarationList([
+            ts.factory.createVariableDeclaration(instances, undefined, undefined,
+                ts.factory.createNewExpression(ts.factory.createIdentifier("WeakSet"),
+                    [ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword)], []))], ts.NodeFlags.Const)),
+            ts.factory.createClassDeclaration([ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], name, undefined,
+                [ts.factory.createHeritageClause(ts.SyntaxKind.ExtendsKeyword, [ts.factory.createExpressionWithTypeArguments(
+                    ts.factory.createIdentifier("__as3EmbeddedBitmap"), undefined)])], [
+                    ts.factory.createConstructorDeclaration(undefined, [], ts.factory.createBlock([
+                        ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createSuper(), undefined, [
+                            ts.factory.createCallExpression(ts.factory.createIdentifier("__as3EmbeddedBitmapData"), undefined,
+                                [ts.factory.createStringLiteral(asset.resourceId)])])),
+                        ts.factory.createExpressionStatement(propertyCall(instances, "add", [ts.factory.createThis()])),
+                    ], true)),
+                ]),
+            ts.factory.createFunctionDeclaration([ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)], undefined,
+                name + "Predicate", undefined, [ts.factory.createParameterDeclaration(undefined, undefined, "value", undefined,
+                    ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword), undefined)],
+                ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword), ts.factory.createBlock([
+                    ts.factory.createReturnStatement(propertyCall(instances, "has", [ts.factory.createAsExpression(
+                        ts.factory.createIdentifier("value"), ts.factory.createKeywordTypeNode(ts.SyntaxKind.ObjectKeyword))])),
+                ], true)),
+        ];
+    });
 }
 
 function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
@@ -1217,7 +1273,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                 ts.factory.createIdentifier("value"), ts.factory.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken),
                 ts.factory.createIdentifier("__as3ConstructionProof")))], true)),
     ];
-    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(nominalState, [declaration], nominalPredicate));
+    const embedded = embeddedBitmapDeclarations(program, imports, ts);
+    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration], nominalPredicate));
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
     let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n");
     code = code.replace(/\n*$/, "\n");

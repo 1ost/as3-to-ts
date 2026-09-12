@@ -355,7 +355,22 @@ function memberMapping(context: AdapterContext, sourceQName: string, access: str
         fail("HARDENED_CAPABILITY_MEMBER_OVERLOAD", "Flash API " + sourceQName + "." + name
             + " has multiple mappings and requires a future typed overload resolver", node);
     }
-    return matches.length === 1 ? matches[0]! : null;
+    if (matches.length === 1) return matches[0]!;
+    const seen = new Set<string>();
+    let current = sourceQName;
+    while (context.sourceMemberAuthority !== null) {
+        if (seen.has(current)) fail("HARDENED_CAPABILITY_MEMBER_ANCESTRY", "Native member ancestry is cyclic", node);
+        seen.add(current);
+        const declaration = context.sourceMemberAuthority.entriesByQName[current];
+        // An unmapped declaration shadows its bases; never bypass that hold.
+        if (!declaration || declaration.ownInstanceMemberNames.includes(name) || declaration.baseQName === null) return null;
+        current = declaration.baseQName;
+        const inherited = Object.values(context.memberMappingsByKey).filter((mapping): mapping is CapabilityMapping =>
+            !!mapping && mapping.sourceQName === current && mapping.sourceMember?.access === access && mapping.sourceMember.name === name);
+        if (inherited.length > 1) fail("HARDENED_CAPABILITY_MEMBER_OVERLOAD", "Inherited native member requires overload resolution", node);
+        if (inherited.length === 1) return inherited[0]!;
+    }
+    return null;
 }
 
 function flashBaseMemberMapping(context: AdapterContext, access: string, name: string, node: TreeNode): CapabilityMapping | null {
@@ -473,7 +488,7 @@ function adaptMappedCall(mapping: CapabilityMapping, argumentsList: SemanticExpr
                 }) : adapted;
         } catch (error) {
             if (error instanceof HardenedSemanticError) {
-                fail("HARDENED_CAPABILITY_CALL_TYPE", `Flash bridge argument ${index} does not match its authenticated source type`,
+                fail("HARDENED_CAPABILITY_CALL_TYPE", `Flash bridge ${mapping.sourceQName}.${mapping.sourceMember!.name} argument ${index} must match ${parameterType}: ${error.message}`,
                     argumentNodes[index] || node);
             }
             throw error;
@@ -579,6 +594,18 @@ function oneType(node: TreeNode): TreeNode {
     return matches[0]!;
 }
 
+function flashSemanticImport(authority: LoadedCapabilityAuthority, qname: string, node: TreeNode): SemanticImport {
+        const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
+        const mapping = mappingForRole(authority, qname, "import", node);
+        return Object.assign(identity(node), {
+            authorityKind: "flash" as "flash", localNodeId: null,
+            runtimeConstructible: mapping.targetKind === "class", runtimeInterface: mapping.targetKind === "interface",
+            localValueType: null, compileTimeNamespace: false,
+            sourceQualifiedName: qname, sourceLocalName: localName,
+            targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
+        });
+}
+
 function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
     localAuthority: LoadedLocalTypeAuthority | undefined, resolveCurrentLocal: (() => CurrentLocalType) | null,
     localMemberAuthority: LoadedLocalMemberAuthority | null): {
@@ -596,17 +623,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         imports.push(item);
         importsByLocal[item.sourceLocalName] = item;
     };
-    const flashImport = (qname: string, node: TreeNode): SemanticImport => {
-        const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
-        const mapping = mappingForRole(authority, qname, "import", node);
-        return Object.assign(identity(node), {
-            authorityKind: "flash" as "flash", localNodeId: null,
-            runtimeConstructible: mapping.targetKind === "class", runtimeInterface: mapping.targetKind === "interface",
-            localValueType: null, compileTimeNamespace: false,
-            sourceQualifiedName: qname, sourceLocalName: localName,
-            targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
-        });
-    };
+    const flashImport = (qname: string, node: TreeNode): SemanticImport => flashSemanticImport(authority, qname, node);
     const intrinsicImport = (qname: string, node: TreeNode): SemanticImport => {
         const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
         const mapping = authority.intrinsicTypesBySource[qname];
@@ -1122,6 +1139,8 @@ function authoritySemanticType(typeName: string, context: AdapterContext, node: 
         return semanticType(node, importedName, importedName, [], undefined,
             context.importsByLocal[importedName]!.sourceQualifiedName);
     }
+    const implicit = context.resolveImportedType(typeName, null, node);
+    if (implicit) return semanticType(node, implicit.sourceLocalName, implicit.sourceLocalName, [], undefined, implicit.sourceQualifiedName);
     return semanticType(node, typeName, typeName.slice(typeName.lastIndexOf(".") + 1));
 }
 
@@ -1743,6 +1762,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         const mapping = memberMapping(context, expression.capabilitySource, "read", expression.name, node);
         if (mapping !== null) return mappedMemberType(mapping, "read", context, node);
     }
+    if (expression.kind === "math") return semanticType(node, "Number", "number", [], false, "Number");
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
@@ -2073,13 +2093,50 @@ function adaptAssignmentValue(target: SemanticType, expression: SemanticExpressi
             argument: expression,
         });
     }
+    if ((target.nullable || !value.nullable) && provenReferenceSubtype(value, target, context)) return expression;
     assertAssignmentCompatible(target, value, node);
     return expression;
+}
+
+function builtinMathMember(node: TreeNode, context: AdapterContext): string | null {
+    if (node.kind !== "DOT" || node.children.length !== 2 || node.children[0]!.kind !== "IDENTIFIER"
+        || node.children[0]!.text !== "Math" || context.className === "Math"
+        || context.locals.Math || context.parameters.Math || context.fields.Math || context.methods.Math
+        || context.accessors.Math || context.importsByLocal.Math || context.resolveImportedType("Math", null, node)) return null;
+    return requiredText(node.children[1]!, "Math member");
 }
 
 function parseExpression(node: TreeNode, context: AdapterContext, valuePosition: boolean,
     allowSuperCall: boolean = false, allowMethodClosure: boolean = true,
     allowAssignment: boolean = false): SemanticExpression {
+    if (["ADD", "MINUS", "MULTIPLICATION", "RELATION", "EQUALITY", "AND", "OR", "B_AND", "B_OR", "B_XOR", "SHIFT"].includes(node.kind)
+        && node.children.length > 3) {
+        if (node.children.length % 2 !== 1 || node.children.length > 257
+            || node.children.some((child, index) => index % 2 === 1 && child.kind !== "OP"))
+            fail("HARDENED_BINARY_SHAPE", "Binary chain must contain bounded alternating operands and operators", node);
+        let left = node.children[0]!;
+        for (let index = 1; index < node.children.length; index += 2)
+            left = Object.assign({}, node, {children: [left, node.children[index]!, node.children[index + 1]!]});
+        return parseExpression(left, context, valuePosition, allowSuperCall, allowMethodClosure, allowAssignment);
+    }
+    const mathName = builtinMathMember(node, context);
+    if (mathName !== null) {
+        if (mathName !== "PI" || !valuePosition)
+            fail("HARDENED_MATH_MEMBER", "Only numeric Math calls and the read-only PI constant are admitted", node);
+        return Object.assign(identity(node), {kind: "math" as "math", member: "PI" as "PI", arguments: null});
+    }
+    if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS") {
+        const member = builtinMathMember(node.children[0]!, context);
+        if (member !== null) {
+            if (member !== "min" && member !== "max") fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
+            const args = node.children[1]!.children.map(child => parseExpression(child, context, true));
+            args.forEach((argument, index) => {
+                if (!["Number", "int", "uint"].includes(assignmentType(argument, context, node.children[1]!.children[index]!).sourceName))
+                    fail("HARDENED_MATH_ARGUMENT", "Math arguments require proven numeric values", node.children[1]!.children[index]!);
+            });
+            return Object.assign(identity(node), {kind: "math" as "math", member: member as "min" | "max", arguments: args});
+        }
+    }
     if (node.kind === "LITERAL") {
         return parseLiteral(node);
     }
@@ -2170,6 +2227,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         const name = validateIdentifier(requiredText(nameNode, "constructor target"), nameNode);
         const args = call.children[1]!.children.map((child) => parseExpression(child, context, true));
+        const embedded = context.fields[name]?.embeddedBitmap;
+        if (embedded && !context.locals[name] && !context.parameters[name]) {
+            if (args.length !== 0) fail("HARDENED_EMBED_CONSTRUCTOR_ARITY", "Embedded bitmap construction currently admits zero arguments", call);
+            const bitmapImport = Object.values(context.importsByLocal).find(item => item.sourceQualifiedName === "flash.display.Bitmap");
+            if (!bitmapImport) fail("HARDENED_EMBED_BITMAP_AUTHORITY", "Embedded bitmap requires its authenticated Bitmap type", node);
+            const constructorValue = parseExpression(nameNode, context, true);
+            return Object.assign(identity(node), {kind: "new" as "new", arguments: args,
+                sourceType: semanticType(nameNode, bitmapImport.sourceLocalName, bitmapImport.sourceLocalName, [], undefined, bitmapImport.sourceQualifiedName), constructorValue});
+        }
         let sourceType: SemanticType;
         if (name === context.className) {
             const local = context.methods[name];
@@ -2307,7 +2373,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_BINARY_SHAPE", "binary expression must contain exactly one operator and two operands", node);
         }
         const operator = requiredText(node.children[1]!, "binary operator");
-        const admitted = new Set(["<", "<=", ">", ">=", "===", "!==", "&&", "||", "+", "-", "*", "/", "%"]);
+        const admitted = new Set(["<", "<=", ">", ">=", "==", "!=", "===", "!==", "&&", "||", "+", "-", "*", "/", "%"]);
         if (!admitted.has(operator)) {
             fail("HARDENED_BINARY_OPERATOR", "coercive or runtime-dependent binary operator remains held", node.children[1]!);
         }
@@ -2317,12 +2383,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const rightType = assignmentType(right, context, node.children[2]!);
         const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
             || (rightType.sourceName === "null" && leftType.nullable);
-        const strictEquality = operator === "===" || operator === "!==";
+        const looseEquality = operator === "==" || operator === "!=";
+        if (looseEquality && !nullComparison)
+            fail("HARDENED_BINARY_COERCION", "Loose equality currently requires a null comparison", node);
+        const strictEquality = operator === "===" || operator === "!==" || looseEquality;
         const numericPair = context.sourceMemberAuthority !== null
             && [leftType, rightType].every(type => ["Number", "int", "uint"].includes(type.sourceName) && type.emittedName === "number");
-        if (!numericPair && !sameType(leftType, rightType)
+        const stringConcatenation = operator === "+"
+            && [leftType, rightType].some(type => type.sourceName === "String" && !type.nullable)
+            && [leftType, rightType].every(type => ["String", "Number", "int", "uint", "Boolean", "null"].includes(type.sourceName));
+        if (!numericPair && !stringConcatenation && !sameType(leftType, rightType)
             && !(strictEquality && (nullComparison || sameUnderlyingType(leftType, rightType)))) {
-            fail("HARDENED_BINARY_TYPE", "binary operands require the exact same proven source type", node);
+            fail("HARDENED_BINARY_TYPE", `binary ${operator} operands ${leftType.sourceName} and ${rightType.sourceName} require compatible proven source types`, node);
         }
         if ((operator === "&&" || operator === "||") && leftType.sourceName !== "Boolean") {
             fail("HARDENED_BINARY_BOOLEAN", "logical operators require exact Boolean operands", node);
@@ -2334,16 +2406,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (["-", "*", "/", "%"].indexOf(operator) >= 0 && !numericPair && leftType.sourceName !== "Number") {
             fail("HARDENED_BINARY_NUMBER", "numeric operators require exact Number operands", node);
         }
-        if (operator === "+" && !numericPair && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
+        if (operator === "+" && !numericPair && !stringConcatenation && leftType.sourceName !== "Number" && leftType.sourceName !== "String") {
             fail("HARDENED_BINARY_ADD", "addition requires exact Number or exact String operands", node);
         }
-        const booleanResult = ["<", "<=", ">", ">=", "===", "!==", "&&", "||"].indexOf(operator) >= 0;
+        const booleanResult = ["<", "<=", ">", ">=", "==", "!=", "===", "!==", "&&", "||"].indexOf(operator) >= 0;
         const resultType = booleanResult
             ? semanticType(node, "Boolean", "boolean")
-            : numericPair ? semanticType(node, "Number", "number") : leftType;
+            : stringConcatenation ? semanticType(node, "String", "string", [], false)
+                : numericPair ? semanticType(node, "Number", "number") : leftType;
         return Object.assign(identity(node), {
             kind: "binary" as "binary",
-            operator: operator as "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||" |
+            operator: operator as "<" | "<=" | ">" | ">=" | "==" | "!=" | "===" | "!==" | "&&" | "||" |
                 "+" | "-" | "*" | "/" | "%",
             left, right, resultType,
         });
@@ -2426,10 +2499,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const falseType = assignmentType(whenFalse, context, node.children[2]!);
         const trueNull = trueType.sourceName === "null" && falseType.nullable;
         const falseNull = falseType.sourceName === "null" && trueType.nullable;
-        if (!sameType(trueType, falseType) && !trueNull && !falseNull) {
+        const numericBranches = [trueType, falseType].every(type => ["Number", "int", "uint"].includes(type.sourceName));
+        if (!sameUnderlyingType(trueType, falseType) && !numericBranches && !trueNull && !falseNull) {
             fail("HARDENED_CONDITIONAL_TYPE", "conditional branches require the exact same proven source type", node);
         }
-        const resultType = trueNull ? falseType : falseNull ? trueType : trueType;
+        const resultType = numericBranches ? semanticType(node, "Number", "number")
+            : trueNull ? falseType : withNullability(trueType, trueType.nullable || falseType.nullable);
         return Object.assign(identity(node), {
             kind: "conditional" as "conditional", condition, whenTrue, whenFalse,
             resultType: withNullability(resultType, trueNull || falseNull || resultType.nullable),
@@ -2844,6 +2919,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
         }
+        let targetName: string | undefined;
         let capabilitySource: string | null = superOwnerQName;
         let targetNullable = false;
         if (target.kind === "super") {
@@ -2945,8 +3021,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 const mappings = accesses.map(access => memberMapping(context, flashSource, access, name, node))
                     .filter((mapping): mapping is CapabilityMapping => mapping !== null);
                 if (mappings.length === 0) {
-                    fail("HARDENED_MEMBER_TARGET", "Flash receiver member lacks an exact bridge mapping", node);
+                    fail("HARDENED_MEMBER_TARGET", `Flash receiver ${flashSource}.${name} lacks an exact bridge mapping`, node);
                 }
+                const names = new Set(mappings.map(mapping => mapping.targetMember!.name));
+                if (names.size !== 1) fail("HARDENED_MEMBER_TARGET", "Flash accessor mappings disagree on their bridge target", node);
+                targetName = mappings[0]!.targetMember!.name;
                 capabilitySource = flashSource;
             } else if (intrinsicSource !== null) {
                 if (intrinsicMember(context, intrinsicSource, "read", name) === null
@@ -2982,7 +3061,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                 } else {
                     const arrayLength = isArrayType(targetType) && name === "length";
-                    if (!arrayLength && (vectorElement(targetType) === null
+                    const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr"].includes(name);
+                    if (!arrayLength && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", "member target is outside the admitted subset", node);
                     }
@@ -2995,7 +3075,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_OWN_RECORD_ESCAPE", "TTreeNode.FData is confined to authenticated own-record indexing", node);
         }
         return Object.assign(identity(node), {
-            kind: "member" as "member", target, targetNullable, name, capabilitySource,
+            kind: "member" as "member", target, targetNullable, name, ...(targetName ? {targetName} : {}), capabilitySource,
         });
     }
     if (node.kind === "CALL") {
@@ -3084,6 +3164,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             assertInheritedVisibility(inherited.member, inherited.ownerQName!, context, node);
             assertLocalMethodCall(inherited.member, args, node.children[1]!.children, context, node);
             resultType = authoritySemanticType(inherited.member.returnType!, context, node);
+        } else if (callee.kind === "member" && callee.capabilitySource === "String"
+            && assignmentType(callee.target, context, rawCallee).sourceName === "String") {
+            if (!["indexOf", "substr"].includes(callee.name) || args.length < 1 || args.length > 2)
+                fail("HARDENED_STRING_ARITY", "String method requires its native one or two arguments", node);
+            args.forEach((argument, index) => {
+                const type = assignmentType(argument, context, node.children[1]!.children[index]!);
+                if (callee.name === "indexOf" && index === 0 ? type.sourceName !== "String"
+                    : !["Number", "int", "uint"].includes(type.sourceName))
+                    fail("HARDENED_STRING_ARGUMENT", "String argument lacks a proven native primitive type", node.children[1]!.children[index]!);
+            });
+            resultType = callee.name === "indexOf" ? semanticType(node, "int", "number")
+                : semanticType(node, "String", "string", [], false);
         } else if (callee.kind === "identifier" && context.locals[callee.name]?.lambdaSignature) {
             const signature = context.locals[callee.name]!.lambdaSignature!;
             calleeNullable = context.locals[callee.name]!.type.nullable;
@@ -3876,7 +3968,7 @@ function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {
 }
 
 function parseField(list: TreeNode, context: AdapterContext, readonly: boolean): SemanticField[] {
-    onlyKinds(list, ["MOD_LIST", "NAME_TYPE_INIT"]);
+    onlyKinds(list, ["META_LIST", "MOD_LIST", "NAME_TYPE_INIT"]);
     const memberModifiers = parseMemberModifiers(list, context);
     const modifiers = memberModifiers.modifiers;
     if (modifiers.indexOf("override") >= 0) {
@@ -3885,6 +3977,35 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
     const declarations = list.children.filter((child) => child.kind === "NAME_TYPE_INIT");
     if (declarations.length === 0) {
         fail("HARDENED_FIELD_EMPTY", "field declaration must contain at least one source declarator", list);
+    }
+    const metadata = one(list, "META_LIST", true);
+    let embeddedSource: string | null = null;
+    if (metadata !== null) {
+        if (metadata.children.length !== 1 || metadata.children[0]!.kind !== "META"
+            || metadata.children[0]!.children.length !== 1 || declarations.length !== 1) {
+            fail("HARDENED_EMBED_METADATA", "Embedded field requires one metadata declaration and one field", metadata);
+        }
+        const call = metadata.children[0]!.children[0]!;
+        if (call.kind !== "CALL" || call.children.length !== 2 || call.children[0]!.kind !== "IDENTIFIER"
+            || call.children[0]!.text !== "Embed" || call.children[1]!.kind !== "ARGUMENTS"
+            || call.children[1]!.children.length !== 1) {
+            fail("HARDENED_EMBED_METADATA", "Only a source-only Embed declaration is currently admitted", metadata);
+        }
+        const option = call.children[1]!.children[0]!;
+        if (option.kind !== "ASSIGN" || option.children.length !== 3
+            || option.children[0]!.kind !== "IDENTIFIER" || option.children[0]!.text !== "source"
+            || option.children[1]!.text !== "=" || option.children[2]!.kind !== "LITERAL") {
+            fail("HARDENED_EMBED_METADATA", "Embed source must be one literal path", metadata);
+        }
+        const path = parseExpression(option.children[2]!, context, true);
+        if (path.kind !== "literal" || typeof path.value !== "string"
+            || !/^(?:\.\.\/)*[A-Za-z0-9_$.-]+(?:\/[A-Za-z0-9_$.-]+)*\.png$/i.test(path.value)) {
+            fail("HARDENED_EMBED_FORMAT", "Only relative PNG bitmap Embed resources are currently admitted", metadata);
+        }
+        embeddedSource = path.value;
+        if (!readonly || !modifiers.includes("static")) {
+            fail("HARDENED_EMBED_FIELD", "Embedded bitmap requires the original static const Class declaration", list);
+        }
     }
     return declarations.map((declaration) => {
         onlyKinds(declaration, ["INIT", "NAME", "TYPE", "VECTOR"]);
@@ -3900,10 +4021,13 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
                 fail("HARDENED_INITIALIZER_SHAPE", "field initializer has the wrong normalized shape", init);
             }
             initializer = parseExpression(init.children[0]!, context, true, false, false);
-        } else if (readonly) {
+        } else if (readonly && embeddedSource === null) {
             fail("HARDENED_CONST_INITIALIZER", "AS3 const fields require an explicit admitted initializer", declaration);
         }
         let fieldType = parseType(oneType(declaration), context, false);
+        if (embeddedSource !== null && (fieldType.sourceName !== "Class" || init !== null)) {
+            fail("HARDENED_EMBED_FIELD", "Embed supplies the initializer of an otherwise uninitialized Class field", declaration);
+        }
         const treeNodeRecord = isTreeNodeContext(context) && name === "FData";
         if (treeNodeRecord) {
             if (readonly || modifiers.join("\u0000") !== "protected" || fieldType.sourceName !== "Object"
@@ -3932,6 +4056,14 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean):
             initializer,
             implicitDefault,
         });
+        if (embeddedSource !== null) {
+            const mapping = context.mappingsBySource["flash.display.Bitmap"];
+            if (!mapping || mapping.targetKind !== "class") {
+                fail("HARDENED_EMBED_BITMAP_AUTHORITY", "Embedded bitmap requires an authenticated Bitmap capability", declaration);
+            }
+            field.embeddedBitmap = {source: embeddedSource, resourceId: context.classQualifiedName + "." + name,
+                className: "__as3Embedded_" + name, bitmapModule: targetModuleSpecifier(mapping.targetModule), bitmapExport: mapping.targetExport};
+        }
         context.fields[name] = field;
         return field;
     });
@@ -4226,7 +4358,18 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         node: TreeNode): SemanticImport | null => {
         const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
         const existing = parsedImports.importsByLocal[localName];
-        if (existing) return existing;
+        if (existing) {
+            if (sourceName.includes('.') && existing.sourceQualifiedName !== sourceName)
+                fail("HARDENED_IMPORT_COLLISION", "implicit signature type conflicts with an existing import", node);
+            return existing;
+        }
+        if (authority.typeMappingsBySource[sourceName]) {
+            const item = flashSemanticImport(authority, sourceName, node);
+            if (expectedKind !== null && authority.typeMappingsBySource[sourceName]!.targetKind !== expectedKind) return null;
+            parsedImports.imports.push(item);
+            parsedImports.importsByLocal[localName] = item;
+            return item;
+        }
         if (!localAuthority || !resolveCurrentLocal) return null;
         const qname = sourceName.indexOf(".") >= 0 ? sourceName
             : packageName === "" ? sourceName : `${packageName}.${sourceName}`;

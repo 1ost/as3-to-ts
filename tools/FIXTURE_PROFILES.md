@@ -83,3 +83,37 @@ authenticated SDK inventory and the exact target capability row, then retain
 the returned mappings and member uses in the locked application profile. Read
 and write access are checked separately; missing or ambiguous target accessors
 remain unmapped. This uses the same authority logic as the native fixture lane.
+
+
+Styled original classes can add `--ffdec-jar /path/to/ffdec.jar`. The shared
+`native-api-profile.py` recovers complete public SDK signatures, optional
+arguments and declaring owners from retained decompiled SDK bytes. The profile
+pins this evidence in its source manifest; unsupported target members remain
+unmapped. Native inheritance is resolved from the authenticated SDK ancestry.
+`TextField.autoSize` uses the shared `flashAutoSize` bridge to avoid Laya's
+boolean property collision; source field and method names remain intact.
+
+The admitted `[Embed(source="relative.png")]` form is an original static const
+Class field with no explicit initializer. PNG bytes are retained under their
+SHA-256 in the output manifest, and the compiler emits a Bitmap subclass for
+that field. Install the generated runtime's `installAS3EmbeddedBitmapDataHost`
+only after shared Laya `EmbeddedBitmapAssets` has preloaded the manifest's
+resources. Each construction receives independent canonical BitmapData.
+Other formats/options and constructor arguments remain held. Compiler-generated
+embedded class names are internal identities; native synthesized linkage-name
+reflection still requires conversion evidence before it can be accepted.
+
+Focused SDK-backed Embed regression:
+
+```sh
+TMPDIR=/private/tmp HARDENED_FIXTURE_AIR_SDK=/path/to/AIRSDK \
+  HARDENED_FIXTURE_LAYA=/path/to/LayaAir HARDENED_FIXTURE_FFDEC_JAR=/path/to/ffdec.jar \
+  node --test tests/hardened-cli/embedded-bitmap-profile.test.cjs
+PYTHONDONTWRITEBYTECODE=1 python3 tools/test-native-api-profile.py
+```
+
+Math admission currently includes numeric `min`/`max` and `PI`; String includes
+source-typed `indexOf`/`substr`. Loose equality is limited to null comparisons.
+Binary chains preserve left associativity, conditional branches join compatible
+numeric/nullability types, and reference upcasts require authenticated ancestry.
+These are language lowerings, not application-profile implementations.

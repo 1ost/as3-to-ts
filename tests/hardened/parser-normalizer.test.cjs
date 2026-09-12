@@ -262,6 +262,18 @@ function expectNormalizationCode(action, code) {
 
 const built = compileFocusedSources();
 try {
+    for (const [expression, kind] of [
+        ["new Sprite() as Sprite", "RELATION"],
+        ["new Sprite() == null", "EQUALITY"],
+        ["new Sprite().visible", "DOT"],
+    ]) {
+        const text = `package p { import flash.display.Sprite; public class C { public var value:Object = ${expression}; } }`;
+        const ast = built.normalizer.normalizeParserAst(built.parse("C.as", text), text, sha256);
+        const created = ast.nodes.find(node => node.kind === "NEW");
+        assert.equal(ast.nodes.find(node => node.id === created.parentId).kind, kind);
+        assert.equal(ast.nodes.find(node => node.parentId === created.id).kind, "CALL");
+        assert.equal(text.slice(created.span.start, created.span.end), "new Sprite()");
+    }
     const source = [
         "package lobby.ui {",
         "    /* preserved comment trivia */",
@@ -340,6 +352,27 @@ try {
     const semantic = built.adapter.adaptNormalizedParserAst(
         normalized, authority(built.ledger), source, sha256,
     );
+
+    const startupLanguageSource = `package p { public class StartupLanguage {
+        public function values(message:String, value:Number):String {
+            var clamped:Number = Math.max(0, Math.min(100, value));
+            var divided:Number = 100 / 5 / 2;
+            var chosen:String = message == null ? "" : message;
+            var position:Number = chosen.indexOf(" | ");
+            return chosen.substr(position + 3) + ":" + clamped + "%";
+        }
+        public function angle():Number { return Math.PI / 2; }
+    } }`;
+    const startupLanguage = built.adapter.adaptNormalizedParserAst(
+        built.normalizer.normalizeParserAst(built.parse("StartupLanguage.as", startupLanguageSource), startupLanguageSource, sha256),
+        authority(built.ledger), startupLanguageSource, sha256);
+    assert.equal(startupLanguage.declaration.members.filter(member => member.kind === "method").length, 2);
+    for (const body of ['return Math.random();', 'return Math.max("1", 2);', 'return 1 == "1";']) {
+        const held = `package p { public class Held { public function run():Number { ${body} } } }`;
+        assert.throws(() => built.adapter.adaptNormalizedParserAst(
+            built.normalizer.normalizeParserAst(built.parse("Held.as", held), held, sha256),
+            authority(built.ledger), held, sha256), built.adapter.HardenedSemanticError || Error);
+    }
 
     const primitiveRuntimeSource = [
         "package p {",
@@ -770,10 +803,12 @@ try {
         "package p { [Bindable] public class C {} }",
     ].forEach((unsupported) => {
         const tree = built.parse("fixtures/Unsupported.as", unsupported);
-        expectNormalizationCode(
-            () => built.normalizer.normalizeParserAst(tree, unsupported, sha256),
-            "PARSER_NORMALIZER_UNSUPPORTED_KIND",
-        );
+        const normalizedMetadata = built.normalizer.normalizeParserAst(tree, unsupported, sha256);
+        assert.ok(normalizedMetadata.nodes.some(node => node.kind === "META"));
+        assert.throws(() => built.adapter.adaptNormalizedParserAst(
+            normalizedMetadata, authority(built.ledger), unsupported, sha256),
+            error => error && error.name === "HardenedSemanticError",
+            "unimplemented class metadata remains a semantic hold");
     });
 
     assert.throws(

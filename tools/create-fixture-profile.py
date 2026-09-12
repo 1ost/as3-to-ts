@@ -6,6 +6,7 @@ The real declaration worker and qualifier still decide whether emission is allow
 """
 import argparse
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import re
@@ -123,6 +124,7 @@ def main():
     p.add_argument('--laya', type=Path, required=True)
     p.add_argument('--air-sdk', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--ffdec-jar', type=Path, help='Recover complete native member signatures and optional arguments from this pinned decompiler')
     args = p.parse_args()
     if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*', args.entry):
         p.error('Entry must be an AS3 class QName')
@@ -161,6 +163,53 @@ def main():
     predicate_input = target.parent / 'flash-runtime-type-predicates.json'
     original = json.loads(predicate_input.read_text())
     by_qname = {r['sourceQName']: r for r in original['types']}
+    def target_for(q):
+        name = q.rsplit('.', 1)[-1]
+        module = by_qname[q]['targetModule'] if q in by_qname else None
+        namespace = 'src/layaAir/' + q.rsplit('.', 1)[0].replace('.', '/') + '/'
+        candidates = [(c['id'], o) for c in target_doc['capabilities'] if c.get('status') == 'typescript-obligation'
+                      for o in c.get('obligations', []) if o.get('export') == name
+                      and (o.get('module') == module if module else o.get('module', '').startswith(namespace))]
+        if len(candidates) != 1: raise ValueError('No unique Laya capability for ' + q)
+        return candidates[0]
+    native_api, native_signatures = None, None
+    own_names = set(re.findall(r'\b(?:function\s+(?:(?:get|set)\s+)?|var\s+|const\s+)([A-Za-z_$][\w$]*)', text))
+    member_text = re.sub(r'\bthis\s*\.\s*([A-Za-z_$][\w$]*)',
+                         lambda m: ' ' if m[1] in own_names else m[0], text)
+    used_names = set(re.findall(r'\.\s*([A-Za-z_$][\w$]*)', member_text))
+    used_names.update(re.findall(r'\bnew\s+([A-Za-z_$][\w$]*)', text))
+    if args.ffdec_jar:
+        spec = importlib.util.spec_from_file_location('native_api', ROOT / 'tools/native-api-profile.py')
+        native_api = importlib.util.module_from_spec(spec); spec.loader.exec_module(native_api)
+        with zipfile.ZipFile(sdk / 'frameworks/libs/air/airglobal.swc') as archive:
+            (out / 'airglobal.swf').write_bytes(archive.read('library.swf'))
+        native_signatures = native_api.decompile_sdk(out / 'airglobal.swf', args.ffdec_jar.resolve(), out)
+        # The profile's authenticated source manifest also records the exact SDK
+        # signature evidence used to generate these mappings.
+        source_manifest = json.loads(files['sourceManifest'].read_text())
+        source_manifest['nativeSignaturesSha256'] = sha(out / 'sdk-signatures.json')
+        source_manifest['nativeSdkSha256'] = sha(sdk / 'frameworks/libs/air/airglobal.swc')
+        source_manifest['nativeDecompilerSha256'] = sha(args.ffdec_jar.resolve())
+        write(files['sourceManifest'], source_manifest)
+        local_types = json.loads(files['localTypeMap'].read_text())
+        local_types['sourceManifestSha256'] = sha(files['sourceManifest'])
+        write(files['localTypeMap'], local_types)
+        for qname in imports:
+            if re.search(r'\bextends\s+' + qname.rsplit('.', 1)[-1] + r'\b', text):
+                used_names.update(m['name'] for m in native_api.native_members(native_signatures, qname)
+                                  if m['name'] not in own_names and re.search(r'\b' + re.escape(m['name']) + r'\b', text))
+        pending, closure = list(imports), set(imports)
+        while pending:
+            qname = pending.pop()
+            for member in native_api.native_members(native_signatures, qname):
+                if member['name'] not in used_names: continue
+                for t in [member['declaredBy'], member['type'], *[p['type'] for p in member['parameters']]]:
+                    for dependency in re.findall(r'flash(?:\.[A-Za-z_$][\w$]*)+', t):
+                        if dependency in closure: continue
+                        try: target_for(dependency)
+                        except ValueError: continue
+                        closure.add(dependency); pending.append(dependency)
+        imports = sorted(closure)
     selected, pending = set(), [q for q in imports if q in by_qname]
     while pending:
         q = pending.pop()
@@ -183,17 +232,17 @@ def main():
         if re.search(r'\bextends\s+' + name + r'\b', text): roles.append('base-type')
         if re.search(r'\bnew\s+' + name + r'\s*\(', text): roles.append('constructor')
         if re.search(r':\s*' + name + r'\b', text): roles.append('instance-member')
+        if native_signatures is not None:
+            if 'instance-member' not in roles: roles.append('instance-member')
+            if re.search(r'\b' + name + r'\s*\.', text): roles.append('static-member')
         roles.sort()
         apis.append({'qname': q, 'roles': roles, 'classification': 'layaair-flash-api-bridge', 'preserve': {'apiName': True, 'signature': True}})
-        module = by_qname[q]['targetModule'] if q in by_qname else 'src/layaAir/' + q.replace('.', '/') + '.ts'
-        candidates = [(c['id'], o) for c in target_doc['capabilities'] if c.get('status') == 'typescript-obligation'
-                      for o in c.get('obligations', []) if o.get('module') == module and o.get('export') == name]
-        if len(candidates) != 1:
-            raise ValueError('No unique Laya capability for ' + q)
-        cap, row = candidates[0]
+        cap, row = target_for(q)
+        module = row['module']
         mappings.append({'sourceQName': q, 'sourceRoles': roles, 'sourceMember': None, 'targetCapabilityId': cap,
             'targetModule': module, 'targetExport': row['export'], 'targetKind': row['kind'], 'targetSignature': row['signature'], 'targetMember': None})
-        properties, uses = primitive_property_mappings(q, roles, row, cap, native_classes)
+        properties, uses = (native_api.map_native_members(q, roles, row, cap, native_signatures, used_names)
+                            if native_signatures is not None else primitive_property_mappings(q, roles, row, cap, native_classes))
         mappings.extend(properties)
         member_uses.extend(uses)
     census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': member_uses}})
@@ -212,7 +261,8 @@ def main():
                    'mappedTypes': len(apis), 'mappedMembers': len(member_uses), 'sourceMemberTypes': member_count},
         'files': {k: {'path': v.name, 'sha256': sha(v)} for k, v in files.items()}})
     write(out / 'generator-inputs.json', {str(v): sha(v) for v in [Path(__file__).resolve(), entry, target, predicate_input,
-        sdk / 'frameworks/libs/air/airglobal.swc', sdk / 'lib/swfdump-cli.jar', ROOT / 'lib/declaration-worker.js']})
+        sdk / 'frameworks/libs/air/airglobal.swc', sdk / 'lib/swfdump-cli.jar', ROOT / 'lib/declaration-worker.js',
+        *([args.ffdec_jar.resolve(), ROOT / 'tools/native-api-profile.py', out / 'sdk-signatures.json'] if native_signatures is not None else [])]})
     print(out / 'profile-lock.json')
 
 

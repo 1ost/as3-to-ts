@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
-import { readFileSync } from "node:fs";
-import { join, posix, resolve } from "node:path";
+import { readFileSync, realpathSync, lstatSync } from "node:fs";
+import { dirname, join, posix, resolve, sep } from "node:path";
 import ts49 = require("typescript-4-9");
 import { CliError, errorMessage } from "./errors";
 import { discoverInputs, portableCollisionKey, readInput } from "./inputs";
@@ -11,7 +11,7 @@ import { loadTranspileAuthority } from "./authority";
 import { adaptNormalizedParserAst } from "../hardened/adapter";
 import { HardenedSemanticError, type NormalizedParserAst, type SemanticProgram } from "../hardened/contracts";
 import { emitSemanticProgram } from "../hardened/emitter";
-import { assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeInterfaceAuthoritySource,
+import { assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeEmbeddedAuthoritySources, localRuntimeInterfaceAuthoritySource,
     localRuntimeTypeAuthoritySource, type EmittedRuntimeApplicationEntry,
     type EmittedRuntimeAuthority, type RuntimeAuthoritySource } from "../hardened/type-authority";
 import {
@@ -69,6 +69,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
     "AS3ByteArray.ts": "f6e206784fcab50b8af57d0fb5acdf50696aeef8527ff2e58709c0f06f15bc30",
     "AS3Coerce.ts": "91549a34ee875997da35e837ad4213bb089a771c8ee67efcecf50670adbed99b",
+    "AS3Embed.ts": "41628cd8db111c12c5f12c8a51f036d37c839f8ae609986d0d24796e425d2055",
     "AS3Dictionary.ts": "307af295f7cd3e7c6f32423b799ab8920fb1f84e254181256a5673dfffd45814",
     "AS3MethodClosure.ts": "05329f4fa2a7034f49ab70ed87311350e71e997dca7976f8f7a44b364ca3dd9a",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
@@ -184,7 +185,7 @@ function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<
 }
 
 function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): string {
-    const entries = ["AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3Coerce", "AS3Dictionary",
+    const entries = ["AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3Coerce", "AS3Dictionary", "AS3Embed",
         "AS3MethodClosure", "AS3OwnRecord", "AS3Timer", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
     entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"
@@ -256,6 +257,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
         const runtimeAuthoritySources: RuntimeAuthoritySource[] = transpileAuthority === null
             ? [] : [...transpileAuthority.runtimeTypeSources];
         const localRuntimePrograms: SemanticProgram[] = [];
+        const embeddedResources: Array<{id: string; sourcePath: string; path: string; sha256: string; bytes: number}> = [];
+        const resourceInputs = new Map<string, string>();
         let totalOutputBytes = 0;
 
         for (const file of inputs.files) {
@@ -312,6 +315,32 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     source.content, value => sha256(value), transpileAuthority!.localTypes, file.portablePath,
                     transpileAuthority!.localMembers, transpileAuthority!.runtimeTypeSources,
                     transpileAuthority!.sourceMembers || undefined);
+                if (semantic.declaration.declarationKind === "class") for (const member of semantic.declaration.members) {
+                    if (member.kind !== "field" || !member.embeddedBitmap) continue;
+                    const asset = member.embeddedBitmap;
+                    const resourcePath = resolve(dirname(file.absolutePath), asset.source);
+                    if (!resourcePath.startsWith(inputs.root + sep) || realpathSync.native(resourcePath) !== resourcePath
+                        || !lstatSync(resourcePath).isFile() || lstatSync(resourcePath).size > 16 * 1024 * 1024) {
+                        throw new HardenedSemanticError("HARDENED_EMBED_RESOURCE", "Embedded resource must be a bounded regular file within the source root");
+                    }
+                    const bytes = readFileSync(resourcePath);
+                    if (bytes.length < 24 || bytes.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a"
+                        || bytes.toString("ascii", 12, 16) !== "IHDR") {
+                        throw new HardenedSemanticError("HARDENED_EMBED_RESOURCE", "Embedded PNG resource has an invalid header");
+                    }
+                    const hash = sha256(bytes), target = `__as3_runtime/assets/${hash}.png`;
+                    resourceInputs.set(resourcePath, hash);
+                    if (embeddedResources.some(resource => resource.id === asset.resourceId)) {
+                        throw new HardenedSemanticError("HARDENED_EMBED_RESOURCE", "Embedded resource identity collides");
+                    }
+                    if (options.operation === "transpile" && !embeddedResources.some(resource => resource.path === target)) {
+                        totalOutputBytes += bytes.byteLength;
+                        if (totalOutputBytes > options.limits.maxTotalOutputBytes) throw new CliError("Embedded resources exceed output byte limit", 5);
+                        writeArtifact(publication, target, bytes);
+                    }
+                    embeddedResources.push({id: asset.resourceId, sourcePath: posix.join(posix.dirname(file.portablePath), asset.source),
+                        path: target, sha256: hash, bytes: bytes.byteLength});
+                }
                 const emitted = emitSemanticProgram(semantic, {
                     compiler: ts49,
                     expectedTypeScriptVersion: transpileAuthority!.typeScriptVersion,
@@ -441,6 +470,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     if (semantic.declaration.declarationKind === "class") {
                         runtimeAuthoritySources.push(localRuntimeTypeAuthoritySource(semantic,
                             `./application/${semantic.outputModulePath.slice(0, -3)}`));
+                        runtimeAuthoritySources.push(...localRuntimeEmbeddedAuthoritySources(semantic,
+                            `./application/${semantic.outputModulePath.slice(0, -3)}`));
                     } else if (semantic.declaration.declarationKind === "interface") {
                         runtimeAuthoritySources.push(localRuntimeInterfaceAuthoritySource(semantic));
                     }
@@ -486,6 +517,10 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
         }
 
         assertParserWorkerSha256(parserWorkerSha256);
+        for (const [path, hash] of resourceInputs) {
+            if (realpathSync.native(path) !== path || sha256(readFileSync(path)) !== hash)
+                throw new CliError("Embedded resource changed during generation", 6);
+        }
         const qualificationCounts = options.operation === "qualify" ? qualificationFiles.reduce((result, item) => {
             const key = item.status === "admitted" ? "admitted" : item.code!;
             result[key] = (result[key] || 0) + 1;
@@ -520,6 +555,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             profileLockSha256: transpileAuthority!.profileSha256,
             runtimePackage: transpileAuthority!.runtimePackage,
             classification: "capability-authenticated-typescript-proposal",
+            embeddedResources,
             files: transpiledFiles,
         } : {
             schema: transpileAuthority!.profileSha256 === null

@@ -147,6 +147,12 @@ export interface IntrinsicConstantExpression extends SemanticIdentity {
     value: 16;
 }
 
+export interface MathExpression extends SemanticIdentity {
+    kind: "math";
+    member: "PI" | "min" | "max";
+    arguments: SemanticExpression[] | null;
+}
+
 export interface IdentifierExpression extends SemanticIdentity {
     kind: "identifier";
     name: string;
@@ -167,6 +173,7 @@ export interface MemberExpression extends SemanticIdentity {
     target: SemanticExpression;
     targetNullable: boolean;
     name: string;
+    targetName?: string;
     capabilitySource: string | null;
 }
 
@@ -349,11 +356,12 @@ export interface NewExpression extends SemanticIdentity {
     kind: "new";
     sourceType: SemanticType;
     arguments: SemanticExpression[];
+    constructorValue?: SemanticExpression;
 }
 
 export interface BinaryExpression extends SemanticIdentity {
     kind: "binary";
-    operator: "<" | "<=" | ">" | ">=" | "===" | "!==" | "&&" | "||" |
+    operator: "<" | "<=" | ">" | ">=" | "==" | "!=" | "===" | "!==" | "&&" | "||" |
         "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>";
     left: SemanticExpression;
     right: SemanticExpression;
@@ -395,7 +403,7 @@ export interface UpdateExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = LiteralExpression | IntrinsicConstantExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = LiteralExpression | IntrinsicConstantExpression | MathExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |
@@ -535,6 +543,13 @@ export interface SemanticField extends SemanticIdentity {
     readonly: boolean;
     type: SemanticType;
     initializer: SemanticExpression | null;
+    embeddedBitmap?: {
+        source: string;
+        resourceId: string;
+        className: string;
+        bitmapModule: string;
+        bitmapExport: string;
+    };
     implicitDefault: "zero" | "nan" | "false" | "null" | "undefined" | "constructor-owned" | null;
 }
 

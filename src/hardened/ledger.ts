@@ -312,7 +312,12 @@ function parseMapping(raw: unknown): CapabilityMappingDocument {
         if ((sourceMember === null) !== (targetMember === null)) {
             throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_PAIR", "source and target member mappings must be paired");
         }
-        if (sourceMember !== null && targetMember !== null && sourceMember.name !== targetMember.name) {
+        const textAutoSizeBridge = value.sourceQName === "flash.text.TextField"
+            && value.targetModule === "src/layaAir/flash/text/TextField.ts" && value.targetExport === "TextField"
+            && sourceMember?.name === "autoSize" && ["read", "write"].includes(sourceMember.access)
+            && targetMember?.name === "flashAutoSize" && targetMember.scope === "instance"
+            && targetMember.signature === "string";
+        if (sourceMember !== null && targetMember !== null && sourceMember.name !== targetMember.name && !textAutoSizeBridge) {
             throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_NAME", "source-visible Flash member name must be preserved by the target bridge");
         }
         const constructorRole = sourceMember !== null && sourceRoles.indexOf("constructor") >= 0;
@@ -421,7 +426,10 @@ const TEXT_FILTER_ALLOWED_MEMBERS: { [qname: string]: Set<string> } = Object.fre
     "flash.filters.BlurFilter": new Set(["BlurFilter"]),
     "flash.filters.DropShadowFilter": new Set(["DropShadowFilter"]),
     "flash.filters.GlowFilter": new Set(["GlowFilter"]),
+    "flash.text.TextFormat": new Set(["TextFormat"]),
 });
+const TEXT_FIELD_PROPERTIES = new Set(["defaultTextFormat", "selectable", "embedFonts", "antiAliasType", "autoSize",
+    "wordWrap", "text", "width", "height"]);
 const EXACT_TEXT_FIELD_MEMBERS = new Set(["appendText", "getCharBoundaries", "getCharIndexAtPoint", "getLineLength",
     "getLineOffset", "getTextFormat", "replaceText", "setTextFormat"]);
 
@@ -507,10 +515,12 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
     }
     if (TEXT_FILTER_QNAMES.has(mapping.sourceQName)) {
         const allowed = TEXT_FILTER_ALLOWED_MEMBERS[mapping.sourceQName];
-        if (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
+        const textProperty = mapping.sourceQName === "flash.text.TextField" && mapping.sourceMember.access !== "call"
+            && TEXT_FIELD_PROPERTIES.has(mapping.sourceMember.name) && mapping.sourceRoles[0] === "instance-member";
+        if (!textProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
             || (mapping.sourceQName === "flash.text.TextField" ? mapping.sourceMember.name === "TextField"
                 ? mapping.sourceRoles[0] !== "constructor" : mapping.sourceRoles[0] !== "instance-member"
-                : mapping.sourceRoles[0] !== "constructor" || mapping.sourceMember.name !== mapping.targetExport)) {
+                : mapping.sourceRoles[0] !== "constructor" || mapping.sourceMember.name !== mapping.targetExport))) {
             throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
                 "text/filter member is outside the exact behavioral allowlist");
         }
@@ -639,7 +649,7 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
                         && (value.signatures[0].minArgs !== 0 || value.signatures[0].maxArgs !== null))
                     || !exactOwnedSourceMetadata(mapping, value, value.signatures[0])) {
                     throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY",
-                        "bitmap source member evidence is conflicting or incomplete");
+                        "bitmap source member evidence is conflicting or incomplete: " + mapping.sourceQName + "." + mapping.sourceMember!.name + "/" + mapping.sourceMember!.access);
                 }
                 const argumentIdentity = JSON.stringify(value.argumentCount);
                 const tuple = JSON.stringify(value.signatures[0]);

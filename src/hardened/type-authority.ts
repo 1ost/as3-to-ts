@@ -1,4 +1,4 @@
-import { HardenedSemanticError, SemanticField, SemanticMember, SemanticProgram } from "./contracts";
+import { HardenedSemanticError, SemanticExpression, SemanticField, SemanticMember, SemanticProgram } from "./contracts";
 import { assertAdaptedSemanticProgram } from "./adapter";
 import { emitSemanticProgram } from "./emitter";
 
@@ -31,6 +31,7 @@ export type RuntimeAuthoritySource = RuntimeAuthorityInterfaceSource | RuntimeAu
 const authenticatedRuntimeAuthoritySources = new WeakSet<object>();
 const localRuntimeProofs = new WeakMap<object, { readonly transaction: symbol; readonly evaluationOrder: number }>();
 const localAuthoritySourceProofs = new WeakMap<object, symbol>();
+const compilerEmbeddedSources = new WeakSet<object>();
 let activeLocalRuntimeProof: symbol | null = null;
 
 function authenticatedSource<T extends RuntimeAuthoritySource>(source: T): T {
@@ -151,7 +152,7 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         || !program.declaration.modifiers.includes("public") || !generatedLocalModule(moduleSpecifier)) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_LOCAL", "local runtime identity must be one public authenticated class module");
     }
-    if (program.declaration.members.some(member => member.kind === "field" && member.modifiers.includes("static"))) {
+    if (hasExecutableStaticInitializer(program)) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_STATIC_INIT",
             `local runtime identity ${program.declaration.name} has static module evaluation and must remain HOLD`);
     }
@@ -177,6 +178,33 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         evaluationOrder: proof.evaluationOrder });
     localAuthoritySourceProofs.set(source as unknown as object, proof.transaction);
     return source;
+}
+
+function hasExecutableStaticInitializer(program: SemanticProgram): boolean {
+    const literalOnly = (expression: SemanticExpression): boolean => !!expression && (expression.kind === "literal"
+        || expression.kind === "coercion" && (expression.argument === null || literalOnly(expression.argument)));
+    return program.declaration.declarationKind === "class" && program.declaration.members.some(member =>
+        member.kind === "field" && member.modifiers.includes("static") && !member.embeddedBitmap
+        && member.initializer !== null && !literalOnly(member.initializer));
+}
+
+/** Generated Embed classes derive solely from admitted metadata and the mapped Bitmap authority. */
+export function localRuntimeEmbeddedAuthoritySources(program: SemanticProgram, moduleSpecifier: string): readonly RuntimeAuthorityClassSource[] {
+    localRuntimeTypeAuthoritySource(program, moduleSpecifier);
+    if (program.declaration.declarationKind !== "class") return [];
+    const proof = localRuntimeProofs.get(program as unknown as object)!;
+    return program.declaration.members.filter((member): member is SemanticField => member.kind === "field" && !!member.embeddedBitmap)
+        .map(field => {
+            const asset = field.embeddedBitmap!;
+            const source = authenticatedSource<RuntimeAuthorityClassSource>({kind: "class",
+                qname: (program.packageName ? program.packageName + "." : "") + program.declaration.name + "_" + field.name,
+                base: "flash.display.Bitmap", interfaces: [], sourceSha256: program.sourceSha256, definitionSafe: true,
+                module: moduleSpecifier, constructorExport: asset.className, predicateExport: asset.className + "Predicate",
+                constructionTargetExport: null, constructionProofExport: null, fields: [], evaluationOrder: proof.evaluationOrder});
+            localAuthoritySourceProofs.set(source as unknown as object, proof.transaction);
+            compilerEmbeddedSources.add(source);
+            return source;
+        });
 }
 
 function localImportPath(program: SemanticProgram, targetModule: string): string {
@@ -274,8 +302,7 @@ export function assertLocalRuntimeDefinitionClosure(programs: readonly SemanticP
     const authorities = definitions.filter(program => program.declaration.declarationKind === "class")
         .sort((left, right) => left.outputModulePath.localeCompare(right.outputModulePath, "en"));
     authorities.forEach(program => {
-        if (program.declaration.members.some((member: SemanticMember) =>
-            member.kind === "field" && member.modifiers.includes("static"))) {
+        if (hasExecutableStaticInitializer(program)) {
             throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_STATIC_INIT",
                 `local runtime identity ${program.declaration.name} has static module evaluation and must remain HOLD`);
         }
@@ -499,7 +526,7 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
         }
         if (source.kind === "class" && (!runtimeAuthorityModule(source.module) || !identifier(source.constructorExport)
             || !identifier(source.predicateExport)
-            || (source.evaluationOrder === null
+            || (source.evaluationOrder === null || compilerEmbeddedSources.has(source)
                 ? source.constructionTargetExport !== null || source.constructionProofExport !== null
                 : source.constructionTargetExport !== "as3ConstructionTarget"
                     || source.constructionProofExport !== "isAS3ConstructionProof")

@@ -208,7 +208,7 @@ export function preparePublication(outputArgument: string, sourceRoot: string): 
     }
 }
 
-export function writeArtifact(publication: Publication, portablePath: string, content: string): void {
+export function writeArtifact(publication: Publication, portablePath: string, content: string | Buffer): void {
     const segments = portablePath.split("/");
     if (segments.some(segment => segment === "" || segment === "." || segment === "..")) {
         throw new CliError("internal artifact path invariant failed", 70);

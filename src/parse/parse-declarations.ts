@@ -212,19 +212,12 @@ function parseIncludeExpression(parser:AS3Parser):Node {
 
 
 function parseMetaData(parser:AS3Parser):Node {
-    let buffer = '';
-
-    let index = consume(parser, Operators.LEFT_SQUARE_BRACKET).index;
-    while (!tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) {
-        assertNotEOF(parser, 'metadata');
-        const checkpoint = getParserCheckPoint(parser);
-        buffer += parser.tok.text;
-        nextToken(parser);
-        assertProgress(parser, checkpoint, 'metadata');
-    }
-    let end = parser.tok.end;
-    skip(parser, Operators.RIGHT_SQUARE_BRACKET);
-    return createNode(NodeKind.META, {start: index, end: end, text: '[' + buffer + ']'});
+    const start = consume(parser, Operators.LEFT_SQUARE_BRACKET).index;
+    const expression = parseExpression(parser);
+    const end = consume(parser, Operators.RIGHT_SQUARE_BRACKET).end;
+    const result = createNode(NodeKind.META, {start, end});
+    result.children.push(expression);
+    return result;
 }
 
 

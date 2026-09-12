@@ -95,21 +95,25 @@ function parseLambdaExpression(parser:AS3Parser):Node {
 
 
 function parseNewExpression(parser:AS3Parser):Node {
-    let tok = consume(parser, Keywords.NEW);
-
-    let result:Node = createNode(NodeKind.NEW, {start: tok.index});
-    result.children.push(parseExpression(parser)); // name
-    if (tokIs(parser, Operators.VECTOR_START)) {
-        let index = parser.tok.index;
-        let vec = parseVector(parser);
-        result.children.push(createNode(NodeKind.VECTOR, {start: index, end: vec.end}, vec));
+    const tok = consume(parser, Keywords.NEW);
+    const result = createNode(NodeKind.NEW, {start: tok.index});
+    let target = parsePrimaryExpression(parser);
+    // A constructor consumes its target and one argument list. Casts, binary
+    // operators and accesses on the new instance belong to the enclosing
+    // expression (for example, new Asset() as Bitmap).
+    if (target.kind !== NodeKind.SHORT_VECTOR) {
+        while (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_COLUMN)
+            || tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
+            target = tokIs(parser, Operators.LEFT_SQUARE_BRACKET)
+                ? parseArrayAccessor(parser, target) : parseDot(parser, target);
+        }
+        if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
+            const args = parseArgumentList(parser);
+            target = createNode(NodeKind.CALL, {start: target.start, end: args.end}, target, args);
+        }
     }
-    if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
-        result.children.push(parseArgumentList(parser));
-    }
-    result.end = result.children.reduce((index:number, child:Node) => {
-        return Math.max(index, child ? child.end : 0);
-    }, result.end);
+    result.children.push(target);
+    result.end = target.end;
     return result;
 }
 
