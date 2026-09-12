@@ -3825,7 +3825,12 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                         test = null;
                     } else {
                         test = parseExpression(rawTest, context, true);
-                        assertAssignmentCompatible(expressionType, assignmentType(test, context, rawTest), rawTest);
+                        const testType = assignmentType(test, context, rawTest);
+                        // Flash switch compares numeric values across int/uint/Number.
+                        // Assignment coercion would truncate fractional labels or wrap uint bounds.
+                        const numericCase = ["Number", "int", "uint"].includes(expressionType.sourceName)
+                            && ["Number", "int", "uint"].includes(testType.sourceName);
+                        if (!numericCase) assertAssignmentCompatible(expressionType, testType, rawTest);
                     }
                     return Object.assign(identity(caseNode), {
                         test,

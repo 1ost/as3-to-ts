@@ -383,3 +383,13 @@ The unchanged AddValuesProbe retains 47 native/generated checkpoints, including
 asymmetric custom conversion, class/function labels, null results, exact errors,
 String/Number slots and getter/RHS/setter order. It is a shared language fixture,
 not an application controller replacement.
+
+
+Numeric switch expressions and case labels may mix int, uint and Number.
+Comparison preserves their numeric values: fractional labels are not truncated,
+uint boundary labels are not wrapped, NaN never matches, and negative zero
+matches zero. The native NumericSwitchProbe also retains selector/case evaluation
+order, first matching case, default placement and fallthrough. The emitted native
+JavaScript switch already supplies these proven semantics; no slot coercion is
+inserted into a case label. Other mixed source-type cases keep their existing
+admission boundary.
