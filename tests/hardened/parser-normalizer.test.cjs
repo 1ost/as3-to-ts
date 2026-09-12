@@ -783,6 +783,24 @@ try {
     assert.equal(negation.resultType.sourceName, "Boolean");
     assert.equal(negation.resultType.nullable, false);
     assert.equal(booleanContext.declaration.members.find(member => member.name === "loop").body[0].condition.kind, "coercion");
+    const equalitySource = 'package p { public class Equality { public function same(a:Equality,b:Equality):Boolean { return a == b; } public function numbers(a:int,b:Number):Boolean { return a != b; } } }';
+    const equalityAst = built.normalizer.normalizeParserAst(built.parse("Equality.as", equalitySource), equalitySource, sha256);
+    built.adapter.adaptNormalizedParserAst(equalityAst, authority(built.ledger), equalitySource, sha256,
+        undefined, undefined, undefined, undefined, sourceMemberAuthority);
+    const defaultConstruction = 'package p { public class DefaultConstruction { public function create():DefaultConstruction { return new DefaultConstruction(); } } }';
+    const defaultConstructionAst = built.normalizer.normalizeParserAst(built.parse("DefaultConstruction.as", defaultConstruction), defaultConstruction, sha256);
+    built.adapter.adaptNormalizedParserAst(defaultConstructionAst, authority(built.ledger), defaultConstruction, sha256,
+        undefined, undefined, undefined, undefined, sourceMemberAuthority);
+    const badDefaultConstruction = defaultConstruction.replace('new DefaultConstruction()', 'new DefaultConstruction(1)');
+    const badDefaultAst = built.normalizer.normalizeParserAst(built.parse("DefaultConstruction.as", badDefaultConstruction), badDefaultConstruction, sha256);
+    assert.throws(() => built.adapter.adaptNormalizedParserAst(badDefaultAst, authority(built.ledger), badDefaultConstruction, sha256,
+        undefined, undefined, undefined, undefined, sourceMemberAuthority), error => error?.code === "HARDENED_NEW_LOCAL_ARITY");
+    for (const [left, right] of [["Object", "Object"], ["*", "*"], ["String", "Number"]]) {
+        const heldSource = `package p { public class HeldEquality { public function same(a:${left},b:${right}):Boolean { return a == b; } } }`;
+        const heldAst = built.normalizer.normalizeParserAst(built.parse("HeldEquality.as", heldSource), heldSource, sha256);
+        assert.throws(() => built.adapter.adaptNormalizedParserAst(heldAst, authority(built.ledger), heldSource, sha256,
+            undefined, undefined, undefined, undefined, sourceMemberAuthority), error => error?.code === "HARDENED_BINARY_COERCION");
+    }
     const conditionOutput=built.emitter.emitSemanticProgram(conditionSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
     assert.match(conditionOutput.code,/if \(__as3Boolean\(item\)\)/);

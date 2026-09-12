@@ -2241,10 +2241,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         let sourceType: SemanticType;
         if (name === context.className) {
             const local = context.methods[name];
-            if (!local || !local.constructor || !admittedArity(local.parameters, args.length)) {
+            const implicitObjectConstructor = !local && context.sourceMemberAuthority !== null
+                && context.baseSourceQName === null && context.baseLocalQName === null && args.length === 0;
+            if (!implicitObjectConstructor && (!local || !local.constructor || !admittedArity(local.parameters, args.length))) {
                 fail("HARDENED_NEW_LOCAL_ARITY", "local constructor call does not match its exact declaration", call);
             }
-            args.forEach((argument, index) => {
+            if (local) args.forEach((argument, index) => {
                 args[index] = adaptAssignmentValue(local.parameters[index]!.type, argument, context,
                     call.children[1]!.children[index]!);
             });
@@ -2386,11 +2388,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
             || (rightType.sourceName === "null" && leftType.nullable);
         const looseEquality = operator === "==" || operator === "!=";
-        if (looseEquality && !nullComparison)
-            fail("HARDENED_BINARY_COERCION", "Loose equality currently requires a null comparison", node);
-        const strictEquality = operator === "===" || operator === "!==" || looseEquality;
         const numericPair = context.sourceMemberAuthority !== null
             && [leftType, rightType].every(type => ["Number", "int", "uint"].includes(type.sourceName) && type.emittedName === "number");
+        const sameValueDomain = context.sourceMemberAuthority !== null
+            && sameUnderlyingType(leftType, rightType)
+            && !["Object", "*", "XML", "XMLList", "void"].includes(leftType.sourceName);
+        if (looseEquality && !nullComparison && !numericPair && !sameValueDomain)
+            fail("HARDENED_BINARY_COERCION", "Loose equality requires null or a proven common primitive/reference domain", node);
+        const strictEquality = operator === "===" || operator === "!==" || looseEquality;
         const stringConcatenation = operator === "+"
             && [leftType, rightType].some(type => type.sourceName === "String" && !type.nullable)
             && [leftType, rightType].every(type => ["String", "Number", "int", "uint", "Boolean", "null"].includes(type.sourceName));
