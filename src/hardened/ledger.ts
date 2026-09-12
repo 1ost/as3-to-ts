@@ -443,7 +443,7 @@ const TEXT_FILTER_ALLOWED_MEMBERS: { [qname: string]: Set<string> } = Object.fre
     "flash.text.TextFormat": new Set(["TextFormat"]),
 });
 const TEXT_FIELD_PROPERTIES = new Set(["defaultTextFormat", "selectable", "embedFonts", "antiAliasType", "autoSize",
-    "wordWrap", "text", "width", "height"]);
+    "wordWrap", "multiline", "text", "htmlText", "textWidth", "width", "height"]);
 const EXACT_TEXT_FIELD_MEMBERS = new Set(["appendText", "getCharBoundaries", "getCharIndexAtPoint", "getLineLength",
     "getLineOffset", "getTextFormat", "replaceText", "setTextFormat"]);
 
@@ -531,7 +531,12 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
         const allowed = TEXT_FILTER_ALLOWED_MEMBERS[mapping.sourceQName];
         const textProperty = mapping.sourceQName === "flash.text.TextField" && mapping.sourceMember.access !== "call"
             && TEXT_FIELD_PROPERTIES.has(mapping.sourceMember.name) && mapping.sourceRoles[0] === "instance-member";
-        if (!textProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
+        const leadingProperty = mapping.sourceQName === "flash.text.TextFormat"
+            && mapping.targetModule === "src/layaAir/flash/text/TextFormat.ts" && mapping.targetExport === "TextFormat"
+            && mapping.sourceMember.name === "leading" && mapping.targetMember.name === "leading"
+            && mapping.sourceMember.access !== "call" && mapping.sourceRoles[0] === "instance-member"
+            && mapping.targetMember.kind === "get+set" && mapping.targetMember.signature === "get number | null; set unknown";
+        if (!textProperty && !leadingProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
             || (mapping.sourceQName === "flash.text.TextField" ? mapping.sourceMember.name === "TextField"
                 ? mapping.sourceRoles[0] !== "constructor" : mapping.sourceRoles[0] !== "instance-member"
                 : mapping.sourceRoles[0] !== "constructor" || mapping.sourceMember.name !== mapping.targetExport))) {
