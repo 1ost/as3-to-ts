@@ -367,6 +367,18 @@ try {
         built.normalizer.normalizeParserAst(built.parse("StartupLanguage.as", startupLanguageSource), startupLanguageSource, sha256),
         authority(built.ledger), startupLanguageSource, sha256);
     assert.equal(startupLanguage.declaration.members.filter(member => member.kind === "method").length, 2);
+    const emptySource = 'package p { public class EmptyFixture { public function run():String { ; if (false); else ; while (false) { }; return "ready"; } } }';
+    const emptySemantic = built.adapter.adaptNormalizedParserAst(
+        built.normalizer.normalizeParserAst(built.parse("EmptyFixture.as", emptySource), emptySource, sha256),
+        authority(built.ledger), emptySource, sha256);
+    const emptyBody = emptySemantic.declaration.members.find(member => member.name === "run").body;
+    assert.equal(emptyBody[0].kind, "empty");
+    assert.equal(emptyBody[1].thenStatements[0].kind, "empty");
+    assert.equal(emptyBody[1].elseStatements[0].kind, "empty");
+    assert.equal(emptyBody[3].kind, "empty");
+    assert.match(built.emitter.emitSemanticProgram(emptySemantic, {
+        compiler: require("typescript-4-9"), expectedTypeScriptVersion: "4.9.5", sha256,
+    }).code, /if \(false\) \{\s*;/);
     for (const body of ['return Math.random();', 'return Math.max("1", 2);', 'return 1 == "1";']) {
         const held = `package p { public class Held { public function run():Number { ${body} } } }`;
         assert.throws(() => built.adapter.adaptNormalizedParserAst(

@@ -394,6 +394,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
 }
 
 function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi): any {
+    if (statement.kind === "empty") return ts.factory.createEmptyStatement();
     if (statement.kind === "expression") {
         return ts.factory.createExpressionStatement(expressionNode(statement.expression, ts));
     }

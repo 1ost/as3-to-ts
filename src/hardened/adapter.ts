@@ -3412,6 +3412,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
 
 function parseStatementNode(node: TreeNode, context: AdapterContext, constructor: boolean,
     derived: boolean, expectedReturn: SemanticType | null, allowSuperCall: boolean): SemanticStatement {
+        if (node.kind === "STMT_EMPTY") {
+            if (node.children.length !== 0) fail("HARDENED_EMPTY_STATEMENT", "Empty statement cannot contain executable children", node);
+            return Object.assign(identity(node), {kind: "empty" as "empty"});
+        }
         if (node.kind === "CALL" || node.kind === "ASSIGN" || node.kind === "DELETE" || node.kind === "PRE_INC"
             || node.kind === "PRE_DEC" || node.kind === "POST_INC" || node.kind === "POST_DEC") {
             return Object.assign(identity(node), {

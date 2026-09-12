@@ -409,6 +409,10 @@ export type SemanticExpression = LiteralExpression | IntrinsicConstantExpression
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |
     RuntimeTypeExpression | CoercionExpression;
 
+export interface EmptyStatement extends SemanticIdentity {
+    kind: "empty";
+}
+
 export interface ExpressionStatement extends SemanticIdentity {
     kind: "expression";
     expression: SemanticExpression;
@@ -523,7 +527,7 @@ export interface LabelStatement extends SemanticIdentity {
     statement: SemanticStatement;
 }
 
-export type SemanticStatement = ExpressionStatement | ReturnStatement | IfStatement |
+export type SemanticStatement = EmptyStatement | ExpressionStatement | ReturnStatement | IfStatement |
     WhileStatement | DoWhileStatement | SwitchStatement | ThrowStatement |
     ForStatement | ForEachStatement | ForInStatement | TryStatement | LocalDeclarationStatement | LoopControlStatement | LabelStatement;
 
