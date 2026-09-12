@@ -61,6 +61,11 @@ public class Base {
         self.assertEqual(api.target_arity('<T extends LayaNode>(child: T) => T'), (1, 1))
         self.assertEqual(api.target_arity('(x: number, y?: number) => void'), (1, 2))
         self.assertEqual(api.target_arity('(x: number, ...args: unknown[]) => void'), (1, 1000000))
+        self.assertEqual(api.target_arity('<T extends Node = Node>(index: number, classType?: new (...args: any[]) => T) => T'), (1, 2))
+        self.assertEqual(api.target_arity('(callback: (x: number, y: number) => void, label?: string) => () => void'), (1, 2))
+        self.assertEqual(api.target_arity('<T extends () => void>(callback: T) => T'), (1, 1))
+        with self.assertRaisesRegex(ValueError, 'Malformed native parameter signature'):
+            api.split_parameters('x: (number]')
         self.assertIsNone(api.target_arity('number'))
 
     def test_member_requires_compatible_target_type_and_arity(self):

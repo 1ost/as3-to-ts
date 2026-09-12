@@ -13,21 +13,31 @@ BUILTINS = {'*', 'void', 'int', 'uint', 'Number', 'Boolean', 'String', 'Array', 
             'XML', 'XMLList', 'Namespace', 'QName', 'Error', 'RegExp', 'Date'}
 
 
-def split_parameters(text):
-    """Split declaration arguments without splitting strings or generic/array values."""
-    values, start, depth, quote, escaped = [], 0, 0, None, False
+def signature_tokens(text):
+    """Yield unquoted tokens with balanced delimiters; arrow heads are not generics."""
+    stack, quote, escaped = [], None, False
     for i, ch in enumerate(text):
         if quote:
             if escaped: escaped = False
             elif ch == '\\': escaped = True
             elif ch == quote: quote = None
         elif ch in "\"'": quote = ch
-        elif ch in '(<[{': depth += 1
-        elif ch in ')>]}': depth -= 1
-        elif ch == ',' and depth == 0:
-            values.append(text[start:i].strip()); start = i + 1
-    if quote or depth != 0:
+        else:
+            if ch in '(<[{': stack.append(ch)
+            elif ch in ')>]}' and not (ch == '>' and i > 0 and text[i - 1] == '='):
+                if not stack or stack.pop() != {')': '(', '>': '<', ']': '[', '}': '{'}[ch]:
+                    raise ValueError('Malformed native parameter signature')
+            yield i, ch, len(stack)
+    if quote or stack:
         raise ValueError('Malformed native parameter signature')
+
+
+def split_parameters(text):
+    """Split declaration arguments without splitting strings or generic/array values."""
+    values, start = [], 0
+    for i, ch, depth in signature_tokens(text):
+        if ch == ',' and depth == 0:
+            values.append(text[start:i].strip()); start = i + 1
     if text[start:].strip(): values.append(text[start:].strip())
     return values
 
@@ -114,16 +124,19 @@ def native_members(classes, qname):
 
 def target_arity(signature):
     if signature.startswith('<'):
-        depth = 0
-        for index, character in enumerate(signature):
-            depth += int(character == '<') - int(character == '>')
-            if depth == 0:
+        for index, character, depth in signature_tokens(signature):
+            if character == '>' and depth == 0:
                 signature = signature[index + 1:]
                 break
         else: return None
-    match = re.fullmatch(r'(?:new )?\((.*)\)(?:: | => ).+', signature)
-    if not match: return None
-    parameters = split_parameters(match[1])
+    if signature.startswith('new '): signature = signature[4:]
+    if not signature.startswith('('): return None
+    for index, character, depth in signature_tokens(signature):
+        if character == ')' and depth == 0:
+            if not re.fullmatch(r'(?:: | => ).+', signature[index + 1:]): return None
+            parameters = split_parameters(signature[1:index])
+            break
+    else: return None
     if any(':' not in p for p in parameters): return None
     return (sum(not p.startswith('...') and '?' not in p.split(':', 1)[0] for p in parameters),
             1000000 if any(p.startswith('...') for p in parameters) else len(parameters))
