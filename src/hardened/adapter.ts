@@ -3173,17 +3173,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (dictionary && indexType.sourceName === "void") {
             fail("HARDENED_DICTIONARY_KEY", "Dictionary key must be a proven value", node.children[1]!);
         }
-        if (array) {
-            if (index.kind === "literal") {
-                if (typeof index.value !== "number" || !Number.isInteger(index.value)
-                    || index.value < 0 || index.value > 0xfffffffe) {
-                    fail("HARDENED_ARRAY_INDEX_LITERAL",
-                        "Array literal index must be an integer from 0 through 4294967294", node.children[1]!);
-                }
-            } else if (indexType.sourceName !== "int" && indexType.sourceName !== "uint") {
-                fail("HARDENED_ARRAY_INDEX_TYPE",
-                    "Array dynamic index requires an exact int or uint source type", node.children[1]!);
-            }
+        if (array && !["Number", "int", "uint"].includes(indexType.sourceName)) {
+            fail("HARDENED_ARRAY_INDEX_TYPE",
+                "Array index requires a proven numeric source value", node.children[1]!);
         }
         if (ownRecord && (indexType.sourceName !== "String" || indexType.emittedName !== "string")) {
             fail("HARDENED_OWN_RECORD_KEY", "TTreeNode.FData requires one exact String key", node.children[1]!);

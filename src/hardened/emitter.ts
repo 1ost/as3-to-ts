@@ -282,13 +282,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3OwnRecordGet"), undefined,
                 [admittedTarget, expressionNode(expression.index, ts)]);
         }
-        return ts.factory.createElementAccessExpression(
-            admittedTarget,
-            expression.accessKind === "array"
-                ? ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayIndex"), undefined,
-                    [expressionNode(expression.index, ts)])
-                : expressionNode(expression.index, ts),
-        );
+        if (expression.accessKind === "array") return ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3ArrayRead"), undefined,
+            [target, expressionNode(expression.index, ts)]);
+        return ts.factory.createElementAccessExpression(admittedTarget, expressionNode(expression.index, ts));
     }
     if (expression.kind === "vectorConversion") {
         const element = expression.vectorType.typeArguments[0]!;
@@ -1387,8 +1384,8 @@ function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
 function arrayRuntimeImport(ts: TypeScriptCompilerApi): any {
     return ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
-            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayIndex"),
-                ts.factory.createIdentifier("__as3ArrayIndex")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayRead"),
+                ts.factory.createIdentifier("__as3ArrayRead")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayWrite"),
                 ts.factory.createIdentifier("__as3ArrayWrite")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayCall"),

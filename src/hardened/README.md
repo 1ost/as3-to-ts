@@ -116,3 +116,20 @@ The native private-slot fixture also proves null/literal-String conditional
 branches and the String slot passed to Bitmap: null must reach the native #2007
 failure instead of inventing a replacement string. Fixture profiles authenticate
 implicit base constructor roles only when the SDK actually declares a constructor.
+
+
+### Numeric Array keys in original arithmetic
+
+The original UISkin/ScaleBitmap loops use expressions such as `index + 1`, whose
+AS3 type is Number. Numeric Array access now accepts Number, int and uint without
+forcing indices through uint conversion. The shared runtime preserves native
+Number property names: valid array indices grow sparse length, while negative,
+fractional, NaN, infinite and out-of-range numeric names remain ordinary properties.
+Reads preserve holes and exact null errors. Receiver/key/RHS evaluation occurs
+before a write's null check; reads evaluate receiver/key first.
+
+The shared AIR suite retains sixteen Number-index checkpoints plus the existing
+four write-order cases. Array subclass, inherited index and accessor behavior
+remain explicit unavailable operations; String/Object index coercion is not
+admitted by this numeric boundary. Original AS3 is not rewritten or cast merely
+to satisfy the emitted TypeScript types.

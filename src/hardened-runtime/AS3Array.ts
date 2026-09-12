@@ -1,4 +1,4 @@
-import { as3NativeArrayJoin } from "./AS3ObjectDispatch";
+import { as3NativeArrayJoin, as3NativeString } from "./AS3ObjectDispatch";
 import { as3FunctionArgument } from "./AS3Function";
 
 /*
@@ -20,21 +20,42 @@ export class AS3ArrayOperationUnavailable extends Error {
     constructor(message:string) { super(message); this.name = "AS3ArrayOperationUnavailable"; }
 }
 
-/** Numeric-index writes preserve sparse length and the uncoerced assigned value. */
-export function as3ArrayWrite<T>(value: unknown, index: number, item: T): T {
+/** Numeric keys retain Flash's Number-to-name conversion without uint wrapping. */
+function numericKey(index:number):string {
+    if (typeof index !== "number")
+        throw new AS3ArrayOperationUnavailable("Array keys require a proven native numeric value");
+    return as3NativeString(index);
+}
+function ordinaryArray(value:unknown):unknown[] {
     if (value === null || value === undefined) {
         const id=value === null ? 1009 : 1010;
         const error=new TypeError(`Error #${id}: ${id === 1009 ? "Cannot access a property or method of a null object reference." : "A term is undefined and has no properties."}`);
         Object.defineProperty(error,"errorID",{value:id});throw error;
     }
-    const key=as3ArrayIndex(index);
     if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype)
-        throw new AS3ArrayOperationUnavailable("Array indexed writes require an ordinary native Array");
-    const own=Object.getOwnPropertyDescriptor(value,String(key));
-    if (Object.prototype.hasOwnProperty.call(Array.prototype,String(key))
-        || own && (!("value" in own) || !own.writable) || !Object.getOwnPropertyDescriptor(value,"length")?.writable)
+        throw new AS3ArrayOperationUnavailable("Array indexing requires an ordinary native Array");
+    return value;
+}
+/** Holes read as undefined; named numeric properties never change array length. */
+export function as3ArrayRead(value:unknown, index:number):unknown {
+    const array=ordinaryArray(value), key=numericKey(index);
+    const own=Object.getOwnPropertyDescriptor(array,key);
+    if (Object.prototype.hasOwnProperty.call(Array.prototype,key)
+        || Object.prototype.hasOwnProperty.call(Object.prototype,key) || own && !("value" in own))
+        throw new AS3ArrayOperationUnavailable("Array inherited and accessor indices require native evidence");
+    return own?.value;
+}
+
+/** Numeric-index writes preserve sparse length and the uncoerced assigned value. */
+export function as3ArrayWrite<T>(value: unknown, index: number, item: T): T {
+    const array=ordinaryArray(value), key=numericKey(index);
+    const own=Object.getOwnPropertyDescriptor(array,key);
+    if (Object.prototype.hasOwnProperty.call(Array.prototype,key)
+        || Object.prototype.hasOwnProperty.call(Object.prototype,key)
+        || own && (!("value" in own) || !own.writable) || !Object.getOwnPropertyDescriptor(array,"length")?.writable)
         throw new AS3ArrayOperationUnavailable("Array accessor and fixed-slot writes require native evidence");
-    value[key]=item;
+    if (!Reflect.set(array,key,item))
+        throw new AS3ArrayOperationUnavailable("Array host storage rejected the numeric write");
     return item;
 }
 

@@ -142,5 +142,28 @@ test('numeric Array writes retain sparse ownership and reject host accessor effe
  assert.throws(()=>as3ArrayWrite(null,2,item),error=>error.errorID===1009);
  let invoked=false;const accessor=[];Object.defineProperty(accessor,'0',{set(){invoked=true;}});
  assert.throws(()=>as3ArrayWrite(accessor,0,item),AS3ArrayOperationUnavailable);assert.equal(invoked,false);
- assert.throws(()=>as3ArrayWrite([],1.5,item),RangeError);
+ const named=[];assert.equal(as3ArrayWrite(named,1.5,item),item);assert.equal(named.length,0);assert.equal(named["1.5"],item);
+});
+
+const {as3ArrayRead,as3ArrayWrite}=require(path.join(OUTPUT,'hardened-runtime/AS3Array.js'));
+test('numeric Array keys preserve names, holes, max index and null failures',()=>{
+ for(const [key,name] of [[-0,'0'],[-1,'-1'],[1.5,'1.5'],[4294967295,'4294967295'],[4294967296,'4294967296'],[1e21,'1e+21'],[1e-7,'1e-7'],[NaN,'NaN'],[Infinity,'Infinity'],[-Infinity,'-Infinity']]) {
+  const array=[],item={};assert.equal(as3ArrayRead(array,key),undefined);
+  assert.equal(as3ArrayWrite(array,key,item),item);assert.equal(as3ArrayRead(array,key),item);
+  assert.equal(Object.getOwnPropertyDescriptor(array,name).value,item);
+  assert.equal(array.length,Object.is(key,-0)?1:0);
+ }
+ const full=[];as3ArrayWrite(full,4294967294,'last');assert.equal(full.length,4294967295);
+ assert.equal(as3ArrayRead(full,4294967293),undefined);
+ for(const op of [as3ArrayRead,as3ArrayWrite]) {
+  assert.throws(()=>op(null,0),{name:'TypeError',errorID:1009});
+  assert.throws(()=>op(undefined,0),{name:'TypeError',errorID:1010});
+  assert.throws(()=>op(new (class extends Array {})(),0),AS3ArrayOperationUnavailable);
+ }
+});
+test('numeric Array access rejects unproved host properties without invoking getters',()=>{
+ let calls=0;const value=[];Object.defineProperty(value,'1.5',{get(){calls++;return 4;}});
+ assert.throws(()=>as3ArrayRead(value,1.5),AS3ArrayOperationUnavailable);
+ assert.throws(()=>as3ArrayWrite(value,1.5,8),AS3ArrayOperationUnavailable);
+ assert.equal(calls,0);
 });

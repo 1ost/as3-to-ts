@@ -2297,25 +2297,18 @@ function main() {
     const arrayProgram = adapt(api, buildTree({ arrayReadWorkpack: true }), authority);
     const arrayOutput = api.emitSemanticProgram(arrayProgram,
         { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
-    assert.match(arrayOutput.code,
-        /import \{ as3ArrayIndex as __as3ArrayIndex \} from "@bleach\/as3-runtime\/AS3Array";/);
-    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(0\)\]/);
-    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(index\)\]/);
-    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(unsignedIndex\)\]/);
-    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(__as3Int\(numberIndex\)\)\]/);
-    assert.match(arrayOutput.code, /items!\[__as3ArrayIndex\(4294967294\)\]/);
+    assert.match(arrayOutput.code, /as3ArrayRead as __as3ArrayRead/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, 0\)/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, index\)/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, unsignedIndex\)/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, __as3Int\(numberIndex\)\)/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, 4294967294\)/);
     assert.match(arrayOutput.code, /var count: number = items!\.length;/);
     assert.doesNotMatch(arrayOutput.code, /\bany\b/);
-    assertErrorCode(() => adapt(api, buildTree({ arrayNegativeLiteral: true }), authority),
-        "HARDENED_ARRAY_INDEX_LITERAL");
-    assertErrorCode(() => adapt(api, buildTree({ arrayFractionalLiteral: true }), authority),
-        "HARDENED_ARRAY_INDEX_LITERAL");
-    assertErrorCode(() => adapt(api, buildTree({ arrayUintMaxLiteral: true }), authority),
-        "HARDENED_ARRAY_INDEX_LITERAL");
-    assertErrorCode(() => adapt(api, buildTree({ arrayNumberIndex: true }), authority),
-        "HARDENED_ARRAY_INDEX_TYPE");
+    for (const name of ["arrayNegativeLiteral", "arrayFractionalLiteral", "arrayUintMaxLiteral", "arrayNumberIndex"])
+        assert.doesNotThrow(() => adapt(api, buildTree({ [name]: true }), authority));
     assertErrorCode(() => adapt(api, buildTree({ arrayStringIndex: true }), authority),
-        "HARDENED_ARRAY_INDEX_LITERAL");
+        "HARDENED_ARRAY_INDEX_TYPE");
     assertErrorCode(() => adapt(api, buildTree({ arrayWrite: true }), authority),
         "HARDENED_ARRAY_INDEX_WRITE");
     assertErrorCode(() => adapt(api, buildTree({ arrayDelete: true }), authority),
