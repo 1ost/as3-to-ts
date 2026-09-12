@@ -129,3 +129,18 @@ General dynamic Object indexing, trait visibility and prototype methods remain
 held; this literal/slot support does not authorize raw JavaScript class access.
 Uninitialized Number locals and defaults of other local types before their
 declaration remain separate compatibility work.
+
+Generated local class authority now includes immutable instance `objectTraits`:
+member kind, runtime type name, original visibility and original namespace name.
+The declaring QName remains attached through the ordered class chain. These
+records participate in the canonical authority SHA-256. Mapped bridge classes
+without this metadata remain explicitly unresolved; JavaScript own properties or
+a mutable `constructor` property cannot supply missing source traits.
+
+Native AIR dynamic-class probes show that computed access uses lexical namespaces:
+same-class access can reach a private field while external access fails; `in` and
+`hasOwnProperty` use public names. Do not implement generic indexing using only
+public descriptors, nor infer source privacy from generated JavaScript fields.
+Namespace names retained here are source identities, not resolved namespace URIs.
+The adapter still holds dynamic Object access; the metadata is a prerequisite,
+not an implementation or parity waiver. Dynamic class declarations remain held.

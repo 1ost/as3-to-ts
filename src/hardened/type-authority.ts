@@ -22,6 +22,10 @@ export interface RuntimeAuthorityClassSource {
     readonly predicateExport: string;
     readonly constructionTargetExport: string | null;
     readonly constructionProofExport: string | null;
+    readonly objectTraits?: { readonly dynamic: boolean; readonly members: readonly {
+        readonly name: string; readonly kind: "field" | "const" | "method" | "getter" | "setter"; readonly type: string;
+        readonly visibility: "public" | "private" | "protected" | "internal" | "namespace"; readonly namespaceName: string | null;
+    }[] };
     readonly fields: readonly { readonly name: string; readonly policy: "zero" | "nan" | "false" | "null" | "undefined" }[];
     readonly evaluationOrder: number | null;
 }
@@ -175,6 +179,24 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         module: moduleSpecifier, constructorExport: program.declaration.name, predicateExport: "isAS3ClassInstance",
         constructionTargetExport: "as3ConstructionTarget", constructionProofExport: "isAS3ConstructionProof",
         fields,
+        // Dynamic class declarations remain held by the adapter. Namespace names
+        // retain source identity; a name alone is not a resolved namespace URI.
+        objectTraits: Object.freeze({ dynamic: false,
+            members: Object.freeze(program.declaration.members.filter((member): member is Exclude<SemanticMember, {kind:"constructor"}> => member.kind !== "constructor"
+                && !member.modifiers.includes("static"))
+                .map(member => {
+                    const type = member.kind === "field" ? member.type
+                        : member.kind === "getter" ? member.returnType
+                        : member.kind === "setter" ? member.parameter.type : null;
+                    return Object.freeze({name: member.name,
+                        kind: member.kind === "field" && member.readonly ? "const" as const : member.kind as "field" | "method" | "getter" | "setter",
+                        type: type === null ? "Function" : type.runtimeName || type.sourceName,
+                        visibility: member.namespaceName !== null ? "namespace" as const
+                            : member.modifiers.includes("private") ? "private" as const
+                            : member.modifiers.includes("protected") ? "protected" as const
+                            : member.modifiers.includes("public") ? "public" as const : "internal" as const,
+                        namespaceName: member.namespaceName});
+                })) }),
         evaluationOrder: proof.evaluationOrder });
     localAuthoritySourceProofs.set(source as unknown as object, proof.transaction);
     return source;
@@ -493,7 +515,7 @@ function sourceMetadata(entry: RuntimeAuthoritySource): object {
     return entry.kind === "interface"
         ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
         : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
-            sourceSha256: entry.sourceSha256, fields: entry.fields };
+            sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}) };
 }
 
 function canonicalMetadata(entries: readonly RuntimeAuthoritySource[]): string {
@@ -585,7 +607,7 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
             return `    { kind: "interface", qname: ${quote(source.qname)}, bases: ${JSON.stringify(source.bases)} },`;
         }
         const index = importIndex.get(source)!;
-        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
+        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
     });
     const qnames = ordered.map(source => source.qname);
     const code = [

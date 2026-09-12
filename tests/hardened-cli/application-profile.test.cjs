@@ -25,6 +25,15 @@ test('independent application profile emits executable authority and rejects sou
     const output=join(dir,'emitted'), emitted=invoke(output); assert.equal(emitted.status,0,emitted.stderr);
     const entry = require(join(output,'__as3_runtime/ApplicationEntry.generated.js'));
     assert.deepEqual(new entry.AS3_APPLICATION_MODULES[0].Probe().snapshot(),{value:false});
+    const runtime = require(join(output,'__as3_runtime/AS3Authority.generated.js'));
+    const metadata = {schema:'as3-runtime-type-authority@1',qnames:['Probe'],entries:[{
+        kind:'class',qname:'Probe',base:null,interfaces:[],sourceSha256:hash(join(source,'Probe.as')),
+        fields:[{name:'flag',policy:'false'}],objectTraits:{dynamic:false,members:[
+            {name:'flag',kind:'field',type:'Boolean',visibility:'private',namespaceName:null},
+            {name:'snapshot',kind:'method',type:'Function',visibility:'public',namespaceName:null}]}}]};
+    assert.equal(runtime.AS3_TYPE_AUTHORITY_SHA256,
+        createHash('sha256').update(JSON.stringify(metadata)).digest('hex'),
+        'Source field visibility and method traits must participate in the sealed authority digest');
     writeFileSync(join(source,'Probe.as'),readFileSync(join(source,'Probe.as'),'utf8').replace('value:flag','value:true'));
     const sourceDrift = invoke(join(dir,'source-drift')); assert.notEqual(sourceDrift.status,0); assert.match(sourceDrift.stderr,/source|hash|declaration/i);
     writeFileSync(join(profile,'census.json'),'{}\n');

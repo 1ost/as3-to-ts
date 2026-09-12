@@ -18,12 +18,20 @@ export interface AS3InterfaceAuthorityEntry {
     readonly bases: readonly string[];
 }
 
+export interface AS3ObjectTraits {
+    readonly dynamic: boolean;
+    readonly members: readonly { readonly name: string;
+        readonly kind: "field" | "const" | "method" | "getter" | "setter"; readonly type: string;
+        readonly visibility: "public" | "private" | "protected" | "internal" | "namespace"; readonly namespaceName:string | null }[];
+}
+
 export interface AS3ClassAuthorityEntry {
     readonly kind: "class";
     readonly qname: string;
     readonly base: string | null;
     readonly interfaces: readonly string[];
     readonly sourceSha256: string;
+    readonly objectTraits?: AS3ObjectTraits;
     readonly fields: readonly { readonly name: string; readonly policy: "zero" | "nan" | "false" | "null" | "undefined" }[];
     readonly constructor: RuntimeConstructor;
     readonly predicate: (value: unknown) => boolean;
@@ -49,6 +57,7 @@ const CLASS_PREDICATES = new WeakMap<Function, (value: unknown) => boolean>();
 const CLASS_CONSTRUCTION_TARGETS = new WeakMap<Function, (value: unknown) => RuntimeConstructor | null>();
 const CLASS_CONSTRUCTION_PROOFS = new WeakMap<Function, (value: unknown) => boolean>();
 const CLASS_FIELD_DEFAULTS = new WeakMap<Function, AS3ClassAuthorityEntry["fields"]>();
+const CLASS_OBJECT_ENTRIES = new WeakMap<Function, Readonly<{qname:string; traits:AS3ObjectTraits | null}>>();
 const CLASS_BASES = new WeakMap<Function, RuntimeConstructor | null>();
 const REGISTERED_CLASSES: Function[] = [];
 const INTERFACE_TOKENS = new Map<string, AS3TypeToken<object>>();
@@ -379,7 +388,7 @@ function canonicalAuthorityMetadata(document: AS3TypeAuthorityDocument): string 
         entries: document.entries.map(entry => entry.kind === "interface"
             ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
             : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
-                sourceSha256: entry.sourceSha256, fields: entry.fields }),
+                sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}) }),
     });
 }
 
@@ -471,7 +480,7 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                 }, sealedClosure);
                 INTERFACE_TOKENS.set(entry.qname, token);
             } else if (entry.kind === "class") {
-                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", "constructor", "predicate", "constructionTarget", "constructionProof"],
+                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
                     `AS3 class ${entry.qname}`);
                 if (entry.base !== null && (!seen.has(entry.base) || !CLASS_BY_QNAME.has(entry.base))) {
                     throw new TypeError(`AS3 class ${entry.qname} has a missing, cyclic, or out-of-order class base`);
@@ -512,6 +521,25 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                 if (entry.constructionProof !== null) CLASS_CONSTRUCTION_PROOFS.set(entry.constructor, entry.constructionProof);
                 CLASS_FIELD_DEFAULTS.set(entry.constructor, Object.freeze(entry.fields.map(
                     (field: AS3ClassAuthorityEntry["fields"][number]) => Object.freeze({ ...field }))));
+                if (entry.objectTraits) {
+                    const traits = entry.objectTraits;
+                    exactKeys(traits, ["dynamic", "members"], "AS3 Object traits");
+                    if (typeof traits.dynamic !== "boolean" || !Array.isArray(traits.members)) throw new TypeError("Invalid AS3 Object traits");
+                    const names = new Set<string>();
+                    traits.members.forEach((member:AS3ObjectTraits["members"][number]) => {
+                        exactKeys(member, ["name", "kind", "type", "visibility", "namespaceName"], "AS3 Object member");
+                        if (!stableRuntimeTypeName(member.name) || !stableRuntimeTypeName(member.type)
+                            || !["field", "const", "method", "getter", "setter"].includes(member.kind)
+                            || !["public", "private", "protected", "internal", "namespace"].includes(member.visibility)
+                            || (member.namespaceName !== null && !stableRuntimeTypeName(member.namespaceName))
+                            || (member.visibility === "namespace") !== (member.namespaceName !== null)
+                            || names.has(JSON.stringify([member.name,member.kind,member.visibility,member.namespaceName]))) throw new TypeError("Invalid AS3 Object member");
+                        names.add(JSON.stringify([member.name,member.kind,member.visibility,member.namespaceName]));
+                    });
+                }
+                CLASS_OBJECT_ENTRIES.set(entry.constructor, Object.freeze({qname:entry.qname, traits:entry.objectTraits
+                    ? Object.freeze({dynamic:entry.objectTraits.dynamic,
+                        members:Object.freeze(entry.objectTraits.members.map((member:AS3ObjectTraits["members"][number]) => Object.freeze({...member})))}) : null}));
                 CLASS_BASES.set(entry.constructor, entry.base === null ? null : CLASS_BY_QNAME.get(entry.base)!.constructor);
                 REGISTERED_CLASSES.push(entry.constructor);
             } else {
@@ -530,4 +558,24 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
 
 export function authorityStatus(): Readonly<{ sealed: boolean; sha256: string | null }> {
     return Object.freeze({ sealed: authorityState === "sealed", sha256: installedAuthoritySha256 });
+}
+
+/** Resolve only registered allocation identities; never infer traits from JS fields. */
+export function lookupObjectClass(value: unknown): Readonly<{qname:string; constructor:RuntimeConstructor;
+    chain:readonly Readonly<{qname:string; traits:AS3ObjectTraits | null}>[]}> | null {
+    requireSealed();
+    if ((typeof value !== "object" && typeof value !== "function") || value === null) return null;
+    let selected: RuntimeConstructor | null = pendingConstructionTarget(value);
+    if (selected === null) for (const candidate of REGISTERED_CLASSES) {
+        let matches = false;
+        try { matches = CLASS_PREDICATES.get(candidate)!(value); } catch { /* no forged identity */ }
+        if (!matches) continue;
+        if (selected === null || constructorIsSubtype(candidate as RuntimeConstructor, selected)) selected = candidate as RuntimeConstructor;
+        else if (!constructorIsSubtype(selected, candidate as RuntimeConstructor)) throw new TypeError("Ambiguous AS3 Object class identity");
+    }
+    if (selected === null) return null;
+    const chain = [];
+    for (let current:RuntimeConstructor | null = selected; current !== null; current = CLASS_BASES.get(current) ?? null)
+        chain.push(CLASS_OBJECT_ENTRIES.get(current)!);
+    return Object.freeze({qname:chain[0]!.qname, constructor:selected, chain:Object.freeze(chain)});
 }

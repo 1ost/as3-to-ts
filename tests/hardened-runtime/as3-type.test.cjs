@@ -41,7 +41,7 @@ function authority(entries) {
         entries: entries.map(entry => entry.kind === "interface"
             ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
             : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
-                sourceSha256: entry.sourceSha256, fields:entry.fields }) };
+                sourceSha256: entry.sourceSha256, fields:entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}) }) };
     return { schema: metadata.schema, sha256: crypto.createHash("sha256").update(JSON.stringify(metadata)).digest("hex"),
         qnames, entries };
 }
@@ -62,9 +62,12 @@ test("one hash-pinned, ordered authority installs every identity exactly once", 
         { kind: "interface", qname: "test.IEventSource", bases: [] },
         { kind: "interface", qname: "test.IRunnable", bases: ["test.IEventSource"] },
         { kind: "class", qname: "test.Base", base: null, interfaces: ["test.IRunnable"], sourceSha256: "a".repeat(64),
-            fields:[], constructor: Base, predicate: value => baseBrands.has(value), constructionTarget:null, constructionProof:null },
+            fields:[], objectTraits:{dynamic:false,members:[
+                {name:"secret",kind:"field",type:"String",visibility:"private",namespaceName:null},
+                {name:"shared",kind:"field",type:"int",visibility:"public",namespaceName:null}]}, constructor: Base, predicate: value => baseBrands.has(value), constructionTarget:null, constructionProof:null },
         { kind: "class", qname: "test.Child", base: "test.Base", interfaces: [], sourceSha256: "b".repeat(64),
-            fields:[], constructor: Child, predicate: value => childBrands.has(value), constructionTarget:null, constructionProof:null },
+            fields:[], objectTraits:{dynamic:false,members:[
+                {name:"secret",kind:"field",type:"int",visibility:"private",namespaceName:null}]}, constructor: Child, predicate: value => childBrands.has(value), constructionTarget:null, constructionProof:null },
         { kind: "class", qname: "flash.events.Event", base: null, interfaces: [], sourceSha256: "c".repeat(64),
             fields:[], constructor: Event, predicate: value => eventBrands.has(value), constructionTarget:null, constructionProof:null },
         { kind: "class", qname: "flash.display.Sprite", base: null, interfaces: [], sourceSha256: "d".repeat(64),
@@ -151,5 +154,51 @@ test("malformed, duplicate, cyclic, drifted and preempting authority documents f
     for (const rows of cases) {
         const result = childProcess.spawnSync(process.execPath, ["-e", script, JSON.stringify(rows)], { encoding: "utf8" });
         assert.equal(result.status, 0, result.stderr);
+    }
+});
+
+
+test("Object trait authority preserves declaring class and namespace without trusting JS properties", () => {
+    const value = new Child();
+    value.constructor = Base;
+    value.forged = "not a source trait";
+    const info = internal.lookupObjectClass(value);
+    assert.equal(info.qname, "test.Child");
+    assert.equal(info.constructor, Child);
+    assert.deepEqual(info.chain.map(item => item.qname), ["test.Child", "test.Base"]);
+    assert.deepEqual(info.chain.map(item => item.traits.members.filter(m => m.name === "secret").map(m => [m.type,m.visibility])),
+        [[["int","private"]], [["String","private"]]]);
+    assert.equal(info.chain.some(item => item.traits.members.some(m => m.name === "forged")), false);
+    assert.equal(Object.isFrozen(info.chain[0].traits.members[0]), true);
+    assert.equal(internal.lookupObjectClass(Object.create(Child.prototype)), null);
+    assert.equal(internal.lookupObjectClass({constructor:Child}), null);
+    assert.equal(internal.lookupObjectClass(new Event()).chain[0].traits, null,
+        "Mapped classes without trait authority must remain explicitly unresolved");
+});
+
+
+test("namespace metadata cannot drift, widen after installation, or install invalid visibility", () => {
+    const script = `
+      const assert=require('node:assert/strict'),crypto=require('node:crypto');
+      const i=require(${JSON.stringify(path.join(OUTPUT,"hardened-runtime/internal/AS3TypeRegistry.js"))});
+      const brands=new WeakSet();class A {constructor(){brands.add(this)}}
+      const traits={dynamic:false,members:[{name:'secret',kind:'field',type:'String',visibility:'private',namespaceName:null}]};
+      const row={kind:'class',qname:'A',base:null,interfaces:[],sourceSha256:'a'.repeat(64),fields:[],objectTraits:traits};
+      const metadata={schema:'as3-runtime-type-authority@1',qnames:['A'],entries:[row]};
+      const mode=process.argv[1];if(mode==='invalid')traits.members[0].visibility='friend';
+      const digest=crypto.createHash('sha256').update(JSON.stringify(metadata)).digest('hex');
+      if(mode==='drift')traits.members[0].visibility='public';
+      const document={schema:metadata.schema,sha256:digest,qnames:metadata.qnames,entries:[{...row,constructor:A,predicate:v=>brands.has(v),constructionTarget:null,constructionProof:null}]};
+      if(mode==='copy'){
+        i.installAS3TypeAuthority(document);traits.members[0].visibility='public';
+        assert.equal(i.lookupObjectClass(new A()).chain[0].traits.members[0].visibility,'private');
+      }else{
+        assert.throws(()=>i.installAS3TypeAuthority(document),mode==='drift'?/canonical SHA-256/:/Invalid AS3 Object member/);
+        assert.equal(i.authorityStatus().sealed,false);
+        assert.throws(()=>i.installAS3TypeAuthority(document),/already installing/);
+      }`;
+    for (const mode of ["drift","invalid","copy"]) {
+        const result=childProcess.spawnSync(process.execPath,["-e",script,mode],{encoding:"utf8"});
+        assert.equal(result.status,0,result.stderr);
     }
 });
