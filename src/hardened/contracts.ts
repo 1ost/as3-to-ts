@@ -638,6 +638,14 @@ export interface SemanticConstructor extends SemanticIdentity {
 
 export type SemanticMember = SemanticField | SemanticMethod | SemanticConstructor | SemanticGetter | SemanticSetter;
 
+export interface InheritedAccessorForward {
+    kind: "getter" | "setter";
+    name: string;
+    ownerQName: string;
+    type: SemanticType;
+    modifiers: SemanticModifier[];
+}
+
 export interface SemanticClass extends SemanticIdentity {
     declarationKind: "class" | "interface";
     name: string;
@@ -646,6 +654,7 @@ export interface SemanticClass extends SemanticIdentity {
     interfaceExtendsTypes: SemanticType[];
     implementsTypes: Array<{ type: SemanticType; runtimeName: string }>;
     members: SemanticMember[];
+    inheritedAccessors?: InheritedAccessorForward[];
 }
 
 export interface SemanticPackageField extends SemanticIdentity {

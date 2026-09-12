@@ -1383,6 +1383,17 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     const classMembers = program.declaration.declarationKind === "class"
         ? program.declaration.members.filter(member => member.kind !== "constructor").map(member => memberNode(member, ts)) : [];
     if (program.declaration.declarationKind === "class") {
+        for (const forward of program.declaration.inheritedAccessors || []) {
+            const target = ts.factory.createPropertyAccessExpression(ts.factory.createSuper(), forward.name);
+            if (forward.kind === "getter") classMembers.push(ts.factory.createGetAccessorDeclaration(
+                modifierTokens(forward.modifiers, ts), forward.name, [], typeNode(forward.type, ts),
+                ts.factory.createBlock([ts.factory.createReturnStatement(target)], true)));
+            else classMembers.push(ts.factory.createSetAccessorDeclaration(
+                modifierTokens(forward.modifiers, ts), forward.name,
+                [ts.factory.createParameterDeclaration(undefined, undefined, "value", undefined, typeNode(forward.type, ts))],
+                ts.factory.createBlock([ts.factory.createExpressionStatement(ts.factory.createAssignment(target,
+                    ts.factory.createIdentifier("value")))], true)));
+        }
         classMembers.push(classConstructorNode(program, constructorMember, boundMethods, ts));
     }
     const declaration = program.declaration.declarationKind === "interface"

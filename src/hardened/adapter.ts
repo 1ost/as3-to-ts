@@ -11,6 +11,7 @@ import {
     NormalizedParserAst,
     NormalizedParserNode,
     SemanticClass,
+    InheritedAccessorForward,
     SemanticCatchClause,
     SemanticConstructor,
     SemanticExpression,
@@ -91,6 +92,7 @@ interface AdapterContext {
     fields: { [name: string]: SemanticField };
     methods: { [name: string]: MethodHeader };
     accessors: { [name: string]: AccessorPair };
+    inheritedAccessors?: InheritedAccessorForward[];
     parameters: { [name: string]: SemanticParameter };
     locals: { [name: string]: LocalHeader };
     loopDepth: number;
@@ -1110,7 +1112,7 @@ function parseLiteral(node: TreeNode): SemanticExpression {
         value = text === "true";
     } else if (text === "null") {
         value = null;
-    } else if (/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(text)) {
+    } else if (/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(text) || /^0[xX][0-9a-fA-F]{1,8}$/.test(text)) {
         value = Number(text);
         if (!Number.isFinite(value)) {
             fail("HARDENED_LITERAL_NUMBER", "numeric literal is outside the finite subset", node);
@@ -1572,7 +1574,7 @@ function localQNameForExpression(expression: SemanticExpression, context: Adapte
 }
 
 function localInstanceNamedMembers(context: AdapterContext, qname: string, name: string,
-    node: TreeNode): { members: LocalDeclarationMember[]; ownerQName: string | null; terminalFlashQNames: string[] } {
+    node: TreeNode, access?: "read" | "write"): { members: LocalDeclarationMember[]; ownerQName: string | null; terminalFlashQNames: string[] } {
     if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) {
         fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "local receiver requires the loaded member authority", node);
     }
@@ -1622,7 +1624,10 @@ function localInstanceNamedMembers(context: AdapterContext, qname: string, name:
                 && member.kind !== "constructor" && member.modifiers.indexOf("static") < 0
                 && (member.namespaceName === null
                     || Object.prototype.hasOwnProperty.call(context.namespaceNames, member.namespaceName)));
-            if (members.length > 0) matches.push({ members, ownerQName: current });
+            const oppositeOnly = access !== undefined && members.length > 0
+                && members.every(member => member.kind === (access === "read" ? "setter" : "getter")
+                    && !member.modifiers.includes("private"));
+            if (members.length > 0 && !oppositeOnly) matches.push({ members, ownerQName: current });
             next.push(...declaration.baseQNames);
         }
         if (matches.length > 1) {
@@ -1783,6 +1788,19 @@ function assertObjectKey(type:SemanticType,node:TreeNode):void {
 }
 
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "member" && expression.target.kind === "super" && context.baseLocalQName !== null
+        && expression.capabilitySource !== null && !context.mappingsBySource[expression.capabilitySource]) {
+        const inherited = localInheritedMember(context, expression.name, "getter", null, node);
+        if (inherited.member && inherited.ownerQName === expression.capabilitySource) {
+            assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
+            return authoritySemanticType(inherited.member.returnType!, context, node);
+        }
+    }
+    if (expression.kind === "member" && expression.target.kind === "this") {
+        const forward = context.inheritedAccessors?.find(item => item.name === expression.name && item.kind === "getter");
+        if (forward) return forward.type;
+    }
+
     if (expression.kind === "globalFunction" || expression.kind === "identifier" && expression.bindingKind === "package-function")
         return semanticType(node,"Function","Function",[],false);
     if (expression.kind === "functionApply") return expression.resultType;
@@ -1888,9 +1906,10 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         }
         const receiverQName = localQNameForType(targetType, context);
         if (receiverQName !== null && expression.capabilitySource !== null) {
-            const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node);
+            const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node, "read");
             const readable = lookup.members.filter(member => member.kind === "getter" || member.kind === "field");
-            if (lookup.ownerQName !== expression.capabilitySource || readable.length !== 1) {
+            if ((lookup.ownerQName !== expression.capabilitySource
+                && localInstanceNamedMembers(context, receiverQName, expression.name, node).ownerQName !== expression.capabilitySource) || readable.length !== 1) {
                 fail("HARDENED_LOCAL_INSTANCE_READ",
                     "local instance read requires one exact authenticated field or getter", node);
             }
@@ -1963,6 +1982,19 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
 }
 
 function assignmentTargetType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if (expression.kind === "member" && expression.target.kind === "super" && context.baseLocalQName !== null
+        && expression.capabilitySource !== null && !context.mappingsBySource[expression.capabilitySource]) {
+        const inherited = localInheritedMember(context, expression.name, "setter", null, node);
+        if (inherited.member && inherited.ownerQName === expression.capabilitySource) {
+            assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
+            return authoritySemanticType(inherited.member.parameters[0]!.type, context, node);
+        }
+    }
+    if (expression.kind === "member" && expression.target.kind === "this") {
+        const forward = context.inheritedAccessors?.find(item => item.name === expression.name && item.kind === "setter");
+        if (forward) return forward.type;
+    }
+
     if (expression.kind === "member" && (expression.target.kind === "super" || expression.target.kind === "this")
         && expression.capabilitySource !== null && context.mappingsBySource[expression.capabilitySource]) {
         const mapping = memberMapping(context, expression.capabilitySource, "write", expression.name, node);
@@ -2047,10 +2079,11 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
         }
         const receiverQName = localQNameForType(targetType, context);
         if (receiverQName !== null && expression.capabilitySource !== null) {
-            const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node);
+            const lookup = localInstanceNamedMembers(context, receiverQName, expression.name, node, "write");
             const writable = lookup.members.filter(member => member.kind === "setter"
                 || (member.kind === "field" && !member.readonly));
-            if (lookup.ownerQName !== expression.capabilitySource || writable.length !== 1) {
+            if ((lookup.ownerQName !== expression.capabilitySource
+                && localInstanceNamedMembers(context, receiverQName, expression.name, node).ownerQName !== expression.capabilitySource) || writable.length !== 1) {
                 fail("HARDENED_LOCAL_INSTANCE_WRITE",
                     "local instance write requires one exact authenticated field or setter", node);
             }
@@ -2787,7 +2820,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         if (context.accessors[name]) {
             const accessor = context.accessors[name]!;
-            if (valuePosition && !accessor.getter) {
+            if (valuePosition && !accessor.getter
+                && !context.inheritedAccessors?.some(item => item.name === name && item.kind === "getter")) {
                 fail("HARDENED_ACCESSOR_WRITE_ONLY", "write-only accessor cannot be read", node);
             }
             const staticGetter = (accessor.getter?.modifiers.indexOf("static") ?? -1) >= 0;
@@ -3087,11 +3121,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (valuePosition) fail("HARDENED_LOCAL_METHOD_CLOSURE", "super method closures remain held", node);
                 superOwnerQName = inherited.ownerQName;
             } else {
-                const mapping = flashBaseMemberMapping(context, "read", name, node)
+                const accessor = context.baseLocalQName === null ? null
+                    : localInheritedMember(context, name, valuePosition ? "getter" : "setter", null, node);
+                if (accessor?.member && accessor.ownerQName) {
+                    assertInheritedVisibility(accessor.member, accessor.ownerQName, context, node);
+                    superOwnerQName = accessor.ownerQName;
+                }
+                const mapping = superOwnerQName !== null ? null : flashBaseMemberMapping(context, "read", name, node)
                     || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node) : null);
-                if (mapping === null || mapping.targetMember?.scope !== "instance")
+                if (superOwnerQName === null && (mapping === null || mapping.targetMember?.scope !== "instance"))
                     fail("HARDENED_SUPER_MEMBER", "super property lacks an exact inherited Flash mapping", node);
-                superOwnerQName = mapping.sourceQName;
+                if (mapping !== null) superOwnerQName = mapping.sourceQName;
             }
             target = Object.assign(identity(node.children[0]!), { kind: "super" as "super" });
         } else {
@@ -4945,6 +4985,40 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             }
         }
     });
+    placeholder.inheritedAccessors = [];
+    if (placeholder.sourceMemberAuthority !== null && extendsType !== null) {
+        for (const [name, pair] of Object.entries(placeholder.accessors)) {
+            if (pair.getter && pair.setter) continue;
+            const own = (pair.getter || pair.setter)!;
+            if (own.modifiers.includes("static") || own.modifiers.includes("private") || own.namespaceName !== null) continue;
+            const kind = pair.getter ? "setter" : "getter";
+            const inherited = placeholder.baseLocalQName === null ? null
+                : localInheritedMember(placeholder, name, kind, null, own.node);
+            let type: SemanticType | null = null, ownerQName: string | null = null;
+            if (inherited?.member && inherited.ownerQName) {
+                assertInheritedVisibility(inherited.member, inherited.ownerQName, placeholder, own.node);
+                if (memberVisibility(inherited.member.modifiers) !== memberVisibility(own.modifiers))
+                    fail("HARDENED_ACCESSOR_VISIBILITY", "inherited accessor halves require the same source visibility", own.node);
+                type = authoritySemanticType(kind === "getter" ? inherited.member.returnType!
+                    : inherited.member.parameters[0]!.type, placeholder, own.node);
+                ownerQName = inherited.ownerQName;
+            } else {
+                const mapping = flashBaseMemberMapping(placeholder, kind === "getter" ? "read" : "write", name, own.node);
+                if (mapping && mapping.targetMember?.scope === "instance") {
+                    if (memberVisibility(own.modifiers) !== "public")
+                        fail("HARDENED_ACCESSOR_VISIBILITY", "native public accessor cannot supply a non-public accessor half", own.node);
+                    type = mappedMemberType(mapping, kind === "getter" ? "read" : "write", placeholder, own.node);
+                    ownerQName = mapping.sourceQName;
+                }
+            }
+            if (type !== null && ownerQName !== null) {
+                if (!sameType(type, pair.getter ? own.returnType! : own.parameters[0]!.type))
+                    fail("HARDENED_ACCESSOR_PAIR", "inherited accessor half has a different source type", own.node);
+                placeholder.inheritedAccessors.push({kind, name, ownerQName, type,
+                    modifiers: own.modifiers.filter(modifier => modifier !== "override")});
+            }
+        }
+    }
     const members: SemanticMember[] = [];
     classContent.children.forEach((node) => {
         if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {
@@ -5034,6 +5108,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         interfaceExtendsTypes: [],
         implementsTypes,
         members,
+        ...(placeholder.inheritedAccessors?.length ? {inheritedAccessors: placeholder.inheritedAccessors} : {}),
     });
     const program: SemanticProgram = Object.assign(identity(root), {
         schema: "as3-semantic-ir@1" as "as3-semantic-ir@1",

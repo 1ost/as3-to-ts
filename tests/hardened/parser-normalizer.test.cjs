@@ -774,6 +774,21 @@ try {
     const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson),sha256);
     {
+        const adapt = source => built.adapter.adaptNormalizedParserAst(
+            built.normalizer.normalizeParserAst(built.parse("AccessorGuard.as", source), source, sha256),
+            authority(built.ledger), source, sha256, undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);
+        const readonly = adapt('package p { import flash.display.Sprite; public class AccessorGuard extends Sprite { public function AccessorGuard(){super();} public function get value():Number{return 3;} } }');
+        assert.equal(readonly.declaration.inheritedAccessors, undefined, "no setter is invented without an inherited declaration");
+        assert.throws(() => adapt('package p { public class AccessorGuard { public function set value(input:Number):void{} public function read():Number{return value;} } }'),
+            error => error?.code === "HARDENED_ACCESSOR_WRITE_ONLY");
+        const hex = adapt('package p { public class AccessorGuard { public var color:uint=0xff0000; public var limit:Number=0xFFFFFFFF; } }');
+        assert.deepEqual(hex.declaration.members.filter(member=>member.kind==="field").map(member=>
+            member.initializer.kind==="coercion"?member.initializer.argument.value:member.initializer.value),[16711680,4294967295]);
+        assert.throws(() => adapt('package p { public class AccessorGuard { public var wide:Number=0x100000000; } }'),
+            error => error?.code === "HARDENED_LITERAL");
+    }
+
+    {
         const source = 'package p { public class ObjectFixture { public var value:Object; public function run(input:*):void { value = input; var missing:*; } public function make():Object { return {"__proto__":"data", "constructor":"ctor", "stage":1, "stage":2}; } } }';
         const semantic = built.adapter.adaptNormalizedParserAst(
             built.normalizer.normalizeParserAst(built.parse("ObjectFixture.as", source), source, sha256), authority(built.ledger), source, sha256, undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);
