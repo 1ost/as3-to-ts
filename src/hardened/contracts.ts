@@ -415,6 +415,8 @@ export interface NewExpression extends SemanticIdentity {
 }
 
 export interface BinaryExpression extends SemanticIdentity {
+    /** Native identity is independent of the target classes structural overlap. */
+    referenceIdentity?: true;
     kind: "binary";
     numericCoercion?: true;
     additionCoercion?: true;

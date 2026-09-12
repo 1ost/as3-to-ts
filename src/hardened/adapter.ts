@@ -2218,7 +2218,13 @@ function adaptAssignmentValue(target: SemanticType, expression: SemanticExpressi
             argument: expression,
         });
     }
-    if ((target.nullable || !value.nullable) && provenReferenceSubtype(value, target, context)) return expression;
+    if ((target.nullable || !value.nullable) && provenReferenceSubtype(value, target, context)) {
+        // Native base identity may be implemented by composition in a shared
+        // bridge, so TypeScript's structural/JS ancestry cannot encode this upcast.
+        if (reference && targetImport?.authorityKind === "flash" && !sameUnderlyingType(target,value))
+            return Object.assign(identity(node), {kind:"coercion" as const, reference, targetType:target, argument:expression});
+        return expression;
+    }
     assertAssignmentCompatible(target, value, node);
     return expression;
 }
@@ -2573,7 +2579,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     && (localQNameForType(type,context) !== null || mappedFlashQNameForType(type,context) !== null)))
             && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))) {
             return Object.assign(identity(node),{kind:"binary" as const,
-                operator:operator as "===" | "!==",left,right,resultType:semanticType(node,"Boolean","boolean")});
+                operator:operator as "===" | "!==",left,right,referenceIdentity:true as const,resultType:semanticType(node,"Boolean","boolean")});
         }
         if (operator === "+" && context.sourceMemberAuthority !== null
             && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))

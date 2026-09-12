@@ -447,8 +447,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         if (token === undefined) {
             throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "semantic IR contains an unsupported binary operator");
         }
+        if (expression.referenceIdentity && expression.operator !== "===" && expression.operator !== "!==")
+            throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "reference identity requires strict comparison");
+        const left=expressionNode(expression.left,ts);
         return ts.factory.createBinaryExpression(
-            expressionNode(expression.left, ts), ts.factory.createToken(token), expressionNode(expression.right, ts),
+            expression.referenceIdentity ? ts.factory.createAsExpression(left,ts.factory.createKeywordTypeNode(ts.SyntaxKind.UnknownKeyword)) : left,
+            ts.factory.createToken(token), expressionNode(expression.right, ts),
         );
     }
     if (expression.kind === "unary") {

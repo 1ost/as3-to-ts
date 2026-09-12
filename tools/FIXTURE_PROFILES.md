@@ -429,3 +429,19 @@ Native `dynamic-method-arity` retains missing-argument #1063 and omitted optiona
 argument defaults. New dynamic calls to unregistered bare function values remain
 explicitly unavailable; method closures carry generated method behavior. This
 does not establish general anonymous-function arity or calls with extra arguments.
+
+
+Shared native ancestry can differ from JavaScript inheritance when Laya uses
+composition. Proven native-base assignments therefore use the authenticated
+reference cast helper, retaining object identity and producing a valid target
+TypeScript type. Reference identity comparisons erase structural overlap checks
+on the left operand only; the emitted JavaScript comparison is unchanged.
+After running Laya's `event-ancestry` native pair, validate the generated probe
+against the real bridge declarations with:
+
+```sh
+node tools/check-native-reference-types.cjs /absolute/path/to/EventAncestryProbe.ts /absolute/path/to/LayaAir
+```
+
+This bounded regression checks the generated file using the relevant actual
+bridge/runtime declarations. It is not a complete engine or game typecheck.

@@ -912,7 +912,9 @@ try {
         const ast = built.normalizer.normalizeParserAst(built.parse("DirectSubtype.as", source), source, sha256);
         const semantic = built.adapter.adaptNormalizedParserAst(ast, authority(built.ledger), source, sha256,
             undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);
-        assert.equal(semantic.declaration.members.find(m => m.name === "make").body[0].expression.sourceType.runtimeName, "flash.display.Sprite");
+        const nativeUpcast=semantic.declaration.members.find(m => m.name === "make").body[0].expression;
+        assert.equal(nativeUpcast.argument.sourceType.runtimeName,"flash.display.Sprite");
+        assert.deepEqual(nativeUpcast.reference,{targetKind:"class",runtimeName:"flash.display.DisplayObject"});
         const invalid = source.replace('public function make():DisplayObject { return new Sprite(); }', 'public function make(value:Object):DisplayObject { return value; }');
         const invalidAst = built.normalizer.normalizeParserAst(built.parse("DirectSubtype.as", invalid), invalid, sha256);
         const narrowed = built.adapter.adaptNormalizedParserAst(invalidAst, authority(built.ledger), invalid, sha256,
