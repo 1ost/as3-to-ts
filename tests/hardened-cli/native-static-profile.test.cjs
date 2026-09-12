@@ -11,8 +11,12 @@ test('authenticated SDK static calls retain geometry types, rest arity and metho
   MissingRequired:'public function run():void { ExternalInterface.call(); }',
   WrongGeometry:'public function run():void { Point.distance(7,new Point()); }',
   MethodValue:'public function run():void { var f:Function=Point.distance; }',
+  ClassName:'public function run(value:*):String { return getQualifiedClassName(value); }',
+  ClassNameMissing:'public function run():String { return getQualifiedClassName(); }',
+  ClassNameExtra:'public function run():String { return getQualifiedClassName(1,2); }',
+  ClassNameValue:'public function run():void { var f:Function=getQualifiedClassName; }',
  };
- for(const [name,body] of Object.entries(cases)) fs.writeFileSync(path.join(source,name+'.as'),`package { import flash.geom.Point; import flash.external.ExternalInterface; public class ${name} { public function ${name}() {} ${body} } }`);
+ for(const [name,body] of Object.entries(cases)) fs.writeFileSync(path.join(source,name+'.as'),`package { import flash.geom.Point; import flash.external.ExternalInterface; import flash.utils.getQualifiedClassName; public class ${name} { public function ${name}() {} ${body} } }`);
  const generated=cp.spawnSync('python3',['-B',path.join(root,'tools/create-fixture-profile.py'),'--source',source,'--entry','Valid','--laya',laya,'--air-sdk',sdk,'--ffdec-jar',ffdec,'--output',profile],{encoding:'utf8',timeout:120000});
  assert.equal(generated.status,0,generated.stderr);
  const result=cp.spawnSync(process.execPath,[path.join(root,'bin/as3-frontend'),'qualify',source,output,'--source-census',path.join(profile,'census.json'),'--profile-lock',path.join(profile,'profile-lock.json'),'--target-capabilities',path.join(laya,'docTool/architecture/authored-content-capabilities.json')],{encoding:'utf8',timeout:30000});
@@ -23,4 +27,13 @@ test('authenticated SDK static calls retain geometry types, rest arity and metho
  assert.equal(byName['MissingRequired.as'].code,'HARDENED_CAPABILITY_CALL_ARITY');
  assert.equal(byName['WrongGeometry.as'].code,'HARDENED_CAPABILITY_CALL_TYPE');
  assert.equal(byName['MethodValue.as'].code,'HARDENED_STATIC_MEMBER');
+ assert.equal(byName['ClassName.as'].status,'admitted',JSON.stringify(byName['ClassName.as']));
+ assert.equal(byName['ClassNameMissing.as'].code,'HARDENED_REFLECTION_ARITY');
+ assert.equal(byName['ClassNameExtra.as'].code,'HARDENED_REFLECTION_ARITY');
+ assert.equal(byName['ClassNameValue.as'].code,'HARDENED_REFLECTION_FUNCTION_VALUE');
+ const census=JSON.parse(fs.readFileSync(path.join(profile,'census.json'),'utf8'));
+ assert.deepEqual(census.as3SourceCapabilities.apis.find(api=>api.qname==='flash.utils.getQualifiedClassName').signatures,[
+  'public function getQualifiedClassName(value:*) : String',
+  'public native function getQualifiedClassName(param1:*) : String;',
+ ]);
 });

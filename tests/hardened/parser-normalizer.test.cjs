@@ -291,6 +291,15 @@ function expectNormalizationCode(action, code) {
 const built = compileFocusedSources();
 try {
     {
+        const source = 'package p { public class CallHold { public function run(callback:Function):void { callback(); } } }';
+        const normalized = built.normalizer.normalizeParserAst(built.parse("CallHold.as", source), source, sha256);
+        const start = source.indexOf("callback();");
+        assert.throws(() => built.adapter.adaptNormalizedParserAst(normalized, authority(built.ledger), source, sha256),
+            error => error?.code === "HARDENED_CALL_TARGET"
+                && error.message.includes(`parameter callback at source offsets ${start}:${start + 8}`)
+                && normalized.nodes.find(node => node.id === error.sourceNodeId)?.text === "callback");
+    }
+    {
         const source = 'package p { public class TraceFixture { public function run():void { trace("hello", 1, null); } } }';
         const adapt = (text, admitted = true) => built.adapter.adaptNormalizedParserAst(
             built.normalizer.normalizeParserAst(built.parse("TraceFixture.as", text), text, sha256), authority(built.ledger, admitted), text, sha256);
@@ -811,7 +820,7 @@ try {
         .flatMap(statement=>statement.kind==="local"?statement.declarations:[]);
     assert.deepEqual(defaultLocals.map(local=>local.initializer.kind==="coercion"
         ?local.initializer.argument.value:local.initializer.value),[null,0,false]);
-    for(const heldDefault of ["var amount:Number;","const item:Object;"]){
+    for(const heldDefault of ["const item:Object;"]){
         const heldSource=`package p { public class HeldDefault { public function run():void { ${heldDefault} } } }`;
         const heldTree=built.parse("fixtures/HeldDefault.as",heldSource);
         const heldNormalized=built.normalizer.normalizeParserAst(heldTree,heldSource,sha256);

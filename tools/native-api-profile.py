@@ -163,6 +163,27 @@ def map_native_globals(directory, used_names, target):
     return apis, mappings
 
 
+def annotate_native_function_signatures(apis, directory):
+    """Authenticate the SDK wrapper and its native implementation together."""
+    for api in apis:
+        if api['qname'] != 'flash.utils.getQualifiedClassName':
+            continue
+        root = Path(directory) / 'scripts'
+        wrapper = (root / 'flash/utils/getQualifiedClassName.as').read_text()
+        implementation = (root / 'avmplus/getQualifiedClassName.as').read_text()
+        wrapper_match = re.fullmatch(
+            r'\s*package flash\.utils\s*\{\s*import avmplus\.getQualifiedClassName;\s*'
+            r'(public function getQualifiedClassName\(value:\*\) : String)\s*'
+            r'\{\s*return getQualifiedClassName\(value\);\s*\}\s*\}\s*', wrapper)
+        native_match = re.fullmatch(
+            r'\s*package avmplus\s*\{\s*\[native\("DescribeTypeClass::getQualifiedClassName"\)\]\s*'
+            r'(public native function getQualifiedClassName\(param1:\*\) : String;)\s*\}\s*'
+            r'import avmplus\.\*;\s*use namespace AS3;\s*', implementation)
+        if not wrapper_match or not native_match:
+            raise ValueError('Class-name reflection differs from the authenticated SDK wrapper/native signature')
+        api['signatures'] = [wrapper_match[1], native_match[1]]
+
+
 def target_arity(signature):
     if signature.startswith('<'):
         for index, character, depth in signature_tokens(signature):

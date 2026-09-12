@@ -166,3 +166,8 @@ Reflection functions (`getDefinitionByName`, `getQualifiedClassName`, and
 remain on hold until the accepted unified native type authority exposes a
 sealed identity/definition query; this timer lane neither changes `AS3Type`
 nor introduces an AVM, QName, reflection, evaluation, or dynamic-import seam.
+
+Subsequent class-name support is a separate path: direct SDK-authenticated
+`getQualifiedClassName` calls pass the sealed `AS3Type` allocation identity query
+to Laya's `resolveNativeClassName`. Definition lookup and superclass reflection
+remain outside that path; this does not extend the timer authority.

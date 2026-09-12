@@ -205,6 +205,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
     }
     if (expression.kind === "call") {
+        if (expression.capabilitySource === "flash.utils.getQualifiedClassName")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ResolveNativeClassName"), undefined,
+                [expressionNode(expression.arguments[0]!, ts), ts.factory.createIdentifier("__as3ReflectionClassIdentity")]);
         if (expression.capabilitySource === "Number" && expression.capabilityMember === "toFixed" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NumberToFixed"),undefined,[expressionNode(expression.callee.target,ts),...expression.arguments.map(argument=>expressionNode(argument,ts))]);
         if (expression.capabilitySource === "String" && expression.capabilityMember === "toLowerCase" && expression.callee.kind === "member")
@@ -1265,6 +1268,15 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         throw new HardenedSemanticError("HARDENED_TYPESCRIPT_VERSION", "structural emitter requires the exact configured modern TypeScript compiler API");
     }
     const imports = program.imports.filter((item) => !item.compileTimeNamespace).map((item) => importNode(item, ts));
+    if (program.imports.some(item => item.sourceQualifiedName === "flash.utils.getQualifiedClassName")) {
+        for (const [module, exported, local] of [
+            ["laya/flash/utils/getQualifiedClassName", "resolveNativeClassName", "__as3ResolveNativeClassName"],
+            ["@bleach/as3-runtime/AS3Type", "as3ReflectionClassIdentity", "__as3ReflectionClassIdentity"],
+        ]) imports.push(ts.factory.createImportDeclaration(undefined,
+            ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+                ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!))])),
+            ts.factory.createStringLiteral(module!), undefined));
+    }
     if (programHasKind(program, "object")) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ObjectLiteral"),

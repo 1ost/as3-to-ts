@@ -1796,6 +1796,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "globalCall") return semanticType(node, "void", "void", [], false);
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false, context.classQualifiedName);
+    if (expression.kind === "identifier" && expression.bindingKind === "builtin-class")
+        return semanticType(node, "Class", "__as3ClassValue", [], false);
     if (expression.kind === "identifier" && context.locals[expression.name]) {
         return context.locals[expression.name]!.type;
     }
@@ -2673,6 +2675,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         try {
             predeclareLocals(block, context);
             statements = parseBlock(block, context, false, false, returnType, false);
+            statements = initializeNumberLocals(statements, context, priorLocals);
         } finally {
             context.lambdaDepth -= 1;
             context.parameters = priorParameters;
@@ -2725,6 +2728,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_NAMESPACE_VALUE", "compile-time namespace cannot be used as a runtime value", node);
         }
         const imported = context.importsByLocal[name];
+        if (imported?.sourceQualifiedName === "flash.utils.getQualifiedClassName"
+            && (context.fields[name] || context.accessors[name] || context.methods[name]))
+            fail("HARDENED_REFLECTION_SHADOW", "native reflection import has an unresolved class-member shadow", node);
         if (imported?.authorityKind === "native-timer-function"
             && (context.locals[name] || context.parameters[name] || context.fields[name]
                 || context.accessors[name] || context.methods[name])) {
@@ -2746,6 +2752,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             ? Object.assign(identity(node), {kind:"identifier" as const,name,bindingKind:"package-function" as const,bindingSourceQualifiedName:context.classQualifiedName})
             : currentClassIdentifier(node, context);
         if (imported) {
+            if (imported.sourceQualifiedName === "flash.utils.getQualifiedClassName" && valuePosition)
+                fail("HARDENED_REFLECTION_FUNCTION_VALUE", "native reflection function values require retained closure behavior", node);
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
                 bindingKind: "import" as "import", bindingSourceQualifiedName: imported.sourceQualifiedName });
         }
@@ -2852,6 +2860,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node),{kind:"binary" as const,operator:"/" as const,
                 left:Object.assign(identity(node),{kind:"literal" as const,value:name === "NaN" ? 0 : 1}),
                 right:Object.assign(identity(node),{kind:"literal" as const,value:0}),resultType:semanticType(node,"Number","number")});
+        }
+        if (context.sourceMemberAuthority !== null && ["Object","Array","String","Number","Boolean","Function"].includes(name)
+            && !context.resolveImportedType(name, null, node)) {
+            assertNoInheritedNativeTimerShadow(context, name, node);
+            return Object.assign(identity(node), {kind: "identifier" as const, name,
+                bindingKind: "builtin-class" as const, bindingSourceQualifiedName: name});
         }
         fail("HARDENED_IDENTIFIER_SCOPE", `identifier ${name} is not a parameter or proven import/member`, node);
     }
@@ -3405,6 +3419,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             });
             resultType = signature.returnType;
         } else if (callee.kind === "identifier" && callee.bindingKind === "import"
+            && callee.bindingSourceQualifiedName === "flash.utils.getQualifiedClassName") {
+            const mapping = context.mappingsBySource[callee.bindingSourceQualifiedName];
+            if (!context.sourceMemberAuthority || !mapping || mapping.targetKind !== "function"
+                || mapping.targetExport !== "getQualifiedClassName"
+                || mapping.targetModule !== "src/layaAir/flash/utils/getQualifiedClassName.ts"
+                || mapping.targetSignature !== "(value: unknown) => string")
+                fail("HARDENED_REFLECTION_AUTHORITY", "native class-name query lacks its shared target and source authority", node);
+            if (args.length !== 1)
+                fail("HARDENED_REFLECTION_ARITY", "getQualifiedClassName requires exactly one original value", node);
+            capabilitySource = mapping.sourceQName; capabilityMember = "<call>";
+            resultType = semanticType(node, "String", "string");
+        } else if (callee.kind === "identifier" && callee.bindingKind === "import"
             && context.importsByLocal[callee.name]?.authorityKind === "native-timer-function"
             && callee.bindingSourceQualifiedName === context.importsByLocal[callee.name]!.sourceQualifiedName) {
             const imported = context.importsByLocal[callee.name]!;
@@ -3636,7 +3662,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                                 : name === "push" || name === "unshift" ? semanticType(node, "uint", "number")
                                     : semanticType(node, "int", "number");
         } else {
-            fail("HARDENED_CALL_TARGET", "call target is not a proven local method or super", node);
+            const binding = callee.kind === "identifier"
+                ? `${callee.bindingKind} ${callee.bindingSourceQualifiedName || callee.name}`
+                : callee.kind === "member" ? `member ${callee.capabilitySource || callee.target.kind}.${callee.name}`
+                    : callee.kind;
+            const position = rawCallee.span === null ? "" : ` at source offsets ${rawCallee.span.start}:${rawCallee.span.end}`;
+            fail("HARDENED_CALL_TARGET", `call target ${binding}${position} lacks an admitted callable implementation`, rawCallee);
         }
         const result: CallExpression = Object.assign(identity(node), {
             kind: "call" as "call", callee, calleeNullable, arguments: args,
@@ -4015,8 +4046,10 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                         fail("HARDENED_LOCAL_INITIALIZER", "locals require exactly one explicit admitted initializer", declaration);
                     }
                     if (header.type.sourceName === "Number") {
-                        fail("HARDENED_LOCAL_DEFAULT",
-                            "uninitialized Number locals require explicit NaN IR", declaration);
+                        // The function-entry prelude initializes this slot once,
+                        // even when its declaration occurs in a loop or branch.
+                        return Object.assign(identity(declaration), { name, readonly: false, type: header.type,
+                            initializer: Object.assign(identity(declaration), {kind: "undefined" as const}) });
                     }
                     const value = header.type.sourceName === "int" || header.type.sourceName === "uint" ? 0
                         : header.type.sourceName === "Boolean" ? false : null;
@@ -4041,6 +4074,24 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             return Object.assign(identity(node), { kind: "local" as "local", declarations });
         }
         fail("HARDENED_STATEMENT_UNSUPPORTED", "normalized statement kind is unsupported: " + node.kind, node);
+}
+
+function initializeNumberLocals(body: SemanticStatement[], context: AdapterContext,
+    outer: { [name: string]: LocalHeader } = {}): SemanticStatement[] {
+    const declarations: SemanticLocal[] = Object.values(context.locals)
+        .filter(local => local !== outer[local.name] && local.type.sourceName === "Number"
+            && !local.readonly && one(local.node, "INIT", true) === null)
+        .map(local => Object.assign(identity(local.node), {
+            name: local.name, readonly: false, type: local.type,
+            initializer: Object.assign(identity(local.node), {kind: "binary" as const, operator: "/" as const,
+                left: Object.assign(identity(local.node), {kind: "literal" as const, value: 0}),
+                right: Object.assign(identity(local.node), {kind: "literal" as const, value: 0}),
+                resultType: local.type}),
+        }));
+    if (!declarations.length) return body;
+    const initial: SemanticStatement = Object.assign(identity(context.locals[declarations[0]!.name]!.node),
+        {kind: "local" as const, declarations});
+    return body.length && superCall(body[0]!) ? [body[0]!, initial, ...body.slice(1)] : [initial, ...body];
 }
 
 function predeclareLocals(block: TreeNode, context: AdapterContext): void {
@@ -4492,7 +4543,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         context.currentCallable=header;
         header.parameters.forEach(parameter => context.parameters[parameter.name]=parameter);
         predeclareLocals(header.block,context);
-        const body=parseBlock(header.block,context,false,false,header.returnType);
+        const body=initializeNumberLocals(parseBlock(header.block,context,false,false,header.returnType), context);
         if (header.returnType!.sourceName !== "void" && !statementsAlwaysReturn(body))
             fail("HARDENED_RETURN_PATH", "package function must return or throw on every path", fieldList);
         declaration=Object.assign(identity(fieldList),{declarationKind:"packageFunction" as const,name,modifiers,
@@ -4878,6 +4929,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             let body: SemanticStatement[];
             try {
                 body = parseBlock(header.block, placeholder, header.constructor, extendsType !== null, header.returnType);
+                body = initializeNumberLocals(body, placeholder);
             } finally {
                 placeholder.parameters = oldParameters;
                 placeholder.locals = oldLocals;

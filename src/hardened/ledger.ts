@@ -615,6 +615,18 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
             "owned source API identity is absent or ambiguous", null);
     }
     const api = apis.length === 1 ? apis[0] : null;
+    if (mapping.sourceQName === "flash.utils.getQualifiedClassName" && (!isObject(api)
+        || JSON.stringify(api.signatures) !== JSON.stringify([
+            "public function getQualifiedClassName(value:*) : String",
+            "public native function getQualifiedClassName(param1:*) : String;",
+        ]) || mapping.sourceMember !== null || mapping.targetMember !== null
+        || mapping.targetKind !== "function" || mapping.targetExport !== "getQualifiedClassName"
+        || mapping.targetModule !== "src/layaAir/flash/utils/getQualifiedClassName.ts"
+        || mapping.targetCapabilityId !== "api.flash.utils"
+        || mapping.targetSignature !== "(value: unknown) => string")) {
+        throw new HardenedSemanticError("HARDENED_REFLECTION_AUTHORITY",
+            "Class-name reflection requires its exact SDK wrapper/native signatures and shared target");
+    }
     if (mapping.sourceQName === "trace" && (!isObject(api)
         || JSON.stringify(api.signatures) !== JSON.stringify(["public native function trace(... rest) : void;"])
         || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "global-function"

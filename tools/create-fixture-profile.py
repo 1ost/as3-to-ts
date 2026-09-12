@@ -262,6 +262,7 @@ def main():
             set(re.findall(r'\b[A-Za-z_$][\w$]*\b', text)), target_doc)
         apis.extend(global_apis)
         mappings.extend(global_mappings)
+        native_api.annotate_native_function_signatures(apis, out / 'sdk-source')
     census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': member_uses}})
     if native_signatures is not None:
         mappings = native_api.select_supported_members(mappings, census, target, out)

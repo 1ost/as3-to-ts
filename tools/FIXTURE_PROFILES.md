@@ -1,5 +1,21 @@
 # Independent native-oracle profiles
 
+`flash.utils.getQualifiedClassName(value)` uses Laya's `resolveNativeClassName`
+with the generated application's sealed class identity query. Profiles
+authenticate both the SDK's Flash wrapper and native `avmplus` declaration.
+Direct calls require exactly one argument; function-value escapes, other
+reflection APIs and unregistered host instances remain held or explicitly
+unavailable. The query does not infer identities from application constructor
+fields or register observed definitions. Its 75-checkpoint AIR 51 macOS fixture
+includes numeric atom boundaries, negative zero, package names, class values
+and method closures. Other Flash versions are not established by this corpus.
+
+The same fixture admits builtin Object/Array/String/Number/Boolean/Function
+class values and uninitialized Number locals. Those Number slots initialize
+to NaN once at function entry, including declarations inside loops/branches;
+capturing lambdas do not reset an outer slot. This does not qualify every typed
+local's initialization or general callable builtin class values.
+
 `create-fixture-profile.py` creates an explicit application profile for a bounded
 independent AS3 fixture (1 to 128 source files). It leaves the default Bleach trust root untouched and
 uses the real declaration worker, qualifier and emitter. Build the transpiler

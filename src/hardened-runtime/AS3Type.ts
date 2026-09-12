@@ -15,10 +15,21 @@ import {
     enterConstruction,
     abortConstruction,
     completeConstruction,
+    lookupStringClassName,
+    lookupObjectClass,
 } from "./internal/AS3TypeRegistry";
+import { isAS3MethodClosure } from "./AS3MethodClosure";
 
 export { AS3Types };
 export type { AS3TypeToken, AS3ClassValue };
+
+/** Query existing sealed allocation authority without reading application fields. */
+export function as3ReflectionClassIdentity(value: unknown): string | null {
+    if (isAS3MethodClosure(value)) return "builtin.as$0::MethodClosure";
+    const className = lookupStringClassName(value);
+    if (className !== null) return className;
+    return lookupObjectClass(value)?.qname ?? null;
+}
 
 export function as3ClassType<T extends object>(name: string,
     constructor: RuntimeConstructor<T>): AS3TypeToken<T> {
