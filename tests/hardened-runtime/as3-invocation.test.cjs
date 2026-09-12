@@ -47,3 +47,42 @@ test('Array length stores uint after the receiver check and returns the original
   const values=[1,2,3];assert.equal(as3ArrayLengthWrite(values,input),input);assert.equal(values.length,length);
  }
 });
+
+test('sortOn retains native tied-priority identity order beyond the small partitions',()=>{
+ const {as3ArrayCall}=require(path.join(out,'hardened-runtime/AS3Array.js'));
+ const rows=Array.from({length:12},(_,id)=>({id,priority:(id*7)%5-2}));
+ const original=rows.slice();assert.equal(as3ArrayCall(rows,'sortOn',['priority',18]),rows);
+ assert.deepEqual(rows.map(row=>row.id),[2,7,9,4,1,6,11,3,8,0,10,5]);
+ rows.forEach(row=>assert.equal(row,original[row.id]));
+ const forty=Array.from({length:40},(_,id)=>({id,priority:(id*7)%5-2}));
+ as3ArrayCall(forty,'sortOn',['priority',18]);
+ assert.deepEqual(forty.map(row=>row.id),[27,37,2,32,7,12,22,17,4,9,19,24,14,34,39,29,16,11,6,31,1,21,26,36,8,38,23,28,18,33,13,3,30,15,5,35,10,0,25,20]);
+});
+test('sortOn snapshots fields backwards and delays all writes until getters succeed',()=>{
+ const {as3ArrayCall}=require(path.join(out,'hardened-runtime/AS3Array.js'));const events=[];
+ let fail=false;const rows=Array.from({length:5},(_,id)=>({id,get priority(){events.push(id);if(fail&&id===2)throw new Error('priority failed');return id%2;}}));
+ as3ArrayCall(rows,'sortOn',['priority',18]);assert.deepEqual(events,[4,3,2,1,0]);assert.deepEqual(rows.map(row=>row.id),[3,1,0,2,4]);
+ rows.sort((a,b)=>a.id-b.id);events.length=0;fail=true;
+ assert.throws(()=>as3ArrayCall(rows,'sortOn',['priority',18]),/priority failed/);
+ assert.deepEqual(events,[4,3,2]);assert.deepEqual(rows.map(row=>row.id),[0,1,2,3,4]);
+});
+test('sortOn descending exchanges numeric conversion operands before comparing',()=>{
+ const {as3ArrayCall}=require(path.join(out,'hardened-runtime/AS3Array.js'));const events=[];
+ const rows=[{id:'a',priority:{valueOf(){events.push('a');return 3;}}},{id:'b',priority:{valueOf(){events.push('b');return 7;}}},{id:'c',priority:5}];
+ as3ArrayCall(rows,'sortOn',['priority',18]);assert.deepEqual(rows.map(row=>row.id),['b','c','a']);assert.deepEqual(events,['b','a','a','b']);
+});
+test('sortOn partitions absent slots and primitive rows without boxing their fields',()=>{
+ const {as3ArrayCall}=require(path.join(out,'hardened-runtime/AS3Array.js'));
+ const rows=[{id:'a',priority:1},null,undefined,7,{id:'b',priority:3},'x'];
+ as3ArrayCall(rows,'sortOn',['priority',18]);assert.deepEqual(rows.map(row=>row&&row.id||row),['b','a',null,undefined,7,'x']);
+ const sparse=[{id:0,priority:0},,{id:2,priority:2}];sparse.length=6;
+ as3ArrayCall(sparse,'sortOn',['priority',18]);assert.equal(sparse.length,6);assert.deepEqual(Object.keys(sparse),['0','1']);assert.deepEqual(sparse.slice(0,2).map(row=>row.id),[2,0]);
+});
+test('sortOn keeps unqualified modes and host storage explicit',()=>{
+ const {as3ArrayCall}=require(path.join(out,'hardened-runtime/AS3Array.js'));
+ for(const options of [0,2,4,8,20,24]) assert.throws(()=>as3ArrayCall([],'sortOn',['priority',options]),{name:'AS3ArraySortOperationUnavailable'});
+ assert.throws(()=>as3ArrayCall(null,'sortOn',['priority',18]),{errorID:1009});
+ assert.throws(()=>as3ArrayCall(undefined,'sortOn',['priority',18]),{errorID:1010});
+ const oversized=[];oversized.length=0x10000000;assert.throws(()=>as3ArrayCall(oversized,'sortOn',['priority',18]),{name:'AS3ArraySortOperationUnavailable'});
+ const overridden=[];overridden.sortOn=()=>0;assert.throws(()=>as3ArrayCall(overridden,'sortOn',['priority',18]),{name:'AS3ArraySortOperationUnavailable'});
+});

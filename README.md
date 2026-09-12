@@ -100,6 +100,22 @@ finally blocks retain their source order. Typed Error catches keep their filter;
 multiple typed catches and writes to catch bindings remain outside this admission.
 Native evidence lives in LayaAir's `lexical-method` and `wildcard-catch` fixtures.
 
+## Numeric field sorting and wildcard method returns
+
+Authenticated Array.sortOn calls admit a single String field and proven
+Array.NUMERIC, optionally combined with Array.DESCENDING. The shared runtime
+retains reverse field reads, delayed array writes, native numeric conversion order,
+unstable tie ordering, primitive-item partitioning and holes. It uses the retained
+AVMplus index sort rather than the host JavaScript sort. Getter failures leave
+source ordering intact. Original LoadDataItem priorities and clear() are covered
+by native AIR/generated Laya evidence. Multi-field/string/index-return/unique sort
+modes, overrides, subclasses, oversized arrays and inherited/accessor Array indices remain held.
+
+Authenticated methods returning * may fall through with undefined. The emitter
+supplies the implicit return without changing source bytes; other return types,
+getters, lambdas and package functions retain their existing path checks.
+The MPL-2.0 sorting adaptation is identified in THIRD_PARTY_NOTICES.md.
+
 ## Provenance and licenses
 
 The frozen parser and syntax model derive from `@as3web/as3-to-ts` 0.3.10 at

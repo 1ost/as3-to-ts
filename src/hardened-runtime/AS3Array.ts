@@ -1,3 +1,4 @@
+import { as3ArraySortOnNumeric } from "./internal/AS3ArraySort";
 import { as3NativeArrayJoin, as3NativeString, as3NativeNumber } from "./AS3ObjectDispatch";
 import { as3FunctionArgument } from "./AS3Function";
 
@@ -75,7 +76,13 @@ export function as3ArrayCall(value:unknown, method:"push" | "unshift", args:unkn
 export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown[]):unknown;
 export function as3ArrayCall(value:unknown, method:"concat", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"join", args:unknown[]):string;
+export function as3ArrayCall(value:unknown, method:"sortOn", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unknown {
+    if (method === "sortOn") {
+        const array=ordinaryArray(value);
+        if (args.length !== 2) throw new AS3ArrayOperationUnavailable("Array.sortOn requires field and numeric options");
+        return as3ArraySortOnNumeric(array,args[0],args[1]);
+    }
     if (value === null) {
         const error = new TypeError("Error #1009: Cannot access a property or method of a null object reference.");
         Object.defineProperty(error,"errorID",{value:1009}); throw error;

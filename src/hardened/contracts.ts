@@ -148,8 +148,8 @@ export interface UndefinedExpression extends SemanticIdentity {
 
 export interface IntrinsicConstantExpression extends SemanticIdentity {
     kind: "intrinsicConstant";
-    identity: "Array.NUMERIC";
-    value: 16;
+    identity: "Array.NUMERIC" | "Array.DESCENDING";
+    value: 16 | 2;
 }
 
 export interface ParseIntegerExpression extends SemanticIdentity {

@@ -3217,7 +3217,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_MEMBER_SHAPE", "member expression has the wrong normalized shape", node);
         }
         const name = validateIdentifier(requiredText(node.children[1]!, "member name"), node.children[1]!);
-        if (node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "Array" && name === "NUMERIC"
+        if (node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "Array" && (name === "NUMERIC" || name === "DESCENDING")
             && context.className !== "Array" && context.locals.Array === undefined && context.parameters.Array === undefined
             && context.fields.Array === undefined && context.methods.Array === undefined && context.accessors.Array === undefined
             && context.importsByLocal.Array === undefined) {
@@ -3242,7 +3242,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             if (context.resolveImportedType("Array", null, node.children[0]!) === null) {
                 return Object.assign(identity(node), {
-                    kind: "intrinsicConstant" as "intrinsicConstant", identity: "Array.NUMERIC" as "Array.NUMERIC", value: 16 as 16,
+                    kind: "intrinsicConstant" as "intrinsicConstant", identity: (name === "NUMERIC" ? "Array.NUMERIC" : "Array.DESCENDING") as "Array.NUMERIC" | "Array.DESCENDING", value: (name === "NUMERIC" ? 16 : 2) as 16 | 2,
                 });
             }
         }
@@ -3454,7 +3454,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
-                        && !valuePosition && ["push","pop","shift","unshift","concat","join"].includes(name);
+                        && !valuePosition && ["push","pop","shift","unshift","concat","join","sortOn"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase"].includes(name);
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
@@ -3845,14 +3845,28 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
             && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee))) {
             const name = callee.name;
-            if (!["push","pop","shift","unshift","concat","join"].includes(name)
+            if (!["push","pop","shift","unshift","concat","join","sortOn"].includes(name)
                 || (["pop","shift"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1))
                 fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
                 fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
+            if (name === "sortOn") {
+                const flags = (expression:SemanticExpression):number | null => {
+                    if (expression.kind === "intrinsicConstant") return expression.value;
+                    if (expression.kind === "literal" && typeof expression.value === "number") return expression.value;
+                    if (expression.kind === "binary" && expression.operator === "|") {
+                        const left=flags(expression.left),right=flags(expression.right);
+                        return left===null || right===null ? null : left | right;
+                    }
+                    return null;
+                };
+                if (args.length !== 2 || assignmentType(args[0]!,context,node).sourceName !== "String"
+                    || ![16,18].includes(flags(args[1]!)!))
+                    fail("HARDENED_ARRAY_SORT_ON", "Array.sortOn requires one String field and proven NUMERIC with optional DESCENDING", node);
+            }
             capabilitySource = "Array";
             capabilityMember = name;
-            resultType = name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" ? semanticType(node,"Array","Array",[],false)
+            resultType = name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "sortOn" ? semanticType(node,"Array","Array",[],false)
                 : name === "push" || name === "unshift"
                 ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && vectorElement(assignmentType(callee.target, context, rawCallee)) !== null) {
@@ -5319,7 +5333,11 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
                 members.push(setter);
             } else {
                 if (header.returnType!.sourceName !== "void" && !statementsAlwaysReturn(body)) {
-                    fail("HARDENED_RETURN_PATH", "non-void method must return a proven value on every admitted path", node);
+                    if (placeholder.sourceMemberAuthority !== null && header.returnType!.sourceName === "*"
+                        && header.returnType!.emittedName === "unknown") {
+                        body.push(Object.assign(identity(node), {kind:"return" as const,
+                            expression:Object.assign(identity(node), {kind:"undefined" as const})}));
+                    } else fail("HARDENED_RETURN_PATH", "non-void method must return a proven value on every admitted path", node);
                 }
                 const method: SemanticMethod = Object.assign(identity(node), {
                     kind: "method" as "method", name: header.name, modifiers: header.modifiers,

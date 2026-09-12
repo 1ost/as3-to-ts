@@ -128,3 +128,14 @@ The rest of this frontend retains its existing licensing.
 and power-of-two radix rounding from `core/MathUtils.cpp` in Adobe AVMplus under
 MPL-2.0. Its macOS AIR 51 fused accumulation and widened float NaN payload are
 checked against retained native AIR captures.
+
+
+## AVMplus numeric field sorting
+
+`src/hardened-runtime/internal/AS3ArraySort.ts` adapts the single-field snapshot,
+numeric comparison, index partitioning and quicksort algorithm from Adobe AVMplus
+`core/ArrayClass.cpp` at revision `858d034a3bd3a54d9b70909386435cf4aec81d21`.
+The adapted file is licensed under MPL-2.0 and carries its notice. Original source:
+<https://github.com/adobe/avmplus/blob/858d034a3bd3a54d9b70909386435cf4aec81d21/core/ArrayClass.cpp>.
+License: <https://mozilla.org/MPL/2.0/>. Native AIR 51 captures verify the retained
+comparison and tie behavior; other Array sort modes require separate evidence.

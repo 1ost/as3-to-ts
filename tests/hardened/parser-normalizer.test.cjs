@@ -1077,6 +1077,33 @@ try {
         typedCatchSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
     assert.match(built.emitter.emitSemanticProgram(typedCatchSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code,/instanceof Error/);
+    const fallingMethodSource="package p { public class FallingReturn { public function clear():* {} } }";
+    const fallingMethodAst=built.normalizer.normalizeParserAst(
+        built.parse("fixtures/FallingReturn.as",fallingMethodSource),fallingMethodSource,sha256);
+    const fallingMethodSemantic=built.adapter.adaptNormalizedParserAst(fallingMethodAst,authority(built.ledger),
+        fallingMethodSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    assert.match(built.emitter.emitSemanticProgram(fallingMethodSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code,/return void 0;/);
+    const fallingNumberSource=fallingMethodSource.replace(":*",":Number");
+    const fallingNumberAst=built.normalizer.normalizeParserAst(
+        built.parse("fixtures/FallingNumber.as",fallingNumberSource),fallingNumberSource,sha256);
+    assert.throws(()=>built.adapter.adaptNormalizedParserAst(fallingNumberAst,authority(built.ledger),
+        fallingNumberSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority),
+        error=>error&&error.code==="HARDENED_RETURN_PATH");
+    const numericFieldSortSource='package p { public class FieldSort { public function run(values:Array):void { values.sortOn("priority",18); } } }';
+    const numericFieldSortAst=built.normalizer.normalizeParserAst(
+        built.parse("fixtures/FieldSort.as",numericFieldSortSource),numericFieldSortSource,sha256);
+    const numericFieldSortSemantic=built.adapter.adaptNormalizedParserAst(numericFieldSortAst,authority(built.ledger),
+        numericFieldSortSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    assert.match(built.emitter.emitSemanticProgram(numericFieldSortSemantic,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code,/__as3ArrayCall\(values, "sortOn", \["priority", 18\]\)/);
+    for(const heldFieldSort of [numericFieldSortSource.replace(',18',',8'),
+        numericFieldSortSource.replace('"priority",18','["priority"],18'),
+        numericFieldSortSource.replace('"priority",18','"priority"')]) {
+        const ast=built.normalizer.normalizeParserAst(built.parse("fixtures/HeldFieldSort.as",heldFieldSort),heldFieldSort,sha256);
+        assert.throws(()=>built.adapter.adaptNormalizedParserAst(ast,authority(built.ledger),heldFieldSort,
+            sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority),error=>error&&error.code==="HARDENED_ARRAY_SORT_ON");
+    }
     const conditionSource="package p { public class TruthyCondition { public function run(item:Object):void { if (item) { return; } } } }";
     const conditionTree=built.parse("fixtures/TruthyCondition.as",conditionSource);
     const conditionNormalized=built.normalizer.normalizeParserAst(conditionTree,conditionSource,sha256);
