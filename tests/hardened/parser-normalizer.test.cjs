@@ -1013,6 +1013,8 @@ try {
             const update=semantic.declaration.members.find(m=>m.name==='run').body[0].expression;
             assert.equal(update.kind,'update');assert.equal(update.numericLocal,true);
             assert.equal(update.resultType.sourceName,'Number');
+            const code=built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code;
+            assert.match(code,/as3Number as __as3Number/);
         }
         assert.throws(()=>adaptUpdate('public function run():Number {const value:*=0;return value++;}'),
             error=>error.code==='HARDENED_ASSIGNMENT_READONLY');
@@ -1119,7 +1121,7 @@ try {
     const instanceLambdaOutput=built.emitter.emitSemanticProgram(instanceLambdaSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
     assert.match(instanceLambdaOutput.code,/__as3LexicalReceiver1\.ready = true;/);
-    assert.match(instanceLambdaOutput.code,/=> function/);
+    assert.match(instanceLambdaOutput.code,/=> __as3SourceLambda\(function/);
     const explicitThisSource=instanceLambdaSource.replace("ready = true", "this.ready = true");
     const explicitThisNormalized=built.normalizer.normalizeParserAst(
         built.parse("fixtures/ExplicitThis.as",explicitThisSource),explicitThisSource,sha256);
@@ -1136,7 +1138,7 @@ try {
     const methodCaptureOutput=built.emitter.emitSemanticProgram(methodCaptureSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
     assert.match(methodCaptureOutput.code,/__as3LexicalReceiver2\.complete\(\)/);
-    assert.match(methodCaptureOutput.code,/\}\)\(__as3LexicalReceiver1\)/);
+    assert.match(methodCaptureOutput.code,/\}\)\)\(__as3LexicalReceiver1\)/);
     for (const heldCaptureSource of [methodCaptureSource.replace("complete();", "this.complete();"),
         methodCaptureSource.replace("complete();", "var saved:Function=complete;"),
         methodCaptureSource.replace("public function run", "public static function run")]) {

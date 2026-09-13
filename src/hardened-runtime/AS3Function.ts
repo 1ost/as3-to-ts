@@ -5,6 +5,14 @@ export class AS3FunctionOperationUnavailable extends Error {
     constructor(message:string) { super(message); this.name="AS3FunctionOperationUnavailable"; }
 }
 
+const SOURCE_LAMBDAS = new WeakSet<Function>();
+/** Preserve identity while marking functions emitted from authenticated AS3 bodies. */
+export function as3SourceLambda<T extends Function>(value:T):T {
+    SOURCE_LAMBDAS.add(value);
+    return value;
+}
+export function isAS3SourceLambda(value:Function):boolean { return SOURCE_LAMBDAS.has(value); }
+
 /** Package functions retain native arity checks even when invoked through Function.apply. */
 export function as3CheckFunctionArity(qname:string, actual:number, minimum:number, maximum:number | null):void {
     if (actual >= minimum && (maximum === null || actual <= maximum)) return;

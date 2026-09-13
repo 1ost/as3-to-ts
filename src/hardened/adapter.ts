@@ -3825,9 +3825,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 // receiver is not statically rewritten into an Array cast.
                 if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
                     fail("HARDENED_OBJECT_CALL_ARGUMENT", "Dynamic push arguments must produce values", node);
-            } else if (args.length !== 0 || callee.index.kind !== "literal" || typeof callee.index.value !== "string") {
-                fail("HARDENED_OBJECT_CALL_TARGET", "dynamic calls with arguments or computed names require retained native evaluation evidence", node);
+            } else if (callee.index.kind !== "literal" || typeof callee.index.value !== "string") {
+                fail("HARDENED_OBJECT_CALL_TARGET", "computed dynamic calls require retained native evaluation evidence", node);
             }
+            if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
+                fail("HARDENED_OBJECT_CALL_ARGUMENT", "Dynamic call arguments must produce values", node);
             return Object.assign(identity(node),{kind:"objectOperation" as const,operation:"call" as const,
                 target:callee.target,index:callee.index,arguments:args,callerQName:context.classQualifiedName,
                 resultType:semanticType(node,"*","unknown")});

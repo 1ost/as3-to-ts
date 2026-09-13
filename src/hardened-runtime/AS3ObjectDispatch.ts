@@ -1,3 +1,4 @@
+import { isAS3SourceLambda } from "./AS3Function";
 import { AS3ArgumentError } from "./AS3Error";
 import { as3StringSplit } from "./AS3Coerce";
 import { as3ArrayCall, as3ArrayDelete, as3ArrayRead, as3ArrayWrite, as3ArrayLengthWrite } from "./AS3Array";
@@ -233,7 +234,7 @@ export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:st
         const error=new TypeError(`Error #1006: ${name} is not a function.`);
         Object.defineProperty(error,"errorID",{value:1006}); throw error;
     }
-    if (name !== "hasOwnProperty" && name !== "toString" && !isAS3MethodClosure(fn) && ![...BUILTINS.values()].includes(fn))
+    if (name !== "hasOwnProperty" && name !== "toString" && !isAS3MethodClosure(fn) && !isAS3SourceLambda(fn) && ![...BUILTINS.values()].includes(fn))
         return unavailable("Dynamic function values require authenticated method-closure argument behavior");
     return Reflect.apply(fn,value,args);
 }

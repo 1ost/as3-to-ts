@@ -598,11 +598,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length"),
                 ts.factory.createNumericLiteral(expression.parameters.filter(p=>!p.rest && p.defaultValue === null).length),
                 expression.parameters.some(p=>p.rest) ? ts.factory.createNull() : ts.factory.createNumericLiteral(expression.parameters.length)]));
-        const fn = ts.factory.createFunctionExpression(undefined, undefined, undefined, undefined,
+        const sourceFn = ts.factory.createFunctionExpression(undefined, undefined, undefined, undefined,
             expression.parameters.map(parameter => parameterNode(parameter, ts)),
             typeNode(expression.returnType, ts),
             ts.factory.createBlock([arity].concat(parameterSlotStatements(expression.parameters,ts),
                 expression.statements.map(statement => statementNode(statement, ts))), true));
+        const fn=ts.factory.createCallExpression(ts.factory.createIdentifier("__as3SourceLambda"),undefined,[sourceFn]);
         if (!expression.lexicalReceiver) return fn;
         const capture = expression.lexicalReceiver;
         // Keep an ordinary Function and capture its lexical instance separately
@@ -1664,7 +1665,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.kind === "call" && value.capabilitySource === "Error" && value.capabilityMember === "toString"
         || value.kind === "call" && value.capabilitySource === "String" && ["toLowerCase","charAt","split"].includes(value.capabilityMember)
         || Object.values(value).some(primitiveMember));
-    if (programHasKind(program, "coercion") || programHasKind(program, "assignmentStorageCoercion")
+    if (programHasKind(program, "update") || programHasKind(program, "coercion") || programHasKind(program, "assignmentStorageCoercion")
         || programHasKind(program, "parseInteger") || programHasKind(program,"numericPredicate") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
     const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "functionApply" || value.kind === "globalFunction"
@@ -1676,7 +1677,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
-            ["as3FunctionApply","as3FunctionCall","as3FunctionInvoke","as3FunctionFieldInvoke","as3CheckLambdaArity","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3CheckMethodArity","as3TraceFunction"].map(name =>
+            ["as3SourceLambda","as3FunctionApply","as3FunctionCall","as3FunctionInvoke","as3FunctionFieldInvoke","as3CheckLambdaArity","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3CheckMethodArity","as3TraceFunction"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
     const dictionarySlot = (value:any):boolean => value !== null && typeof value === "object" && (

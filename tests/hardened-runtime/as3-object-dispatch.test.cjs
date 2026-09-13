@@ -173,3 +173,14 @@ test("SDK member absence permits local methods without exposing unresolved nativ
  assert.throws(()=>r.as3ObjectCall(new UnknownNative(),"missing",[],"LocalChild"),{name:"AS3ObjectDispatchUnavailable"});
  for(const value of [{dispose:7},{}]) assert.throws(()=>r.as3ObjectCall(value,"dispose",[],"LocalChild"),{name:"TypeError",errorID:1006});
 });
+
+test("dynamic calls admit source lambdas without admitting unknown host functions",()=>{
+ const {as3SourceLambda,isAS3SourceLambda}=require(path.join(out,"hardened-runtime/AS3Function.js"));
+ const fn=function(value){return value;};
+ assert.equal(isAS3SourceLambda(fn),false);
+ assert.throws(()=>r.as3ObjectCall({run:fn},"run",[7]),{name:"AS3ObjectDispatchUnavailable"});
+ assert.equal(as3SourceLambda(fn),fn);assert.equal(isAS3SourceLambda(fn),true);
+ assert.equal(r.as3ObjectCall({run:fn},"run",[7]),7);
+ assert.equal(r.as3ObjectRead({run:fn},"run"),fn);
+ assert.throws(()=>r.as3ObjectCall({run:function(){}},"run",[7]),{name:"AS3ObjectDispatchUnavailable"});
+});
