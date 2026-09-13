@@ -1022,6 +1022,21 @@ try {
             error=>error.code==='HARDENED_UPDATE_NUMBER');
     }
     {
+        const adaptImmediate = expression => {
+            const source=`package p { public class Immediate { public function run():Number {return ${expression};} } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("Immediate.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+        };
+        const result=adaptImmediate('((function(value:Number):Number {return value;}))(3)')
+            .declaration.members.find(m=>m.name==='run').body[0].expression;
+        assert.equal(result.kind,'call');assert.equal(result.immediateLambdaCall,true);
+        assert.equal(result.resultType.sourceName,'Number');
+        for(const expression of ['(function(value:Number):Number{return value;})()',
+            '(function():Number{return 1;})(1)'])
+            assert.throws(()=>adaptImmediate(expression),error=>error.code==='HARDENED_LAMBDA_CALL_ARITY');
+    }
+    {
         const adaptObject = body => {
             const source = `package p { public class ObjectConversion { ${body} } }`;
             return built.adapter.adaptNormalizedParserAst(

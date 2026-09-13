@@ -228,6 +228,7 @@ export interface MethodClosureExpression extends SemanticIdentity {
 }
 
 export interface CallExpression extends SemanticIdentity {
+    immediateLambdaCall?: true;
     kind: "call";
     callee: SemanticExpression;
     calleeNullable: boolean;

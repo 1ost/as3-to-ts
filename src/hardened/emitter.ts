@@ -255,7 +255,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         const callee = expressionNode(expression.callee, ts);
         return ts.factory.createCallExpression(
             expression.calleeNullable ? ts.factory.createNonNullExpression(callee) : callee, undefined,
-            expression.arguments.map((argument) => expression.packageFunctionCall
+            expression.arguments.map((argument) => expression.packageFunctionCall || expression.immediateLambdaCall
                 ? ts.factory.createAsExpression(expressionNode(argument, ts), ts.factory.createKeywordTypeNode(ts.SyntaxKind.AnyKeyword))
                 : expressionNode(argument, ts)));
     }

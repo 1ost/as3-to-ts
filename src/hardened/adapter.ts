@@ -3765,6 +3765,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         }
         const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
+        let immediateLambda=callee;
+        while (immediateLambda.kind === "parenthesized") immediateLambda=immediateLambda.expression;
+        if (context.sourceMemberAuthority !== null && immediateLambda.kind === "lambda") {
+            if (!admittedArity(immediateLambda.parameters,args.length))
+                fail("HARDENED_LAMBDA_CALL_ARITY", "immediate lambda call does not match its source declaration", node);
+            if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
+                fail("HARDENED_FUNCTION_ARGUMENT", "immediate lambda arguments must produce values", node);
+            // The function body owns parameter coercion, after every argument expression.
+            return Object.assign(identity(node),{kind:"call" as const,callee,calleeNullable:false,arguments:args,immediateLambdaCall:true as const,
+                capabilitySource:null,capabilityMember:null,resultType:immediateLambda.returnType});
+        }
+
         if (context.sourceMemberAuthority !== null && callee.kind === "member" && callee.target.kind === "this"
             && context.lambdaDepth === 0 && context.currentCallable !== null
             && !context.currentCallable.modifiers.includes("static")
