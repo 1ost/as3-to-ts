@@ -299,6 +299,21 @@ function additionPrimitive(value:unknown):unknown {
     return value;
 }
 
+/** AIR reverses primitive conversion for <= and >, after both expressions evaluate. */
+export function as3NativeRelation(left:unknown, right:unknown, operator:"<" | "<=" | ">" | ">="):boolean {
+    const reverse = operator === "<=" || operator === ">";
+    const first = additionPrimitive(reverse ? right : left);
+    const second = additionPrimitive(reverse ? left : right);
+    let less:boolean;
+    if (typeof first === "string" && typeof second === "string") less = first < second;
+    else {
+        const a = as3NativeNumber(first), b = as3NativeNumber(second);
+        if (Number.isNaN(a) || Number.isNaN(b)) return false;
+        less = a < b;
+    }
+    return operator === "<=" || operator === ">=" ? !less : less;
+}
+
 /** Native abstract equality: reference pairs never invoke primitive conversion. */
 export function as3NativeEquals(left:unknown, right:unknown):boolean {
     if ([left,right].some(value => typeof value === "bigint" || typeof value === "symbol"))

@@ -2805,6 +2805,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 operator:operator as "-" | "*" | "/" | "%", left, right, numericCoercion:true as const,
                 resultType:semanticType(node,"Number","number")});
         }
+        if (["<","<=",">",">="].includes(operator) && context.sourceMemberAuthority !== null) {
+            if ([leftType,rightType].some(type => ["void","XML","XMLList","Namespace","QName"].includes(type.sourceName)))
+                fail("HARDENED_BINARY_RELATION", "Ordered relations require supported native value domains", node);
+            return Object.assign(identity(node), {kind:"binary" as const,
+                operator:operator as "<" | "<=" | ">" | ">=", left,right,relationCoercion:true as const,
+                resultType:semanticType(node,"Boolean","boolean")});
+        }
         const nullComparison = (leftType.sourceName === "null" && rightType.nullable)
             || (rightType.sourceName === "null" && leftType.nullable);
         const looseEquality = operator === "==" || operator === "!=";

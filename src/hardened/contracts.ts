@@ -468,6 +468,7 @@ export interface BinaryExpression extends SemanticIdentity {
     numericCoercion?: true;
     additionCoercion?: true;
     equalityCoercion?: true;
+    relationCoercion?: true;
     operator: "<" | "<=" | ">" | ">=" | "==" | "!=" | "===" | "!==" | "&&" | "||" |
         "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>" | ">>>";
     left: SemanticExpression;

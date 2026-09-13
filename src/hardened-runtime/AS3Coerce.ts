@@ -4,7 +4,7 @@ import { as3IntegerText } from "./internal/AS3ParseInteger";
 import { as3ObjectLiteral } from "./AS3Object";
 import { as3FixedDecimal } from "./internal/AS3NumberFormat";
 import { AS3_LOWERCASE_BMP } from "./internal/AS3CaseTable";
-import { as3NativeString, as3NativeNumber, as3NativeAdd, as3NativeEquals, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
+import { as3NativeString, as3NativeNumber, as3NativeAdd, as3NativeEquals, as3NativeRelation, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
 
 export function as3Int(value: unknown = 0): number {
     return as3NativeNumber(value) >> 0;
@@ -140,6 +140,11 @@ export function as3NumberToFixed(value:unknown, precision:unknown=0):string {
 /** Both operand expressions evaluate before the native addition conversion. */
 export function as3Add(left:unknown, right:unknown):string|number {
     return as3NativeAdd(left,right);
+}
+
+/** Argument evaluation stays left to right; native primitive conversion is operator-specific. */
+export function as3Relation(left:unknown, right:unknown, operator:"<" | "<=" | ">" | ">="):boolean {
+    return as3NativeRelation(left,right,operator);
 }
 
 /** Both operand expressions evaluate before native equality conversion starts. */

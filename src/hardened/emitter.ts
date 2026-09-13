@@ -470,6 +470,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "binary") {
+        if (expression.relationCoercion) {
+            if (!["<","<=",">",">="].includes(expression.operator))
+                throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "relation conversion requires an ordered operator");
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Relation"),undefined,
+                [expressionNode(expression.left,ts),expressionNode(expression.right,ts),ts.factory.createStringLiteral(expression.operator)]);
+        }
         if (expression.equalityCoercion) {
             if (expression.operator !== "==" && expression.operator !== "!=")
                 throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "equality conversion requires an equality operator");
@@ -1477,7 +1483,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
+    const names = ["as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals", "as3Relation"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
