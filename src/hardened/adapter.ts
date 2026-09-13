@@ -66,6 +66,7 @@ interface AccessorPair {
 }
 
 interface LocalHeader {
+    enumerationBinding?: true;
     node: TreeNode;
     name: string;
     readonly: boolean;
@@ -4504,13 +4505,15 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             const bindingReference = context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType) || dynamicIterable)
                 ? referenceCoercionForType(header.type,context) : null;
             if (context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType) || dynamicIterable)) {
-                if (!bindingReference && !["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(header.type.sourceName)
-                    || declaresBinding && header.type.sourceName !== "*")
-                    fail("HARDENED_FOREACH_ARRAY_BINDING", "Array/Dictionary enumeration requires a retained slot type and existing typed binding", declaration);
+                if (!bindingReference && !["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(header.type.sourceName))
+                    fail("HARDENED_FOREACH_ARRAY_BINDING", "Array/Dictionary enumeration requires a retained slot type and authenticated binding", declaration);
             } else {
                 if (elementType === null) fail("HARDENED_FOREACH_ITERABLE", "for each requires an authenticated Array, Dictionary or typed Vector", node.children[1]!);
                 assertAssignmentCompatible(header.type, elementType, declaration);
             }
+            if (declaresBinding && context.sourceMemberAuthority !== null
+                && (isArrayType(iterableType,context) || isDictionaryType(iterableType) || dynamicIterable))
+                header.enumerationBinding = true;
             const body = node.children[2]!;
             context.loopDepth += 1;
             context.breakableDepth += 1;
@@ -4677,16 +4680,34 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
 
 function initializeNumberLocals(body: SemanticStatement[], context: AdapterContext,
     outer: { [name: string]: LocalHeader } = {}): SemanticStatement[] {
+    // Native ASC leaves declared enumeration registers undefined until their
+    // first assignment. Creating a nested function instead gives this owning
+    // function an activation object whose typed slots have native defaults.
+    // Stop at each lambda: its body gets its own initialization pass.
+    const createsFunction = (value: unknown): boolean => {
+        if (value === null || typeof value !== "object") return false;
+        if ((value as {kind?: string}).kind === "lambda") return true;
+        return Object.values(value).some(createsFunction);
+    };
+    const activation = createsFunction(body);
     const declarations: SemanticLocal[] = Object.values(context.locals)
-        .filter(local => local !== outer[local.name] && local.type.sourceName === "Number"
-            && !local.readonly && one(local.node, "INIT", true) === null)
-        .map(local => Object.assign(identity(local.node), {
-            name: local.name, readonly: false, type: local.type,
-            initializer: Object.assign(identity(local.node), {kind: "binary" as const, operator: "/" as const,
-                left: Object.assign(identity(local.node), {kind: "literal" as const, value: 0}),
-                right: Object.assign(identity(local.node), {kind: "literal" as const, value: 0}),
-                resultType: local.type}),
-        }));
+        .filter(local => local !== outer[local.name] && !local.readonly
+            && one(local.node, "INIT", true) === null
+            && (local.enumerationBinding ? activation && local.type.sourceName !== "*"
+                : local.type.sourceName === "Number"))
+        .map(local => {
+            const initializer: SemanticExpression = local.type.sourceName === "Number"
+                ? Object.assign(identity(local.node), {kind: "binary" as const, operator: "/" as const,
+                    left: Object.assign(identity(local.node), {kind: "literal" as const, value: 0}),
+                    right: Object.assign(identity(local.node), {kind: "literal" as const, value: 0}),
+                    resultType: local.type})
+                : Object.assign(identity(local.node), {kind: "literal" as const,
+                    value: ["int","uint"].includes(local.type.sourceName) ? 0
+                        : local.type.sourceName === "Boolean" ? false : null});
+            return Object.assign(identity(local.node), {
+                name: local.name, readonly: false, type: local.type, initializer,
+            });
+        });
     if (!declarations.length) return body;
     const initial: SemanticStatement = Object.assign(identity(context.locals[declarations[0]!.name]!.node),
         {kind: "local" as const, declarations});

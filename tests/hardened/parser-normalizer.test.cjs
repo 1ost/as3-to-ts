@@ -1022,6 +1022,37 @@ try {
             error=>error.code==='HARDENED_UPDATE_NUMBER');
     }
     {
+        const adaptEnumeration = (body, authenticated = true) => {
+            const source=`package p { public class DeclaredEnumeration { ${body} } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("DeclaredEnumeration.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,
+                authenticated ? sourceMemberAuthority : undefined);
+        };
+        for(const type of ['Object','String','int','uint','Number','Boolean','Array','Function']) {
+            const semantic=adaptEnumeration(`public function run(values:Array):void {for each(var item:${type} in values){}}`);
+            const body=semantic.declaration.members.find(m=>m.name==='run').body;
+            assert.equal(body[0].kind,'forEach',`${type} register must remain uninitialized before iteration`);
+            assert.equal(body[0].declaresBinding,true);
+            assert.equal(body[0].binding.type.sourceName,type);
+            const activated=adaptEnumeration(`public function run(values:Array):void {var fn:Function=function():void{};for each(var item:${type} in values){}}`);
+            const initial=activated.declaration.members.find(m=>m.name==='run').body[0];
+            assert.equal(initial.kind,'local');assert.equal(initial.declarations[0].name,'item');
+            const value=initial.declarations[0].initializer;
+            if(type==='Number') {assert.equal(value.kind,'binary');assert.equal(value.operator,'/');}
+            else {assert.equal(value.kind,'literal');assert.equal(value.value,['int','uint'].includes(type)?0:type==='Boolean'?false:null);}
+        }
+        // Vector admission predates this patch; preserve its existing Number prelude.
+        const vector=adaptEnumeration('public function run(values:Vector.<Number>):void {for each(var item:Number in values){}}');
+        const vectorInitial=vector.declaration.members.find(m=>m.name==='run').body[0];
+        assert.equal(vectorInitial.kind,'local');
+        assert.equal(vectorInitial.declarations[0].initializer.kind,'binary');
+        assert.throws(()=>adaptEnumeration('public function run(values:Number):void {for each(var item:Object in values){}}'),
+            error=>error.code==='HARDENED_FOREACH_ITERABLE');
+        assert.throws(()=>adaptEnumeration('public function run(values:Array):void {for each(var item:Object in values){}}',false),
+            error=>!!error.code);
+    }
+    {
         const adaptImmediate = expression => {
             const source=`package p { public class Immediate { public function run():Number {return ${expression};} } }`;
             return built.adapter.adaptNormalizedParserAst(

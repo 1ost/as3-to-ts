@@ -8,7 +8,7 @@ test("Reference enumeration requires authenticated reference slots and supported
  const cases={
   Good:'public function run(values:Array):int {var value:Value=null;var sum:int=0;for each(value in values){if(value)sum+=value.id;}return sum;}',
   DictionaryGood:'public function run(values:Dictionary):int {var value:Value=null;var sum:int=0;for each(value in values){if(value)sum+=value.id;}return sum;}',
-  BadDeclared:'public function run(values:Array):void {for each(var value:Value in values){}}',
+  DeclaredGood:'public function run(values:Array):void {for each(var value:Value in values){}}',
   BadIterable:'public function run(values:Number):void {var value:Value=null;for each(value in values){}}',
   Value:'public var id:int=7;'
  };
@@ -19,6 +19,6 @@ test("Reference enumeration requires authenticated reference slots and supported
   const result=spawnSync(process.execPath,[path.join(ROOT,'bin/as3-frontend'),'qualify',source,out,'--source-census',path.join(profile,'census.json'),'--target-capabilities',path.join(laya,'docTool/architecture/authored-content-capabilities.json'),'--profile-lock',path.join(profile,'profile-lock.json')],{encoding:'utf8',timeout:60000});assert.equal(result.status,0,result.stdout+result.stderr);
   const rows=JSON.parse(fs.readFileSync(path.join(out,'manifest.json'),'utf8')).files;
   assert.equal(rows.length,Object.keys(cases).length);
-  for(const row of rows)assert.equal(row.status,['Good','DictionaryGood','Value'].includes(path.basename(row.sourcePath,'.as'))?'admitted':'held',JSON.stringify(row));
+  for(const row of rows)assert.equal(row.status,['Good','DictionaryGood','DeclaredGood','Value'].includes(path.basename(row.sourcePath,'.as'))?'admitted':'held',JSON.stringify(row));
  }
 });
