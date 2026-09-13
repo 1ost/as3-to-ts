@@ -2956,16 +2956,20 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 || type.runtimeName !== null && !["Boolean", "Number", "int", "uint", "void"].includes(type.sourceName)));
         const trueNull = trueType.sourceName === "null" && admitsNull(falseType);
         const falseNull = falseType.sourceName === "null" && admitsNull(trueType);
+        const dynamicBranch = context.sourceMemberAuthority !== null
+            && [trueType,falseType].some(type=>type.sourceName === "*")
+            && [trueType,falseType].every(type=>!["void","XML","XMLList","Namespace","QName"].includes(type.sourceName));
         const numericBranches = [trueType, falseType].every(type => ["Number", "int", "uint"].includes(type.sourceName));
         const referenceBranch = context.sourceMemberAuthority !== null && !numericBranches && !trueNull && !falseNull
             && !sameUnderlyingType(trueType,falseType)
             ? provenReferenceSubtype(trueType,falseType,context) ? falseType
                 : provenReferenceSubtype(falseType,trueType,context) ? trueType : null
             : null;
-        if (!sameUnderlyingType(trueType, falseType) && !numericBranches && !trueNull && !falseNull && referenceBranch === null) {
+        if (!sameUnderlyingType(trueType, falseType) && !numericBranches && !trueNull && !falseNull && referenceBranch === null && !dynamicBranch) {
             fail("HARDENED_CONDITIONAL_TYPE", "conditional branches require the exact same proven source type", node);
         }
-        const resultType = numericBranches ? semanticType(node, "Number", "number")
+        const resultType = dynamicBranch ? semanticType(node,"*","unknown")
+            : numericBranches ? semanticType(node, "Number", "number")
             : referenceBranch ? withNullability(referenceBranch,trueType.nullable || falseType.nullable)
             : trueNull ? falseType : withNullability(trueType, trueType.nullable || falseType.nullable);
         return Object.assign(identity(node), {

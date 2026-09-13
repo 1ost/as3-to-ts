@@ -1037,6 +1037,19 @@ try {
             assert.throws(()=>adaptImmediate(expression),error=>error.code==='HARDENED_LAMBDA_CALL_ARITY');
     }
     {
+        const adaptConditional = expression => {
+            const source=`package p { public class Conditional { public function run(flag:Boolean,value:*):* {return ${expression};} } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("Conditional.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+        };
+        for(const expression of ['flag ? value : [1]','flag ? [1] : value']) {
+            const result=adaptConditional(expression).declaration.members.find(m=>m.name==='run').body[0].expression;
+            assert.equal(result.kind,'conditional');assert.equal(result.resultType.sourceName,'*');
+        }
+        assert.throws(()=>adaptConditional('flag ? 1 : [1]'),error=>error.code==='HARDENED_CONDITIONAL_TYPE');
+    }
+    {
         const adaptObject = body => {
             const source = `package p { public class ObjectConversion { ${body} } }`;
             return built.adapter.adaptNormalizedParserAst(
