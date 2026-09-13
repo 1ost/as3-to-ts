@@ -233,6 +233,7 @@ function canonicalizeExtract(entry, extract) {
             interfaceQNames: interfaceNames,
             members,
             packageInitializer,
+            ...(extract.fileLocalClasses ? {fileLocalClasses:extract.fileLocalClasses} : {}),
         },
     };
 }

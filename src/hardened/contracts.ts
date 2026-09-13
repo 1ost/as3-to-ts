@@ -368,6 +368,20 @@ export interface LocalDeclarationMember {
     readonly: boolean;
 }
 
+/** A declaration owned by one source file, never a globally importable type. */
+export interface FileLocalClassDeclaration {
+    schema: "as3-file-local-class-declaration@1";
+    ownerQualifiedName: string;
+    namespaceUri: string;
+    name: string;
+    sourceNodeId: string;
+    modifiers: string[];
+    imports: string[];
+    extendsNames: string[];
+    implementsNames: string[];
+    members: LocalDeclarationMember[];
+}
+
 export interface LocalDeclarationExtract {
     schema: "as3-local-declaration-extract@1";
     sourceSha256: string;
@@ -379,6 +393,7 @@ export interface LocalDeclarationExtract {
     implementsNames: string[];
     members: LocalDeclarationMember[];
     packageInitializer: { kind: "new"; typeName: string; argumentCount: 0 } | null;
+    fileLocalClasses?: FileLocalClassDeclaration[];
 }
 
 export interface LocalMemberDeclaration {
@@ -386,6 +401,7 @@ export interface LocalMemberDeclaration {
     interfaceQNames: string[];
     members: LocalDeclarationMember[];
     packageInitializer: { kind: "new"; targetQName: string; argumentCount: 0 } | null;
+    fileLocalClasses?: FileLocalClassDeclaration[];
 }
 
 export interface LocalMemberAuthorityEntry {

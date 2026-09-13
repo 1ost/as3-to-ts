@@ -1,5 +1,6 @@
 import {
     HardenedSemanticError,
+    FileLocalClassDeclaration,
     LoadedLocalMemberAuthority,
     LoadedLocalTypeAuthority,
     LocalDeclarationMember,
@@ -129,8 +130,54 @@ function member(raw: unknown): LocalDeclarationMember {
     };
 }
 
-function declaration(raw: unknown): LocalMemberDeclaration {
-    if (!object(raw) || !exactKeys(raw, ["baseQNames", "interfaceQNames", "members", "packageInitializer"])
+function fileLocalDeclarations(raw: unknown, ownerQualifiedName: string, sourcePath: string): FileLocalClassDeclaration[] {
+    const basename = sourcePath.split(/[\\/]/).pop();
+    if (!basename || !/^[A-Za-z_$][A-Za-z0-9_$]*\.as$/.test(basename)
+        || !Array.isArray(raw) || raw.length === 0) {
+        fail("HARDENED_LOCAL_FILE_DECLARATION", "file-local authority requires declarations and an authenticated filename");
+    }
+    const names = new Set<string>();
+    const nodes = new Set<string>();
+    const qualifiedNames = (value: unknown): value is string[] => Array.isArray(value)
+        && value.every(item => typeof item === "string" && QNAME.test(item))
+        && new Set(value).size === value.length;
+    return raw.map(item => {
+        if (!object(item) || !exactKeys(item, ["schema", "ownerQualifiedName", "namespaceUri", "name",
+            "sourceNodeId", "modifiers", "imports", "extendsNames", "implementsNames", "members"])
+            || item.schema !== "as3-file-local-class-declaration@1"
+            || item.ownerQualifiedName !== ownerQualifiedName
+            || item.namespaceUri !== `FilePrivateNS:${basename.slice(0, -3)}`
+            || typeof item.name !== "string" || !IDENTIFIER.test(item.name) || names.has(item.name)
+            || typeof item.sourceNodeId !== "string" || !/^n[0-9]+$/.test(item.sourceNodeId) || nodes.has(item.sourceNodeId)
+            || !Array.isArray(item.modifiers) || item.modifiers.some(value => value !== "final" && value !== "dynamic")
+            || new Set(item.modifiers).size !== item.modifiers.length
+            || !Array.isArray(item.imports) || item.imports.some(value => typeof value !== "string"
+                || !QNAME.test(value.endsWith(".*") ? value.slice(0, -2) : value))
+            || new Set(item.imports).size !== item.imports.length
+            || !qualifiedNames(item.extendsNames) || item.extendsNames.length > 1
+            || !qualifiedNames(item.implementsNames) || !Array.isArray(item.members)) {
+            fail("HARDENED_LOCAL_FILE_DECLARATION", "file-local declaration does not match its source scope");
+        }
+        const members = item.members.map(member);
+        if (members.some(value => value.kind === "namespace"
+            || (value.kind === "constructor" && value.name !== item.name))
+            || members.filter(value => value.kind === "constructor").length > 1) {
+            fail("HARDENED_LOCAL_FILE_DECLARATION", "file-local class member ownership is invalid");
+        }
+        names.add(item.name);
+        nodes.add(item.sourceNodeId);
+        return {
+            schema: "as3-file-local-class-declaration@1", ownerQualifiedName,
+            namespaceUri: item.namespaceUri, name: item.name, sourceNodeId: item.sourceNodeId,
+            modifiers: item.modifiers.slice() as string[], imports: item.imports.slice() as string[],
+            extendsNames: item.extendsNames.slice(), implementsNames: item.implementsNames.slice(), members,
+        };
+    });
+}
+
+function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: string): LocalMemberDeclaration {
+    if (!object(raw) || !exactKeys(raw, ["baseQNames", "interfaceQNames", "members", "packageInitializer"]
+        .concat(Object.prototype.hasOwnProperty.call(raw, "fileLocalClasses") ? ["fileLocalClasses"] : []))
         || !Array.isArray(raw.baseQNames) || !Array.isArray(raw.interfaceQNames) || !Array.isArray(raw.members)
         || raw.baseQNames.some(item => typeof item !== "string" || !QNAME.test(item))
         || raw.interfaceQNames.some(item => typeof item !== "string" || !QNAME.test(item))
@@ -152,6 +199,8 @@ function declaration(raw: unknown): LocalMemberDeclaration {
         interfaceQNames: raw.interfaceQNames.slice() as string[],
         members: raw.members.map(member),
         packageInitializer,
+        ...(Object.prototype.hasOwnProperty.call(raw, "fileLocalClasses")
+            ? { fileLocalClasses: fileLocalDeclarations(raw.fileLocalClasses, ownerQualifiedName, sourcePath) } : {}),
     };
 }
 
@@ -217,7 +266,7 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
             if (raw.holdCode !== null || raw.holdSha256 !== null || raw.declaration === null) {
                 fail("HARDENED_LOCAL_MEMBER_ENTRY", "complete local member entry has held state");
             }
-            parsedDeclaration = declaration(raw.declaration);
+            parsedDeclaration = declaration(raw.declaration, raw.qname, localType.sourcePath);
             if (raw.typeKind === "package") {
                 const localName = raw.qname.slice(raw.qname.lastIndexOf(".") + 1);
                 if (parsedDeclaration.baseQNames.length !== 0 || parsedDeclaration.interfaceQNames.length !== 0

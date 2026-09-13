@@ -160,3 +160,30 @@ expression result. Its receiver is checked after RHS evaluation but before numer
 storage conversion. Native sparse growth, truncation, wrapping and null order are
 retained. Compound length writes and length updates remain held. The original
 DataLoader's length-zero cleanup needs no source rewrite.
+
+### File-local class declaration groundwork
+
+The declaration worker retains classes outside the package as optional nested
+`fileLocalClasses` headers. Each header preserves its original name, members,
+file-scope imports and parser node ID, with the containing source owner and a
+`FilePrivateNS:<source basename>` reflection namespace. These declarations do
+not enter the global local-type map. Package imports are not copied into their
+file scope. The member-map loader validates and freezes the nested headers
+against the containing type's authenticated source path and owner.
+
+This is declaration support only. Semantic adaptation and emission still reject
+nonempty file scope with `HARDENED_OUTSIDE_PACKAGE`; scoped references, runtime
+class identity, constructors and reflection must be implemented and compared
+with native AIR before this hold can be removed. A reflection namespace string
+alone must not become a global class identity or ApplicationDomain definition.
+
+Validation: `npm run build`, then `TMPDIR=/private/tmp node --test
+tests/hardened-cli/declaration-worker.test.cjs
+tests/hardened-cli/local-member-map.test.cjs
+tests/hardened-cli/file-local-authority.test.cjs`. The tests retain same-spelled
+private helpers under different owners, separate imports, deterministic generated
+authority, source hashes, and rejection of altered owner/namespace/member data.
+The original 4,114-byte `FrameCenterAdv.as` (SHA-256
+`d3f33664f123af9b32bf141c0ba521fafb068943911ae4e2f3a8b6a86c6781a2`)
+also extracts its unchanged private `Item` and its four fields. This does not yet
+qualify the scheduler for Laya or advance AP's pinned toolchain.

@@ -95,7 +95,7 @@ test("declaration worker authenticates package constants and namespaces", async 
 });
 
 test("declaration worker fails closed on unsupported package declarations and output caps", async () => {
-    const unsupported = await run(request("package p { public function helper():void {} }"));
+    const unsupported = await run(request("package p { public function helper():void {} public class Worker {} }"));
     assert.equal(unsupported.ok, false);
     assert.match(unsupported.error, /HARDENED_LOCAL_DECLARATION_CONTENT/);
     const capped = await run(request("package p { public class Worker {} }", 1));
@@ -104,4 +104,59 @@ test("declaration worker fails closed on unsupported package declarations and ou
     const malformed = await run({ bad: true });
     assert.equal(malformed.ok, false);
     assert.equal(malformed.error, "invalid declaration request");
+});
+
+test("file-local classes retain original signatures, source ownership and separate import scope", async () => {
+    for (const [owner, sourcePath] of [["First", "fixtures/First.as"], ["Second", "C:\\fixtures\\Second.as"]]) {
+        const content = `package p { import packageScope.Visible; public class ${owner} {} }
+import fileScope.Base;
+import fileScope.*;
+final class Item extends Base implements IReady {
+    public var delayfrm:int;
+    public var fn:Function;
+    public var params:Array;
+    public var isRepeat:Boolean;
+    public function Item() { super(); }
+}`;
+        const response = await run({ ...request(content), sourcePath });
+        assert.equal(response.ok, true, response.error);
+        const value = JSON.parse(response.json);
+        assert.equal(value.sourceSha256, sha256(content));
+        assert.deepEqual(value.imports, ["packageScope.Visible"]);
+        assert.equal(value.fileLocalClasses.length, 1);
+        const helper = value.fileLocalClasses[0];
+        assert.equal(helper.schema, "as3-file-local-class-declaration@1");
+        assert.equal(helper.ownerQualifiedName, `p.${owner}`);
+        assert.equal(helper.namespaceUri, `FilePrivateNS:${owner}`);
+        assert.equal(helper.name, "Item");
+        assert.match(helper.sourceNodeId, /^n[0-9]+$/);
+        assert.deepEqual(helper.modifiers, ["final"]);
+        assert.deepEqual(helper.imports, ["fileScope.Base", "fileScope.*"]);
+        assert.deepEqual(helper.extendsNames, ["Base"]);
+        assert.deepEqual(helper.implementsNames, ["IReady"]);
+        assert.deepEqual(helper.members.map(member => [member.kind, member.name, member.fieldType]), [
+            ["field", "delayfrm", "int"], ["field", "fn", "Function"],
+            ["field", "params", "Array"], ["field", "isRepeat", "Boolean"],
+            ["constructor", "Item", null],
+        ]);
+    }
+});
+
+test("file-local declaration extraction rejects malformed or unsupported file scope", async () => {
+    for (const [suffix, code] of [
+        ["class Item {} class Item {}", "HARDENED_LOCAL_FILE_CLASS"],
+        ["public class Item {}", "HARDENED_LOCAL_FILE_CLASS"],
+        ["import q.Base; import q.Base; class Item {}", "HARDENED_LOCAL_DECLARATION_IMPORT"],
+        ["function helper():void {}", "HARDENED_LOCAL_FILE_CONTENT"],
+    ]) {
+        const response = await run(request(`package p { public class Worker {} } ${suffix}`));
+        assert.equal(response.ok, false, suffix);
+        assert.match(response.error, new RegExp(code));
+    }
+    const invalidPath = await run({ ...request("package p { public class Worker {} } class Item {}"), sourcePath: "invalid-name.as" });
+    assert.equal(invalidPath.ok, false);
+    assert.match(invalidPath.error, /HARDENED_LOCAL_FILE_SOURCE/);
+    const ordinary = await run(request("package p { public class Worker {} }"));
+    assert.equal(ordinary.ok, true);
+    assert.equal(Object.hasOwn(JSON.parse(ordinary.json), "fileLocalClasses"), false);
 });

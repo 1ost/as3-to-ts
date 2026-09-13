@@ -71,7 +71,7 @@ process.once("message", (message: unknown) => {
     try {
         const parsed = parse(message.sourcePath, message.content);
         const normalized = normalizeParserAst(parsed, message.content, sha256);
-        const result = extractLocalDeclaration(normalized, message.content, sha256);
+        const result = extractLocalDeclaration(normalized, message.content, sha256, message.sourcePath);
         const json = `${JSON.stringify(result)}\n`;
         const byteLength = Buffer.byteLength(json, "utf8");
         if (byteLength > message.maxResultBytes) {

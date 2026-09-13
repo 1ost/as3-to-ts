@@ -1,6 +1,7 @@
 import {
     HardenedSemanticError,
     LocalDeclarationExtract,
+    FileLocalClassDeclaration,
     LocalDeclarationMember,
     LocalDeclarationParameter,
     NormalizedParserAst,
@@ -138,8 +139,54 @@ function fields(node: TreeNode): LocalDeclarationMember[] {
     }));
 }
 
+function fileLocalClasses(root: TreeNode, packageNode: TreeNode, ownerQualifiedName: string,
+    sourcePath: string | undefined): FileLocalClassDeclaration[] {
+    const nodes: TreeNode[] = [];
+    for (const child of root.children) {
+        if (child === packageNode) continue;
+        if (child.kind !== "CONTENT") fail("HARDENED_LOCAL_FILE_CONTENT", "file scope requires parser CONTENT nodes", child);
+        nodes.push(...child.children);
+    }
+    if (nodes.length === 0) return [];
+    if (nodes.some(node => node.kind !== "IMPORT" && node.kind !== "CLASS"))
+        fail("HARDENED_LOCAL_FILE_CONTENT", "file scope currently requires imports and class declarations", root);
+    const basename = sourcePath?.split(/[\\/]/).pop();
+    if (!basename || !/^[A-Za-z_$][A-Za-z0-9_$]*\.as$/.test(basename))
+        fail("HARDENED_LOCAL_FILE_SOURCE", "file-private declarations require the authenticated source filename", root);
+    const namespaceUri = "FilePrivateNS:" + basename.slice(0, -3);
+    const imports = nodes.filter(node => node.kind === "IMPORT").map(node => requiredText(node, "file import"));
+    if (new Set(imports).size !== imports.length)
+        fail("HARDENED_LOCAL_DECLARATION_IMPORT", "file import is duplicated", root);
+    const seen = new Set<string>();
+    return nodes.filter(node => node.kind === "CLASS").map(node => {
+        if (node.children.some(child => !["NAME", "MOD_LIST", "EXTENDS", "IMPLEMENTS_LIST", "CONTENT"].includes(child.kind)))
+            fail("HARDENED_LOCAL_FILE_CLASS", "file-local class contains an unsupported declaration child", node);
+        const name = identifier(one(node, "NAME")!, "file-local class name");
+        if (seen.has(name)) fail("HARDENED_LOCAL_FILE_CLASS", "file-local class name is duplicated", node);
+        seen.add(name);
+        const modList = one(node, "MOD_LIST", true);
+        const values = modList?.children.map(child => {
+            if (child.kind !== "MODIFIER") fail("HARDENED_LOCAL_FILE_CLASS", "file-local class modifier is malformed", child);
+            return requiredText(child, "class modifier");
+        }) || [];
+        if (new Set(values).size !== values.length || values.some(value => !["final", "dynamic"].includes(value)))
+            fail("HARDENED_LOCAL_FILE_CLASS", "file-local classes cannot declare package visibility", node);
+        const members: LocalDeclarationMember[] = [];
+        for (const child of one(node, "CONTENT")!.children) {
+            if (["FUNCTION", "GET", "SET"].includes(child.kind)) members.push(callable(child, name));
+            else if (["VAR_LIST", "CONST_LIST"].includes(child.kind)) members.push(...fields(child));
+            else fail("HARDENED_LOCAL_DECLARATION_MEMBER", "file-local member kind is not structurally admitted", child);
+        }
+        return { schema: "as3-file-local-class-declaration@1", ownerQualifiedName, namespaceUri, name,
+            sourceNodeId: node.id, modifiers: values, imports: imports.slice(),
+            extendsNames: node.children.filter(child => child.kind === "EXTENDS").map(child => requiredText(child, "file-local base")),
+            implementsNames: node.children.filter(child => child.kind === "IMPLEMENTS_LIST")
+                .flatMap(list => list.children.map(child => requiredText(child, "file-local interface"))), members };
+    });
+}
+
 export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: string,
-    sha256: Sha256Function): LocalDeclarationExtract {
+    sha256: Sha256Function, sourcePath?: string): LocalDeclarationExtract {
     const root = buildTree(ast, sourceText, sha256);
     if (root.kind !== "COMPILATION_UNIT") fail("HARDENED_LOCAL_DECLARATION_ROOT", "root must be a compilation unit", root);
     const packageNode = one(root, "PACKAGE")!;
@@ -229,5 +276,7 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
         members,
         packageInitializer,
     };
+    const locals = fileLocalClasses(root, packageNode, qualifiedName, sourcePath);
+    if (locals.length > 0) result.fileLocalClasses = locals;
     return result;
 }
