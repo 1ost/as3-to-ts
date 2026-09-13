@@ -18,6 +18,11 @@ export function as3Number(value?: unknown): number {
     return arguments.length === 0 ? 0 : as3NativeNumber(value);
 }
 
+/** Global isNaN coerces through the native Number protocol exactly once. */
+export function as3IsNaN(value:unknown=NaN):boolean {
+    return Number.isNaN(as3NativeNumber(value));
+}
+
 export function as3Boolean(value: unknown = false): boolean {
     return Boolean(value);
 }

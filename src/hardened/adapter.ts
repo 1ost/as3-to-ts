@@ -1887,6 +1887,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         if (mapping !== null) return mappedMemberType(mapping, "read", context, node);
     }
     if (expression.kind === "undefined") return semanticType(node, "*", "unknown");
+    if (expression.kind === "numericPredicate") return semanticType(node,"Boolean","boolean",[],false);
     if (expression.kind === "math" || expression.kind === "parseInteger") return semanticType(node, "Number", "number", [], false, "Number");
     if (expression.kind === "globalCall") return semanticType(node, "void", "void", [], false);
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
@@ -2339,6 +2340,20 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         for (const suffix of suffixes)
             indexed = {...suffix, kind:"ARRAY_ACCESSOR", children:[indexed, suffix.children[0]!]};
         return parseExpression(indexed, context, valuePosition, allowSuperCall, allowMethodClosure, allowAssignment);
+    }
+    if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length === 2
+        && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "IDENTIFIER"
+        && node.children[0]!.text === "isNaN" && context.className !== "isNaN"
+        && !context.locals.isNaN && !context.parameters.isNaN && !context.fields.isNaN
+        && !context.methods.isNaN && !context.accessors.isNaN && !context.importsByLocal.isNaN
+        && !context.resolveImportedType("isNaN", null, node)) {
+        assertNoInheritedNativeFunctionShadow(context,"isNaN",node);
+        const argumentNodes=node.children[1]!.children;
+        if (argumentNodes.length > 1) fail("HARDENED_NUMERIC_PREDICATE_ARITY", "isNaN accepts zero or one argument",node);
+        const args=argumentNodes.map(child=>parseExpression(child,context,true));
+        args.forEach((argument,index)=>adaptAssignmentValue(authoritySemanticType("Number",context,argumentNodes[index]!),
+            argument,context,argumentNodes[index]!));
+        return Object.assign(identity(node),{kind:"numericPredicate" as const,name:"isNaN" as const,arguments:args});
     }
     if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length === 2
         && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "IDENTIFIER"

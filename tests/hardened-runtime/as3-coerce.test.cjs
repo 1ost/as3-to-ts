@@ -27,6 +27,22 @@ require(path.join(OUTPUT,"hardened-runtime/internal/AS3TypeRegistry.js")).instal
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
 
+test("global isNaN retains native Number conversion and missing-argument behavior", () => {
+    const {as3IsNaN}=require(path.join(OUTPUT,"hardened-runtime/AS3Coerce.js"));
+    assert.equal(as3IsNaN(),true);
+    for(const value of [undefined,NaN,"NaN","1x",[1,2],{}]) assert.equal(as3IsNaN(value),true);
+    for(const value of [null,true,false,Infinity,-Infinity,""," ","12","0x10",[],[1]])
+        assert.equal(as3IsNaN(value),false);
+    const calls=[];
+    assert.equal(as3IsNaN({valueOf(){calls.push("number");return NaN;}}),true);
+    assert.deepEqual(calls,["number"]);
+    calls.length=0;
+    assert.equal(as3IsNaN({valueOf(){calls.push("number");return {};},toString(){calls.push("text");return "7";}}),false);
+    assert.deepEqual(calls,["number","text"]);
+    const failure=new Error("conversion");
+    assert.throws(()=>as3IsNaN({valueOf(){throw failure;}}),error=>error===failure);
+});
+
 test("String split retains Flash empty and nullish argument behavior", () => {
     const {as3StringSplit}=require(path.join(OUTPUT,"hardened-runtime/AS3Coerce.js"));
     assert.deepEqual(as3StringSplit("",[""]),[""]);

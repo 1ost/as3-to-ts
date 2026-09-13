@@ -166,6 +166,8 @@ function initializeClassNode(value: any, self: boolean, ts: TypeScriptCompilerAp
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
     if (expression.kind === "undefined") return ts.factory.createVoidExpression(ts.factory.createNumericLiteral(0));
+    if (expression.kind === "numericPredicate") return ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3IsNaN"),undefined,expression.arguments.map(argument=>expressionNode(argument,ts)));
     if (expression.kind === "parseInteger") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3ParseInt"), undefined,
         expression.arguments.map(argument => expressionNode(argument, ts)));
@@ -767,7 +769,7 @@ function boundMethodNames(program: SemanticProgram): string[] {
             if (!expression.staticTarget) names[expression.methodName] = true;
         } else if (expression.kind === "member") {
             inspectExpression(expression.target);
-        } else if (expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger") {
+        } else if (expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger" || expression.kind === "numericPredicate") {
             expression.arguments?.forEach(inspectExpression);
         } else if (expression.kind === "call") {
             inspectExpression(expression.callee);
@@ -1290,7 +1292,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
         if (expression.kind === "member") return visitExpression(expression.target);
-        if (expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger") return expression.arguments?.some(visitExpression) || false;
+        if (expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger" || expression.kind === "numericPredicate") return expression.arguments?.some(visitExpression) || false;
         if (expression.kind === "call") return visitExpression(expression.callee) || expression.arguments.some(visitExpression);
         if (expression.kind === "assignment") return visitExpression(expression.target) || visitExpression(expression.value);
         if (expression.kind === "binary") return visitExpression(expression.left) || visitExpression(expression.right);
@@ -1475,7 +1477,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
+    const names = ["as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1640,7 +1642,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.kind === "call" && value.capabilitySource === "String" && ["toLowerCase","charAt","split"].includes(value.capabilityMember)
         || Object.values(value).some(primitiveMember));
     if (programHasKind(program, "coercion") || programHasKind(program, "assignmentStorageCoercion")
-        || programHasKind(program, "parseInteger") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
+        || programHasKind(program, "parseInteger") || programHasKind(program,"numericPredicate") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
     const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "functionApply" || value.kind === "globalFunction"
         || value.kind === "lambda"
