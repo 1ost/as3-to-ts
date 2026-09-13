@@ -306,6 +306,7 @@ function expectNormalizationCode(action, code) {
 
 const built = compileFocusedSources();
 try {
+
     {
         for (const literal of ["/[，、]/g", "/x/gim", "/x/", String.raw`/a\/b/gi`]) {
             const source=`package p { public class RegexSpan { public var a:RegExp=${literal}; public var b:RegExp=${literal}; } }`;
@@ -850,6 +851,26 @@ try {
     const sourceMemberJson=JSON.stringify(sourceMemberDocument);
     const sourceMemberAuthority=built.sourceMembers.loadSourceMemberAuthority(
         sourceMemberJson,sha256(sourceMemberJson),sha256);
+    {
+        const adapt = body => {
+            const source = `package { public class NumericIndex { public function run(flag:Boolean):* {${body}} } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("NumericIndex.as", source), source, sha256),
+                authority(built.ledger), source, sha256, undefined, undefined, undefined, referenceAuthority, sourceMemberAuthority);
+        };
+        const numeric = adapt('var cursor:*=0; var values:Array=[4]; return values[cursor];');
+        assert.equal(numeric.declaration.members.find(m=>m.name==='run').body.find(s=>s.kind==='local').declarations[0].type.sourceName,'*');
+        for (const body of [
+            'var cursor:*=0; var values:Array=[4]; cursor="0"; return values[cursor];',
+            'var values:Array=[4]; var prior:*=values[cursor]; var cursor:*=0; return values[cursor];',
+            'var values:Array=[4]; if(flag) {var cursor:*=0;} return values[cursor];',
+            'var cursor:*=0; var values:Array=[4]; cursor=flag; return values[cursor];',
+            'var cursor:*=0; var values:Array=[4]; cursor+=1; return values[cursor];',
+            'var cursor:*=0; var values:Array=[4]; var callback:Function=function():void {cursor=1;}; return values[cursor];',
+            'var cursor:*=0; var values:Array=[4]; try {cursor=1;} catch(cursor:Error) {} return values[cursor];',
+        ]) assert.throws(()=>adapt(body), error=>error.code==='HARDENED_ARRAY_INDEX_TYPE');
+    }
+
     {
         for (const expression of ['flag ? null : "never"','flag ? "never" : null']) {
             const source=`package p { public class NullableText {public function select(flag:Boolean):String {return ${expression};}} }`;

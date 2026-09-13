@@ -66,6 +66,7 @@ interface AccessorPair {
 }
 
 interface LocalHeader {
+    numericIndexProvenance?: true;
     enumerationBinding?: true;
     node: TreeNode;
     name: string;
@@ -3403,7 +3404,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (dictionary && indexType.sourceName === "void") {
             fail("HARDENED_DICTIONARY_KEY", "Dictionary key must be a proven value", node.children[1]!);
         }
-        if (array && !["Number", "int", "uint"].includes(indexType.sourceName)) {
+        const provenWildcardIndex = index.kind === "identifier" && indexType.sourceName === "*"
+            && context.locals[index.name]?.numericIndexProvenance === true;
+        if (array && provenWildcardIndex) {
+            // The local declaration stays wildcard; this proven numeric use gets
+            // the existing scalar boundary required by the typed Array helper.
+            index = adaptAssignmentValue(semanticType(node, "Number", "number"), index, context, node.children[1]!);
+        }
+        if (array && !["Number", "int", "uint"].includes(indexType.sourceName) && !provenWildcardIndex) {
             fail("HARDENED_ARRAY_INDEX_TYPE",
                 "Array index requires a proven numeric source value", node.children[1]!);
         }
@@ -4722,6 +4730,53 @@ function initializeNumberLocals(body: SemanticStatement[], context: AdapterConte
     return body.length && superCall(body[0]!) ? [body[0]!, initial, ...body.slice(1)] : [initial, ...body];
 }
 
+/** Prove only numeric Array-key uses; never change the local's declared wildcard type. */
+function markNumericIndexLocals(block: TreeNode, context: AdapterContext): void {
+    const nodes: TreeNode[] = [];
+    const collect = (node: TreeNode): void => { nodes.push(node); node.children.forEach(collect); };
+    collect(block);
+    // Closures can retain bindings and catch/iteration bindings can shadow or assign
+    // without an ordinary ASSIGN node. Keep that scope/control flow outside this proof.
+    if (nodes.some(node => ["LAMBDA", "FUNCTION", "TRY", "CATCH", "FINALLY", "FORIN", "FOREACH", "WITH", "LABEL"].includes(node.kind))) return;
+    const numericValue = (node: TreeNode): boolean => {
+        if (node.kind === "LITERAL") {
+            try {
+                const literal = parseLiteral(node);
+                return literal.kind === "literal" && typeof literal.value === "number";
+            } catch { return false; }
+        }
+        if (node.kind === "ENCAPSULATED" && node.children.length === 1) return numericValue(node.children[0]!);
+        if (node.kind !== "CALL" || node.children.length !== 2 || node.children[0]!.kind !== "IDENTIFIER"
+            || node.children[1]!.kind !== "ARGUMENTS" || node.children[1]!.children.length !== 1) return false;
+        const name = node.children[0]!.text!;
+        if (!["Number", "int", "uint"].includes(name) || context.className === name
+            || context.locals[name] || context.parameters[name] || context.fields[name]
+            || context.methods[name] || context.accessors[name] || context.importsByLocal[name]
+            || context.resolveImportedType(name, null, node)) return false;
+        try { assertNoInheritedNativeFunctionShadow(context, name, node); } catch { return false; }
+        return true;
+    };
+    for (const statement of block.children) {
+        if (statement.kind !== "VAR_LIST") continue;
+        for (const declaration of statement.children) {
+            const name = declaration.children.find(child => child.kind === "NAME")?.text;
+            const local = name ? context.locals[name] : undefined;
+            const init = declaration.children.find(child => child.kind === "INIT");
+            if (!local || !declaration.span || local.node !== declaration || local.type.sourceName !== "*" || !init
+                || init.children.length !== 1 || init.children[0]!.kind !== "LITERAL" || !numericValue(init.children[0]!)) continue;
+            let valid = true;
+            for (const node of nodes) {
+                if (node.kind === "IDENTIFIER" && node.text === name && (!node.span || node.span.start < declaration.span.end)) valid = false;
+                if (node.kind === "ASSIGN" && node.children[0]?.kind === "IDENTIFIER" && node.children[0]!.text === name
+                    && (node.children.length !== 3 || node.children[1]!.text !== "=" || !numericValue(node.children[2]!))) valid = false;
+                if (node.kind === "DELETE" && node.children.some(child => child.kind === "IDENTIFIER" && child.text === name)) valid = false;
+            }
+            if (valid) local.numericIndexProvenance = true;
+        }
+    }
+}
+
+
 function predeclareLocals(block: TreeNode, context: AdapterContext): void {
     const visit = (node: TreeNode): void => {
         if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST") {
@@ -4814,6 +4869,7 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
         }
     };
     visit(block);
+    markNumericIndexLocals(block, context);
 }
 
 function parseBlock(block: TreeNode, context: AdapterContext, constructor: boolean,
