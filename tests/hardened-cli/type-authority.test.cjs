@@ -127,14 +127,23 @@ test("central authority emission is deterministic, closed, ordered, hash-pinned,
         fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/internal/AS3TypeRegistry.ts"),path.join(output,"internal/AS3TypeRegistry.ts"));
         fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3Type.ts"),path.join(output,"AS3Type.ts"));
         fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3MethodClosure.ts"),path.join(output,"AS3MethodClosure.ts"));
+        fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3ClassInitialization.ts"),path.join(output,"AS3ClassInitialization.ts"));
         fs.writeFileSync(path.join(output,"AS3Authority.generated.ts"),first.code,"utf8");
         fs.writeFileSync(path.join(output,"Base.ts"),"const b=new WeakSet<object>(); export class Base{readonly _b=b.add(this)} export const isAS3ClassInstance=(v:unknown):v is Base=>b.has(v as object); export const as3ConstructionTarget=(_v:unknown):typeof Base|null=>null; export const isAS3ConstructionProof=(_v:unknown):boolean=>false;\n","utf8");
         fs.writeFileSync(path.join(output,"Child.ts"),"import {Base} from './Base'; const b=new WeakSet<object>(); export class Child extends Base{readonly _c=b.add(this)} export const isAS3ClassInstance=(v:unknown):v is Child=>b.has(v as object); export const as3ConstructionTarget=(_v:unknown):typeof Child|null=>null; export const isAS3ConstructionProof=(_v:unknown):boolean=>false;\n","utf8");
         const config=path.join(output,"tsconfig.json");
         fs.writeFileSync(config,JSON.stringify({compilerOptions:{target:"ES2022",module:"CommonJS",moduleResolution:"Node",strict:true,skipLibCheck:true,outDir:"./js"},include:["./*.ts","./internal/*.ts"]}),"utf8");
         childProcess.execFileSync(process.execPath,[path.join(ROOT,"node_modules/typescript-4-9/bin/tsc"),"-p",config],{cwd:output,stdio:"inherit"});
-        require(path.join(output,"js/AS3Authority.generated.js"));
+        const authority=require(path.join(output,"js/AS3Authority.generated.js"));
         const api=require(path.join(output,"js/AS3Type.js")); const {Base}=require(path.join(output,"js/Base.js")); const {Child}=require(path.join(output,"js/Child.js"));
+        assert.equal(Object.isFrozen(authority.AS3_CLASS_DEFINITIONS),true);
+        assert.deepEqual(authority.AS3_CLASS_DEFINITIONS.map(row=>row.name),["game.Base","game.Child"]);
+        assert.deepEqual(authority.AS3_CLASS_DEFINITIONS.map(row=>row.definition),[Base,Child]);
+        for(const row of authority.AS3_CLASS_DEFINITIONS) {
+            assert.equal(Object.isFrozen(row),true);
+            assert.equal(typeof row.initialize,"function");
+            row.initialize();
+        }
         assert.equal(api.as3Is(new Child(),api.as3ClassType("game.Base",Base)),true);
         assert.equal(api.as3Is(new Child(),api.as3InterfaceType("game.IRun")),true);
         assert.equal(api.as3Is(new Base(),api.as3ClassType("game.Child",Child)),false);

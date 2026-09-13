@@ -65,6 +65,16 @@ package exports. Substituting raw runtime TypeScript aliases can load a second,
 unsealed authority instance. Parsing or successful TypeScript emission alone is
 not native parity evidence.
 
+The authority module also exports immutable `AS3_CLASS_DEFINITIONS` bindings
+for its authenticated classes: `{name, definition, initialize}`. Creating or
+reading that list does not run AS3 static initializers. A host may explicitly
+publish the bindings into a native definition domain before running application
+code. The initializer delegates to the existing idempotent/retryable AS3 class
+initialization runtime. This optional interface does not register definitions
+in Laya automatically or add a Laya dependency to the compiler. Interface and
+package-function publication, incremental authority installation and unloadable
+module closures remain separate work.
+
 LayaAir's `tests/nativeFlashOracle/README.md` documents the paired AIR/browser
 suite, authored SWF conversion, exact pixels and retained qualification holds.
 Language fixes belong here; Flash display and authored-content fixes belong in

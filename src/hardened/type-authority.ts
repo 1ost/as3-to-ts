@@ -750,6 +750,7 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
     const code = [
         "// Generated from authenticated local declarations and mapped Laya capabilities. Do not edit.",
         "import { installAS3TypeAuthority } from \"./internal/AS3TypeRegistry\";",
+        "import { as3InitializeClass as __as3InitializePublishedClass } from \"./AS3ClassInitialization\";",
         ...imports,
         "",
         `export const AS3_TYPE_AUTHORITY_SHA256 = ${quote(digest)};`,
@@ -759,6 +760,13 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
         "] as const;",
         "installAS3TypeAuthority({ schema: \"as3-runtime-type-authority@1\", sha256: AS3_TYPE_AUTHORITY_SHA256,",
         "    qnames: AS3_TYPE_AUTHORITY_QNAMES, entries });",
+        "// Optional host publication; obtaining these bindings does not execute class initializers.",
+        "export const AS3_CLASS_DEFINITIONS = Object.freeze([",
+        ...classes.map(source => {
+            const index = importIndex.get(source)!;
+            return `    Object.freeze({ name: ${quote(source.qname)}, definition: __as3Class${index}, initialize: () => { __as3InitializePublishedClass(__as3Class${index}); } }),`;
+        }),
+        "] as const);",
         "",
     ].join("\n");
     return Object.freeze({ schema: "as3-runtime-type-authority-source@1", sha256: digest,
