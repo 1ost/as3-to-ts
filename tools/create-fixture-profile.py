@@ -241,7 +241,7 @@ def main():
         'layaRevision': subprocess.check_output(['git', '-C', str(laya), 'rev-parse', 'HEAD'], text=True).strip(),
         'predicateAuthorityCanonicalLfSha256': sha(files['runtimeTypePredicates']),
         'predicateAuthorityEntryCount': len(selected), 'predicateAuthorityQNames': sorted(selected)})
-    files['sourceMemberAuthority'], member_count, native_classes = source_members(sdk, out, {q for q in selected if by_qname[q].get("kind") != "interface"})
+    files['sourceMemberAuthority'], member_count, native_classes = source_members(sdk, out, {q for q in selected if by_qname[q].get("kind") != "interface"} | set(args.intrinsic_type))
     apis, mappings, member_uses = [], [], []
     for q in sorted(set(imports)):
         name = q.rsplit('.', 1)[1]

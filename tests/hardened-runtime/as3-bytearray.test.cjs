@@ -167,3 +167,13 @@ test("ByteArray rejects hostile allocation ranges before allocating or mutating 
     assert.throws(() => { bytes[256 * 1024 * 1024] = 1; }, /resource limit/);
     assert.equal(Object.prototype.hasOwnProperty.call(bytes, String(256 * 1024 * 1024)), false);
 });
+
+test("ByteArray nominal identity accepts allocations without consulting forged prototypes or proxy hooks",()=>{
+    const {isAS3ByteArray}=require(path.join(OUTPUT,"hardened-runtime/AS3ByteArray.js"));
+    const value=new AS3ByteArray();let hooks=0;
+    const hostile=new Proxy({}, {get(){hooks++;throw new Error('unexpected read');},getPrototypeOf(){hooks++;throw new Error('unexpected prototype');}});
+    assert.equal(isAS3ByteArray(value),true);
+    for(const fake of [null,undefined,7,'bytes',{},Object.create(AS3ByteArray.prototype),new Proxy(value,{}),hostile])
+        assert.equal(isAS3ByteArray(fake),false);
+    assert.equal(hooks,0);
+});

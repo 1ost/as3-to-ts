@@ -386,7 +386,8 @@ function flashBaseMemberMapping(context: AdapterContext, access: string, name: s
     while (qname !== null) {
         if (seen.has(qname) || seen.size >= 1024) fail("HARDENED_LOCAL_MEMBER_CYCLE", "base member lineage is cyclic", node);
         seen.add(qname);
-        if (context.mappingsBySource[qname]) return memberMapping(context, qname, access, name, node);
+        if (context.mappingsBySource[qname] || qname === "Array" && nativeArrayBase(context))
+            return memberMapping(context, qname, access, name, node);
         const moduleName = context.resolveCurrentLocal?.().entry.module;
         const local = moduleName ? context.localMemberAuthority?.entriesByIdentity[`${moduleName}\u0000${qname}`] : undefined;
         if (!local || local.status !== "complete" || !local.declaration)
@@ -2222,6 +2223,9 @@ function referenceCoercionForType(type: SemanticType, context: AdapterContext): 
     if (type.sourceName === context.className)
         return {targetKind:"class", runtimeName:context.classQualifiedName};
     const imported = context.importsByLocal[type.sourceName];
+    if (imported?.authorityKind === "intrinsic" && imported.sourceQualifiedName === "flash.utils.ByteArray"
+        && context.sourceMemberAuthority?.entriesByQName[imported.sourceQualifiedName]?.baseQName === "Object")
+        return {targetKind:"class",runtimeName:imported.sourceQualifiedName};
     if (imported?.authorityKind !== "local" && (imported?.authorityKind !== "flash"
         || !context.runtimeReferenceParentsByQName.has(imported.sourceQualifiedName))) return null;
     if (imported?.localValueType === null && (imported.runtimeInterface || imported.runtimeConstructible))
@@ -2592,6 +2596,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else {
             fail("HARDENED_RUNTIME_TYPE_TARGET", "runtime type target must be a named class, primitive, or Vector", rawTarget);
         }
+        const runtimeImport = context.importsByLocal[targetType.sourceName];
+        if (runtimeImport?.authorityKind === "intrinsic" && runtimeImport.sourceQualifiedName === "flash.utils.ByteArray"
+            && !referenceCoercionForType(targetType,context))
+            fail("HARDENED_BYTEARRAY_TYPE_AUTHORITY", "ByteArray runtime type queries require native SDK authority", rawTarget);
         const runtimePrimitives = new Set(["int", "uint", "Number", "Boolean", "String", "Object", "Array", "Class", "Function"]);
         let targetKind: "primitive" | "class" | "interface" | "vector";
         let runtimeName = targetType.sourceName;

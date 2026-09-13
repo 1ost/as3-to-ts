@@ -9,6 +9,12 @@ export class AS3Endian {
     }
 }
 
+const byteArrayInstances = new WeakSet<object>();
+/** Module-owned allocation identity; prototype lookalikes and proxy wrappers do not qualify. */
+export function isAS3ByteArray(value: unknown): value is AS3ByteArray {
+    return (typeof value === "object" && value !== null) && byteArrayInstances.has(value);
+}
+
 const MAX_BYTEARRAY_LENGTH = 256 * 1024 * 1024;
 const ARRAY_INDEX = /^(?:0|[1-9][0-9]*)$/;
 const UTF8_ENCODER = new TextEncoder();
@@ -98,6 +104,7 @@ export class AS3ByteArray {
                 return index === null ? Reflect.has(target, property) : index < target._length;
             },
         });
+        byteArrayInstances.add(proxy);
         return proxy;
     }
 

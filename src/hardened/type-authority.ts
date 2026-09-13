@@ -338,6 +338,19 @@ export function localRuntimeEmbeddedAuthoritySources(program: SemanticProgram, m
         });
 }
 
+/** Register the existing compiler ByteArray only for an authenticated intrinsic import. */
+export function byteArrayRuntimeTypeAuthoritySource(source: LoadedSourceMemberAuthority, runtimeSha256:string): RuntimeAuthorityClassSource {
+    assertLoadedSourceMemberAuthority(source);
+    const entry=source.entriesByQName["flash.utils.ByteArray"];
+    if (!entry || entry.baseQName !== "Object" || !entry.ownInstanceMemberNames.includes("length")
+        || !entry.ownInstanceMemberNames.includes("clear") || !/^[a-f0-9]{64}$/.test(runtimeSha256))
+        throw new HardenedSemanticError("HARDENED_BYTEARRAY_TYPE_AUTHORITY","ByteArray lacks native SDK and runtime authority");
+    return authenticatedSource({kind:"class",qname:"flash.utils.ByteArray",base:null,interfaces:[],sourceSha256:runtimeSha256,
+        definitionSafe:true,module:"./AS3ByteArray",constructorExport:"AS3ByteArray",predicateExport:"isAS3ByteArray",
+        constructionTargetExport:null,constructionProofExport:null,fields:[],evaluationOrder:null,
+        nativeObjectTraits:{dynamic:false,names:[...entry.ownInstanceMemberNames],sourceArtifactSha256:source.sourceArtifactSha256}});
+}
+
 /** The builtin Array base is backed by the retained SDK census and hashed runtime. */
 export function arrayRuntimeTypeAuthoritySource(source: LoadedSourceMemberAuthority, runtimeSha256:string): RuntimeAuthorityClassSource {
     assertLoadedSourceMemberAuthority(source);

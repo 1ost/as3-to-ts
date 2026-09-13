@@ -11,7 +11,7 @@ import { loadTranspileAuthority } from "./authority";
 import { adaptNormalizedParserAst } from "../hardened/adapter";
 import { HardenedSemanticError, type NormalizedParserAst, type SemanticProgram } from "../hardened/contracts";
 import { emitSemanticProgram } from "../hardened/emitter";
-import { arrayRuntimeTypeAuthoritySource, assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeEmbeddedAuthoritySources, localRuntimeInterfaceAuthoritySource,
+import { byteArrayRuntimeTypeAuthoritySource, arrayRuntimeTypeAuthoritySource, assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeEmbeddedAuthoritySources, localRuntimeInterfaceAuthoritySource,
     localRuntimeTypeAuthoritySource, type EmittedRuntimeApplicationEntry,
     type EmittedRuntimeAuthority, type RuntimeAuthoritySource } from "../hardened/type-authority";
 import {
@@ -68,7 +68,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "internal/AS3ArraySort.ts": "2b869fcd6e6de7cbe7a39e27c24a12fba561f728edbf0e0749aaba9054c00f82",
     "AS3Array.ts": "a07eb30f897234679a5423c20cec2f2222895cd2b4f6c3ce2f48891a2a902530",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
-    "AS3ByteArray.ts": "f6e206784fcab50b8af57d0fb5acdf50696aeef8527ff2e58709c0f06f15bc30",
+    "AS3ByteArray.ts": "d42f79a903e9c34b98ab1dd247e20c216d230ff811869709794a3a6977e10d7e",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
     "AS3ClassInitialization.ts": "5b446cdfe43be974455866ca93648b5625edb777938093979e0437aaa8dd501f",
     "AS3Coerce.ts": "00279f0c43929aab328c8011bdcdf27ba65cad000b49ece779fddd833c50da15",
@@ -496,6 +496,11 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 && program.declaration.extendsType?.runtimeName === "Array")) {
                 if (!transpileAuthority!.sourceMembers) throw new CliError("Array base lacks native source authority",4);
                 runtimeAuthoritySources.push(arrayRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers,RUNTIME_SOURCE_SHA256["AS3Array.ts"]!));
+            }
+            if (transpileAuthority!.sourceMembers?.entriesByQName["flash.utils.ByteArray"]
+                && localRuntimePrograms.some(program=>program.imports.some(item=>item.authorityKind === "intrinsic"
+                    && item.sourceQualifiedName === "flash.utils.ByteArray"))) {
+                runtimeAuthoritySources.push(byteArrayRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers,RUNTIME_SOURCE_SHA256["AS3ByteArray.ts"]!));
             }
             runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value));
             const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
