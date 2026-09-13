@@ -975,6 +975,8 @@ function callbackSignature(expression: SemanticExpression, context: AdapterConte
         return { parameters: expression.parameters, returnType: expression.returnType };
     }
     if (expression.kind === "methodClosure") {
+        if (expression.staticTarget && (expression.staticTarget.kind !== "identifier"
+            || expression.staticTarget.bindingKind !== "current-class")) return null;
         const method = context.methods[expression.methodName];
         return method === undefined || method.returnType === null
             ? null : { parameters: method.parameters, returnType: method.returnType };
@@ -1825,6 +1827,12 @@ function currentClassMember(node: TreeNode, context: AdapterContext, name: strin
         kind: "member" as "member", target: currentClassIdentifier(node, context),
         targetNullable: false, name, capabilitySource: context.classQualifiedName,
     });
+}
+
+function staticMethodValue(node:TreeNode, context:AdapterContext, target:SemanticExpression, name:string):SemanticExpression {
+    if (context.sourceMemberAuthority === null)
+        fail("HARDENED_LOCAL_STATIC_METHOD_CLOSURE", "static method values require authenticated source member authority", node);
+    return Object.assign(identity(node), {kind:"methodClosure" as const, staticTarget:target, methodName:name});
 }
 
 function inheritedMethodValue(node:TreeNode, context:AdapterContext, name:string,
@@ -3035,10 +3043,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (context.methods[name]) {
             const method = context.methods[name]!;
             if (method.modifiers.indexOf("static") >= 0) {
-                if (valuePosition) {
-                    fail("HARDENED_LOCAL_STATIC_METHOD_CLOSURE",
-                        "current-class static method closure identity remains held", node);
-                }
+                if (valuePosition) return staticMethodValue(node, context, currentClassIdentifier(node, context), name);
                 return currentClassMember(node, context, name);
             }
             if (context.lambdaDepth > 0) {
@@ -3453,10 +3458,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     fail("HARDENED_LOCAL_STATIC_MEMBER",
                         "local static member identity is absent or ambiguous", node);
                 }
-                if (valuePosition && methods.length > 0) {
-                    fail("HARDENED_LOCAL_STATIC_METHOD_CLOSURE",
-                        "local static method closure identity remains held", node);
-                }
+                if (valuePosition && methods.length > 0)
+                    return staticMethodValue(node, context, target, name);
                 capabilitySource = imported.sourceQualifiedName;
             } else if (imported.authorityKind === "intrinsic") {
                 const member = intrinsicMember(context, imported.sourceQualifiedName, "read", name);
@@ -3483,10 +3486,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_CURRENT_STATIC_MEMBER",
                     "current-class member lacks an exact static declaration", node);
             }
-            if (valuePosition && method) {
-                fail("HARDENED_LOCAL_STATIC_METHOD_CLOSURE",
-                    "current-class static method closure identity remains held", node);
-            }
+            if (valuePosition && method) return staticMethodValue(node, context, target, name);
             capabilitySource = context.classQualifiedName;
         } else {
             const targetType = assignmentType(target, context, node.children[0]!);

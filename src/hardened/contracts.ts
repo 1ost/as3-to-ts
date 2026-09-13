@@ -214,6 +214,7 @@ export interface MemberExpression extends SemanticIdentity {
 
 export interface MethodClosureExpression extends SemanticIdentity {
     kind: "methodClosure";
+    staticTarget?: SemanticExpression;
     inherited?: true;
     methodName: string;
 }

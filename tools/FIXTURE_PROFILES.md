@@ -481,3 +481,19 @@ index writes cache the key, read through the original receiver, evaluate RHS,
 and reevaluate the receiver for the store. The native array-index-write probe
 retains this order. Null compound reads, logical indexed assignments and other
 compound operators require their own evidence before extending admission.
+
+
+## Authenticated static method values
+
+Original local static methods may be read as stable callable values from their
+own class, another admitted class or a package function. The semantic closure
+retains its authenticated class receiver; the runtime evaluates that receiver
+once, initializes it using the existing class protocol, and caches the bound
+method without installing an instance member. Public/internal visibility checks
+remain at the original member lookup boundary. Flash native static methods still
+require separate callable-value authority.
+
+Static method calls retain required/maximum arity, native class labels ending in
+`$`, and the distinction between omitted and explicitly undefined optional slots.
+The ten-checkpoint Laya `static-method-closure` fixture retains native AIR evidence.
+Inherited static lookup and callable-length reflection are not qualified here.

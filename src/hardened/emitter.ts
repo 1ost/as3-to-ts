@@ -221,6 +221,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "methodClosure") {
+        if (expression.staticTarget) return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindStaticMethod"),
+            undefined, [expressionNode(expression.staticTarget,ts),ts.factory.createStringLiteral(expression.methodName)]);
         const method = ts.factory.createPropertyAccessExpression(ts.factory.createThis(), expression.methodName);
         // A base constructor can call a virtual method before the derived
         // constructor's binding prologue. The shared cache also covers that read.
@@ -753,7 +755,7 @@ function boundMethodNames(program: SemanticProgram): string[] {
         if (expression.kind === "functionApply") {
             inspectExpression(expression.target); inspectExpression(expression.receiver); inspectExpression(expression.argumentsArray);
         } else if (expression.kind === "methodClosure") {
-            names[expression.methodName] = true;
+            if (!expression.staticTarget) names[expression.methodName] = true;
         } else if (expression.kind === "member") {
             inspectExpression(expression.target);
         } else if (expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger") {
@@ -928,21 +930,21 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQNam
     if (member.kind === "constructor") throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR",
         "constructor emission requires its authenticated class context", member.sourceNodeId);
     if (member.kind === "method") {
-        const minimum=member.modifiers.includes("static") ? 0 : member.parameters.filter(p=>!p.rest && p.defaultValue === null).length;
+        const minimum=member.parameters.filter(p=>!p.rest && p.defaultValue === null).length;
         const arity:any[]=member.modifiers.includes("static") ? [ts.factory.createExpressionStatement(
             initializeClassNode(ts.factory.createIdentifier(classQName.split(".").pop()!), true, ts))] : [];
-        if (!member.modifiers.includes("static")) {
+        {
             if (member.parameters.some(p=>p.name === "arguments") || constructorStatementsBindArguments(member.body))
                 throw new HardenedSemanticError("HARDENED_EMIT_METHOD_ARITY", "method binding shadows the runtime arguments object", member.sourceNodeId);
             arity.push(ts.factory.createExpressionStatement(ts.factory.createCallExpression(
-                ts.factory.createIdentifier("__as3CheckMethodArity"),undefined,[ts.factory.createStringLiteral(classQName),
+                ts.factory.createIdentifier("__as3CheckMethodArity"),undefined,[ts.factory.createStringLiteral(classQName+(member.modifiers.includes("static") ? "$" : "")),
                     ts.factory.createStringLiteral(member.name),ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length"),
                     ts.factory.createNumericLiteral(minimum),member.parameters.some(p=>p.rest) ? ts.factory.createNull() : ts.factory.createNumericLiteral(member.parameters.length)])));
         }
         return ts.factory.createMethodDeclaration(
             modifierTokens(member.modifiers, ts), undefined, member.name, undefined, undefined,
             member.parameters.map((parameter) => parameterNode(parameter, ts)), typeNode(member.returnType, ts),
-            ts.factory.createBlock(arity.concat(parameterSlotStatements(member.parameters,ts,!member.modifiers.includes("static")),member.body.map((statement) => statementNode(statement, ts))), true),
+            ts.factory.createBlock(arity.concat(parameterSlotStatements(member.parameters,ts,true),member.body.map((statement) => statementNode(statement, ts))), true),
         );
     }
     if (member.kind === "getter") {
@@ -1456,6 +1458,8 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3BindMethod"),
                 ts.factory.createIdentifier("__as3BindMethod")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3BindStaticMethod"),
+                ts.factory.createIdentifier("__as3BindStaticMethod")),
         ])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3MethodClosure"), undefined);
 }
@@ -1624,8 +1628,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
             && value.targetType.sourceName !== "Dictionary"
         || value.kind === "constructor" && value.parameters.some(nativeParameterSlot)
-        || value.kind === "method" && (value.parameters.some(nativeParameterSlot)
-            || !value.modifiers.includes("static"))
+        || value.kind === "method"
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
@@ -1655,6 +1658,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (programUsesBigTurnTableInner(program)) {
         imports.push(bigTurnTableInnerRuntimeImport(ts));
     }
+    if (programHasKind(program,"methodClosure")) imports.push(methodClosureRuntimeImport(ts));
     if (program.declaration.declarationKind === "packageField" || program.declaration.declarationKind === "packageFunction") {
         const declaration = program.declaration.declarationKind === "packageFunction" ? packageFunctionNode(program,ts) : ts.factory.createVariableStatement(
             [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
@@ -1675,7 +1679,6 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             code, typeScriptVersion: ts.version };
     }
     const boundMethods = boundMethodNames(program);
-    if (boundMethods.length > 0) imports.push(methodClosureRuntimeImport(ts));
     const classModifiers = program.declaration.modifiers.indexOf("public") >= 0
         ? [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)] : [];
     const heritage: any[] = [];

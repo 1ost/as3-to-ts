@@ -29,3 +29,9 @@ export function as3BindMethod<TArguments extends unknown[], TResult>(receiver: o
     closures.set(closure, closure);
     return closure;
 }
+
+/** Static reads evaluate their authenticated class receiver once before caching the bound method. */
+export function as3BindStaticMethod(receiver:Function, name:string):Function {
+    if (typeof receiver !== "function") throw new TypeError("Static method closure requires its class receiver");
+    return as3BindMethod(receiver, Reflect.get(receiver,name));
+}
