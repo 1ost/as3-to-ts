@@ -3482,7 +3482,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const arrayLength = isArrayType(targetType) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
                         && !valuePosition && ["push","pop","shift","unshift","concat","join","sortOn"].includes(name);
-                    const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase"].includes(name);
+                    const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase", "charAt"].includes(name);
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
@@ -3680,6 +3680,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (callee.name === "toLowerCase") {
                 if (args.length !== 0) fail("HARDENED_STRING_ARITY", "String.toLowerCase requires its native zero-argument call", node);
                 capabilitySource="String"; capabilityMember="toLowerCase";
+            } else if (callee.name === "charAt") {
+                if (args.length > 1) fail("HARDENED_STRING_ARITY", "String.charAt requires zero or one index argument", node);
+                capabilitySource="String"; capabilityMember="charAt";
             } else if (!["indexOf", "substr"].includes(callee.name) || args.length < 1 || args.length > 2)
                 fail("HARDENED_STRING_ARITY", "String method requires its native one or two arguments", node);
             args.forEach((argument, index) => {

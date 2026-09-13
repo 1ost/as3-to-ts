@@ -103,6 +103,14 @@ export function as3StringToLowerCase(value:unknown):string {
     return result.join("");
 }
 
+/** Native charAt indexes UTF-16 units without wrapping large indices to int32. */
+export function as3StringCharAt(value:unknown, index:number=0):string {
+    primitiveReceiver(value);
+    if (typeof value !== "string" || typeof index !== "number")
+        throw new AS3ObjectDispatchUnavailable("String.charAt requires an original String and numeric index");
+    return value.charAt(index);
+}
+
 /** Native Number method: evaluate arguments first, then convert precision to int. */
 export function as3NumberToFixed(value:unknown, precision:unknown=0):string {
     primitiveReceiver(value);
