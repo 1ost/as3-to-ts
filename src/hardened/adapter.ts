@@ -2374,6 +2374,16 @@ function builtinMathMember(node: TreeNode, context: AdapterContext): string | nu
 function parseExpression(node: TreeNode, context: AdapterContext, valuePosition: boolean,
     allowSuperCall: boolean = false, allowMethodClosure: boolean = true,
     allowAssignment: boolean = false): SemanticExpression {
+    if (context.sourceMemberAuthority !== null && node.kind === "ARRAY_ACCESSOR" && node.children.length > 2) {
+        // The original parser stores a[b][c] as [a,b,c]. Each suffix consumes
+        // the previous access, including its read/error, before evaluating the next key.
+        if (node.children.length > 65)
+            fail("HARDENED_INDEX_SHAPE", "indexed access exceeds the bounded suffix count", node);
+        let indexed = node.children[0]!;
+        for (const key of node.children.slice(1))
+            indexed = {...node, children:[indexed,key]};
+        return parseExpression(indexed, context, valuePosition, allowSuperCall, allowMethodClosure, allowAssignment);
+    }
     if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length > 2
         && node.children[1]!.kind === "ARGUMENTS") {
         const suffixes = node.children.slice(2);
@@ -3268,11 +3278,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 && target.target.bindingKind === "current-class"
                 && target.target.bindingSourceQualifiedName === context.classQualifiedName
                 && context.fields[target.name]?.modifiers.includes("static");
-            if (target.kind === "index" && (target.accessKind !== "array" || context.sourceMemberAuthority === null) || (target.kind === "member" && target.target.kind !== "this" && !ownStaticField
+            if (target.kind === "index" && (!["array","object"].includes(target.accessKind) || context.sourceMemberAuthority === null) || (target.kind === "member" && target.target.kind !== "this" && !ownStaticField
                 && context.sourceMemberAuthority === null)) {
                 fail("HARDENED_COMPOUND_TARGET", "compound assignment requires a once-evaluated local, parameter, or direct this field", node.children[0]!);
             }
-            if (target.kind === "index" && target.accessKind === "array"
+            if (target.kind === "index" && ["array","object"].includes(target.accessKind)
                 || target.kind === "member" && target.target.kind !== "this" && !ownStaticField) deferCompoundStore = true;
             const numeric = (type: SemanticType): boolean => ["Number", "int", "uint"].includes(type.sourceName)
                 && type.emittedName === "number";

@@ -987,6 +987,21 @@ try {
         assert.deepEqual(literal.properties.map(property => property.name), ["__proto__", "constructor", "stage", "stage"]);
     }
     {
+        const adapt = (suffix, authenticated=true) => {
+            const source=`package p { public class NestedIndex { public function run(value:*):* { return value${suffix}; } } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("NestedIndex.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,
+                referenceAuthority,authenticated ? sourceMemberAuthority : undefined);
+        };
+        const expression=adapt('[0][1][2]').declaration.members.find(m=>m.name==='run').body[0].expression;
+        assert.equal(expression.kind,'index');
+        assert.equal(expression.target.kind,'index');
+        assert.equal(expression.target.target.kind,'index');
+        assert.throws(()=>adapt('[0][1]',false),error=>error.code==='HARDENED_TYPE_UNMAPPED');
+        assert.throws(()=>adapt('[0]'.repeat(65)),error=>error.code==='HARDENED_INDEX_SHAPE');
+    }
+    {
         const adaptObject = body => {
             const source = `package p { public class ObjectConversion { ${body} } }`;
             return built.adapter.adaptNormalizedParserAst(

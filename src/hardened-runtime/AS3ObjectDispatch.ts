@@ -1,6 +1,6 @@
 import { AS3ArgumentError } from "./AS3Error";
 import { as3StringSplit } from "./AS3Coerce";
-import { as3ArrayCall, as3ArrayDelete } from "./AS3Array";
+import { as3ArrayCall, as3ArrayDelete, as3ArrayRead, as3ArrayWrite, as3ArrayLengthWrite } from "./AS3Array";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
 import { lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod, isAS3MethodClosure } from "./AS3MethodClosure";
@@ -120,8 +120,15 @@ BUILTINS.set("isPrototypeOf",labelFunction(function(this:unknown,other:unknown):
 },"function Function() {}"));
 
 export function as3ObjectRead(value:unknown, key:unknown, caller:string | null = null):unknown {
-    const target = receiver(value), name = keyName(key), info = describe(target);
+    const target = receiver(value), name = keyName(key);
     if (caller !== null) lookupObjectCaller(caller);
+    if (Array.isArray(target)) {
+        if (name === "length") return target.length;
+        const index=Number(name);
+        if (as3NativeString(index) === name) return as3ArrayRead(target,index);
+        return unavailable("Dynamic Array named reads require native member evidence");
+    }
+    const info = describe(target);
     if (info) {
         const members = findTrait(info,name,caller,false);
         const readable = members.find(member => member.kind !== "setter");
@@ -158,8 +165,15 @@ function slotValue(type:string,value:unknown):unknown {
     return unavailable(`Native slot coercion for ${type} requires further support`);
 }
 export function as3ObjectWrite(value:unknown,key:unknown,next:unknown,caller:string | null = null):unknown {
-    const target = receiver(value), name = keyName(key), info = describe(target);
+    const target = receiver(value), name = keyName(key);
     if (caller !== null) lookupObjectCaller(caller);
+    if (Array.isArray(target)) {
+        if (name === "length") return as3ArrayLengthWrite(target,next);
+        const index=Number(name);
+        if (as3NativeString(index) === name) return as3ArrayWrite(target,index,next);
+        return unavailable("Dynamic Array named writes require native member evidence");
+    }
+    const info = describe(target);
     if (info) {
         const members = findTrait(info,name,caller,false);
         const writable = members.find(member => member.kind === "field" || member.kind === "setter");
