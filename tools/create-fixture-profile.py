@@ -25,6 +25,39 @@ def write(path, value):
     return path
 
 
+def resolve_fixture_target(qname, target_doc, predicates, laya, proof_inputs):
+    name = qname.rsplit('.', 1)[-1]
+    authority = predicates.get(qname)
+    namespace = 'src/layaAir/' + qname.rsplit('.', 1)[0].replace('.', '/') + '/'
+    owned = [(c['id'], o) for c in target_doc['capabilities']
+             if c.get('status') == 'typescript-obligation' for o in c.get('obligations', [])]
+    candidates = [(cap, row) for cap, row in owned if row.get('export') == name
+                  and (row.get('module') == authority['targetModule'] if authority
+                       else row.get('module', '').startswith(namespace))]
+    if len(candidates) == 1:
+        return candidates[0]
+    if candidates or authority is None:
+        raise ValueError('No unique Laya capability for ' + qname)
+    # Predicate facades can re-export a constructor owned by another module.
+    # Keep the runtime predicate on its authenticated facade, and map members
+    # only after TypeScript proves the exact constructor/interface identity.
+    kind = 'interface' if authority.get('kind') == 'interface' else 'class'
+    candidates = [(cap, row) for cap, row in owned if cap == authority['targetCapabilityId']
+                  and row.get('kind') == kind and row.get('module', '').startswith(namespace)]
+    resolver = ROOT / 'tools/resolve-laya-export.cjs'
+    request = {'root': str(laya), 'facade': {'module': authority['targetModule'],
+               'export': authority['interfaceExport' if kind == 'interface' else 'constructorExport'],
+               'sha256': authority['moduleSha256']}, 'candidates': [row for _, row in candidates]}
+    result = subprocess.run(['node', str(resolver)], input=json.dumps(request),
+                            capture_output=True, text=True, timeout=90)
+    if result.returncode:
+        raise ValueError('Cannot resolve authenticated facade for ' + qname + ': ' + result.stderr)
+    proof = json.loads(result.stdout)
+    proof_inputs.update(proof['inputs'])
+    proof_inputs[str(resolver)] = sha(resolver)
+    return candidates[proof['index']]
+
+
 def source_members(sdk, output, qnames):
     artifact = sdk / "frameworks/libs/air/airglobal.swc"
     with zipfile.ZipFile(artifact) as archive:
@@ -185,15 +218,9 @@ def main():
     predicate_input = target.parent / 'flash-runtime-type-predicates.json'
     original = json.loads(predicate_input.read_text())
     by_qname = {r['sourceQName']: r for r in original['types']}
+    facade_inputs = {}
     def target_for(q):
-        name = q.rsplit('.', 1)[-1]
-        module = by_qname[q]['targetModule'] if q in by_qname else None
-        namespace = 'src/layaAir/' + q.rsplit('.', 1)[0].replace('.', '/') + '/'
-        candidates = [(c['id'], o) for c in target_doc['capabilities'] if c.get('status') == 'typescript-obligation'
-                      for o in c.get('obligations', []) if o.get('export') == name
-                      and (o.get('module') == module if module else o.get('module', '').startswith(namespace))]
-        if len(candidates) != 1: raise ValueError('No unique Laya capability for ' + q)
-        return candidates[0]
+        return resolve_fixture_target(q, target_doc, by_qname, laya, facade_inputs)
     native_api, native_signatures = None, None
     own_names = set(re.findall(r'\b(?:function\s+(?:(?:get|set)\s+)?|var\s+|const\s+)([A-Za-z_$][\w$]*)', text))
     member_text = re.sub(r'\bthis\s*\.\s*([A-Za-z_$][\w$]*)',
@@ -299,9 +326,9 @@ def main():
         'counts': {'localTypes': len(declarations), 'localMembersComplete': members['completeCount'], 'localMembersHeld': members['heldCount'],
                    'mappedTypes': sum(m['sourceMember'] is None for m in mappings), 'mappedMembers': sum(m['sourceMember'] is not None for m in mappings), 'sourceMemberTypes': member_count},
         'files': {k: {'path': v.name, 'sha256': sha(v)} for k, v in files.items()}})
-    write(out / 'generator-inputs.json', {str(v): sha(v) for v in [Path(__file__).resolve(), *sources, ROOT / "tools/inspect-source-declarations.cjs", target, predicate_input,
+    write(out / 'generator-inputs.json', {**facade_inputs, **{str(v): sha(v) for v in [Path(__file__).resolve(), *sources, ROOT / "tools/inspect-source-declarations.cjs", target, predicate_input,
         sdk / 'frameworks/libs/air/airglobal.swc', sdk / 'lib/swfdump-cli.jar', ROOT / 'lib/declaration-worker.js',
-        *([args.ffdec_jar.resolve(), ROOT / 'tools/native-api-profile.py', out / 'sdk-signatures.json'] if native_signatures is not None else [])]})
+        *([args.ffdec_jar.resolve(), ROOT / 'tools/native-api-profile.py', out / 'sdk-signatures.json'] if native_signatures is not None else [])]}})
     print(out / 'profile-lock.json')
 
 

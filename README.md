@@ -147,6 +147,18 @@ omitted its final flag. Regenerate such a profile with the shared worker. Final
 methods and unqualified reflection remain held. LayaAir's `final-class` fixture
 includes AP's unchanged RuntimeArtifactContext and retained native comparisons.
 
+## Native fixture facade ownership
+
+`tools/create-fixture-profile.py` retains runtime predicates on their declared
+facade while resolving re-exported constructors and interfaces to the exact
+owned capability module. `tools/resolve-laya-export.cjs` uses TypeScript symbol
+identity, validates the facade and obligation hashes, and records all inspected
+source bytes in `generator-inputs.json`. Matching names or value aliases cannot
+replace an owned declaration; duplicate and ambiguous exports remain held.
+Run `python3 -B tools/test-fixture-targets.py` for the isolated regressions.
+LayaAir's unchanged `original-frame-center-adv` fixture exercises this path with
+the EventDispatcher facade and its independently owned core declaration.
+
 ## Provenance and licenses
 
 The frozen parser and syntax model derive from `@as3web/as3-to-ts` 0.3.10 at
