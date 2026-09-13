@@ -167,3 +167,18 @@ test('numeric Array access rejects unproved host properties without invoking get
  assert.throws(()=>as3ArrayWrite(value,1.5,8),AS3ArrayOperationUnavailable);
  assert.equal(calls,0);
 });
+
+
+test('Array subclass constructor lengths retain native errors and foreign prototypes remain unavailable',()=>{
+ const {as3ArrayConstructorArguments,as3ArrayRead}=require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
+ for(const value of [-1,1.5,NaN,Infinity,4294967296])
+  assert.throws(()=>as3ArrayConstructorArguments([value]),{name:'RangeError',errorID:1005,
+   message:`Error #1005: Array index is not a positive integer (${String(value)}).`});
+ for(const args of [[],[0],[3],[4294967295],['frame'],[1,'frame']])
+  assert.equal(as3ArrayConstructorArguments(args),args);
+ const prototype=Object.create(Array.prototype);
+ for(const value of [Object.setPrototypeOf([1],prototype),new (class extends Array {})(1,2)]) {
+  assert.throws(()=>as3ArrayRead(value,0),AS3ArrayOperationUnavailable);
+  assert.throws(()=>as3ArrayCall(value,'push',[3]),AS3ArrayOperationUnavailable);
+ }
+});

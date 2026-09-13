@@ -256,7 +256,7 @@ function validateIdentifier(value: string, node: TreeNode): string {
     return value;
 }
 
-function parseModifiers(owner: TreeNode, classLevel: boolean): SemanticModifier[] {
+function parseModifiers(owner: TreeNode, classLevel: boolean, arrayDynamic:boolean = false): SemanticModifier[] {
     const list = one(owner, "MOD_LIST", true);
     if (list === null) {
         return [];
@@ -268,7 +268,8 @@ function parseModifiers(owner: TreeNode, classLevel: boolean): SemanticModifier[
             fail("HARDENED_MODIFIER_NODE", "modifier list contains an unsupported node", node);
         }
         const modifier = requiredText(node, "modifier");
-        if (!ALLOWED_MODIFIERS.has(modifier) || seen[modifier] || (classLevel && modifier !== "public")) {
+        if ((!ALLOWED_MODIFIERS.has(modifier) && !(arrayDynamic && modifier === "dynamic"))
+            || seen[modifier] || (classLevel && modifier !== "public" && !(arrayDynamic && modifier === "dynamic"))) {
             fail("HARDENED_MODIFIER", "modifier is unsupported, duplicated, or invalid in this position", node);
         }
         seen[modifier] = true;
@@ -769,6 +770,7 @@ function vectorElement(type: SemanticType): SemanticType | null {
 }
 
 function referenceParents(qname: string, context: AdapterContext): readonly string[] | null {
+    if (qname === "Array" && nativeArrayBase(context)) return [];
     const mapped = context.runtimeReferenceParentsByQName.get(qname);
     if (mapped !== undefined) {
         if (context.localMemberAuthority !== null && context.resolveCurrentLocal !== null) {
@@ -791,6 +793,7 @@ function referenceParents(qname: string, context: AdapterContext): readonly stri
 
 function provenReferenceSubtype(source: SemanticType, target: SemanticType, context: AdapterContext): boolean {
     if (sameUnderlyingType(source, target)) return true;
+    if (target.sourceName === "Array" && target.emittedName === "Array" && isArrayType(source,context)) return true;
     if (context.sourceMemberAuthority !== null && source.sourceName === "ArgumentError"
         && source.emittedName === "__AS3ArgumentError" && source.runtimeName === "ArgumentError"
         && target.sourceName === "Error" && target.emittedName === "Error") return true;
@@ -847,8 +850,32 @@ function runtimeReferenceParents(sources: readonly RuntimeAuthoritySource[] | un
     return result;
 }
 
-function isArrayType(type: SemanticType): boolean {
-    return type.sourceName === "Array" && type.emittedName === "Array";
+function nativeArrayBase(context: AdapterContext): boolean {
+    const source = context.sourceMemberAuthority;
+    if (!source) return false;
+    assertLoadedSourceMemberAuthority(source);
+    const entry = source.entriesByQName.Array;
+    return !!entry && entry.baseQName === "Object" && entry.ownInstanceMemberNames.includes("length");
+}
+
+function isArrayType(type: SemanticType, context?: AdapterContext): boolean {
+    if (type.sourceName === "Array" && type.emittedName === "Array") return true;
+    if (!context || !nativeArrayBase(context) || !type.runtimeName) return false;
+    const visited = new Set<string>();
+    let current:string | null = type.runtimeName;
+    while (current !== null) {
+        if (current === "Array") return true;
+        if (visited.has(current) || visited.size >= 1024) return false;
+        visited.add(current);
+        if (current === context.classQualifiedName) current = context.extendsType?.runtimeName ?? null;
+        else {
+            const moduleName = context.resolveCurrentLocal?.().entry.module;
+            const entry: LocalMemberAuthorityEntry | null | undefined = moduleName ? context.localMemberAuthority?.entriesByIdentity[`${moduleName}\u0000${current}`] : null;
+            if (!entry || entry.status !== "complete" || !entry.declaration || entry.declaration.baseQNames.length > 1) return false;
+            current = entry.declaration.baseQNames[0] || null;
+        }
+    }
+    return false;
 }
 
 const TREE_NODE_QNAME = "Foundation.SensitiveWord.TTreeNode";
@@ -1178,6 +1205,7 @@ function localInheritedNamedMembers(context: AdapterContext, name: string,
     const visited = new Set<string>();
     let qname: string | null = context.baseLocalQName;
     while (qname !== null) {
+        if (qname === "Array" && nativeArrayBase(context)) break;
         if (visited.has(qname) || visited.size >= 1024) {
             fail("HARDENED_LOCAL_MEMBER_CYCLE", "local base-member lineage is cyclic or exceeds its bound", node);
         }
@@ -1212,6 +1240,7 @@ function assertNoInheritedLocalValueShadow(context: AdapterContext, name: string
     const visited = new Set<string>();
     let qname: string | null = context.baseLocalQName;
     while (qname !== null) {
+        if (qname === "Array" && nativeArrayBase(context)) break;
         if (visited.has(qname) || visited.size >= 1024) {
             fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
                 `${name} intrinsic lookup encountered a cyclic or over-bound local base lineage`, node);
@@ -1249,6 +1278,7 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
     const visited = new Set<string>();
     let qname: string | null = context.baseLocalQName || context.baseSourceQName;
     while (qname !== null) {
+        if (qname === "Array" && nativeArrayBase(context)) break;
         if (visited.has(qname) || visited.size >= 1024) {
             fail("HARDENED_LOCAL_MEMBER_CYCLE", "native timer base-member lineage is cyclic or exceeds its bound", node);
         }
@@ -1407,6 +1437,7 @@ function localInheritedMember(context: AdapterContext, name: string,
     const visited = new Set<string>();
     let qname: string | null = context.baseLocalQName;
     while (qname !== null) {
+        if (qname === "Array" && nativeArrayBase(context)) break;
         if (visited.has(qname) || visited.size >= 1024) {
             fail("HARDENED_LOCAL_MEMBER_CYCLE", "local base-member lineage is cyclic or exceeds its bound", node);
         }
@@ -1498,6 +1529,13 @@ function localDeclaration(context: AdapterContext, qname: string, node: TreeNode
 
 function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: readonly SemanticMember[],
     node: TreeNode): void {
+    if (isArrayType(semanticType(node,context.className,context.className,[],false,context.classQualifiedName),context)) {
+        const nativeNames = context.sourceMemberAuthority!.entriesByQName.Array!.ownInstanceMemberNames;
+        for (const member of members) if (member.kind !== "constructor" && !member.modifiers.includes("static")
+            && nativeNames.includes(member.name))
+            fail("HARDENED_ARRAY_OVERRIDE","Native Array member overrides require retained dispatch evidence",node);
+    }
+
     if (context.baseLocalQName === null) return;
     if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) {
         fail("HARDENED_LOCAL_FIELD_ANCESTRY", "local field ancestry requires the loaded member authority", node);
@@ -1524,6 +1562,10 @@ function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: r
     const visited = new Set<string>();
     let current: string | null = context.baseLocalQName;
     while (current !== null && !current.startsWith("flash.")) {
+        if (current === "Array" && nativeArrayBase(context)) {
+            context.sourceMemberAuthority!.entriesByQName.Array!.ownInstanceMemberNames.forEach(name=>record("Array",name,false));
+            break;
+        }
         if (visited.has(current) || visited.size >= 1024) {
             fail("HARDENED_LOCAL_FIELD_ANCESTRY", "local field ancestry is cyclic or exceeds its bound", node);
         }
@@ -1590,7 +1632,7 @@ function localInstanceNamedMembers(context: AdapterContext, qname: string, name:
     const visiting = new Set<string>();
     const terminalFlash = new Set<string>();
     const authenticateLineage = (current: string): void => {
-        if (current.startsWith("flash.")) {
+        if (current.startsWith("flash.") || current === "Array" && nativeArrayBase(context)) {
             terminalFlash.add(current);
             return;
         }
@@ -1621,7 +1663,7 @@ function localInstanceNamedMembers(context: AdapterContext, qname: string, name:
         for (const current of [...new Set(frontier)].sort()) {
             if (searched.has(current)) continue;
             searched.add(current);
-            if (current.startsWith("flash.")) {
+            if (current.startsWith("flash.") || current === "Array" && nativeArrayBase(context)) {
                 continue;
             }
             const declaration = entries.get(current)!.declaration!;
@@ -1664,6 +1706,7 @@ function localLineageContains(context: AdapterContext, startQName: string, owner
     let current: string | null = startQName;
     while (current !== null) {
         if (current === ownerQName) return true;
+        if (current === "Array" && nativeArrayBase(context)) return false;
         if (visited.has(current) || visited.size >= 1024) {
             fail("HARDENED_LOCAL_MEMBER_CYCLE", "local visibility lineage is cyclic or exceeds its bound", node);
         }
@@ -1864,6 +1907,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         }
     }
     if (expression.kind === "member") {
+        if (expression.capabilitySource === "Array" && expression.name === "length")
+            return semanticType(node,"uint","number");
         if (BIG_TURN_TABLE_INNER_CONSUMERS[expression.capabilitySource || ""] !== undefined) {
             const innerMember = innerMemberType(context,
                 assignmentType(expression.target, context, node), expression.name, node);
@@ -1953,7 +1998,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             && ["message","name","errorID"].includes(expression.name)) return expression.name === "errorID"
                 ? semanticType(node,"int","number") : semanticType(node,"*","unknown");
         if (ownerType.sourceName === "String" && expression.name === "length") return semanticType(node,"int","number");
-        if (isArrayType(ownerType) && expression.name === "length") {
+        if (isArrayType(ownerType,context) && expression.name === "length") {
             return semanticType(node, "uint", "number");
         }
     }
@@ -2637,6 +2682,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         if (["===","!=="].includes(operator) && context.sourceMemberAuthority !== null
             && ([leftType,rightType].some(type => dynamicObjectType(type,context))
+                || [leftType,rightType].every(type => isArrayType(type,context))
                 || [leftType,rightType].every(type => type.runtimeName !== null
                     && (localQNameForType(type,context) !== null || mappedFlashQNameForType(type,context) !== null)))
             && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))) {
@@ -3084,7 +3130,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         if (context.sourceMemberAuthority !== null && operator === "=" && target.kind === "member"
             && target.capabilitySource === "Array" && target.name === "length"
-            && isArrayType(assignmentType(target.target,context,node.children[0]!))) {
+            && isArrayType(assignmentType(target.target,context,node.children[0]!),context)) {
             const value=parseExpression(node.children[2]!,context,true);
             // Validate the uint storage conversion without moving it before the native null check.
             adaptAssignmentValue(semanticType(node,"uint","number"),value,context,node.children[2]!);
@@ -3190,7 +3236,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const element = vectorElement(ownerType);
         const dictionary = isDictionaryType(ownerType);
         const byteArray = intrinsicSourceForType(ownerType, context) === "flash.utils.ByteArray";
-        const array = isArrayType(ownerType);
+        const array = isArrayType(ownerType,context);
         const ownRecord = ownRecordValue(ownerType);
         if (!innerRoot && !innerCost && !element && !dictionary && !byteArray && !array && !ownRecord) {
             fail("HARDENED_INDEX_TARGET", "indexed access requires a proven Array, Vector, ByteArray, intrinsic Dictionary, or authenticated local record", node);
@@ -3334,6 +3380,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_METHOD_CLOSURE_SCOPE", "only non-static instance methods have admitted AS3 closure identity", node);
             }
             return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
+        }
+        if (target.kind !== "super" && ["length","push","pop","shift","unshift","concat","join","sortOn"].includes(name)) {
+            const arrayType = assignmentType(target,context,node);
+            if (isArrayType(arrayType,context) && arrayType.sourceName !== "Array") {
+                const qname = arrayType.runtimeName!;
+                const lookup = localInstanceNamedMembers(context,qname,name,node);
+                if (lookup.members.length === 0) {
+                    if (valuePosition && name !== "length") fail("HARDENED_ARRAY_METHOD_CLOSURE","Array method closures need native evidence",node);
+                    return Object.assign(identity(node),{kind:"member" as const,target,targetNullable:arrayType.nullable,name,capabilitySource:"Array"});
+                }
+            }
         }
         let targetName: string | undefined;
         let capabilitySource: string | null = superOwnerQName;
@@ -3486,8 +3543,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && name === "toString";
                     const numberMethod = !valuePosition && ["Number","int","uint"].includes(targetType.sourceName) && name === "toFixed";
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
-                    const arrayLength = isArrayType(targetType) && name === "length";
-                    const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType)
+                    const arrayLength = isArrayType(targetType,context) && name === "length";
+                    const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType,context)
                         && !valuePosition && ["push","pop","shift","unshift","concat","join","sortOn"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase", "charAt"].includes(name);
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
@@ -3664,6 +3721,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                 }
                 assertLocalCallArguments(constructorMember, args, node.children[1]!.children, context, node);
+            } else if (context.baseSourceQName === "Array" && nativeArrayBase(context)) {
+                if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
+                    fail("HARDENED_ARRAY_ARGUMENT","Array constructor arguments must produce values",node);
             } else if (context.sourceMemberAuthority !== null && context.baseSourceQName === "flash.display.Bitmap") {
                 const mapping=memberMapping(context,context.baseSourceQName,"call","Bitmap",node);
                 if (!mapping || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "constructor")
@@ -3771,6 +3831,36 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             capabilitySource = mapping.sourceQName;
             capabilityMember = "<call>";
             resultType = authoritySemanticType(mapping.returnType, context, node);
+        } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
+            && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee),context)) {
+            const name = callee.name;
+            if (!["push","pop","shift","unshift","concat","join","sortOn"].includes(name)
+                || (["pop","shift"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1))
+                fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
+            for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
+                fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
+            if (name === "sortOn") {
+                if (assignmentType(callee.target,context,rawCallee).runtimeName !== null
+                    && assignmentType(callee.target,context,rawCallee).runtimeName !== "Array")
+                    fail("HARDENED_ARRAY_SORT_ON", "Array subclass sorting requires retained native dispatch evidence", node);
+                const flags = (expression:SemanticExpression):number | null => {
+                    if (expression.kind === "intrinsicConstant") return expression.value;
+                    if (expression.kind === "literal" && typeof expression.value === "number") return expression.value;
+                    if (expression.kind === "binary" && expression.operator === "|") {
+                        const left=flags(expression.left),right=flags(expression.right);
+                        return left===null || right===null ? null : left | right;
+                    }
+                    return null;
+                };
+                if (args.length !== 2 || assignmentType(args[0]!,context,node).sourceName !== "String"
+                    || ![16,18].includes(flags(args[1]!)!))
+                    fail("HARDENED_ARRAY_SORT_ON", "Array.sortOn requires one String field and proven NUMERIC with optional DESCENDING", node);
+            }
+            capabilitySource = "Array";
+            capabilityMember = name;
+            resultType = name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "sortOn" ? semanticType(node,"Array","Array",[],false)
+                : name === "push" || name === "unshift"
+                ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {
             const parameters = context.methods[callee.name]!.parameters;
             if (!admittedArity(parameters, args.length)) {
@@ -3896,33 +3986,6 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             resultType = authoritySemanticType(member.returnType, context, node);
             capabilitySource = member.sourceQName;
             capabilityMember = member.name;
-        } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
-            && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee))) {
-            const name = callee.name;
-            if (!["push","pop","shift","unshift","concat","join","sortOn"].includes(name)
-                || (["pop","shift"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1))
-                fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
-            for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
-                fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
-            if (name === "sortOn") {
-                const flags = (expression:SemanticExpression):number | null => {
-                    if (expression.kind === "intrinsicConstant") return expression.value;
-                    if (expression.kind === "literal" && typeof expression.value === "number") return expression.value;
-                    if (expression.kind === "binary" && expression.operator === "|") {
-                        const left=flags(expression.left),right=flags(expression.right);
-                        return left===null || right===null ? null : left | right;
-                    }
-                    return null;
-                };
-                if (args.length !== 2 || assignmentType(args[0]!,context,node).sourceName !== "String"
-                    || ![16,18].includes(flags(args[1]!)!))
-                    fail("HARDENED_ARRAY_SORT_ON", "Array.sortOn requires one String field and proven NUMERIC with optional DESCENDING", node);
-            }
-            capabilitySource = "Array";
-            capabilityMember = name;
-            resultType = name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "sortOn" ? semanticType(node,"Array","Array",[],false)
-                : name === "push" || name === "unshift"
-                ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && vectorElement(assignmentType(callee.target, context, rawCallee)) !== null) {
             const ownerType = assignmentType(callee.target, context, rawCallee);
             const element = vectorElement(ownerType)!;
@@ -4251,9 +4314,11 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             }
             if (!header) fail("HARDENED_FOREACH_BINDING", "for each binding lacks its predeclared local identity", declaration);
             const iterable = parseExpression(node.children[1]!.children[0]!, context, true);
-            const iterableType = assignmentType(iterable, context, node.children[1]!.children[0]!);
+            const actualIterableType = assignmentType(iterable, context, node.children[1]!.children[0]!);
+            const iterableType = isArrayType(actualIterableType,context)
+                ? semanticType(node,"Array","Array",[],actualIterableType.nullable,"Array") : actualIterableType;
             const elementType = vectorElement(iterableType);
-            if (context.sourceMemberAuthority !== null && (isArrayType(iterableType) || isDictionaryType(iterableType))) {
+            if (context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType))) {
                 if (!["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(header.type.sourceName)
                     || declaresBinding && header.type.sourceName !== "*")
                     fail("HARDENED_FOREACH_ARRAY_BINDING", "Array/Dictionary enumeration requires a retained slot type and existing typed binding", declaration);
@@ -5208,23 +5273,29 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
         const imported = parsedImports.importsByLocal[localName]
             || resolveImplicitLocalType(sourceName, "class", extendsNode);
-        if (!imported || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)) {
-            fail("HARDENED_BASE_TYPE", "base type " + extendsNode.text
-                + " must be a double-pinned Flash class or authenticated local class", extendsNode);
-        }
-        if (imported.authorityKind === "flash") {
-            mappingForRole(authority, imported.sourceQualifiedName, "base-type", extendsNode);
+        if (!imported && sourceName === "Array" && nativeArrayBase(placeholder)) {
+            extendsType = semanticType(extendsNode,"Array","__AS3ArrayBase",[],false,"Array");
+            placeholder.extendsType = extendsType;
+            placeholder.baseSourceQName = "Array";
         } else {
-            const localBase = localAuthority!.entriesByIdentity[`${resolveCurrentLocal!().entry.module}\u0000${imported.sourceQualifiedName}`];
-            if (!localBase || localBase.typeKind !== "class") {
-                fail("HARDENED_BASE_TYPE", "local base type must resolve to an authenticated class", extendsNode);
+            if (!imported || (sourceName.indexOf(".") >= 0 && imported.sourceQualifiedName !== sourceName)) {
+                fail("HARDENED_BASE_TYPE", "base type " + extendsNode.text
+                    + " must be a double-pinned Flash class or authenticated local class", extendsNode);
             }
+            if (imported.authorityKind === "flash") {
+                mappingForRole(authority, imported.sourceQualifiedName, "base-type", extendsNode);
+            } else {
+                const localBase = localAuthority!.entriesByIdentity[`${resolveCurrentLocal!().entry.module}\u0000${imported.sourceQualifiedName}`];
+                if (!localBase || localBase.typeKind !== "class") {
+                    fail("HARDENED_BASE_TYPE", "local base type must resolve to an authenticated class", extendsNode);
+                }
+            }
+            extendsType = semanticType(extendsNode, imported.sourceLocalName, imported.sourceLocalName, [], undefined,
+                imported.sourceQualifiedName);
+            placeholder.extendsType = extendsType;
+            placeholder.baseSourceQName = imported.authorityKind === "flash" ? imported.sourceQualifiedName : null;
+            placeholder.baseLocalQName = imported.authorityKind === "local" ? imported.sourceQualifiedName : null;
         }
-        extendsType = semanticType(extendsNode, imported.sourceLocalName, imported.sourceLocalName, [], undefined,
-            imported.sourceQualifiedName);
-        placeholder.extendsType = extendsType;
-        placeholder.baseSourceQName = imported.authorityKind === "flash" ? imported.sourceQualifiedName : null;
-        placeholder.baseLocalQName = imported.authorityKind === "local" ? imported.sourceQualifiedName : null;
     }
     const implementsTypes: Array<{ type: SemanticType; runtimeName: string }> = [];
     const implementsNode = one(classNode, "IMPLEMENTS_LIST", true);
@@ -5428,7 +5499,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     assertNoLocalAncestryFieldCollision(placeholder, members, classNode);
     const declaration: SemanticClass = Object.assign(identity(classNode), {
         declarationKind: "class" as "class", name: className,
-        modifiers: parseModifiers(classNode, true),
+        modifiers: parseModifiers(classNode, true,
+            isArrayType(semanticType(classNode,className,className,[],false,placeholder.classQualifiedName),placeholder)),
         extendsType,
         interfaceExtendsTypes: [],
         implementsTypes,

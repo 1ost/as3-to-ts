@@ -1,3 +1,4 @@
+import { lookupObjectClass } from "./internal/AS3TypeRegistry";
 import { as3ArraySortOnNumeric } from "./internal/AS3ArraySort";
 import { as3NativeArrayJoin, as3NativeString, as3NativeNumber } from "./AS3ObjectDispatch";
 import { as3FunctionArgument } from "./AS3Function";
@@ -8,6 +9,30 @@ import { as3FunctionArgument } from "./AS3Function";
  */
 
 export const AS3_ARRAY_MAX_INDEX = 0xfffffffe;
+
+/** Validate the single numeric length before invoking native Array allocation. */
+export function as3ArrayConstructorArguments(args:unknown[]):unknown[] {
+    const value=args[0];
+    if (args.length === 1 && typeof value === "number"
+        && (!Number.isInteger(value) || value < 0 || value > 0xffffffff)) {
+        const error=new RangeError(`Error #1005: Array index is not a positive integer (${as3NativeString(value)}).`);
+        Object.defineProperty(error,"errorID",{value:1005});
+        throw error;
+    }
+    return args;
+}
+
+export const AS3ArrayBase = Array;
+export const isAS3Array = (value:unknown):value is unknown[] => Array.isArray(value);
+
+function authenticatedArray(value:unknown[]):boolean {
+    if (Object.getPrototypeOf(value) === Array.prototype) return true;
+    let info:ReturnType<typeof lookupObjectClass>;
+    try { info=lookupObjectClass(value); } catch { return false; }
+    return !!info && info.qname !== "Array" && info.chain.some(owner=>owner.qname === "Array")
+        && Object.getPrototypeOf(value) === info.constructor.prototype;
+}
+
 
 export function as3ArrayIndex(value: number): number {
     if (!Number.isInteger(value) || value < 0 || value > AS3_ARRAY_MAX_INDEX) {
@@ -33,8 +58,8 @@ function ordinaryArray(value:unknown):unknown[] {
         const error=new TypeError(`Error #${id}: ${id === 1009 ? "Cannot access a property or method of a null object reference." : "A term is undefined and has no properties."}`);
         Object.defineProperty(error,"errorID",{value:id});throw error;
     }
-    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype)
-        throw new AS3ArrayOperationUnavailable("Array indexing requires an ordinary native Array");
+    if (!Array.isArray(value) || !authenticatedArray(value))
+        throw new AS3ArrayOperationUnavailable("Array indexing requires an ordinary or authenticated subclass Array");
     return value;
 }
 /** Holes read as undefined; named numeric properties never change array length. */
@@ -87,7 +112,7 @@ export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unkno
         const error = new TypeError("Error #1009: Cannot access a property or method of a null object reference.");
         Object.defineProperty(error,"errorID",{value:1009}); throw error;
     }
-    if (!Array.isArray(value) || !["push","pop","shift","unshift","concat","join"].includes(method)
+    if (!Array.isArray(value) || !authenticatedArray(value) || !["push","pop","shift","unshift","concat","join"].includes(method)
         || (["pop","shift"].includes(method) && args.length !== 0))
         throw new AS3ArrayOperationUnavailable("Array mutation requires a supported Array receiver, method and arity");
     const nativeMethod = Array.prototype[method as "push" | "pop" | "shift" | "unshift" | "concat" | "join"];
@@ -118,7 +143,7 @@ function concatArrays(value:unknown[], args:unknown[]):unknown[] {
             result[length++] = item;
             continue;
         }
-        if (Object.getPrototypeOf(item) !== Array.prototype || Object.getOwnPropertySymbols(item).length)
+        if (!authenticatedArray(item) || Object.getOwnPropertySymbols(item).length)
             throw new AS3ArrayOperationUnavailable("Array concat requires ordinary native Arrays");
         const nextLength = length + item.length;
         if (nextLength > 0xffffffff)
@@ -140,10 +165,14 @@ function concatArrays(value:unknown[], args:unknown[]):unknown[] {
 /** Native dense Array for-each retains the receiver and observes live length/index values. */
 export function* as3ArrayValues(value:unknown, bindingType:string):Generator<any,void,unknown> {
     if (value === null || value === undefined) return;
-    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || Object.keys(Array.prototype).length !== 0)
+    if (!Array.isArray(value) || !authenticatedArray(value) || Object.keys(Array.prototype).length !== 0)
         throw new AS3ArrayOperationUnavailable("Array enumeration requires an ordinary native Array");
+    // Declared AS3 traits are not dynamic enumeration entries even though the
+    // generated storage uses JS own properties.
+    const declared = Object.getPrototypeOf(value) === Array.prototype ? new Set<string>()
+        : new Set(lookupObjectClass(value)!.chain.flatMap(owner=>owner.traits?.members.map(member=>member.name) || []));
     const validate = ():void => {
-        const keys=Reflect.ownKeys(value);
+        const keys=Reflect.ownKeys(value).filter(key=>typeof key !== "string" || !declared.has(key));
         if (keys.length !== value.length + 1 || keys.some(key => typeof key !== "string"
             || key !== "length" && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length)))
             throw new AS3ArrayOperationUnavailable("Sparse or named Array enumeration requires retained native evidence");

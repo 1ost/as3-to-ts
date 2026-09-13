@@ -251,9 +251,9 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         module: moduleSpecifier, constructorExport: program.declaration.name, predicateExport: "isAS3ClassInstance",
         constructionTargetExport: "as3ConstructionTarget", constructionProofExport: "isAS3ConstructionProof",
         fields,
-        // Dynamic class declarations remain held by the adapter. Namespace names
-        // retain source identity; a name alone is not a resolved namespace URI.
-        objectTraits: Object.freeze({ dynamic: false,
+        // Only native-proven dynamic class scopes are admitted by the adapter.
+        // Namespace names retain identity, not an inferred namespace URI.
+        objectTraits: Object.freeze({ dynamic: program.declaration.modifiers.includes("dynamic"),
             members: Object.freeze(program.declaration.members.filter((member): member is Exclude<SemanticMember, {kind:"constructor"}> => member.kind !== "constructor"
                 && !member.modifiers.includes("static"))
                 .map(member => {
@@ -336,6 +336,19 @@ export function localRuntimeEmbeddedAuthoritySources(program: SemanticProgram, m
             compilerEmbeddedSources.add(source);
             return source;
         });
+}
+
+/** The builtin Array base is backed by the retained SDK census and hashed runtime. */
+export function arrayRuntimeTypeAuthoritySource(source: LoadedSourceMemberAuthority, runtimeSha256:string): RuntimeAuthorityClassSource {
+    assertLoadedSourceMemberAuthority(source);
+    const array=source.entriesByQName.Array;
+    if (!array || array.baseQName !== "Object" || !array.ownInstanceMemberNames.includes("length")
+        || !/^[a-f0-9]{64}$/.test(runtimeSha256))
+        throw new HardenedSemanticError("HARDENED_ARRAY_BASE_AUTHORITY","Array base lacks native SDK and runtime authority");
+    return authenticatedSource({kind:"class",qname:"Array",base:null,interfaces:[],sourceSha256:runtimeSha256,
+        definitionSafe:true,module:"./AS3Array",constructorExport:"AS3ArrayBase",predicateExport:"isAS3Array",
+        constructionTargetExport:null,constructionProofExport:null,fields:[],evaluationOrder:null,
+        nativeObjectTraits:{dynamic:true,names:[...array.ownInstanceMemberNames],sourceArtifactSha256:source.sourceArtifactSha256}});
 }
 
 function localImportPath(program: SemanticProgram, targetModule: string): string {

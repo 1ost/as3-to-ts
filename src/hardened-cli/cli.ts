@@ -11,7 +11,7 @@ import { loadTranspileAuthority } from "./authority";
 import { adaptNormalizedParserAst } from "../hardened/adapter";
 import { HardenedSemanticError, type NormalizedParserAst, type SemanticProgram } from "../hardened/contracts";
 import { emitSemanticProgram } from "../hardened/emitter";
-import { assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeEmbeddedAuthoritySources, localRuntimeInterfaceAuthoritySource,
+import { arrayRuntimeTypeAuthoritySource, assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeEmbeddedAuthoritySources, localRuntimeInterfaceAuthoritySource,
     localRuntimeTypeAuthoritySource, type EmittedRuntimeApplicationEntry,
     type EmittedRuntimeAuthority, type RuntimeAuthoritySource } from "../hardened/type-authority";
 import {
@@ -66,7 +66,7 @@ function sha256(data: string | Buffer): string {
 
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "internal/AS3ArraySort.ts": "2b869fcd6e6de7cbe7a39e27c24a12fba561f728edbf0e0749aaba9054c00f82",
-    "AS3Array.ts": "16ed82c31464ecaa01cf112beab3177d4fcf44463d62da6d91431e36e39cab76",
+    "AS3Array.ts": "a07eb30f897234679a5423c20cec2f2222895cd2b4f6c3ce2f48891a2a902530",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
     "AS3ByteArray.ts": "f6e206784fcab50b8af57d0fb5acdf50696aeef8527ff2e58709c0f06f15bc30",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
@@ -492,6 +492,11 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 transpileAuthority!.includeBigTurnTableDto);
             writeArtifact(publication, "__as3_runtime/package.json", packageJson);
             totalOutputBytes += Buffer.byteLength(packageJson, "utf8");
+            if (localRuntimePrograms.some(program=>program.declaration.declarationKind === "class"
+                && program.declaration.extendsType?.runtimeName === "Array")) {
+                if (!transpileAuthority!.sourceMembers) throw new CliError("Array base lacks native source authority",4);
+                runtimeAuthoritySources.push(arrayRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers,RUNTIME_SOURCE_SHA256["AS3Array.ts"]!));
+            }
             runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value));
             const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
             const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code,

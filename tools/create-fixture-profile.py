@@ -64,7 +64,7 @@ def source_members(sdk, output, qnames):
             match = member_pattern.match(line)
             if match and match['name'] != name:
                 classes[current]['ownInstanceMemberNames'].add(match['name'])
-    selected, pending = set(), list(qnames | {'Object'})
+    selected, pending = set(), list(qnames | {'Object', 'Array'})
     while pending:
         qname = pending.pop()
         if qname in selected:

@@ -1133,7 +1133,9 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
                         ts.factory.createIdentifier("__as3ConstructionProof")]))], ts.NodeFlags.Const));
         const prepared = ts.factory.createSpreadElement(ts.factory.createIdentifier("__as3PreparedConstruction"));
         const authenticatedSuper = ts.factory.createExpressionStatement(ts.factory.createCallExpression(
-            originalCall.expression, originalCall.typeArguments, [...originalCall.arguments, prepared]));
+            originalCall.expression, originalCall.typeArguments, [...(classDeclaration.extendsType?.runtimeName === "Array"
+                ? [ts.factory.createSpreadElement(ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayConstructorArguments"),undefined,
+                    [ts.factory.createArrayLiteralExpression([...originalCall.arguments])]))] : originalCall.arguments), prepared]));
         const cancel = ts.factory.createIfStatement(ts.factory.createBinaryExpression(newTargetExpression(ts),
             ts.factory.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken), ts.factory.createIdentifier(className)),
         ts.factory.createExpressionStatement(ts.factory.createCallExpression(
@@ -1540,6 +1542,12 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         throw new HardenedSemanticError("HARDENED_TYPESCRIPT_VERSION", "structural emitter requires the exact configured modern TypeScript compiler API");
     }
     const imports = program.imports.filter((item) => !item.compileTimeNamespace).map((item) => importNode(item, ts));
+    if (program.declaration.declarationKind === "class" && program.declaration.extendsType?.runtimeName === "Array")
+        imports.push(ts.factory.createImportDeclaration(undefined,
+            ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+                ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("AS3ArrayBase"),ts.factory.createIdentifier("__AS3ArrayBase")),
+                ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3ArrayConstructorArguments"),ts.factory.createIdentifier("__as3ArrayConstructorArguments"))])),
+            ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Array"),undefined));
     imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports(
             ["as3InitializeClass", "as3DefineClassInitialization", "as3InitializeStaticField", "as3ClassMemberReceiver"].map(name =>

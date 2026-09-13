@@ -119,7 +119,7 @@ export interface SemanticType extends SemanticIdentity {
     typeArguments: SemanticType[];
 }
 
-export type SemanticModifier = "public" | "private" | "protected" | "static" | "override";
+export type SemanticModifier = "dynamic" | "public" | "private" | "protected" | "static" | "override";
 
 export interface SemanticImport extends SemanticIdentity {
     authorityKind: "flash" | "local" | "intrinsic" | "native-timer-function";
