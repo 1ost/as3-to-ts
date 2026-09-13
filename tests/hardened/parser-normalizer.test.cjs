@@ -1197,7 +1197,7 @@ try {
     const methodCaptureOutput=built.emitter.emitSemanticProgram(methodCaptureSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
     assert.match(methodCaptureOutput.code,/__as3LexicalReceiver2\.complete\(\)/);
-    assert.match(methodCaptureOutput.code,/\}\)\)\(__as3LexicalReceiver1\)/);
+    assert.match(methodCaptureOutput.code,/\}, 0\)\)\(__as3LexicalReceiver1\)/);
     for (const heldCaptureSource of [methodCaptureSource.replace("complete();", "this.complete();"),
         methodCaptureSource.replace("complete();", "var saved:Function=complete;"),
         methodCaptureSource.replace("public function run", "public static function run")]) {
@@ -1236,6 +1236,24 @@ try {
     assert.throws(()=>built.adapter.adaptNormalizedParserAst(fallingNumberAst,authority(built.ledger),
         fallingNumberSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority),
         error=>error&&error.code==="HARDENED_RETURN_PATH");
+    {
+        const adaptLength = (body, authenticated = true) => {
+            const source=`package p { public class FunctionLength { ${body} } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("FunctionLength.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,
+                authenticated ? sourceMemberAuthority : undefined);
+        };
+        const semantic=adaptLength('public function read(value:Function):int {return value.length;} public function optional(first:int,second:int=4):void {} public function rest(first:int,...items):void {}');
+        const read=semantic.declaration.members.find(m=>m.name==='read').body[0].expression;
+        assert.equal(read.kind,'member');assert.equal(read.capabilitySource,'Function');
+        const code=built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code;
+        assert.match(code,/__as3FunctionLength\(value\)/);
+        assert.match(code,/__as3DefineMethodLength\(FunctionLength.prototype, "optional", 2\)/);
+        assert.match(code,/__as3DefineMethodLength\(FunctionLength.prototype, "rest", 1\)/);
+        assert.throws(()=>adaptLength('public function read(value:Function):int {return value.length;}',false),error=>!!error.code);
+        assert.throws(()=>adaptLength('public function write(value:Function):void {value.length=2;}'),error=>!!error.code);
+    }
     {
         const adaptIndexOf = (expression, type = 'Array', authenticated = true) => {
             const source=`package p { public class ArraySearch { public function run(values:${type},start:*,needle:*):int {return ${expression};} } }`;

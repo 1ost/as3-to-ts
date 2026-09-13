@@ -4,6 +4,7 @@ import {
     SemanticConstructor,
     SemanticField,
     SemanticMember,
+    SemanticMethod,
     SemanticModifier,
     SemanticParameter,
     SemanticProgram,
@@ -216,6 +217,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             ? ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ClassMemberReceiver"), undefined, [rawTarget]) : rawTarget;
         if (expression.capabilitySource === "Error" && expression.name === "errorID")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ErrorID"),undefined,[target]);
+        if (expression.capabilitySource === "Function" && expression.name === "length")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3FunctionLength"),undefined,[target]);
         if (expression.capabilitySource === "String" && expression.name === "length")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringLength"),undefined,[target]);
         return ts.factory.createPropertyAccessExpression(
@@ -603,7 +606,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             typeNode(expression.returnType, ts),
             ts.factory.createBlock([arity].concat(parameterSlotStatements(expression.parameters,ts),
                 expression.statements.map(statement => statementNode(statement, ts))), true));
-        const fn=ts.factory.createCallExpression(ts.factory.createIdentifier("__as3SourceLambda"),undefined,[sourceFn]);
+        const fn=ts.factory.createCallExpression(ts.factory.createIdentifier("__as3SourceLambda"),undefined,[sourceFn,
+            ts.factory.createNumericLiteral(expression.parameters.filter(parameter=>!parameter.rest).length)]);
         if (!expression.lexicalReceiver) return fn;
         const capture = expression.lexicalReceiver;
         // Keep an ordinary Function and capture its lexical instance separately
@@ -1668,7 +1672,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (programHasKind(program, "update") || programHasKind(program, "coercion") || programHasKind(program, "assignmentStorageCoercion")
         || programHasKind(program, "parseInteger") || programHasKind(program,"numericPredicate") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));
     const functionRuntime=(value:any):boolean => value !== null && typeof value === "object" && (
-        value.kind === "functionApply" || value.kind === "globalFunction"
+        value.kind === "member" && value.capabilitySource === "Function" && value.name === "length"
+        || value.kind === "functionApply" || value.kind === "globalFunction"
         || value.kind === "lambda"
         || (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
             && value.targetType.sourceName !== "Dictionary"
@@ -1677,7 +1682,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
-            ["as3SourceLambda","as3FunctionApply","as3FunctionCall","as3FunctionInvoke","as3FunctionFieldInvoke","as3CheckLambdaArity","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3CheckMethodArity","as3TraceFunction"].map(name =>
+            ["as3DefineFunctionLength","as3DefineMethodLength","as3FunctionLength","as3SourceLambda","as3FunctionApply","as3FunctionCall","as3FunctionInvoke","as3FunctionFieldInvoke","as3CheckLambdaArity","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3CheckMethodArity","as3TraceFunction"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
     const dictionarySlot = (value:any):boolean => value !== null && typeof value === "object" && (
@@ -1720,7 +1725,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ], ts.NodeFlags.Const),
         );
         const empty = ts.createSourceFile(program.outputModulePath, "", ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
-        const sourceFile = ts.factory.updateSourceFile(empty, imports.concat([declaration]));
+        const functionLength = program.declaration.declarationKind === "packageFunction" ? [
+            ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createIdentifier("__as3DefineFunctionLength"),
+                undefined,[ts.factory.createIdentifier(program.declaration.name),
+                    ts.factory.createNumericLiteral(program.declaration.parameters.filter(parameter=>!parameter.rest).length)]))] : [];
+        const sourceFile = ts.factory.updateSourceFile(empty, imports.concat([declaration],functionLength));
         const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
         let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n").replace(/\n*$/, "\n");
         const reparsed = ts.createSourceFile(program.outputModulePath, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -1844,7 +1853,15 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     const privateBinding = fileLocalIdentity ? [ts.factory.createExportDeclaration(undefined, false,
         ts.factory.createNamedExports([ts.factory.createExportSpecifier(false,
             ts.factory.createIdentifier(program.declaration.name), ts.factory.createIdentifier("__as3FileLocalClass"))]), undefined)] : [];
-    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration], deferredInitialization, nominalPredicate, privateBinding));
+    const methodLengths = program.declaration.declarationKind !== "class" ? []
+        : program.declaration.members.filter(member=>member.kind === "method").map(member=>
+            ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+                ts.factory.createIdentifier("__as3DefineMethodLength"),undefined,[
+                    member.modifiers.includes("static") ? ts.factory.createIdentifier(program.declaration.name)
+                        : ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(program.declaration.name),"prototype"),
+                    ts.factory.createStringLiteral(member.name),
+                    ts.factory.createNumericLiteral((member as SemanticMethod).parameters.filter(parameter=>!parameter.rest).length)])));
+    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration], methodLengths, deferredInitialization, nominalPredicate, privateBinding));
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
     let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n");
     code = code.replace(/\n*$/, "\n");

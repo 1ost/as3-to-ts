@@ -1,3 +1,5 @@
+import { defineFunctionLength } from "./internal/AS3FunctionLength";
+export { defineFunctionLength as as3DefineFunctionLength, as3DefineMethodLength, as3FunctionLength } from "./internal/AS3FunctionLength";
 import { as3ArraySlot } from "./AS3Array";
 import { as3Boolean, as3Int, as3Number, as3Object, as3String, as3TraceValue, as3Uint } from "./AS3Coerce";
 
@@ -7,7 +9,8 @@ export class AS3FunctionOperationUnavailable extends Error {
 
 const SOURCE_LAMBDAS = new WeakSet<Function>();
 /** Preserve identity while marking functions emitted from authenticated AS3 bodies. */
-export function as3SourceLambda<T extends Function>(value:T):T {
+export function as3SourceLambda<T extends Function>(value:T, sourceLength?:number):T {
+    if (sourceLength !== undefined) defineFunctionLength(value,sourceLength);
     SOURCE_LAMBDAS.add(value);
     return value;
 }

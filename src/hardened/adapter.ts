@@ -1972,6 +1972,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         }
     }
     if (expression.kind === "member") {
+        if (expression.capabilitySource === "Function" && expression.name === "length")
+            return semanticType(node,"int","number");
         if (expression.capabilitySource === "Array" && expression.name === "length")
             return semanticType(node,"uint","number");
         if (BIG_TURN_TABLE_INNER_CONSUMERS[expression.capabilitySource || ""] !== undefined) {
@@ -3669,6 +3671,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const errorMethod = !valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && name === "toString";
                     const numberMethod = !valuePosition && ["Number","int","uint"].includes(targetType.sourceName) && name === "toFixed";
+                    const functionLength = context.sourceMemberAuthority !== null && valuePosition
+                        && targetType.sourceName === "Function" && name === "length";
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType,context) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType,context)
@@ -3676,7 +3680,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                             || name === "indexOf" && targetType.sourceName === "Array");
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && (["indexOf", "substr", "toLowerCase", "charAt"].includes(name)
                         || context.sourceMemberAuthority !== null && name === "split");
-                    if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
+                    if (!numberMethod && !errorRead && !errorMethod && !stringLength && !functionLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
                     }

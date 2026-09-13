@@ -1,3 +1,5 @@
+import { copyFunctionLength } from "./internal/AS3FunctionLength";
+
 const METHOD_CLOSURES = new WeakMap<object, WeakMap<Function, Function>>();
 const METHOD_CLOSURE_BRANDS = new WeakSet<Function>();
 
@@ -24,6 +26,7 @@ export function as3BindMethod<TArguments extends unknown[], TResult>(receiver: o
     const cached = closures.get(method);
     if (cached) return cached as (...args: TArguments) => TResult;
     const closure = ((...args: TArguments): TResult => Reflect.apply(method, receiver, args));
+    copyFunctionLength(method,closure);
     METHOD_CLOSURE_BRANDS.add(closure);
     closures.set(method, closure);
     closures.set(closure, closure);
