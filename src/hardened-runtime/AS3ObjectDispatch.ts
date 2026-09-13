@@ -360,3 +360,15 @@ export function as3NativeArrayJoin(value:unknown[], separator:unknown):string {
     const text=separator === undefined ? "," : nativeString(separator,active);
     return arrayString(value,active,text);
 }
+
+/** Dynamic properties enumerate without a promised order; declared traits never become entries. */
+export function* as3ObjectEnumerableValues(value:object):Generator<unknown,void,unknown> {
+    const info=describe(value);
+    if (info && !dynamicClass(info)) return;
+    const declared=new Set(info?.chain.flatMap(owner=>owner.traits?.members.map(member=>member.name)
+        || owner.nativeTraits?.names || []) || []);
+    for (const name in value) {
+        if (declared.has(name)) continue;
+        yield Reflect.get(value,name);
+    }
+}

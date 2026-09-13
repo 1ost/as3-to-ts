@@ -424,3 +424,8 @@ export class AS3Vector<T> implements Iterable<T> {
 
 Object.freeze(AS3Vector.prototype);
 Object.freeze(AS3Vector);
+
+/** Allocation identity for dynamic enumeration across authenticated Vector policies. */
+export function isAS3Vector(value:unknown):value is AS3Vector<unknown> {
+    return (typeof value === "object" || typeof value === "function") && value !== null && VECTOR_STATES.has(value);
+}

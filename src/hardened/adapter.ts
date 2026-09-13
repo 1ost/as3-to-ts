@@ -4345,9 +4345,10 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             const iterableType = isArrayType(actualIterableType,context)
                 ? semanticType(node,"Array","Array",[],actualIterableType.nullable,"Array") : actualIterableType;
             const elementType = vectorElement(iterableType);
-            const bindingReference = context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType))
+            const dynamicIterable = ["*","Object"].includes(iterableType.sourceName);
+            const bindingReference = context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType) || dynamicIterable)
                 ? referenceCoercionForType(header.type,context) : null;
-            if (context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType))) {
+            if (context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType) || dynamicIterable)) {
                 if (!bindingReference && !["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(header.type.sourceName)
                     || declaresBinding && header.type.sourceName !== "*")
                     fail("HARDENED_FOREACH_ARRAY_BINDING", "Array/Dictionary enumeration requires a retained slot type and existing typed binding", declaration);

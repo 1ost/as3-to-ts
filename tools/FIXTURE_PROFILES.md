@@ -497,3 +497,21 @@ Static method calls retain required/maximum arity, native class labels ending in
 `$`, and the distinction between omitted and explicitly undefined optional slots.
 The ten-checkpoint Laya `static-method-closure` fixture retains native AIR evidence.
 Inherited static lookup and callable-length reflection are not qualified here.
+
+
+## Dynamic for-each receivers
+
+Authenticated Object/wildcard receivers use the exported AS3Enumeration runtime.
+It evaluates the original receiver once and delegates actual Arrays, Dictionary
+and Vector instances to their existing runtime behavior. Native scalar/nullish
+values produce no entries. Object enumeration skips declared traits and converts
+each value before assigning the original typed local; a rejected reference cast
+preserves the previous binding. No source cast or generated-class repair is used.
+
+Object property order is unspecified by the AIR language reference:
+https://airsdk.dev/reference/actionscript/3.0/statements.html
+The Laya `dynamic-collection` fixture compares exact Array sequences and explicit
+Object membership/counts, retaining raw exploratory ordering separately. It does
+not qualify order-dependent Object gameplay behavior, dynamic-class source
+modifiers, prototype/mutation ordering, Function/Class enumeration or new
+sparse/named Array behavior. Existing guards for those paths remain applicable.

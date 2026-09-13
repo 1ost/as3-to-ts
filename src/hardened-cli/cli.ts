@@ -65,6 +65,7 @@ function sha256(data: string | Buffer): string {
 }
 
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
+    "AS3Enumeration.ts": "b7059948afc148589fe3b7b265064473643c879ae22785103e8a3df6c135cdcc",
     "internal/AS3ArraySort.ts": "2b869fcd6e6de7cbe7a39e27c24a12fba561f728edbf0e0749aaba9054c00f82",
     "AS3Array.ts": "a07eb30f897234679a5423c20cec2f2222895cd2b4f6c3ce2f48891a2a902530",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
@@ -74,15 +75,15 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Coerce.ts": "00279f0c43929aab328c8011bdcdf27ba65cad000b49ece779fddd833c50da15",
     "AS3Error.ts": "9ef96325ad8c55ff0172d3b2df8ea78f87af61414a62b7ded5b1e5011d13a889",
     "AS3Embed.ts": "41628cd8db111c12c5f12c8a51f036d37c839f8ae609986d0d24796e425d2055",
-    "AS3Dictionary.ts": "079d3fc0a244e38ca45bac584e18b899a0aff50626980d41d491a0bc89101f9f",
+    "AS3Dictionary.ts": "6093e08ea252cc7926982934da92c1d7785d093880e196c798c67c5f8d7d8f84",
     "AS3Function.ts": "79cb46943253f5330f987db91e19b060de2c169b9c0a309bb570bc943b1db891",
     "AS3MethodClosure.ts": "b6b25a872e14b134a2f728480f4e201c73ac4a466d24a890b7ecdd2dddafec20",
-    "AS3ObjectDispatch.ts": "805a1389db41fc68f143a0efd8f3690cd419f46da1c336e40aca8f221b05e11a",
+    "AS3ObjectDispatch.ts": "1d7be0f6d1d71f556b0b7db98f7e10573a8783424d01e630d325bfa049c81c5e",
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
     "AS3Timer.ts": "639a0e3776611b3fd736305994d709b47af8465509bb9d2de440bc611a985851",
     "AS3Type.ts": "4c6bce4684abb325a0b270219675b057e130a5fd07a1695a7875520f311d38d8",
-    "AS3Vector.ts": "5deedf01b46703ae7ae0d0f98ed6cfa680a39496ddd6ab747ee48c3bb5ec1101",
+    "AS3Vector.ts": "6839a53b9987f70cd975367640d6f0b1deaef1d529e7b85c1ffe2ed0f3dca6ad",
     "internal/AS3NumberFormat.ts": "c7a2b808bd4bafded492a65acce6041f67601f2e56308fb2724443f8baa58bc4",
     "internal/AS3CaseTable.ts": "ed85937df05d8ba9015e3cd35b8d75ce46e56348547085c0d218426ed0a44fc5",
     "internal/AS3TypeRegistry.ts": "d3fb37323bf6c20a110d504e34cccd894f16d5de303eef1137f1b4447ce72a34",
@@ -194,7 +195,7 @@ function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<
 }
 
 function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): string {
-    const entries = ["AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Embed", "AS3Error", "AS3Function",
+    const entries = ["AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
         "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3Timer", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
     entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"

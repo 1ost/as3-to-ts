@@ -126,3 +126,8 @@ export function as3DictionaryIn(key:unknown, value:unknown):boolean {
     }
     return AS3Dictionary.prototype.has.call(dictionary,key);
 }
+
+/** Allocation identity for dynamic enumeration; prototype lookalikes do not qualify. */
+export function isAS3Dictionary(value:unknown):value is AS3Dictionary {
+    return isWeakKey(value) && DICTIONARIES.has(value);
+}

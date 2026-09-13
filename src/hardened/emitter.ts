@@ -657,8 +657,9 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             ], ts.NodeFlags.None)
             : ts.factory.createIdentifier(statement.binding.name);
         const iterable = expressionNode(statement.iterable, ts);
-        let values = ["Array","Dictionary"].includes(statement.iterableType.sourceName) ? ts.factory.createCallExpression(
-            ts.factory.createIdentifier(statement.iterableType.sourceName === "Dictionary" ? "__as3DictionaryValues" : "__as3ArrayValues"),undefined,
+        let values = ["Array","Dictionary","*","Object"].includes(statement.iterableType.sourceName) ? ts.factory.createCallExpression(
+            ts.factory.createIdentifier(statement.iterableType.sourceName === "Dictionary" ? "__as3DictionaryValues"
+                : statement.iterableType.sourceName === "Array" ? "__as3ArrayValues" : "__as3DynamicValues"),undefined,
             [iterable,ts.factory.createStringLiteral(statement.bindingReference ? "*" : statement.binding.type.sourceName)])
             : statement.iterableType.nullable ? ts.factory.createNonNullExpression(iterable) : iterable;
         if (statement.bindingReference) values = ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ReferenceValues"),undefined,
@@ -1651,6 +1652,13 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DictionaryIn"),
                 ts.factory.createIdentifier("__as3DictionaryIn"))])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Dictionary"),undefined));
+    const dynamicEnumeration=(value:any):boolean => value !== null && typeof value === "object" && (
+        value.kind === "forEach" && ["*","Object"].includes(value.iterableType.sourceName)
+        || Object.values(value).some(dynamicEnumeration));
+    if (dynamicEnumeration(program)) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DynamicValues"),ts.factory.createIdentifier("__as3DynamicValues"))])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Enumeration"),undefined));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
         imports.push(ownRecordRuntimeImport(ts));
