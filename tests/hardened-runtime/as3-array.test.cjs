@@ -182,3 +182,36 @@ test('Array subclass constructor lengths retain native errors and foreign protot
   assert.throws(()=>as3ArrayCall(value,'push',[3]),AS3ArrayOperationUnavailable);
  }
 });
+
+const {as3ArrayLiteral,as3NewArray,as3ArrayLengthWrite}=require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
+test('splice retains the native distinction between fresh holes and grown dense storage',()=>{
+ const folder=path.join(process.env.HARDENED_FIXTURE_LAYA,'tests/nativeFlashOracle/array-splice');
+ const native=JSON.parse(fs.readFileSync(path.join(folder,'native-air.json'),'utf8'));
+ const hash=value=>require('node:crypto').createHash('sha256').update(value).digest('hex');
+ assert.equal(hash(fs.readFileSync(path.join(folder,'ArraySpliceProbe.as'))),native.sourceSha256);
+ assert.equal(hash(fs.readFileSync(path.join(folder,'scenario.json'))),native.scenarioSha256);
+ const row=id=>native.capture.state.observations.find(item=>item.id===id).result;
+ const snapshot=(array,removed)=>['',String(array),array.length,Array.from({length:array.length},(_,i)=>Object.hasOwn(array,i)?'1':'0').join(''),String(removed),removed.length,Array.from({length:removed.length},(_,i)=>Object.hasOwn(removed,i)?'1':'0').join('')];
+ const fresh=as3NewArray([5]);assert.deepEqual(snapshot(fresh,as3ArrayCall(fresh,'splice',[1,2])),row('holes-shrink'));
+ const grown=as3ArrayLiteral(['a']);as3ArrayLengthWrite(grown,5);
+ assert.deepEqual(snapshot(grown,as3ArrayCall(grown,'splice',[1,2])),row('length-growth-history'));
+ const sparse=as3NewArray([70]);as3ArrayWrite(sparse,0,'a');as3ArrayWrite(sparse,69,'z');
+ as3ArrayLengthWrite(sparse,1);as3ArrayLengthWrite(sparse,3);
+ assert.deepEqual(snapshot(sparse,as3ArrayCall(sparse,'splice',[1,1])),row('persistent-sparse-history'));
+ const back=as3NewArray([20]);as3ArrayWrite(back,10,'x');as3ArrayWrite(back,9,'y');
+ assert.deepEqual(snapshot(back,as3ArrayCall(back,'splice',[8,2])),row('backward-write-capacity'));
+});
+test('splice rejects foreign storage and overrides before array mutation',()=>{
+ const foreign=new Array(3);foreign[1]='x';
+ assert.throws(()=>as3ArrayCall(foreign,'splice',[0,1]),AS3ArrayOperationUnavailable);
+ assert.equal(foreign.length,3);assert.equal(Object.hasOwn(foreign,0),false);
+ const own=as3ArrayLiteral([1,2]);Object.defineProperty(own,'1',{get(){throw Error('getter must not run');}});
+ assert.throws(()=>as3ArrayCall(own,'splice',[0,1]),AS3ArrayOperationUnavailable);assert.equal(own[0],1);
+ const fixed=as3ArrayLiteral([1,2]);Object.freeze(fixed);
+ assert.throws(()=>as3ArrayCall(fixed,'splice',[0,1]),AS3ArrayOperationUnavailable);assert.deepEqual(fixed,[1,2]);
+ const overridden=as3ArrayLiteral([1,2]);overridden.splice=()=>{throw Error('override must not run');};
+ assert.throws(()=>as3ArrayCall(overridden,'splice',[0,1]),AS3ArrayOperationUnavailable);assert.equal(overridden.length,2);
+ const reentrant=as3ArrayLiteral([1,2]);
+ assert.throws(()=>as3ArrayCall(reentrant,'splice',[{valueOf(){throw Error('unproved reentry');}},1]),AS3ArrayOperationUnavailable);
+ assert.deepEqual(reentrant,[1,2]);
+});

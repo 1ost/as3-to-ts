@@ -444,6 +444,7 @@ export interface AssignmentExpression extends SemanticIdentity {
 }
 
 export interface NewExpression extends SemanticIdentity {
+    nativeArray?: true;
     initializationSelf?: boolean;
     kind: "new";
     sourceType: SemanticType;

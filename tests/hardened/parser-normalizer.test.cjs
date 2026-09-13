@@ -1206,7 +1206,15 @@ try {
     const arrayOutput=built.emitter.emitSemanticProgram(arraySemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
     assert.match(arrayOutput.code,/private values: unknown\[\] \| null;/);
-    assert.match(arrayOutput.code,/this\.values = \[\];/);
+    assert.match(arrayOutput.code,/this\.values = __as3ArrayLiteral\(\[\]\);/);
+    const shadowArraySource="package p { public class Array { public function Array() {} public function make():* { return new Array(); } } }";
+    const shadowArrayAst=built.normalizer.normalizeParserAst(built.parse("fixtures/Array.as",shadowArraySource),shadowArraySource,sha256);
+    const shadowArrayProgram=built.adapter.adaptNormalizedParserAst(shadowArrayAst,authority(built.ledger),
+        shadowArraySource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
+    const shadowArrayCode=built.emitter.emitSemanticProgram(shadowArrayProgram,
+        {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code;
+    assert.doesNotMatch(shadowArrayCode,/__as3NewArray/);
+    assert.match(shadowArrayCode,/return new \(__as3InitializeClass\(Array, true\)\)/);
     const typeofSource="package p { public class TypeofCheck { public function run(item:Object):void { if (typeof item !== \"object\") { return; } } } }";
     const typeofTree=built.parse("fixtures/TypeofCheck.as",typeofSource);
     const typeofNormalized=built.normalizer.normalizeParserAst(typeofTree,typeofSource,sha256);

@@ -46,6 +46,127 @@ export class AS3ArrayOperationUnavailable extends Error {
     constructor(message:string) { super(message); this.name = "AS3ArrayOperationUnavailable"; }
 }
 
+/** Storage history is observable through native splice hole ownership. */
+interface ArrayStorage { start:number; end:number; used:number; capacity:number; sparse:boolean; }
+const ARRAY_STORAGE = new WeakMap<unknown[],ArrayStorage | null>();
+const indexProperty = (name:string):boolean => /^(0|[1-9][0-9]*)$/.test(name) && Number(name) <= AS3_ARRAY_MAX_INDEX;
+const sparseStorage = (length:number,used:number):boolean => length > 0x7fffffff || length > 32 && length > (used+1)*4;
+function growStorage(state:ArrayStorage,length:number):void {
+    if (length > state.capacity) state.capacity=length+Math.floor(length/4);
+}
+/** Generated literals are fresh native dense arrays, not host species allocations. */
+export function as3ArrayLiteral<T>(value:T[]):T[] {
+    ARRAY_STORAGE.set(value,{start:0,end:value.length,used:value.length,capacity:Math.max(4,value.length),sparse:false});
+    return value;
+}
+export function as3NewArray(args:unknown[]):unknown[] {
+    as3ArrayConstructorArguments(args);
+    const value=Reflect.construct(Array,args) as unknown[];
+    if (args.length === 1 && typeof args[0] === "number")
+        ARRAY_STORAGE.set(value,{start:0,end:0,used:0,capacity:4,sparse:false});
+    else as3ArrayLiteral(value);
+    return value;
+}
+function storage(value:unknown[]):ArrayStorage | null {
+    if (ARRAY_STORAGE.has(value)) return ARRAY_STORAGE.get(value)!;
+    const names=Object.getOwnPropertyNames(value).filter(indexProperty);
+    // Untracked sparse host arrays carry no recoverable native allocation history.
+    if (names.length !== value.length) { ARRAY_STORAGE.set(value,null); return null; }
+    as3ArrayLiteral(value); return ARRAY_STORAGE.get(value)!;
+}
+function storageWrite(state:ArrayStorage,index:number,present:boolean):void {
+    if (state.sparse) return;
+    if (!present) ++state.used;
+    if (index >= 0x80000000) {state.sparse=true;return;}
+    if (state.end === state.start) {state.start=index;state.end=index+1;growStorage(state,1);return;}
+    if (index < state.start) {
+        const length=state.end-index;
+        if (sparseStorage(length,state.used)) {state.sparse=true;return;}
+        growStorage(state,length);
+        state.start-=Math.min(state.start,state.capacity-(state.end-state.start));
+    } else if (index >= state.end) {
+        if (sparseStorage(index+1-state.start,state.used)) {state.sparse=true;return;}
+        state.end=index+1;growStorage(state,state.end-state.start);
+    }
+}
+function storageLength(value:unknown[],state:ArrayStorage,oldLength:number,newLength:number):void {
+    if (state.sparse) return;
+    if (newLength < oldLength) {
+        if (newLength <= state.start) {state.start=state.end=state.used=0;return;}
+        state.end=Math.min(state.end,newLength);
+        state.used=Object.getOwnPropertyNames(value).filter(indexProperty).length;
+    } else if (newLength > oldLength && !(state.end === state.start && oldLength === 0)) {
+        if (sparseStorage(newLength-state.start,state.used)) {state.sparse=true;return;}
+        state.end=newLength;growStorage(state,state.end-state.start);
+    }
+}
+function deleteArrayIndex(value:unknown[],state:ArrayStorage,index:number):void {
+    if (Object.prototype.hasOwnProperty.call(value,index) && !state.sparse) {
+        --state.used;
+        if (state.used === 0) state.start=state.end=0;
+        else if (sparseStorage(state.end-state.start,state.used)) state.sparse=true;
+    }
+    Reflect.deleteProperty(value,String(index));
+}
+function spliceArray(value:unknown[],args:unknown[]):unknown[] | null {
+    if (Object.getPrototypeOf(value) !== Array.prototype)
+        throw new AS3ArrayOperationUnavailable("Array subclass splice requires retained native dispatch evidence");
+    if (!args.length) return null;
+    if (args.slice(0,2).some(item=>item !== null && (typeof item === "object" || typeof item === "function")))
+        throw new AS3ArrayOperationUnavailable("Reentrant Array splice coercion requires native evidence");
+    const length=value.length;
+    const rawStart=as3NativeNumber(args[0]);
+    const integer=Number.isNaN(rawStart) ? 0 : Math.trunc(rawStart);
+    const start=integer < 0 ? Math.max(length+integer,0) : Math.min(integer,length);
+    const rawCount=args.length < 2 ? length-start : as3NativeNumber(args[1]);
+    const count=Math.min(rawCount < 0 ? 0 : rawCount >>> 0,length-start);
+    const added=Math.max(0,args.length-2),delta=added-count,newLength=length+delta;
+    if (newLength > 0xffffffff)
+        throw new AS3ArrayOperationUnavailable("Array splice length overflow requires native evidence");
+    const state=storage(value);
+    if (!state) throw new AS3ArrayOperationUnavailable("Array splice requires retained native storage history");
+    if (!Object.isExtensible(value) || !Object.getOwnPropertyDescriptor(value,"length")?.writable
+        || Object.getOwnPropertySymbols(value).length
+        || [Array.prototype,Object.prototype].some(proto=>Object.getOwnPropertyNames(proto).some(indexProperty)))
+        throw new AS3ArrayOperationUnavailable("Array splice requires ordinary writable storage without inherited indices");
+    for (const key of Object.getOwnPropertyNames(value).filter(indexProperty)) {
+        const slot=Object.getOwnPropertyDescriptor(value,key)!;
+        if (!("value" in slot) || !slot.writable || !slot.enumerable || !slot.configurable)
+            throw new AS3ArrayOperationUnavailable("Array splice accessor and fixed slots require native evidence");
+    }
+    const fast=!state.sparse && start >= state.start && start+count <= state.end;
+    const removed:unknown[]=new Array(count);
+    if (fast) {
+        const priorEnd=state.end;
+        for(let i=0;i<count;i++) if(Object.prototype.hasOwnProperty.call(value,start+i)) removed[i]=value[start+i];
+        const copy=(from:number,to:number):void=>{
+            if(Object.prototype.hasOwnProperty.call(value,from)) value[to]=value[from];
+            else Reflect.deleteProperty(value,String(to));
+        };
+        if(delta < 0) for(let i=start+count;i<priorEnd;i++) copy(i,i+delta);
+        else if(delta > 0) for(let i=priorEnd-1;i>=start+count;i--) copy(i,i+delta);
+        for(let i=0;i<added;i++) value[start+i]=args[i+2];
+        if(delta < 0) for(let i=priorEnd+delta;i<priorEnd;i++) Reflect.deleteProperty(value,String(i));
+        value.length=newLength;
+        state.end+=delta;
+        if(state.end === state.start) state.start=state.end=0;
+        state.used=Object.getOwnPropertyNames(value).filter(indexProperty).length;
+        growStorage(state,state.end-state.start);
+        const removedUsed=Object.getOwnPropertyNames(removed).filter(indexProperty).length;
+        ARRAY_STORAGE.set(removed,{start:0,end:count,used:removedUsed,capacity:count>4 ? count+Math.floor(count/4) : 4,sparse:false});
+    } else {
+        for(let i=0;i<count;i++) removed[i]=value[start+i];
+        as3ArrayLiteral(removed);
+        if(delta < 0) {
+            for(let i=start+count;i<length;i++) as3ArrayWrite(value,i+delta,value[i]);
+            for(let i=newLength;i<length;i++) deleteArrayIndex(value,state,i);
+        } else for(let i=length-1;i>=start+count;i--) as3ArrayWrite(value,i+delta,value[i]);
+        for(let i=0;i<added;i++) as3ArrayWrite(value,start+i,args[i+2]);
+        as3ArrayLengthWrite(value,newLength);
+    }
+    return removed;
+}
+
 /** Numeric keys retain Flash's Number-to-name conversion without uint wrapping. */
 function numericKey(index:number):string {
     if (typeof index !== "number")
@@ -78,8 +199,10 @@ export function as3ArrayLengthWrite<T>(value:unknown,input:T):T {
     const length=as3NativeNumber(input) >>> 0;
     if (!Object.getOwnPropertyDescriptor(array,"length")?.writable)
         throw new AS3ArrayOperationUnavailable("Array length requires ordinary writable storage");
+    const oldLength=array.length,state=storage(array);
     if (!Reflect.set(array,"length",length))
         throw new AS3ArrayOperationUnavailable("Array host storage rejected the length write");
+    if (state) storageLength(array,state,oldLength,length);
     return input;
 }
 
@@ -91,8 +214,10 @@ export function as3ArrayWrite<T>(value: unknown, index: number, item: T): T {
         || Object.prototype.hasOwnProperty.call(Object.prototype,key)
         || own && (!("value" in own) || !own.writable) || !Object.getOwnPropertyDescriptor(array,"length")?.writable)
         throw new AS3ArrayOperationUnavailable("Array accessor and fixed-slot writes require native evidence");
+    const state=indexProperty(key) ? storage(array) : null;
     if (!Reflect.set(array,key,item))
         throw new AS3ArrayOperationUnavailable("Array host storage rejected the numeric write");
+    if (state) storageWrite(state,index,!!own);
     return item;
 }
 
@@ -102,11 +227,27 @@ export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown
 export function as3ArrayCall(value:unknown, method:"concat", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"join", args:unknown[]):string;
 export function as3ArrayCall(value:unknown, method:"sortOn", args:unknown[]):unknown[];
+export function as3ArrayCall(value:unknown, method:"splice", args:unknown[]):unknown[] | null;
+export function as3ArrayCall(value:unknown, method:"hasOwnProperty", args:unknown[]):boolean;
 export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unknown {
+    if (method === "hasOwnProperty") {
+        const array=ordinaryArray(value);
+        if (args.length !== 1 || typeof args[0] !== "string"
+            || Reflect.get(array,"hasOwnProperty") !== Object.prototype.hasOwnProperty)
+            throw new AS3ArrayOperationUnavailable("Array ownership requires one String key and an unmodified native method");
+        return Object.prototype.hasOwnProperty.call(array,args[0]);
+    }
+    if (method === "splice") {
+        const array=ordinaryArray(value);
+        if (Reflect.get(array,"splice") !== Array.prototype.splice)
+            throw new AS3ArrayOperationUnavailable("Overridden Array splice requires native dispatch evidence");
+        return spliceArray(array,args);
+    }
     if (method === "sortOn") {
         const array=ordinaryArray(value);
         if (args.length !== 2) throw new AS3ArrayOperationUnavailable("Array.sortOn requires field and numeric options");
-        return as3ArraySortOnNumeric(array,args[0],args[1]);
+        const sorted=as3ArraySortOnNumeric(array,args[0],args[1]);
+        ARRAY_STORAGE.set(array,null);return sorted;
     }
     if (value === null) {
         const error = new TypeError("Error #1009: Cannot access a property or method of a null object reference.");
@@ -125,7 +266,20 @@ export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unkno
     }
     if ((method === "push" || method === "unshift") && value.length + args.length > 0xffffffff)
         throw new AS3ArrayOperationUnavailable("Array length overflow requires retained native behavior");
-    return Reflect.apply(nativeMethod,value,args);
+    const priorLength=value.length,state=storage(value);
+    const result=Reflect.apply(nativeMethod,value,args);
+    if (state && method === "push" && args.length) {
+        if (!state.sparse) {
+            state.used+=args.length;
+            if(sparseStorage(value.length-state.start,state.used)) state.sparse=true;
+            else {state.end=value.length;growStorage(state,state.end-state.start);}
+        }
+    } else if (state && (args.length || priorLength) && method !== "push") {
+        // Existing operations keep their established semantics; splice must not
+        // reconstruct allocation history after an unqualified storage transition.
+        ARRAY_STORAGE.set(value,null);
+    }
+    return result;
 }
 
 /** Flash spreads Arrays one level, preserves holes and never consults JS species. */

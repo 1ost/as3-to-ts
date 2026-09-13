@@ -215,3 +215,32 @@ source files through this adapter and the real generated modules: distinct Item
 identities, native reflection names and failed global lookup match AIR. This is
 one state checkpoint with an empty frame, not startup or UI evidence. The original
 FrameCenterAdv now reaches its next hold, `Array.splice`; AP pins remain unchanged.
+
+
+### Native Array construction and splice storage
+
+Original Array literals and authenticated `new Array(...)` calls create ordinary
+Arrays through the shared runtime. An explicit IR marker distinguishes the native
+constructor from an original application class named Array. Class names and source
+bytes stay unchanged. The native constructor preserves sparse lengths and existing
+constructor range checks; direct/dynamic native allocation share the helper.
+
+Array.splice now retains omitted versus explicit arguments, Number start clamping,
+unsigned positive removal-count wrapping, null results, identity and source ordering.
+Its WeakMap storage state records allocation, indexed writes, length changes, push
+and previous splices. Native fast and generic paths have different hole ownership;
+current keys alone cannot reconstruct that history. Array.hasOwnProperty accepts
+one proven non-null String key for observing native ownership.
+
+Laya's array-splice fixture matches AIR on 43 checkpoints, including shrink/regrow,
+backward writes, sparse transitions, successive splices and trailing-slot cleanup.
+The runtime tests bind those captures to the source/scenario hashes and reject
+untracked sparse hosts, fixed/accessor storage and overridden methods. Subclass
+splice, reentrant object coercion, inherited indices, overflow and storage history
+after pop/shift/unshift/sortOn remain unqualified. Sparse concat output also has no
+retained splice history. These paths remain explicit runtime holds.
+
+Original FrameCenterAdv now clears Array.splice and next holds its implicit
+wildcard-to-Array assignment. No original scheduler closure or AP startup is
+published from this checkpoint. AP pins are not advanced until the scheduler's
+remaining shared compatibility issues are qualified.

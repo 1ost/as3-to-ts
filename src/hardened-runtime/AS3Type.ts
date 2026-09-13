@@ -1,3 +1,4 @@
+import { as3NewArray } from "./AS3Array";
 import {
     AS3Types,
     AS3TypeToken,
@@ -132,5 +133,6 @@ export function as3ConstructClass(value:unknown,args:unknown[]):unknown {
         error.name="VerifyError";Object.defineProperty(error,"errorID",{value:1001});throw error;
     }
     if (!target) throw new AS3ClassConstructionUnavailable("Class construction requires an authenticated registered constructor or interface");
+    if (target === Array) return as3NewArray(args);
     return Reflect.construct(target,args);
 }

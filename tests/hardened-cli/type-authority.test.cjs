@@ -188,12 +188,7 @@ test("central authority emission is deterministic, closed, ordered, hash-pinned,
     assert.doesNotMatch(first.code,/as3RegisterClass|as3DefineInterface|brand\s*\(/);
     const output=fs.mkdtempSync(path.join(os.tmpdir(),"as3-authority-module-"));
     try{
-        fs.mkdirSync(path.join(output,"internal"));
-        fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts"),path.join(output,"internal/AS3FileLocalIdentity.ts"));
-        fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/internal/AS3TypeRegistry.ts"),path.join(output,"internal/AS3TypeRegistry.ts"));
-        fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3Type.ts"),path.join(output,"AS3Type.ts"));
-        fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3MethodClosure.ts"),path.join(output,"AS3MethodClosure.ts"));
-        fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3ClassInitialization.ts"),path.join(output,"AS3ClassInitialization.ts"));
+        fs.cpSync(path.join(ROOT,"src/hardened-runtime"),output,{recursive:true});
         fs.writeFileSync(path.join(output,"AS3Authority.generated.ts"),first.code,"utf8");
         fs.writeFileSync(path.join(output,"Base.ts"),"const b=new WeakSet<object>(); export class Base{readonly _b=b.add(this)} export const isAS3ClassInstance=(v:unknown):v is Base=>b.has(v as object); export const as3ConstructionTarget=(_v:unknown):typeof Base|null=>null; export const isAS3ConstructionProof=(_v:unknown):boolean=>false;\n","utf8");
         fs.writeFileSync(path.join(output,"Child.ts"),"import {Base} from './Base'; const b=new WeakSet<object>(); export class Child extends Base{readonly _c=b.add(this)} export const isAS3ClassInstance=(v:unknown):v is Child=>b.has(v as object); export const as3ConstructionTarget=(_v:unknown):typeof Child|null=>null; export const isAS3ConstructionProof=(_v:unknown):boolean=>false;\n","utf8");

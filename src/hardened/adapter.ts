@@ -865,7 +865,11 @@ function nativeArrayBase(context: AdapterContext): boolean {
 }
 
 function isArrayType(type: SemanticType, context?: AdapterContext): boolean {
-    if (type.sourceName === "Array" && type.emittedName === "Array") return true;
+    if (context?.className === "Array" && type.runtimeName === context.classQualifiedName)
+        return context.extendsType !== null && context.extendsType.runtimeName !== context.classQualifiedName
+            && isArrayType(context.extendsType,context);
+    if (type.sourceName === "Array" && type.emittedName === "Array"
+        && (type.runtimeName === null || type.runtimeName === "Array")) return true;
     if (!context || !nativeArrayBase(context) || !type.runtimeName) return false;
     const visited = new Set<string>();
     let current:string | null = type.runtimeName;
@@ -2493,6 +2497,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node), {kind:"new" as const,dynamicClass:true as const,
                 sourceType:semanticType(node,"*","unknown"),constructorValue,arguments:args});
         }
+        if (name === "Array" && context.sourceMemberAuthority !== null && context.className !== name
+            && !context.locals[name] && !context.parameters[name] && !context.fields[name] && !context.methods[name]
+            && !context.accessors[name] && !context.importsByLocal[name] && !context.resolveImportedType(name,null,nameNode)) {
+            assertNoInheritedNativeFunctionShadow(context,name,nameNode);
+            const native=context.sourceMemberAuthority.entriesByQName.Array;
+            if (!native || native.baseQName !== "Object" || !native.dynamic || !native.ownInstanceMemberNames.includes("length"))
+                fail("HARDENED_ARRAY_CONSTRUCTOR_AUTHORITY", "Array construction requires the authenticated native SDK type",call);
+            for (const argument of args) if (assignmentType(argument,context,call).sourceName === "void")
+                fail("HARDENED_ARRAY_CONSTRUCTOR_ARGUMENT", "Array constructor arguments must produce values",call);
+            return Object.assign(identity(node),{kind:"new" as const,nativeArray:true as const,sourceType:semanticType(node,"Array","Array",[],false,"Array"),arguments:args});
+        }
         if (name === "Error" && context.sourceMemberAuthority !== null && context.className !== "Error"
             && !context.locals.Error && !context.parameters.Error && !context.fields.Error && !context.methods.Error
             && !context.accessors.Error && !context.importsByLocal.Error && !context.resolveImportedType("Error",null,nameNode)) {
@@ -3406,7 +3421,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
         }
-        if (target.kind !== "super" && ["length","push","pop","shift","unshift","concat","join","sortOn"].includes(name)) {
+        if (target.kind !== "super" && ["length","push","pop","shift","unshift","concat","join","sortOn","splice","hasOwnProperty"].includes(name)) {
             const arrayType = assignmentType(target,context,node);
             if (isArrayType(arrayType,context) && arrayType.sourceName !== "Array") {
                 const qname = arrayType.runtimeName!;
@@ -3565,7 +3580,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType,context) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType,context)
-                        && !valuePosition && ["push","pop","shift","unshift","concat","join","sortOn"].includes(name);
+                        && !valuePosition && ["push","pop","shift","unshift","concat","join","sortOn","splice","hasOwnProperty"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase", "charAt"].includes(name);
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
@@ -3869,11 +3884,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
             && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee),context)) {
             const name = callee.name;
-            if (!["push","pop","shift","unshift","concat","join","sortOn"].includes(name)
+            if (!["push","pop","shift","unshift","concat","join","sortOn","splice","hasOwnProperty"].includes(name)
                 || (["pop","shift"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1))
                 fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
                 fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
+            if (name === "hasOwnProperty" && (args.length !== 1
+                || assignmentType(args[0]!,context,node).sourceName !== "String" || assignmentType(args[0]!,context,node).nullable))
+                fail("HARDENED_ARRAY_OWNERSHIP", "Array ownership requires one non-null String key", node);
+            if (name === "splice" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
+                fail("HARDENED_ARRAY_SPLICE", "Array subclass splice requires native dispatch evidence", node);
             if (name === "sortOn") {
                 if (assignmentType(callee.target,context,rawCallee).runtimeName !== null
                     && assignmentType(callee.target,context,rawCallee).runtimeName !== "Array")
@@ -3893,7 +3913,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             capabilitySource = "Array";
             capabilityMember = name;
-            resultType = name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "sortOn" ? semanticType(node,"Array","Array",[],false)
+            resultType = name === "hasOwnProperty" ? semanticType(node,"Boolean","boolean") : name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "sortOn" || name === "splice" ? semanticType(node,"Array","Array",[],name === "splice")
                 : name === "push" || name === "unshift"
                 ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {

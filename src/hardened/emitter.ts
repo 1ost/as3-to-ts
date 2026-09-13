@@ -255,7 +255,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 : expressionNode(argument, ts)));
     }
     if (expression.kind === "array") {
-        return ts.factory.createArrayLiteralExpression(expression.elements.map(element => expressionNode(element, ts)), false);
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayLiteral"),undefined,
+            [ts.factory.createArrayLiteralExpression(expression.elements.map(element => expressionNode(element, ts)), false)]);
     }
     if (expression.kind === "object") {
         return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectLiteral"), undefined,
@@ -436,6 +437,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "new") {
+        if (expression.nativeArray)
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NewArray"),undefined,
+                [ts.factory.createArrayLiteralExpression(expression.arguments.map(argument=>expressionNode(argument,ts)))]);
         if (expression.sourceType.emittedName === "__AS3ArgumentError" && expression.sourceType.runtimeName === "ArgumentError")
             return ts.factory.createNewExpression(ts.factory.createIdentifier("__AS3ArgumentError"),undefined,
                 expression.arguments.map(argument => expressionNode(argument,ts)));
@@ -1479,6 +1483,8 @@ function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
 function arrayRuntimeImport(ts: TypeScriptCompilerApi): any {
     return ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayLiteral"),ts.factory.createIdentifier("__as3ArrayLiteral")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3NewArray"),ts.factory.createIdentifier("__as3NewArray")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayRead"),
                 ts.factory.createIdentifier("__as3ArrayRead")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayWrite"),
@@ -1500,7 +1506,8 @@ function programUsesArrayIndex(program: SemanticProgram): boolean {
         if (seen.has(value)) return false;
         seen.add(value);
         const record = value as { [key: string]: unknown };
-        if (record.kind === "assignment" && record.arrayLengthStorage
+        if (record.kind === "array" || record.kind === "new" && record.nativeArray
+            || record.kind === "assignment" && record.arrayLengthStorage
             || record.kind === "index" && record.accessKind === "array"
             || record.kind === "call" && record.capabilitySource === "Array"
             || record.kind === "forEach" && (record.iterableType as SemanticType)?.sourceName === "Array") return true;
