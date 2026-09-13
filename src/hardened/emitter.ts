@@ -655,10 +655,13 @@ function statementNode(statement: SemanticStatement, ts: TypeScriptCompilerApi):
             ], ts.NodeFlags.None)
             : ts.factory.createIdentifier(statement.binding.name);
         const iterable = expressionNode(statement.iterable, ts);
-        return ts.factory.createForOfStatement(undefined, binding,
-            ["Array","Dictionary"].includes(statement.iterableType.sourceName) ? ts.factory.createCallExpression(
-                ts.factory.createIdentifier(statement.iterableType.sourceName === "Dictionary" ? "__as3DictionaryValues" : "__as3ArrayValues"),undefined,[iterable,ts.factory.createStringLiteral(statement.binding.type.sourceName)])
-                : statement.iterableType.nullable ? ts.factory.createNonNullExpression(iterable) : iterable,
+        let values = ["Array","Dictionary"].includes(statement.iterableType.sourceName) ? ts.factory.createCallExpression(
+            ts.factory.createIdentifier(statement.iterableType.sourceName === "Dictionary" ? "__as3DictionaryValues" : "__as3ArrayValues"),undefined,
+            [iterable,ts.factory.createStringLiteral(statement.bindingReference ? "*" : statement.binding.type.sourceName)])
+            : statement.iterableType.nullable ? ts.factory.createNonNullExpression(iterable) : iterable;
+        if (statement.bindingReference) values = ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ReferenceValues"),undefined,
+            [values,runtimeTypeTokenNode({...statement.bindingReference,targetType:statement.binding.type},ts)]);
+        return ts.factory.createForOfStatement(undefined, binding, values,
             ts.factory.createBlock(statement.statements.map(item => statementNode(item, ts)), true));
     }
     if (statement.kind === "forIn") {
@@ -1427,7 +1430,7 @@ function embeddedBitmapDeclarations(program: SemanticProgram, imports: any[], ts
     });
 }
 
-function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
+function runtimeTypeImport(ts: TypeScriptCompilerApi, referenceEnumeration: boolean = false): any {
     const names = [
         ["AS3ClassValue", "__as3ClassValue"], ["AS3Types", "__as3Types"], ["as3As", "__as3As"], ["as3Is", "__as3Is"], ["as3Cast", "__as3Cast"],
         ["as3ClassType", "__as3ClassType"], ["as3InterfaceType", "__as3InterfaceType"],
@@ -1440,6 +1443,7 @@ function runtimeTypeImport(ts: TypeScriptCompilerApi): any {
         ["as3EnterConstruction", "__as3EnterConstruction"],
         ["as3AbortConstruction", "__as3AbortConstruction"],
         ["as3CompleteConstruction", "__as3CompleteConstruction"],
+        ...(referenceEnumeration ? [["as3ReferenceValues", "__as3ReferenceValues"]] : []),
     ].map(([exported, local]) => ts.factory.createImportSpecifier(false,
         ts.factory.createIdentifier(exported!), ts.factory.createIdentifier(local!)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1576,8 +1580,10 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3ObjectDispatch"),undefined));
     const globalCalls = new Map<string, Extract<SemanticExpression, {kind: "globalCall"}>>();
+    let referenceEnumeration = false;
     const collectGlobals = (value: any): void => {
         if (!value || typeof value !== "object") return;
+        if (value.kind === "forEach" && value.bindingReference) referenceEnumeration = true;
         if (value.kind === "globalCall" || value.kind === "globalFunction") globalCalls.set(value.name, value);
         Object.keys(value).forEach(key => collectGlobals(value[key]));
     };
@@ -1592,8 +1598,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     const implementsTypes = program.declaration.declarationKind === "packageField" || program.declaration.declarationKind === "packageFunction"
         ? [] : program.declaration.implementsTypes;
     if (program.declaration.declarationKind !== "packageField" || programUsesClassValue(program)
-        || programUsesRuntimeType(program) || implementsTypes.length > 0 || programUsesVector(program)) {
-        imports.push(runtimeTypeImport(ts));
+        || programUsesRuntimeType(program) || referenceEnumeration || implementsTypes.length > 0 || programUsesVector(program)) {
+        imports.push(runtimeTypeImport(ts,referenceEnumeration));
     }
     const argumentError=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "new" && value.sourceType.emittedName === "__AS3ArgumentError"

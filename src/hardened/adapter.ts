@@ -4326,8 +4326,10 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             const iterableType = isArrayType(actualIterableType,context)
                 ? semanticType(node,"Array","Array",[],actualIterableType.nullable,"Array") : actualIterableType;
             const elementType = vectorElement(iterableType);
+            const bindingReference = context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType))
+                ? referenceCoercionForType(header.type,context) : null;
             if (context.sourceMemberAuthority !== null && (isArrayType(iterableType,context) || isDictionaryType(iterableType))) {
-                if (!["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(header.type.sourceName)
+                if (!bindingReference && !["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(header.type.sourceName)
                     || declaresBinding && header.type.sourceName !== "*")
                     fail("HARDENED_FOREACH_ARRAY_BINDING", "Array/Dictionary enumeration requires a retained slot type and existing typed binding", declaration);
             } else {
@@ -4341,7 +4343,7 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                 return Object.assign(identity(node), {
                     kind: "forEach" as "forEach", binding: Object.assign(identity(declaration), {
                         name: header.name, type: header.type,
-                    }), declaresBinding, iterable, iterableType,
+                    }), ...(bindingReference ? {bindingReference} : {}), declaresBinding, iterable, iterableType,
                     statements: body.kind === "BLOCK"
                         ? parseBlock(body, context, constructor, derived, expectedReturn, false)
                         : [parseStatementNode(body, context, constructor, derived, expectedReturn, false)],

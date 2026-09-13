@@ -58,6 +58,11 @@ export function as3Cast<T extends object>(value: unknown, type: AS3TypeToken<T>)
     return castReference(value, type);
 }
 
+/** Cast before the loop binding is assigned; rejection retains its previous value. */
+export function* as3ReferenceValues<T extends object>(values: Iterable<unknown>, type: AS3TypeToken<T>): Generator<T | null, void, unknown> {
+    for (const value of values) yield castReference(value,type);
+}
+
 /** Unshadowable generated-constructor failure seam. It never observes application values. */
 export function as3RejectConstructorArity(className: string, minimum: number, maximum: number | null, actual?: number): never {
     if (typeof className !== "string" || className.length === 0 || !Number.isSafeInteger(minimum) || minimum < 0

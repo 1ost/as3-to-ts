@@ -237,3 +237,16 @@ test("constructor arity preserves qualified labels and actual argument counts",(
     assert.throws(()=>runtime.as3RejectConstructorArity("Required",1,1,2),{
         name:"ArgumentError",errorID:1063,message:"Error #1063: Argument count mismatch on Required(). Expected 1, got 2."});
 });
+
+test("reference enumeration preserves the last binding on rejection and stops reading the source",()=>{
+    const first=new Base(),child=new Child(),type=as3ClassType('test.Base',Base);
+    let binding=first,reads=0,closed=0;
+    function* input(){try {reads++;yield child;reads++;yield {};reads++;yield first;}finally{closed++;}}
+    assert.throws(()=>{for(binding of runtime.as3ReferenceValues(input(),type)){}},error=>error.errorID===1034);
+    assert.equal(binding,child);assert.equal(reads,2);assert.equal(closed,1);
+    assert.deepEqual([...runtime.as3ReferenceValues([undefined,null,child],type)],[null,null,child]);
+    assert.deepEqual([...runtime.as3ReferenceValues([child],as3InterfaceType('test.IRunnable'))],[child]);
+    binding=first;for(binding of runtime.as3ReferenceValues([],type)){}assert.equal(binding,first);
+    reads=0;closed=0;for(binding of runtime.as3ReferenceValues(input(),type))break;
+    assert.equal(binding,child);assert.equal(reads,1);assert.equal(closed,1);
+});
