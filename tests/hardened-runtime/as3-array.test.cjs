@@ -43,6 +43,22 @@ test("the read seam admits exactly native AS3 Array index identities", () => {
 });
 
 const {as3ArrayCall,AS3ArrayOperationUnavailable} = require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
+test('Array parameter slots retain native identity, diagnostics and rejection without conversion hooks',()=>{
+ const {as3FunctionArgument}=require(path.join(OUTPUT,'hardened-runtime/AS3Function.js'));
+ const folder=path.join(process.env.HARDENED_FIXTURE_LAYA,'tests/nativeFlashOracle/array-slot');
+ const native=JSON.parse(fs.readFileSync(path.join(folder,'native-air.json')));
+ const rows=new Map(native.capture.state.observations.map(row=>[row.id,row]));
+ const values=[];assert.equal(as3FunctionArgument(values,'Array'),values);
+ assert.equal(as3FunctionArgument(null,'Array'),null);assert.equal(as3FunctionArgument(undefined,'Array'),null);
+ for(const [id,value] of [['number-rejection',7],['string-rejection','bad'],['boolean-rejection',true]]){
+  assert.throws(()=>as3FunctionArgument(value,'Array'),{name:'TypeError',errorID:1034,message:rows.get(id).message});
+ }
+ const controls=rows.get('diagnostic-control-characters');
+ assert.throws(()=>as3FunctionArgument(controls.inputText,'Array'),{name:'TypeError',errorID:1034,message:controls.message});
+ let calls=0;const object={valueOf(){calls++;return [];},toString(){calls++;return 'array';}};
+ assert.throws(()=>as3FunctionArgument(object,'Array'),{name:'TypeError',errorID:1034});assert.equal(calls,0);
+ assert.throws(()=>as3FunctionArgument(new(class extends Array {})(),'Array'),AS3ArrayOperationUnavailable);
+});
 test('Array mutations preserve values, identity, ordering and empty results',()=>{
  const values=[],item={};
  assert.equal(as3ArrayCall(values,'push',[]),0);

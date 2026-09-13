@@ -116,6 +116,16 @@ supplies the implicit return without changing source bytes; other return types,
 getters, lambdas and package functions retain their existing path checks.
 The MPL-2.0 sorting adaptation is identified in THIRD_PARTY_NOTICES.md.
 
+## Native Array reference slots
+
+Authenticated native Array assignments from wildcard values preserve reference
+identity, normalize null/undefined to null and throw TypeError #1034 before
+changing a slot or entering a method on rejected values. User conversion hooks
+are not invoked. Consumed assignment expressions retain the right-hand value
+independently of the stored coercion. Native evidence is retained in LayaAir's
+`array-slot` fixture. Static Object-to-Array assignment and unauthenticated host
+subclasses remain held; this does not qualify complete application startup.
+
 ## Provenance and licenses
 
 The frozen parser and syntax model derive from `@as3web/as3-to-ts` 0.3.10 at

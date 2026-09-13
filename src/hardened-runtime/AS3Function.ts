@@ -1,3 +1,4 @@
+import { as3ArraySlot } from "./AS3Array";
 import { as3Boolean, as3Int, as3Number, as3Object, as3String, as3TraceValue, as3Uint } from "./AS3Coerce";
 
 export class AS3FunctionOperationUnavailable extends Error {
@@ -37,7 +38,7 @@ export function as3FunctionArgument(value:unknown, type:string):any {
         case "int": return as3Int(value);
         case "uint": return as3Uint(value);
         case "Boolean": return as3Boolean(value);
-        case "Array": if (value == null || Array.isArray(value)) return value == null ? null : value; break;
+        case "Array": return as3ArraySlot(value);
         case "Function": if (value == null || typeof value === "function") return value == null ? null : value; break;
     }
     throw new AS3FunctionOperationUnavailable(`Native function parameter conversion to ${type} requires further evidence`);

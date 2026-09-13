@@ -10,6 +10,22 @@ import { as3FunctionArgument } from "./AS3Function";
 
 export const AS3_ARRAY_MAX_INDEX = 0xfffffffe;
 
+/** Typed native Array slots are identity checks; conversion hooks never run. */
+export function as3ArraySlot(value:unknown):unknown[] | null {
+    if (value === null || value === undefined) return null;
+    if (Array.isArray(value)) {
+        if (!authenticatedArray(value))
+            throw new AS3ArrayOperationUnavailable("Array slot requires native or authenticated subclass identity");
+        return value;
+    }
+    // Native object addresses differ across processes; do not invent one or
+    // invoke user valueOf/toString while reporting a rejected reference slot.
+    const label=typeof value === "string" ? `"${value.replace(/\0/g,"")}"`
+        : typeof value === "object" || typeof value === "function" ? "value" : as3NativeString(value);
+    const error=new TypeError(`Error #1034: Type Coercion failed: cannot convert ${label} to Array.`);
+    Object.defineProperty(error,"errorID",{value:1034});throw error;
+}
+
 /** Validate the single numeric length before invoking native Array allocation. */
 export function as3ArrayConstructorArguments(args:unknown[]):unknown[] {
     const value=args[0];

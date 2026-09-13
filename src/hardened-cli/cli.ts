@@ -76,7 +76,7 @@ function sha256(data: string | Buffer): string {
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Enumeration.ts": "b7059948afc148589fe3b7b265064473643c879ae22785103e8a3df6c135cdcc",
     "internal/AS3ArraySort.ts": "2b869fcd6e6de7cbe7a39e27c24a12fba561f728edbf0e0749aaba9054c00f82",
-    "AS3Array.ts": "fcc9499bf140b5a7f80bdfaa53181356c6806bf6409dd6dd179f01fd879d6e2a",
+    "AS3Array.ts": "e0e0d074dd0753f3db75859c0c791d39b37800b569dbe4873d128bb499407d3c",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
     "AS3ByteArray.ts": "d42f79a903e9c34b98ab1dd247e20c216d230ff811869709794a3a6977e10d7e",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
@@ -85,7 +85,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Error.ts": "9ef96325ad8c55ff0172d3b2df8ea78f87af61414a62b7ded5b1e5011d13a889",
     "AS3Embed.ts": "41628cd8db111c12c5f12c8a51f036d37c839f8ae609986d0d24796e425d2055",
     "AS3Dictionary.ts": "6093e08ea252cc7926982934da92c1d7785d093880e196c798c67c5f8d7d8f84",
-    "AS3Function.ts": "79cb46943253f5330f987db91e19b060de2c169b9c0a309bb570bc943b1db891",
+    "AS3Function.ts": "cc1828a6c60fd2b3b8104af0662726fac3cc6c9d68444db7f8ed25b8a72d165e",
     "AS3MethodClosure.ts": "b6b25a872e14b134a2f728480f4e201c73ac4a466d24a890b7ecdd2dddafec20",
     "AS3ObjectDispatch.ts": "5b14d4f13b9e23a4855a21c1139e7fa6f4eae43380a0dc5f8e20057ad60a4895",
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",

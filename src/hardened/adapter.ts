@@ -2257,6 +2257,10 @@ function adaptAssignmentValue(target: SemanticType, expression: SemanticExpressi
     const reference = context.sourceMemberAuthority !== null ? referenceCoercionForType(target, context) : null;
     if (reference && ["*", "Object", "undefined"].includes(value.sourceName))
         return Object.assign(identity(node), {kind:"coercion" as const, reference, targetType:target, argument:expression});
+    if (nativeArrayBase(context) && target.sourceName === "Array" && target.emittedName === "Array"
+        && (target.runtimeName === null || target.runtimeName === "Array") && !context.importsByLocal.Array
+        && context.className !== "Array" && ["*", "undefined"].includes(value.sourceName))
+        return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
     const targetImport = context.importsByLocal[target.sourceName];
     if (context.sourceMemberAuthority !== null && isDictionaryType(target)
         && targetImport?.authorityKind === "intrinsic" && targetImport.sourceQualifiedName === "flash.utils.Dictionary"
