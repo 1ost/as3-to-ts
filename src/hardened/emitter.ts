@@ -562,6 +562,23 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "update") {
+        if (expression.numericLocal) {
+            if (expression.target.kind !== "identifier" || !["local","parameter"].includes(expression.target.bindingKind))
+                throw new HardenedSemanticError("HARDENED_EMIT_UPDATE", "numeric local update requires a writable lexical binding");
+            const prior=ts.factory.createIdentifier("__as3UpdatePrior");
+            const assignment=ts.factory.createBinaryExpression(expressionNode(expression.target,ts),
+                ts.factory.createToken(ts.SyntaxKind.EqualsToken),ts.factory.createBinaryExpression(prior,
+                    ts.factory.createToken(expression.operator === "++" ? ts.SyntaxKind.PlusToken : ts.SyntaxKind.MinusToken),
+                    ts.factory.createNumericLiteral(1)));
+            return ts.factory.createCallExpression(ts.factory.createParenthesizedExpression(
+                ts.factory.createArrowFunction(undefined,undefined,[ts.factory.createParameterDeclaration(
+                    undefined,undefined,prior,undefined,ts.factory.createKeywordTypeNode(ts.SyntaxKind.NumberKeyword))],undefined,
+                    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),ts.factory.createBlock(expression.prefix
+                        ? [ts.factory.createReturnStatement(assignment)]
+                        : [ts.factory.createExpressionStatement(assignment),ts.factory.createReturnStatement(prior)],true))),undefined,
+                [ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Number"),undefined,[expressionNode(expression.target,ts)])]);
+        }
+
         if (expression.target.kind === "index" && expression.target.accessKind === "object")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectUpdate"),undefined,[
                 expressionNode(expression.target.target,ts),expressionNode(expression.target.index,ts),

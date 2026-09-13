@@ -504,6 +504,7 @@ export interface ConditionalExpression extends SemanticIdentity {
 }
 
 export interface UpdateExpression extends SemanticIdentity {
+    numericLocal?: true;
     kind: "update";
     operator: "++" | "--";
     prefix: boolean;

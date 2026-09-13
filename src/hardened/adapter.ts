@@ -2982,6 +2982,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_UPDATE_TARGET", "update target must be a proven writable identity", node.children[0]!);
         }
         let resultType = assignmentTargetType(parsedTarget, context, node.children[0]!);
+        const dynamicLocalUpdate = context.sourceMemberAuthority !== null && resultType.sourceName === "*"
+            && parsedTarget.kind === "identifier" && ["local","parameter"].includes(parsedTarget.bindingKind);
+        if (dynamicLocalUpdate) resultType = semanticType(node,"Number","number");
         if (context.sourceMemberAuthority !== null && parsedTarget.kind === "index" && parsedTarget.accessKind === "object")
             resultType = semanticType(node,"Number","number");
         if (!["Number", "int", "uint"].includes(resultType.sourceName) || resultType.emittedName !== "number") {
@@ -2992,6 +2995,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             operator: (node.kind === "PRE_INC" || node.kind === "POST_INC" ? "++" : "--") as "++" | "--",
             prefix: node.kind === "PRE_INC" || node.kind === "PRE_DEC",
             target: parsedTarget,
+            ...(dynamicLocalUpdate ? {numericLocal:true as const} : {}),
             resultType,
         });
     }

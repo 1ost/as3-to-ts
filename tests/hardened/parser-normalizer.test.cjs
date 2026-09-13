@@ -1002,6 +1002,24 @@ try {
         assert.throws(()=>adapt('[0]'.repeat(65)),error=>error.code==='HARDENED_INDEX_SHAPE');
     }
     {
+        const adaptUpdate = body => {
+            const source=`package p { public class DynamicUpdate { ${body} } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("DynamicUpdate.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+        };
+        for(const expression of ['value++','++value','value--','--value']) {
+            const semantic=adaptUpdate(`public function run(value:*):Number {return ${expression};}`);
+            const update=semantic.declaration.members.find(m=>m.name==='run').body[0].expression;
+            assert.equal(update.kind,'update');assert.equal(update.numericLocal,true);
+            assert.equal(update.resultType.sourceName,'Number');
+        }
+        assert.throws(()=>adaptUpdate('public function run():Number {const value:*=0;return value++;}'),
+            error=>error.code==='HARDENED_ASSIGNMENT_READONLY');
+        assert.throws(()=>adaptUpdate('public var value:*;public function run():Number {return value++;}'),
+            error=>error.code==='HARDENED_UPDATE_NUMBER');
+    }
+    {
         const adaptObject = body => {
             const source = `package p { public class ObjectConversion { ${body} } }`;
             return built.adapter.adaptNormalizedParserAst(
