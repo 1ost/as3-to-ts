@@ -1,6 +1,6 @@
 import { AS3ArgumentError } from "./AS3Error";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
-import { lookupObjectClass, lookupObjectCaller, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
+import { lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod, isAS3MethodClosure } from "./AS3MethodClosure";
 
 type Member = AS3ObjectTraits["members"][number];
@@ -55,7 +55,6 @@ function dynamicClass(info:ClassInfo):boolean {
     if (typeof dynamic !== "boolean") return unavailable("Native dynamic class flag is unresolved");
     return dynamic;
 }
-function packageName(qname:string):string { return qname.slice(0,Math.max(0,qname.lastIndexOf("."))); }
 function findTrait(info:ClassInfo, key:string, caller:string | null, publicOnly:boolean):Member[] {
     const context = caller === null ? [] : lookupObjectCaller(caller);
     const matches:Member[] = [];
@@ -68,11 +67,11 @@ function findTrait(info:ClassInfo, key:string, caller:string | null, publicOnly:
         for (const member of owner.traits!.members.filter(member => member.name === key)) {
             if (member.namespaceName !== null) return unavailable("Named namespace URIs require authenticated resolution");
             const namespace = member.visibility === "private" ? `private:${owner.qname}`
-                : member.visibility === "internal" ? `internal:${packageName(owner.qname)}` : member.visibility;
+                : member.visibility === "internal" ? `internal:${owner.packageName}` : member.visibility;
             storage.add(namespace);
             const visible = member.visibility === "public" || !publicOnly && caller !== null && (
                 member.visibility === "private" && caller === owner.qname
-                || member.visibility === "internal" && packageName(caller) === packageName(owner.qname));
+                || member.visibility === "internal" && lookupObjectCallerPackage(caller) === owner.packageName);
             if (!publicOnly && member.visibility === "protected" && context.includes(owner.qname))
                 return unavailable("Protected dynamic lookup requires retained inheritance evidence");
             if (visible) matches.push(member);
@@ -90,7 +89,7 @@ export function as3ObjectFunctionLabel(value:unknown):string | null {
 const BUILTINS = new Map<string,Function>();
 BUILTINS.set("toString", labelFunction(function(this:unknown):string {
     const target = receiver(this), info = describe(target);
-    return `[object ${info ? info.qname.split(".").pop() : "Object"}]`;
+    return `[object ${info ? info.localName : "Object"}]`;
 },"function Function() {}"));
 BUILTINS.set("hasOwnProperty", labelFunction(function(this:unknown,key:unknown):boolean {
     return as3ObjectHasOwn(this,key === undefined ? null : key);
@@ -109,7 +108,7 @@ BUILTINS.set("propertyIsEnumerable",labelFunction(function(this:unknown,key:unkn
 },"function Function() {}"));
 BUILTINS.set("setPropertyIsEnumerable",labelFunction(function(this:unknown,key:unknown,flag?:unknown):void {
     const target=receiver(this), name=keyName(key === undefined ? null : key), info=describe(target);
-    if (info && !dynamicClass(info)) referenceError(1056,name,info.qname);
+    if (info && !dynamicClass(info)) referenceError(1056,name,info.diagnosticName);
     const descriptor=Object.getOwnPropertyDescriptor(target,name);
     if (descriptor) Object.defineProperty(target,name,{...descriptor,enumerable:arguments.length < 2 ? true : Boolean(flag)});
 },"function Function() {}"));
@@ -138,9 +137,9 @@ export function as3ObjectRead(value:unknown, key:unknown, caller:string | null =
     if (BUILTINS.has(name)) return BUILTINS.get(name);
     if (name === "constructor") {
         const ctor = info?.constructor ?? Object;
-        return labelFunction(ctor,`[class ${info ? info.qname.split(".").pop() : "Object"}]`);
+        return labelFunction(ctor,`[class ${info ? info.localName : "Object"}]`);
     }
-    if (info && !dynamicClass(info)) return referenceError(1069,name,info.qname);
+    if (info && !dynamicClass(info)) return referenceError(1069,name,info.diagnosticName);
     return undefined;
 }
 function slotValue(type:string,value:unknown):unknown {
@@ -163,9 +162,9 @@ export function as3ObjectWrite(value:unknown,key:unknown,next:unknown,caller:str
         const members = findTrait(info,name,caller,false);
         const writable = members.find(member => member.kind === "field" || member.kind === "setter");
         if (writable) { Reflect.set(target,name,slotValue(writable.type,next)); return next; }
-        if (members.some(member => member.kind === "method")) return referenceError(1037,name,info.qname);
-        if (members.length) return referenceError(1074,name,info.qname);
-        if (!dynamicClass(info)) return referenceError(1056,name,info.qname);
+        if (members.some(member => member.kind === "method")) return referenceError(1037,name,info.diagnosticName);
+        if (members.length) return referenceError(1074,name,info.diagnosticName);
+        if (!dynamicClass(info)) return referenceError(1056,name,info.diagnosticName);
     }
     Object.defineProperty(target,name,{value:next,writable:true,enumerable:true,configurable:true});
     return next;
@@ -264,7 +263,7 @@ function nativePrimitive(value:object, hint:"string" | "number", active:Set<obje
 }
 function nativeString(value:unknown, active:Set<object>):string {
     const className=lookupStringClassName(value);
-    if (className !== null) return `[class ${className.split(".").pop()}]`;
+    if (className !== null) return `[class ${className.slice(className.lastIndexOf("::") >= 0 ? className.lastIndexOf("::") + 2 : className.lastIndexOf(".") + 1)}]`;
     if (typeof value === "function") return as3ObjectFunctionLabel(value) ?? "function Function() {}";
     if (value === null || typeof value !== "object") return String(value);
     return String(nativePrimitive(value,"string",active));

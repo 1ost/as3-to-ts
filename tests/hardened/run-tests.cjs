@@ -110,6 +110,7 @@ function assertGeneratedRuntimeTypechecks(outputs) {
         fs.mkdirSync(generated, { recursive: true });
         fs.mkdirSync(path.join(root, "base"), { recursive: true });
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Type.ts"), path.join(runtime, "AS3Type.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/internal/AS3FileLocalIdentity.ts"), path.join(runtime, "internal", "AS3FileLocalIdentity.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/internal/AS3TypeRegistry.ts"),
             path.join(runtime, "internal", "AS3TypeRegistry.ts"));
         fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3MethodClosure.ts"), path.join(runtime, "AS3MethodClosure.ts"));

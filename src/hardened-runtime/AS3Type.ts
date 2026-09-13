@@ -30,7 +30,7 @@ export function as3ReflectionClassIdentity(value: unknown): string | null {
     if (isAS3MethodClosure(value)) return "builtin.as$0::MethodClosure";
     const className = lookupStringClassName(value);
     if (className !== null) return className;
-    return lookupObjectClass(value)?.qname ?? null;
+    return lookupObjectClass(value)?.reflectionName ?? null;
 }
 
 export function as3ClassType<T extends object>(name: string,

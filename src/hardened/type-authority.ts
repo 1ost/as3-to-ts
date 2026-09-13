@@ -1,4 +1,5 @@
 import { staticConstant } from "./static-constants";
+import { AS3FileLocalClassScope, fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLocalIdentity";
 import { LoadedSourceMemberAuthority, assertLoadedSourceMemberAuthority } from "./source-member-authority";
 import { HardenedSemanticError, SemanticExpression, SemanticField, SemanticMember, SemanticProgram } from "./contracts";
 import { assertAdaptedSemanticProgram } from "./adapter";
@@ -18,6 +19,7 @@ export interface RuntimeAuthorityClassSource {
     readonly base: string | null;
     readonly interfaces: readonly string[];
     readonly sourceSha256: string;
+    readonly fileLocalScope?: AS3FileLocalClassScope;
     readonly definitionSafe: true;
     readonly module: string;
     readonly constructorExport: string;
@@ -229,7 +231,7 @@ export function withNativeObjectMemberCensus(sources: readonly RuntimeAuthorityS
 export function localRuntimeTypeAuthoritySource(program: SemanticProgram, moduleSpecifier: string): RuntimeAuthorityClassSource {
     assertAdaptedSemanticProgram(program);
     if (!program || program.schema !== "as3-semantic-ir@1" || program.declaration.declarationKind !== "class"
-        || !program.declaration.modifiers.includes("public") || !generatedLocalModule(moduleSpecifier)) {
+        || (!program.fileLocalScope && !program.declaration.modifiers.includes("public")) || !generatedLocalModule(moduleSpecifier)) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_LOCAL", "local runtime identity must be one public authenticated class module");
     }
     const proof = localRuntimeProofs.get(program as unknown as object);
@@ -237,7 +239,12 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE",
             `local runtime identity ${program.declaration.name} lacks a complete definition-only import proof`);
     }
-    const qname = program.packageName.length === 0 ? program.declaration.name
+    const fileLocalScope = program.fileLocalScope ? Object.freeze({...program.fileLocalScope}) : undefined;
+    if (fileLocalScope && (program.packageName !== "" || program.declaration.name !== fileLocalScope.name
+        || program.declaration.modifiers.some(value => value !== "dynamic"))) {
+        throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_LOCAL", "file-local runtime class differs from its source scope");
+    }
+    const qname = fileLocalScope ? fileLocalClassIdentity(fileLocalScope).key : program.packageName.length === 0 ? program.declaration.name
         : `${program.packageName}.${program.declaration.name}`;
     const fields: RuntimeAuthorityClassSource["fields"] = Object.freeze(program.declaration.members
         .filter((member): member is SemanticField => member.kind === "field"
@@ -248,7 +255,8 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         base: program.declaration.extendsType?.runtimeName ?? null,
         interfaces: Object.freeze(program.declaration.implementsTypes.map(item => item.runtimeName)),
         sourceSha256: program.sourceSha256, definitionSafe: true,
-        module: moduleSpecifier, constructorExport: program.declaration.name, predicateExport: "isAS3ClassInstance",
+        ...(fileLocalScope ? {fileLocalScope} : {}),
+        module: moduleSpecifier, constructorExport: fileLocalScope ? "__as3FileLocalClass" : program.declaration.name, predicateExport: "isAS3ClassInstance",
         constructionTargetExport: "as3ConstructionTarget", constructionProofExport: "isAS3ConstructionProof",
         fields,
         // Only native-proven dynamic class scopes are admitted by the adapter.
@@ -471,7 +479,7 @@ export function assertLocalRuntimeDefinitionClosure(programs: readonly SemanticP
     });
     const byQName = new Map<string, SemanticProgram>();
     definitions.forEach(program => {
-        const qname = program.packageName.length === 0 ? program.declaration.name
+        const qname = program.fileLocalScope ? fileLocalClassIdentity(program.fileLocalScope).key : program.packageName.length === 0 ? program.declaration.name
             : `${program.packageName}.${program.declaration.name}`;
         if (byQName.has(qname)) {
             throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_DEFINITION_CLOSURE",
@@ -652,7 +660,8 @@ function sourceMetadata(entry: RuntimeAuthoritySource): object {
     return entry.kind === "interface"
         ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
         : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
-            sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}) };
+            sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}),
+            ...(entry.fileLocalScope ? {fileLocalScope:entry.fileLocalScope} : {}) };
 }
 
 function canonicalMetadata(entries: readonly RuntimeAuthoritySource[]): string {
@@ -676,6 +685,11 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
     sources.forEach(source => {
         if (!stableName(source.qname) || byName.has(source.qname)) {
             throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_IDENTITY", "runtime type authority has an invalid or duplicate QName");
+        }
+        if (source.kind === "class" && source.fileLocalScope
+            && (fileLocalClassIdentity(source.fileLocalScope).key !== source.qname
+                || source.evaluationOrder === null || !source.objectTraits || source.nativeObjectTraits)) {
+            throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_LOCAL", "file-local runtime authority lacks its generated source scope");
         }
         const dependencies = source.kind === "interface" ? source.bases
             : (source.base === null ? source.interfaces : [source.base, ...source.interfaces]);
@@ -744,7 +758,7 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
             return `    { kind: "interface", qname: ${quote(source.qname)}, bases: ${JSON.stringify(source.bases)} },`;
         }
         const index = importIndex.get(source)!;
-        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}${source.nativeObjectTraits ? `nativeObjectTraits: ${JSON.stringify(source.nativeObjectTraits)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
+        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}${source.nativeObjectTraits ? `nativeObjectTraits: ${JSON.stringify(source.nativeObjectTraits)}, ` : ""}${source.fileLocalScope ? `fileLocalScope: ${JSON.stringify(source.fileLocalScope)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
     });
     const qnames = ordered.map(source => source.qname);
     const code = [
@@ -762,7 +776,7 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
         "    qnames: AS3_TYPE_AUTHORITY_QNAMES, entries });",
         "// Optional host publication; obtaining these bindings does not execute class initializers.",
         "export const AS3_CLASS_DEFINITIONS = Object.freeze([",
-        ...classes.map(source => {
+        ...classes.filter(source => !source.fileLocalScope).map(source => {
             const index = importIndex.get(source)!;
             return `    Object.freeze({ name: ${quote(source.qname)}, definition: __as3Class${index}, initialize: () => { __as3InitializePublishedClass(__as3Class${index}); } }),`;
         }),

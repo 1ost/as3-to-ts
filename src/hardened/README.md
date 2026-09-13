@@ -171,11 +171,15 @@ not enter the global local-type map. Package imports are not copied into their
 file scope. The member-map loader validates and freezes the nested headers
 against the containing type's authenticated source path and owner.
 
-This is declaration support only. Semantic adaptation and emission still reject
-nonempty file scope with `HARDENED_OUTSIDE_PACKAGE`; scoped references, runtime
-class identity, constructors and reflection must be implemented and compared
-with native AIR before this hold can be removed. A reflection namespace string
-alone must not become a global class identity or ApplicationDomain definition.
+Semantic adaptation still rejects nonempty original file scope with
+`HARDENED_OUTSIDE_PACKAGE`. The emitter and runtime now accept a scoped private
+class IR: its original class name remains module-private, while one compiler
+binding exports its constructor to generated callers and the sealed registry.
+The registry uses the source module/path/name as nominal identity, with a separate
+native reflection name. Private constructors are excluded from
+`AS3_CLASS_DEFINITIONS`; reflection labels cannot be used as reference-type keys.
+Original-source scoped type/member resolution and compilation-unit output are
+still required before the adapter hold can be removed.
 
 Validation: `npm run build`, then `TMPDIR=/private/tmp node --test
 tests/hardened-cli/declaration-worker.test.cjs
@@ -187,3 +191,15 @@ The original 4,114-byte `FrameCenterAdv.as` (SHA-256
 `d3f33664f123af9b32bf141c0ba521fafb068943911ae4e2f3a8b6a86c6781a2`)
 also extracts its unchanged private `Item` and its four fields. This does not yet
 qualify the scheduler for Laya or advance AP's pinned toolchain.
+
+`tests/flash-oracle/file-local-class` retains two identical AIR 51.3.3 captures:
+two `Owner.as` files have distinct private `Item` classes despite reporting the
+same `FilePrivateNS:Owner::Item` name. The `type-authority.test.cjs` emitter test
+builds the corresponding private class IR, compiles the real emitted modules and
+authority, and compares the first 17 retained values: identity, `is`, reflection,
+String labels, initialized fields and missing-property error. It also checks
+that no private definition is published. This is emitter/runtime evidence,
+not original-AS3 CLI admission or browser/native scheduler parity. The final
+native global-lookup failure is retained, but this test does not run a Laya
+ApplicationDomain lookup. Runtime scope tests reject altered keys, malformed
+paths, missing scopes, native constructor substitution and stale metadata hashes.

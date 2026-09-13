@@ -1,3 +1,5 @@
+import type { AS3FileLocalClassScope } from "../hardened-runtime/internal/AS3FileLocalIdentity";
+
 export interface SourceSpan {
     start: number;
     end: number;
@@ -739,6 +741,7 @@ export interface SemanticProgram extends SemanticIdentity {
     outputModulePath: string;
     imports: SemanticImport[];
     declaration: SemanticDeclaration;
+    fileLocalScope?: AS3FileLocalClassScope;
     sourceCapabilitySha256: string;
     targetCapabilitySha256: string;
     capabilityMappingSha256: string;

@@ -1,3 +1,5 @@
+import { AS3FileLocalClassScope, fileLocalClassIdentity } from "./AS3FileLocalIdentity";
+
 export interface AS3TypeToken<T> {
     readonly name: string;
 }
@@ -37,6 +39,7 @@ export interface AS3ClassAuthorityEntry {
     readonly base: string | null;
     readonly interfaces: readonly string[];
     readonly sourceSha256: string;
+    readonly fileLocalScope?: AS3FileLocalClassScope;
     readonly objectTraits?: AS3ObjectTraits;
     readonly nativeObjectTraits?: AS3NativeObjectTraits;
     readonly fields: readonly { readonly name: string; readonly policy: "zero" | "nan" | "false" | "null" | "undefined" }[];
@@ -64,7 +67,16 @@ const CLASS_PREDICATES = new WeakMap<Function, (value: unknown) => boolean>();
 const CLASS_CONSTRUCTION_TARGETS = new WeakMap<Function, (value: unknown) => RuntimeConstructor | null>();
 const CLASS_CONSTRUCTION_PROOFS = new WeakMap<Function, (value: unknown) => boolean>();
 const CLASS_FIELD_DEFAULTS = new WeakMap<Function, AS3ClassAuthorityEntry["fields"]>();
-const CLASS_OBJECT_ENTRIES = new WeakMap<Function, Readonly<{qname:string; traits:AS3ObjectTraits | null; nativeTraits:AS3NativeObjectTraits | null}>>();
+interface ClassObjectEntry {
+    readonly qname: string;
+    readonly reflectionName: string;
+    readonly diagnosticName: string;
+    readonly localName: string;
+    readonly packageName: string;
+    readonly traits: AS3ObjectTraits | null;
+    readonly nativeTraits: AS3NativeObjectTraits | null;
+}
+const CLASS_OBJECT_ENTRIES = new WeakMap<Function, Readonly<ClassObjectEntry>>();
 const CLASS_BASES = new WeakMap<Function, RuntimeConstructor | null>();
 const REGISTERED_CLASSES: Function[] = [];
 const INTERFACE_TOKENS = new Map<string, AS3TypeToken<object>>();
@@ -241,7 +253,7 @@ export function referenceType<T extends object>(name: string,
     runtimeValue: RuntimeConstructor<T> | AS3TypeToken<T>): AS3TypeToken<T> {
     if (typeof runtimeValue === "function") return lookupClassType(name, runtimeValue as RuntimeConstructor<T>);
     requireKind(runtimeValue, ["class", "interface"]);
-    if (runtimeValue.name !== name || lookupNamedReferenceType(name) !== runtimeValue) {
+    if (lookupNamedReferenceType(name) !== runtimeValue) {
         throw new TypeError("AS3 reference value has a different identity");
     }
     return runtimeValue;
@@ -407,7 +419,8 @@ function canonicalAuthorityMetadata(document: AS3TypeAuthorityDocument): string 
         entries: document.entries.map(entry => entry.kind === "interface"
             ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
             : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
-                sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}) }),
+                sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}),
+                ...(entry.fileLocalScope ? {fileLocalScope:entry.fileLocalScope} : {}) }),
     });
 }
 
@@ -471,7 +484,8 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
         document.entries.forEach((entry, index) => {
             if (!entry || typeof entry !== "object" || entry.qname !== document.qnames[index]
                 || !stableRuntimeTypeName(entry.qname) || seen.has(entry.qname)
-                || INTERFACE_TOKENS.has(entry.qname) || CLASS_BY_QNAME.has(entry.qname)) {
+                || INTERFACE_TOKENS.has(entry.qname) || CLASS_BY_QNAME.has(entry.qname)
+                || (entry.qname.startsWith("FilePrivate(") && (entry.kind !== "class" || !entry.fileLocalScope))) {
                 throw new TypeError("AS3 authority has duplicate, drifted, or out-of-order QName identity");
             }
             if (entry.kind === "interface") {
@@ -499,7 +513,7 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                 }, sealedClosure);
                 INTERFACE_TOKENS.set(entry.qname, token);
             } else if (entry.kind === "class") {
-                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), ...(entry.nativeObjectTraits ? ["nativeObjectTraits"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
+                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), ...(entry.nativeObjectTraits ? ["nativeObjectTraits"] : []), ...(entry.fileLocalScope ? ["fileLocalScope"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
                     `AS3 class ${entry.qname}`);
                 if (entry.base !== null && (!seen.has(entry.base) || !CLASS_BY_QNAME.has(entry.base))) {
                     throw new TypeError(`AS3 class ${entry.qname} has a missing, cyclic, or out-of-order class base`);
@@ -527,9 +541,15 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                     if (!token) throw new TypeError(`AS3 class ${entry.qname} interface reference is not an interface`);
                     closure.add(token); interfaceClosure(token).forEach(item => closure.add(item));
                 });
+                const scopedIdentity = entry.fileLocalScope ? fileLocalClassIdentity(entry.fileLocalScope) : null;
+                if (scopedIdentity !== null && (scopedIdentity.key !== entry.qname
+                    || !localConstruction || !entry.objectTraits || entry.nativeObjectTraits)) {
+                    throw new TypeError("AS3 file-local class identity differs from its generated source scope");
+                }
+                const reflectionName = scopedIdentity?.reflectionName ?? entry.qname;
                 const predicate = entry.predicate;
                 let token: AS3TypeToken<object>;
-                token = createTypeToken<object>("class", entry.qname,
+                token = createTypeToken<object>("class", reflectionName,
                     (value): value is object => classValueMatches(value, entry.constructor),
                     Object.freeze(Array.from(closure)));
                 CLASS_TOKENS.set(entry.constructor, token);
@@ -564,6 +584,9 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                     validateQNameList(traits.names,"AS3 native member names");
                 }
                 CLASS_OBJECT_ENTRIES.set(entry.constructor, Object.freeze({qname:entry.qname,
+                    reflectionName, diagnosticName: scopedIdentity ? reflectionName.replace("::", ".") : entry.qname,
+                    localName: scopedIdentity?.localName ?? entry.qname.slice(entry.qname.lastIndexOf(".") + 1),
+                    packageName: scopedIdentity ? "" : entry.qname.slice(0, Math.max(0, entry.qname.lastIndexOf("."))),
                     nativeTraits:entry.nativeObjectTraits ? Object.freeze({...entry.nativeObjectTraits,names:Object.freeze([...entry.nativeObjectTraits.names])}) : null, traits:entry.objectTraits
                     ? Object.freeze({dynamic:entry.objectTraits.dynamic,
                         members:Object.freeze(entry.objectTraits.members.map((member:AS3ObjectTraits["members"][number]) => Object.freeze({...member})))}) : null}));
@@ -588,8 +611,9 @@ export function authorityStatus(): Readonly<{ sealed: boolean; sha256: string | 
 }
 
 /** Resolve only registered allocation identities; never infer traits from JS fields. */
-export function lookupObjectClass(value: unknown): Readonly<{qname:string; constructor:RuntimeConstructor;
-    chain:readonly Readonly<{qname:string; traits:AS3ObjectTraits | null; nativeTraits:AS3NativeObjectTraits | null}>[]}> | null {
+export function lookupObjectClass(value: unknown): Readonly<{qname:string; reflectionName:string;
+    diagnosticName:string; localName:string; constructor:RuntimeConstructor;
+    chain:readonly Readonly<ClassObjectEntry>[]}> | null {
     requireSealed();
     if ((typeof value !== "object" && typeof value !== "function") || value === null) return null;
     let selected: RuntimeConstructor | null = pendingConstructionTarget(value);
@@ -604,7 +628,9 @@ export function lookupObjectClass(value: unknown): Readonly<{qname:string; const
     const chain = [];
     for (let current:RuntimeConstructor | null = selected; current !== null; current = CLASS_BASES.get(current) ?? null)
         chain.push(CLASS_OBJECT_ENTRIES.get(current)!);
-    return Object.freeze({qname:chain[0]!.qname, constructor:selected, chain:Object.freeze(chain)});
+    return Object.freeze({qname:chain[0]!.qname, reflectionName:chain[0]!.reflectionName,
+        diagnosticName:chain[0]!.diagnosticName, localName:chain[0]!.localName,
+        constructor:selected, chain:Object.freeze(chain)});
 }
 
 /** Lexical callers come from generated class identity, not the receiver's fields. */
@@ -619,13 +645,18 @@ export function lookupObjectCaller(qname: string): readonly string[] {
     return Object.freeze(result);
 }
 
+export function lookupObjectCallerPackage(qname: string): string {
+    lookupObjectCaller(qname);
+    return CLASS_OBJECT_ENTRIES.get(CLASS_BY_QNAME.get(qname)!.constructor)!.packageName;
+}
+
 /** Class string labels come only from builtin or authenticated runtime identity. */
 export function lookupStringClassName(value:unknown):string | null {
     if (typeof value === "function") {
         const builtin = [Object,Array,Number,Boolean,String,Function].find(item => item === value);
         if (builtin) return builtin.name;
         requireSealed();
-        return CLASS_OBJECT_ENTRIES.get(value)?.qname ?? null;
+        return CLASS_OBJECT_ENTRIES.get(value)?.reflectionName ?? null;
     }
     if (value !== null && typeof value === "object" && TYPE_TOKENS.has(value))
         return (value as AS3TypeToken<unknown>).name;

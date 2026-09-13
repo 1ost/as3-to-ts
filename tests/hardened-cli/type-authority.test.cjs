@@ -26,7 +26,7 @@ function loadLocalModule(file) {
 }
 const staticConstants=loadLocalModule(path.join(ROOT,"src/hardened/static-constants.ts"));
 const emitterModule=loadTranspiled(path.join(ROOT,"src/hardened/emitter.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}
-    :specifier==="./adapter"?adapterModule:specifier==="./static-constants"?staticConstants:require(specifier));
+    :specifier==="./adapter"?adapterModule:specifier==="./static-constants"?staticConstants:specifier==="../hardened-runtime/internal/AS3FileLocalIdentity"?loadLocalModule(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts")):require(specifier));
 const sourceMembers=loadTranspiled(path.join(ROOT,"src/hardened/source-member-authority.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}:require(specifier));
 const source = fs.readFileSync(path.join(ROOT, "src/hardened/type-authority.ts"), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020,
@@ -34,7 +34,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.Scri
 const moduleValue = { exports: {} };
 Function("require", "module", "exports", compiled)(specifier=>specifier==="./contracts"?{HardenedSemanticError}
     :specifier==="./source-member-authority"?sourceMembers:specifier==="./adapter"?adapterModule:specifier==="./emitter"?emitterModule
-        :specifier==="./static-constants"?staticConstants:specifier==="typescript-4-9"?ts:require(specifier),moduleValue,moduleValue.exports);
+        :specifier==="./static-constants"?staticConstants:specifier==="../hardened-runtime/internal/AS3FileLocalIdentity"?loadLocalModule(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts")):specifier==="typescript-4-9"?ts:require(specifier),moduleValue,moduleValue.exports);
 const { assertLocalRuntimeDefinitionClosure, emitRuntimeTypeAuthority, loadMappedRuntimeTypeAuthority, localRuntimeTypeAuthoritySource,
     localRuntimeInterfaceAuthoritySource, emitRuntimeApplicationEntry } = moduleValue.exports;
 const sha256 = value => crypto.createHash("sha256").update(value).digest("hex");
@@ -70,6 +70,71 @@ test("mapped Laya predicate authority is pinned as one exact 28-type capability 
     const inventory=JSON.parse(fs.readFileSync(path.join(ROOT,"package.json"),"utf8")).files;
     assert.ok(inventory.includes("config/runtime-type-authority-lock.json"));
     assert.ok(inventory.includes("config/runtime-type-predicates.json"));
+});
+
+test("emitted file-private classes keep nominal identity separate from native names and publication", t => {
+    const fixture = path.join(ROOT, "tests/flash-oracle/file-local-class");
+    const golden = JSON.parse(fs.readFileSync(path.join(fixture, "native-air.json"), "utf8"));
+    const nativeCapture = fs.readFileSync(path.join(fixture, "native-capture.json"));
+    assert.equal(sha256(nativeCapture),golden.nativeCaptureSha256);
+    assert.deepEqual(JSON.parse(nativeCapture),golden.capture);
+    for (const [relative, digest] of Object.entries(golden.files))
+        assert.equal(sha256(fs.readFileSync(path.join(fixture, relative))), digest, relative);
+    const programs = ["first", "second"].map(owner => {
+        const program = classProgram("Item", {packageName:"", outputModulePath:`${owner}/Item.ts`});
+        program.sourceSha256 = golden.files[`source/${owner}/Owner.as`];
+        program.declaration.modifiers = [];
+        program.declaration.members = [{...semanticIdentity, kind:"field", name:"label", modifiers:["public"],
+            namespaceName:null, readonly:false, type:{...typeRef("String"),runtimeName:null,nullable:true},
+            initializer:{...semanticIdentity,kind:"literal",value:owner}, implicitDefault:"null"}];
+        program.fileLocalScope = {module:"application",sourcePath:`${owner}/Owner.as`,ownerQualifiedName:`${owner}.Owner`,name:"Item"};
+        return program;
+    });
+    prove(...programs);
+    const sources = programs.map((program,index) => localRuntimeTypeAuthoritySource(program,`../${index===0?"first":"second"}/Item`));
+    assert.notEqual(sources[0].qname, sources[1].qname);
+    const emitted = emitRuntimeTypeAuthority(sources, sha256);
+    assert.equal(emitted.code, emitRuntimeTypeAuthority([...sources].reverse(),sha256).code);
+    const output = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "as3-file-private-emission-")));
+    t.after(() => fs.rmSync(output,{recursive:true,force:true}));
+    fs.cpSync(path.join(ROOT,"src/hardened-runtime"),path.join(output,"runtime"),{recursive:true});
+    fs.writeFileSync(path.join(output,"runtime/AS3Authority.generated.ts"),emitted.code);
+    for (const program of programs) {
+        const code = emitterModule.emitSemanticProgram(program,{compiler:ts,expectedTypeScriptVersion:ts.version}).code;
+        assert.match(code,/class Item/);
+        assert.doesNotMatch(code,/export class Item/);
+        assert.match(code,/export \{ Item as __as3FileLocalClass \}/);
+        const file=path.join(output,program.outputModulePath);
+        fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,code);
+    }
+    fs.writeFileSync(path.join(output,"tsconfig.json"),JSON.stringify({compilerOptions:{target:"ES2022",module:"CommonJS",
+        moduleResolution:"Node",strict:true,skipLibCheck:true,baseUrl:".",paths:{"@bleach/as3-runtime/*":["runtime/*"]},outDir:"js"},
+        files:["runtime/AS3Authority.generated.ts","runtime/AS3ObjectDispatch.ts"]}));
+    childProcess.execFileSync(process.execPath,[path.join(ROOT,"node_modules/typescript-4-9/bin/tsc"),"-p",path.join(output,"tsconfig.json")],{stdio:"inherit"});
+    const packageDir=path.join(output,"js/node_modules/@bleach");fs.mkdirSync(packageDir,{recursive:true});
+    fs.symlinkSync(path.join(output,"js/runtime"),path.join(packageDir,"as3-runtime"),"dir");
+    const authority=require(path.join(output,"js/runtime/AS3Authority.generated.js"));
+    assert.deepEqual(authority.AS3_CLASS_DEFINITIONS,[]);
+    const api=require(path.join(output,"js/runtime/AS3Type.js"));
+    const objectApi=require(path.join(output,"js/runtime/AS3ObjectDispatch.js"));
+    const aModule=require(path.join(output,"js/first/Item.js")),bModule=require(path.join(output,"js/second/Item.js"));
+    assert.equal(aModule.Item,undefined);assert.equal(bModule.Item,undefined);
+    const ca=aModule.__as3FileLocalClass,cb=bModule.__as3FileLocalClass,a=new ca(),b=new cb();
+    const ta=api.as3ClassType(sources[0].qname,ca),tb=api.as3ClassType(sources[1].qname,cb);
+    const result=[a,b,ca,cb].map(api.as3ReflectionClassIdentity);
+    result.push(api.as3Is(a,ta),api.as3Is(b,ta),api.as3Is(b,tb),ca===cb,
+        ...[a,b,ca,cb].map(objectApi.as3NativeString),a.label,b.label);
+    try { objectApi.as3ObjectRead(a,"missing"); } catch(error) { result.push(error.name,error.errorID,error.message); }
+    assert.deepEqual(result,golden.capture.state.observations[0].result.slice(0,17));
+    assert.equal(ta.name,tb.name);
+    assert.equal(api.as3ReferenceType(sources[0].qname,ta),ta);
+    assert.throws(()=>api.as3ReferenceType(sources[1].qname,ta),/different identity/);
+    assert.throws(()=>api.as3ClassType(ta.name,ca),/exactly registered/);
+    assert.throws(()=>api.as3NamedReferenceType("Item"),/not registered/);
+    assert.throws(()=>api.as3NamedReferenceType(ta.name),/not registered/);
+    assert.throws(()=>api.as3Cast(b,ta),error=>error.errorID===1034 && !error.message.includes("FilePrivate("));
+    Object.defineProperty(a,"constructor",{get(){throw Error("forged reflection read");}});
+    assert.equal(api.as3ReflectionClassIdentity(a),ta.name);
 });
 
 test("mapped predicate loader rejects QName, heritage, signature, and canonical-byte drift",()=>{
@@ -124,6 +189,7 @@ test("central authority emission is deterministic, closed, ordered, hash-pinned,
     const output=fs.mkdtempSync(path.join(os.tmpdir(),"as3-authority-module-"));
     try{
         fs.mkdirSync(path.join(output,"internal"));
+        fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts"),path.join(output,"internal/AS3FileLocalIdentity.ts"));
         fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/internal/AS3TypeRegistry.ts"),path.join(output,"internal/AS3TypeRegistry.ts"));
         fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3Type.ts"),path.join(output,"AS3Type.ts"));
         fs.copyFileSync(path.join(ROOT,"src/hardened-runtime/AS3MethodClosure.ts"),path.join(output,"AS3MethodClosure.ts"));

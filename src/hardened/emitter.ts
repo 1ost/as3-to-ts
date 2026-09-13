@@ -1,3 +1,4 @@
+import { fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLocalIdentity";
 import {
     SemanticExpression,
     SemanticConstructor,
@@ -916,7 +917,7 @@ function parameterSlotStatements(parameters:SemanticParameter[], ts:TypeScriptCo
                     : ts.factory.createIdentifier(parameter.name),ts.factory.createStringLiteral(parameter.type.sourceName)]))));
 }
 
-function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQName: string, fields: readonly SemanticField[]): any {
+function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQName: string, fields: readonly SemanticField[], className: string): any {
     if (member.kind === "field") {
         const modifiers = modifierTokens(member.modifiers, ts);
         if (member.readonly) modifiers.push(ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword));
@@ -933,7 +934,7 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQNam
     if (member.kind === "method") {
         const minimum=member.parameters.filter(p=>!p.rest && p.defaultValue === null).length;
         const arity:any[]=member.modifiers.includes("static") ? [ts.factory.createExpressionStatement(
-            initializeClassNode(ts.factory.createIdentifier(classQName.split(".").pop()!), true, ts))] : [];
+            initializeClassNode(ts.factory.createIdentifier(className), true, ts))] : [];
         {
             if (member.parameters.some(p=>p.name === "arguments") || constructorStatementsBindArguments(member.body))
                 throw new HardenedSemanticError("HARDENED_EMIT_METHOD_ARITY", "method binding shadows the runtime arguments object", member.sourceNodeId);
@@ -952,7 +953,7 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQNam
         return ts.factory.createGetAccessorDeclaration(
             modifierTokens(member.modifiers, ts), member.name, [], typeNode(member.returnType, ts),
             ts.factory.createBlock((member.modifiers.includes("static") ? [ts.factory.createExpressionStatement(
-                initializeClassNode(ts.factory.createIdentifier(classQName.split(".").pop()!), true, ts))] : [])
+                initializeClassNode(ts.factory.createIdentifier(className), true, ts))] : [])
                 .concat(member.body.map((statement) => statementNode(statement, ts))), true),
         );
     }
@@ -960,7 +961,7 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQNam
         return ts.factory.createSetAccessorDeclaration(
             modifierTokens(member.modifiers, ts), member.name, [parameterNode(member.parameter, ts)],
             ts.factory.createBlock((member.modifiers.includes("static") ? [ts.factory.createExpressionStatement(
-                initializeClassNode(ts.factory.createIdentifier(classQName.split(".").pop()!), true, ts))] : [])
+                initializeClassNode(ts.factory.createIdentifier(className), true, ts))] : [])
                 .concat(member.body.map((statement) => statementNode(statement, ts))), true),
         );
     }
@@ -1220,7 +1221,8 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
                 [initial,ts.factory.createStringLiteral(parameter.type.sourceName)]) : initial;
         return [ts.factory.createExpressionStatement(ts.factory.createAssignment(value,normalized))];
     });
-    const constructorQName=program.packageName ? program.packageName+"."+className : className;
+    const constructorQName=program.fileLocalScope ? fileLocalClassIdentity(program.fileLocalScope).reflectionName
+        : program.packageName ? program.packageName+"."+className : className;
     const body = [ts.factory.createExpressionStatement(initializeClassNode(ts.factory.createIdentifier(className), true, ts)),
         constructorArityGuard(constructorQName, member, ts), ...constructorSlots, ...stagedFieldSetup, ...leadingLocals,
         ...(superStatement === null ? [] : [prepareStatement, superStatement])]
@@ -1546,6 +1548,12 @@ function programUsesBigTurnTableInner(program: SemanticProgram): boolean {
 
 export function emitSemanticProgram(program: SemanticProgram, options: EmitterOptions): EmittedTypeScript {
     assertAdaptedSemanticProgram(program);
+    if (program.fileLocalScope && (program.declaration.declarationKind !== "class" || program.packageName !== ""
+        || program.declaration.name !== program.fileLocalScope.name
+        || program.declaration.modifiers.some(value => value !== "dynamic"))) {
+        throw new HardenedSemanticError("HARDENED_EMIT_FILE_LOCAL", "file-local class differs from its authenticated scope");
+    }
+    const fileLocalIdentity = program.fileLocalScope ? fileLocalClassIdentity(program.fileLocalScope) : null;
     const ts = options.compiler;
     if (!ts || ts.version !== options.expectedTypeScriptVersion || !ts.factory || typeof ts.createPrinter !== "function") {
         throw new HardenedSemanticError("HARDENED_TYPESCRIPT_VERSION", "structural emitter requires the exact configured modern TypeScript compiler API");
@@ -1705,7 +1713,9 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     const staticFields = program.declaration.declarationKind === "class"
         ? program.declaration.members.filter((field): field is SemanticField => field.kind === "field" && field.modifiers.includes("static")) : [];
     const classMembers = program.declaration.declarationKind === "class"
-        ? program.declaration.members.filter(member => member.kind !== "constructor").map(member => memberNode(member, ts, program.packageName ? program.packageName+"."+program.declaration.name : program.declaration.name, staticFields)) : [];
+        ? program.declaration.members.filter(member => member.kind !== "constructor").map(member => memberNode(member, ts,
+            fileLocalIdentity?.reflectionName ?? (program.packageName ? program.packageName+"."+program.declaration.name : program.declaration.name),
+            staticFields, program.declaration.name)) : [];
     if (program.declaration.declarationKind === "class") {
         for (const forward of program.declaration.inheritedAccessors || []) {
             const target = ts.factory.createPropertyAccessExpression(ts.factory.createSuper(), forward.name);
@@ -1795,7 +1805,10 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     ];
     const embedded = embeddedBitmapDeclarations(program, imports, ts);
     const deferredInitialization = program.declaration.declarationKind === "class" ? [classInitializationNode(program, ts)] : [];
-    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration], deferredInitialization, nominalPredicate));
+    const privateBinding = fileLocalIdentity ? [ts.factory.createExportDeclaration(undefined, false,
+        ts.factory.createNamedExports([ts.factory.createExportSpecifier(false,
+            ts.factory.createIdentifier(program.declaration.name), ts.factory.createIdentifier("__as3FileLocalClass"))]), undefined)] : [];
+    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration], deferredInitialization, nominalPredicate, privateBinding));
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
     let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n");
     code = code.replace(/\n*$/, "\n");
