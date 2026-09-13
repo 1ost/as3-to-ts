@@ -1,5 +1,5 @@
 import { AS3ArgumentError } from "./AS3Error";
-import { as3ArrayCall } from "./AS3Array";
+import { as3ArrayCall, as3ArrayDelete } from "./AS3Array";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
 import { lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod, isAS3MethodClosure } from "./AS3MethodClosure";
@@ -189,8 +189,10 @@ export function as3ObjectHas(value:unknown,key:unknown):boolean {
     return as3ObjectHasOwn(target,name) || name === "constructor" || BUILTINS.has(name);
 }
 export function as3ObjectDelete(value:unknown,key:unknown,caller:string | null = null):boolean {
-    const target = receiver(value), name = keyName(key), info = describe(target);
+    const target = receiver(value), name = keyName(key);
     if (caller !== null) lookupObjectCaller(caller);
+    if (Array.isArray(target)) return as3ArrayDelete(target,name);
+    const info = describe(target);
     if (info && (!dynamicClass(info) || findTrait(info,name,caller,false).length)) return false;
     return Reflect.deleteProperty(target,name);
 }

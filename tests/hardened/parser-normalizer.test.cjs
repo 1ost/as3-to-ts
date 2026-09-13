@@ -1226,6 +1226,19 @@ try {
     const typeofOutput=built.emitter.emitSemanticProgram(typeofSemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
     assert.match(typeofOutput.code,/typeof item !== "object"/);
+    for (const operator of ["==", "!=", "===", "!=="]) {
+        for (const expression of [`typeof item ${operator} "object"`,
+            `item != null && typeof item ${operator} "object"`]) {
+            const source = `package p { public class TypeofCheck { public function run(item:Object):Boolean { return ${expression}; } } }`;
+            const normalized = built.normalizer.normalizeParserAst(built.parse("TypeofCheck.as", source), source, sha256);
+            const semantic = built.adapter.adaptNormalizedParserAst(normalized, authority(built.ledger),
+                source, sha256, undefined, undefined, undefined, undefined, sourceMemberAuthority);
+            const code = built.emitter.emitSemanticProgram(semantic,
+                {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code;
+            assert.ok(code.includes(`typeof item ${operator} "object"`), code);
+            assert.doesNotMatch(code, /typeof __as3Equals/);
+        }
+    }
     assert.throws(()=>built.adapter.adaptNormalizedParserAst(
         concatNormalized,authority(built.ledger),concatSource,sha256,undefined,undefined,undefined,[
             {kind:"class",qname:"flash.display.DisplayObject",base:null,interfaces:[]},

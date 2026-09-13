@@ -23,6 +23,23 @@ const { AS3_ARRAY_MAX_INDEX, as3ArrayIndex } = require(path.join(OUTPUT, "harden
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
 
+test("dynamic Array deletion preserves holes, length and rejects unproved host slots", () => {
+    const {as3ObjectDelete}=require(path.join(OUTPUT,"hardened-runtime/AS3ObjectDispatch.js"));
+    const {as3ArrayLiteral}=require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
+    const values=as3ArrayLiteral([3,1,2]);
+    assert.equal(as3ObjectDelete(values,1),true);
+    assert.equal(values.length,3);
+    assert.equal(Object.hasOwn(values,1),false);
+    assert.equal(as3ObjectDelete(values,1),true);
+    assert.deepEqual(Object.keys(values),["0","2"]);
+    assert.throws(()=>as3ObjectDelete(values,"length"),/ordinary numeric index/);
+    assert.throws(()=>as3ObjectDelete(Object.freeze([1]),0),/ordinary configurable indices/);
+    let reads=0;
+    const accessor=[];Object.defineProperty(accessor,"0",{get(){reads++;return 1;},configurable:true});
+    assert.throws(()=>as3ObjectDelete(accessor,0),/ordinary configurable indices/);
+    assert.equal(reads,0);
+});
+
 test("numeric Array reads retain native hole and missing-index semantics", () => {
     const values = [];
     values[1] = "present";
@@ -230,4 +247,42 @@ test('splice rejects foreign storage and overrides before array mutation',()=>{
  const reentrant=as3ArrayLiteral([1,2]);
  assert.throws(()=>as3ArrayCall(reentrant,'splice',[{valueOf(){throw Error('unproved reentry');}},1]),AS3ArrayOperationUnavailable);
  assert.deepEqual(reentrant,[1,2]);
+});
+
+
+test("numeric sort retains original items and native numeric order",()=>{
+ const values=["10","2","01"];
+ assert.equal(as3ArrayCall(values,"sort",[16]),values);
+ assert.deepEqual(values,["01","2","10"]);
+ assert.equal(as3ArrayCall(values,"sort",[18]),values);
+ assert.deepEqual(values,["10","2","01"]);
+});
+
+test("numeric sort rejects nonnumeric text and holes before rearranging",()=>{
+ const bad=["2","bad","1"];
+ assert.throws(()=>as3ArrayCall(bad,"sort",[16]),e=>e instanceof TypeError && e.errorID===1034);
+ assert.deepEqual(bad,["2","bad","1"]);
+ const sparse=[];sparse.length=3;sparse[1]="1";
+ assert.throws(()=>as3ArrayCall(sparse,"sort",[16]),e=>e instanceof TypeError && e.errorID===1034);
+ assert.equal(sparse.length,3);assert.equal(Object.hasOwn(sparse,"0"),false);assert.equal(Object.hasOwn(sparse,"2"),false);
+});
+
+test("numeric sort distinguishes numeric NaN from a nonnumeric String",()=>{
+ const values=[0,NaN];as3ArrayCall(values,"sort",[18]);
+ assert.ok(Number.isNaN(values[0]));assert.equal(values[1],0);
+ assert.throws(()=>as3ArrayCall(["NaN"],"sort",[16]),e=>e.errorID===1034);
+});
+
+test("numeric sort does not admit unsupported host storage or options",()=>{
+ for(const flags of [0,1,2,4,8,20,24,32,undefined,()=>0])
+  assert.throws(()=>as3ArrayCall([2,1],"sort",[flags]),/requires NUMERIC/);
+ const override=[2,1];override.sort=()=>{throw Error("must not run override");};
+ assert.throws(()=>as3ArrayCall(override,"sort",[16]),/overrides and subclasses/);
+ class Other extends Array {}
+ assert.throws(()=>as3ArrayCall(new Other(2,1),"sort",[16]),/ordinary or authenticated/);
+ const getter=[2,1];Object.defineProperty(getter,"0",{get(){throw Error("must not run getter");}});
+ assert.throws(()=>as3ArrayCall(getter,"sort",[16]),/accessor indices/);
+ const frozen=Object.freeze([2,1]);
+ assert.throws(()=>as3ArrayCall(frozen,"sort",[16]),/writable indices/);
+ assert.deepEqual(frozen,[2,1]);
 });

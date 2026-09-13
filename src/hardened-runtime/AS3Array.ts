@@ -1,5 +1,5 @@
 import { lookupObjectClass } from "./internal/AS3TypeRegistry";
-import { as3ArraySortOnNumeric } from "./internal/AS3ArraySort";
+import { as3ArraySortOnNumeric, as3ArraySortNumeric } from "./internal/AS3ArraySort";
 import { as3NativeArrayJoin, as3NativeString, as3NativeNumber } from "./AS3ObjectDispatch";
 import { as3FunctionArgument } from "./AS3Function";
 
@@ -124,6 +124,21 @@ function deleteArrayIndex(value:unknown[],state:ArrayStorage,index:number):void 
     }
     Reflect.deleteProperty(value,String(index));
 }
+/** Dynamic numeric deletion retains the allocation history used by splice. */
+export function as3ArrayDelete(value:unknown,name:string):boolean {
+    const array=ordinaryArray(value);
+    if (Object.getPrototypeOf(array)!==Array.prototype || !indexProperty(name))
+        throw new AS3ArrayOperationUnavailable("Array deletion requires an ordinary numeric index");
+    const descriptor=Object.getOwnPropertyDescriptor(array,name);
+    if (Object.prototype.hasOwnProperty.call(Array.prototype,name)
+        || Object.prototype.hasOwnProperty.call(Object.prototype,name)
+        || descriptor && (!("value" in descriptor) || !descriptor.enumerable || !descriptor.configurable))
+        throw new AS3ArrayOperationUnavailable("Array deletion requires ordinary configurable indices");
+    const state=storage(array);
+    if(state) deleteArrayIndex(array,state,Number(name));
+    else Reflect.deleteProperty(array,name);
+    return true;
+}
 function spliceArray(value:unknown[],args:unknown[]):unknown[] | null {
     if (Object.getPrototypeOf(value) !== Array.prototype)
         throw new AS3ArrayOperationUnavailable("Array subclass splice requires retained native dispatch evidence");
@@ -242,7 +257,7 @@ export function as3ArrayCall(value:unknown, method:"push" | "unshift", args:unkn
 export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown[]):unknown;
 export function as3ArrayCall(value:unknown, method:"concat", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"join", args:unknown[]):string;
-export function as3ArrayCall(value:unknown, method:"sortOn", args:unknown[]):unknown[];
+export function as3ArrayCall(value:unknown, method:"sortOn" | "sort", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"splice", args:unknown[]):unknown[] | null;
 export function as3ArrayCall(value:unknown, method:"hasOwnProperty", args:unknown[]):boolean;
 export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unknown {
@@ -258,6 +273,12 @@ export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unkno
         if (Reflect.get(array,"splice") !== Array.prototype.splice)
             throw new AS3ArrayOperationUnavailable("Overridden Array splice requires native dispatch evidence");
         return spliceArray(array,args);
+    }
+    if (method === "sort") {
+        const array=ordinaryArray(value);
+        if (args.length !== 1) throw new AS3ArrayOperationUnavailable("Array.sort requires numeric options");
+        const sorted=as3ArraySortNumeric(array,args[0]);
+        ARRAY_STORAGE.set(array,null);return sorted;
     }
     if (method === "sortOn") {
         const array=ordinaryArray(value);

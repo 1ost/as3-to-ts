@@ -75,8 +75,8 @@ function sha256(data: string | Buffer): string {
 
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Enumeration.ts": "b7059948afc148589fe3b7b265064473643c879ae22785103e8a3df6c135cdcc",
-    "internal/AS3ArraySort.ts": "2b869fcd6e6de7cbe7a39e27c24a12fba561f728edbf0e0749aaba9054c00f82",
-    "AS3Array.ts": "e0e0d074dd0753f3db75859c0c791d39b37800b569dbe4873d128bb499407d3c",
+    "internal/AS3ArraySort.ts": "15a4cc94a7c485c2277343fea40695a80c8934cee925c86e8528ab42ae660fa4",
+    "AS3Array.ts": "8f0d1ff5b809aaa8df15a22af1070cb26d19acd67f1aa6e707774fc9b5041d3f",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
     "AS3ByteArray.ts": "d42f79a903e9c34b98ab1dd247e20c216d230ff811869709794a3a6977e10d7e",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
@@ -87,7 +87,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Dictionary.ts": "6093e08ea252cc7926982934da92c1d7785d093880e196c798c67c5f8d7d8f84",
     "AS3Function.ts": "cc1828a6c60fd2b3b8104af0662726fac3cc6c9d68444db7f8ed25b8a72d165e",
     "AS3MethodClosure.ts": "b6b25a872e14b134a2f728480f4e201c73ac4a466d24a890b7ecdd2dddafec20",
-    "AS3ObjectDispatch.ts": "6aad6d4c970a3ed55745f8eded6d459e51831a30e6bd78a182d9a35af6667c4d",
+    "AS3ObjectDispatch.ts": "e31bc4be672f1663f5dccccb169aa5624769f2f0199b8740b139f8e7ffd52e8c",
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
     "AS3Timer.ts": "639a0e3776611b3fd736305994d709b47af8465509bb9d2de440bc611a985851",

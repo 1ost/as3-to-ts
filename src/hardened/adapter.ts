@@ -2813,9 +2813,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 resultType: semanticType(node, "String", "string", [], false),
             });
         };
+        // The parser nests an unparenthesized equality beneath TYPEOF. Restore
+        // unary precedence for both loose and strict comparisons; an explicit
+        // parenthesized operand remains ENCAPSULATED and must not be rotated.
         if (rawOperand.kind === "EQUALITY" && rawOperand.children.length === 3
             && rawOperand.children[1]!.kind === "OP"
-            && ["===", "!=="].includes(requiredText(rawOperand.children[1]!, "typeof comparison operator"))) {
+            && ["==", "!=", "===", "!=="].includes(requiredText(rawOperand.children[1]!, "typeof comparison operator"))) {
             const left = typeofExpression(rawOperand.children[0]!);
             const right = parseExpression(rawOperand.children[2]!, context, true);
             const rightType = assignmentType(right, context, rawOperand.children[2]!);
@@ -2824,7 +2827,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             return Object.assign(identity(node), {
                 kind: "binary" as "binary",
-                operator: requiredText(rawOperand.children[1]!, "typeof comparison operator") as "===" | "!==",
+                operator: requiredText(rawOperand.children[1]!, "typeof comparison operator") as "==" | "!=" | "===" | "!==",
                 left, right, resultType: semanticType(node, "Boolean", "boolean", [], false),
             });
         }
@@ -3426,7 +3429,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
         }
-        if (target.kind !== "super" && ["length","push","pop","shift","unshift","concat","join","sortOn","splice","hasOwnProperty"].includes(name)) {
+        if (target.kind !== "super" && ["length","push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty"].includes(name)) {
             const arrayType = assignmentType(target,context,node);
             if (isArrayType(arrayType,context) && arrayType.sourceName !== "Array") {
                 const qname = arrayType.runtimeName!;
@@ -3585,7 +3588,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType,context) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType,context)
-                        && !valuePosition && ["push","pop","shift","unshift","concat","join","sortOn","splice","hasOwnProperty"].includes(name);
+                        && !valuePosition && ["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty"].includes(name);
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase", "charAt"].includes(name);
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
@@ -3894,7 +3897,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
             && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee),context)) {
             const name = callee.name;
-            if (!["push","pop","shift","unshift","concat","join","sortOn","splice","hasOwnProperty"].includes(name)
+            if (!["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty"].includes(name)
                 || (["pop","shift"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1))
                 fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
@@ -3904,7 +3907,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_ARRAY_OWNERSHIP", "Array ownership requires one non-null String key", node);
             if (name === "splice" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
                 fail("HARDENED_ARRAY_SPLICE", "Array subclass splice requires native dispatch evidence", node);
-            if (name === "sortOn") {
+            if (name === "sortOn" || name === "sort") {
                 if (assignmentType(callee.target,context,rawCallee).runtimeName !== null
                     && assignmentType(callee.target,context,rawCallee).runtimeName !== "Array")
                     fail("HARDENED_ARRAY_SORT_ON", "Array subclass sorting requires retained native dispatch evidence", node);
@@ -3917,13 +3920,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                     return null;
                 };
-                if (args.length !== 2 || assignmentType(args[0]!,context,node).sourceName !== "String"
-                    || ![16,18].includes(flags(args[1]!)!))
+                if (name === "sortOn" && (args.length !== 2 || assignmentType(args[0]!,context,node).sourceName !== "String"
+                    || ![16,18].includes(flags(args[1]!)!)))
                     fail("HARDENED_ARRAY_SORT_ON", "Array.sortOn requires one String field and proven NUMERIC with optional DESCENDING", node);
+                if (name === "sort" && (args.length !== 1 || ![16,18].includes(flags(args[0]!)!)))
+                    fail("HARDENED_ARRAY_SORT", "Array.sort requires proven NUMERIC with optional DESCENDING", node);
             }
             capabilitySource = "Array";
             capabilityMember = name;
-            resultType = name === "hasOwnProperty" ? semanticType(node,"Boolean","boolean") : name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "sortOn" || name === "splice" ? semanticType(node,"Array","Array",[],name === "splice")
+            resultType = name === "hasOwnProperty" ? semanticType(node,"Boolean","boolean") : name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "sortOn" || name === "sort" || name === "splice" ? semanticType(node,"Array","Array",[],name === "splice")
                 : name === "push" || name === "unshift"
                 ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {
