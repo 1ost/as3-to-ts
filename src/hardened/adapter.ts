@@ -2312,7 +2312,7 @@ function adaptAssignmentValue(target: SemanticType, expression: SemanticExpressi
         && ["*", "Object", "undefined"].includes(value.sourceName))
         return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
     if (context.sourceMemberAuthority !== null && value.sourceName === "*"
-        && ["String","Number","int","uint"].includes(target.sourceName))
+        && ["String","Number","int","uint","Function"].includes(target.sourceName))
         return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
     if (target.sourceName === "Object" && target.emittedName === "unknown" && value.sourceName === "*") {
         return Object.assign(identity(node), {kind: "coercion" as "coercion", targetType: target, argument: expression});

@@ -85,7 +85,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Error.ts": "9ef96325ad8c55ff0172d3b2df8ea78f87af61414a62b7ded5b1e5011d13a889",
     "AS3Embed.ts": "41628cd8db111c12c5f12c8a51f036d37c839f8ae609986d0d24796e425d2055",
     "AS3Dictionary.ts": "6093e08ea252cc7926982934da92c1d7785d093880e196c798c67c5f8d7d8f84",
-    "AS3Function.ts": "078da98fa7ba9edd35928517e76974b3cfd4b99ffd2486870bf2d5b8ea95f8a4",
+    "AS3Function.ts": "40f2a229487f39f27a31e68f93f3a7b6228fe92e68d50ee54dfff4a9705094dd",
     "AS3MethodClosure.ts": "b6b25a872e14b134a2f728480f4e201c73ac4a466d24a890b7ecdd2dddafec20",
     "AS3ObjectDispatch.ts": "41b1ff2870c27842e7239462c008befc4d7c66950e122c871d945012d9cf7d9c",
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",

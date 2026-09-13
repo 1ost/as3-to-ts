@@ -184,3 +184,21 @@ test("dynamic calls admit source lambdas without admitting unknown host function
  assert.equal(r.as3ObjectRead({run:fn},"run"),fn);
  assert.throws(()=>r.as3ObjectCall({run:function(){}},"run",[7]),{name:"AS3ObjectDispatchUnavailable"});
 });
+
+test("Function slots preserve native identity, null normalization and rejected-store behavior",()=>{
+ const {as3FunctionSlot}=require(path.join(out,"hardened-runtime/AS3Function.js"));
+ const dir=path.join(process.env.HARDENED_FIXTURE_LAYA,"tests/nativeFlashOracle/function-slot");
+ const retained=JSON.parse(fs.readFileSync(path.join(dir,"native-air.json")));
+ for(const [file,hash] of Object.entries(retained.sourceFiles))
+  assert.equal(crypto.createHash("sha256").update(fs.readFileSync(path.join(dir,file))).digest("hex"),hash);
+ for(let mode=0;mode<9;mode++) {
+  const events=[],result=[];let fn=()=>"retained";const original=fn;
+  let value=[undefined,null,0,true,"value",[],{},()=>"callback"][mode];
+  if(mode===8)value={valueOf(){events.push("value");return original;},toString(){events.push("text");return "function";}};
+  try{fn=as3FunctionSlot(value);result.push(fn===value,fn===null);if(fn!==null)result.push(fn());}
+  catch(error){result.push(error.name,error.errorID,fn===original);}
+  result.push(events.join("|"));
+  assert.deepEqual(result,retained.capture.state.observations.find(row=>row.id==='slot-'+mode).result);
+ }
+ for(const value of [1n,Symbol('host')])assert.throws(()=>as3FunctionSlot(value),{name:"AS3FunctionOperationUnavailable"});
+});

@@ -36,6 +36,19 @@ export function as3CheckMethodArity(classQName:string, method:string, actual:num
     error.name="ArgumentError";Object.defineProperty(error,"errorID",{value:1063});throw error;
 }
 
+/** Function slots preserve callable identity; rejected values never invoke conversion hooks. */
+export function as3FunctionSlot(value:unknown):Function | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "function") return value;
+    if (typeof value === "bigint" || typeof value === "symbol")
+        throw new AS3FunctionOperationUnavailable("Host-only value has no native Function slot conversion");
+    // Native reference addresses vary between processes, as with Array slot errors.
+    const label=typeof value === "string" ? `"${value.replace(/\0/g,"")}"`
+        : typeof value === "object" ? "value" : as3String(value);
+    const error=new TypeError(`Error #1034: Type Coercion failed: cannot convert ${label} to Function.`);
+    Object.defineProperty(error,"errorID",{value:1034});throw error;
+}
+
 /** Typed function slots normalize values at the invocation boundary, including dynamic callers. */
 export function as3FunctionArgument(value:unknown, type:string):any {
     switch(type) {
@@ -47,7 +60,7 @@ export function as3FunctionArgument(value:unknown, type:string):any {
         case "uint": return as3Uint(value);
         case "Boolean": return as3Boolean(value);
         case "Array": return as3ArraySlot(value);
-        case "Function": if (value == null || typeof value === "function") return value == null ? null : value; break;
+        case "Function": return as3FunctionSlot(value);
     }
     throw new AS3FunctionOperationUnavailable(`Native function parameter conversion to ${type} requires further evidence`);
 }
