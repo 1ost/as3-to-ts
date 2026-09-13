@@ -3578,6 +3578,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         }
         const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
+        if (context.sourceMemberAuthority !== null && callee.kind === "member" && callee.target.kind === "this"
+            && context.lambdaDepth === 0 && context.currentCallable !== null
+            && !context.currentCallable.modifiers.includes("static")
+            && context.fields[callee.name]?.type.sourceName === "Function"
+            && !context.fields[callee.name]!.modifiers.includes("static")
+            && context.fields[callee.name]!.namespaceName === null) {
+            for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
+                fail("HARDENED_FUNCTION_ARGUMENT", "Function field arguments must produce values", node);
+            // AS3 callproperty reads an explicit field after its arguments. An
+            // implicit field call instead reads the value first and uses null this.
+            return Object.assign(identity(node), {kind:"functionApply" as const,
+                invocation:rawCallee.kind === "IDENTIFIER" ? "direct" as const : "field" as const,
+                target:callee,receiver:callee.target,
+                argumentsArray:Object.assign(identity(node),{kind:"array" as const,elements:args}),
+                resultType:semanticType(node,"*","unknown")});
+        }
         if (context.sourceMemberAuthority !== null && callee.kind === "identifier"
             && (callee.bindingKind === "parameter" || callee.bindingKind === "local")
             && !context.locals[callee.name]?.lambdaSignature

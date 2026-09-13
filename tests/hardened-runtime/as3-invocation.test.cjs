@@ -32,6 +32,32 @@ test('direct Function invocation preserves argument evaluation and bound receive
  const events=[];assert.throws(()=>fn.as3FunctionInvoke(null,[events.push('argument')]),{name:'TypeError',errorID:1006,message:'Error #1006: value is not a function.'});assert.deepEqual(events,['argument']);
  const failing=()=>{throw new Error('callback failed');};assert.throws(()=>fn.as3FunctionInvoke(failing,[]),/callback failed/);
 });
+test('explicit Function fields retain the native receiver and late field read',()=>{
+ const owner={callback:function(){return this===owner;}};
+ assert.equal(fn.as3FunctionFieldInvoke(owner,'callback',[]),true);
+ assert.equal(fn.as3FunctionInvoke(owner.callback,[]),false);
+ const events=[];owner.callback=()=>events.push('old');
+ function replace(){events.push('argument');owner.callback=()=>events.push('new');return 0;}
+ fn.as3FunctionFieldInvoke(owner,'callback',[replace()]);assert.deepEqual(events,['argument','new']);
+ owner.callback=null;
+ assert.throws(()=>fn.as3FunctionFieldInvoke(owner,'callback',[]),{name:'TypeError',errorID:1006});
+ assert.throws(()=>fn.as3FunctionFieldInvoke({},'missing',[]),fn.AS3FunctionOperationUnavailable);
+ let read=false;assert.throws(()=>fn.as3FunctionFieldInvoke({get callback(){read=true;return ()=>0;}},'callback',[]),fn.AS3FunctionOperationUnavailable);assert.equal(read,false);
+});
+test('Function field receiver dispatch matches the retained native-only dynamic-this probe',{skip:!process.env.HARDENED_FIXTURE_LAYA},()=>{
+ const p=path.join(process.env.HARDENED_FIXTURE_LAYA,'tests/nativeFlashOracle/function-field-receiver');
+ const golden=JSON.parse(fs.readFileSync(path.join(p,'native-air.json'),'utf8')),crypto=require('node:crypto');
+ for(const row of golden.sourceFiles)assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(p,row.path))).digest('hex'),row.sha256);
+ assert.equal(crypto.createHash('sha256').update(fs.readFileSync(path.join(p,'scenario.json'))).digest('hex'),golden.scenarioSha256);
+ const owner={callback:function(){return this===owner;}},local=owner.callback;
+ const result=[fn.as3FunctionFieldInvoke(owner,'callback',[]),fn.as3FunctionInvoke(owner.callback,[]),fn.as3FunctionInvoke(local,[]),fn.as3FunctionCall(owner.callback,null,[]),fn.as3FunctionCall(owner.callback,owner,[])];
+ assert.deepEqual(result,golden.capture.state.observations[0].result);
+});
+test('instance method arity rejects excess arguments and permits rest slots',()=>{
+ fn.as3CheckMethodArity('Probe','rest',5,0,null);fn.as3CheckMethodArity('Probe','optional',1,0,1);
+ assert.throws(()=>fn.as3CheckMethodArity('Probe','optional',2,0,1),{name:'ArgumentError',errorID:1063,message:'Error #1063: Argument count mismatch on Probe/optional(). Expected 0, got 2.'});
+ assert.throws(()=>fn.as3CheckMethodArity('Probe','required',0,1,1),{name:'ArgumentError',errorID:1063});
+});
 test('unqualified anonymous Function arity fails before parameter/body effects',()=>{
  fn.as3CheckLambdaArity(1,1,2);fn.as3CheckLambdaArity(2,1,2);fn.as3CheckLambdaArity(100,1,null);
  assert.throws(()=>fn.as3CheckLambdaArity(0,1,2),fn.AS3FunctionOperationUnavailable);

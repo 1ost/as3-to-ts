@@ -179,7 +179,7 @@ export interface GlobalFunctionExpression extends SemanticIdentity {
 }
 export interface FunctionApplyExpression extends SemanticIdentity {
     kind: "functionApply";
-    invocation?: "call" | "direct";
+    invocation?: "call" | "direct" | "field";
     target: SemanticExpression;
     receiver: SemanticExpression;
     argumentsArray: SemanticExpression;

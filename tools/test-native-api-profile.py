@@ -141,6 +141,24 @@ public class Base {
             target['signature'] = target_type
             self.assertEqual(api.map_native_members(*args), ([], []))
 
+    def test_native_object_read_keeps_the_exact_sdk_type_and_unknown_target(self):
+        member = dict(name='currentTarget', access='read', scope='instance', constructor=False,
+            signature='public function get currentTarget() : Object', minArgs=0, maxArgs=0,
+            type='Object', parameters=[])
+        classes = {'flash.events.Event': {'base': None, 'members': [member]}}
+        target = dict(name='currentTarget', scope='instance', kind='get', signature='unknown')
+        row = dict(module='Event.ts', export='Event', kind='class', signature='typeof Event', members=[target])
+        args = ('flash.events.Event', ['instance-member'], row, 'capability', classes, {'currentTarget'})
+        mappings, uses = api.map_native_members(*args)
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(uses[0]['signatures'][0]['returnType'], 'Object')
+        for signature in ['any', 'object', 'string', 'number', 'Function', 'unknown[]']:
+            target['signature'] = signature
+            self.assertEqual(api.map_native_members(*args), ([], []), signature)
+        target['signature'] = 'unknown'
+        target['kind'] = 'set'
+        self.assertEqual(api.map_native_members(*args), ([], []))
+
     def test_native_constructor_does_not_admit_extra_host_parameters(self):
         member = dict(name='Loader', access='call', scope='static', constructor=True,
             signature='public function Loader()', minArgs=0, maxArgs=0,

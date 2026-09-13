@@ -316,6 +316,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "functionApply" && expression.invocation === "direct") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3FunctionInvoke"),undefined,
         [expressionNode(expression.target,ts),expressionNode(expression.argumentsArray,ts)]);
+    if (expression.kind === "functionApply" && expression.invocation === "field") {
+        if (expression.target.kind !== "member") throw new HardenedSemanticError("HARDENED_EMIT_FUNCTION_FIELD", "Function field invocation requires a retained member");
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3FunctionFieldInvoke"),undefined,
+            [expressionNode(expression.receiver,ts),ts.factory.createStringLiteral(expression.target.name),expressionNode(expression.argumentsArray,ts)]);
+    }
     if (expression.kind === "functionApply") return ts.factory.createCallExpression(
         ts.factory.createIdentifier(expression.invocation === "call" ? "__as3FunctionCall" : "__as3FunctionApply"),undefined,[expressionNode(expression.target,ts),
             expressionNode(expression.receiver,ts),expressionNode(expression.argumentsArray,ts)]);
@@ -888,11 +893,16 @@ function nativeParameterSlot(parameter:SemanticParameter):boolean {
     return !parameter.rest && ["String","Number","int","uint","Boolean","Object","Array","Function"].includes(parameter.type.sourceName);
 }
 
-function parameterSlotStatements(parameters:SemanticParameter[], ts:TypeScriptCompilerApi):any[] {
+function parameterSlotStatements(parameters:SemanticParameter[], ts:TypeScriptCompilerApi, preserveOptionalPresence=false):any[] {
     return parameters.filter(nativeParameterSlot).map(parameter => ts.factory.createExpressionStatement(
         ts.factory.createBinaryExpression(ts.factory.createIdentifier(parameter.name),ts.factory.createToken(ts.SyntaxKind.EqualsToken),
             ts.factory.createCallExpression(ts.factory.createIdentifier("__as3FunctionArgument"),undefined,
-                [ts.factory.createIdentifier(parameter.name),ts.factory.createStringLiteral(parameter.type.sourceName)]))));
+                [preserveOptionalPresence && parameter.defaultValue !== null ? ts.factory.createConditionalExpression(
+                    ts.factory.createBinaryExpression(ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length"),
+                        ts.factory.createToken(ts.SyntaxKind.LessThanEqualsToken),ts.factory.createNumericLiteral(parameters.indexOf(parameter))),
+                    ts.factory.createToken(ts.SyntaxKind.QuestionToken),expressionNode(parameter.defaultValue,ts),ts.factory.createToken(ts.SyntaxKind.ColonToken),
+                    ts.factory.createElementAccessExpression(ts.factory.createIdentifier("arguments"),ts.factory.createNumericLiteral(parameters.indexOf(parameter))))
+                    : ts.factory.createIdentifier(parameter.name),ts.factory.createStringLiteral(parameter.type.sourceName)]))));
 }
 
 function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQName: string, fields: readonly SemanticField[]): any {
@@ -913,18 +923,18 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQNam
         const minimum=member.modifiers.includes("static") ? 0 : member.parameters.filter(p=>!p.rest && p.defaultValue === null).length;
         const arity:any[]=member.modifiers.includes("static") ? [ts.factory.createExpressionStatement(
             initializeClassNode(ts.factory.createIdentifier(classQName.split(".").pop()!), true, ts))] : [];
-        if (minimum > 0) {
+        if (!member.modifiers.includes("static")) {
             if (member.parameters.some(p=>p.name === "arguments") || constructorStatementsBindArguments(member.body))
                 throw new HardenedSemanticError("HARDENED_EMIT_METHOD_ARITY", "method binding shadows the runtime arguments object", member.sourceNodeId);
             arity.push(ts.factory.createExpressionStatement(ts.factory.createCallExpression(
-                ts.factory.createIdentifier("__as3CheckMethodMinimumArity"),undefined,[ts.factory.createStringLiteral(classQName),
+                ts.factory.createIdentifier("__as3CheckMethodArity"),undefined,[ts.factory.createStringLiteral(classQName),
                     ts.factory.createStringLiteral(member.name),ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length"),
-                    ts.factory.createNumericLiteral(minimum)])));
+                    ts.factory.createNumericLiteral(minimum),member.parameters.some(p=>p.rest) ? ts.factory.createNull() : ts.factory.createNumericLiteral(member.parameters.length)])));
         }
         return ts.factory.createMethodDeclaration(
             modifierTokens(member.modifiers, ts), undefined, member.name, undefined, undefined,
             member.parameters.map((parameter) => parameterNode(parameter, ts)), typeNode(member.returnType, ts),
-            ts.factory.createBlock(arity.concat(parameterSlotStatements(member.parameters,ts),member.body.map((statement) => statementNode(statement, ts))), true),
+            ts.factory.createBlock(arity.concat(parameterSlotStatements(member.parameters,ts,!member.modifiers.includes("static")),member.body.map((statement) => statementNode(statement, ts))), true),
         );
     }
     if (member.kind === "getter") {
@@ -1595,11 +1605,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             && value.targetType.sourceName !== "Dictionary"
         || value.kind === "constructor" && value.parameters.some(nativeParameterSlot)
         || value.kind === "method" && (value.parameters.some(nativeParameterSlot)
-            || !value.modifiers.includes("static") && value.parameters.some((p:SemanticParameter)=>!p.rest && p.defaultValue === null))
+            || !value.modifiers.includes("static"))
         || value.declarationKind === "packageFunction" || Object.values(value).some(functionRuntime));
     if (functionRuntime(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
-            ["as3FunctionApply","as3FunctionCall","as3FunctionInvoke","as3CheckLambdaArity","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3TraceFunction"].map(name =>
+            ["as3FunctionApply","as3FunctionCall","as3FunctionInvoke","as3FunctionFieldInvoke","as3CheckLambdaArity","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3CheckMethodArity","as3TraceFunction"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
     const dictionarySlot = (value:any):boolean => value !== null && typeof value === "object" && (

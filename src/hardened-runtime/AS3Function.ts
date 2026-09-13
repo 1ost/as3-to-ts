@@ -15,7 +15,12 @@ export function as3CheckFunctionArity(qname:string, actual:number, minimum:numbe
 
 /** Reject missing required instance-method arguments before slot conversion or body effects. */
 export function as3CheckMethodMinimumArity(classQName:string, method:string, actual:number, minimum:number):void {
-    if (actual >= minimum) return;
+    as3CheckMethodArity(classQName,method,actual,minimum,null);
+}
+
+/** Native instance methods enforce both bounds unless their signature has a rest slot. */
+export function as3CheckMethodArity(classQName:string, method:string, actual:number, minimum:number, maximum:number|null):void {
+    if (actual >= minimum && (maximum === null || actual <= maximum)) return;
     const dot=classQName.lastIndexOf(".");
     const label=dot < 0 ? classQName : classQName.slice(0,dot)+"::"+classQName.slice(dot+1);
     const error=new Error(`Error #1063: Argument count mismatch on ${label}/${method}(). Expected ${minimum}, got ${actual}.`);
@@ -46,11 +51,25 @@ export function as3CheckLambdaArity(actual:number,minimum:number,maximum:number 
 
 /** Direct Function invocation differs from reading/calling its call/apply property. */
 export function as3FunctionInvoke(target:unknown,args:unknown[]):unknown {
+    return invokeDirectFunction(target,null,args);
+}
+
+/** callproperty resolves a sealed field after argument evaluation and retains its receiver. */
+export function as3FunctionFieldInvoke(receiver:unknown,field:string,args:unknown[]):unknown {
+    if (receiver === null || typeof receiver !== "object")
+        throw new AS3FunctionOperationUnavailable("Function field invocation requires an original instance");
+    const slot=Object.getOwnPropertyDescriptor(receiver,field);
+    if (!slot || !("value" in slot))
+        throw new AS3FunctionOperationUnavailable("Function field invocation requires an own data slot");
+    return invokeDirectFunction(slot.value,receiver,args);
+}
+
+function invokeDirectFunction(target:unknown,receiver:unknown,args:unknown[]):unknown {
     if (typeof target !== "function") {
         const error=new TypeError("Error #1006: value is not a function.");
         Object.defineProperty(error,"errorID",{value:1006});throw error;
     }
-    return Reflect.apply(target,null,args);
+    return Reflect.apply(target,receiver,args);
 }
 
 export function as3FunctionApply(target:unknown, receiver:unknown, argumentsArray:unknown):unknown {
