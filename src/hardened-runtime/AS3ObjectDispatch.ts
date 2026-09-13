@@ -1,4 +1,5 @@
 import { AS3ArgumentError } from "./AS3Error";
+import { as3StringSplit } from "./AS3Coerce";
 import { as3ArrayCall, as3ArrayDelete } from "./AS3Array";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
 import { lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
@@ -197,6 +198,10 @@ export function as3ObjectDelete(value:unknown,key:unknown,caller:string | null =
     return Reflect.deleteProperty(target,name);
 }
 export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:string | null = null):unknown {
+    if (key === "split" && typeof value === "string") {
+        if (caller !== null) lookupObjectCaller(caller);
+        return as3StringSplit(value,args);
+    }
     // Fixed-name push calls are admitted independently of computed dispatch.
     // Native primitives fail only after the caller has evaluated all arguments.
     if (key === "push" && ["string","number","boolean"].includes(typeof value)) {

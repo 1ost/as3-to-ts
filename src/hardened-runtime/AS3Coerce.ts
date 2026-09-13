@@ -1,4 +1,5 @@
 import { AS3ArgumentError } from "./AS3Error";
+import { as3ArrayLiteral } from "./AS3Array";
 import { as3IntegerText } from "./internal/AS3ParseInteger";
 import { as3ObjectLiteral } from "./AS3Object";
 import { as3FixedDecimal } from "./internal/AS3NumberFormat";
@@ -109,6 +110,19 @@ export function as3StringCharAt(value:unknown, index:number=0):string {
     if (typeof value !== "string" || typeof index !== "number")
         throw new AS3ObjectDispatchUnavailable("String.charAt requires an original String and numeric index");
     return value.charAt(index);
+}
+
+/** Native String-delimiter splitting, including argument conversion order. */
+export function as3StringSplit(value:unknown,args:unknown[]):unknown[] {
+    primitiveReceiver(value);
+    if (typeof value !== "string" || args.length > 2)
+        throw new AS3ObjectDispatchUnavailable("String.split requires an original String and at most two arguments");
+    const limit=args.length < 2 || args[1] === null || args[1] === undefined ? 0xffffffff : as3Uint(args[1]);
+    if (limit === 0) return as3ArrayLiteral([]);
+    // AIR skips delimiter conversion for empty input, even with a custom hook.
+    if (value.length === 0 || args.length === 0) return as3ArrayLiteral([value]);
+    const delimiter=as3NativeString(args[0]);
+    return as3ArrayLiteral(value.split(delimiter,limit));
 }
 
 /** Native Number method: evaluate arguments first, then convert precision to int. */

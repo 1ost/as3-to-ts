@@ -236,6 +236,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 [expressionNode(expression.arguments[0]!, ts), ts.factory.createIdentifier("__as3ReflectionClassIdentity")]);
         if (expression.capabilitySource === "Number" && expression.capabilityMember === "toFixed" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NumberToFixed"),undefined,[expressionNode(expression.callee.target,ts),...expression.arguments.map(argument=>expressionNode(argument,ts))]);
+        if (expression.capabilitySource === "String" && expression.capabilityMember === "split" && expression.callee.kind === "member")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringSplit"),undefined,
+                [expressionNode(expression.callee.target,ts),ts.factory.createArrayLiteralExpression(expression.arguments.map(argument=>expressionNode(argument,ts)))]);
         if (expression.capabilitySource === "String" && expression.capabilityMember === "toLowerCase" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringToLowerCase"),undefined,[expressionNode(expression.callee.target,ts)]);
         if (expression.capabilitySource === "String" && expression.capabilityMember === "charAt" && expression.callee.kind === "member")
@@ -1472,7 +1475,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
+    const names = ["as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1634,7 +1637,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || value.kind === "member" && value.capabilitySource === "Error" && value.name === "errorID"
         || value.kind === "call" && value.capabilitySource === "Number" && value.capabilityMember === "toFixed"
         || value.kind === "call" && value.capabilitySource === "Error" && value.capabilityMember === "toString"
-        || value.kind === "call" && value.capabilitySource === "String" && ["toLowerCase","charAt"].includes(value.capabilityMember)
+        || value.kind === "call" && value.capabilitySource === "String" && ["toLowerCase","charAt","split"].includes(value.capabilityMember)
         || Object.values(value).some(primitiveMember));
     if (programHasKind(program, "coercion") || programHasKind(program, "assignmentStorageCoercion")
         || programHasKind(program, "parseInteger") || programHasKind(program, "binary") || globalCalls.size > 0 || primitiveMember(program)) imports.push(coercionRuntimeImport(ts));

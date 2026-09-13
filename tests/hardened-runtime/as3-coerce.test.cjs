@@ -20,8 +20,45 @@ const { as3Boolean, as3Int, as3Number, as3String, as3Uint, as3Object } =
     require(path.join(OUTPUT, "hardened-runtime/AS3Coerce.js"));
 
 const { as3ObjectLiteral } = require(path.join(OUTPUT, "hardened-runtime/AS3Object.js"));
+const metadata={schema:"as3-runtime-type-authority@1",qnames:[],entries:[]};
+require(path.join(OUTPUT,"hardened-runtime/internal/AS3TypeRegistry.js")).installAS3TypeAuthority({
+    schema:metadata.schema,sha256:require("node:crypto").createHash("sha256").update(JSON.stringify(metadata)).digest("hex"),
+    qnames:metadata.qnames,entries:metadata.entries});
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
+
+test("String split retains Flash empty and nullish argument behavior", () => {
+    const {as3StringSplit}=require(path.join(OUTPUT,"hardened-runtime/AS3Coerce.js"));
+    assert.deepEqual(as3StringSplit("",[""]),[""]);
+    assert.deepEqual(as3StringSplit("aundefinedb",[undefined]),["a","b"]);
+    assert.deepEqual(as3StringSplit("a,b,",[",",null]),["a","b",""]);
+    assert.deepEqual(as3StringSplit("a,b,",[",",undefined]),["a","b",""]);
+    assert.deepEqual(as3StringSplit("a,b,",[",",NaN]),[]);
+    assert.deepEqual(as3StringSplit("a,b,",[",",4294967296]),[]);
+    assert.deepEqual(as3StringSplit("a,b",[]),["a,b"]);
+});
+
+test("String split runs limit conversion first and skips unused delimiter hooks", () => {
+    const {as3StringSplit}=require(path.join(OUTPUT,"hardened-runtime/AS3Coerce.js"));
+    const calls=[];
+    const separator={toString(){calls.push("separator");return ",";}};
+    const limit={valueOf(){calls.push("limit");return 2;}};
+    assert.deepEqual(as3StringSplit("a,b,c",[separator,limit]),["a","b"]);
+    assert.deepEqual(calls,["limit","separator"]);
+    calls.length=0;
+    assert.deepEqual(as3StringSplit("a,b",[separator,0]),[]);
+    assert.deepEqual(as3StringSplit("",[separator]),[""]);
+    assert.throws(()=>as3StringSplit(null,[separator,limit]),error=>error.errorID===1009);
+    assert.deepEqual(calls,[]);
+});
+
+test("dynamic string split uses the shared native operation", () => {
+    const {as3ObjectCall}=require(path.join(OUTPUT,"hardened-runtime/AS3ObjectDispatch.js"));
+    assert.deepEqual(as3ObjectCall("1|2||","split",["|"]),["1","2","",""]);
+    const {as3StringSplit}=require(path.join(OUTPUT,"hardened-runtime/AS3Coerce.js"));
+    assert.throws(()=>as3StringSplit("a,b",[/,/]),/Unregistered Object receiver/);
+    assert.throws(()=>as3StringSplit("a,b",[",",1,2]),/at most two arguments/);
+});
 
 test("int and uint preserve AVM-compatible 32-bit coercion", () => {
     assert.equal(as3Int(), 0);

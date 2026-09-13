@@ -3589,7 +3589,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const arrayLength = isArrayType(targetType,context) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType,context)
                         && !valuePosition && ["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty"].includes(name);
-                    const stringMethod = targetType.sourceName === "String" && !valuePosition && ["indexOf", "substr", "toLowerCase", "charAt"].includes(name);
+                    const stringMethod = targetType.sourceName === "String" && !valuePosition && (["indexOf", "substr", "toLowerCase", "charAt"].includes(name)
+                        || context.sourceMemberAuthority !== null && name === "split");
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
@@ -3737,6 +3738,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 const expected = (callee.index as Extract<SemanticExpression,{kind:"literal"}>).value === "hasOwnProperty" ? 1 : 0;
                 if (args.length !== expected) fail("HARDENED_OBJECT_CALL_ARITY", "Object builtin call has an unproved arity", node);
                 if (args.length) assertObjectKey(assignmentType(args[0]!,context,node),node);
+            } else if (callee.index.kind === "literal" && callee.index.value === "split" && context.sourceMemberAuthority !== null) {
+                if (args.length > 2 || args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
+                    fail("HARDENED_OBJECT_CALL_ARGUMENT", "Dynamic split requires zero, one or two value arguments", node);
             } else if (callee.index.kind === "literal" && callee.index.value === "push" && nativeArrayBase(context)) {
                 // The runtime selects the actual receiver's method. A wildcard
                 // receiver is not statically rewritten into an Array cast.
@@ -3808,7 +3812,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             capabilitySource="Error";capabilityMember="toString";resultType=semanticType(node,"String","string");
         } else if (callee.kind === "member" && callee.capabilitySource === "String"
             && assignmentType(callee.target, context, rawCallee).sourceName === "String") {
-            if (callee.name === "toLowerCase") {
+            if (callee.name === "split") {
+                if (args.length > 2) fail("HARDENED_STRING_ARITY", "String.split requires zero, one or two arguments", node);
+                capabilitySource="String";capabilityMember="split";
+            } else if (callee.name === "toLowerCase") {
                 if (args.length !== 0) fail("HARDENED_STRING_ARITY", "String.toLowerCase requires its native zero-argument call", node);
                 capabilitySource="String"; capabilityMember="toLowerCase";
             } else if (callee.name === "charAt") {
@@ -3818,11 +3825,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_STRING_ARITY", "String method requires its native one or two arguments", node);
             args.forEach((argument, index) => {
                 const type = assignmentType(argument, context, node.children[1]!.children[index]!);
+                if (callee.name === "split") {
+                    if (type.sourceName === "void") fail("HARDENED_STRING_ARGUMENT", "String.split requires value arguments", node);
+                    return;
+                }
                 if (callee.name === "indexOf" && index === 0 ? type.sourceName !== "String"
                     : !["Number", "int", "uint"].includes(type.sourceName))
                     fail("HARDENED_STRING_ARGUMENT", "String argument lacks a proven native primitive type", node.children[1]!.children[index]!);
             });
-            resultType = callee.name === "indexOf" ? semanticType(node, "int", "number")
+            resultType = callee.name === "split" ? semanticType(node,"Array","Array",[],false)
+                : callee.name === "indexOf" ? semanticType(node, "int", "number")
                 : semanticType(node, "String", "string", [], false);
         } else if (callee.kind === "identifier" && (callee.bindingKind === "package-function"
             || context.importsByLocal[callee.name]?.localFunction)) {
