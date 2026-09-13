@@ -12,17 +12,21 @@ const ts = require("typescript-4-9");
 const ROOT = path.resolve(__dirname, "../..");
 class HardenedSemanticError extends Error { constructor(code,message){super(message);this.code=code;} }
 const adapterModule={assertAdaptedSemanticProgram(){}};
-function loadTranspiled(file,resolver) {
+function loadTranspiled(file,resolver,value={exports:{}}) {
     const source=fs.readFileSync(file,"utf8");
     const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText;
-    const value={exports:{}};Function("require","module","exports",compiled)(resolver,value,value.exports);return value.exports;
+    Function("require","module","exports",compiled)(resolver,value,value.exports);return value.exports;
 }
 const localModules=new Map();
 function loadLocalModule(file) {
     if (localModules.has(file)) return localModules.get(file);
-    const value=loadTranspiled(file,specifier=>specifier.startsWith(".")
-        ? loadLocalModule(path.resolve(path.dirname(file),specifier+".ts")) : require(specifier));
-    localModules.set(file,value);return value;
+    // Match CommonJS: publish partial exports before evaluating dependencies.
+    const module={exports:{}};localModules.set(file,module.exports);
+    try {
+        const value=loadTranspiled(file,specifier=>specifier.startsWith(".")
+            ? loadLocalModule(path.resolve(path.dirname(file),specifier+".ts")) : require(specifier),module);
+        localModules.set(file,value);return value;
+    } catch(error) {localModules.delete(file);throw error;}
 }
 const staticConstants=loadLocalModule(path.join(ROOT,"src/hardened/static-constants.ts"));
 const emitterModule=loadTranspiled(path.join(ROOT,"src/hardened/emitter.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}

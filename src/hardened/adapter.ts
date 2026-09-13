@@ -73,6 +73,8 @@ interface LocalHeader {
     lambdaSignature: { parameters: SemanticParameter[]; returnType: SemanticType } | null;
 }
 
+interface SignatureTypeProof { ownerQName: string; member: LocalDeclarationMember; }
+
 interface AdapterContext {
     packageFunction?: true;
     fileCompilation?: FileLocalCompilation;
@@ -81,7 +83,7 @@ interface AdapterContext {
     extendsType: SemanticType | null;
     importsByLocal: { [name: string]: SemanticImport };
     resolveImportedType: (sourceName: string, expectedKind: "class" | "interface" | null,
-        node: TreeNode) => SemanticImport | null;
+        node: TreeNode, signature?: SignatureTypeProof) => SemanticImport | null;
     mappingsBySource: { [name: string]: CapabilityMapping };
     memberMappingsByKey: { [name: string]: CapabilityMapping };
     intrinsicMembersByKey: LoadedCapabilityAuthority["intrinsicMembersByKey"];
@@ -619,6 +621,36 @@ function oneType(node: TreeNode): TreeNode {
     const matches = node.children.filter(child => child.kind === "TYPE" || child.kind === "VECTOR");
     if (matches.length !== 1) fail("HARDENED_TYPE_CARDINALITY", "declaration requires exactly one type", node);
     return matches[0]!;
+}
+
+/** Import a type proved by a used declaration without granting a source-level name. */
+function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefined,
+    current:CurrentLocalType, types:LoadedLocalTypeAuthority, members:LoadedLocalMemberAuthority | null,
+    imports:SemanticImport[], importsByLocal:{[name:string]:SemanticImport}, node:TreeNode):SemanticImport | null {
+    if (!proof) return null;
+    const target=types.entriesByIdentity[`${current.entry.module}\u0000${typeName}`];
+    if (!target || !target.importable || !["class","interface"].includes(target.typeKind)) return null;
+    const owner=types.entriesByIdentity[`${current.entry.module}\u0000${proof.ownerQName}`];
+    const declaration=members?.entriesByIdentity[`${current.entry.module}\u0000${proof.ownerQName}`];
+    const element=(name:string):string=>name.startsWith("Vector.<") && name.endsWith(">")
+        ? element(name.slice(8,-1)) : name;
+    const signatureNames=[proof.member.returnType,proof.member.fieldType,...proof.member.parameters.map(parameter=>parameter.type)];
+    if (!owner || !declaration || declaration.status !== "complete" || !declaration.declaration?.members.includes(proof.member)
+        || !signatureNames.some(name=>name !== null && element(name) === typeName)
+        || (owner.nodeId !== current.entry.nodeId && !current.entry.prerequisites.includes(owner.nodeId)
+            && !imports.some(item=>item.authorityKind === "local" && item.localNodeId === owner.nodeId))
+        || (owner.nodeId !== target.nodeId && !owner.prerequisites.includes(target.nodeId)))
+        fail("HARDENED_SIGNATURE_TYPE_EDGE","signature type lacks its authenticated owner, member or dependency edge: "+typeName,node);
+    const name=typeName.slice(typeName.lastIndexOf(".")+1);
+    if (current.entry.prerequisites.includes(target.nodeId)
+        && (!importsByLocal[name] || importsByLocal[name]!.sourceQualifiedName === typeName)) return null;
+    const existing=imports.find(item=>item.sourceQualifiedName === typeName);
+    if(existing) return existing;
+    // Reserved aliases cannot be spelled by admitted original AS3 declarations.
+    const alias="__as3Signature"+imports.length;
+    const item={...localSemanticImport(target,current,node,types,members),sourceLocalName:alias};
+    imports.push(item);importsByLocal[alias]=item;
+    return item;
 }
 
 function flashSemanticImport(authority: LoadedCapabilityAuthority, qname: string, node: TreeNode): SemanticImport {
@@ -1185,9 +1217,10 @@ interface LocalInheritedMemberLookup {
     terminalBaseQName: string | null;
 }
 
-function authoritySemanticType(typeName: string, context: AdapterContext, node: TreeNode): SemanticType {
+function authoritySemanticType(typeName: string, context: AdapterContext, node: TreeNode,
+    signature?: SignatureTypeProof): SemanticType {
     if (typeName.startsWith("Vector.<") && typeName.endsWith(">")) {
-        const element = authoritySemanticType(typeName.slice("Vector.<".length, -1), context, node);
+        const element = authoritySemanticType(typeName.slice("Vector.<".length, -1), context, node, signature);
         return semanticType(node, `Vector.<${element.sourceName}>`, "AS3Vector", [element]);
     }
     const primitive = PRIMITIVE_TYPES[typeName];
@@ -1202,7 +1235,7 @@ function authoritySemanticType(typeName: string, context: AdapterContext, node: 
         return semanticType(node, importedName, importedName, [], undefined,
             context.importsByLocal[importedName]!.sourceQualifiedName);
     }
-    const implicit = context.resolveImportedType(typeName, null, node);
+    const implicit = context.resolveImportedType(typeName, null, node, signature);
     if (implicit) return semanticType(node, implicit.sourceLocalName, implicit.sourceLocalName, [], undefined, implicit.sourceQualifiedName);
     return semanticType(node, typeName, typeName.slice(typeName.lastIndexOf(".") + 1));
 }
@@ -1502,9 +1535,19 @@ function memberVisibility(modifiers: string[]): "public" | "protected" | "intern
     return "internal";
 }
 
+function memberVisibilityForOwner(member:LocalDeclarationMember, ownerQName:string,
+    context:AdapterContext):"public" | "protected" | "internal" | "private" {
+    const moduleName=context.resolveCurrentLocal?.().entry.module;
+    const owner=moduleName ? contextLocalMember(context,moduleName,ownerQName) : null;
+    if (owner?.typeKind === "interface" && owner.status === "complete"
+        && owner.declaration?.members.includes(member) && member.modifiers.length === 0
+        && member.namespaceName === null && ["method","getter","setter"].includes(member.kind)) return "public";
+    return memberVisibility(member.modifiers);
+}
+
 function assertInheritedVisibility(member: LocalDeclarationMember, ownerQName: string,
     context: AdapterContext, node: TreeNode): void {
-    const visibility = memberVisibility(member.modifiers);
+    const visibility = memberVisibilityForOwner(member,ownerQName,context);
     const ownerPackage = ownerQName.slice(0, Math.max(0, ownerQName.lastIndexOf(".")));
     const currentPackage = context.classQualifiedName.slice(0, Math.max(0, context.classQualifiedName.lastIndexOf(".")));
     if (visibility === "private" || (visibility === "internal" && ownerPackage !== currentPackage)) {
@@ -1738,7 +1781,7 @@ function assertLocalReceiverVisibility(member: LocalDeclarationMember, ownerQNam
     receiverQName: string, context: AdapterContext, node: TreeNode): void {
     if (member.namespaceName !== null
         && Object.prototype.hasOwnProperty.call(context.namespaceNames, member.namespaceName)) return;
-    const visibility = memberVisibility(member.modifiers);
+    const visibility = memberVisibilityForOwner(member,ownerQName,context);
     const ownerPackage = ownerQName.slice(0, Math.max(0, ownerQName.lastIndexOf(".")));
     const currentPackage = context.classQualifiedName.slice(0,
         Math.max(0, context.classQualifiedName.lastIndexOf(".")));
@@ -1792,7 +1835,7 @@ function assertLocalCallArguments(member: LocalDeclarationMember | null, argumen
 }
 
 function assertLocalMethodCall(member: LocalDeclarationMember, argumentsList: SemanticExpression[],
-    argumentNodes: TreeNode[], context: AdapterContext, node: TreeNode): void {
+    argumentNodes: TreeNode[], context: AdapterContext, node: TreeNode, ownerQName?: string): void {
     const minimum = member.parameters.filter(parameter => !parameter.optional && !parameter.rest).length;
     if (argumentsList.length < minimum
         || (!member.parameters.some(parameter => parameter.rest) && argumentsList.length > member.parameters.length)) {
@@ -1804,7 +1847,7 @@ function assertLocalMethodCall(member: LocalDeclarationMember, argumentsList: Se
             fail("HARDENED_LOCAL_CALL_TYPE",
                 `inherited local method argument ${index} does not match its authenticated type`, argumentNodes[index] || node);
         }
-        const expected = authoritySemanticType(parameter.type, context, argumentNodes[index]!);
+        const expected = authoritySemanticType(parameter.type, context, argumentNodes[index]!, ownerQName ? {ownerQName,member} : undefined);
         try {
             argumentsList[index] = adaptAssignmentValue(expected, argument, context, argumentNodes[index]!);
         } catch (error) {
@@ -4022,8 +4065,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (methods.length !== 1) {
                 fail("HARDENED_LOCAL_STATIC_CALL", "local static call lacks one exact method declaration", node);
             }
-            assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node);
-            resultType = authoritySemanticType(methods[0]!.returnType!, context, node);
+            assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node, imported.sourceQualifiedName);
+            resultType = authoritySemanticType(methods[0]!.returnType!, context, node, {ownerQName:imported.sourceQualifiedName,member:methods[0]!});
         } else if (callee.kind === "member" && callee.target.kind === "identifier"
             && callee.target.bindingKind === "import"
             && context.importsByLocal[callee.target.name]?.authorityKind === "flash") {
@@ -4043,8 +4086,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const methods = lookup.members.filter(member => member.kind === "method");
             if (lookup.ownerQName === callee.capabilitySource && methods.length === 1) {
                 assertLocalReceiverVisibility(methods[0]!, lookup.ownerQName!, receiverQName, context, node);
-                assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node);
-                resultType = authoritySemanticType(methods[0]!.returnType!, context, node);
+                assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node, lookup.ownerQName!);
+                resultType = authoritySemanticType(methods[0]!.returnType!, context, node, {ownerQName:lookup.ownerQName!,member:methods[0]!});
             } else if (methods.length === 0) {
                 const mapping = terminalFlashMemberMapping(context, lookup.terminalFlashQNames,
                     "call", callee.name, node);
@@ -5048,7 +5091,10 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
     const resolveCurrentLocal = (): CurrentLocalType => current;
     const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal, localMemberAuthority);
     const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
-        node: TreeNode): SemanticImport | null => {
+        node: TreeNode, signature?: SignatureTypeProof): SemanticImport | null => {
+        const derived=signatureTypeImport(sourceName,signature,current,localAuthority,localMemberAuthority,
+            parsedImports.imports,parsedImports.importsByLocal,node);
+        if(derived) return derived;
         const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
         const existing = parsedImports.importsByLocal[localName];
         if (existing) return existing;
@@ -5325,7 +5371,12 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         namespaceNames[name] = true;
     });
     const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
-        node: TreeNode): SemanticImport | null => {
+        node: TreeNode, signature?: SignatureTypeProof): SemanticImport | null => {
+        if (signature && localAuthority && resolveCurrentLocal) {
+            const derived=signatureTypeImport(sourceName,signature,resolveCurrentLocal(),localAuthority,localMemberAuthority || null,
+                parsedImports.imports,parsedImports.importsByLocal,node);
+            if(derived) return derived;
+        }
         const scoped = fileCompilation?.byName[sourceName] ?? fileCompilation?.byQName[sourceName];
         const localName = scoped?.header.name ?? sourceName.slice(sourceName.lastIndexOf(".") + 1);
         const existing = parsedImports.importsByLocal[localName];

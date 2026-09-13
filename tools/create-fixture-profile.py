@@ -158,6 +158,8 @@ def main():
     p.add_argument('--air-sdk', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--ffdec-jar', type=Path, help='Recover complete native member signatures and optional arguments from this pinned decompiler')
+    p.add_argument('--omit-direct-edge', action='append', default=[], metavar='CALLER:DEPENDENCY',
+                   help='Exercise signature dependencies in a still strongly connected closed fixture graph')
     p.add_argument('--intrinsic-type', action='append', default=[], choices=['flash.utils.Dictionary', 'flash.utils.ByteArray'],
                    help='Exercise the existing shared compiler intrinsic instead of the optional Laya facade')
     args = p.parse_args()
@@ -199,7 +201,22 @@ def main():
         for row in declarations]})
     # This bounded fixture profile admits edges within its closed source set.
     # Runtime evaluation order is independently proved from emitted imports.
-    graph={'entries':[{'qname':q,'dependencies':sorted(qnames-{q})} for q in sorted(qnames)]}
+    dependencies={q:qnames-{q} for q in qnames}
+    for omitted in args.omit_direct_edge:
+        pair=omitted.split(':')
+        if len(pair) != 2 or pair[0] not in dependencies or pair[1] not in dependencies[pair[0]]:
+            p.error('Omitted edge must identify one existing fixture dependency')
+        dependencies[pair[0]].remove(pair[1])
+    # The fixture's one-component semantic graph remains exact after omissions.
+    for start in (qnames if args.omit_direct_edge else []):
+        seen=set();pending=[start]
+        while pending:
+            current=pending.pop()
+            if current not in seen:
+                seen.add(current);pending.extend(dependencies[current]-seen)
+        if seen != qnames:
+            p.error('Omitted edges must preserve the fixture strongly connected component')
+    graph={'entries':[{'qname':q,'dependencies':sorted(dependencies[q])} for q in sorted(qnames)]}
     files['dependencyGraphRaw']=write(out/'graph.json',graph)
     files['dependencyGraphSemantic']=write(out/'semantic-graph.json',{'components':[sorted(qnames)]})
     files['localTypeMap']=write(out/'local-types.json',{'schema':'as3-application-local-type-map@1',
@@ -208,7 +225,7 @@ def main():
         'dependencyGraphSemanticSha256':sha(files['dependencyGraphSemantic']),'entries':[{
             'componentId':'scc-00000','graphSourceSha256':sha(files['dependencyGraphRaw']),'importable':True,
             'module':'application','nodeId':hashlib.sha256(row['qname'].encode()).hexdigest()[:16],
-            'prerequisites':sorted(hashlib.sha256(q.encode()).hexdigest()[:16] for q in qnames-{row['qname']}),
+            'prerequisites':sorted(hashlib.sha256(q.encode()).hexdigest()[:16] for q in dependencies[row['qname']]),
             'qname':row['qname'],'sourceContentSha256':sha(row['path']),
             'sourcePath':source_prefix+row['path'].relative_to(source).as_posix(),
             'targetPath':target_prefix+row['qname'].replace('.','/')+'.ts','topologicalLevel':0,'typeKind':row['kind']}
