@@ -36,7 +36,15 @@ interface ManifestFile {
     astSha256: string;
 }
 
+interface FileLocalOutput {
+    sourceNodeId: string;
+    modulePath: string;
+    typescriptBytes: number;
+    typescriptSha256: string;
+}
+
 interface TranspiledManifestFile {
+    fileLocalOutputs?: FileLocalOutput[];
     sourcePath: string;
     typescriptPath: string;
     sourceBytes: number;
@@ -48,6 +56,7 @@ interface TranspiledManifestFile {
 }
 
 interface QualificationFile {
+    fileLocalOutputs?: FileLocalOutput[];
     sourcePath: string;
     sourceBytes: number;
     sourceSha256: string;
@@ -326,7 +335,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     source.content, value => sha256(value), transpileAuthority!.localTypes, file.portablePath,
                     transpileAuthority!.localMembers, transpileAuthority!.runtimeTypeSources,
                     transpileAuthority!.sourceMembers || undefined);
-                if (semantic.declaration.declarationKind === "class") for (const member of semantic.declaration.members) {
+                const programs = [semantic, ...(semantic.fileLocalPrograms || [])];
+                for (const program of programs) if (program.declaration.declarationKind === "class") for (const member of program.declaration.members) {
                     if (member.kind !== "field" || !member.embeddedBitmap) continue;
                     const asset = member.embeddedBitmap;
                     const resourcePath = resolve(dirname(file.absolutePath), asset.source);
@@ -352,76 +362,68 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     embeddedResources.push({id: asset.resourceId, sourcePath: posix.join(posix.dirname(file.portablePath), asset.source),
                         path: target, sha256: hash, bytes: bytes.byteLength});
                 }
-                const emitted = emitSemanticProgram(semantic, {
-                    compiler: ts49,
-                    expectedTypeScriptVersion: transpileAuthority!.typeScriptVersion,
+                // Emit and validate the entire source unit before declaring any of it admitted.
+                const outputs = programs.map(program => {
+                    const emitted = emitSemanticProgram(program, {
+                        compiler: ts49, expectedTypeScriptVersion: transpileAuthority!.typeScriptVersion,
+                    });
+                    const code = transpileAuthority!.runtimePackage === "@bleach/as3-runtime" ? emitted.code
+                        : emitted.code.replaceAll("@bleach/as3-runtime", transpileAuthority!.runtimePackage);
+                    const dependencies = program.imports.filter(item => item.authorityKind === "local"
+                        && !item.compileTimeNamespace).map(item => {
+                        const resolved = posix.normalize(posix.join(posix.dirname(emitted.modulePath), item.targetModule));
+                        return resolved.endsWith(".ts") ? resolved : `${resolved}.ts`;
+                    });
+                    return {program, modulePath: emitted.modulePath, code, dependencies,
+                        packagePath: `__as3_runtime/application/${emitted.modulePath}`,
+                        bytes: Buffer.byteLength(code, "utf8"), hash: sha256(code)};
                 });
-                const emittedCode = transpileAuthority!.runtimePackage === "@bleach/as3-runtime" ? emitted.code
-                    : emitted.code.replaceAll("@bleach/as3-runtime", transpileAuthority!.runtimePackage);
-                const requiredLocalModules = semantic.imports.filter(item => item.authorityKind === "local"
-                    && !item.compileTimeNamespace).map(item => {
-                    const resolved = posix.normalize(posix.join(posix.dirname(emitted.modulePath), item.targetModule));
-                    return resolved.endsWith(".ts") ? resolved : `${resolved}.ts`;
-                });
-                const packageModulePath = `__as3_runtime/application/${emitted.modulePath}`;
-                const collisionKey = portableCollisionKey(options.operation === "qualify"
-                    ? emitted.modulePath : packageModulePath);
+                const primary = outputs[0]!;
+                const fileLocalOutputs = outputs.slice(1).map(output => ({sourceNodeId: output.program.declaration.sourceNodeId,
+                    modulePath: output.modulePath, typescriptBytes: output.bytes, typescriptSha256: output.hash}));
+                const requiredLocalModules = [...new Set(outputs.flatMap(output => output.dependencies))];
+                const collisionKeys = outputs.map(output => portableCollisionKey(options.operation === "qualify"
+                    ? output.modulePath : output.packagePath));
+                if (new Set(collisionKeys).size !== collisionKeys.length)
+                    throw new CliError("source unit emits colliding portable module paths", 4);
                 if (options.operation === "qualify") {
                     const current: QualificationFile = {
-                        sourcePath: file.portablePath,
-                        sourceBytes: source.bytes.byteLength,
-                        sourceSha256: sha256(source.bytes),
-                        status: "admitted",
-                        stage: null,
-                        code: null,
-                        message: null,
-                        modulePath: emitted.modulePath,
-                        normalizedFingerprintSha256: normalized.fingerprintSha256,
-                        typescriptSha256: sha256(emittedCode),
+                        sourcePath: file.portablePath, sourceBytes: source.bytes.byteLength,
+                        sourceSha256: sha256(source.bytes), status: "admitted", stage: null, code: null, message: null,
+                        modulePath: primary.modulePath, normalizedFingerprintSha256: normalized.fingerprintSha256,
+                        typescriptSha256: primary.hash, ...(fileLocalOutputs.length ? {fileLocalOutputs} : {}),
                     };
-                    const prior = qualificationOwners.get(collisionKey);
-                    if (prior) {
-                        prior.status = "held";
-                        prior.stage = "output";
-                        prior.code = "HARDENED_OUTPUT_COLLISION";
-                        prior.message = `portable module path collides with ${file.portablePath}`;
-                        prior.typescriptSha256 = null;
-                        current.status = "held";
-                        current.stage = "output";
-                        current.code = "HARDENED_OUTPUT_COLLISION";
-                        current.message = `portable module path collides with ${prior.sourcePath}`;
-                        current.typescriptSha256 = null;
-                    } else {
-                        qualificationOwners.set(collisionKey, current);
+                    for (const key of collisionKeys) {
+                        const prior = qualificationOwners.get(key);
+                        if (prior) {
+                            prior.status = "held"; prior.stage = "output"; prior.code = "HARDENED_OUTPUT_COLLISION";
+                            prior.message = `portable module path collides with ${file.portablePath}`; prior.typescriptSha256 = null;
+                            current.status = "held"; current.stage = "output"; current.code = "HARDENED_OUTPUT_COLLISION";
+                            current.message = `portable module path collides with ${prior.sourcePath}`; current.typescriptSha256 = null;
+                        } else qualificationOwners.set(key, current);
                     }
-                    qualificationFiles.push(current);
-                    localOutputDependencies.set(current, requiredLocalModules);
+                    qualificationFiles.push(current); localOutputDependencies.set(current, requiredLocalModules);
                     continue;
                 }
-                if (outputKeys.has(collisionKey)) {
-                    throw new CliError(`two sources emit the same portable module path: ${emitted.modulePath}`, 4);
+                for (const key of collisionKeys) {
+                    if (outputKeys.has(key)) throw new CliError("two sources emit the same portable module path", 4);
+                    outputKeys.add(key);
                 }
-                outputKeys.add(collisionKey);
-                localRuntimePrograms.push(semantic);
-                const bytes = Buffer.byteLength(emittedCode, "utf8");
-                totalOutputBytes += bytes;
-                if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
-                    throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
+                for (const output of outputs) {
+                    localRuntimePrograms.push(output.program);
+                    const javascript = runtimeCommonJs(output.code, output.packagePath);
+                    totalOutputBytes += output.bytes + Buffer.byteLength(javascript, "utf8");
+                    if (totalOutputBytes > options.limits.maxTotalOutputBytes)
+                        throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
+                    writeArtifact(publication, output.packagePath, output.code);
+                    writeArtifact(publication, output.packagePath.slice(0, -3) + ".js", javascript);
                 }
-                writeArtifact(publication, packageModulePath, emittedCode);
-                const javascriptPath = packageModulePath.slice(0, -3) + ".js";
-                const javascript = runtimeCommonJs(emittedCode, packageModulePath);
-                writeArtifact(publication, javascriptPath, javascript);
-                totalOutputBytes += Buffer.byteLength(javascript, "utf8");
                 const transpiled: TranspiledManifestFile = {
-                    sourcePath: file.portablePath,
-                    typescriptPath: packageModulePath,
-                    sourceBytes: source.bytes.byteLength,
-                    sourceSha256: sha256(source.bytes),
-                    normalizedAstSha256: sha256(parsedFile.json),
-                    normalizedFingerprintSha256: normalized.fingerprintSha256,
-                    typescriptBytes: bytes,
-                    typescriptSha256: sha256(emittedCode),
+                    sourcePath: file.portablePath, typescriptPath: primary.packagePath,
+                    sourceBytes: source.bytes.byteLength, sourceSha256: sha256(source.bytes),
+                    normalizedAstSha256: sha256(parsedFile.json), normalizedFingerprintSha256: normalized.fingerprintSha256,
+                    typescriptBytes: primary.bytes, typescriptSha256: primary.hash,
+                    ...(fileLocalOutputs.length ? {fileLocalOutputs} : {}),
                 };
                 transpiledFiles.push(transpiled);
                 localOutputDependencies.set(transpiled, requiredLocalModules.map(path => `__as3_runtime/application/${path}`));
@@ -452,7 +454,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             while (changed) {
                 changed = false;
                 const admittedModules = new Set(qualificationFiles.filter(item => item.status === "admitted"
-                    && item.modulePath !== null).map(item => portableCollisionKey(item.modulePath!)));
+                    && item.modulePath !== null).flatMap(item => [item.modulePath!, ...(item.fileLocalOutputs || []).map(output => output.modulePath)])
+                    .map(path => portableCollisionKey(path)));
                 qualificationFiles.filter(item => item.status === "admitted").forEach(item => {
                     const missing = (localOutputDependencies.get(item) || [])
                         .find(modulePath => !admittedModules.has(portableCollisionKey(modulePath)));
@@ -467,7 +470,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 });
             }
         } else if (options.operation === "transpile") {
-            const emittedModules = new Set(transpiledFiles.map(item => portableCollisionKey(item.typescriptPath)));
+            const emittedModules = new Set(transpiledFiles.flatMap(item => [item.typescriptPath,
+                ...(item.fileLocalOutputs || []).map(output => `__as3_runtime/application/${output.modulePath}`)]).map(path => portableCollisionKey(path)));
             for (const item of transpiledFiles) {
                 const missing = (localOutputDependencies.get(item) || [])
                     .find(modulePath => !emittedModules.has(portableCollisionKey(modulePath)));

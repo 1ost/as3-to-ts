@@ -742,6 +742,7 @@ export interface SemanticProgram extends SemanticIdentity {
     imports: SemanticImport[];
     declaration: SemanticDeclaration;
     fileLocalScope?: AS3FileLocalClassScope;
+    fileLocalPrograms?: SemanticProgram[];
     sourceCapabilitySha256: string;
     targetCapabilitySha256: string;
     capabilityMappingSha256: string;

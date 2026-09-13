@@ -161,7 +161,7 @@ storage conversion. Native sparse growth, truncation, wrapping and null order ar
 retained. Compound length writes and length updates remain held. The original
 DataLoader's length-zero cleanup needs no source rewrite.
 
-### File-local class declaration groundwork
+### Original file-local class compilation
 
 The declaration worker retains classes outside the package as optional nested
 `fileLocalClasses` headers. Each header preserves its original name, members,
@@ -171,15 +171,17 @@ not enter the global local-type map. Package imports are not copied into their
 file scope. The member-map loader validates and freezes the nested headers
 against the containing type's authenticated source path and owner.
 
-Semantic adaptation still rejects nonempty original file scope with
-`HARDENED_OUTSIDE_PACKAGE`. The emitter and runtime now accept a scoped private
-class IR: its original class name remains module-private, while one compiler
+The adapter authenticates file-local headers against the original AST and source
+bytes, then resolves each helper within its original file scope. The emitter and
+runtime accept a scoped private class IR: its original class name remains module-private, while one compiler
 binding exports its constructor to generated callers and the sealed registry.
 The registry uses the source module/path/name as nominal identity, with a separate
 native reflection name. Private constructors are excluded from
 `AS3_CLASS_DEFINITIONS`; reflection labels cannot be used as reference-type keys.
-Original-source scoped type/member resolution and compilation-unit output are
-still required before the adapter hold can be removed.
+Each helper emits under `<owner>.file-local/<name>.ts`; the manifest retains one
+row per original source and lists its private outputs. Dependencies of every
+helper participate in the source unit closure: a missing helper dependency holds
+the whole source and prevents publication. Source and header drift fail closed.
 
 Validation: `npm run build`, then `TMPDIR=/private/tmp node --test
 tests/hardened-cli/declaration-worker.test.cjs
@@ -203,3 +205,13 @@ not original-AS3 CLI admission or browser/native scheduler parity. The final
 native global-lookup failure is retained, but this test does not run a Laya
 ApplicationDomain lookup. Runtime scope tests reject altered keys, malformed
 paths, missing scopes, native constructor substitution and stale metadata hashes.
+
+The original-source CLI regression `tests/hardened-cli/file-local-compilation.test.cjs`
+uses AIR/FFDec declarations and checks deterministic outputs, a file-scope import
+and inherited helper, closure rejection, changed source bytes and forged member
+headers. Run it with `HARDENED_FIXTURE_AIR_SDK`, `HARDENED_FIXTURE_LAYA` and
+`HARDENED_FIXTURE_FFDEC` set. Laya's `file-local-class` oracle executes two untouched
+source files through this adapter and the real generated modules: distinct Item
+identities, native reflection names and failed global lookup match AIR. This is
+one state checkpoint with an empty frame, not startup or UI evidence. The original
+FrameCenterAdv now reaches its next hold, `Array.splice`; AP pins remain unchanged.

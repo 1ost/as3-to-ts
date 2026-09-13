@@ -5,6 +5,7 @@ import {
     LoadedLocalMemberAuthority,
     LoadedLocalTypeAuthority,
     LocalDeclarationMember,
+    FileLocalClassDeclaration,
     LocalMemberAuthorityEntry,
     LocalTypeMapping,
     NativeTimerFunctionMapping,
@@ -38,6 +39,8 @@ import {
 import { assertLoadedCapabilityAuthority, Sha256Function, targetModuleSpecifier } from "./ledger";
 import { assertLoadedLocalTypeAuthority } from "./local-types";
 import { assertLoadedLocalMemberAuthority } from "./local-members";
+import { extractLocalDeclaration } from "./local-declarations";
+import { AS3FileLocalClassScope, fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLocalIdentity";
 import { assertAuthenticatedRuntimeAuthoritySources, type RuntimeAuthoritySource } from "./type-authority";
 import { assertLoadedSourceMemberAuthority, type LoadedSourceMemberAuthority } from "./source-member-authority";
 
@@ -72,6 +75,7 @@ interface LocalHeader {
 
 interface AdapterContext {
     packageFunction?: true;
+    fileCompilation?: FileLocalCompilation;
     className: string;
     classQualifiedName: string;
     extendsType: SemanticType | null;
@@ -389,7 +393,7 @@ function flashBaseMemberMapping(context: AdapterContext, access: string, name: s
         if (context.mappingsBySource[qname] || qname === "Array" && nativeArrayBase(context))
             return memberMapping(context, qname, access, name, node);
         const moduleName = context.resolveCurrentLocal?.().entry.module;
-        const local = moduleName ? context.localMemberAuthority?.entriesByIdentity[`${moduleName}\u0000${qname}`] : undefined;
+        const local = moduleName ? contextLocalMember(context, moduleName, qname) : undefined;
         if (!local || local.status !== "complete" || !local.declaration)
             fail("HARDENED_LOCAL_MEMBER_HELD", `base member authority is incomplete for ${qname}`, node);
         if (local.declaration.baseQNames.length > 1) fail("HARDENED_LOCAL_MEMBER_BASE", "base member lineage is ambiguous", node);
@@ -565,8 +569,8 @@ function assertPackageRuntimeValue(authority: LoadedLocalMemberAuthority, module
 
 function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLocalType,
     node: TreeNode, localTypeAuthority: LoadedLocalTypeAuthority,
-    localMemberAuthority: LoadedLocalMemberAuthority | null = null): SemanticImport {
-    const localName = validateIdentifier(target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
+    localMemberAuthority: LoadedLocalMemberAuthority | null = null, fileLocalName?: string): SemanticImport {
+    const localName = validateIdentifier(fileLocalName ?? target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
     let localValueType: string | null = null;
     let compileTimeNamespace = false;
     let localFunction: true | undefined;
@@ -605,7 +609,8 @@ function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLoca
         runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
         localValueType, compileTimeNamespace, ...(localFunction ? {localFunction} : {}),
         sourceQualifiedName: target.qname, sourceLocalName: localName,
-        targetModule: relativeLocalModule(currentLocal.outputModulePath, target, localTypeAuthority), targetExport: localName,
+        targetModule: relativeLocalModule(currentLocal.outputModulePath, target, localTypeAuthority),
+        targetExport: fileLocalName ? "__as3FileLocalClass" : localName,
     });
 }
 
@@ -776,7 +781,7 @@ function referenceParents(qname: string, context: AdapterContext): readonly stri
     if (mapped !== undefined) {
         if (context.localMemberAuthority !== null && context.resolveCurrentLocal !== null) {
             const moduleName = context.resolveCurrentLocal().entry.module;
-            if (context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`]) return null;
+            if (contextLocalMember(context, moduleName, qname)) return null;
         }
         return mapped;
     }
@@ -786,7 +791,7 @@ function referenceParents(qname: string, context: AdapterContext): readonly stri
     }
     if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) return null;
     const moduleName = context.resolveCurrentLocal().entry.module;
-    const entry = context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+    const entry = contextLocalMember(context, moduleName, qname);
     if (!entry || entry.status !== "complete" || entry.declaration === null
         || (entry.typeKind !== "class" && entry.typeKind !== "interface")) return null;
     return entry.declaration.baseQNames.concat(entry.declaration.interfaceQNames);
@@ -871,7 +876,7 @@ function isArrayType(type: SemanticType, context?: AdapterContext): boolean {
         if (current === context.classQualifiedName) current = context.extendsType?.runtimeName ?? null;
         else {
             const moduleName = context.resolveCurrentLocal?.().entry.module;
-            const entry: LocalMemberAuthorityEntry | null | undefined = moduleName ? context.localMemberAuthority?.entriesByIdentity[`${moduleName}\u0000${current}`] : null;
+            const entry: LocalMemberAuthorityEntry | null | undefined = moduleName ? contextLocalMember(context, moduleName, current) : null;
             if (!entry || entry.status !== "complete" || !entry.declaration || entry.declaration.baseQNames.length > 1) return false;
             current = entry.declaration.baseQNames[0] || null;
         }
@@ -1214,7 +1219,7 @@ function localInheritedNamedMembers(context: AdapterContext, name: string,
         }
         visited.add(qname);
         const entry: LocalMemberAuthorityEntry | undefined =
-            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+            contextLocalMember(context, moduleName, qname);
         if (!entry) return { members: [], ownerQName: null };
         if (entry.status !== "complete" || entry.declaration === null) {
             fail("HARDENED_LOCAL_MEMBER_HELD",
@@ -1249,13 +1254,13 @@ function assertNoInheritedLocalValueShadow(context: AdapterContext, name: string
                 `${name} intrinsic lookup encountered a cyclic or over-bound local base lineage`, node);
         }
         visited.add(qname);
-        if (!context.localTypeAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`]) {
+        if (!contextLocalType(context, moduleName, qname)) {
             if (context.runtimeReferenceParentsByQName.has(qname)) return;
             fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
                 `${name} intrinsic lookup encountered an unauthenticated nonlocal base terminal`, node);
         }
         const entry: LocalMemberAuthorityEntry | undefined =
-            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+            contextLocalMember(context, moduleName, qname);
         if (!entry || entry.status !== "complete" || entry.declaration === null) {
             fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
                 `${name} intrinsic lookup encountered a missing or held local base declaration`, node);
@@ -1288,7 +1293,7 @@ function assertNoInheritedNativeFunctionShadow(context: AdapterContext, name: st
         }
         visited.add(qname);
         const localType = moduleName === null || context.localTypeAuthority === null ? undefined
-            : context.localTypeAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+            : contextLocalType(context, moduleName, qname);
         if (!localType) {
             if (context.sourceMemberAuthority !== null) {
                 assertLoadedSourceMemberAuthority(context.sourceMemberAuthority);
@@ -1396,7 +1401,7 @@ function assertNoInheritedNativeFunctionShadow(context: AdapterContext, name: st
         }
         assertLoadedLocalMemberAuthority(context.localMemberAuthority);
         const entry: LocalMemberAuthorityEntry | undefined =
-            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+            contextLocalMember(context, moduleName, qname);
         if (!entry || entry.status !== "complete" || entry.declaration === null) {
             fail("HARDENED_LOCAL_MEMBER_HELD",
                 `local member authority for ${qname} is held by ${entry?.holdCode || "unknown"}`, node);
@@ -1447,7 +1452,7 @@ function localInheritedMember(context: AdapterContext, name: string,
         }
         visited.add(qname);
         const entry: LocalMemberAuthorityEntry | undefined =
-            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+            contextLocalMember(context, moduleName, qname);
         if (!entry) return { member: null, ownerQName: null, terminalBaseQName: qname };
         if (entry.status !== "complete" || entry.declaration === null) {
             fail("HARDENED_LOCAL_MEMBER_HELD",
@@ -1524,7 +1529,7 @@ function localDeclaration(context: AdapterContext, qname: string, node: TreeNode
     }
     assertLoadedLocalMemberAuthority(context.localMemberAuthority);
     const moduleName = context.resolveCurrentLocal().entry.module;
-    const entry = context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${qname}`];
+    const entry = contextLocalMember(context, moduleName, qname);
     if (!entry || entry.status !== "complete" || entry.declaration === null) {
         fail("HARDENED_LOCAL_MEMBER_HELD", `local declaration authority for ${qname} is absent or held`, node);
     }
@@ -1575,7 +1580,7 @@ function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: r
         }
         visited.add(current);
         const entry: LocalMemberAuthorityEntry | undefined =
-            context.localMemberAuthority.entriesByIdentity[`${moduleName}\u0000${current}`];
+            contextLocalMember(context, moduleName, current);
         if (!entry || entry.status !== "complete" || entry.declaration === null) {
             fail("HARDENED_LOCAL_FIELD_ANCESTRY", `local field ancestor ${current} is absent or held`, node);
         }
@@ -1647,7 +1652,7 @@ function localInstanceNamedMembers(context: AdapterContext, qname: string, name:
         if (visited.size >= 1024) {
             fail("HARDENED_LOCAL_MEMBER_CYCLE", "local instance-member lineage exceeds its bound", node);
         }
-        const entry = context.localMemberAuthority!.entriesByIdentity[`${moduleName}\u0000${current}`];
+        const entry = contextLocalMember(context, moduleName, current);
         if (!entry || entry.status !== "complete" || entry.declaration === null) {
             fail("HARDENED_LOCAL_MEMBER_HELD", `local declaration authority for ${current} is absent or held`, node);
         }
@@ -2532,7 +2537,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             });
             sourceType = semanticType(nameNode, name, name, [], undefined, context.classQualifiedName);
         } else {
-            const imported = context.importsByLocal[name];
+            if (!context.importsByLocal[name] && context.fileCompilation?.byName[name])
+                assertNoInheritedNativeFunctionShadow(context, name, nameNode);
+            const imported = context.importsByLocal[name] ?? (context.fileCompilation?.byName[name]
+                ? context.resolveImportedType(name, "class", nameNode) : null);
             if (imported?.authorityKind === "intrinsic"
                 && imported.sourceQualifiedName === "flash.utils.Dictionary") {
                 if (args.length > 1 || (args[0]
@@ -3326,7 +3334,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const packageSeparator = context.classQualifiedName.lastIndexOf(".");
             const arrayQName = packageSeparator < 0 ? "Array"
                 : `${context.classQualifiedName.slice(0, packageSeparator)}.Array`;
-            if (context.localTypeAuthority.entriesByIdentity[`${current.entry.module}\u0000${arrayQName}`]) {
+            if (contextLocalType(context, current.entry.module, arrayQName)) {
                 fail("HARDENED_INTRINSIC_IDENTITY_SHADOW",
                     "Array.NUMERIC is shadowed by an authenticated same-package declaration", node.children[0]!);
             }
@@ -3792,7 +3800,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             || context.importsByLocal[callee.name]?.localFunction)) {
             const qname=callee.bindingSourceQualifiedName!;
             const current=context.resolveCurrentLocal!();
-            const declaration=context.localMemberAuthority!.entriesByIdentity[`${current.entry.module}\u0000${qname}`]?.declaration;
+            const declaration=contextLocalMember(context, current.entry.module, qname)?.declaration;
             const member=declaration?.members[0];
             if (!member || member.kind !== "method" || declaration!.members.length !== 1)
                 fail("HARDENED_PACKAGE_FUNCTION_CALL", "package function lacks its authenticated signature", node);
@@ -5043,11 +5051,118 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
     return program;
 }
 
+interface FileLocalClass {
+    header: FileLocalClassDeclaration;
+    scope: AS3FileLocalClassScope;
+    type: LocalTypeMapping;
+    outputModulePath: string;
+}
+interface FileLocalCompilation {
+    owner: LocalTypeMapping;
+    classes: FileLocalClass[];
+    byName: { [name: string]: FileLocalClass };
+    byQName: { [qname: string]: FileLocalClass };
+    members: { [qname: string]: LocalMemberAuthorityEntry };
+}
+function contextLocalMember(context: AdapterContext, module: string, qname: string): LocalMemberAuthorityEntry | undefined {
+    return (context.fileCompilation?.owner.module === module ? context.fileCompilation.members[qname] : undefined)
+        ?? context.localMemberAuthority?.entriesByIdentity[`${module}\u0000${qname}`];
+}
+function contextLocalType(context: AdapterContext, module: string, qname: string): LocalTypeMapping | undefined {
+    return (context.fileCompilation?.owner.module === module ? context.fileCompilation.byQName[qname]?.type : undefined)
+        ?? context.localTypeAuthority?.entriesByIdentity[`${module}\u0000${qname}`];
+}
+
+/** Derive lexical declarations from the original bytes; never widen the global maps. */
+function prepareFileLocalCompilation(ast: NormalizedParserAst, root: TreeNode, authority: LoadedCapabilityAuthority,
+    sourceText: string, sha256: Sha256Function, localTypes: LoadedLocalTypeAuthority | undefined,
+    sourcePath: string | undefined, localMembers: LoadedLocalMemberAuthority | undefined): FileLocalCompilation {
+    if (!localTypes || !localMembers || !sourcePath)
+        fail("HARDENED_FILE_LOCAL_AUTHORITY", "file-local compilation requires authenticated source and declaration maps", root);
+    assertLoadedLocalTypeAuthority(localTypes);
+    assertLoadedLocalMemberAuthority(localMembers);
+    const extract = extractLocalDeclaration(ast, sourceText, sha256, sourcePath);
+    const owners = localTypes.entries.filter(entry => entry.qname === extract.qualifiedName
+        && entry.sourcePath === localTypes.sourceRoots[entry.module] + sourcePath
+        && entry.sourceContentSha256 === sha256(sourceText.replace(/\r\n?/g, "\n")) && entry.typeKind === "class");
+    if (owners.length !== 1 || !extract.fileLocalClasses?.length)
+        fail("HARDENED_FILE_LOCAL_AUTHORITY", "file scope lacks one authenticated class owner and helper declarations", root);
+    const owner = owners[0]!;
+    const signed = localMembers.entriesByIdentity[`${owner.module}\u0000${owner.qname}`];
+    if (signed?.status !== "complete" || !signed.declaration
+        || JSON.stringify(signed.declaration.fileLocalClasses) !== JSON.stringify(extract.fileLocalClasses))
+        fail("HARDENED_FILE_LOCAL_AUTHORITY", "file-local headers differ from the authenticated original declaration", root);
+    const publicOutput = owner.targetPath.slice(localTypes.targetRoots[owner.module].length);
+    const result: FileLocalCompilation = { owner, classes: [], byName: Object.create(null), byQName: Object.create(null), members: Object.create(null) };
+    for (const header of extract.fileLocalClasses) {
+        if (PRIMITIVE_TYPES[header.name] || header.name === "Vector")
+            fail("HARDENED_FILE_LOCAL_SHADOW", "file-local builtin type shadowing requires native binding evidence", root);
+        const scope: AS3FileLocalClassScope = {module: owner.module, sourcePath: owner.sourcePath,
+            ownerQualifiedName: owner.qname, name: header.name};
+        const qname = fileLocalClassIdentity(scope).key;
+        const outputModulePath = `${publicOutput.slice(0, -3)}.file-local/${header.name}.ts`;
+        const type: LocalTypeMapping = {...owner, qname, importable: false,
+            nodeId: sha256(`${owner.nodeId}\u0000${header.sourceNodeId}`).slice(0, 16),
+            prerequisites: [...new Set([...owner.prerequisites, owner.nodeId])].sort(),
+            targetPath: localTypes.targetRoots[owner.module] + outputModulePath};
+        const item = {header, scope, type, outputModulePath};
+        result.classes.push(item); result.byName[header.name] = item; result.byQName[qname] = item;
+    }
+    const resolveType = (name: string, header: FileLocalClassDeclaration): string => {
+        if (name.startsWith("Vector.<") && name.endsWith(">")) return `Vector.<${resolveType(name.slice(8, -1), header)}>`;
+        if (name === "*" || name === "void" || PRIMITIVE_TYPES[name]) return name;
+        if (result.byName[name]) return result.byName[name]!.type.qname;
+        const exists = (qname: string): boolean => !!authority.typeMappingsBySource[qname]
+            || !!authority.intrinsicTypesBySource[qname]
+            || !!localTypes.entriesByIdentity[`${owner.module}\u0000${qname}`];
+        const matches = name.includes(".") ? [name].filter(exists) : [
+            ...header.imports.filter(value => !value.endsWith(".*") && value.endsWith("." + name)),
+            ...header.imports.filter(value => value.endsWith(".*")).map(value => value.slice(0, -1) + name), name,
+        ].filter(exists);
+        const distinct = [...new Set(matches)];
+        if (distinct.length !== 1) fail("HARDENED_FILE_LOCAL_TYPE", `file-local signature type ${name} lacks one lexical binding`, root);
+        return distinct[0]!;
+    };
+    for (const item of result.classes) {
+        const header = item.header;
+        result.members[item.type.qname] = {module: owner.module, qname: item.type.qname, nodeId: item.type.nodeId,
+            sourceContentSha256: owner.sourceContentSha256, typeKind: "class", status: "complete", holdCode: null, holdSha256: null,
+            declaration: {baseQNames: header.extendsNames.map(name => resolveType(name, header)),
+                interfaceQNames: header.implementsNames.map(name => resolveType(name, header)), packageInitializer: null,
+                members: header.members.map(member => ({...member,
+                    fieldType: member.fieldType === null ? null : resolveType(member.fieldType, header),
+                    returnType: member.returnType === null ? null : resolveType(member.returnType, header),
+                    parameters: member.parameters.map(parameter => ({...parameter, type: resolveType(parameter.type, header)}))}))}};
+    }
+    return result;
+}
+
 export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: LoadedCapabilityAuthority,
     sourceText: string, sha256: Sha256Function, localAuthority?: LoadedLocalTypeAuthority,
     sourceLogicalPath?: string, localMemberAuthority?: LoadedLocalMemberAuthority,
     runtimeReferenceAuthority?: readonly RuntimeAuthoritySource[],
     sourceMemberAuthority?: LoadedSourceMemberAuthority): SemanticProgram {
+    assertLoadedCapabilityAuthority(authority);
+    const root = buildTree(ast, sourceText, sha256);
+    const hasFileScope = root.children.some(child => child.kind === "CONTENT" && child.children.length > 0);
+    const compilation = hasFileScope ? prepareFileLocalCompilation(ast, root, authority, sourceText, sha256,
+        localAuthority, sourceLogicalPath, localMemberAuthority) : undefined;
+    const program = adaptSourceClass(ast, authority, sourceText, sha256, localAuthority, sourceLogicalPath,
+        localMemberAuthority, runtimeReferenceAuthority, sourceMemberAuthority, compilation);
+    if (!compilation) return program;
+    const fileLocalPrograms = compilation.classes.map(item => adaptSourceClass(ast, authority, sourceText, sha256,
+        localAuthority, sourceLogicalPath, localMemberAuthority, runtimeReferenceAuthority, sourceMemberAuthority, compilation, item));
+    const complete = {...program, fileLocalPrograms};
+    deepFreeze(complete); ADAPTED_PROGRAMS.add(complete);
+    return complete;
+}
+
+function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityAuthority,
+    sourceText: string, sha256: Sha256Function, localAuthority?: LoadedLocalTypeAuthority,
+    sourceLogicalPath?: string, localMemberAuthority?: LoadedLocalMemberAuthority,
+    runtimeReferenceAuthority?: readonly RuntimeAuthoritySource[],
+    sourceMemberAuthority?: LoadedSourceMemberAuthority, fileCompilation?: FileLocalCompilation,
+    selectedFileClass?: FileLocalClass): SemanticProgram {
     assertLoadedCapabilityAuthority(authority);
     const root = buildTree(ast, sourceText, sha256);
     if (root.kind !== "COMPILATION_UNIT") {
@@ -5056,13 +5171,19 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     const packageNode = one(root, "PACKAGE")!;
     const trailing = root.children.filter((child) => child.kind === "CONTENT" && child !== packageNode);
     if (root.children.some((child) => child !== packageNode && child.kind !== "CONTENT")
-        || trailing.some((content) => content.children.length !== 0)) {
+        || (!fileCompilation && trailing.some((content) => content.children.length !== 0))) {
         fail("HARDENED_OUTSIDE_PACKAGE", "declarations outside the package are not admitted", root);
     }
     const packageNameNode = one(packageNode, "NAME")!;
     onlyKinds(packageNode, ["CONTENT", "NAME"]);
-    const packageName = packageNameNode.text === null ? "" : packageNameNode.text;
-    const content = one(packageNode, "CONTENT")!;
+    const packageName = selectedFileClass ? "" : packageNameNode.text === null ? "" : packageNameNode.text;
+    const packageContent = one(packageNode, "CONTENT")!;
+    const selectedNode = selectedFileClass ? trailing.flatMap(content => content.children)
+        .find(node => node.id === selectedFileClass.header.sourceNodeId && node.kind === "CLASS") : undefined;
+    if (selectedFileClass && !selectedNode) fail("HARDENED_FILE_LOCAL_NODE", "file-local class is absent from original AST", root);
+    // A lexical view of the original nodes, not a rewritten source or normalized AST.
+    const content = selectedFileClass ? {...packageContent, children: trailing.flatMap(content => content.children)
+        .filter(node => node.kind === "IMPORT" || node === selectedNode)} : packageContent;
     const declarationPosition = content.children.findIndex((child) => child.kind === "CLASS" || child.kind === "INTERFACE");
     if (declarationPosition >= 0 && content.children.slice(declarationPosition + 1)
         .some((child) => child.kind === "IMPORT" || child.kind === "USE")) {
@@ -5083,7 +5204,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     onlyKinds(classNode, ["CONTENT", "EXTENDS", "IMPLEMENTS_LIST", "MOD_LIST", "NAME"]);
     const classNameNode = one(classNode, "NAME")!;
     const className = validateIdentifier(requiredText(classNameNode, "class name"), classNameNode);
-    const outputModulePath = modulePath(packageName, className, packageNameNode);
+    const outputModulePath = selectedFileClass?.outputModulePath ?? modulePath(packageName, className, packageNameNode);
     const classContentForNamespaces = one(classNode, "CONTENT")!;
     const firstClassMember = classContentForNamespaces.children.findIndex(child => child.kind !== "USE");
     if (firstClassMember >= 0 && classContentForNamespaces.children.slice(firstClassMember + 1)
@@ -5093,7 +5214,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     const namespaceNames: { [name: string]: true } = Object.create(null);
     const namespaceUseNodes = content.children.filter(child => child.kind === "USE")
         .concat(classContentForNamespaces.children.filter(child => child.kind === "USE"));
-    let currentLocal: CurrentLocalType | null = null;
+    let currentLocal: CurrentLocalType | null = selectedFileClass ? {entry: selectedFileClass.type, outputModulePath} : null;
     let resolveCurrentLocal: (() => CurrentLocalType) | null = null;
     if (localAuthority !== undefined || sourceLogicalPath !== undefined) {
         if (!localAuthority || typeof sourceLogicalPath !== "string" || sourceLogicalPath.length === 0) {
@@ -5139,8 +5260,19 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     });
     const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
         node: TreeNode): SemanticImport | null => {
-        const localName = sourceName.slice(sourceName.lastIndexOf(".") + 1);
+        const scoped = fileCompilation?.byName[sourceName] ?? fileCompilation?.byQName[sourceName];
+        const localName = scoped?.header.name ?? sourceName.slice(sourceName.lastIndexOf(".") + 1);
         const existing = parsedImports.importsByLocal[localName];
+        if (scoped) {
+            if (expectedKind === "interface") return null;
+            if (existing && existing.sourceQualifiedName !== scoped.type.qname)
+                fail("HARDENED_FILE_LOCAL_SHADOW", "file-local type conflicts with an explicit import", node);
+            if (existing) return existing;
+            const item = localSemanticImport(scoped.type, resolveCurrentLocal!(), node, localAuthority!,
+                localMemberAuthority || null, scoped.header.name);
+            parsedImports.imports.push(item); parsedImports.importsByLocal[localName] = item;
+            return item;
+        }
         if (existing) {
             if (sourceName.includes('.') && existing.sourceQualifiedName !== sourceName)
                 fail("HARDENED_IMPORT_COLLISION", "implicit signature type conflicts with an existing import", node);
@@ -5174,7 +5306,8 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
     };
     const placeholder: AdapterContext = {
         className,
-        classQualifiedName: packageName === "" ? className : `${packageName}.${className}`,
+        classQualifiedName: selectedFileClass?.type.qname ?? (packageName === "" ? className : `${packageName}.${className}`),
+        ...(fileCompilation ? {fileCompilation} : {}),
         extendsType: null,
         importsByLocal: parsedImports.importsByLocal,
         resolveImportedType: resolveImplicitLocalType,
@@ -5315,7 +5448,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
             if (imported.authorityKind === "flash") {
                 mappingForRole(authority, imported.sourceQualifiedName, "base-type", extendsNode);
             } else {
-                const localBase = localAuthority!.entriesByIdentity[`${resolveCurrentLocal!().entry.module}\u0000${imported.sourceQualifiedName}`];
+                const localBase = contextLocalType(placeholder, resolveCurrentLocal!().entry.module, imported.sourceQualifiedName);
                 if (!localBase || localBase.typeKind !== "class") {
                     fail("HARDENED_BASE_TYPE", "local base type must resolve to an authenticated class", extendsNode);
                 }
@@ -5545,6 +5678,7 @@ export function adaptNormalizedParserAst(ast: NormalizedParserAst, authority: Lo
         outputModulePath,
         imports: parsedImports.imports,
         declaration,
+        ...(selectedFileClass ? {fileLocalScope: selectedFileClass.scope} : {}),
         sourceCapabilitySha256: authority.sourceCensusSha256,
         targetCapabilitySha256: authority.targetCapabilitiesSha256,
         capabilityMappingSha256: authority.mappingSha256,
