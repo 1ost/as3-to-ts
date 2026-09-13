@@ -264,6 +264,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3CreateOwnRecord"),
             [typeNode(expression.valueType, ts)], []);
     }
+    if (expression.kind === "dictionaryHas") return ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3DictionaryIn"),undefined,
+        [expressionNode(expression.index,ts),expressionNode(expression.target,ts)]);
     if (expression.kind === "objectOperation") {
         const key = expressionNode(expression.index,ts), target = expressionNode(expression.target,ts);
         return ts.factory.createCallExpression(ts.factory.createIdentifier(expression.operation === "has" ? "__as3ObjectIn" : "__as3ObjectCall"),undefined,
@@ -765,6 +768,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             expression.elements.forEach(inspectExpression);
         } else if (expression.kind === "object") {
             expression.properties.forEach(property => inspectExpression(property.value));
+        } else if (expression.kind === "dictionaryHas") {
+            inspectExpression(expression.index); inspectExpression(expression.target);
         } else if (expression.kind === "objectOperation") {
             inspectExpression(expression.target); inspectExpression(expression.index);
             expression.arguments.forEach(inspectExpression);
@@ -1262,6 +1267,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "coercion") return expression.argument !== null && visitExpression(expression.argument);
         if (expression.kind === "array") return expression.elements.some(visitExpression);
         if (expression.kind === "object") return expression.properties.some(property => visitExpression(property.value));
+        if (expression.kind === "dictionaryHas") return visitExpression(expression.index) || visitExpression(expression.target);
         if (expression.kind === "objectOperation") return visitExpression(expression.target)
             || visitExpression(expression.index) || expression.arguments.some(visitExpression);
         if (expression.kind === "index") return visitType(expression.resultType)
@@ -1623,6 +1629,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3DictionaryValues"),
                 ts.factory.createIdentifier("__as3DictionaryValues"))])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Dictionary"), undefined));
+    if (programHasKind(program,"dictionaryHas")) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DictionaryIn"),
+                ts.factory.createIdentifier("__as3DictionaryIn"))])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Dictionary"),undefined));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
         imports.push(ownRecordRuntimeImport(ts));

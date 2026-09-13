@@ -360,13 +360,22 @@ function scanDecimal(scanner: AS3Scanner, currentCharacter: string): Token {
             currentChar = scanner.peekChar(peekPos++);
         }
 
-        if (currentChar === 'E') {
+    }
+
+    if (currentChar === 'e' || currentChar === 'E') {
+        buffer += currentChar;
+        currentChar = scanner.peekChar(peekPos++);
+        if (currentChar === '+' || currentChar === '-') {
             buffer += currentChar;
             currentChar = scanner.peekChar(peekPos++);
-            while (/\d/.test(currentChar)) {
-                buffer += currentChar;
-                currentChar = scanner.peekChar(peekPos++);
-            }
+        }
+        if (!/\d/.test(currentChar)) {
+            throw new AS3ParseError('AS3_PARSE_NUMBER_EXPONENT', scanner.sourceFile,
+                scanner.index, buffer, 'exponent digits', 'numeric literal');
+        }
+        while (/\d/.test(currentChar)) {
+            buffer += currentChar;
+            currentChar = scanner.peekChar(peekPos++);
         }
     }
 

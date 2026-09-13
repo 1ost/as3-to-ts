@@ -1116,7 +1116,7 @@ function parseLiteral(node: TreeNode): SemanticExpression {
         value = text === "true";
     } else if (text === "null") {
         value = null;
-    } else if (/^-?(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*)?|\.[0-9]+)$/.test(text)
+    } else if (/^-?(?:(?:0|[1-9][0-9]*)(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/.test(text)
         || /^0[xX][0-9a-fA-F]{1,8}$/.test(text)) {
         value = Number(text);
         if (!Number.isFinite(value)) {
@@ -1990,7 +1990,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "parenthesized" || expression.kind === "nonNull") {
         return expression.resultType;
     }
-    if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index" || expression.kind === "objectOperation") {
+    if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index" || expression.kind === "objectOperation" || expression.kind === "dictionaryHas") {
         return expression.resultType;
     }
     if (expression.kind === "delete") return expression.resultType;
@@ -2602,8 +2602,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (operator === "in") {
             const index = parseExpression(node.children[0]!,context,true);
             const target = parseExpression(node.children[2]!,context,true);
-            if (!dynamicObjectType(assignmentType(target,context,node),context))
-                fail("HARDENED_OBJECT_IN", "in requires an authenticated Object target", node);
+            const targetType = assignmentType(target,context,node);
+            if (intrinsicSourceForType(targetType,context) === "flash.utils.Dictionary") {
+                if (assignmentType(index,context,node).sourceName === "void")
+                    fail("HARDENED_DICTIONARY_KEY", "Dictionary key must be a proven value", node);
+                return Object.assign(identity(node), {kind:"dictionaryHas" as const,target,index,
+                    resultType:semanticType(node,"Boolean","boolean")});
+            }
+            if (!dynamicObjectType(targetType,context))
+                fail("HARDENED_OBJECT_IN", "in requires an authenticated Object or intrinsic Dictionary target", node);
             assertObjectKey(assignmentType(index,context,node),node);
             return Object.assign(identity(node), {kind:"objectOperation" as const,operation:"has" as const,
                 target,index,arguments:[],callerQName:context.classQualifiedName,resultType:semanticType(node,"Boolean","boolean")});

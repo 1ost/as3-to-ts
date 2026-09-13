@@ -153,6 +153,23 @@ const zeroPackageContent = emptyPackageAst.children[0].findChild(NodeKind.CONTEN
 assert.strictEqual(zeroPackageContent.start, zeroPackageContent.end,
     'empty package content has an exact zero-width span');
 
+for (const literal of ['1e21','1e+21','1E-7','1.25e2','.5E+3','1.e2']) {
+    const numeric = new AS3Scanner();
+    numeric.setContent(literal + ';', 'exponent.as');
+    const token = numeric.nextToken();
+    assert.strictEqual(token.text, literal);
+    assert.strictEqual(token.isNumeric, true);
+    assert.strictEqual(token.end, literal.length);
+    assert.strictEqual(numeric.nextToken().text, ';');
+    const source = `package { public class Numeric { public var value:Number = ${literal}; } }`;
+    assertMonotoneSpans(parse('Numeric.as', source), source, literal);
+}
+for (const literal of ['1e','1e+','1E-','1.e;']) {
+    const numeric = new AS3Scanner();
+    numeric.setContent(literal, 'bad-exponent.as');
+    assert.throws(() => numeric.nextToken(), error => error.code === 'AS3_PARSE_NUMBER_EXPONENT');
+}
+
 const scanner = new AS3Scanner();
 scanner.setContent('Vector.<uint> tail', 'checkpoint.as');
 assert.strictEqual(scanner.nextToken().text, 'Vector');

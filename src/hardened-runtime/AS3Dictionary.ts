@@ -4,6 +4,20 @@ function isWeakKey(value: unknown): value is object {
     return value !== null && (typeof value === "object" || typeof value === "function");
 }
 
+// Native Dictionary stores primitive property keys as strings, while references
+// retain identity. Do not run an object's toString/valueOf hooks for a key.
+function dictionaryKey(value:unknown):unknown {
+    if (isWeakKey(value)) return value;
+    if (typeof value === "symbol" || typeof value === "bigint")
+        throw new TypeError("Host-only primitives are not native Dictionary keys");
+    return String(value);
+}
+
+const NATIVE_PROTOTYPE_NAMES = new Set([
+    "constructor", "toString", "toLocaleString", "valueOf", "hasOwnProperty",
+    "isPrototypeOf", "propertyIsEnumerable", "setPropertyIsEnumerable",
+]);
+
 const DICTIONARIES = new WeakSet<object>();
 
 /** AVM typed-slot coercion preserves Dictionary identity and never converts an object. */
@@ -37,10 +51,12 @@ export class AS3Dictionary {
     }
 
     public get(key: unknown): unknown {
+        key = dictionaryKey(key);
         return this.weakKeys && isWeakKey(key) ? this.weakValues.get(key) : this.strongValues.get(key);
     }
 
     public set(key: unknown, value: unknown): unknown {
+        key = dictionaryKey(key);
         if (this.weakKeys && isWeakKey(key)) {
             let reference = this.weakReferences.get(key);
             if (!reference) {
@@ -57,10 +73,13 @@ export class AS3Dictionary {
     }
 
     public has(key: unknown): boolean {
-        return this.weakKeys && isWeakKey(key) ? this.weakValues.has(key) : this.strongValues.has(key);
+        key = dictionaryKey(key);
+        return this.weakKeys && isWeakKey(key) ? this.weakValues.has(key)
+            : this.strongValues.has(key) || typeof key === "string" && NATIVE_PROTOTYPE_NAMES.has(key);
     }
 
     public delete(key: unknown): boolean {
+        key = dictionaryKey(key);
         if (this.weakKeys && isWeakKey(key)) {
             const reference = this.weakReferences.get(key);
             if (!reference || !this.weakValues.delete(key)) return false;
@@ -95,4 +114,15 @@ export function* as3DictionaryValues(value:unknown, bindingType:string):Generato
     const dictionary=as3DictionarySlot(value);
     if (dictionary === null) return;
     for (const item of dictionary.values()) yield as3FunctionArgument(item,bindingType);
+}
+
+/** Arguments retain AVM's key-then-target evaluation before the null check. */
+export function as3DictionaryIn(key:unknown, value:unknown):boolean {
+    const dictionary=as3DictionarySlot(value);
+    if (dictionary === null) {
+        const error=new TypeError("Error #1009: Cannot access a property or method of a null object reference.");
+        Object.defineProperty(error,"errorID",{value:1009});
+        throw error;
+    }
+    return AS3Dictionary.prototype.has.call(dictionary,key);
 }

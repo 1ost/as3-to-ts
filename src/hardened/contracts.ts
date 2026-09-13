@@ -268,6 +268,13 @@ export interface IndexExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
+export interface DictionaryHasExpression extends SemanticIdentity {
+    kind: "dictionaryHas";
+    target: SemanticExpression;
+    index: SemanticExpression;
+    resultType: SemanticType;
+}
+
 export interface ObjectOperationExpression extends SemanticIdentity {
     kind: "objectOperation";
     operation: "has" | "call";
@@ -475,7 +482,7 @@ export interface UpdateExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |
