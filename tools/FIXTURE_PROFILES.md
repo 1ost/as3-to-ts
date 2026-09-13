@@ -71,9 +71,17 @@ reading that list does not run AS3 static initializers. A host may explicitly
 publish the bindings into a native definition domain before running application
 code. The initializer delegates to the existing idempotent/retryable AS3 class
 initialization runtime. This optional interface does not register definitions
-in Laya automatically or add a Laya dependency to the compiler. Interface and
-package-function publication, incremental authority installation and unloadable
-module closures remain separate work.
+in Laya automatically or add a Laya dependency to the compiler.
+
+The application entry exports optional immutable
+`AS3_APPLICATION_FUNCTION_DEFINITIONS` bindings for original public package
+functions in the emitted module set. Each `{name, definition}` preserves the
+original callable identity and defaults; publication does not invoke functions
+or scan helper exports. Hosts explicitly register these alongside class bindings.
+Authenticated SDK `getDefinitionByName` calls use the shared Laya registry,
+including native String argument conversion and missing/null-name errors.
+Interface publication, incremental authority installation and unloadable module
+closures remain separate work.
 
 LayaAir's `tests/nativeFlashOracle/README.md` documents the paired AIR/browser
 suite, authored SWF conversion, exact pixels and retained qualification holds.

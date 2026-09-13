@@ -1273,7 +1273,8 @@ function assertNoInheritedLocalValueShadow(context: AdapterContext, name: string
     }
 }
 
-function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: string, node: TreeNode): void {
+function assertNoInheritedNativeFunctionShadow(context: AdapterContext, name: string, node: TreeNode,
+    diagnosticPrefix = "HARDENED_NATIVE_TIMER", label = "native timer"): void {
     if (context.baseLocalQName === null && context.baseSourceQName === null) return;
     const moduleName = context.resolveCurrentLocal === null ? null : context.resolveCurrentLocal().entry.module;
     const visited = new Set<string>();
@@ -1281,7 +1282,7 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
     while (qname !== null) {
         if (qname === "Array" && nativeArrayBase(context)) break;
         if (visited.has(qname) || visited.size >= 1024) {
-            fail("HARDENED_LOCAL_MEMBER_CYCLE", "native timer base-member lineage is cyclic or exceeds its bound", node);
+            fail("HARDENED_LOCAL_MEMBER_CYCLE", `${label} base-member lineage is cyclic or exceeds its bound`, node);
         }
         visited.add(qname);
         const localType = moduleName === null || context.localTypeAuthority === null ? undefined
@@ -1291,7 +1292,7 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
                 assertLoadedSourceMemberAuthority(context.sourceMemberAuthority);
                 const sourceEntry = context.sourceMemberAuthority.entriesByQName[qname];
                 if (!sourceEntry) {
-                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                    fail(`${diagnosticPrefix}_MAPPED_BASE_HELD`,
                         `source member authority is missing inherited base ${qname}`, node);
                 }
                 const mappedMembers = Object.keys(context.memberMappingsByKey)
@@ -1301,7 +1302,7 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
                         && mapping.sourceMember.name === name);
                 if (!sourceEntry.ownInstanceMemberNames.includes(name)) {
                     if (mappedMembers.length !== 0) {
-                        fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                        fail(`${diagnosticPrefix}_MAPPED_BASE_HELD`,
                             `mapped member authority disagrees with the source census for ${qname}.${name}`, node);
                     }
                     qname = sourceEntry.baseQName;
@@ -1311,7 +1312,7 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
                     && mapping.sourceRoles[0] === "instance-member" && mapping.targetMember !== null
                     && mapping.targetMember.scope === "instance");
                 if (inherited.length === 0 || inherited.length !== mappedMembers.length) {
-                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                    fail(`${diagnosticPrefix}_MAPPED_BASE_HELD`,
                         `source member ${qname}.${name} lacks complete mapped member authority`, node);
                 }
                 const visibilities = new Set(inherited.map(mapping => {
@@ -1320,21 +1321,21 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
                     if (/^(?:native\s+)?(?:function|var|const)\s+/.test(mapping.sourceMember!.signature.trim())) {
                         return "internal";
                     }
-                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                    fail(`${diagnosticPrefix}_MAPPED_BASE_HELD`,
                         `mapped member visibility for ${qname}.${name} is unauthenticated`, node);
                 }));
                 if (visibilities.size > 1) {
-                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_AMBIGUOUS",
+                    fail(`${diagnosticPrefix}_MAPPED_BASE_AMBIGUOUS`,
                         `mapped member visibility for ${qname}.${name} is ambiguous`, node);
                 }
                 const visibility = visibilities.values().next().value as string | undefined;
                 if (visibility === "internal") {
-                    fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_VISIBILITY",
+                    fail(`${diagnosticPrefix}_MAPPED_BASE_VISIBILITY`,
                         `mapped internal member ${qname}.${name} is not provably visible`, node);
                 }
                 if (visibility === "public" || visibility === "protected") {
-                    fail("HARDENED_NATIVE_TIMER_INHERITED_SHADOW",
-                        `native timer import is shadowed by inherited mapped member ${qname}.${name}`, node);
+                    fail(`${diagnosticPrefix}_INHERITED_SHADOW`,
+                        `${label} import is shadowed by inherited mapped member ${qname}.${name}`, node);
                 }
                 qname = sourceEntry.baseQName;
                 continue;
@@ -1343,8 +1344,8 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
             const mappedType = context.mappingsBySource[qname];
             if (parents === undefined || !mappedType || mappedType.sourceMember !== null
                 || mappedType.targetKind !== "class") {
-                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
-                    `native timer lookup encountered unauthenticated mapped base ${qname}`, node);
+                fail(`${diagnosticPrefix}_MAPPED_BASE_HELD`,
+                    `${label} lookup encountered unauthenticated mapped base ${qname}`, node);
             }
             const mappedMembers = Object.keys(context.memberMappingsByKey)
                 .map(key => context.memberMappingsByKey[key])
@@ -1355,7 +1356,7 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
                 && mapping.sourceRoles[0] === "instance-member" && mapping.targetMember !== null
                 && mapping.targetMember.scope === "instance");
             if (inherited.length !== mappedMembers.length) {
-                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                fail(`${diagnosticPrefix}_MAPPED_BASE_HELD`,
                     `mapped member authority for ${qname}.${name} is incomplete`, node);
             }
             const visibilities = new Set(inherited.map(mapping => {
@@ -1364,32 +1365,32 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
                 if (/^(?:native\s+)?(?:function|var|const)\s+/.test(mapping.sourceMember!.signature.trim())) {
                     return "internal";
                 }
-                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+                fail(`${diagnosticPrefix}_MAPPED_BASE_HELD`,
                     `mapped member visibility for ${qname}.${name} is unauthenticated`, node);
             }));
             if (visibilities.size > 1) {
-                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_AMBIGUOUS",
+                fail(`${diagnosticPrefix}_MAPPED_BASE_AMBIGUOUS`,
                     `mapped member visibility for ${qname}.${name} is ambiguous`, node);
             }
             const visibility = visibilities.values().next().value as string | undefined;
             if (visibility === "internal") {
-                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_VISIBILITY",
+                fail(`${diagnosticPrefix}_MAPPED_BASE_VISIBILITY`,
                     `mapped internal member ${qname}.${name} is not provably visible`, node);
             }
             if (visibility === "public" || visibility === "protected") {
-                fail("HARDENED_NATIVE_TIMER_INHERITED_SHADOW",
-                    `native timer import is shadowed by inherited mapped member ${qname}.${name}`, node);
+                fail(`${diagnosticPrefix}_INHERITED_SHADOW`,
+                    `${label} import is shadowed by inherited mapped member ${qname}.${name}`, node);
             }
             if (parents.length > 1 || new Set(parents).size !== parents.length) {
-                fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_AMBIGUOUS",
+                fail(`${diagnosticPrefix}_MAPPED_BASE_AMBIGUOUS`,
                     `mapped base ${qname} has an ambiguous parent lineage`, node);
             }
-            fail("HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD",
+            fail(`${diagnosticPrefix}_MAPPED_BASE_HELD`,
                 `mapped base ${qname} lacks exhaustive negative source-member authority for ${name}`, node);
         }
         if (context.localMemberAuthority === null || context.localTypeAuthority === null || moduleName === null) {
             fail("HARDENED_LOCAL_MEMBER_AUTHORITY",
-                `${name} native timer lookup requires the complete local base declaration authority`, node);
+                `${name} ${label} lookup requires the complete local base declaration authority`, node);
         }
         assertLoadedLocalMemberAuthority(context.localMemberAuthority);
         const entry: LocalMemberAuthorityEntry | undefined =
@@ -1404,8 +1405,8 @@ function assertNoInheritedNativeTimerShadow(context: AdapterContext, name: strin
                 || member.kind === "setter" || member.kind === "method"));
         if (members.length > 0) {
             members.forEach(member => assertInheritedVisibility(member, qname!, context, node));
-            fail("HARDENED_NATIVE_TIMER_INHERITED_SHADOW",
-                `native timer import is shadowed by inherited local member ${qname}.${name}`, node);
+            fail(`${diagnosticPrefix}_INHERITED_SHADOW`,
+                `${label} import is shadowed by inherited local member ${qname}.${name}`, node);
         }
         if (entry.declaration.baseQNames.length > 1) {
             fail("HARDENED_LOCAL_MEMBER_BASE", `class ${qname} has an ambiguous base lineage`, node);
@@ -2300,7 +2301,7 @@ function builtinMathMember(node: TreeNode, context: AdapterContext): string | nu
         || context.locals.Math || context.parameters.Math || context.fields.Math || context.methods.Math
         || context.accessors.Math || context.importsByLocal.Math || context.resolveImportedType("Math", null, node)) return null;
     // Reuse the exhaustive base-member check: an inherited value can shadow a global too.
-    assertNoInheritedNativeTimerShadow(context, "Math", node);
+    assertNoInheritedNativeFunctionShadow(context, "Math", node);
     return requiredText(node.children[1]!, "Math member");
 }
 
@@ -2323,7 +2324,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         && !context.locals.parseInt && !context.parameters.parseInt && !context.fields.parseInt
         && !context.methods.parseInt && !context.accessors.parseInt && !context.importsByLocal.parseInt
         && !context.resolveImportedType("parseInt", null, node)) {
-        assertNoInheritedNativeTimerShadow(context, "parseInt", node);
+        assertNoInheritedNativeFunctionShadow(context, "parseInt", node);
         const argumentNodes = node.children[1]!.children;
         if (argumentNodes.length > 2)
             fail("HARDENED_PARSE_INTEGER_ARITY", "native parseInt accepts zero through two arguments", node);
@@ -2341,7 +2342,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         && context.className !== "trace" && !context.locals.trace && !context.parameters.trace
         && !context.fields.trace && !context.methods.trace && !context.accessors.trace && !context.importsByLocal.trace
         && !context.resolveImportedType("trace", null, node)) {
-        assertNoInheritedNativeTimerShadow(context, "trace", node);
+        assertNoInheritedNativeFunctionShadow(context, "trace", node);
         const mapping = context.mappingsBySource.trace;
         if (!mapping || mapping.sourceRoles.indexOf("global-function") < 0)
             fail("HARDENED_GLOBAL_FUNCTION_AUTHORITY", "global trace lacks authenticated native and shared target authority", node);
@@ -2482,7 +2483,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (name === "Error" && context.sourceMemberAuthority !== null && context.className !== "Error"
             && !context.locals.Error && !context.parameters.Error && !context.fields.Error && !context.methods.Error
             && !context.accessors.Error && !context.importsByLocal.Error && !context.resolveImportedType("Error",null,nameNode)) {
-            assertNoInheritedNativeTimerShadow(context,"Error",nameNode);
+            assertNoInheritedNativeFunctionShadow(context,"Error",nameNode);
             if (args.length > 1 || args.some(argument => {
                 const type=assignmentType(argument,context,call);
                 return type.sourceName !== "String" || type.nullable;
@@ -2492,7 +2493,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (name === "ArgumentError" && context.sourceMemberAuthority !== null && context.className !== name
             && !context.locals[name] && !context.parameters[name] && !context.fields[name] && !context.methods[name]
             && !context.accessors[name] && !context.importsByLocal[name] && !context.resolveImportedType(name,null,nameNode)) {
-            assertNoInheritedNativeTimerShadow(context,name,nameNode);
+            assertNoInheritedNativeFunctionShadow(context,name,nameNode);
             if (args.length > 2 || (args[1]
                 && !["Number","int","uint"].includes(assignmentType(args[1],context,call).sourceName)))
                 fail("HARDENED_ARGUMENT_ERROR_CONSTRUCTOR", "ArgumentError requires zero to two arguments and a proven numeric identifier",call);
@@ -2960,7 +2961,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_NAMESPACE_VALUE", "compile-time namespace cannot be used as a runtime value", node);
         }
         const imported = context.importsByLocal[name];
-        if (imported?.sourceQualifiedName === "flash.utils.getQualifiedClassName"
+        if ((imported?.sourceQualifiedName === "flash.utils.getQualifiedClassName"
+            || imported?.sourceQualifiedName === "flash.utils.getDefinitionByName")
             && (context.fields[name] || context.accessors[name] || context.methods[name]))
             fail("HARDENED_REFLECTION_SHADOW", "native reflection import has an unresolved class-member shadow", node);
         if (imported?.authorityKind === "native-timer-function"
@@ -2970,7 +2972,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 "native timer import is shadowed by a lexical or class binding", node);
         }
         if (imported?.authorityKind === "native-timer-function") {
-            assertNoInheritedNativeTimerShadow(context, name, node);
+            assertNoInheritedNativeFunctionShadow(context, name, node);
         }
         if (context.locals[name]) {
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
@@ -2984,10 +2986,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             ? Object.assign(identity(node), {kind:"identifier" as const,name,bindingKind:"package-function" as const,bindingSourceQualifiedName:context.classQualifiedName})
             : currentClassIdentifier(node, context);
         if (imported) {
+            if (imported.sourceQualifiedName === "flash.utils.getDefinitionByName")
+                assertNoInheritedNativeFunctionShadow(context, name, node, "HARDENED_REFLECTION", "native reflection");
             if (valuePosition && imported.runtimeInterface && context.sourceMemberAuthority !== null)
                 return Object.assign(identity(node), {kind:"identifier" as const,name,bindingKind:"interface-class" as const,
                     bindingSourceQualifiedName:imported.sourceQualifiedName});
-            if (imported.sourceQualifiedName === "flash.utils.getQualifiedClassName" && valuePosition)
+            if (["flash.utils.getQualifiedClassName", "flash.utils.getDefinitionByName"].includes(imported.sourceQualifiedName) && valuePosition)
                 fail("HARDENED_REFLECTION_FUNCTION_VALUE", "native reflection function values require retained closure behavior", node);
             return Object.assign(identity(node), { kind: "identifier" as "identifier", name,
                 bindingKind: "import" as "import", bindingSourceQualifiedName: imported.sourceQualifiedName });
@@ -3099,14 +3103,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (implicit) return Object.assign(identity(node), {kind:"identifier" as const,name,
             bindingKind:"import" as const,bindingSourceQualifiedName:implicit.sourceQualifiedName});
         if (name === "trace" && context.mappingsBySource.trace?.sourceRoles.includes("global-function")) {
-            assertNoInheritedNativeTimerShadow(context,name,node);
+            assertNoInheritedNativeFunctionShadow(context,name,node);
             const mapping=context.mappingsBySource.trace!;
             return Object.assign(identity(node), {kind:"globalFunction" as const,name:"trace" as const,
                 targetModule:targetModuleSpecifier(mapping.targetModule),targetExport:mapping.targetExport});
         }
         if (context.sourceMemberAuthority !== null && ["undefined","NaN","Infinity"].includes(name)
             && !context.resolveImportedType(name,null,node)) {
-            assertNoInheritedNativeTimerShadow(context,name,node);
+            assertNoInheritedNativeFunctionShadow(context,name,node);
             if (name === "undefined") return Object.assign(identity(node),{kind:"undefined" as const});
             return Object.assign(identity(node),{kind:"binary" as const,operator:"/" as const,
                 left:Object.assign(identity(node),{kind:"literal" as const,value:name === "NaN" ? 0 : 1}),
@@ -3114,7 +3118,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         if (context.sourceMemberAuthority !== null && ["Object","Array","String","Number","Boolean","Function"].includes(name)
             && !context.resolveImportedType(name, null, node)) {
-            assertNoInheritedNativeTimerShadow(context, name, node);
+            assertNoInheritedNativeFunctionShadow(context, name, node);
             return Object.assign(identity(node), {kind: "identifier" as const, name,
                 bindingKind: "builtin-class" as const, bindingSourceQualifiedName: name});
         }
@@ -3809,6 +3813,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         node.children[1]!.children[index]!);
             });
             resultType = signature.returnType;
+        } else if (callee.kind === "identifier" && callee.bindingKind === "import"
+            && callee.bindingSourceQualifiedName === "flash.utils.getDefinitionByName") {
+            const mapping = context.mappingsBySource[callee.bindingSourceQualifiedName];
+            if (!context.sourceMemberAuthority || !mapping || mapping.targetKind !== "function"
+                || mapping.targetExport !== "getDefinitionByName"
+                || mapping.targetModule !== "src/layaAir/flash/utils/DefinitionRegistry.ts"
+                || mapping.targetSignature !== "(name: string) => NativeDefinition")
+                fail("HARDENED_REFLECTION_AUTHORITY", "native definition lookup lacks its shared target and source authority", node);
+            if (args.length !== 1)
+                fail("HARDENED_REFLECTION_ARITY", "getDefinitionByName requires exactly one original name", node);
+            if (!["String","*","null","undefined"].includes(assignmentType(args[0]!,context,node).sourceName))
+                fail("HARDENED_REFLECTION_ARGUMENT", "definition name requires a String or native wildcard conversion", node);
+            args[0] = adaptAssignmentValue(semanticType(node,"String","string"),args[0]!,context,node.children[1]!.children[0]!);
+            capabilitySource = mapping.sourceQName; capabilityMember = "<call>";
+            resultType = semanticType(node,"Object","unknown");
         } else if (callee.kind === "identifier" && callee.bindingKind === "import"
             && callee.bindingSourceQualifiedName === "flash.utils.getQualifiedClassName") {
             const mapping = context.mappingsBySource[callee.bindingSourceQualifiedName];

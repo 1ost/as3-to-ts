@@ -776,13 +776,23 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
 
 /** Emits the sole application entry; authority installation completes before any application module evaluates. */
 export function emitRuntimeApplicationEntry(modulePaths: readonly string[],
-    sha256: (canonicalUtf8: string) => string): EmittedRuntimeApplicationEntry {
+    sha256: (canonicalUtf8: string) => string, programs: readonly SemanticProgram[] = []): EmittedRuntimeApplicationEntry {
     if (!Array.isArray(modulePaths) || typeof sha256 !== "function"
         || modulePaths.some(path => typeof path !== "string" || !emittedApplicationModule(path))
         || new Set(modulePaths).size !== modulePaths.length) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_ENTRY", "runtime application entry requires unique portable emitted TypeScript modules");
     }
     const ordered = [...modulePaths].sort((left, right) => left.localeCompare(right, "en"));
+    const functions = programs.filter(program => program.declaration.declarationKind === "packageFunction");
+    for (const program of functions) {
+        assertAdaptedSemanticProgram(program);
+        if (!ordered.includes(`application/${program.outputModulePath}`)
+            || !program.declaration.modifiers.includes("public"))
+            throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_ENTRY", "function publication requires an original public declaration in this output set");
+    }
+    functions.sort((left,right)=>left.outputModulePath.localeCompare(right.outputModulePath,"en"));
+    if (new Set(functions.map(program=>program.outputModulePath)).size !== functions.length)
+        throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_ENTRY", "function publication repeats an original declaration");
     const imports = ordered.map((path, index) => `import * as __as3Application${index} from ${quote(`./${path.slice(0, -3)}`)};`);
     const code = [
         "// Generated authority-first application entry. Do not edit or bypass.",
@@ -791,6 +801,13 @@ export function emitRuntimeApplicationEntry(modulePaths: readonly string[],
         "",
         "export const AS3_APPLICATION_TYPE_AUTHORITY_SHA256 = __as3TypeAuthoritySha256;",
         `export const AS3_APPLICATION_MODULES = Object.freeze([${ordered.map((_, index) => `__as3Application${index}`).join(", ")}]);`,
+        "export const AS3_APPLICATION_FUNCTION_DEFINITIONS = Object.freeze([",
+        ...functions.map(program => {
+            const index = ordered.indexOf(`application/${program.outputModulePath}`);
+            const name = program.packageName ? program.packageName + "." + program.declaration.name : program.declaration.name;
+            return `    Object.freeze({name: ${quote(name)}, definition: __as3Application${index}[${quote(program.declaration.name)}]}),`;
+        }),
+        "] as const);",
         "",
     ].join("\n");
     const digest = sha256(code);

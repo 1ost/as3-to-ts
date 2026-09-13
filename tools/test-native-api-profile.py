@@ -26,6 +26,19 @@ class NativeSignaturesTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'SDK declaration'):
                 api.map_native_globals(root, {'trace'}, target)
 
+    def test_definition_lookup_requires_exact_native_sdk_function(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'scripts/flash/utils/getDefinitionByName.as'
+            source.parent.mkdir(parents=True)
+            source.write_text('package flash.utils { [native("FlashUtilScript::getDefinitionByName")] public native function getDefinitionByName(param1:String) : Object; }')
+            apis = [{'qname':'flash.utils.getDefinitionByName'}]
+            api.annotate_native_function_signatures(apis, root)
+            self.assertEqual(apis[0]['signatures'], ['public native function getDefinitionByName(param1:String) : Object;'])
+            source.write_text('package flash.utils { public function getDefinitionByName(param1:String) : Object {return null;} }')
+            with self.assertRaisesRegex(ValueError, 'authenticated SDK'):
+                api.annotate_native_function_signatures(apis, root)
+
     def test_signature_closure_follows_implicit_receivers_and_keeps_unavailable_types_held(self):
         def member(name, result):
             return dict(name=name, access='read', scope='instance', constructor=False, type=result, parameters=[])

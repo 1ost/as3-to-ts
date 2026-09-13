@@ -197,6 +197,15 @@ def native_timer_member_uses(apis, directory):
 def annotate_native_function_signatures(apis, directory):
     """Authenticate the SDK wrapper and its native implementation together."""
     for api in apis:
+        if api['qname'] == 'flash.utils.getDefinitionByName':
+            text = (Path(directory) / 'scripts/flash/utils/getDefinitionByName.as').read_text()
+            match = re.fullmatch(
+                r'\s*package flash\.utils\s*\{\s*\[native\("FlashUtilScript::getDefinitionByName"\)\]\s*'
+                r'(public native function getDefinitionByName\(param1:String\) : Object;)\s*\}\s*', text)
+            if not match:
+                raise ValueError('Definition lookup differs from the authenticated SDK native signature')
+            api['signatures'] = [match[1]]
+            continue
         if api['qname'] != 'flash.utils.getQualifiedClassName':
             continue
         root = Path(directory) / 'scripts'

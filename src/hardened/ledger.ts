@@ -696,6 +696,17 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
         throw new HardenedSemanticError("HARDENED_REFLECTION_AUTHORITY",
             "Class-name reflection requires its exact SDK wrapper/native signatures and shared target");
     }
+    if (mapping.sourceQName === "flash.utils.getDefinitionByName" && (!isObject(api)
+        || JSON.stringify(api.signatures) !== JSON.stringify([
+            "public native function getDefinitionByName(param1:String) : Object;",
+        ]) || mapping.sourceMember !== null || mapping.targetMember !== null
+        || mapping.targetKind !== "function" || mapping.targetExport !== "getDefinitionByName"
+        || mapping.targetModule !== "src/layaAir/flash/utils/DefinitionRegistry.ts"
+        || mapping.targetCapabilityId !== "api.flash.utils"
+        || mapping.targetSignature !== "(name: string) => NativeDefinition")) {
+        throw new HardenedSemanticError("HARDENED_REFLECTION_AUTHORITY",
+            "Definition lookup requires its exact SDK native signature and shared target");
+    }
     if (mapping.sourceQName === "trace" && (!isObject(api)
         || JSON.stringify(api.signatures) !== JSON.stringify(["public native function trace(... rest) : void;"])
         || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "global-function"

@@ -519,7 +519,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             writeArtifact(publication, "__as3_runtime/AS3Timer.js", timerFacadeJavaScript);
             applicationEntry = emitRuntimeApplicationEntry(transpiledFiles.map(item =>
                 item.typescriptPath.slice("__as3_runtime/".length)),
-                value => sha256(value));
+                value => sha256(value),localRuntimePrograms);
             const applicationEntryPath = `__as3_runtime/${applicationEntry.path}`;
             const entryCollisionKey = portableCollisionKey(applicationEntryPath);
             if (outputKeys.has(entryCollisionKey)) {
