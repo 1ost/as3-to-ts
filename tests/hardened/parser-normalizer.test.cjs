@@ -416,6 +416,41 @@ try {
     assert.equal(parserTree.trivia.length, 1);
     assert.equal(source.slice(parserTree.trivia[0].index, parserTree.trivia[0].end), parserTree.trivia[0].text);
 
+    // PureMVC Facade repeats an import name in its ASDoc @see reference.
+    // Retain the name's token range instead of searching the comment.
+    for (const newline of ["\n", "\r\n"]) {
+        const importSource = [
+            "package p {",
+            "    import org.puremvc.as3.core.*;",
+            "    import org.puremvc.as3.patterns.observer.Notification;",
+            "    /** @see org.puremvc.as3.patterns.observer.Notification Notification */",
+            "    public class Facade { public function Facade() {} }",
+            "}",
+        ].join(newline);
+        const importTree = built.parse("fixtures/Facade.as", importSource);
+        const importNormalized = built.normalizer.normalizeParserAst(importTree, importSource, sha256);
+        const imports = importNormalized.nodes.filter(node => node.kind === "IMPORT");
+        assert.equal(imports.length, 2);
+        for (const node of imports) {
+            assert.equal(node.span.start, importSource.indexOf(node.text));
+            assert.equal(importSource.slice(node.span.start, node.span.end), node.text);
+        }
+        assert.equal(importTree.trivia.length, 1);
+        assert.equal(importSource.slice(importTree.trivia[0].index, importTree.trivia[0].end),
+            importTree.trivia[0].text);
+        assert.ok(built.localDeclarations.extractLocalDeclaration(importNormalized, importSource, sha256));
+        // A corrupted raw range must still fail closed at the ambiguous text.
+        let damaged;
+        (function visit(node) {
+            if (node.text === "org.puremvc.as3.patterns.observer.Notification") damaged = node;
+            node.children.forEach(visit);
+        }(importTree));
+        damaged.start -= "import ".length;
+        damaged.end = damaged.start + damaged.text.length;
+        expectNormalizationCode(() => built.normalizer.normalizeParserAst(importTree, importSource, sha256),
+            "PARSER_NORMALIZER_TEXT");
+    }
+
     const semantic = built.adapter.adaptNormalizedParserAst(
         normalized, authority(built.ledger), source, sha256,
     );

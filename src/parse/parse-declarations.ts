@@ -142,9 +142,10 @@ function parseNamespaceDeclaration(parser:AS3Parser, meta:Node[], modifiers:Toke
 
 function parseImport(parser:AS3Parser):Node {
 
-    let tok = consume(parser, Keywords.IMPORT);
+    consume(parser, Keywords.IMPORT);
+    const nameStart = parser.tok.index;
     let name = parseImportName(parser);
-    let result:Node = createNode(NodeKind.IMPORT, {start: tok.index, text: name});
+    let result:Node = createNode(NodeKind.IMPORT, {start: nameStart, end: name.end, text: name.text});
     skip(parser, Operators.SEMI_COLUMN);
     return result;
 }
@@ -154,8 +155,9 @@ function parseImport(parser:AS3Parser):Node {
  * tok is the first part of a name the last part can be a star exit tok is
  * the first token, which doesn't belong to the name
  */
-function parseImportName(parser:AS3Parser):string {
+function parseImportName(parser:AS3Parser):{text:string, end:number} {
     let result = '';
+    let end = parser.tok.end;
 
     result += parser.tok.text;
     nextToken(parser);
@@ -163,9 +165,10 @@ function parseImportName(parser:AS3Parser):string {
         result += Operators.DOT;
         nextToken(parser); // .
         result += parser.tok.text;
+        end = parser.tok.end;
         nextToken(parser); // part of name
     }
-    return result;
+    return {text: result, end};
 }
 
 
