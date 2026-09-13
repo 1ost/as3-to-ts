@@ -121,7 +121,7 @@ export interface SemanticType extends SemanticIdentity {
     typeArguments: SemanticType[];
 }
 
-export type SemanticModifier = "dynamic" | "public" | "private" | "protected" | "static" | "override";
+export type SemanticModifier = "dynamic" | "final" | "public" | "private" | "protected" | "static" | "override";
 
 export interface SemanticImport extends SemanticIdentity {
     authorityKind: "flash" | "local" | "intrinsic" | "native-timer-function";
@@ -385,6 +385,7 @@ export interface FileLocalClassDeclaration {
 }
 
 export interface LocalDeclarationExtract {
+    finalClass?: true;
     schema: "as3-local-declaration-extract@1";
     sourceSha256: string;
     packageName: string;
@@ -399,6 +400,7 @@ export interface LocalDeclarationExtract {
 }
 
 export interface LocalMemberDeclaration {
+    finalClass?: true;
     baseQNames: string[];
     interfaceQNames: string[];
     members: LocalDeclarationMember[];

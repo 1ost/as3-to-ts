@@ -137,6 +137,16 @@ A profile mapping Dictionary to an external bridge cannot silently use the
 compiler's branded iterator. Ordinary TypeScript bridge consumers do not need
 these compiler-specific helpers.
 
+## Final classes
+
+Authenticated final classes preserve their source modifier through declaration
+extraction, semantic adaptation and runtime class metadata. The compiler rejects
+final base inheritance; the runtime installation transaction rejects it as well.
+An original final class cannot be admitted using a declaration profile that
+omitted its final flag. Regenerate such a profile with the shared worker. Final
+methods and unqualified reflection remain held. LayaAir's `final-class` fixture
+includes AP's unchanged RuntimeArtifactContext and retained native comparisons.
+
 ## Provenance and licenses
 
 The frozen parser and syntax model derive from `@as3web/as3-to-ts` 0.3.10 at

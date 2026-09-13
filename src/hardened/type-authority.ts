@@ -27,7 +27,7 @@ export interface RuntimeAuthorityClassSource {
     readonly constructionTargetExport: string | null;
     readonly constructionProofExport: string | null;
     readonly nativeObjectTraits?: { readonly dynamic: boolean | null; readonly names: readonly string[]; readonly sourceArtifactSha256: string };
-    readonly objectTraits?: { readonly dynamic: boolean; readonly members: readonly {
+    readonly objectTraits?: { readonly dynamic: boolean; readonly final?: true; readonly members: readonly {
         readonly name: string; readonly kind: "field" | "const" | "method" | "getter" | "setter"; readonly type: string;
         readonly visibility: "public" | "private" | "protected" | "internal" | "namespace"; readonly namespaceName: string | null;
     }[] };
@@ -262,6 +262,7 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         // Only native-proven dynamic class scopes are admitted by the adapter.
         // Namespace names retain identity, not an inferred namespace URI.
         objectTraits: Object.freeze({ dynamic: program.declaration.modifiers.includes("dynamic"),
+            ...(program.declaration.modifiers.includes("final") ? {final:true as const} : {}),
             members: Object.freeze(program.declaration.members.filter((member): member is Exclude<SemanticMember, {kind:"constructor"}> => member.kind !== "constructor"
                 && !member.modifiers.includes("static"))
                 .map(member => {

@@ -22,6 +22,7 @@ export interface AS3InterfaceAuthorityEntry {
 
 export interface AS3ObjectTraits {
     readonly dynamic: boolean;
+    readonly final?: true;
     readonly members: readonly { readonly name: string;
         readonly kind: "field" | "const" | "method" | "getter" | "setter"; readonly type: string;
         readonly visibility: "public" | "private" | "protected" | "internal" | "namespace"; readonly namespaceName:string | null }[];
@@ -518,6 +519,8 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                 if (entry.base !== null && (!seen.has(entry.base) || !CLASS_BY_QNAME.has(entry.base))) {
                     throw new TypeError(`AS3 class ${entry.qname} has a missing, cyclic, or out-of-order class base`);
                 }
+                if (entry.base !== null && CLASS_OBJECT_ENTRIES.get(CLASS_BY_QNAME.get(entry.base)!.constructor)?.traits?.final)
+                    throw new TypeError(`AS3 class ${entry.qname} cannot extend final class ${entry.base}`);
                 validateQNameList(entry.interfaces, `AS3 class ${entry.qname} interfaces`);
                 const localConstruction = typeof entry.constructionTarget === "function" && typeof entry.constructionProof === "function";
                 const mappedConstruction = entry.constructionTarget === null && entry.constructionProof === null;
@@ -562,7 +565,7 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                     (field: AS3ClassAuthorityEntry["fields"][number]) => Object.freeze({ ...field }))));
                 if (entry.objectTraits) {
                     const traits = entry.objectTraits;
-                    exactKeys(traits, ["dynamic", "members"], "AS3 Object traits");
+                    exactKeys(traits, ["dynamic", ...(traits.final === true ? ["final"] : []), "members"], "AS3 Object traits");
                     if (typeof traits.dynamic !== "boolean" || !Array.isArray(traits.members)) throw new TypeError("Invalid AS3 Object traits");
                     const names = new Set<string>();
                     traits.members.forEach((member:AS3ObjectTraits["members"][number]) => {
@@ -589,6 +592,7 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                     packageName: scopedIdentity ? "" : entry.qname.slice(0, Math.max(0, entry.qname.lastIndexOf("."))),
                     nativeTraits:entry.nativeObjectTraits ? Object.freeze({...entry.nativeObjectTraits,names:Object.freeze([...entry.nativeObjectTraits.names])}) : null, traits:entry.objectTraits
                     ? Object.freeze({dynamic:entry.objectTraits.dynamic,
+                        ...(entry.objectTraits.final === true ? {final:true as const} : {}),
                         members:Object.freeze(entry.objectTraits.members.map((member:AS3ObjectTraits["members"][number]) => Object.freeze({...member})))}) : null}));
                 CLASS_BASES.set(entry.constructor, entry.base === null ? null : CLASS_BY_QNAME.get(entry.base)!.constructor);
                 REGISTERED_CLASSES.push(entry.constructor);

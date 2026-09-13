@@ -272,8 +272,9 @@ function parseModifiers(owner: TreeNode, classLevel: boolean, arrayDynamic:boole
             fail("HARDENED_MODIFIER_NODE", "modifier list contains an unsupported node", node);
         }
         const modifier = requiredText(node, "modifier");
-        if ((!ALLOWED_MODIFIERS.has(modifier) && !(arrayDynamic && modifier === "dynamic"))
-            || seen[modifier] || (classLevel && modifier !== "public" && !(arrayDynamic && modifier === "dynamic"))) {
+        const finalClass = classLevel && owner.kind === "CLASS" && modifier === "final";
+        if ((!ALLOWED_MODIFIERS.has(modifier) && !(arrayDynamic && modifier === "dynamic") && !finalClass)
+            || seen[modifier] || (classLevel && modifier !== "public" && !(arrayDynamic && modifier === "dynamic") && !finalClass)) {
             fail("HARDENED_MODIFIER", "modifier is unsupported, duplicated, or invalid in this position", node);
         }
         seen[modifier] = true;
@@ -5160,6 +5161,7 @@ function prepareFileLocalCompilation(ast: NormalizedParserAst, root: TreeNode, a
         result.members[item.type.qname] = {module: owner.module, qname: item.type.qname, nodeId: item.type.nodeId,
             sourceContentSha256: owner.sourceContentSha256, typeKind: "class", status: "complete", holdCode: null, holdSha256: null,
             declaration: {baseQNames: header.extendsNames.map(name => resolveType(name, header)),
+                ...(header.modifiers.includes("final") ? {finalClass:true as const} : {}),
                 interfaceQNames: header.implementsNames.map(name => resolveType(name, header)), packageInitializer: null,
                 members: header.members.map(member => ({...member,
                     fieldType: member.fieldType === null ? null : resolveType(member.fieldType, header),
@@ -5484,6 +5486,8 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                 if (!localBase || localBase.typeKind !== "class") {
                     fail("HARDENED_BASE_TYPE", "local base type must resolve to an authenticated class", extendsNode);
                 }
+                if (localDeclaration(placeholder,imported.sourceQualifiedName,extendsNode).declaration!.finalClass)
+                    fail("HARDENED_FINAL_BASE", "a final source class cannot be extended", extendsNode);
             }
             extendsType = semanticType(extendsNode, imported.sourceLocalName, imported.sourceLocalName, [], undefined,
                 imported.sourceQualifiedName);
@@ -5692,6 +5696,9 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         }
     }
     assertNoLocalAncestryFieldCollision(placeholder, members, classNode);
+    if (one(classNode,"MOD_LIST",true)?.children.some(modifier=>modifier.text === "final")
+        && localDeclaration(placeholder,placeholder.classQualifiedName,classNode).declaration!.finalClass !== true)
+        fail("HARDENED_FINAL_CLASS_AUTHORITY", "final class requires its authenticated declaration flag", classNode);
     const declaration: SemanticClass = Object.assign(identity(classNode), {
         declarationKind: "class" as "class", name: className,
         modifiers: parseModifiers(classNode, true,

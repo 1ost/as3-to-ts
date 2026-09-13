@@ -262,6 +262,8 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
         };
     }
     const result: LocalDeclarationExtract = {
+        ...(declaration.kind === "CLASS" && declaration.children.some(list => list.kind === "MOD_LIST"
+            && list.children.some(modifier => modifier.text === "final")) ? {finalClass:true as const} : {}),
         schema: "as3-local-declaration-extract@1",
         sourceSha256: ast.sourceSha256,
         packageName,

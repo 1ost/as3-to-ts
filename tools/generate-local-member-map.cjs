@@ -229,6 +229,7 @@ function canonicalizeExtract(entry, extract) {
     return {
         holdCode: null,
         declaration: {
+            ...(extract.finalClass === true ? {finalClass:true} : {}),
             baseQNames: baseNames,
             interfaceQNames: interfaceNames,
             members,

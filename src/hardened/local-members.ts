@@ -177,6 +177,7 @@ function fileLocalDeclarations(raw: unknown, ownerQualifiedName: string, sourceP
 
 function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: string): LocalMemberDeclaration {
     if (!object(raw) || !exactKeys(raw, ["baseQNames", "interfaceQNames", "members", "packageInitializer"]
+        .concat(raw.finalClass === true ? ["finalClass"] : [])
         .concat(Object.prototype.hasOwnProperty.call(raw, "fileLocalClasses") ? ["fileLocalClasses"] : []))
         || !Array.isArray(raw.baseQNames) || !Array.isArray(raw.interfaceQNames) || !Array.isArray(raw.members)
         || raw.baseQNames.some(item => typeof item !== "string" || !QNAME.test(item))
@@ -196,6 +197,7 @@ function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: strin
     }
     return {
         baseQNames: raw.baseQNames.slice() as string[],
+        ...(raw.finalClass === true ? {finalClass:true as const} : {}),
         interfaceQNames: raw.interfaceQNames.slice() as string[],
         members: raw.members.map(member),
         packageInitializer,
