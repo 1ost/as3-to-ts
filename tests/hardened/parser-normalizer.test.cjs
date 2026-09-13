@@ -307,6 +307,23 @@ function expectNormalizationCode(action, code) {
 const built = compileFocusedSources();
 try {
     {
+        for (const literal of ["/[，、]/g", "/x/gim", "/x/", String.raw`/a\/b/gi`]) {
+            const source=`package p { public class RegexSpan { public var a:RegExp=${literal}; public var b:RegExp=${literal}; } }`;
+            const normalized=built.normalizer.normalizeParserAst(built.parse("RegexSpan.as",source),source,sha256);
+            const literals=normalized.nodes.filter(node=>node.kind==="LITERAL" && node.text===literal);
+            assert.equal(literals.length,2);
+            for (const node of literals) assert.equal(source.slice(node.span.start,node.span.end),literal);
+            const ast=built.parse("RegexSpan.as",source);
+            const alter=node=>{if(node.text===literal) node.text=literal+"i";(node.children||[]).forEach(alter);};
+            alter(ast);
+            expectNormalizationCode(()=>built.normalizer.normalizeParserAst(ast,source,sha256),"PARSER_NORMALIZER_TEXT");
+            const runtimeSource=`package p { public class RegexRuntime { public function run():String { return ${literal}; } } }`;
+            const runtimeAst=built.normalizer.normalizeParserAst(built.parse("RegexRuntime.as",runtimeSource),runtimeSource,sha256);
+            assert.throws(()=>built.adapter.adaptNormalizedParserAst(runtimeAst,authority(built.ledger),runtimeSource,sha256),
+                error=>error.code==="HARDENED_LITERAL");
+        }
+    }
+    {
         const source = 'package p { public class CallHold { public function run(callback:Function):void { callback(); } } }';
         const normalized = built.normalizer.normalizeParserAst(built.parse("CallHold.as", source), source, sha256);
         const start = source.indexOf("callback();");
