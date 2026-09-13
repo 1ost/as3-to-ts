@@ -257,10 +257,25 @@ export function as3ArrayCall(value:unknown, method:"push" | "unshift", args:unkn
 export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown[]):unknown;
 export function as3ArrayCall(value:unknown, method:"concat", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"join", args:unknown[]):string;
+export function as3ArrayCall(value:unknown, method:"indexOf", args:unknown[]):number;
 export function as3ArrayCall(value:unknown, method:"sortOn" | "sort", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"splice", args:unknown[]):unknown[] | null;
 export function as3ArrayCall(value:unknown, method:"hasOwnProperty", args:unknown[]):boolean;
 export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unknown {
+    if (method === "indexOf") {
+        const array=ordinaryArray(value);
+        if (args.length < 1 || args.length > 2 || Object.getPrototypeOf(array) !== Array.prototype
+            || Object.prototype.hasOwnProperty.call(array,"indexOf"))
+            throw new AS3ArrayOperationUnavailable("Array.indexOf requires an ordinary native method and one or two arguments");
+        // AIR coerces fromIndex to int before observing length, even for empty arrays.
+        // Search values are never coerced, and an absent index reads as undefined.
+        const from=args.length === 2 ? as3NativeNumber(args[1]) >> 0 : 0;
+        const length=array.length;
+        for (let index=from < 0 ? Math.max(length+from,0) : from; index < length; index++) {
+            if (as3ArrayRead(array,index) === args[0]) return index | 0;
+        }
+        return -1;
+    }
     if (method === "hasOwnProperty") {
         const array=ordinaryArray(value);
         if (args.length !== 1 || typeof args[0] !== "string"

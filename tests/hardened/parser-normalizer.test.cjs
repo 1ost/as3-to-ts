@@ -1236,6 +1236,29 @@ try {
     assert.throws(()=>built.adapter.adaptNormalizedParserAst(fallingNumberAst,authority(built.ledger),
         fallingNumberSource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority),
         error=>error&&error.code==="HARDENED_RETURN_PATH");
+    {
+        const adaptIndexOf = (expression, type = 'Array', authenticated = true) => {
+            const source=`package p { public class ArraySearch { public function run(values:${type},start:*,needle:*):int {return ${expression};} } }`;
+            return built.adapter.adaptNormalizedParserAst(
+                built.normalizer.normalizeParserAst(built.parse("ArraySearch.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,
+                authenticated ? sourceMemberAuthority : undefined);
+        };
+        for(const expression of ['values.indexOf(needle)','values.indexOf(needle,start)']) {
+            const semantic=adaptIndexOf(expression);
+            const call=semantic.declaration.members.find(m=>m.name==='run').body[0].expression;
+            assert.equal(call.capabilitySource,'Array');assert.equal(call.capabilityMember,'indexOf');
+            assert.equal(call.resultType.sourceName,'int');
+            const emitted=built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code;
+            assert.match(emitted,/__as3ArrayCall\(values, "indexOf", \[needle(?:, start)?\]\)/);
+        }
+        for(const expression of ['values.indexOf()','values.indexOf(needle,start,0)'])
+            assert.throws(()=>adaptIndexOf(expression),error=>error.code==='HARDENED_ARRAY_CALL');
+        assert.throws(()=>adaptIndexOf('values.indexOf(needle)','Array',false),error=>!!error.code);
+        const vector=adaptIndexOf('values.indexOf(1)','Vector.<int>');
+        const vectorCall=vector.declaration.members.find(m=>m.name==='run').body[0].expression;
+        assert.notEqual(vectorCall.capabilitySource,'Array');
+    }
     const numericFieldSortSource='package p { public class FieldSort { public function run(values:Array):void { values.sortOn("priority",18); } } }';
     const numericFieldSortAst=built.normalizer.normalizeParserAst(
         built.parse("fixtures/FieldSort.as",numericFieldSortSource),numericFieldSortSource,sha256);
