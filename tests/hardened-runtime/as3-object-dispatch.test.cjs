@@ -29,6 +29,31 @@ i.installAS3TypeAuthority({schema:metadata.schema,sha256:crypto.createHash("sha2
 test.after(()=>fs.rmSync(out,{recursive:true,force:true}));
 const string=value=>r.as3ObjectFunctionLabel(value)??String(value);
 
+test("dynamic push retains native receiver capture, argument order and primitive failures",()=>{
+ const folder=path.join(process.env.HARDENED_FIXTURE_LAYA,"tests/nativeFlashOracle/dynamic-array-push");
+ const retained=JSON.parse(fs.readFileSync(path.join(folder,"native-air.json")));
+ for(const [name,hash] of Object.entries(retained.sourceFiles))
+  assert.equal(crypto.createHash("sha256").update(fs.readFileSync(path.join(folder,name))).digest("hex"),hash);
+ for(const row of retained.capture.state.observations){
+  if(["class-method","wrong-method-arity"].includes(row.id))continue; // Actual generated methods are exercised by the paired fixture.
+  const original=["original"],log=[];let stored=original;
+  const values={null:null,undefined:undefined,"noncallable-property":{push:7},"missing-property":{},string:"text",number:7,boolean:true};
+  if(Object.hasOwn(values,row.id))stored=values[row.id];
+  const current=()=>{log.push("receiver");return stored;};
+  const argument=n=>{log.push("arg"+n);if(row.id==="receiver-replaced"&&n===1)stored=["replacement"];return n;};
+  let result;
+  try {
+   const answer=row.id==="no-arguments"?r.as3ObjectCall(current(),"push",[]):row.id==="one-argument"?
+    r.as3ObjectCall(current(),"push",[argument(1)]):r.as3ObjectCall(current(),"push",[argument(1),argument(2)]);
+   result=["return",answer];
+  }catch(error){result=[error.name,error.errorID,error.message];}
+  result.push(log,original.join("|"),0,0,stored===original);assert.deepEqual(result,row.result,row.id);
+ }
+ const overridden=[];overridden.push=()=>99;
+ assert.throws(()=>r.as3ObjectCall(overridden,"push",[1]),{name:"AS3ArrayOperationUnavailable"});
+ assert.throws(()=>r.as3ObjectCall(new(class extends Array{})(),"push",[1]),{name:"AS3ArrayOperationUnavailable"});
+});
+
 test("native same-class and external namespace operations",()=>{
  const goldenRoot=process.env.HARDENED_FIXTURE_LAYA;
  assert.ok(goldenRoot,"HARDENED_FIXTURE_LAYA identifies retained native captures");

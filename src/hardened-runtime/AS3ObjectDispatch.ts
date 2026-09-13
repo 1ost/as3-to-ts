@@ -1,4 +1,5 @@
 import { AS3ArgumentError } from "./AS3Error";
+import { as3ArrayCall } from "./AS3Array";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
 import { lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod, isAS3MethodClosure } from "./AS3MethodClosure";
@@ -194,8 +195,18 @@ export function as3ObjectDelete(value:unknown,key:unknown,caller:string | null =
     return Reflect.deleteProperty(target,name);
 }
 export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:string | null = null):unknown {
+    // Fixed-name push calls are admitted independently of computed dispatch.
+    // Native primitives fail only after the caller has evaluated all arguments.
+    if (key === "push" && ["string","number","boolean"].includes(typeof value)) {
+        const error=new TypeError("Error #1006: value is not a function.");
+        Object.defineProperty(error,"errorID",{value:1006}); throw error;
+    }
     receiver(value);
     const name=keyName(key);
+    if (name === "push" && Array.isArray(value)) {
+        if (caller !== null) lookupObjectCaller(caller);
+        return as3ArrayCall(value,"push",args);
+    }
     const fn = as3ObjectRead(value,name,caller);
     if (typeof fn !== "function") {
         const error=new TypeError(`Error #1006: ${name} is not a function.`);

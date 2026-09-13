@@ -126,6 +126,17 @@ independently of the stored coercion. Native evidence is retained in LayaAir's
 `array-slot` fixture. Static Object-to-Array assignment and unauthenticated host
 subclasses remain held; this does not qualify complete application startup.
 
+Fixed-name wildcard `push` calls preserve receiver capture and argument order.
+The runtime dispatches to native Array storage or the actual authenticated class
+method, retaining native arity and failure behavior. Computed names, other dynamic
+argument calls, Array method overrides and foreign subclasses remain held.
+The `dynamic-array-push` native fixture covers this scheduler call pattern.
+
+Dictionary value enumeration requires an explicitly selected compiler intrinsic.
+A profile mapping Dictionary to an external bridge cannot silently use the
+compiler's branded iterator. Ordinary TypeScript bridge consumers do not need
+these compiler-specific helpers.
+
 ## Provenance and licenses
 
 The frozen parser and syntax model derive from `@as3web/as3-to-ts` 0.3.10 at

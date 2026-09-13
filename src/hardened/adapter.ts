@@ -3733,6 +3733,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 const expected = (callee.index as Extract<SemanticExpression,{kind:"literal"}>).value === "hasOwnProperty" ? 1 : 0;
                 if (args.length !== expected) fail("HARDENED_OBJECT_CALL_ARITY", "Object builtin call has an unproved arity", node);
                 if (args.length) assertObjectKey(assignmentType(args[0]!,context,node),node);
+            } else if (callee.index.kind === "literal" && callee.index.value === "push" && nativeArrayBase(context)) {
+                // The runtime selects the actual receiver's method. A wildcard
+                // receiver is not statically rewritten into an Array cast.
+                if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
+                    fail("HARDENED_OBJECT_CALL_ARGUMENT", "Dynamic push arguments must produce values", node);
             } else if (args.length !== 0 || callee.index.kind !== "literal" || typeof callee.index.value !== "string") {
                 fail("HARDENED_OBJECT_CALL_TARGET", "dynamic calls with arguments or computed names require retained native evaluation evidence", node);
             }
@@ -4374,6 +4379,9 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             if (!header) fail("HARDENED_FOREACH_BINDING", "for each binding lacks its predeclared local identity", declaration);
             const iterable = parseExpression(node.children[1]!.children[0]!, context, true);
             const actualIterableType = assignmentType(iterable, context, node.children[1]!.children[0]!);
+            if (context.sourceMemberAuthority !== null && isDictionaryType(actualIterableType)
+                && intrinsicSourceForType(actualIterableType,context) !== "flash.utils.Dictionary")
+                fail("HARDENED_FOREACH_DICTIONARY_AUTHORITY", "Dictionary value enumeration requires the selected native compiler intrinsic", node.children[1]!);
             const iterableType = isArrayType(actualIterableType,context)
                 ? semanticType(node,"Array","Array",[],actualIterableType.nullable,"Array") : actualIterableType;
             const elementType = vectorElement(iterableType);
