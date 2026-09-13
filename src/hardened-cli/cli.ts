@@ -8,6 +8,7 @@ import { discoverInputs, portableCollisionKey, readInput } from "./inputs";
 import { assertParserWorkerSha256, captureParserWorkerSha256, parseIsolated } from "./isolated-parser";
 import { HELP, parseArguments, TOOL_VERSION } from "./options";
 import { loadTranspileAuthority } from "./authority";
+import { targetModuleSpecifier } from "../hardened/ledger";
 import { adaptNormalizedParserAst } from "../hardened/adapter";
 import { HardenedSemanticError, type NormalizedParserAst, type SemanticProgram } from "../hardened/contracts";
 import { emitSemanticProgram } from "../hardened/emitter";
@@ -78,7 +79,8 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "internal/AS3ArraySort.ts": "15a4cc94a7c485c2277343fea40695a80c8934cee925c86e8528ab42ae660fa4",
     "AS3Array.ts": "e44e0129b2b07748fb4449a9cdcc325c7e4f082ca5ea3feab4f3feb20d99d57b",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
-    "AS3ByteArray.ts": "d42f79a903e9c34b98ab1dd247e20c216d230ff811869709794a3a6977e10d7e",
+    "AS3ByteArrayNative.ts": "f6188ecdba0cb5180172da9a5533640aec0dc1ac7c0433b8e41aec3e02e744e3",
+    "AS3ByteArray.ts": "1cf1a2f0f8abc200585b7b62a66724d0fee0ec03c397d96b769905d5a899e4b5",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
     "AS3ClassInitialization.ts": "5b446cdfe43be974455866ca93648b5625edb777938093979e0437aaa8dd501f",
     "AS3Coerce.ts": "771bc664aba75ac1d61c366fda1371424100015b17371fab22afc47edc97160f",
@@ -117,11 +119,21 @@ function runtimeEmbeddedCommonJs(code: string, fileName: string): string {
         /^Object\.defineProperty\(exports, "__esModule", \{ value: true \}\);\n/m, "");
 }
 
-function runtimeBundleJavaScript(authorityCode: string, includeBigTurnTableDto: boolean): string {
+function runtimeBundleJavaScript(authorityCode: string, includeBigTurnTableDto: boolean,
+    byteArrayNative?: {targetModule:string;targetExport:string}): string {
     const modules = new Map<string, string>();
     runtimeSourceTemplates(includeBigTurnTableDto).forEach(template => {
         const moduleId = template.path.slice(0, -3) + ".js";
-        modules.set(moduleId, runtimeEmbeddedCommonJs(template.code, template.path));
+        const code=template.path==="AS3ByteArrayNative.ts" && byteArrayNative
+            ? `import { ${byteArrayNative.targetExport} as NativeByteArray } from "${targetModuleSpecifier(byteArrayNative.targetModule)}";
+export function uncompressNativeByteArray(state: {bytes:Uint8Array;position:number;endian:string}) {
+    const value=new NativeByteArray(state.bytes.slice());
+    value.position=state.position;value.endian=state.endian;
+    value.uncompress();
+    return {bytes:new Uint8Array(value.buffer),position:value.position,endian:value.endian};
+}
+` : template.code;
+        modules.set(moduleId, runtimeEmbeddedCommonJs(code, template.path));
     });
     modules.set("AS3Authority.generated.js",
         runtimeEmbeddedCommonJs(authorityCode, "AS3Authority.generated.ts"));
@@ -512,7 +524,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value));
             const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
             const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code,
-                transpileAuthority!.includeBigTurnTableDto);
+                transpileAuthority!.includeBigTurnTableDto, transpileAuthority!.authority.byteArrayNative);
             totalOutputBytes += Buffer.byteLength(authorityJavaScript, "utf8");
             if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
                 throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);

@@ -162,6 +162,7 @@ def main():
                    help='Exercise signature dependencies in a still strongly connected closed fixture graph')
     p.add_argument('--intrinsic-type', action='append', default=[], choices=['flash.utils.Dictionary', 'flash.utils.ByteArray'],
                    help='Exercise the existing shared compiler intrinsic instead of the optional Laya facade')
+    p.add_argument('--bytearray-native-uncompress', action='store_true', help='Authenticate zero-argument intrinsic decompression through shared Laya')
     args = p.parse_args()
     if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*', args.entry):
         p.error('Entry must be an AS3 class QName')
@@ -326,6 +327,18 @@ def main():
         mappings.extend(global_mappings)
         native_api.annotate_native_function_signatures(apis, out / 'sdk-source')
         member_uses.extend(native_api.native_timer_member_uses(apis, out / 'sdk-source'))
+    if args.bytearray_native_uncompress:
+        if 'flash.utils.ByteArray' not in args.intrinsic_type or native_signatures is None:
+            p.error('Native uncompress requires the ByteArray intrinsic and exact FFDec SDK signatures')
+        helper_spec = importlib.util.spec_from_file_location("native_bytearray_profile", ROOT / "tools/native_bytearray_profile.py")
+        helper = importlib.util.module_from_spec(helper_spec)
+        helper_spec.loader.exec_module(helper)
+        evidence = helper.produce_native_bytearray_proof(profile_root=out, laya_root=laya, air_sdk=sdk,
+            sdk_signatures=out / 'sdk-signatures.json', sdk_declaration=out / 'sdk-source/scripts/flash/utils/ByteArray.as')
+        facade_inputs.update(evidence['generatorInputs'])
+        files['byteArrayNative'] = evidence['proofPath']
+        if not any(use.get('qname')=='flash.utils.ByteArray' and use.get('member')=='uncompress' for use in member_uses):
+            member_uses.append(evidence['censusUse'])
     census = write(out / 'census.json', {'schema': 'swf-capability-census@1', 'as3SourceCapabilities': {'apis': apis, 'memberUses': member_uses}})
     if native_signatures is not None:
         mappings = native_api.select_supported_members(mappings, census, target, out)

@@ -1,3 +1,4 @@
+import { uncompressNativeByteArray } from "./AS3ByteArrayNative";
 import { as3BindMethod } from "./AS3MethodClosure";
 
 export class AS3Endian {
@@ -63,8 +64,8 @@ export function configureAS3SystemCodePageEncoder(encoder: AS3SystemCodePageEnco
 
 /**
  * Native TypeScript implementation of the source-visible Flash ByteArray binary subset.
- * AMF object serialization and synchronous compression are deliberately not exposed here;
- * the semantic adapter keeps those source members on HOLD until their codecs are proven.
+ * AMF object serialization remains held. Synchronous uncompress delegates only
+ * through a target-proof-bound shared native operation; it contains no decoder.
  */
 export class AS3ByteArray {
     [index: number]: number;
@@ -159,6 +160,23 @@ export class AS3ByteArray {
         result._bytes.set(source);
         result._length = source.byteLength;
         return result;
+    }
+
+    public uncompress(): void {
+        if (!isAS3ByteArray(this)) throw new TypeError("Native ByteArray operation requires its allocation identity");
+        if (arguments.length !== 0) throw new TypeError("ByteArray.uncompress admits no algorithm arguments");
+        const state = uncompressNativeByteArray({bytes:new Uint8Array(this.toArrayBuffer()),
+            position:this._position,endian:this.endian});
+        if (!(state.bytes instanceof Uint8Array) || state.bytes.byteLength > MAX_BYTEARRAY_LENGTH
+            || !Number.isInteger(state.position) || state.position < 0 || state.position > 0xffffffff
+            || (state.endian !== AS3Endian.BIG_ENDIAN && state.endian !== AS3Endian.LITTLE_ENDIAN))
+            throw new RangeError("Native ByteArray result exceeds its authenticated state boundary");
+        // Copy and validate everything before replacing any receiver state.
+        const replacement = state.bytes.slice();
+        this._bytes = replacement;
+        this._length = replacement.byteLength;
+        this._position = state.position;
+        this._littleEndian = state.endian === AS3Endian.LITTLE_ENDIAN;
     }
 
     public clear(): void {

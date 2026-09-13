@@ -1,3 +1,4 @@
+import { loadByteArrayNativeTarget } from "../hardened/bytearray-native-authority";
 import { createHash } from "node:crypto";
 import {
     closeSync,
@@ -288,6 +289,7 @@ function parseProfileDocument(bytes: string, label: string): Record<string, unkn
     return value as Record<string, unknown>;
 }
 
+
 function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapabilitiesPath: string,
     profileLockPath: string): TranspileAuthority {
     const profileJson = readRegularUtf8(profileLockPath, "application profile lock");
@@ -308,7 +310,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
         || !exactKeys(profile.targetRoots, ["application", "bootstrap"])
         || !exactKeys(profile.files, ["capabilityMapping", "dependencyGraphRaw", "dependencyGraphSemantic",
             "localMemberMap", "localTypeMap", "nativeTimerAuthority", "runtimeTypeAuthorityLock",
-            "runtimeTypePredicates", "sourceManifest", "sourceMemberAuthority"])
+            "runtimeTypePredicates", "sourceManifest", "sourceMemberAuthority"].concat(
+                Object.prototype.hasOwnProperty.call(profile.files,"byteArrayNative") ? ["byteArrayNative"] : []))
         || !exactKeys(profile.counts, ["localMembersComplete", "localMembersHeld", "localTypes", "mappedMembers", "mappedTypes", "sourceMemberTypes"])
         || !Array.isArray(profile.runtimePredicateQNames)
         || profile.runtimePredicateQNames.some(value => typeof value !== "string")) {
@@ -319,7 +322,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const profileRoot = dirname(resolve(profileLockPath));
     const files = profile.files as unknown as {
         capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
-        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile;
         runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
         sourceMemberAuthority: ProfileFile;
     };
@@ -359,12 +362,17 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
         throw new CliError("application profile counts or runtime identity set do not match its pinned files", 6);
     }
     try {
+        const byteArrayNative=files.byteArrayNative ? loadByteArrayNativeTarget(profileRoot,
+            profileFile(profileRoot,files.byteArrayNative,"native ByteArray proof"),targetCapabilitiesPath,
+            targetCapabilitiesJson,sourceMemberAuthorityJson,
+            profileFile(profileRoot,files.sourceManifest,"source manifest")) : undefined;
         const authority = loadCapabilityAuthority({
             sourceCensusJson, sourceCensusSha256: profile.sourceCensusSha256 as string,
             targetCapabilitiesJson, targetCapabilitiesSha256: profile.targetCapabilitiesSha256 as string,
             mappingJson, mappingSha256: files.capabilityMapping.sha256,
             nativeTimerAuthorityJson, nativeTimerAuthoritySha256: files.nativeTimerAuthority.sha256,
             runtimePackage: profile.runtimePackage as string, applicationProfile: true,
+            ...(byteArrayNative ? { byteArrayNative } : {}),
         }, sha256);
         const localTypes = loadLocalTypeAuthority({
             json: localTypeJson, sha256: files.localTypeMap.sha256,

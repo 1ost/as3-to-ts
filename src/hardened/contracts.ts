@@ -53,7 +53,14 @@ export interface CapabilityMappingDocument {
     mappings: CapabilityMapping[];
 }
 
+export interface ByteArrayNativeTarget {
+    readonly targetModule: "src/layaAir/flash/utils/ByteArray.ts";
+    readonly targetExport: "ByteArray";
+    readonly sourceSignature: 'public function uncompress(algorithm:String = "zlib") : void';
+}
+
 export interface CapabilityAuthorityInput {
+    byteArrayNative?: ByteArrayNativeTarget;
     sourceCensusJson: string;
     sourceCensusSha256: string;
     targetCapabilitiesJson: string;
@@ -67,6 +74,7 @@ export interface CapabilityAuthorityInput {
 }
 
 export interface LoadedCapabilityAuthority {
+    byteArrayNative?: ByteArrayNativeTarget;
     sourceCensusSha256: string;
     targetCapabilitiesSha256: string;
     mappingSha256: string;

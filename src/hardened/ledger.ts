@@ -1,3 +1,4 @@
+import { assertByteArrayNativeTarget } from "./bytearray-native-authority";
 import {
     CapabilityAuthorityInput,
     CapabilityMapping,
@@ -825,13 +826,17 @@ function intrinsicMemberKey(sourceQName: string, access: string, name: string): 
 
 function intrinsicMembers(source: { [key: string]: unknown },
     intrinsicTypesBySource: LoadedCapabilityAuthority["intrinsicTypesBySource"],
-    applicationProfile: boolean): LoadedCapabilityAuthority["intrinsicMembersByKey"] {
+    applicationProfile: boolean, byteArrayNative?: LoadedCapabilityAuthority["byteArrayNative"]): LoadedCapabilityAuthority["intrinsicMembersByKey"] {
     const section = source.as3SourceCapabilities;
     if (!isObject(section) || !Array.isArray(section.memberUses)) {
         throw new HardenedSemanticError("HARDENED_SOURCE_CENSUS_SCHEMA", "source census lacks intrinsic member authority");
     }
     const result: LoadedCapabilityAuthority["intrinsicMembersByKey"] = Object.create(null);
-    INTRINSIC_MEMBERS.forEach(definition => {
+    const definitions = byteArrayNative ? [...INTRINSIC_MEMBERS, {
+        sourceQName:"flash.utils.ByteArray",name:"uncompress",access:"call" as const,
+        minArgs:0,maxArgs:0,parameterTypes:[],returnType:"void",sourceSignature:byteArrayNative.sourceSignature,
+    }] : INTRINSIC_MEMBERS;
+    definitions.forEach(definition => {
         if (!intrinsicTypesBySource[definition.sourceQName]) return;
         const uses = (section.memberUses as unknown[]).filter((value: unknown) => isObject(value)
             && value.qname === definition.sourceQName && value.member === definition.name
@@ -844,7 +849,7 @@ function intrinsicMembers(source: { [key: string]: unknown },
                 && signature.returnType.split(".").pop() === definition.returnType
                 && signature.minArgs === definition.minArgs
                 && (definition.access === "read" ? signature.maxArgs === null || signature.maxArgs === 0
-                    : signature.maxArgs === definition.maxArgs)));
+                    : signature.maxArgs === (definition.name === "uncompress" ? 1 : definition.maxArgs))));
         if (!authenticated) {
             throw new HardenedSemanticError("HARDENED_SOURCE_INTRINSIC_MEMBER",
                 `source intrinsic member ${definition.sourceQName}.${definition.name} lacks its exact census signature`);
@@ -1020,6 +1025,7 @@ export function selectCapabilityCandidates(sourceJson: string, targetJson: strin
 }
 
 export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256: Sha256Function): LoadedCapabilityAuthority {
+    if (input.byteArrayNative !== undefined) assertByteArrayNativeTarget(input.byteArrayNative, input.targetCapabilitiesJson);
     const runtimePackage = input.runtimePackage || "@bleach/as3-runtime";
     const applicationProfile = input.applicationProfile === true;
     if (!/^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(runtimePackage)) {
@@ -1075,7 +1081,8 @@ export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256:
         typeMappingsBySource,
         memberMappingsByKey,
         intrinsicTypesBySource,
-        intrinsicMembersByKey: intrinsicMembers(source, intrinsicTypesBySource, applicationProfile),
+        ...(input.byteArrayNative ? {byteArrayNative:input.byteArrayNative} : {}),
+        intrinsicMembersByKey: intrinsicMembers(source, intrinsicTypesBySource, applicationProfile, input.byteArrayNative),
         nativeTimerFunctionsBySource: nativeTimerFunctions(source, nativeTimerAuthority, runtimePackage, applicationProfile),
     });
     LOADED_AUTHORITIES.add(authority);
