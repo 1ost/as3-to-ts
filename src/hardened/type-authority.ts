@@ -1,3 +1,5 @@
+import { assertReflectionProviderTarget, type ReflectionProviderTarget } from "./reflection-provider-authority";
+import { targetModuleSpecifier } from "./ledger";
 import { hasNativeDateAuthority } from "./native-date-authority";
 import { staticConstant } from "./static-constants";
 import { AS3FileLocalClassScope, fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLocalIdentity";
@@ -21,6 +23,7 @@ export interface RuntimeAuthorityClassSource {
     readonly interfaces: readonly string[];
     readonly sourceSha256: string;
     readonly fileLocalScope?: AS3FileLocalClassScope;
+    readonly staticReflection?: {readonly variables: readonly {readonly name:string; readonly type:string}[]};
     readonly definitionSafe: true;
     readonly module: string;
     readonly constructorExport: string;
@@ -252,6 +255,21 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
             && !member.modifiers.includes("static") && member.implicitDefault !== "constructor-owned")
         .map(member => Object.freeze({ name: member.name,
             policy: member.implicitDefault as Exclude<SemanticField["implicitDefault"], "constructor-owned" | null> })));
+    // Source declaration order is deterministic; native sibling trait order is not promised.
+    // A missing type authority suppresses the entire descriptor, never a partial field set.
+    const staticFields = program.declaration.members.filter((member): member is SemanticField =>
+        member.kind === "field" && member.modifiers.includes("static") && member.modifiers.includes("public")
+        && !member.readonly && member.namespaceName === null);
+    const staticVariables = staticFields.map(member => {
+        if (member.type.typeArguments.length) return null;
+        const primitive = ["*", "Object", "String", "Boolean", "Number", "int", "uint", "Array", "Function", "Class"];
+        const name = member.type.runtimeName || (primitive.includes(member.type.sourceName) ? member.type.sourceName : null);
+        if (!name || name.startsWith("FilePrivate(")) return null;
+        const split = name.lastIndexOf(".");
+        return Object.freeze({name:member.name,type:split < 0 ? name : name.slice(0,split) + "::" + name.slice(split+1)});
+    });
+    const staticReflection = staticVariables.every((variable): variable is {readonly name:string;readonly type:string} => variable !== null)
+        ? Object.freeze({variables:Object.freeze(staticVariables)}) : undefined;
     const source: RuntimeAuthorityClassSource = authenticatedSource({ kind: "class", qname,
         base: program.declaration.extendsType?.runtimeName ?? null,
         interfaces: Object.freeze(program.declaration.implementsTypes.map(item => item.runtimeName)),
@@ -260,6 +278,7 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         module: moduleSpecifier, constructorExport: fileLocalScope ? "__as3FileLocalClass" : program.declaration.name, predicateExport: "isAS3ClassInstance",
         constructionTargetExport: "as3ConstructionTarget", constructionProofExport: "isAS3ConstructionProof",
         fields,
+        ...(staticReflection ? {staticReflection} : {}),
         // Only native-proven dynamic class scopes are admitted by the adapter.
         // Namespace names retain identity, not an inferred namespace URI.
         objectTraits: Object.freeze({ dynamic: program.declaration.modifiers.includes("dynamic"),
@@ -663,7 +682,8 @@ function sourceMetadata(entry: RuntimeAuthoritySource): object {
         ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
         : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
             sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}),
-            ...(entry.fileLocalScope ? {fileLocalScope:entry.fileLocalScope} : {}) };
+            ...(entry.fileLocalScope ? {fileLocalScope:entry.fileLocalScope} : {}),
+            ...(entry.staticReflection ? {staticReflection:entry.staticReflection} : {}) };
 }
 
 function canonicalMetadata(entries: readonly RuntimeAuthoritySource[]): string {
@@ -678,10 +698,12 @@ function canonicalMetadata(entries: readonly RuntimeAuthoritySource[]): string {
  * closure and produces one immutable, hash-pinned installation transaction.
  */
 export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySource[],
-    sha256: (canonicalUtf8: string) => string): EmittedRuntimeAuthority {
+    sha256: (canonicalUtf8: string) => string,
+    reflectionProvider?: {readonly target: ReflectionProviderTarget; readonly targetCapabilitiesJson: string}): EmittedRuntimeAuthority {
     if (!Array.isArray(sources) || typeof sha256 !== "function") {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_INPUT", "runtime type authority requires a source list and SHA-256 function");
     }
+    if (reflectionProvider) assertReflectionProviderTarget(reflectionProvider.target, reflectionProvider.targetCapabilitiesJson);
     assertAuthenticatedRuntimeAuthoritySources(sources);
     const byName = new Map<string, RuntimeAuthoritySource>();
     sources.forEach(source => {
@@ -760,13 +782,18 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
             return `    { kind: "interface", qname: ${quote(source.qname)}, bases: ${JSON.stringify(source.bases)} },`;
         }
         const index = importIndex.get(source)!;
-        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}${source.nativeObjectTraits ? `nativeObjectTraits: ${JSON.stringify(source.nativeObjectTraits)}, ` : ""}${source.fileLocalScope ? `fileLocalScope: ${JSON.stringify(source.fileLocalScope)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
+        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}${source.nativeObjectTraits ? `nativeObjectTraits: ${JSON.stringify(source.nativeObjectTraits)}, ` : ""}${source.fileLocalScope ? `fileLocalScope: ${JSON.stringify(source.fileLocalScope)}, ` : ""}${source.staticReflection ? `staticReflection: ${JSON.stringify(source.staticReflection)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
     });
     const qnames = ordered.map(source => source.qname);
     const code = [
         "// Generated from authenticated local declarations and mapped Laya capabilities. Do not edit.",
         "import { installAS3TypeAuthority } from \"./internal/AS3TypeRegistry\";",
         "import { as3InitializeClass as __as3InitializePublishedClass } from \"./AS3ClassInitialization\";",
+        ...(reflectionProvider ? [
+            'import { installAS3ReflectionProvider } from "./AS3Reflection";',
+            `import { ${reflectionProvider.target.metadataExport} as __as3CreateReflectionMetadata } from ${quote(targetModuleSpecifier(reflectionProvider.target.metadataModule))};`,
+            `import { ${reflectionProvider.target.describeExport} as __as3DescribeTypeXml } from ${quote(targetModuleSpecifier(reflectionProvider.target.describeModule))};`,
+        ] : []),
         ...imports,
         "",
         `export const AS3_TYPE_AUTHORITY_SHA256 = ${quote(digest)};`,
@@ -776,6 +803,10 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
         "] as const;",
         "installAS3TypeAuthority({ schema: \"as3-runtime-type-authority@1\", sha256: AS3_TYPE_AUTHORITY_SHA256,",
         "    qnames: AS3_TYPE_AUTHORITY_QNAMES, entries });",
+        ...(reflectionProvider ? [
+            "// The class authority is sealed before the optional shared provider is installed.",
+            "installAS3ReflectionProvider({createFlashReflectionMetadata: __as3CreateReflectionMetadata, describeTypeXml: __as3DescribeTypeXml});",
+        ] : []),
         "// Optional host publication; obtaining these bindings does not execute class initializers.",
         "export const AS3_CLASS_DEFINITIONS = Object.freeze([",
         ...classes.filter(source => !source.fileLocalScope).map(source => {

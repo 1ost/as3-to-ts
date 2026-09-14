@@ -77,6 +77,7 @@ function sha256(data: string | Buffer): string {
 }
 
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
+    "AS3Reflection.ts": "2bdc6c362ed2a6d63a7559b41213a0c4bb195e80a4b63944f6036cefe4757ee2",
     "internal/AS3RegExpPattern.ts": "036bdd8077771be4ee518d9b84b25a7ffc80309240ebb45f7f85aeb84c4d3319",
     "AS3RegExp.ts": "5b254ea41376aafb0e3381bc7707381be9db9e241c8b514f4d372991fb95a574",
     "AS3Enumeration.ts": "b7059948afc148589fe3b7b265064473643c879ae22785103e8a3df6c135cdcc",
@@ -104,7 +105,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "internal/AS3NumberFormat.ts": "c7a2b808bd4bafded492a65acce6041f67601f2e56308fb2724443f8baa58bc4",
     "internal/AS3CaseTable.ts": "ed85937df05d8ba9015e3cd35b8d75ce46e56348547085c0d218426ed0a44fc5",
     "internal/AS3FileLocalIdentity.ts": "9adbd4a9ab454a7d8351982d6da643d6510d2486658305eb0530170651232abb",
-    "internal/AS3TypeRegistry.ts": "37542e8e73b0e7ee3c97db13190855f923252ade93cbc6118a8fffa31bc81f3f",
+    "internal/AS3TypeRegistry.ts": "4cab9540bd99c500ad478dcd242d4990ea69bc8c8fe00064a854c16dc658467c",
     "internal/AS3TimerRuntime.ts": "3204d4ee73defe74f71fd43f1e146f4ef21ee80784ba585ff52698c97f90285e",
 });
 
@@ -528,7 +529,11 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             }
             if(hasNativeDateAuthority(transpileAuthority!.sourceMembers))
                 runtimeAuthoritySources.push(dateRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers!,RUNTIME_SOURCE_SHA256["AS3Date.ts"]!));
-            runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value));
+            runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value),
+                transpileAuthority!.reflectionProvider ? {
+                    target: transpileAuthority!.reflectionProvider,
+                    targetCapabilitiesJson: readFileSync(options.targetCapabilitiesPath!, "utf8"),
+                } : undefined);
             const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
             const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code,
                 transpileAuthority!.includeBigTurnTableDto, transpileAuthority!.authority.byteArrayNative);

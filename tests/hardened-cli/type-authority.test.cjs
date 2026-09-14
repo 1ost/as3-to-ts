@@ -37,7 +37,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.Scri
     module: ts.ModuleKind.CommonJS } }).outputText;
 const moduleValue = { exports: {} };
 Function("require", "module", "exports", compiled)(specifier=>specifier==="./contracts"?{HardenedSemanticError}
-    :specifier==="./source-member-authority"?sourceMembers:specifier==="./adapter"?adapterModule:specifier==="./emitter"?emitterModule
+    :specifier==="./native-date-authority"?loadLocalModule(path.join(ROOT,"src/hardened/native-date-authority.ts")):specifier==="./reflection-provider-authority"?loadLocalModule(path.join(ROOT,"src/hardened/reflection-provider-authority.ts")):specifier==="./ledger"?loadLocalModule(path.join(ROOT,"src/hardened/ledger.ts")):specifier==="./source-member-authority"?sourceMembers:specifier==="./adapter"?adapterModule:specifier==="./emitter"?emitterModule
         :specifier==="./static-constants"?staticConstants:specifier==="../hardened-runtime/internal/AS3FileLocalIdentity"?loadLocalModule(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts")):specifier==="typescript-4-9"?ts:require(specifier),moduleValue,moduleValue.exports);
 const { assertLocalRuntimeDefinitionClosure, emitRuntimeTypeAuthority, loadMappedRuntimeTypeAuthority, localRuntimeTypeAuthoritySource,
     localRuntimeInterfaceAuthoritySource, emitRuntimeApplicationEntry } = moduleValue.exports;

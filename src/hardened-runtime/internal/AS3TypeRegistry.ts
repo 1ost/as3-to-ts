@@ -34,6 +34,15 @@ export interface AS3NativeObjectTraits {
     readonly sourceArtifactSha256: string;
 }
 
+export interface AS3StaticReflectionTraits {
+    readonly variables: readonly { readonly name: string; readonly type: string }[];
+}
+export interface AS3StaticReflectionDescriptor {
+    readonly qualifiedName: string;
+    readonly staticVariables: AS3StaticReflectionTraits["variables"];
+}
+const STATIC_REFLECTION = new WeakMap<Function, AS3StaticReflectionDescriptor>();
+
 export interface AS3ClassAuthorityEntry {
     readonly kind: "class";
     readonly qname: string;
@@ -41,6 +50,7 @@ export interface AS3ClassAuthorityEntry {
     readonly interfaces: readonly string[];
     readonly sourceSha256: string;
     readonly fileLocalScope?: AS3FileLocalClassScope;
+    readonly staticReflection?: AS3StaticReflectionTraits;
     readonly objectTraits?: AS3ObjectTraits;
     readonly nativeObjectTraits?: AS3NativeObjectTraits;
     readonly fields: readonly { readonly name: string; readonly policy: "zero" | "nan" | "false" | "null" | "undefined" }[];
@@ -421,7 +431,8 @@ function canonicalAuthorityMetadata(document: AS3TypeAuthorityDocument): string 
             ? { kind: entry.kind, qname: entry.qname, bases: entry.bases }
             : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
                 sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}),
-                ...(entry.fileLocalScope ? {fileLocalScope:entry.fileLocalScope} : {}) }),
+                ...(entry.fileLocalScope ? {fileLocalScope:entry.fileLocalScope} : {}),
+                ...(entry.staticReflection !== undefined ? {staticReflection:entry.staticReflection} : {}) }),
     });
 }
 
@@ -514,7 +525,7 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                 }, sealedClosure);
                 INTERFACE_TOKENS.set(entry.qname, token);
             } else if (entry.kind === "class") {
-                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), ...(entry.nativeObjectTraits ? ["nativeObjectTraits"] : []), ...(entry.fileLocalScope ? ["fileLocalScope"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
+                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), ...(entry.nativeObjectTraits ? ["nativeObjectTraits"] : []), ...(entry.fileLocalScope ? ["fileLocalScope"] : []), ...(entry.staticReflection !== undefined ? ["staticReflection"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
                     `AS3 class ${entry.qname}`);
                 if (entry.base !== null && (!seen.has(entry.base) || !CLASS_BY_QNAME.has(entry.base))) {
                     throw new TypeError(`AS3 class ${entry.qname} has a missing, cyclic, or out-of-order class base`);
@@ -550,6 +561,24 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                     throw new TypeError("AS3 file-local class identity differs from its generated source scope");
                 }
                 const reflectionName = scopedIdentity?.reflectionName ?? entry.qname;
+                if (entry.staticReflection !== undefined) {
+                    const reflection = entry.staticReflection;
+                    if (!reflection || typeof reflection !== "object") throw new TypeError("Invalid static reflection traits");
+                    exactKeys(reflection, ["variables"], "AS3 static reflection traits");
+                    if (!Array.isArray(reflection.variables)) throw new TypeError("Invalid static reflection variables");
+                    const names = new Set<string>();
+                    const variables = reflection.variables.map((variable: AS3StaticReflectionTraits["variables"][number]) => {
+                        exactKeys(variable, ["name", "type"], "AS3 static reflection variable");
+                        if (!stableRuntimeTypeName(variable.name) || !stableRuntimeTypeName(variable.type) || names.has(variable.name))
+                            throw new TypeError("Invalid or duplicate static reflection variable");
+                        names.add(variable.name);
+                        return Object.freeze({name:variable.name, type:variable.type});
+                    });
+                    const qualifiedName = scopedIdentity ? reflectionName :
+                        entry.qname.includes(".") ? entry.qname.slice(0, entry.qname.lastIndexOf(".")) + "::" + entry.qname.slice(entry.qname.lastIndexOf(".") + 1) : entry.qname;
+                    STATIC_REFLECTION.set(entry.constructor, Object.freeze({qualifiedName, staticVariables:Object.freeze(variables)}));
+                }
+
                 const predicate = entry.predicate;
                 let token: AS3TypeToken<object>;
                 token = createTypeToken<object>("class", reflectionName,
@@ -683,4 +712,12 @@ export function lookupDynamicConstruction(value:unknown):RuntimeConstructor | st
     if (value !== null && typeof value === "object" && TYPE_DETAILS.get(value)?.kind === "interface")
         return (value as AS3TypeToken<unknown>).name;
     return null;
+}
+
+/** Authenticated class identity only; no predicate, constructor or getter is invoked. */
+export function getAS3StaticReflectionDescriptor(value: unknown): AS3StaticReflectionDescriptor {
+    requireSealed();
+    const descriptor = typeof value === "function" && CLASS_TOKENS.has(value) ? STATIC_REFLECTION.get(value) : undefined;
+    if (!descriptor) throw new TypeError("AS3 class has no sealed static reflection authority");
+    return descriptor;
 }
