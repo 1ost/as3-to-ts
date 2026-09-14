@@ -80,7 +80,7 @@ interface LocalHeader {
     lambdaSignature: { parameters: SemanticParameter[]; returnType: SemanticType } | null;
 }
 
-interface SignatureTypeProof { ownerQName: string; member: LocalDeclarationMember; }
+interface SignatureTypeProof { ownerQName: string; member: LocalDeclarationMember; receiverQName?: string; }
 
 interface AdapterContext {
     packageFunction?: true;
@@ -644,10 +644,35 @@ function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefin
     const element=(name:string):string=>name.startsWith("Vector.<") && name.endsWith(">")
         ? element(name.slice(8,-1)) : name;
     const signatureNames=[proof.member.returnType,proof.member.fieldType,...proof.member.parameters.map(parameter=>parameter.type)];
+    // The used receiver may inherit the declaration without importing its owner.
+    // Follow only that receiver's authenticated base edges, never arbitrary
+    // dependency reachability or an unrelated imported class's ancestry.
+    const inheritedOwner = ():boolean => {
+        if (!proof.receiverQName || !owner || !members) return false;
+        const start=types.entriesByIdentity[`${current.entry.module}\u0000${proof.receiverQName}`];
+        if (!start || (start.nodeId !== current.entry.nodeId
+            && !current.entry.prerequisites.includes(start.nodeId)
+            && !imports.some(item=>item.authorityKind === "local" && item.localNodeId === start.nodeId))) return false;
+        const visiting=new Set<string>(),visited=new Set<string>();
+        const reaches=(entry:LocalTypeMapping):boolean => {
+            if (visiting.has(entry.nodeId) || visited.size >= 1024) return false;
+            if (entry.nodeId === owner.nodeId) return true;
+            if (visited.has(entry.nodeId)) return false;
+            visited.add(entry.nodeId);visiting.add(entry.nodeId);
+            const row=members.entriesByIdentity[`${current.entry.module}\u0000${entry.qname}`];
+            if (!row || row.status !== "complete" || !row.declaration) return false;
+            for (const base of row.declaration.baseQNames) {
+                const parent=types.entriesByIdentity[`${current.entry.module}\u0000${base}`];
+                if (parent && entry.prerequisites.includes(parent.nodeId) && reaches(parent)) return true;
+            }
+            visiting.delete(entry.nodeId);return false;
+        };
+        return reaches(start);
+    };
     if (!owner || !declaration || declaration.status !== "complete" || !declaration.declaration?.members.includes(proof.member)
         || !signatureNames.some(name=>name !== null && element(name) === typeName)
         || (owner.nodeId !== current.entry.nodeId && !current.entry.prerequisites.includes(owner.nodeId)
-            && !imports.some(item=>item.authorityKind === "local" && item.localNodeId === owner.nodeId))
+            && !imports.some(item=>item.authorityKind === "local" && item.localNodeId === owner.nodeId) && !inheritedOwner())
         || (privateTarget ? privateTarget.owner.nodeId !== (privateOwner?.owner.nodeId ?? owner.nodeId)
             : (owner.nodeId !== target.nodeId && !owner.prerequisites.includes(target.nodeId))))
         fail("HARDENED_SIGNATURE_TYPE_EDGE","signature type lacks its authenticated owner, member or dependency edge: "+typeName,node);
@@ -1853,7 +1878,7 @@ function assertLocalCallArguments(member: LocalDeclarationMember | null, argumen
 }
 
 function assertLocalMethodCall(member: LocalDeclarationMember, argumentsList: SemanticExpression[],
-    argumentNodes: TreeNode[], context: AdapterContext, node: TreeNode, ownerQName?: string): void {
+    argumentNodes: TreeNode[], context: AdapterContext, node: TreeNode, ownerQName?: string, receiverQName?: string): void {
     const minimum = member.parameters.filter(parameter => !parameter.optional && !parameter.rest).length;
     if (argumentsList.length < minimum
         || (!member.parameters.some(parameter => parameter.rest) && argumentsList.length > member.parameters.length)) {
@@ -1865,7 +1890,7 @@ function assertLocalMethodCall(member: LocalDeclarationMember, argumentsList: Se
             fail("HARDENED_LOCAL_CALL_TYPE",
                 `inherited local method argument ${index} does not match its authenticated type`, argumentNodes[index] || node);
         }
-        const expected = authoritySemanticType(parameter.type, context, argumentNodes[index]!, ownerQName ? {ownerQName,member} : undefined);
+        const expected = authoritySemanticType(parameter.type, context, argumentNodes[index]!, ownerQName ? {ownerQName,member,...(receiverQName ? {receiverQName} : {})} : undefined);
         try {
             argumentsList[index] = adaptAssignmentValue(expected, argument, context, argumentNodes[index]!);
         } catch (error) {
@@ -2069,7 +2094,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             assertLocalReceiverVisibility(readable[0]!, lookup.ownerQName!, receiverQName, context, node);
             return authoritySemanticType(readable[0]!.kind === "field"
                 ? readable[0]!.fieldType! : readable[0]!.returnType!, context, node,
-                {ownerQName: lookup.ownerQName!, member: readable[0]!});
+                {ownerQName: lookup.ownerQName!, member: readable[0]!, receiverQName});
         }
         if (expression.capabilitySource !== null) {
             const member = intrinsicMember(context, expression.capabilitySource, "read", expression.name);
@@ -2256,7 +2281,7 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
             assertLocalReceiverVisibility(writable[0]!, lookup.ownerQName!, receiverQName, context, node);
             return authoritySemanticType(writable[0]!.kind === "field"
                 ? writable[0]!.fieldType! : writable[0]!.parameters[0]!.type, context, node,
-                {ownerQName: lookup.ownerQName!, member: writable[0]!});
+                {ownerQName: lookup.ownerQName!, member: writable[0]!, receiverQName});
         }
         if (expression.capabilitySource !== null) {
             const member = intrinsicMember(context, expression.capabilitySource, "write", expression.name);
@@ -4282,8 +4307,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const methods = lookup.members.filter(member => member.kind === "method");
             if (lookup.ownerQName === callee.capabilitySource && methods.length === 1) {
                 assertLocalReceiverVisibility(methods[0]!, lookup.ownerQName!, receiverQName, context, node);
-                assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node, lookup.ownerQName!);
-                resultType = authoritySemanticType(methods[0]!.returnType!, context, node, {ownerQName:lookup.ownerQName!,member:methods[0]!});
+                assertLocalMethodCall(methods[0]!, args, node.children[1]!.children, context, node, lookup.ownerQName!, receiverQName);
+                resultType = authoritySemanticType(methods[0]!.returnType!, context, node, {ownerQName:lookup.ownerQName!,member:methods[0]!,receiverQName});
             } else if (methods.length === 0) {
                 const mapping = terminalFlashMemberMapping(context, lookup.terminalFlashQNames,
                     "call", callee.name, node);
