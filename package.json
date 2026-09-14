@@ -14,7 +14,7 @@
     "test:simple": "node tests/simple/SimpleTests.js",
     "test:compound": "node tests/compound/CompoundTests.js",
     "test:int-uint-assignment": "node tests/int-uint-assignment/IntUintAssignmentLoweringTests.js && node tests/int-uint-assignment/IndexedPostfixAssignmentTests.js",
-    "test:native-namespaces": "node tests/native-namespaces/NativeNamespacesTests.js && node tests/native-namespaces/NativeNamespacesTests.js --es5",
+    "test:native-namespaces": "node tests/native-namespaces/NativeNamespacesTests.js && node tests/native-namespaces/NativeNamespacesTests.js --es5 && node tests/native-namespaces/InheritedNamespacesTests.js",
     "test:native-constructors": "node tests/native-constructors/NativeConstructorsTests.js",
     "test:simple:win": "node %NODE_DEBUG_OPTION% tests/simple/SimpleTests.js",
     "tsc": "tsc",

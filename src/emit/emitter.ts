@@ -1494,13 +1494,25 @@ function emitObjectValue(emitter:Emitter, node:Node):void {
 }
 
 function emitNameTypeInit(emitter:Emitter, node:Node):void {
-	if (!emitter.namespaces.member(node.findChild(NodeKind.NAME))) emitter.declareInScope({
+	const namespaceMember = emitter.namespaces.member(node.findChild(NodeKind.NAME));
+	if (!namespaceMember) emitter.declareInScope({
 		name: node.findChild(NodeKind.NAME).text,
 		type: getDeclarationType(emitter, node),
 		as3Type: getAS3DeclarationType(node)
 	});
 	emitter.catchup(node.start);
 	visitNodes(emitter, node.children);
+	if (namespaceMember && !node.findChild(NodeKind.INIT)) {
+		// AS3 slot defaults use source types before Number/int/uint are mapped to TS.
+		// Keep this bounded to namespace fields; locals and parameters have separate
+		// initialization rules and are not admitted through this member authority.
+		const type = getAS3DeclarationType(node);
+		const value = type === 'int' || type === 'uint' ? '0'
+			: type === 'Number' ? '(0 / 0)' : type === 'Boolean' ? 'false'
+			: !type || type === '*' ? 'void 0' : 'null';
+		emitter.catchup(node.end);
+		emitter.insert(' = ' + value);
+	}
 }
 
 function emitMethod(emitter:Emitter, node:Node):void {

@@ -1,6 +1,7 @@
 # Bounded native namespace lowering
 
-Run `npm run tsc` and `npm run test:native-namespaces`.
+Run `npm run tsc`, `npm run test:native-namespaces`, and
+`node tests/native-namespaces/InheritedNamespacesTests.js`.
 
 The ordinary `emit(ast, source, options)` API accepts `namespaceUris`, an exact
 map from imported AS3 namespace qualified names to their literal source URIs:
@@ -23,22 +24,61 @@ member keys canonicalize `(URI, member name)`. Qualified fields and instance
 methods remain separate from public properties with the same spelling. Method
 closures use the existing shared compiler decorators, including Symbol keys.
 
-The initial supported member scope is classes without explicit inheritance,
-single writable fields (including static fields), and instance methods.
+The supported member scope is single writable fields (including own static
+fields) and instance methods in proven ordinary classes. Explicit inheritance
+is accepted only when the entire base chain resolves to unambiguous same-file
+ordinary class declarations. URI/name identity is unchanged across that chain.
+Each base must already precede its derived declaration in source order. A later
+base fails explicitly pending class scheduling; static initializers are never
+silently reordered.
+The derived object retains native prototype inheritance and the existing shared
+decorators bind inherited method closures to the actual instance.
 Selectors may use `this`, the containing class, a local/parameter typed as a
-same-file ordinary class, or an implicit receiver for a declared own qualified
-member. Known int/uint field assignments retain integer coercion, including a
-receiver variable typed as a same-file class. Parenthesized references preserve
+same-file ordinary class, or an implicit receiver for a proven qualified member.
+Instance fields and methods may be inherited through multiple local bases.
+Static fields remain own-class-only; inheritance does not silently use JS's
+inherited static property lookup. Known int/uint field assignments retain integer
+coercion from the original declaring base, including a receiver variable typed
+as a derived class. Parenthesized references preserve
 the same destination coercion and mutation checks; comma expressions are not
 treated as transparent references.
 
 Unresolved/ambiguous namespaces, local namespace scopes, dynamic namespace
 values, open-set implicit member inference, complex/unproven receivers, private
 namespaces, namespace accessors/consts, static namespace method closures,
-inheritance, escaped/empty/implicit URIs, and E4X in namespace-bearing sources
+unresolved/imported base chains, inheritance cycles, dynamic classes, namespace
+overrides/redeclarations, explicit `super` namespace selectors,
+escaped/empty/implicit URIs, and E4X in namespace-bearing sources
 fail explicitly. Namespace delete, increment/decrement, and method writes also
 fail explicitly. These are future compiler work, not namespace aliases to public
 members. Complete cross-file binding still requires source/provider analysis.
+
+`InheritedNamespacesTests.js` executes the actual compiler-distributed
+decorators with ES5 and ES2015 output: three native class levels, constructor
+effects, inherited fields and methods, URI aliases, public/other-namespace
+spelling collisions, int/uint assignments, detached closure identity and
+receiver retention, base-typed versus derived-typed receivers, and per-instance
+storage.
+Uninitialized namespace slots now emit their AS3 source-type defaults: int/uint
+zero, Number NaN, Boolean false, typed references (including Object/String)
+null, and wildcard/untyped undefined. The executable fixture checks own,
+inherited, and static slots, constructor reads, initialization expressions
+after the default declarations, and actual own-property storage. Explicit
+initializers remain untouched. This does not establish full AVM allocation
+timing: in particular, forward field-initializer reads or a base constructor
+observing not-yet-initialized derived slots need separate allocation lowering.
+Nineteen explicit unsupported-source cases retain the boundary, including a
+forward base declaration.
+Expected behavior follows ordinary AS3 inheritance and explicit namespace
+selection; this fixture does not claim a new actual Flash oracle run or a
+cross-file/provider binding.
+
+In particular, maintained OP2 ArrayCollection extends imported
+`flash.utils.Proxy` and declares namespace overrides. It continues to reject
+explicitly: neither the presence of its source nor this ordinary inheritance
+extension establishes Proxy dispatch, its methods' provider bindings, or
+ArrayCollection runtime readiness. A 12/13 maintained syntax-probe result must
+not be relabeled 13/13 on this basis.
 
 The TLF-shaped executable fixture covers ImportExportConfiguration's three
 fields and six selectors in isolation. Both ES5 and ES2015 targets execute the

@@ -22,12 +22,18 @@ export class NativeNamespaces {
     private members = new Map<Node, NamespaceMember>();
     private keys = new Map<string, string>();
     private declarations = new Map<string, Node>();
+    private classes = new Map<string, Node[]>();
     private configured: {[qname: string]: string};
 
     constructor(private root: Node, private source: string, namespaceUris?: {[qname: string]: string}) {
         if (namespaceUris !== undefined && (!namespaceUris || typeof namespaceUris !== 'object' || Array.isArray(namespaceUris)))
             this.fail('namespaceUris must be a QName-to-URI object');
         this.configured = namespaceUris || {};
+        this.walk(root, node => {
+            if (node.kind !== NodeKind.CLASS) return;
+            const qname = this.packageName(node) + node.findChild(NodeKind.NAME).text;
+            this.classes.set(qname, (this.classes.get(qname) || []).concat(node));
+        });
         Object.keys(this.configured).forEach(qname => {
             if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(qname)
                 || typeof this.configured[qname] !== 'string' || !this.configured[qname])
@@ -59,7 +65,9 @@ export class NativeNamespaces {
             if (node.kind === NodeKind.GET || node.kind === NodeKind.SET)
                 this.fail('namespace accessors require separate lowering');
             if (node.kind === NodeKind.CONST_LIST) this.fail('namespace const requires write protection');
-            if (owner.findChild(NodeKind.EXTENDS)) this.fail('namespace member inheritance requires separate lowering');
+            this.hierarchy(owner);
+            if (mods.children.some(mod => mod.text === 'override'))
+                this.fail('namespace member overrides require separate lowering');
             if (node.kind === NodeKind.FUNCTION && mods.children.some(mod => mod.text === 'static'))
                 this.fail('static namespace method closures require separate lowering');
             const names = node.kind === NodeKind.VAR_LIST
@@ -73,6 +81,13 @@ export class NativeNamespaces {
                     && previous.static === member.static) this.fail('duplicate namespace member: ' + member.name);
             });
             this.members.set(names[0], member);
+        });
+        this.members.forEach(member => {
+            if (member.static) return;
+            this.hierarchy(member.owner).slice(1).forEach(base => {
+                if (this.findMember(base, member.uri, member.name, false, true))
+                    this.fail('namespace member redeclaration in an inherited class: ' + member.name);
+            });
         });
         this.walk(root, node => {
             if (node.kind === NodeKind.USE) this.resolve(node, node.text);
@@ -107,6 +122,48 @@ export class NativeNamespaces {
         const owner = this.ancestor(node, NodeKind.PACKAGE);
         const name = owner && owner.findChild(NodeKind.NAME).text;
         return name ? name + '.' : '';
+    }
+
+    /** Only lexical same-file class declarations are inheritance authority. */
+    private classType(node: Node, name: string): Node {
+        if (!name) return null;
+        const matches: Node[] = [];
+        this.candidates(node, name).forEach(qname => {
+            (this.classes.get(qname) || []).forEach(value => {
+                if (matches.indexOf(value) < 0) matches.push(value);
+            });
+        });
+        if (matches.length > 1) this.fail('ambiguous namespace receiver/base class: ' + name);
+        return matches[0] || null;
+    }
+
+    private hierarchy(owner: Node, active: Node[] = []): Node[] {
+        if (!owner) return [];
+        if (active.indexOf(owner) >= 0) this.fail('cyclic namespace class inheritance');
+        const mods = owner.findChild(NodeKind.MOD_LIST);
+        if (mods && mods.children.some(mod => mod.text === 'dynamic'))
+            this.fail('dynamic namespace receiver classes require separate lowering');
+        const extension = owner.findChild(NodeKind.EXTENDS);
+        if (!extension) return [owner];
+        const baseName = extension.text;
+        const base = this.classType(owner, baseName);
+        if (!base) this.fail('namespace inheritance requires a proven same-file ordinary base: ' + baseName);
+        if (base.start > owner.start)
+            this.fail('forward namespace base declaration requires class scheduling: ' + baseName);
+        return [owner].concat(this.hierarchy(base, active.concat(owner)));
+    }
+
+    private findMember(owner: Node, uri: string, name: string, isStatic: boolean, ownOnly = false): NamespaceMember {
+        const owners = ownOnly || isStatic ? [owner] : this.hierarchy(owner);
+        for (const candidate of owners) {
+            let found: NamespaceMember = null;
+            this.members.forEach(member => {
+                if (member.owner === candidate && member.uri === uri && member.name === name && member.static === isStatic)
+                    found = member;
+            });
+            if (found) return found;
+        }
+        return null;
     }
 
     private candidates(node: Node, name: string): string[] {
@@ -172,22 +229,16 @@ export class NativeNamespaces {
         let implicitMember: NamespaceMember = null;
         if (!receiver) {
             const owner = this.ancestor(node, NodeKind.CLASS);
-            this.members.forEach(member => {
-                if (member.owner === owner && member.uri === uri && member.name === name) {
-                    if (implicitMember) this.fail('ambiguous implicit namespace receiver');
-                    implicitMember = member;
-                }
-            });
-            if (!implicitMember) this.fail('implicit namespace receiver requires a declared own member: ' + name);
+            const instanceMember = this.findMember(owner, uri, name, false);
+            const staticMember = this.findMember(owner, uri, name, true);
+            if (instanceMember && staticMember) this.fail('ambiguous implicit namespace receiver');
+            implicitMember = instanceMember || staticMember;
+            if (!implicitMember) this.fail('implicit namespace receiver requires a proven member: ' + name);
         } else if (receiver.kind === NodeKind.IDENTIFIER) {
             const owner = this.ancestor(node, NodeKind.CLASS);
             if (owner && (receiver.text === 'this' || receiver.text === owner.findChild(NodeKind.NAME).text)) {
-                let found = false;
-                this.members.forEach(member => {
-                    if (member.owner === owner && member.uri === uri && member.name === name
-                        && member.static === (receiver.text !== 'this')) found = true;
-                });
-                if (!found) this.fail('qualified receiver requires a declared own namespace member: ' + name);
+                if (!this.findMember(owner, uri, name, receiver.text !== 'this'))
+                    this.fail('qualified receiver requires a proven namespace member: ' + name);
             }
         }
         return { uri, name, receiver, implicitMember, qualifier };
@@ -200,24 +251,15 @@ export class NativeNamespaces {
         if (!owner || access.receiver.kind !== NodeKind.IDENTIFIER) return null;
         const receiver = access.receiver.text;
         if (receiver !== 'this' && receiver !== owner.findChild(NodeKind.NAME).text) return null;
-        let result: NamespaceMember = null;
-        this.members.forEach(member => {
-            if (member.owner === owner && member.uri === access.uri && member.name === access.name
-                && member.static === (receiver !== 'this')) result = member;
-        });
-        return result;
+        return this.findMember(owner, access.uri, access.name, receiver !== 'this');
     }
 
     accessMember(node: Node, receiverType: string): NamespaceMember {
         const own = this.ownAccessMember(node);
         if (own) return own;
         const access = this.access(node);
-        let result: NamespaceMember = null;
-        this.members.forEach(member => {
-            if (member.owner.findChild(NodeKind.NAME).text === receiverType && member.uri === access.uri
-                && member.name === access.name && !member.static) result = member;
-        });
-        return result;
+        const receiverClass = this.classType(node, receiverType);
+        return receiverClass && this.findMember(receiverClass, access.uri, access.name, false);
     }
 
     checkReceiver(node: Node, receiverType: string): void {
@@ -228,23 +270,19 @@ export class NativeNamespaces {
             this.fail('complex namespace receiver requires type-directed lowering');
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (owner && (receiver.text === 'this' || receiver.text === owner.findChild(NodeKind.NAME).text)) return;
-        let knownClass = false;
-        this.walk(this.root, candidate => {
-            if (candidate.kind === NodeKind.CLASS && candidate.findChild(NodeKind.NAME).text === receiverType
-                && !candidate.findChild(NodeKind.EXTENDS)) this.members.forEach(member => {
-                    if (member.owner === candidate && member.uri === access.uri && member.name === access.name && !member.static)
-                        knownClass = true;
-                });
-        });
-        if (!knownClass) this.fail('namespace receiver type is not a proven ordinary class: ' + receiver.text);
+        const receiverClass = this.classType(node, receiverType);
+        if (!receiverClass || !this.findMember(receiverClass, access.uri, access.name, false))
+            this.fail('namespace receiver type is not a proven ordinary class: ' + receiver.text);
     }
 
     checkDot(node: Node): void {
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (!owner) return;
         const name = node.children[1].text;
+        if (!Array.from(this.members.values()).some(member => member.name === name)) return;
+        const owners = this.hierarchy(owner);
         this.members.forEach(member => {
-            if (member.owner !== owner || member.name !== name) return;
+            if (owners.indexOf(member.owner) < 0 || member.name !== name) return;
             const pkg = this.ancestor(node, NodeKind.PACKAGE);
             const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
                 .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
@@ -260,8 +298,10 @@ export class NativeNamespaces {
             || Object.prototype.hasOwnProperty.call(this.configured, qname));
         if (namespaceMatches.length) this.fail('runtime Namespace values are not lowered: ' + node.text);
         const owner = this.ancestor(node, NodeKind.CLASS);
+        if (!Array.from(this.members.values()).some(member => member.name === node.text)) return;
+        const owners = owner ? this.hierarchy(owner) : [];
         this.members.forEach(member => {
-            if (member.owner === owner && member.name === node.text)
+            if (owners.indexOf(member.owner) >= 0 && member.name === node.text)
                 this.fail('implicit namespace member requires an explicit selector: ' + node.text);
         });
     }
