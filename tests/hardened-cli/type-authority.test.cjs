@@ -363,3 +363,32 @@ test("v2 mapped interfaces retain nominal class relationships and reject invalid
         {...nativeInterface,constructorExport:"IEventDispatcher"},{...dispatcher,kind:"unknown"}])
         assert.throws(()=>load([value]),error=>error.code==="HARDENED_TYPE_AUTHORITY_PREDICATE");
 });
+
+test("v2 composed reference predicate unions require exact authenticated descendant identities",()=>{
+    const row=(name,parents=[])=>({kind:"class",sourceQName:`flash.display.${name}`,targetCapabilityId:"api.flash.display",
+        targetModule:`src/layaAir/flash/display/${name}.ts`,constructorExport:name,constructorSignature:`typeof ${name}`,
+        constructSignatures:[`new (): ${name}`],predicateExport:`is${name}Reference`,
+        predicateSignature:`(value: unknown) => value is ${name}`,heritageClosure:parents,interfaces:[],moduleSha256:"a".repeat(64)});
+    const base=row("Base"),middle=row("Middle",[base.sourceQName]),stage=row("Stage",[middle.sourceQName,base.sourceQName]);
+    const load=(types,schema="laya-flash-runtime-type-predicates@2")=>{
+        const bytes=JSON.stringify({schema,hashMode:"canonical-lf-utf8",types});
+        return loadMappedRuntimeTypeAuthority(JSON.stringify({schema:"as3-application-runtime-type-authority-lock@1",
+            predicateAuthorityCanonicalLfSha256:sha256(bytes),predicateAuthorityEntryCount:types.length}),bytes,types.map(item=>item.sourceQName),sha256);
+    };
+    const union={...base,predicateSignature:"(value: unknown) => value is Base | Stage"};
+    const sources=load([union,stage,middle]);
+    assert.equal(sources[0].module,"laya/flash/display/Base");
+    assert.equal(sources[0].constructorExport,"Base");assert.equal(sources[0].predicateExport,"isBaseReference");
+    assert.equal(sources[1].base,middle.sourceQName);
+    assert.deepEqual(load([base,stage,middle]),sources);
+    assert.deepEqual(load([{...union,predicateSignature:"(value: unknown) => value is Stage | Base"},stage,middle]),sources);
+    for(const signature of ["Base | Base","Stage","Base | Other","Base | unknown","Base | any","Base | null",
+        "Base | undefined","Base | Stage[]","Base | Array<Stage>","Base | alias.Stage","Base|Stage","Base | Stage | Stage"]){
+        const candidate={...union,predicateSignature:"(value: unknown) => value is "+signature};
+        assert.throws(()=>load([candidate,stage,middle,row("Other")]),error=>error.code==="HARDENED_TYPE_AUTHORITY_PREDICATE",signature);
+    }
+    assert.throws(()=>load([union,{...stage,heritageClosure:[]},middle]),error=>error.code==="HARDENED_TYPE_AUTHORITY_PREDICATE");
+    assert.throws(()=>load([union,stage,middle,{...row("Stage"),sourceQName:"other.Stage"}]),error=>error.code==="HARDENED_TYPE_AUTHORITY_PREDICATE");
+    assert.throws(()=>load([union,stage,{...middle,heritageClosure:[]}]),error=>error.code==="HARDENED_TYPE_AUTHORITY_HERITAGE");
+    assert.throws(()=>load([union,{...stage,heritageClosure:[base.sourceQName,stage.sourceQName]},middle]),error=>error.code==="HARDENED_TYPE_AUTHORITY_HERITAGE");
+});

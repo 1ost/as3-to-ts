@@ -46,6 +46,60 @@ def fixture_flash_imports(all_imports, retained_qnames):
     return sorted(flash)
 
 
+def predicate_reference_closure(document, roots):
+    """Select existing rows including exact union predicates' nominal descendants.
+
+    Rows are copied unchanged; the compiler still verifies the pinned full schema.
+    No target member or source class is invented by this dependency discovery.
+    """
+    rows = document['types']
+    by_name = {row['sourceQName']: row for row in rows}
+    if len(by_name) != len(rows):
+        raise ValueError("Duplicate predicate source identity")
+    by_export = {}
+    for row in rows:
+        if row.get('kind') != 'interface':
+            by_export.setdefault(row['constructorExport'], []).append(row)
+    dependencies = {}
+    for qname, row in by_name.items():
+        parents = row['heritageClosure']
+        if not isinstance(parents, list) or len(set(parents)) != len(parents) or qname in parents:
+            raise ValueError("Invalid predicate heritage")
+        if any(parent not in by_name for parent in parents):
+            raise ValueError("Missing predicate heritage")
+        if row.get('kind') != 'interface' and parents:
+            if by_name[parents[0]].get('kind') == 'interface' or by_name[parents[0]]['heritageClosure'] != parents[1:]:
+                raise ValueError("Inconsistent predicate heritage")
+        dependencies[qname] = parents + row.get('interfaces', [])
+    for qname, row in by_name.items():
+        if row.get('kind') == 'interface':
+            continue
+        signature = row.get('predicateSignature', '')
+        match = re.fullmatch(r"\(value: unknown\) => value is ([A-Za-z_$][A-Za-z0-9_$]*(?: \| [A-Za-z_$][A-Za-z0-9_$]*)*)", signature)
+        terms = match[1].split(' | ') if match else []
+        if not terms or len(set(terms)) != len(terms) or row['constructorExport'] not in terms:
+            raise ValueError("Invalid predicate reference union")
+        if len(terms) == 1:
+            continue
+        if document['schema'] != 'laya-flash-runtime-type-predicates@2':
+            raise ValueError("Reference unions require v2 predicates")
+        for term in terms:
+            matches = by_export.get(term, [])
+            if len(matches) != 1 or (matches[0]['sourceQName'] != qname and qname not in matches[0]['heritageClosure']):
+                raise ValueError("Unproved predicate reference descendant: " + term)
+            dependencies[qname].append(matches[0]['sourceQName'])
+    selected, pending = set(), [q for q in roots if q in by_name]
+    while pending:
+        qname = pending.pop()
+        if qname in selected:
+            continue
+        if qname not in by_name:
+            raise ValueError("Missing predicate dependency: " + qname)
+        selected.add(qname)
+        pending.extend(dependencies[qname])
+    return selected
+
+
 def resolve_fixture_target(qname, target_doc, predicates, laya, proof_inputs):
     name = qname.rsplit('.', 1)[-1]
     authority = predicates.get(qname)
@@ -330,14 +384,7 @@ def main():
             except ValueError: return False
             return True
         imports = native_api.native_type_closure(imports, native_signatures, used_names, has_target)
-    selected, pending = set(), [q for q in imports if q in by_qname]
-    while pending:
-        q = pending.pop()
-        if q in selected:
-            continue
-        selected.add(q)
-        pending.extend(by_qname[q]['heritageClosure'])
-        pending.extend(by_qname[q].get('interfaces', []))
+    selected = predicate_reference_closure(original, imports)
     predicates = {**original, 'types': [r for r in original['types'] if r['sourceQName'] in selected]}
     files['runtimeTypePredicates'] = write(out / 'predicates.json', predicates)
     files['runtimeTypeAuthorityLock'] = write(out / 'runtime-lock.json', {

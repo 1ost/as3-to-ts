@@ -157,7 +157,8 @@ export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: 
         } else if ((version2 && row.kind !== "class") || typeof row.constructorExport !== "string"
             || !identifier(row.constructorExport) || typeof row.predicateExport !== "string" || !identifier(row.predicateExport)
             || row.constructorSignature !== `typeof ${row.constructorExport}`
-            || row.predicateSignature !== `(value: unknown) => value is ${row.constructorExport}`
+            || typeof row.predicateSignature !== "string"
+            || (!version2 && row.predicateSignature !== `(value: unknown) => value is ${row.constructorExport}`)
             || !Array.isArray(row.constructSignatures) || row.constructSignatures.length === 0
             || row.constructSignatures.some(item => typeof item !== "string" || !stableName(item))
             || (version2 && !names(row.interfaces))) {
@@ -196,6 +197,27 @@ export function loadMappedRuntimeTypeAuthority(lockJson: string, authorityJson: 
         active.delete(name); visited.add(name);
     };
     byName.forEach(row => visit(row.sourceQName));
+    // Check predicate unions only after every source ancestry row is validated.
+    // A composed native descendant can share source identity without pretending
+    // that its target implementation has JavaScript inheritance from the base.
+    byName.forEach(row => {
+        if (row.kind === "interface") return;
+        const prefix = "(value: unknown) => value is ";
+        const terms = row.predicateSignature.startsWith(prefix)
+            ? row.predicateSignature.slice(prefix.length).split(" | ") : [];
+        if (terms.length === 0 || terms.some(term => !identifier(term))
+            || new Set(terms).size !== terms.length || !terms.includes(row.constructorExport))
+            throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PREDICATE", `mapped runtime predicate ${row.sourceQName} has invalid reference targets`);
+        if (terms.length === 1) return; // Preserve the exact legacy constructor predicate.
+        for (const term of terms) {
+            const matches = [...byName.values()].filter(candidate => candidate.kind !== "interface"
+                && candidate.constructorExport === term);
+            if (matches.length !== 1
+                || (matches[0]!.sourceQName !== row.sourceQName
+                    && !matches[0]!.heritageClosure.includes(row.sourceQName)))
+                throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_PREDICATE", `mapped runtime predicate ${row.sourceQName} contains an unproved descendant ${term}`);
+        }
+    });
     return Object.freeze(Array.from(byName.values()).map(row => row.kind === "interface"
         ? authenticatedSource({kind: "interface" as const, qname: row.sourceQName, bases: Object.freeze([...row.heritageClosure])})
         : authenticatedSource({ kind: "class" as const,
