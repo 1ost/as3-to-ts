@@ -977,9 +977,9 @@ function findTargetCapability(target: { [key: string]: unknown }, mapping: Capab
             && mapping.targetMember.scope === "static"
             && mapping.targetMember.name === mapping.targetExport
             && Array.isArray(obligation.constructors)
-            && obligation.constructors.length === 1
-            && obligation.constructors[0] === mapping.targetMember.signature;
-        const ordinary = Array.isArray(obligation.members) && obligation.members.some((member: unknown) => isObject(member)
+            && obligation.constructors.every((signature: unknown) => typeof signature === "string")
+            && obligation.constructors.filter((signature: string) => signature === mapping.targetMember!.signature).length === 1;
+        const ordinary = mapping.targetMember.kind !== "constructor" && Array.isArray(obligation.members) && obligation.members.some((member: unknown) => isObject(member)
             && member.name === mapping.targetMember!.name && member.kind === mapping.targetMember!.kind
             && member.scope === mapping.targetMember!.scope && member.signature === mapping.targetMember!.signature
             && (mapping.sourceMember?.access !== "write" || member.readonly !== true)
