@@ -567,7 +567,25 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
             && mapping.sourceMember.name === "leading" && mapping.targetMember.name === "leading"
             && mapping.sourceMember.access !== "call" && mapping.sourceRoles[0] === "instance-member"
             && mapping.targetMember.kind === "get+set" && mapping.targetMember.signature === "get number | null; set unknown";
-        if (!textProperty && !leadingProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
+        const formatType: {[name:string]:string} = {font:"string",size:"number",color:"number",bold:"boolean",
+            italic:"boolean",underline:"boolean",url:"string",target:"string",align:"string",leftMargin:"number",
+            rightMargin:"number",indent:"number",leading:"number",blockIndent:"number",bullet:"boolean",
+            kerning:"boolean",letterSpacing:"number",tabStops:"number[]",display:"string"};
+        const formatName=mapping.sourceMember.name;
+        const expectedFormatType=formatType[formatName];
+        const pair=/^get (.+); set (.+)$/.exec(mapping.targetMember.signature);
+        const formatSignature=pair ? pair[mapping.sourceMember.access === "read" ? 1 : 2] : mapping.targetMember.signature;
+        const formatProperty=mapping.sourceQName === "flash.text.TextFormat"
+            && mapping.targetModule === "src/layaAir/flash/text/TextFormat.ts" && mapping.targetExport === "TextFormat"
+            && mapping.sourceRoles.length === 1 && mapping.sourceRoles[0] === "instance-member"
+            && mapping.targetMember.scope === "instance" && mapping.targetMember.name === formatName
+            && ["property","get","set","get+set"].includes(mapping.targetMember.kind)
+            && (mapping.sourceMember.access === "read" || mapping.sourceMember.access === "write" && ["font","size"].includes(formatName))
+            && expectedFormatType !== undefined
+            && mappedPropertyType(mapping.sourceMember.signature,mapping.sourceMember.access)
+                === (expectedFormatType === "string" ? "string" : expectedFormatType === "number[]" ? "Array" : "Object")
+            && [expectedFormatType,expectedFormatType+" | null","null | "+expectedFormatType].includes(formatSignature!);
+        if (!textProperty && !leadingProperty && !formatProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
             || (mapping.sourceQName === "flash.text.TextField" ? mapping.sourceMember.name === "TextField"
                 ? mapping.sourceRoles[0] !== "constructor" : mapping.sourceRoles[0] !== "instance-member"
                 : mapping.sourceRoles[0] !== "constructor" || mapping.sourceMember.name !== mapping.targetExport))) {

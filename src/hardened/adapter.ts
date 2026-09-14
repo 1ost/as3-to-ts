@@ -1970,6 +1970,9 @@ function reflectionClassArgument(expression:SemanticExpression, context:AdapterC
             const name=member.fieldType;
             if (!name || name.startsWith("FilePrivate(") || name.startsWith("Vector.<")) return false;
             if (primitive.includes(name) || context.runtimeReferenceParentsByQName.has(name)) return true;
+            const mapped=context.mappingsBySource[name];
+            if (mapped && mapped.sourceQName === name && mapped.sourceMember === null
+                && mapped.sourceRoles.includes("import") && ["class","interface"].includes(mapped.targetKind)) return true;
             const type=contextLocalType(context,context.resolveCurrentLocal!().entry.module,name);
             return !!type && ["class","interface"].includes(type.typeKind) && type.importable;
         });
@@ -2835,6 +2838,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (runtimeImport?.authorityKind === "intrinsic" && runtimeImport.sourceQualifiedName === "flash.utils.ByteArray"
             && !referenceCoercionForType(targetType,context))
             fail("HARDENED_BYTEARRAY_TYPE_AUTHORITY", "ByteArray runtime type queries require native SDK authority", rawTarget);
+        if (runtimeImport?.authorityKind === "flash"
+            && !context.runtimeReferenceParentsByQName.has(runtimeImport.sourceQualifiedName))
+            fail("HARDENED_RUNTIME_TYPE_IDENTITY", "mapped Flash runtime type query requires its authenticated predicate registration: "
+                + runtimeImport.sourceQualifiedName, rawTarget);
         const runtimePrimitives = new Set(["int", "uint", "Number", "Boolean", "String", "Object", "Array", "Class", "Function"]);
         let targetKind: "primitive" | "class" | "interface" | "vector";
         let runtimeName = targetType.sourceName;

@@ -345,9 +345,14 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
                 if primitive:
                     return target == primitive or (primitive == 'string' and target in ('string | null', 'null | string')) or (native['scope'] == 'static' and native['access'] == 'read'
                         and primitive == 'string' and target.startswith('"'))
-                if (qname == 'flash.text.TextFormat' and native['name'] == 'leading'
-                        and native['access'] == 'read' and native['type'] == 'Object'):
-                    return target == 'number | null'
+                # TextFormat's native Object slots retain their source semantics;
+                # only evidenced reads and the locale size assignment are admitted.
+                if qname == 'flash.text.TextFormat' and native['type'] == 'Object':
+                    numeric = {'size', 'color', 'indent', 'leading', 'leftMargin', 'rightMargin', 'blockIndent', 'letterSpacing'}
+                    boolean = {'bold', 'italic', 'underline', 'bullet', 'kerning'}
+                    expected = 'number' if native['name'] in numeric else 'boolean' if native['name'] in boolean else None
+                    if expected and (native['access'] == 'read' or native['name'] == 'size'):
+                        return target in (expected, expected + ' | null', 'null | ' + expected)
                 if native['type'] == 'Array': return bool(re.fullmatch(r'(?:readonly )?[A-Za-z_$][\w$]*(?:\[\])(?: \| null)?', target))
                 if native['type'].startswith('flash.'):
                     return bool(re.search(r'\b' + re.escape(native['type'].rsplit('.', 1)[-1]) + r'\b', target))

@@ -208,6 +208,30 @@ public class Base {
         row['members'].append(dict(target))
         self.assertEqual(api.map_native_members(*args), ([], []))
 
+    def test_text_format_object_slots_preserve_native_type_and_bound_access(self):
+        native = dict(name='size', access='read', scope='instance', constructor=False,
+            signature='public function get size() : Object', minArgs=0, maxArgs=0, type='Object', parameters=[])
+        target = dict(name='size', kind='get+set', scope='instance', signature='number | null')
+        row = dict(module='TextFormat.ts', export='TextFormat', kind='class', signature='typeof TextFormat', members=[target])
+        def mapped(qname='flash.text.TextFormat'):
+            return api.map_native_members(qname, ['instance-member'], row, 'api.flash.text',
+                {qname: {'base': None, 'members': [native]}}, {native['name']})
+        for name, expected in [('size', 'number'), ('color', 'number'), ('bold', 'boolean'), ('kerning', 'boolean')]:
+            native['name'] = target['name'] = name
+            for signature in [expected, expected+' | null', 'null | '+expected]:
+                target['signature'] = signature
+                mappings, uses = mapped()
+                self.assertEqual(len(mappings), 1)
+                self.assertEqual(uses[0]['signatures'][0]['returnType'], 'Object')
+                self.assertEqual(mappings[0]['targetMember']['signature'], signature)
+                self.assertEqual(mapped('flash.other.Format'), ([], []))
+            native['access'] = 'write'
+            self.assertEqual(len(mapped()[0]), 1 if name == 'size' else 0)
+            native['access'] = 'read'
+        for signature in ['string', 'boolean | undefined', 'any', 'number[]', 'number | boolean']:
+            native['name'] = target['name'] = 'size';target['signature'] = signature
+            self.assertEqual(mapped(), ([], []))
+
     def test_native_constructor_does_not_admit_extra_host_parameters(self):
         member = dict(name='Loader', access='call', scope='static', constructor=True,
             signature='public function Loader()', minArgs=0, maxArgs=0,
