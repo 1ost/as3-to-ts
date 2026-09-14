@@ -2494,13 +2494,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
     if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS") {
         const member = builtinMathMember(node.children[0]!, context);
         if (member !== null) {
-            if (member !== "min" && member !== "max") fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
+            if (member !== "min" && member !== "max" && member !== "round") fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
+            if (member === "round" && node.children[1]!.children.length !== 1)
+                fail("HARDENED_MATH_ARITY", "Math.round requires exactly one proven numeric argument", node);
             const args = node.children[1]!.children.map(child => parseExpression(child, context, true));
             args.forEach((argument, index) => {
                 if (!["Number", "int", "uint"].includes(assignmentType(argument, context, node.children[1]!.children[index]!).sourceName))
                     fail("HARDENED_MATH_ARGUMENT", "Math arguments require proven numeric values", node.children[1]!.children[index]!);
             });
-            return Object.assign(identity(node), {kind: "math" as "math", member: member as "min" | "max", arguments: args});
+            return Object.assign(identity(node), {kind: "math" as "math", member: member as "min" | "max" | "round", arguments: args});
         }
     }
     if (node.kind === "LITERAL") {

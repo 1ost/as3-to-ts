@@ -6,6 +6,12 @@ import { as3FixedDecimal } from "./internal/AS3NumberFormat";
 import { AS3_LOWERCASE_BMP } from "./internal/AS3CaseTable";
 import { as3NativeString, as3NativeNumber, as3NativeAdd, as3NativeEquals, as3NativeRelation, AS3ObjectDispatchUnavailable } from "./AS3ObjectDispatch";
 
+/** AIR51 numeric Math.round: addition rounds before floor, and zero becomes positive. */
+export function as3MathRound(value:number):number {
+    if(typeof value!=="number") throw new AS3ObjectDispatchUnavailable("Math.round requires a proven numeric input");
+    return Math.floor(value+0.5);
+}
+
 export function as3Int(value: unknown = 0): number {
     return as3NativeNumber(value) >> 0;
 }

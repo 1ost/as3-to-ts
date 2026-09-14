@@ -185,6 +185,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         expression.arguments.map(argument => ts.factory.createCallExpression(
             ts.factory.createIdentifier("__as3TraceValue"),undefined,[expressionNode(argument,ts)])));
     if (expression.kind === "math") {
+        if (expression.member === "round") return ts.factory.createCallExpression(
+            ts.factory.createIdentifier("__as3MathRound"),undefined,
+            expression.arguments!.map(argument=>expressionNode(argument,ts)));
+
         const member = ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("Math"), expression.member);
         return expression.arguments === null ? member : ts.factory.createCallExpression(member, undefined,
             expression.arguments.map(argument => expressionNode(argument, ts)));
@@ -1513,7 +1517,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals", "as3Relation"].map(exported =>
+    const names = ["as3MathRound", "as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals", "as3Relation"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -1671,6 +1675,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                 ts.factory.createIdentifier("__AS3ArgumentError"))])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Error"),undefined));
     const primitiveMember=(value:any):boolean => value !== null && typeof value === "object" && (
+        value.kind === "math" && value.member === "round" ||
         value.kind === "member" && value.capabilitySource === "String" && value.name === "length"
         || value.kind === "member" && value.capabilitySource === "Error" && value.name === "errorID"
         || value.kind === "call" && value.capabilitySource === "Number" && value.capabilityMember === "toFixed"

@@ -1334,6 +1334,25 @@ try {
             assert.throws(()=>adaptBindable(undefined,declaration),error=>error.code==='HARDENED_BINDABLE_METADATA');
         assert.throws(()=>adaptBindable(undefined,undefined,false),error=>error.code==='HARDENED_BINDABLE_METADATA');
     }
+    {
+        const adaptRound=(expression,type="Number")=>{
+            const source=`package p {public class RoundProbe {public function run(value:${type}):Number{return ${expression};}}}`;
+            return built.adapter.adaptNormalizedParserAst(built.normalizer.normalizeParserAst(built.parse("RoundProbe.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,sourceMemberAuthority);
+        };
+        for(const type of ['Number','int','uint']) {
+            const semantic=adaptRound('Math.round(value)',type);
+            const emitted=built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code;
+            assert.match(emitted,/__as3MathRound\(value\)/);assert.doesNotMatch(emitted,/Math\.round/);
+            assert.match(emitted,/as3MathRound as __as3MathRound/);
+        }
+        for(const expression of ['Math.round()','Math.round(value,1)']) assert.throws(()=>adaptRound(expression),error=>error.code==='HARDENED_MATH_ARITY');
+        for(const type of ['String','Object','*']) assert.throws(()=>adaptRound('Math.round(value)',type),error=>error.code==='HARDENED_MATH_ARGUMENT');
+        assert.throws(()=>adaptRound('Math.floor(value)'),error=>error.code==='HARDENED_MATH_MEMBER');
+        const shadow='package p {public class RoundShadow {public function run(Math:Object):Number{return Math.round(1);}}}';
+        assert.throws(()=>built.adapter.adaptNormalizedParserAst(built.normalizer.normalizeParserAst(built.parse('RoundShadow.as',shadow),shadow,sha256),
+            authority(built.ledger),shadow,sha256),error=>!!error.code);
+    }
     const numericFieldSortSource='package p { public class FieldSort { public function run(values:Array):void { values.sortOn("priority",18); } } }';
     const numericFieldSortAst=built.normalizer.normalizeParserAst(
         built.parse("fixtures/FieldSort.as",numericFieldSortSource),numericFieldSortSource,sha256);
