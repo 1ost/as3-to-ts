@@ -1,0 +1,273 @@
+{
+  "schema": 1,
+  "captureSha256": "c3c26d03cdd1b9064df97eb39b3d8b5311d2717af9e1db2ccf4f4f51cc5f1cee",
+  "classes": {
+    "typeprobe.Subject": {
+      "sourceSha256": "13169d29f4d910a6840115a7418e7824fbb44757337ff112b30e6a8f1aa549c2",
+      "metadata": {
+        "name": "typeprobe::Subject",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [
+            {
+              "name": "value",
+              "declaredBy": "typeprobe::Subject",
+              "type": "*"
+            }
+          ],
+          "accessors": [
+            {
+              "name": "read",
+              "declaredBy": "typeprobe::Subject",
+              "access": "readonly"
+            }
+          ],
+          "methods": [],
+          "constants": []
+        },
+        "statics": {
+          "variables": [
+            {
+              "name": "ticks",
+              "declaredBy": "typeprobe::Subject",
+              "type": "int"
+            },
+            {
+              "name": "order",
+              "declaredBy": "typeprobe::Subject",
+              "type": "*"
+            },
+            {
+              "name": "external",
+              "declaredBy": "typeprobe::Subject",
+              "type": "*"
+            }
+          ],
+          "accessors": [
+            {
+              "name": "thrown",
+              "declaredBy": "typeprobe::Subject",
+              "access": "readonly"
+            },
+            {
+              "name": "chosen",
+              "declaredBy": "typeprobe::Subject",
+              "access": "readonly"
+            },
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ],
+          "methods": [
+            {
+              "name": "shadowUndefined",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "primitives",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "functionType",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "missingSealed",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "throwingType",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "getterType",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "receiver",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "suppliedType",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "commaType",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "shadowClass",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "effect",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "undefinedProperty",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "receiverType",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "effectType",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "readonlyWrite",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "missingDynamic",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "nullProperty",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "classType",
+              "declaredBy": "typeprobe::Subject",
+              "parameterCount": 0
+            }
+          ],
+          "constants": []
+        }
+      },
+      "instanceTraits": [
+        {
+          "name": "value",
+          "kind": "variable",
+          "type": "*"
+        },
+        {
+          "name": "read",
+          "kind": "accessor",
+          "type": "*"
+        }
+      ],
+      "staticTraits": [
+        {
+          "name": "ticks",
+          "kind": "variable",
+          "type": "int"
+        },
+        {
+          "name": "order",
+          "kind": "variable",
+          "type": "*"
+        },
+        {
+          "name": "external",
+          "kind": "variable",
+          "type": "*"
+        },
+        {
+          "name": "thrown",
+          "kind": "accessor",
+          "type": "*"
+        },
+        {
+          "name": "chosen",
+          "kind": "accessor",
+          "type": "*"
+        },
+        {
+          "name": "shadowUndefined",
+          "kind": "method"
+        },
+        {
+          "name": "primitives",
+          "kind": "method"
+        },
+        {
+          "name": "functionType",
+          "kind": "method"
+        },
+        {
+          "name": "missingSealed",
+          "kind": "method"
+        },
+        {
+          "name": "throwingType",
+          "kind": "method"
+        },
+        {
+          "name": "getterType",
+          "kind": "method"
+        },
+        {
+          "name": "receiver",
+          "kind": "method"
+        },
+        {
+          "name": "suppliedType",
+          "kind": "method"
+        },
+        {
+          "name": "commaType",
+          "kind": "method"
+        },
+        {
+          "name": "shadowClass",
+          "kind": "method"
+        },
+        {
+          "name": "effect",
+          "kind": "method"
+        },
+        {
+          "name": "undefinedProperty",
+          "kind": "method"
+        },
+        {
+          "name": "receiverType",
+          "kind": "method"
+        },
+        {
+          "name": "effectType",
+          "kind": "method"
+        },
+        {
+          "name": "readonlyWrite",
+          "kind": "method"
+        },
+        {
+          "name": "missingDynamic",
+          "kind": "method"
+        },
+        {
+          "name": "nullProperty",
+          "kind": "method"
+        },
+        {
+          "name": "classType",
+          "kind": "method"
+        }
+      ]
+    }
+  }
+}

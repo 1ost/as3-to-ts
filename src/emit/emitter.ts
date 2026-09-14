@@ -1,4 +1,5 @@
 import {NativeClassMetadataOptions} from './native-class-metadata';
+import {insideTypeOf, sourceIdentifier, typeOfBinding} from './native-typeof';
 import NodeKind, {nodeKindName} from '../syntax/nodeKind';
 import * as Keywords from '../syntax/keywords';
 import Node, {createNode, outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
@@ -2683,6 +2684,26 @@ function hasFunctionLocal(emitter:Emitter, name:string):boolean {
 }
 
 export function emitIdent(emitter:Emitter, node:Node):void {
+	let preservedTypeOfName: string;
+	if (emitter.options.nativeCallableMetadata && insideTypeOf(node)
+		&& !(node.parent.kind === NodeKind.DOT && node.parent.children[0] !== node)) {
+		const name = sourceIdentifier(node, emitter.source);
+		const binding = typeOfBinding(node, emitter.source, Object.keys(emitter.options.nativeClassInitialization.classes));
+		if (binding === 'builtin' && ['Class', 'int', 'uint'].indexOf(name) >= 0) {
+			let alias = '__as3_typeof_builtin_' + name;
+			while (emitter.source.indexOf(alias) >= 0) alias += '_';
+			const exported = name === 'Class' ? 'AS3ClassType' : name === 'int' ? 'AS3Int' : 'AS3Uint';
+			emitter.ensureImportIdentifier(exported + ' as ' + alias, emitter.options.nativeCallableMetadata.module, false);
+			let classValue = '__as3_typeof_classValue';
+			while (emitter.source.indexOf(classValue) >= 0) classValue += '_';
+			emitter.ensureImportIdentifier('as3AsClass as ' + classValue, emitter.options.nativeCallableMetadata.module, false);
+			emitter.nativeSourceHelpers.add(classValue);
+			emitter.nativeSourceHelpers.add(alias);
+			emitter.catchup(node.start); emitter.insert(classValue + '(' + alias + ')'); emitter.skipTo(node.end); return;
+		}
+		// Preserve source spelling when an authored declaration shadows int/uint.
+		if ((name === 'int' || name === 'uint') && binding !== 'builtin') node.text = preservedTypeOfName = name;
+	}
 	emitter.namespaces.checkIdentifier(node, hasFunctionLocal(emitter, node.text));
 	if (node.text == "getDefinitionByName") {
 		let pathToRoot = ClassList.getLastPathToRoot();
@@ -2808,7 +2829,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 
 	// emitter.ensureImportIdentifier(node.text);
 
-	node.text = emitter.getIdentifierRemap(node.text) || node.text;
+	node.text = preservedTypeOfName || emitter.getIdentifierRemap(node.text) || node.text;
 
 	emitter.insert(node.text);
 	emitter.skipTo(node.end);

@@ -1,0 +1,1 @@
+package foreign { public class hidden { public function hidden(){} } }

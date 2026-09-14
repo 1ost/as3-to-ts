@@ -1,0 +1,86 @@
+[
+  {
+    "case": "unimported",
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof-review\\original-unimported",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof-review\\original-unimported\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof-review\\original-unimported\\Oracle.as"
+    ],
+    "exitCode": 1,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof-review\\original-unimported\\consumer\\Subject.as(1): col: 120 Error: Access of undefined property hidden.\n\npackage consumer { public class Subject { public function Subject(){} public static function check():* { return typeof hidden; } } }\n                                                                                                                       ^\n\n",
+    "files": [
+      {
+        "path": "original-unimported\\consumer\\Subject.as",
+        "sha256": "9c28163dd12a514c79b4f60bdf3c531739048c50eda45a4f1dd270683f52f444"
+      },
+      {
+        "path": "original-unimported\\foreign\\hidden.as",
+        "sha256": "9be5ae1b7da1a8c8d91a548c8a3adb6d7f5c8f1e4ae64fe88972cb6c2f9caae2"
+      },
+      {
+        "path": "original-unimported\\Oracle.as",
+        "sha256": "e8b2b22b7fe9da8395d924c63993b708116f36568196ef904247cc49de8c865d"
+      }
+    ],
+    "tools": [
+      {
+        "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+      },
+      {
+        "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+        "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+      }
+    ]
+  },
+  {
+    "case": "builtins",
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof-review\\original-builtins",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof-review\\original-builtins\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof-review\\original-builtins\\Oracle.as"
+    ],
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof-review\\original-builtins\\oracle.swf (801 bytes)\n",
+    "stderr": "",
+    "files": [
+      {
+        "path": "original-builtins\\consumer\\Subject.as",
+        "sha256": "7b19b6ef71d46ef1b24191517454b6e7a2c90e1159a0ae52c7807e98bff82cbb"
+      },
+      {
+        "path": "original-builtins\\foreign\\hidden.as",
+        "sha256": "9be5ae1b7da1a8c8d91a548c8a3adb6d7f5c8f1e4ae64fe88972cb6c2f9caae2"
+      },
+      {
+        "path": "original-builtins\\Oracle.as",
+        "sha256": "e8b2b22b7fe9da8395d924c63993b708116f36568196ef904247cc49de8c865d"
+      }
+    ],
+    "tools": [
+      {
+        "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+      },
+      {
+        "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+        "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+      }
+    ]
+  }
+]

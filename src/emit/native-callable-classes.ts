@@ -1,4 +1,5 @@
 import {lowerNativeSourceOperations} from './native-source-operations';
+import {validateNativeTypeOf} from './native-typeof';
 import {NativeClassMetadataOptions, validateNativeClassMetadata} from './native-class-metadata';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
@@ -42,6 +43,7 @@ export class NativeCallableClasses {
             walk(root);
             if (declarations.length !== 1) this.fail('exactly one source class is required: ' + qname);
             const cls = declarations[0], name = cls.findChild(K.NAME).text;
+            if (metadata) validateNativeTypeOf(cls, options[qname], Object.keys(lazy));
             let pkg = cls.parent; while (pkg && pkg.kind !== K.PACKAGE) pkg = pkg.parent;
             const namespace = pkg && pkg.findChild(K.NAME).text || '';
             if ((namespace ? namespace + '.' : '') + name !== qname) this.fail('mismatched source identity: ' + qname);

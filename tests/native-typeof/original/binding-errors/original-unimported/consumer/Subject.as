@@ -1,0 +1,1 @@
+package consumer { public class Subject { public function Subject(){} public static function check():* { return typeof hidden; } } }

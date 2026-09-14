@@ -67,7 +67,7 @@ executed by the port. Node's isolated JavaScript context is only a test harness.
 ## Limits and guards
 
 The suite verifies thirteen compiler rejection cases (hash/surface fabrication,
-nonpublic members, method arguments, enumeration, and typeof), two trusted-input
+nonpublic members, method arguments, enumeration, and unresolved typeof), two trusted-input
 authentication failures, and one lowerer check that an authored import from a
 provider-looking module remains routed through common invocation. These are
 sixteen guards, separate from original observation counts. Synthetic negative
@@ -75,6 +75,9 @@ inputs deliberately bypass the trusted capture entry point to test the compiler'
 own rejection behavior; they are not authenticated source admissions.
 
 Inherited/nonpublic/custom-namespace metadata, ordinary-function global context,
-general method coercion/arity/return rules, method arguments, enumeration, typeof,
+general method coercion/arity/return rules, method arguments, enumeration,
 and complete source Class semantics remain unimplemented or separately gated.
+The separate `native-typeof` package authenticates source typeof and a bounded
+public wildcard-return readonly getter surface; this older package does not
+supply that new source evidence.
 This package does not prove a complete game module or in-game validation.

@@ -38,7 +38,12 @@ export function validateNativeClassMetadata(qname: string, source: string, input
         } else if (member.kind === K.FUNCTION) {
             const method = member.findChild(K.NAME).text; if (method === name) return;
             surfaces[side].push({name: method, kind: 'method', parameterCount: member.findChild(K.PARAMETER_LIST).children.length});
-        } else fail('source accessor/custom trait validation pending');
+        } else if (member.kind === K.GET) {
+            if (member.findChild(K.PARAMETER_LIST).children.length) fail('source getter parameters');
+            if ((member.findChild(K.TYPE) || {text:'*'}).text !== '*') fail('typed getter return coercion integration pending');
+            surfaces[side].push({name: member.findChild(K.NAME).text, kind:'accessor',
+                type:(member.findChild(K.TYPE) || {text:'*'}).text, access:'readonly'});
+        } else fail('source setter/custom trait validation pending');
     });
     const sort = (a: any, b: any): number => a.name.localeCompare(b.name);
     ['instance', 'statics'].forEach(side => {
@@ -52,15 +57,18 @@ export function validateNativeClassMetadata(qname: string, source: string, input
                 }
                 if (member.uri) fail('custom namespace metadata requires namespace authority');
                 const item: any = {name: member.name, kind: pair[1]};
-                if (pair[1] === 'method') item.parameterCount = member.parameterCount; else item.type = member.type;
+                if (pair[1] === 'method') item.parameterCount = member.parameterCount;
+                else if (pair[1] === 'accessor') item.access = member.access;
+                else item.type = member.type;
                 actual.push(item);
             });
         });
-        if (JSON.stringify(actual.sort(sort)) !== JSON.stringify(expected)) fail('complete source member surface');
+        const reflected = expected.map(x => {const result = Object.assign({}, x); if (result.kind === 'accessor') delete result.type; return result;});
+        if (JSON.stringify(actual.sort(sort)) !== JSON.stringify(reflected)) fail('complete source member surface');
         const supplied = side === 'instance' ? record.instanceTraits : record.staticTraits;
         if (!Array.isArray(supplied)) fail('complete source traits');
         const traits = supplied.map(x => Object.assign({}, x)).sort(sort);
-        const wanted = expected.map(x => {const result = Object.assign({}, x); delete result.parameterCount; return result;});
+        const wanted = expected.map(x => {const result = Object.assign({}, x); delete result.parameterCount; delete result.access; return result;});
         if (JSON.stringify(traits) !== JSON.stringify(wanted)) fail('source storage/types');
     });
 }

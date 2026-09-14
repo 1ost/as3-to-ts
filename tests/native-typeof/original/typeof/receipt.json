@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "group": "typeof",
+  "files": [
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-mha46pyq\\capture.cjs"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "b290329a912ed41e20434b6a0ce1ab5d005f4a1b6dec0f973661cd591eb091da"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "c3c26d03cdd1b9064df97eb39b3d8b5311d2717af9e1db2ccf4f4f51cc5f1cee",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-mha46pyq\\flash.json"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "5c95d9f54adb361b1bd55918e0340e4b1f87254e7a34abf2c2f74c9bc06782cf",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-mha46pyq\\oracle.swf"
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "bced0089a94c3ee55b8a579118b2bc8564d2747baa0a1732f8d43072c6a84566"
+    },
+    {
+      "path": "sources/MetadataOracle.as",
+      "sha256": "d87590da554722c0707d519a9cfb1e526f60b5563536fea39b6ac14012eccc82",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-mha46pyq\\sources\\MetadataOracle.as"
+    },
+    {
+      "path": "sources/typeprobe/Subject.as",
+      "sha256": "13169d29f4d910a6840115a7418e7824fbb44757337ff112b30e6a8f1aa549c2",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-mha46pyq\\sources\\typeprobe\\Subject.as"
+    },
+    {
+      "path": "metadata.json",
+      "sha256": "f9b4d92d5fcc83fe67f3c20a5eba5ca0ef288dd60a791d19a46fc4550b580289"
+    }
+  ],
+  "rows": 32,
+  "lifecycleSteps": 0,
+  "operationTrace": false,
+  "authentication": "Exact original source, capture, ordered XML metadata, SWF and provenance. SDK/player binaries excluded."
+}

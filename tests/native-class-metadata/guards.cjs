@@ -27,7 +27,7 @@ exports.run=function(compiler,evidence){
         const records=copy(metadata);records['entryreview.Subject'].sourceSha256=hash(input['entryreview.Subject']);
         assert.throws(()=>compile(input,records),/nonpublic source members/);passed.push(name+' held');
     }
-    for(const [name,statement] of [['method arguments','return arguments.length;'],['enumeration','for(var key:String in this) {} return 0;'],['typeof','return typeof Subject;']]){
+    for(const [name,statement] of [['method arguments','return arguments.length;'],['enumeration','for(var key:String in this) {} return 0;'],['unresolved typeof','return typeof absentName;']]){
         const input={...sources,'entryreview.Subject':sources['entryreview.Subject'].replace('public var n:int=7;','public var n:int=7; public function probe():* {'+statement+'}')};
         assert.notEqual(input['entryreview.Subject'],sources['entryreview.Subject']);
         const records=copy(metadata),record=records['entryreview.Subject'];record.sourceSha256=hash(input['entryreview.Subject']);

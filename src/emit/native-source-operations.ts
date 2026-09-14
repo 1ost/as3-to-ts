@@ -14,7 +14,7 @@ export function lowerNativeSourceOperations(source: string, provider: string, co
         if (node.kind === S.ForInStatement || node.kind === S.ForOfStatement)
             return fail('source enumeration requires common trait and key-order authority');
         if (node.kind === S.TypeOfExpression)
-            return fail('source typeof Class/Function requires common type-category authority');
+            return provider + '.as3TypeOf(' + render(node.expression) + ')';
         if (node.kind === S.Identifier && node.text === 'arguments'
             && !(node.parent.kind === S.PropertyAccessExpression && node.parent.name === node)
             && !(node.parent.kind === S.PropertyAssignment && node.parent.name === node))
