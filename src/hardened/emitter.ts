@@ -166,6 +166,11 @@ function initializeClassNode(value: any, self: boolean, ts: TypeScriptCompilerAp
 }
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
+    if (expression.kind === "reflection") {
+        const name={describe:"as3DescribeTypeStatic",variable:"as3ReflectionVariable",staticRead:"as3ReflectionStaticRead"}[expression.operation];
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__"+name),undefined,
+            expression.arguments.map(argument=>expressionNode(argument,ts)));
+    }
     if (expression.kind === "regexpCall") {
         const pattern=ts.factory.createStringLiteral(expression.pattern);
         if(expression.operation==="test") return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3RegExpTest"),undefined,
@@ -1666,6 +1671,18 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ts.factory.createImportSpecifier(false,undefined,ts.factory.createIdentifier("AS3Date")),
             ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DateReceiver"),ts.factory.createIdentifier("__as3DateReceiver"))])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Date"),undefined));
+    const reflectionSeen=new WeakSet<object>();
+    const hasReflection=(value:unknown):boolean => {
+        if (!value || typeof value !== "object" || reflectionSeen.has(value)) return false;
+        reflectionSeen.add(value);
+        const row=value as Record<string,unknown>;
+        return row.kind === "reflection" || Object.values(row).some(hasReflection);
+    };
+    if (hasReflection(program)) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
+            ["as3DescribeTypeStatic","as3ReflectionVariable","as3ReflectionStaticRead"].map(name=>
+                ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Reflection"),undefined));
     for (const [name, call] of [...globalCalls].sort(([left], [right]) => left.localeCompare(right)))
         imports.push(ts.factory.createImportDeclaration(undefined,
             ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([

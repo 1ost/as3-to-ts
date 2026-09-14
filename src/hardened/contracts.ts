@@ -132,7 +132,7 @@ export interface SemanticType extends SemanticIdentity {
 export type SemanticModifier = "dynamic" | "final" | "public" | "private" | "protected" | "static" | "override";
 
 export interface SemanticImport extends SemanticIdentity {
-    authorityKind: "flash" | "local" | "intrinsic" | "native-timer-function";
+    authorityKind: "flash" | "local" | "intrinsic" | "native-timer-function" | "native-reflection-function";
     localNodeId: string | null;
     runtimeConstructible: boolean;
     runtimeInterface: boolean;
@@ -529,7 +529,14 @@ export interface UpdateExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = RegExpCallExpression | NumericPredicateExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export interface ReflectionExpression extends SemanticIdentity {
+    kind: "reflection";
+    operation: "describe" | "variable" | "staticRead";
+    arguments: SemanticExpression[];
+    resultType: SemanticType;
+}
+
+export type SemanticExpression = ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |

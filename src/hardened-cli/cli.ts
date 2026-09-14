@@ -77,10 +77,10 @@ function sha256(data: string | Buffer): string {
 }
 
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
-    "AS3Reflection.ts": "2bdc6c362ed2a6d63a7559b41213a0c4bb195e80a4b63944f6036cefe4757ee2",
+    "AS3Reflection.ts": "123dbfdc9fff41eed41f0ca3e6e8dc790cc6baed793fb506b9dd30c23210caae",
     "internal/AS3RegExpPattern.ts": "036bdd8077771be4ee518d9b84b25a7ffc80309240ebb45f7f85aeb84c4d3319",
     "AS3RegExp.ts": "5b254ea41376aafb0e3381bc7707381be9db9e241c8b514f4d372991fb95a574",
-    "AS3Enumeration.ts": "b7059948afc148589fe3b7b265064473643c879ae22785103e8a3df6c135cdcc",
+    "AS3Enumeration.ts": "183f10ec17e98fdf37158cc842fd608d449374082ccba5fb5aaa7230d7426bbd",
     "internal/AS3ArraySort.ts": "15a4cc94a7c485c2277343fea40695a80c8934cee925c86e8528ab42ae660fa4",
     "AS3Array.ts": "29836bf4136b9fb6321c712932091a425ed190d1ff4d160572eae52bfedc2be0",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
@@ -96,7 +96,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Function.ts": "dcd4c0c60c72fad77cd6543fcda1c5e907e32741f4049779bc1096ef5dbd8812",
     "AS3MethodClosure.ts": "3021c90d64458b0aed10451eb36f87078c33386c43dcb741c3d34919cfdbfa60",
     "internal/AS3FunctionLength.ts": "61c6c06f2f8ebb09f297d11a35ccd53c1e9cb2c75265d050f750b0693ed31ef4",
-    "AS3ObjectDispatch.ts": "d8086029ae73ed1ae65da2446aa474f2ad4384445352ef77848543bf25da7810",
+    "AS3ObjectDispatch.ts": "4d22bcde242aebd85b2eadda7ba2e4fe3ac5b148c7f3ebc986d771da346945da",
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
     "AS3Timer.ts": "639a0e3776611b3fd736305994d709b47af8465509bb9d2de440bc611a985851",
@@ -224,7 +224,7 @@ function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<
 }
 
 function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): string {
-    const entries = ["AS3Date", "AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
+    const entries = ["AS3Reflection", "AS3Date", "AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
         "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3RegExp", "AS3Timer", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
     entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"

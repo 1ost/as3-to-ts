@@ -1,3 +1,4 @@
+import { verifyNativeDescribeTypeAuthority } from "../hardened/native-describe-type-authority";
 import { loadReflectionProviderTarget, type ReflectionProviderTarget } from "../hardened/reflection-provider-authority";
 import { verifyNativeDateAuthority } from "../hardened/native-date-authority";
 import { loadByteArrayNativeTarget } from "../hardened/bytearray-native-authority";
@@ -316,6 +317,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             "runtimeTypePredicates", "sourceManifest", "sourceMemberAuthority"].concat(
                 Object.prototype.hasOwnProperty.call(profile.files,"byteArrayNative") ? ["byteArrayNative"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeDate") ? ["nativeDate"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"nativeDescribeType") ? ["nativeDescribeType"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"reflectionProvider") ? ["reflectionProvider"] : []))
         || !exactKeys(profile.counts, ["localMembersComplete", "localMembersHeld", "localTypes", "mappedMembers", "mappedTypes", "sourceMemberTypes"])
         || !Array.isArray(profile.runtimePredicateQNames)
@@ -327,7 +329,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const profileRoot = dirname(resolve(profileLockPath));
     const files = profile.files as unknown as {
         capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
-        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; reflectionProvider?: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; nativeDescribeType?: ProfileFile; reflectionProvider?: ProfileFile;
         runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
         sourceMemberAuthority: ProfileFile;
     };
@@ -409,6 +411,12 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             files.sourceMemberAuthority.sha256, sha256);
         if(files.nativeDate) verifyNativeDateAuthority(sourceMembers,profileRoot,
             profileFile(profileRoot,files.nativeDate,"native Date proof"),sourceManifestJson);
+        if (files.nativeDescribeType) {
+            if (!reflectionProvider) throw new CliError("native describeType requires a verified reflection provider", 6);
+            verifyNativeDescribeTypeAuthority(sourceMembers, profileRoot,
+                profileFile(profileRoot, files.nativeDescribeType, "native describeType proof"),
+                sourceManifestJson, reflectionProvider, targetCapabilitiesJson);
+        }
         if (Object.keys(sourceMembers.entriesByQName).length !== counts.sourceMemberTypes) {
             throw new CliError("application source member count differs from the profile lock", 6);
         }

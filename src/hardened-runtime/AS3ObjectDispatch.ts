@@ -1,3 +1,4 @@
+import { isAS3ReflectionValue, as3ReflectionVariable, as3ReflectionAttribute } from "./AS3Reflection";
 import { isAS3SourceLambda } from "./AS3Function";
 import { AS3ArgumentError, AS3RangeError } from "./AS3Error";
 import { as3StringSplit } from "./AS3Coerce";
@@ -123,6 +124,10 @@ BUILTINS.set("isPrototypeOf",labelFunction(function(this:unknown,other:unknown):
 export function as3ObjectRead(value:unknown, key:unknown, caller:string | null = null):unknown {
     const target = receiver(value), name = keyName(key);
     if (caller !== null) lookupObjectCaller(caller);
+    if (isAS3ReflectionValue(value)) {
+        if (name === "variable") return as3ReflectionVariable(value);
+        return unavailable("Reflection XML reads outside variable selection require native evidence");
+    }
     if (Array.isArray(target)) {
         if (name === "length") return target.length;
         const index=Number(name);
@@ -213,6 +218,11 @@ export function as3ObjectDelete(value:unknown,key:unknown,caller:string | null =
     return Reflect.deleteProperty(target,name);
 }
 export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:string | null = null):unknown {
+    if (isAS3ReflectionValue(value)) {
+        if (caller !== null) lookupObjectCaller(caller);
+        if (key === "attribute" && args.length === 1) return as3ReflectionAttribute(value,args[0]);
+        return unavailable("Reflection XML calls outside single-argument attribute selection require native evidence");
+    }
     if (key === "split" && typeof value === "string") {
         if (caller !== null) lookupObjectCaller(caller);
         return as3StringSplit(value,args);

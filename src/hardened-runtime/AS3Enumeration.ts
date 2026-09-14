@@ -1,3 +1,4 @@
+import { isAS3ReflectionList, as3ReflectionValues } from "./AS3Reflection";
 import { as3ArrayValues } from "./AS3Array";
 import { as3DictionaryValues, isAS3Dictionary } from "./AS3Dictionary";
 import { as3FunctionArgument } from "./AS3Function";
@@ -7,6 +8,10 @@ import { isAS3Vector } from "./AS3Vector";
 /** Dispatch an original dynamically typed for-each receiver once, preserving typed local assignment. */
 export function* as3DynamicValues(value:unknown, bindingType:string):Generator<any,void,unknown> {
     if (value == null || ["string","number","boolean"].includes(typeof value)) return;
+    if (isAS3ReflectionList(value)) {
+        for (const item of as3ReflectionValues(value)) yield as3FunctionArgument(item,bindingType);
+        return;
+    }
     if (Array.isArray(value)) { yield* as3ArrayValues(value,bindingType); return; }
     if (isAS3Dictionary(value)) { yield* as3DictionaryValues(value,bindingType); return; }
     if (isAS3Vector(value)) {

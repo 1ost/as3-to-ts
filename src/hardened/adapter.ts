@@ -1,3 +1,4 @@
+import { hasNativeDescribeTypeAuthority } from "./native-describe-type-authority";
 import { hasNativeDateAuthority } from "./native-date-authority";
 import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
 import {
@@ -702,7 +703,7 @@ function flashSemanticImport(authority: LoadedCapabilityAuthority, qname: string
 
 function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
     localAuthority: LoadedLocalTypeAuthority | undefined, resolveCurrentLocal: (() => CurrentLocalType) | null,
-    localMemberAuthority: LoadedLocalMemberAuthority | null): {
+    localMemberAuthority: LoadedLocalMemberAuthority | null, sourceMembers?: LoadedSourceMemberAuthority): {
     imports: SemanticImport[];
     importsByLocal: { [name: string]: SemanticImport };
 } {
@@ -787,7 +788,11 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         }
         const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
         let item: SemanticImport;
-        if (authority.typeMappingsBySource[qname]) {
+        if (qname === "flash.utils.describeType" && hasNativeDescribeTypeAuthority(sourceMembers)) {
+            item={...identity(node),authorityKind:"native-reflection-function",localNodeId:null,
+                runtimeConstructible:false,runtimeInterface:false,localValueType:null,compileTimeNamespace:false,
+                sourceQualifiedName:qname,sourceLocalName:localName,targetModule:"@bleach/as3-runtime/AS3Reflection",targetExport:"as3DescribeTypeStatic"};
+        } else if (authority.typeMappingsBySource[qname]) {
             item = flashImport(qname, node);
         } else if (authority.intrinsicTypesBySource[qname]) {
             item = intrinsicImport(qname, node);
@@ -1949,6 +1954,27 @@ function assertObjectKey(type:SemanticType,node:TreeNode):void {
         fail("HARDENED_OBJECT_KEY", "dynamic Object key type requires native String-conversion authority", node);
 }
 
+function reflectionClassArgument(expression:SemanticExpression, context:AdapterContext):boolean {
+    if (expression.kind !== "identifier" || !context.localMemberAuthority || !context.resolveCurrentLocal) return false;
+    const imported=context.importsByLocal[expression.name];
+    const qname=expression.bindingKind === "current-class" ? context.classQualifiedName
+        : expression.bindingKind === "import" && imported?.authorityKind === "local"
+            && imported.runtimeConstructible && !imported.runtimeInterface ? imported.sourceQualifiedName : null;
+    if (!qname) return false;
+    const row=contextLocalMember(context,context.resolveCurrentLocal().entry.module,qname);
+    if (!row || row.status !== "complete" || !row.declaration) return false;
+    const primitive=["*","Object","String","Boolean","Number","int","uint","Array","Function","Class"];
+    return row.declaration.members.filter(member=>member.kind === "field" && !member.readonly
+        && member.modifiers.includes("public") && member.modifiers.includes("static") && member.namespaceName === null)
+        .every(member=>{
+            const name=member.fieldType;
+            if (!name || name.startsWith("FilePrivate(") || name.startsWith("Vector.<")) return false;
+            if (primitive.includes(name) || context.runtimeReferenceParentsByQName.has(name)) return true;
+            const type=contextLocalType(context,context.resolveCurrentLocal!().entry.module,name);
+            return !!type && ["class","interface"].includes(type.typeKind) && type.importable;
+        });
+}
+
 function assignmentType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
     if (expression.kind === "member" && expression.target.kind === "super" && context.baseLocalQName !== null
         && expression.capabilitySource !== null && !context.mappingsBySource[expression.capabilitySource]) {
@@ -1965,7 +1991,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
 
     if (expression.kind === "globalFunction" || expression.kind === "identifier" && expression.bindingKind === "package-function")
         return semanticType(node,"Function","Function",[],false);
-    if (expression.kind === "functionApply" || expression.kind === "regexpCall") return expression.resultType;
+    if (expression.kind === "reflection" || expression.kind === "functionApply" || expression.kind === "regexpCall") return expression.resultType;
 
     if (expression.kind === "member" && (expression.target.kind === "super" || expression.target.kind === "this")
         && expression.capabilitySource !== null && context.mappingsBySource[expression.capabilitySource]) {
@@ -3193,6 +3219,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_NAMESPACE_VALUE", "compile-time namespace cannot be used as a runtime value", node);
         }
         const imported = context.importsByLocal[name];
+        if (imported?.authorityKind === "native-reflection-function") {
+            if (context.locals[name] || context.parameters[name] || context.fields[name] || context.accessors[name] || context.methods[name])
+                fail("HARDENED_REFLECTION_SHADOW","describeType has a lexical or class shadow",node);
+            assertNoInheritedNativeFunctionShadow(context,name,node,"HARDENED_REFLECTION","native describeType");
+            if (valuePosition) fail("HARDENED_REFLECTION_FUNCTION_VALUE","describeType function values remain held",node);
+        }
         if ((imported?.sourceQualifiedName === "flash.utils.getQualifiedClassName"
             || imported?.sourceQualifiedName === "flash.utils.getDefinitionByName")
             && (context.fields[name] || context.accessors[name] || context.methods[name]))
@@ -3465,6 +3497,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } finally {
             context.ownRecordTargetDepth -= 1;
         }
+        if (hasNativeDescribeTypeAuthority(context.sourceMemberAuthority) && reflectionClassArgument(target,context)) {
+            const key=parseExpression(node.children[1]!,context,true);
+            const keyType=assignmentType(key,context,node.children[1]!);
+            if (!["Object","*","String"].includes(keyType.sourceName))
+                fail("HARDENED_REFLECTION_KEY","static reflection key requires Object, wildcard or String with runtime proof",node);
+            return {...identity(node),kind:"reflection",operation:"staticRead",arguments:[target,key],resultType:semanticType(node,"*","unknown")};
+        }
         const ownerType = assignmentType(target, context, node.children[0]!);
         if (dynamicObjectType(ownerType,context)) {
             const index = parseExpression(node.children[1]!,context,true);
@@ -3650,6 +3689,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const index = Object.assign(identity(node.children[1]!),{kind:"literal" as const,value:name});
             return Object.assign(identity(node),{kind:"index" as const,accessKind:"object" as const,target,
                 targetNullable:true,index,callerQName:context.classQualifiedName,resultType:semanticType(node,"*","unknown")});
+        }
+        if (target.kind === "reflection" && target.operation === "describe") {
+            if (!valuePosition || name !== "variable") fail("HARDENED_REFLECTION_XML","describeType supports only the proven variable selection",node);
+            return {...identity(node),kind:"reflection",operation:"variable",arguments:[target],resultType:semanticType(node,"XMLList","unknown",[],false)};
         }
         if (target.kind === "this" && context.methods[name] && valuePosition) {
             if (!allowMethodClosure) {
@@ -3936,6 +3979,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         }
         const args = node.children[1]!.children.map((child) => parseExpression(child, context, true));
+        if (callee.kind === "identifier" && callee.bindingKind === "import"
+            && context.importsByLocal[callee.name]?.authorityKind === "native-reflection-function") {
+            if (!hasNativeDescribeTypeAuthority(context.sourceMemberAuthority) || args.length !== 1
+                || !reflectionClassArgument(args[0]!,context))
+                fail("HARDENED_REFLECTION_CLASS","describeType requires exactly one authenticated local class with sealed static metadata",node);
+            return {...identity(node),kind:"reflection",operation:"describe",arguments:args,
+                resultType:semanticType(node,"XML","unknown",[],false)};
+        }
         let immediateLambda=callee;
         while (immediateLambda.kind === "parenthesized") immediateLambda=immediateLambda.expression;
         if (context.sourceMemberAuthority !== null && immediateLambda.kind === "lambda") {
@@ -5401,7 +5452,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         fail("HARDENED_LOCAL_PACKAGE_OUTPUT", "package declaration does not match its authenticated kind", fieldList);
     if (!functionDeclaration) assertPackageRuntimeValue(localMemberAuthority,current.entry.module,declarationEntry,fieldList);
     const resolveCurrentLocal = (): CurrentLocalType => current;
-    const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal, localMemberAuthority);
+    const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal, localMemberAuthority, sourceMemberAuthority);
     const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
         node: TreeNode, signature?: SignatureTypeProof): SemanticImport | null => {
         const derived=signatureTypeImport(sourceName,signature,current,localAuthority,localMemberAuthority,
@@ -5704,7 +5755,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         fail("HARDENED_LOCAL_MEMBER_AUTHORITY_INSTANCE", "local member authority requires its local type authority", classNode);
     }
     const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal,
-        localMemberAuthority || null);
+        localMemberAuthority || null, sourceMemberAuthority);
     namespaceUseNodes.forEach((node) => {
         onlyKinds(node, []);
         const name = validateNamespaceIdentifier(requiredText(node, "namespace directive"), node);

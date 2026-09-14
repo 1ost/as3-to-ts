@@ -5,10 +5,10 @@ test('sealed static reflection authority rejects spoofing and snapshots without 
  const config=path.join(out,'tsconfig.json');fs.writeFileSync(config,JSON.stringify({compilerOptions:{target:'ES2020',module:'commonjs',strict:true,skipLibCheck:true,types:[],outDir:path.join(out,'js')},files:[path.join(root,'src/hardened-runtime/AS3Reflection.ts')]}));
  cp.execFileSync(process.execPath,[path.join(root,'node_modules/typescript-4-9/bin/tsc'),'-p',config],{stdio:'inherit'});
  const registry=require(path.join(out,'js/internal/AS3TypeRegistry.js')),runtime=require(path.join(out,'js/AS3Reflection.js'));
- let constructed=0,reads=0,bound=0;
+ let constructed=0,reads=0,bound=0,xml;
  class Original {constructor(){constructed++;}}
  Object.defineProperty(Original,'field',{get(){reads++;throw Error('field getter');}});
- const provider={createFlashReflectionMetadata(bindings){bound++;assert.equal(bindings[0].constructor,Original);return bindings[0].descriptor;},describeTypeXml(value,metadata){return metadata;}};
+ const provider={createFlashReflectionMetadata(bindings){bound++;assert.equal(bindings[0].constructor,Original);return bindings[0].descriptor;},describeTypeXml(value,metadata){return xml || (xml={...metadata,select(){throw Error("unused");},attribute(){throw Error("unused");}});}};
  assert.throws(()=>runtime.installAS3ReflectionProvider(provider),/sealed/);
  const row={kind:'class',qname:'example.Original',base:null,interfaces:[],sourceSha256:'a'.repeat(64),fields:[],staticReflection:{variables:[{name:'field',type:'String'}]}};
  const metadata={schema:'as3-runtime-type-authority@1',qnames:[row.qname],entries:[row]};

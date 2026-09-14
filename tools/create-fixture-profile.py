@@ -185,7 +185,10 @@ def main():
                    help='Exercise the existing shared compiler intrinsic instead of the optional Laya facade')
     p.add_argument('--bytearray-native-uncompress', action='store_true', help='Authenticate zero-argument intrinsic decompression through shared Laya')
     p.add_argument('--native-date', action='store_true', help='Authenticate the shared zero-argument Date intrinsic from exact SDK declarations')
+    p.add_argument('--native-describe-type', action='store_true', help='Retain exact SDK describeType proof; requires a separately verified reflection provider')
     args = p.parse_args()
+    if args.native_describe_type and not args.ffdec_jar:
+        p.error('--native-describe-type requires --ffdec-jar')
     if args.native_date and not args.ffdec_jar:
         p.error('--native-date requires exact SDK decompilation via --ffdec-jar')
     if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*', args.entry):
@@ -291,6 +294,14 @@ def main():
             source_manifest.update(date_evidence['manifestPins'])
             facade_inputs.update(date_evidence['generatorInputs'])
             files['nativeDate'] = out / date_evidence['file']['path']
+        if args.native_describe_type:
+            describe_spec = importlib.util.spec_from_file_location('native_describe_type_profile', ROOT / 'tools/native_describe_type_profile.py')
+            describe_helper = importlib.util.module_from_spec(describe_spec); describe_spec.loader.exec_module(describe_helper)
+            describe_evidence = describe_helper.produce_native_describe_type_profile(profile_root=out, air_sdk=sdk,
+                sdk_declaration=out / 'sdk-source/scripts/flash/utils/describeType.as', sdk_signatures=out / 'sdk-signatures.json')
+            source_manifest.update(describe_evidence['manifestPins'])
+            facade_inputs.update(describe_evidence['generatorInputs'])
+            files['nativeDescribeType'] = out / describe_evidence['file']['path']
         write(files['sourceManifest'], source_manifest)
         local_types = json.loads(files['localTypeMap'].read_text())
         local_types['sourceManifestSha256'] = sha(files['sourceManifest'])
