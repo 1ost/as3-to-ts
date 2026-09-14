@@ -3811,7 +3811,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const arrayLength = isArrayType(targetType,context) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType,context)
                         && !valuePosition && (["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty"].includes(name)
-                            || name === "indexOf" && targetType.sourceName === "Array");
+                            || ["indexOf","filter"].includes(name) && targetType.sourceName === "Array");
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && (["indexOf", "substr", "toLowerCase", "charAt"].includes(name)
                         || context.sourceMemberAuthority !== null && name === "split");
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !functionLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
@@ -4158,9 +4158,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
             && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee),context)) {
             const name = callee.name;
-            if (!["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty","indexOf"].includes(name)
+            if (!["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty","indexOf","filter"].includes(name)
                 || (["pop","shift"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1)
-                || (name === "indexOf" && (args.length < 1 || args.length > 2)))
+                || (["indexOf","filter"].includes(name) && (args.length < 1 || args.length > 2)))
                 fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
                 fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
@@ -4169,6 +4169,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_ARRAY_OWNERSHIP", "Array ownership requires one non-null String key", node);
             if (name === "indexOf" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
                 fail("HARDENED_ARRAY_INDEX_OF", "Array subclass indexOf requires native dispatch evidence", node);
+            if (name === "filter" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
+                fail("HARDENED_ARRAY_FILTER", "Array subclass filter requires native dispatch evidence", node);
             if (name === "splice" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
                 fail("HARDENED_ARRAY_SPLICE", "Array subclass splice requires native dispatch evidence", node);
             if (name === "sortOn" || name === "sort") {
@@ -4192,7 +4194,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             capabilitySource = "Array";
             capabilityMember = name;
-            resultType = name === "indexOf" ? semanticType(node,"int","number") : name === "hasOwnProperty" ? semanticType(node,"Boolean","boolean") : name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "sortOn" || name === "sort" || name === "splice" ? semanticType(node,"Array","Array",[],name === "splice")
+            resultType = name === "indexOf" ? semanticType(node,"int","number") : name === "hasOwnProperty" ? semanticType(node,"Boolean","boolean") : name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "filter" || name === "sortOn" || name === "sort" || name === "splice" ? semanticType(node,"Array","Array",[],name === "splice")
                 : name === "push" || name === "unshift"
                 ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {

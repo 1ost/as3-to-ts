@@ -1,7 +1,9 @@
 import { lookupObjectClass } from "./internal/AS3TypeRegistry";
 import { as3ArraySortOnNumeric, as3ArraySortNumeric } from "./internal/AS3ArraySort";
 import { as3NativeArrayJoin, as3NativeString, as3NativeNumber } from "./AS3ObjectDispatch";
-import { as3FunctionArgument } from "./AS3Function";
+import { as3FunctionArgument, as3FunctionSlot } from "./AS3Function";
+
+import { isAS3MethodClosure } from "./AS3MethodClosure";
 
 /*
  * Native Array index and bounded mutation boundaries.
@@ -255,13 +257,35 @@ export function as3ArrayWrite<T>(value: unknown, index: number, item: T): T {
 /** Native push/pop/shift/unshift retain values, identities and uint lengths. */
 export function as3ArrayCall(value:unknown, method:"push" | "unshift", args:unknown[]):number;
 export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown[]):unknown;
-export function as3ArrayCall(value:unknown, method:"concat", args:unknown[]):unknown[];
+export function as3ArrayCall(value:unknown, method:"concat" | "filter", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"join", args:unknown[]):string;
 export function as3ArrayCall(value:unknown, method:"indexOf", args:unknown[]):number;
 export function as3ArrayCall(value:unknown, method:"sortOn" | "sort", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"splice", args:unknown[]):unknown[] | null;
 export function as3ArrayCall(value:unknown, method:"hasOwnProperty", args:unknown[]):boolean;
 export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unknown {
+    if (method === "filter") {
+        const array=ordinaryArray(value);
+        if (args.length < 1 || args.length > 2 || Object.getPrototypeOf(array) !== Array.prototype
+            || Object.prototype.hasOwnProperty.call(array,"filter"))
+            throw new AS3ArrayOperationUnavailable("Array.filter requires an ordinary native method and one or two arguments");
+        const callback=as3FunctionSlot(args[0]);
+        const receiver=args.length === 2 ? args[1] : null;
+        if (isAS3MethodClosure(callback) && receiver != null) {
+            const error=new TypeError("Error #1510: When the callback argument is a method of a class, the optional this argument must be null.");
+            Object.defineProperty(error,"errorID",{value:1510});throw error;
+        }
+        const result:unknown[]=[];
+        if (callback === null) return result;
+        const length=array.length;
+        // AIR visits every original position, even deleted or now out-of-range
+        // slots, and retains only literal true rather than truthy results.
+        for (let index=0; index < length; index++) {
+            const item=as3ArrayRead(array,index);
+            if (Reflect.apply(callback,receiver,[item,index,array]) === true) result.push(item);
+        }
+        return result;
+    }
     if (method === "indexOf") {
         const array=ordinaryArray(value);
         if (args.length < 1 || args.length > 2 || Object.getPrototypeOf(array) !== Array.prototype
