@@ -1298,6 +1298,22 @@ try {
         const vectorCall=vector.declaration.members.find(m=>m.name==='run').body[0].expression;
         assert.notEqual(vectorCall.capabilitySource,'Array');
     }
+    {
+        const adaptRegex=(expression,resultType="Boolean",authenticated=true)=>{
+            const source=`package p {public class RegexProbe {public function run(value:String):${resultType} {return ${expression};}}}`;
+            return built.adapter.adaptNormalizedParserAst(built.normalizer.normalizeParserAst(built.parse("RegexProbe.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,
+                authenticated?sourceMemberAuthority:undefined);
+        };
+        for(const expression of ['/^[0-9a-f]{64}$/.test(value)','/^a$/.test(value)']) {
+            const semantic=adaptRegex(expression);assert.match(built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code,/__as3RegExpTest/);
+        }
+        const semantic=adaptRegex('(value || "").replace(/assets_(?:en|cn)(?=\\/|$)/,"assets")','String');
+        assert.match(built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code,/__as3RegExpReplaceReceiver/);
+        for(const expression of ['/a/g.test(value)','/(a)/.test(value)','/a./.test(value)','/a+/.test(value)','/[^a]/.test(value)'])
+            assert.throws(()=>adaptRegex(expression),error=>error.code==='HARDENED_REGEXP_GRAMMAR');
+        assert.throws(()=>adaptRegex('/a/.test(value)','Boolean',false),error=>!!error.code);
+    }
     const numericFieldSortSource='package p { public class FieldSort { public function run(values:Array):void { values.sortOn("priority",18); } } }';
     const numericFieldSortAst=built.normalizer.normalizeParserAst(
         built.parse("fixtures/FieldSort.as",numericFieldSortSource),numericFieldSortSource,sha256);

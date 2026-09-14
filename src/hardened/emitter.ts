@@ -166,6 +166,14 @@ function initializeClassNode(value: any, self: boolean, ts: TypeScriptCompilerAp
 }
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
+    if (expression.kind === "regexpCall") {
+        const pattern=ts.factory.createStringLiteral(expression.pattern);
+        if(expression.operation==="test") return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3RegExpTest"),undefined,
+            [pattern,expressionNode(expression.arguments[0]!,ts)]);
+        const receiver=ts.factory.createCallExpression(ts.factory.createIdentifier("__as3RegExpReplaceReceiver"),undefined,
+            [expressionNode(expression.arguments[0]!,ts)]);
+        return ts.factory.createCallExpression(receiver,undefined,[pattern,expressionNode(expression.arguments[1]!,ts)]);
+    }
     if (expression.kind === "undefined") return ts.factory.createVoidExpression(ts.factory.createNumericLiteral(0));
     if (expression.kind === "numericPredicate") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3IsNaN"),undefined,expression.arguments.map(argument=>expressionNode(argument,ts)));
@@ -797,7 +805,7 @@ function boundMethodNames(program: SemanticProgram): string[] {
             if (!expression.staticTarget) names[expression.methodName] = true;
         } else if (expression.kind === "member") {
             inspectExpression(expression.target);
-        } else if (expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger" || expression.kind === "numericPredicate") {
+        } else if (expression.kind === "regexpCall" || expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger" || expression.kind === "numericPredicate") {
             expression.arguments?.forEach(inspectExpression);
         } else if (expression.kind === "call") {
             inspectExpression(expression.callee);
@@ -1320,7 +1328,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
         if (expression.kind === "member") return visitExpression(expression.target);
-        if (expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger" || expression.kind === "numericPredicate") return expression.arguments?.some(visitExpression) || false;
+        if (expression.kind === "regexpCall" || expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger" || expression.kind === "numericPredicate") return expression.arguments?.some(visitExpression) || false;
         if (expression.kind === "call") return visitExpression(expression.callee) || expression.arguments.some(visitExpression);
         if (expression.kind === "assignment") return visitExpression(expression.target) || visitExpression(expression.value);
         if (expression.kind === "binary") return visitExpression(expression.left) || visitExpression(expression.right);
@@ -1708,6 +1716,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
             ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DynamicValues"),ts.factory.createIdentifier("__as3DynamicValues"))])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Enumeration"),undefined));
+    if (programHasKind(program,"regexpCall")) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
+            ["as3RegExpTest","as3RegExpReplaceReceiver"].map(name=>ts.factory.createImportSpecifier(false,
+                ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3RegExp"),undefined));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {
         imports.push(ownRecordRuntimeImport(ts));

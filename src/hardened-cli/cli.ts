@@ -75,6 +75,8 @@ function sha256(data: string | Buffer): string {
 }
 
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
+    "internal/AS3RegExpPattern.ts": "036bdd8077771be4ee518d9b84b25a7ffc80309240ebb45f7f85aeb84c4d3319",
+    "AS3RegExp.ts": "5b254ea41376aafb0e3381bc7707381be9db9e241c8b514f4d372991fb95a574",
     "AS3Enumeration.ts": "b7059948afc148589fe3b7b265064473643c879ae22785103e8a3df6c135cdcc",
     "internal/AS3ArraySort.ts": "15a4cc94a7c485c2277343fea40695a80c8934cee925c86e8528ab42ae660fa4",
     "AS3Array.ts": "e44e0129b2b07748fb4449a9cdcc325c7e4f082ca5ea3feab4f3feb20d99d57b",
@@ -219,7 +221,7 @@ function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<
 
 function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): string {
     const entries = ["AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
-        "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3Timer", "AS3Type", "AS3Vector"];
+        "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3RegExp", "AS3Timer", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
     entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"
         ? "./AS3Timer.js" : "./AS3Authority.generated.js"; });

@@ -1,3 +1,4 @@
+import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
 import {
     CallExpression,
     CapabilityMapping,
@@ -1924,7 +1925,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
 
     if (expression.kind === "globalFunction" || expression.kind === "identifier" && expression.bindingKind === "package-function")
         return semanticType(node,"Function","Function",[],false);
-    if (expression.kind === "functionApply") return expression.resultType;
+    if (expression.kind === "functionApply" || expression.kind === "regexpCall") return expression.resultType;
 
     if (expression.kind === "member" && (expression.target.kind === "super" || expression.target.kind === "this")
         && expression.capabilitySource !== null && context.mappingsBySource[expression.capabilitySource]) {
@@ -2378,6 +2379,27 @@ function builtinMathMember(node: TreeNode, context: AdapterContext): string | nu
 function parseExpression(node: TreeNode, context: AdapterContext, valuePosition: boolean,
     allowSuperCall: boolean = false, allowMethodClosure: boolean = true,
     allowAssignment: boolean = false): SemanticExpression {
+    if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length === 2
+        && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "DOT") {
+        const callee=node.children[0]!, args=node.children[1]!.children;
+        if(callee.children.length===2 && callee.children[1]!.kind==="LITERAL") {
+            const operation=callee.children[1]!.text, receiver=callee.children[0]!;
+            const rawPattern=operation==="test" ? receiver : operation==="replace" ? args[0] : undefined;
+            if(rawPattern?.kind==="LITERAL" && rawPattern.text?.startsWith("/")) {
+                try {lowerAS3RegExpLiteral(rawPattern.text);} catch {fail("HARDENED_REGEXP_GRAMMAR","RegExp literal uses unsupported native grammar or flags",rawPattern);}
+                if(args.length!==(operation==="test"?1:2)) fail("HARDENED_REGEXP_ARITY","RegExp operation has unsupported arity",node);
+                const values=(operation==="test" ? args : [receiver,args[1]!]).map(child=>parseExpression(child,context,true));
+                if(operation==="replace" && assignmentType(values[0]!,context,receiver).sourceName!=="String")
+                    fail("HARDENED_REGEXP_RECEIVER","RegExp replace requires a proven String receiver",receiver);
+                const inputType=assignmentType(values[values.length-1]!,context,node);
+                if(inputType.sourceName==="void" || operation==="replace" && inputType.sourceName==="Function")
+                    fail("HARDENED_REGEXP_ARGUMENT","RegExp argument behavior is unsupported",node);
+                return Object.assign(identity(node),{kind:"regexpCall" as const,operation:operation as "test"|"replace",
+                    pattern:rawPattern.text,arguments:values,
+                    resultType:semanticType(node,operation==="test"?"Boolean":"String",operation==="test"?"boolean":"string",[],false)});
+            }
+        }
+    }
     if (context.sourceMemberAuthority !== null && node.kind === "ARRAY_ACCESSOR" && node.children.length > 2) {
         // The original parser stores a[b][c] as [a,b,c]. Each suffix consumes
         // the previous access, including its read/error, before evaluating the next key.
