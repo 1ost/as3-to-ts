@@ -3984,7 +3984,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && ["message","name","errorID"].includes(name);
                     const errorMethod = !valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && name === "toString";
-                    const numberMethod = !valuePosition && ["Number","int","uint"].includes(targetType.sourceName) && name === "toFixed";
+                    const numberMethod = !valuePosition && (["Number","int","uint"].includes(targetType.sourceName) && name === "toFixed"
+                        || context.sourceMemberAuthority !== null && ["int","uint"].includes(targetType.sourceName)
+                            && targetType.emittedName === "number" && name === "toString");
                     const functionLength = context.sourceMemberAuthority !== null && valuePosition
                         && targetType.sourceName === "Function" && name === "length";
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
@@ -4272,6 +4274,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 capabilitySource = mapping.sourceQName;
                 capabilityMember = mapping.sourceMember!.name;
             }
+        } else if (context.sourceMemberAuthority !== null && callee.kind === "member"
+            && ["int","uint"].includes(callee.capabilitySource || "") && callee.name === "toString") {
+            const integerType = assignmentType(callee.target, context, rawCallee);
+            if (!["int","uint"].includes(integerType.sourceName) || integerType.emittedName !== "number")
+                fail("HARDENED_INTEGER_STRING_TARGET", "integer toString requires an authenticated primitive receiver", node);
+            if (args.length !== 0)
+                fail("HARDENED_INTEGER_STRING_ARITY", "integer toString currently requires its zero-argument decimal form", node);
+            return Object.assign(identity(node), {kind:"coercion" as const,
+                targetType:semanticType(node,"String","string",[],false),argument:callee.target});
         } else if (callee.kind === "member" && ["Number","int","uint"].includes(callee.capabilitySource || "")
             && callee.name === "toFixed") {
             if (args.length > 1) fail("HARDENED_NUMBER_ARITY", "Number.toFixed requires zero or one precision argument", node);
