@@ -1353,6 +1353,21 @@ try {
         assert.throws(()=>built.adapter.adaptNormalizedParserAst(built.normalizer.normalizeParserAst(built.parse('RoundShadow.as',shadow),shadow,sha256),
             authority(built.ledger),shadow,sha256),error=>!!error.code);
     }
+    {
+        const adaptRange=(expression,parameters='',authenticated=true)=>{
+            const source=`package p {public class RangeProbe {public function make(${parameters}):Error{return ${expression};}}}`;
+            return built.adapter.adaptNormalizedParserAst(built.normalizer.normalizeParserAst(built.parse('RangeProbe.as',source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,authenticated?sourceMemberAuthority:undefined);
+        };
+        for(const expression of ['new RangeError()','new RangeError("The requested frame is out of bounds.")','new RangeError(null,73)','new RangeError(undefined,"73")','new RangeError(42,-1.9)','new RangeError("object",{valueOf:function():Number{return 73;}})']) {
+            const semantic=adaptRange(expression);const emitted=built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code;
+            assert.match(emitted,/new __AS3RangeError\(/);assert.match(emitted,/AS3RangeError as __AS3RangeError/);
+        }
+        assert.throws(()=>adaptRange('new RangeError("x",1,2)'),error=>error.code==='HARDENED_RANGE_ERROR_CONSTRUCTOR');
+        for(const type of ['*','Object']) assert.throws(()=>adaptRange('new RangeError("x",id)',`id:${type}`),error=>error.code==='HARDENED_RANGE_ERROR_IDENTIFIER');
+        assert.throws(()=>adaptRange('new RangeError()','',false),error=>!!error.code);
+        assert.throws(()=>adaptRange('new RangeError()','RangeError:Object'),error=>!!error.code);
+    }
     const numericFieldSortSource='package p { public class FieldSort { public function run(values:Array):void { values.sortOn("priority",18); } } }';
     const numericFieldSortAst=built.normalizer.normalizeParserAst(
         built.parse("fixtures/FieldSort.as",numericFieldSortSource),numericFieldSortSource,sha256);

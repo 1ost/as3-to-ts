@@ -460,8 +460,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         if (expression.nativeArray)
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NewArray"),undefined,
                 [ts.factory.createArrayLiteralExpression(expression.arguments.map(argument=>expressionNode(argument,ts)))]);
-        if (expression.sourceType.emittedName === "__AS3ArgumentError" && expression.sourceType.runtimeName === "ArgumentError")
-            return ts.factory.createNewExpression(ts.factory.createIdentifier("__AS3ArgumentError"),undefined,
+        if (["ArgumentError","RangeError"].includes(expression.sourceType.runtimeName || "")
+            && expression.sourceType.emittedName === "__AS3"+expression.sourceType.runtimeName)
+            return ts.factory.createNewExpression(ts.factory.createIdentifier(expression.sourceType.emittedName),undefined,
                 expression.arguments.map(argument => expressionNode(argument,ts)));
         if (expression.dynamicClass && expression.constructorValue)
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ConstructClass"),undefined,
@@ -1666,14 +1667,16 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || programUsesRuntimeType(program) || referenceEnumeration || implementsTypes.length > 0 || programUsesVector(program)) {
         imports.push(runtimeTypeImport(ts,referenceEnumeration));
     }
-    const argumentError=(value:any):boolean => value !== null && typeof value === "object" && (
-        value.kind === "new" && value.sourceType.emittedName === "__AS3ArgumentError"
-        && value.sourceType.runtimeName === "ArgumentError" || Object.values(value).some(argumentError));
-    if (argumentError(program)) imports.push(ts.factory.createImportDeclaration(undefined,
-        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
-            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("AS3ArgumentError"),
-                ts.factory.createIdentifier("__AS3ArgumentError"))])),
-        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Error"),undefined));
+    for(const errorName of ["ArgumentError","RangeError"]) {
+        const nativeError=(value:any):boolean => value !== null && typeof value === "object" && (
+            value.kind === "new" && value.sourceType.emittedName === "__AS3"+errorName
+            && value.sourceType.runtimeName === errorName || Object.values(value).some(nativeError));
+        if(nativeError(program)) imports.push(ts.factory.createImportDeclaration(undefined,
+            ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+                ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("AS3"+errorName),
+                    ts.factory.createIdentifier("__AS3"+errorName))])),
+            ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Error"),undefined));
+    }
     const primitiveMember=(value:any):boolean => value !== null && typeof value === "object" && (
         value.kind === "math" && value.member === "round" ||
         value.kind === "member" && value.capabilitySource === "String" && value.name === "length"

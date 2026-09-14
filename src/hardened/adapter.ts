@@ -838,8 +838,8 @@ function referenceParents(qname: string, context: AdapterContext): readonly stri
 function provenReferenceSubtype(source: SemanticType, target: SemanticType, context: AdapterContext): boolean {
     if (sameUnderlyingType(source, target)) return true;
     if (target.sourceName === "Array" && target.emittedName === "Array" && isArrayType(source,context)) return true;
-    if (context.sourceMemberAuthority !== null && source.sourceName === "ArgumentError"
-        && source.emittedName === "__AS3ArgumentError" && source.runtimeName === "ArgumentError"
+    if (context.sourceMemberAuthority !== null && ["ArgumentError","RangeError"].includes(source.sourceName)
+        && source.emittedName === "__AS3"+source.sourceName && source.runtimeName === source.sourceName
         && target.sourceName === "Error" && target.emittedName === "Error") return true;
     if (source.runtimeName === null || target.runtimeName === null || source.typeArguments.length !== 0
         || target.typeArguments.length !== 0) return false;
@@ -2630,6 +2630,23 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_ARGUMENT_ERROR_CONSTRUCTOR", "ArgumentError requires zero to two arguments and a proven numeric identifier",call);
             return Object.assign(identity(node), {kind:"new" as const,
                 sourceType:semanticType(node,"ArgumentError","__AS3ArgumentError",[],false,"ArgumentError"),arguments:args});
+        }
+        if (name === "RangeError" && context.sourceMemberAuthority !== null && context.className !== name
+            && !context.locals[name] && !context.parameters[name] && !context.fields[name] && !context.methods[name]
+            && !context.accessors[name] && !context.importsByLocal[name] && !context.resolveImportedType(name,null,nameNode)) {
+            assertNoInheritedNativeFunctionShadow(context,name,nameNode);
+            if(args.length>2 || args.some(argument=>assignmentType(argument,context,call).sourceName==="void"))
+                fail("HARDENED_RANGE_ERROR_CONSTRUCTOR","RangeError accepts zero to two value arguments",call);
+            if(args[1]) {
+                const idType=assignmentType(args[1],context,call);
+                // Primitive conversion and authenticated object literals share the existing Number runtime.
+                // An unknown host/object parameter does not itself prove a native coercion route.
+                if(!["Number","int","uint","String","Boolean","null","undefined"].includes(idType.sourceName)
+                    && args[1].kind!=="object")
+                    fail("HARDENED_RANGE_ERROR_IDENTIFIER","RangeError identifier lacks a proven native numeric conversion route",call);
+            }
+            return Object.assign(identity(node),{kind:"new" as const,
+                sourceType:semanticType(node,"RangeError","__AS3RangeError",[],false,"RangeError"),arguments:args});
         }
         const embedded = context.fields[name]?.embeddedBitmap;
         if (embedded && !context.locals[name] && !context.parameters[name]) {
