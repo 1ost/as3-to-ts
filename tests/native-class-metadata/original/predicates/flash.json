@@ -1,0 +1,60 @@
+{
+  "failure": "",
+  "ready": true,
+  "rows": [
+    [
+      "ordinary-is-Class",
+      false
+    ],
+    [
+      "subject-is-Class",
+      true
+    ],
+    [
+      "genuine-is",
+      true
+    ],
+    [
+      "object-is",
+      false
+    ],
+    [
+      "genuine-as",
+      true
+    ],
+    [
+      "object-as",
+      true
+    ],
+    [
+      "class-as",
+      true
+    ],
+    [
+      "ordinary-as",
+      true
+    ],
+    [
+      "negative-int",
+      true
+    ],
+    [
+      "negative-uint",
+      false
+    ],
+    [
+      "large-int",
+      false
+    ],
+    [
+      "large-uint",
+      true
+    ]
+  ],
+  "instances": [
+    "<type name=\"review::Subject\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_ctor_definition_help\">\n    <arg key=\"pos\" value=\"59\"/>\n  </metadata>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"31\"/>\n  </metadata>\n</type>"
+  ],
+  "reflection": [
+    "<type name=\"review::Subject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"isInt\" declaredBy=\"review::Subject\" returnType=\"Boolean\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"508\"/>\n    </metadata>\n  </method>\n  <method name=\"isSubject\" declaredBy=\"review::Subject\" returnType=\"Boolean\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"287\"/>\n    </metadata>\n  </method>\n  <method name=\"functionCheck\" declaredBy=\"review::Subject\" returnType=\"Boolean\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"96\"/>\n    </metadata>\n  </method>\n  <method name=\"isUint\" declaredBy=\"review::Subject\" returnType=\"Boolean\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"579\"/>\n    </metadata>\n  </method>\n  <method name=\"asSubject\" declaredBy=\"review::Subject\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"366\"/>\n    </metadata>\n  </method>\n  <method name=\"asClass\" declaredBy=\"review::Subject\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"439\"/>\n    </metadata>\n  </method>\n  <method name=\"classCheck\" declaredBy=\"review::Subject\" returnType=\"Boolean\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"214\"/>\n    </metadata>\n  </method>\n  <factory type=\"review::Subject\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_ctor_definition_help\">\n      <arg key=\"pos\" value=\"59\"/>\n    </metadata>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"31\"/>\n    </metadata>\n  </factory>\n</type>"
+  ]
+}

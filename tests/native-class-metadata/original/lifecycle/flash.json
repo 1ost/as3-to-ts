@@ -1,0 +1,112 @@
+{
+  "reflection": [
+    "<type name=\"entryreview::Subject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"count\" type=\"int\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"64\"/>\n    </metadata>\n  </variable>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"entryreview::Subject\">\n    <extendsClass type=\"Object\"/>\n    <variable name=\"n\" type=\"int\">\n      <metadata name=\"__go_to_definition_help\">\n        <arg key=\"pos\" value=\"87\"/>\n      </metadata>\n    </variable>\n    <metadata name=\"__go_to_ctor_definition_help\">\n      <arg key=\"pos\" value=\"111\"/>\n    </metadata>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"37\"/>\n    </metadata>\n  </factory>\n</type>",
+    "<type name=\"entryreview::Probe\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"bindNew\" declaredBy=\"entryreview::Probe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"71\"/>\n    </metadata>\n  </method>\n  <method name=\"aliasCoerce\" declaredBy=\"entryreview::Probe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"343\"/>\n    </metadata>\n  </method>\n  <method name=\"freshPrototype\" declaredBy=\"entryreview::Probe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"182\"/>\n    </metadata>\n  </method>\n  <factory type=\"entryreview::Probe\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"37\"/>\n    </metadata>\n  </factory>\n</type>",
+    "<type name=\"entryreview::FlowProbe\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"objectAllocate\" declaredBy=\"entryreview::FlowProbe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"200\"/>\n    </metadata>\n  </method>\n  <method name=\"transitiveCoerce\" declaredBy=\"entryreview::FlowProbe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"73\"/>\n    </metadata>\n  </method>\n  <method name=\"arrayCoerce\" declaredBy=\"entryreview::FlowProbe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"639\"/>\n    </metadata>\n  </method>\n  <method name=\"arrayAllocate\" declaredBy=\"entryreview::FlowProbe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"316\"/>\n    </metadata>\n  </method>\n  <method name=\"allocate\" declaredBy=\"entryreview::FlowProbe\" returnType=\"*\">\n    <parameter index=\"1\" type=\"Class\" optional=\"false\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"760\"/>\n    </metadata>\n  </method>\n  <method name=\"callbackAllocate\" declaredBy=\"entryreview::FlowProbe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"423\"/>\n    </metadata>\n  </method>\n  <method name=\"objectCoerce\" declaredBy=\"entryreview::FlowProbe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"509\"/>\n    </metadata>\n  </method>\n  <factory type=\"entryreview::FlowProbe\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"36\"/>\n    </metadata>\n  </factory>\n</type>",
+    "<type name=\"entryreview::OperationProbe\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"target\" type=\"Object\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"103\"/>\n    </metadata>\n  </variable>\n  <variable name=\"log\" type=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"73\"/>\n    </metadata>\n  </variable>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"receiver\" declaredBy=\"entryreview::OperationProbe\" returnType=\"Object\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"211\"/>\n    </metadata>\n  </method>\n  <method name=\"key\" declaredBy=\"entryreview::OperationProbe\" returnType=\"String\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"143\"/>\n    </metadata>\n  </method>\n  <method name=\"run\" declaredBy=\"entryreview::OperationProbe\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"292\"/>\n    </metadata>\n  </method>\n  <factory type=\"entryreview::OperationProbe\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"36\"/>\n    </metadata>\n  </factory>\n</type>",
+    "<type name=\"entryreview::LifecycleLog\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"first\" type=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"102\"/>\n    </metadata>\n  </variable>\n  <variable name=\"fail\" type=\"Boolean\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"131\"/>\n    </metadata>\n  </variable>\n  <variable name=\"failure\" type=\"Object\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"170\"/>\n    </metadata>\n  </variable>\n  <variable name=\"rows\" type=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"71\"/>\n    </metadata>\n  </variable>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"capture\" declaredBy=\"entryreview::LifecycleLog\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"229\"/>\n    </metadata>\n  </method>\n  <factory type=\"entryreview::LifecycleLog\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"36\"/>\n    </metadata>\n  </factory>\n</type>",
+    "<type name=\"entryreview::Lifecycle\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"captured\" type=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"68\"/>\n    </metadata>\n  </variable>\n  <variable name=\"token\" type=\"int\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"132\"/>\n    </metadata>\n  </variable>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"record\" declaredBy=\"entryreview::Lifecycle\" returnType=\"int\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"441\"/>\n    </metadata>\n  </method>\n  <method name=\"begin\" declaredBy=\"entryreview::Lifecycle\" returnType=\"int\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"269\"/>\n    </metadata>\n  </method>\n  <factory type=\"entryreview::Lifecycle\">\n    <extendsClass type=\"Object\"/>\n    <variable name=\"n\" type=\"int\">\n      <metadata name=\"__go_to_definition_help\">\n        <arg key=\"pos\" value=\"164\"/>\n      </metadata>\n    </variable>\n    <metadata name=\"__go_to_ctor_definition_help\">\n      <arg key=\"pos\" value=\"198\"/>\n    </metadata>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"36\"/>\n    </metadata>\n  </factory>\n</type>"
+  ],
+  "failure": "",
+  "instances": [
+    "<type name=\"entryreview::Subject\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <variable name=\"n\" type=\"int\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"87\"/>\n    </metadata>\n  </variable>\n  <metadata name=\"__go_to_ctor_definition_help\">\n    <arg key=\"pos\" value=\"111\"/>\n  </metadata>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"37\"/>\n  </metadata>\n</type>",
+    "<type name=\"entryreview::Probe\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"37\"/>\n  </metadata>\n</type>",
+    "<type name=\"entryreview::FlowProbe\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"36\"/>\n  </metadata>\n</type>",
+    "<type name=\"entryreview::OperationProbe\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"36\"/>\n  </metadata>\n</type>",
+    "<type name=\"entryreview::LifecycleLog\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"36\"/>\n  </metadata>\n</type>",
+    "<type name=\"entryreview::Lifecycle\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <variable name=\"n\" type=\"int\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"164\"/>\n    </metadata>\n  </variable>\n  <metadata name=\"__go_to_ctor_definition_help\">\n    <arg key=\"pos\" value=\"198\"/>\n  </metadata>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"36\"/>\n  </metadata>\n</type>"
+  ],
+  "lifecycle": [
+    "capture",
+    "static",
+    "thrown:true",
+    "capture",
+    "static",
+    "retry:true",
+    "field",
+    "body",
+    "field",
+    "body",
+    "values:3:3",
+    "tokens:0:7",
+    "types:true:true",
+    "coercions:true:true"
+  ],
+  "rows": [
+    [
+      "bindNew",
+      "error",
+      1006,
+      0
+    ],
+    [
+      "freshPrototype",
+      "error",
+      1006,
+      0
+    ],
+    [
+      "aliasCoerce",
+      "ok",
+      7,
+      true,
+      1
+    ],
+    [
+      "transitiveCoerce",
+      "ok",
+      7,
+      true,
+      1
+    ],
+    [
+      "objectAllocate",
+      "ok",
+      7,
+      true,
+      1
+    ],
+    [
+      "arrayAllocate",
+      "ok",
+      7,
+      true,
+      1
+    ],
+    [
+      "callbackAllocate",
+      "ok",
+      7,
+      true,
+      1
+    ],
+    [
+      "objectCoerce",
+      "ok",
+      7,
+      true,
+      1
+    ],
+    [
+      "arrayCoerce",
+      "ok",
+      7,
+      true,
+      1
+    ]
+  ],
+  "operation": [
+    true,
+    true,
+    false,
+    false,
+    [
+      "key",
+      "receiver",
+      "receiver",
+      "key",
+      "key",
+      "receiver"
+    ]
+  ]
+}

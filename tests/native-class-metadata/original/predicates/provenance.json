@@ -1,0 +1,76 @@
+{
+  "files": [
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\sources\\MetadataOracle.as",
+      "sha256": "2ab6c922515196c9a0dd6fa50b3df5cfbb84107327892c013868a06db60d2f67"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\sources\\review\\Subject.as",
+      "sha256": "dd7cf09d6b2c9ad7e2d3fc2a0ff9d5e69aa1a944ee9a39525036aac7fb3236fc"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\oracle.swf",
+      "sha256": "eef6d4221c28724346c0c24ded74997070a08d51dfeb0b0f1a4a2f452c323319"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\flash.json",
+      "sha256": "1940209ce2a381bdedd42d565bd797cbceda4c41e8fa17559261ef071afe14de"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\capture.py",
+      "sha256": "c013557bef8c2e6a2eabe386075f84160108437b8495b49b3aebc7dffb724cdc"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-debug=true",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\sources",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\sources\\MetadataOracle.as"
+      ],
+      "exitCode": 0,
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\oracle.swf (1994 bytes)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\capture.cjs",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\flash.json",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+      ],
+      "exitCode": 0,
+      "stdout": "\n",
+      "stderr": ""
+    }
+  ]
+}

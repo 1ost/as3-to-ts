@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "groups": [
+    {
+      "group": "lifecycle",
+      "receipt": "original/lifecycle/receipt.json",
+      "sha256": "40a17fad2bb9b900e77e3012537b71f75034b8c36da1db46b19d8f2c1c4944cf"
+    },
+    {
+      "group": "predicates",
+      "receipt": "original/predicates/receipt.json",
+      "sha256": "9ff8aa50eff7333cd908becfbe0aa91e2a586dcc9087b46483b2fbfeeae4c22c"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import {NativeClassMetadataOptions} from './native-class-metadata';
 import NodeKind, {nodeKindName} from '../syntax/nodeKind';
 import * as Keywords from '../syntax/keywords';
 import Node, {createNode, outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
@@ -103,6 +104,7 @@ export interface EmitterOptions {
 	nativeCallableMethodBindingModule?: string;
 	/** Common Laya AS3Coercion module; required for callable numeric constructor parameters. */
 	nativeCallableCoercionModule?: string;
+	nativeCallableMetadata?: NativeClassMetadataOptions;
 }
 
 
@@ -207,6 +209,8 @@ function filterAST(node:Node):Node {
 
 
 export default class Emitter {
+    /** Exact compiler-created callable imports; authored imports grant no exemption. */
+    public nativeSourceHelpers = new Set<string>();
 	public isNew:boolean = false;
 	public isExtended:boolean = false;
 	public skipNewLines:boolean = false;
@@ -286,7 +290,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -2178,10 +2182,34 @@ function emitCatch(emitter:Emitter, node:Node):void {
 function emitRelation(emitter:Emitter, node:Node):void {
 
 	emitter.catchup(node.start);
+    const sourceOperand = emitter.source.slice(node.lastChild.start, node.lastChild.end).trim();
+    const relationType = sourceOperand === 'int' || sourceOperand === 'uint' ? sourceOperand : node.lastChild.text;
 
 	// Check for 'as' in relation.
 	let as = node.findChild(NodeKind.AS);
 	if (as) {
+        if (emitter.options.nativeCallableMetadata) {
+            let helper = node.lastChild.text === 'Class' ? '__as3_source_asClass' : '__as3_source_asType';
+            while (emitter.source.indexOf(helper) >= 0) helper += '_';
+            emitter.ensureImportIdentifier((node.lastChild.text === 'Class' ? 'as3AsClass' : 'as3As') + ' as ' + helper, emitter.options.nativeCallableMetadata.module, false);
+            emitter.nativeSourceHelpers.add(helper);
+            emitter.insert(helper + '(');
+            visitNodes(emitter, node.getChildUntil(NodeKind.AS));
+            emitter.catchup(as.start);
+            if (node.lastChild.text !== 'Class') {
+                emitter.insert(','); emitter.skipTo(node.lastChild.start);
+                if (relationType === 'int' || relationType === 'uint') {
+                    let operand = helper + '_operand_' + relationType;
+                    while (emitter.source.indexOf(operand) >= 0) operand += '_';
+                    emitter.ensureImportIdentifier((relationType === 'int' ? 'AS3Int' : 'AS3Uint') + ' as ' + operand, emitter.options.nativeCallableMetadata.module, false);
+                    emitter.insert(operand);
+                } else visitNode(emitter, node.lastChild);
+            }
+            emitter.insert(')');
+            emitter.skipTo(node.end);
+            return;
+        }
+
 		if (emitter.classInitializers.resolve(node, node.lastChild.text) === 'lazy')
 			throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: lazy-class as coercion requires separate type authority');
 		// TODO: implement relation with type cast to vectors
@@ -2209,6 +2237,29 @@ function emitRelation(emitter:Emitter, node:Node):void {
 	// Check for 'is' in relation.
 	let is = containsIsKeyword(node);
 	if (is) {
+        if (emitter.options.nativeCallableMetadata) {
+            let helper = node.lastChild.text === 'Class' ? '__as3_source_isClass' : '__as3_source_isType';
+            while (emitter.source.indexOf(helper) >= 0) helper += '_';
+            const classTest = node.lastChild.text === 'Class';
+            emitter.ensureImportIdentifier((classTest ? 'as3AsClass' : 'as3Is') + ' as ' + helper, emitter.options.nativeCallableMetadata.module, false);
+            emitter.nativeSourceHelpers.add(helper);
+            emitter.insert(helper + '(');
+            visitNode(emitter, node.children[0]);
+            emitter.catchup(node.children[0].end);
+            if (!classTest) {
+                emitter.insert(',');
+                emitter.skipTo(node.lastChild.start);
+                if (relationType === 'int' || relationType === 'uint') {
+                    let operand = helper + '_operand_' + relationType;
+                    while (emitter.source.indexOf(operand) >= 0) operand += '_';
+                    emitter.ensureImportIdentifier((relationType === 'int' ? 'AS3Int' : 'AS3Uint') + ' as ' + operand, emitter.options.nativeCallableMetadata.module, false);
+                    emitter.insert(operand);
+                } else visitNode(emitter, node.lastChild);
+            }
+            emitter.insert(classTest ? ') !== null' : ')');
+            emitter.skipTo(node.end);
+            return;
+        }
 
 		// Determine if the check is against a primitive or a custom type.
 		// console.log(node.toString());
@@ -2824,5 +2875,4 @@ export function emit(ast:Node, source:string, options?:EmitterOptions):string {
 	let emitter = new Emitter(source, options);
 	return emitter.emit(ast);
 }
-
 

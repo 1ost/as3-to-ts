@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "group": "predicates",
+  "files": [
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\capture.cjs"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "8fd826e351274caebb1fbc5e513b3f50f0c972e0fc823d19bbaec47144b6ad30"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "1940209ce2a381bdedd42d565bd797cbceda4c41e8fa17559261ef071afe14de",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\flash.json"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "eef6d4221c28724346c0c24ded74997070a08d51dfeb0b0f1a4a2f452c323319",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\oracle.swf"
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "6825ba8d32fb192937347abf9ea59515d45cbe2575ddcbd99d4cb8154d947ce9"
+    },
+    {
+      "path": "sources/MetadataOracle.as",
+      "sha256": "2ab6c922515196c9a0dd6fa50b3df5cfbb84107327892c013868a06db60d2f67",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\sources\\MetadataOracle.as"
+    },
+    {
+      "path": "sources/review/Subject.as",
+      "sha256": "dd7cf09d6b2c9ad7e2d3fc2a0ff9d5e69aa1a944ee9a39525036aac7fb3236fc",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-class-alias-review\\flash-xc3ysufv\\sources\\review\\Subject.as"
+    },
+    {
+      "path": "metadata.json",
+      "sha256": "5e304986d8b7cb6ddd4e0cd76b811c6898c9ae49c4fec47444fd69b63eec7740"
+    }
+  ],
+  "rows": 12,
+  "lifecycleSteps": 0,
+  "operationTrace": false,
+  "authentication": "Receipt binds exact original Flash capture, source bytes, ordered extracted metadata, and original provenance. Sorted source surface alone does not authenticate reflection order."
+}

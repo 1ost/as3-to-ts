@@ -1,0 +1,100 @@
+{
+  "schema": 1,
+  "captureSha256": "1940209ce2a381bdedd42d565bd797cbceda4c41e8fa17559261ef071afe14de",
+  "classes": {
+    "review.Subject": {
+      "sourceSha256": "dd7cf09d6b2c9ad7e2d3fc2a0ff9d5e69aa1a944ee9a39525036aac7fb3236fc",
+      "metadata": {
+        "name": "review::Subject",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [],
+          "accessors": [],
+          "methods": [],
+          "constants": []
+        },
+        "statics": {
+          "variables": [],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ],
+          "methods": [
+            {
+              "name": "isInt",
+              "declaredBy": "review::Subject",
+              "parameterCount": 1
+            },
+            {
+              "name": "isSubject",
+              "declaredBy": "review::Subject",
+              "parameterCount": 1
+            },
+            {
+              "name": "functionCheck",
+              "declaredBy": "review::Subject",
+              "parameterCount": 0
+            },
+            {
+              "name": "isUint",
+              "declaredBy": "review::Subject",
+              "parameterCount": 1
+            },
+            {
+              "name": "asSubject",
+              "declaredBy": "review::Subject",
+              "parameterCount": 1
+            },
+            {
+              "name": "asClass",
+              "declaredBy": "review::Subject",
+              "parameterCount": 1
+            },
+            {
+              "name": "classCheck",
+              "declaredBy": "review::Subject",
+              "parameterCount": 0
+            }
+          ],
+          "constants": []
+        }
+      },
+      "instanceTraits": [],
+      "staticTraits": [
+        {
+          "name": "isInt",
+          "kind": "method"
+        },
+        {
+          "name": "isSubject",
+          "kind": "method"
+        },
+        {
+          "name": "functionCheck",
+          "kind": "method"
+        },
+        {
+          "name": "isUint",
+          "kind": "method"
+        },
+        {
+          "name": "asSubject",
+          "kind": "method"
+        },
+        {
+          "name": "asClass",
+          "kind": "method"
+        },
+        {
+          "name": "classCheck",
+          "kind": "method"
+        }
+      ]
+    }
+  }
+}

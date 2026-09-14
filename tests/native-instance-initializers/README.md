@@ -272,3 +272,22 @@ See `../native-super-methods` for original observations and current-engine type
 checks. Detached, computed, grouped, namespaced and accessor super forms, other
 parameter types, and native provider bases remain unimplemented. The source Class
 identity and dynamic-operation requirements above are unchanged.
+
+## Authenticated Class metadata integration
+
+`nativeCallableMetadata` adds optional exact source Class publication and common
+property/invocation lowering. The source hash and parsed member checks validate
+the supplied surface; trusted capture tooling must authenticate original ordered
+reflection metadata before passing this option. See `../native-class-metadata`
+for retained source/SWF provenance, metadata reconstruction and executable checks.
+
+The implemented metadata shape is public Object-root classes. It preserves
+failed static-initialization generations, source nominal identity, Class aliases
+in Object/Array containers, Class coercion, deletion/membership and mixed
+Class/nominal/int/uint predicates. Compiler-created predicate helpers are tracked
+by exact emitted alias, independently of the configured provider module name.
+
+Inherited/nonpublic metadata, ordinary unbound function globals, method
+arguments, source enumeration and source typeof remain unresolved. Existing
+super-call support remains available without this metadata option; inherited
+metadata is rejected explicitly. These tests do not qualify a complete game.

@@ -1,3 +1,5 @@
+import {lowerNativeSourceOperations} from './native-source-operations';
+import {NativeClassMetadataOptions, validateNativeClassMetadata} from './native-class-metadata';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
@@ -17,7 +19,7 @@ export class NativeCallableClasses {
     private sourceTexts = new Map<string, string>();
     private ts: any;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>) {
         if (!options) return;
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
             || /[\r\n\u0000]/.test(methodBindingModule))
@@ -29,6 +31,7 @@ export class NativeCallableClasses {
         Object.keys(options).forEach(qname => {
             if (typeof options[qname] !== 'string' || !lazy || lazy[qname] !== 'lazy') this.fail('source identity must be lazy: ' + qname);
             this.sourceTexts.set(qname, options[qname]);
+            if (metadata) validateNativeClassMetadata(qname, options[qname], metadata);
             const root = parse(qname + '.as', options[qname]), declarations: Node[] = [];
             const walk = (node: Node): void => {
                 if (!node) return;
@@ -59,7 +62,7 @@ export class NativeCallableClasses {
                     this.fail('dynamic Class invocation requires exact constructor authority');
                 node.children.forEach(callScan);
             };
-            callScan(cls);
+            if (!metadata) callScan(cls);
             if (cls.findChild(K.IMPLEMENTS_LIST)) this.fail('interface construction identity requires separate authority');
             let base = null;
             const ext = cls.findChild(K.EXTENDS);
@@ -176,6 +179,14 @@ export class NativeCallableClasses {
             ts.forEachChild(node, visit);
         };
         visit(file);
+        const compilerHelpers = new Set<string>();
+        if (this.sourceHelpers) this.sourceHelpers.forEach(helper => compilerHelpers.add(helper));
+        file.statements.forEach((statement: any) => {
+            if (statement.kind !== S.ImportDeclaration || !statement.importClause || !statement.importClause.namedBindings) return;
+            if (!/(?:^|\/)(?:nativeClass|callableClass|bound|classBound|AS3MethodBinding)$/.test(statement.moduleSpecifier.text)) return;
+            const bindings = statement.importClause.namedBindings;
+            if (bindings.elements) bindings.elements.forEach((item: any) => compilerHelpers.add(item.name.text));
+        });
         if (!cls || !alias) this.fail('expected complete native class and instance type');
         const unique = (label: string): string => { let result = '__as3_callable_' + label; while (source.indexOf(result) >= 0) result += '_'; return result; };
         const baseName = unique('base'), constructorType = unique('constructor'), bindName = unique('bind');
@@ -233,6 +244,7 @@ export class NativeCallableClasses {
                 + parameters.slice(0, supplied).map((_,index) => args + '[' + index + '] = !!' + args + '[' + index + '];').join('')
                 + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
         };
+        const provider = unique('provider'), declaration = unique('declaration'), generation = unique('generation');
         const text = (node: any): string => node.getText(file);
         const params = (member: any, signature: boolean): string => member.parameters.map((p: any) => {
             if (!signature) return text(p);
@@ -320,7 +332,7 @@ export class NativeCallableClasses {
             edits.sort((a,b) => b.start - a.start).forEach(edit => {
                 result = result.slice(0, edit.start - offset) + edit.value + result.slice(edit.end - offset);
             });
-            return result;
+            return this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique) : result;
         };
         const accessorTypes = new Set<string>();
         cls.members.forEach((member: any) => {
@@ -371,7 +383,7 @@ export class NativeCallableClasses {
             });
         }
         const bindInstance = instanceMethods.map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
-        const defaults = chainFields.map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
+        const defaults = (this.metadata ? generation + '.enterInstance(this);\n' : '') + chainFields.map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
             + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
         const ancestry = cls.heritageClauses && cls.heritageClauses[0];
         const base = ancestry ? 'const ' + baseName + ' = ' + text(ancestry.types[0].expression) + ';\n' : '';
@@ -402,7 +414,7 @@ export class NativeCallableClasses {
             + arity + coercions
             + (this.own.usesArguments ? '\nlet ' + sourceArguments + ': any[] = '
                 + intrinsic + '.apply(' + intrinsic + '.arraySlice, arguments, []);\n' : '') + '\nif (' + fresh + ') {\n' + defaults + '\n' + bindInstance + '\n}\n'
-            + initializers.join('\n') + '\n' + completedBody + '\n' + completion + '\n} finally { '
+            + (this.metadata ? lowerNativeSourceOperations(initializers.join('\n'), provider, compilerHelpers, unique) : initializers.join('\n')) + '\n' + completedBody + '\n' + completion + '\n} finally { '
             + intrinsic + '.leave(this, ' + identity + ', ' + succeeded + '); }\n} as any;\n'
             + 'const ' + identity + ' = ' + name + ';\n'
             + (this.own.base ? intrinsic + '.setPrototypeOf(' + name + ', ' + baseName + ');\n'
@@ -410,17 +422,41 @@ export class NativeCallableClasses {
             + intrinsic + '.defineProperty(' + name + '.prototype, "constructor", {value:' + name + ', writable:false, configurable:true});\n'
             + intrinsic + '.register(' + identity + ', ' + (this.own.base ? baseName : 'null') + ');\n'
             + definitions.join('\n') + '\n'
-            + staticMethods.map(key => bindName + '(' + name + ', ' + JSON.stringify(key) + ');').join('\n');
+            + staticMethods.map(key => bindName + '(' + name + ', ' + JSON.stringify(key) + ');').join('\n')
+            + (this.metadata ? '\n' + intrinsic + '.defineProperty(' + name + ', "prototype", {writable:false});\n'
+                + provider + '.registerFlashTypeMetadata(' + name + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].metadata) + ');\n'
+                + provider + '.registerAS3Class(' + name + ', []);\n'
+                + 'const ' + generation + ' = ' + declaration + '.publishGeneration(' + name + ');\n'
+                + provider + '.registerAS3PropertyTraits(' + name + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].instanceTraits)
+                    + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].staticTraits) + ');\n'
+                + provider + '.registerAS3Constructor(' + name + ', {minimum:' + required + ', maximum:'
+                    + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
             + ' {\n' + instanceTypes.join('\n') + '\n}\ninterface ' + constructorType
             + ' extends ' + functionType + ' {new(' + (ctor ? params(ctor, true) : '') + '): ' + name + '; prototype: ' + name + ';\n'
             + staticTypes.join('\n') + '\n}';
         const replacements = [{start: cls.getStart(file), end: cls.end, value: replacement},
             {start: alias.getStart(file), end: alias.end, value: surface}];
+        if (this.metadata) {
+            const statements = cls.parent.statements;
+            if (!statements) this.fail('lazy native factory body required for publication');
+            const index = statements.indexOf(cls);
+            const finalize = statements[index + 1];
+            if (!finalize || finalize.kind !== S.ExpressionStatement || finalize.expression.kind !== S.BinaryExpression
+                || finalize.expression.right.kind !== S.CallExpression) this.fail('lazy final identity publication marker');
+            for (let i = index + 2; i < statements.length; i++) {
+                const statement = statements[i];
+                if (statement.kind === S.ReturnStatement) break;
+                replacements.push({start: statement.getStart(file), end: statement.end,
+                    value: lowerNativeSourceOperations(text(statement), provider, compilerHelpers, unique)});
+            }
+        }
         replacements.sort((a,b) => b.start - a.start).forEach(edit => source = source.slice(0,edit.start) + edit.value + source.slice(edit.end));
         const boundImport = file.statements.find((node: any) => node.kind === S.ImportDeclaration && /(?:^|\/)bound$/.test(node.moduleSpecifier.text));
         const helperPath = boundImport ? boundImport.moduleSpecifier.text : './bound';
-        return 'import {callableClassIntrinsics as ' + intrinsic + ', NativeCallableFunction as ' + functionType + '} from '
+        return (this.metadata ? 'import * as ' + provider + ' from ' + JSON.stringify(this.metadata.module) + ';\n'
+            + 'const ' + declaration + ' = ' + provider + '.declareAS3ReferenceType(' + JSON.stringify(this.metadata.classes[this.own.qname].metadata.name) + ');\n' : '')
+            + 'import {callableClassIntrinsics as ' + intrinsic + ', NativeCallableFunction as ' + functionType + '} from '
             + JSON.stringify(helperPath.replace(/bound$/, 'callableClass')) + ';\n'
             + 'import {bindAS3Method as ' + bindName + '} from '
             + JSON.stringify(this.methodBindingModule) + ';\n'

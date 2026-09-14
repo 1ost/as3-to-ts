@@ -7,3 +7,5 @@ tests/native-class-initializers/RetainOracleEvidence.js text eol=lf
 tests/native-instance-initializers/** -text whitespace=cr-at-eol
 tests/native-callable-prerequisites/** -text whitespace=cr-at-eol
 tests/native-super-methods/** -text whitespace=cr-at-eol
+
+tests/native-class-metadata/** -text whitespace=cr-at-eol

@@ -1,6 +1,6 @@
 const assert=require('assert'),fs=require('fs'),path=require('path'),vm=require('vm');
 const ts=require('typescript'),parse=require('../../lib/parse'),emit=require('../../lib/emit');
-exports.fixture=function(target,sources,commonSource){
+exports.fixture=function(target,sources,commonSource,metadata){
     const context=vm.createContext({}),modules=new Map();
     function load(source,name){
         const result=name==='AS3MethodBinding'?{outputText:source,diagnostics:[]}:ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});
@@ -16,7 +16,7 @@ exports.fixture=function(target,sources,commonSource){
     for(const name of Object.keys(sources))modules.set(name.split('.').pop(),{});
     for(const [qname,source] of Object.entries(sources)){
         const name=qname.split('.').pop();
-        generated[name]=emit(parse(name+'.as',source),source,{customVisitors:[],definitionsByNamespace:{},nativeClassInitialization:{classes},nativeCallableMethodBindingModule:"./AS3MethodBinding",nativeCallableCoercionModule:"./AS3MethodBinding",nativeCallableClasses:sources});
+        generated[name]=emit(parse(name+'.as',source),source,{customVisitors:[],definitionsByNamespace:{},nativeClassInitialization:{classes},nativeCallableMethodBindingModule:"./AS3MethodBinding",nativeCallableCoercionModule:"./AS3MethodBinding",nativeCallableClasses:sources,nativeCallableMetadata:metadata});
         load(generated[name],name);
     }
     return {get:name=>modules.get('nativeClass').readNativeClass(modules.get(name)[name]),generated,
