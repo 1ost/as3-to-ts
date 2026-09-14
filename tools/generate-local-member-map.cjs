@@ -127,7 +127,8 @@ function runWorker(entry, content) {
         const root=sourceIncludes.inventory.roots.find(item=>item.path===relative);
         if(!root || sha256(fs.readFileSync(path.resolve(sourceRepository,entry.sourcePath)))!==root.sha256)
             throw new Error("Source does not match include root authority: "+entry.sourcePath);
-        includeEnvelope={includeRootPath:relative,includeFragments:sourceIncludes.fragments,includeEdges:sourceIncludes.inventory.edges};
+        if(sourceIncludes.inventory.edges.some(edge=>edge.ownerPath===relative))
+            includeEnvelope={includeRootPath:relative,includeFragments:sourceIncludes.fragments,includeEdges:sourceIncludes.inventory.edges};
     }
     return new Promise((resolve, reject) => {
         const child = childProcess.fork(worker.lexical, [], {

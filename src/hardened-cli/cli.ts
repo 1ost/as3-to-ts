@@ -333,6 +333,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                         const root=includes.inventory.roots.find(item=>item.path===file.portablePath);
                         if(!root) return undefined;
                         if (root.sha256!==sha256(source.bytes)) throw new Error("HARDENED_INCLUDE_ROOT_IDENTITY: selected source differs from include authority");
+                        if(!includes.inventory.edges.some(edge=>edge.ownerPath===root.path)) return undefined;
                         return {includeRootPath:root.path,includeFragments:includes.fragments,includeEdges:includes.inventory.edges};
                     })() : undefined);
             } catch (error) {

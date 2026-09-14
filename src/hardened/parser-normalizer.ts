@@ -265,7 +265,9 @@ export function normalizeIncludedSource(sourcePath: string, sourceText: string,
         if(canonical(expanded.proof.edges)!==canonical(expectedEdges.filter(edge=>owners.has(edge.ownerPath))))
             throw new Error("HARDENED_INCLUDE_PROOF: parser directives differ from retained inventory");
     }
+    if (expanded.proof.edges.length === 0)
+        return normalizeParserAst(parse(sourcePath,sourceText),sourceText,sha256);
     const ast = normalizeParserAst(parse(sourcePath, expanded.content), expanded.content, sha256);
-    return expanded.proof.edges.length === 0 ? normalizeParserAst(parse(sourcePath,sourceText),sourceText,sha256) : deepFreeze({...ast,
+    return deepFreeze({...ast,
         sourceSha256: sha256(sourceText), includeExpansion: expanded.proof});
 }

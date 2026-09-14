@@ -74,9 +74,9 @@ process.once("message", (message: unknown) => {
         return;
     }
     try {
-        const parsed = parse(message.sourcePath, message.content);
-        const normalized = message.includeFragments ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments, sha256, message.includeEdges)
-            : normalizeParserAst(parsed, message.content, sha256);
+        const hasIncludes = message.includeFragments !== undefined;
+        const normalized = hasIncludes ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments!, sha256, message.includeEdges)
+            : normalizeParserAst(parse(message.sourcePath, message.content), message.content, sha256);
         const result = extractLocalDeclaration(normalized, message.content, sha256, message.sourcePath);
         const json = `${JSON.stringify(result)}\n`;
         const byteLength = Buffer.byteLength(json, "utf8");

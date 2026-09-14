@@ -75,13 +75,12 @@ process.once("message", (message: unknown) => {
         return;
     }
     try {
-        const parsed = parse(message.sourcePath, message.content);
+        const hash = (bytes:string):string => createHash("sha256").update(bytes, "utf8").digest("hex");
+        const hasIncludes = message.includeFragments !== undefined;
         const ast = message.format === "normalized"
-            ? message.includeFragments ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments,
-                bytes => createHash("sha256").update(bytes, "utf8").digest("hex"), message.includeEdges)
-                : normalizeParserAst(parsed, message.content,
-                bytes => createHash("sha256").update(bytes, "utf8").digest("hex"))
-            : parsed;
+            ? hasIncludes ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments!, hash, message.includeEdges)
+                : normalizeParserAst(parse(message.sourcePath,message.content),message.content,hash)
+            : parse(message.sourcePath,message.content);
         const json = `${JSON.stringify(ast, null, 2)}\n`;
         const byteLength = Buffer.byteLength(json, "utf8");
         if (byteLength > message.maxAstBytes) {
