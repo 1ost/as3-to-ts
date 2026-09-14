@@ -500,6 +500,25 @@ function adaptMappedCall(mapping: CapabilityMapping, argumentsList: SemanticExpr
         fail("HARDENED_CAPABILITY_CALL_ARITY", "Flash bridge call does not match its double-pinned source arity", node);
     }
     const signature = authenticatedSourceMemberSignature(mapping, node);
+    if (mapping.sourceQName === "flash.display.MovieClip" && mapping.sourceMember.name === "addFrameScript") {
+        if (mapping.sourceRoles.length !== 1 || !["instance-member","base-type"].includes(mapping.sourceRoles[0]!)
+            || mapping.sourceMember.access !== "call" || mapping.sourceMember.signature !== "public function addFrameScript(...rest:*) : void"
+            || mapping.sourceMember.minArgs !== 0 || mapping.sourceMember.maxArgs !== 1000000
+            || mapping.targetModule !== "src/layaAir/flash/display/MovieClip.ts" || mapping.targetExport !== "MovieClip"
+            || mapping.targetCapabilityId !== "api.flash.display" || mapping.targetMember?.kind !== "method"
+            || mapping.targetMember.name !== "addFrameScript" || mapping.targetMember.scope !== "instance"
+            || mapping.targetMember.signature !== "(frame: number, script: FlashFrameScript, ...additional: Array<number | FlashFrameScript>) => void")
+            fail("HARDENED_FRAME_SCRIPT_AUTHORITY","Frame scripts require the exact authenticated native variadic and shared pair signature",node);
+        if (argumentsList.length < 2 || argumentsList.length % 2 !== 0)
+            fail("HARDENED_FRAME_SCRIPT_ARITY","Frame script calls require one or more frame/callback pairs",node);
+        argumentsList.forEach((argument,index)=>{
+            const type=assignmentType(argument,context,argumentNodes[index] || node);
+            if (index % 2 === 0 ? !["Number","int","uint"].includes(type.sourceName)
+                : type.sourceName !== "Function" && !(argument.kind === "literal" && argument.value === null))
+                fail("HARDENED_FRAME_SCRIPT_ARGUMENT","Frame scripts require proven numeric frames and Function or literal null callbacks",argumentNodes[index] || node);
+        });
+        return authoritySemanticType(signature.returnType,context,node);
+    }
     argumentsList.forEach((argument, index) => {
         const parameterType = signature.parameterTypes[index] || signature.restParameterType;
         if (!parameterType) {

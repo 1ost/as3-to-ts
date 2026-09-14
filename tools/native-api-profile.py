@@ -304,6 +304,21 @@ def is_primitive_string_record(signature):
     return re.fullmatch(r'Record\s*<\s*string\s*,\s*(?:string|number|boolean)\s*>', signature) is not None
 
 
+def supports_frame_script_pairs(qname, native, row, member):
+    """Retain native variadic authority for the compiler's explicitly checked pair subset."""
+    return (qname == 'flash.display.MovieClip' and row.get('module') == 'src/layaAir/flash/display/MovieClip.ts'
+        and row.get('export') == 'MovieClip' and row.get('kind') == 'class'
+        and native.get('name') == 'addFrameScript' and native.get('access') == 'call'
+        and native.get('declaredBy') == qname and native.get('scope') == 'instance'
+        and native.get('constructor') is False and native.get('minArgs') == 0 and native.get('maxArgs') == 1000000
+        and native.get('signature') == 'public function addFrameScript(...rest:*) : void'
+        and native.get('nativeSignature') == 'public native function addFrameScript(... rest) : void;'
+        and native.get('type') == 'void'
+        and native.get('parameters') == [{'name':'rest','type':'*','optional':False,'default':None,'rest':True}]
+        and member.get('name') == 'addFrameScript' and member.get('kind') == 'method' and member.get('scope') == 'instance'
+        and member.get('signature') == '(frame: number, script: FlashFrameScript, ...additional: Array<number | FlashFrameScript>) => void')
+
+
 def map_native_members(qname, roles, row, capability_id, classes, used_names):
     mappings, uses = [], []
     for native in native_members(classes, qname):
@@ -323,6 +338,7 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
                 overloads = target_overloads(member['signature']) if not native['constructor'] else []
                 if overloads:
                     return sum(overload_matches_native(value, native) for value in overloads) == 1
+                if supports_frame_script_pairs(qname, native, row, member): return True
                 arity = target_arity(member['signature'])
                 return arity is not None and (arity == (native['minArgs'], native['maxArgs']) if native['constructor']
                     else arity[0] <= native['minArgs'] and arity[1] >= native['maxArgs'])
