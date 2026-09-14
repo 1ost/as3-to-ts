@@ -25,6 +25,27 @@ def write(path, value):
     return path
 
 
+def fixture_flash_imports(all_imports, retained_qnames):
+    """Resolve local wildcard discovery only inside the already retained closure.
+
+    This does not enumerate a filesystem/package or create new graph entries.
+    Actual per-use binding and ambiguous names remain the compiler's obligation.
+    """
+    flash = set()
+    for qname in all_imports:
+        if qname.endswith(".*") and qname.count("*") == 1:
+            package = qname[:-2]
+            if (package == "flash" or package.startswith("flash.")
+                    or not re.fullmatch(r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*", package)
+                    or not any(name.rpartition(".")[0] == package for name in retained_qnames)):
+                raise ValueError("Fixture wildcard import requires retained local declarations: " + qname)
+        elif "*" in qname or not qname.startswith("flash.") and qname not in retained_qnames:
+            raise ValueError("Fixture imports must resolve to explicit Flash QNames or retained local sources: " + qname)
+        elif qname.startswith("flash."):
+            flash.add(qname)
+    return sorted(flash)
+
+
 def resolve_fixture_target(qname, target_doc, predicates, laya, proof_inputs):
     name = qname.rsplit('.', 1)[-1]
     authority = predicates.get(qname)
@@ -189,9 +210,10 @@ def main():
     qnames={row['qname'] for row in declarations}
     if len(qnames)!=len(declarations): p.error('Duplicate fixture QName')
     all_imports=re.findall(r'\bimport\s+([\w$.*]+)\s*;',text)
-    if any('*' in q or not q.startswith('flash.') and q not in qnames for q in all_imports):
-        p.error('Fixture imports must resolve to explicit Flash QNames or retained local sources')
-    imports=sorted({q for q in all_imports if q.startswith('flash.')})
+    try:
+        imports = fixture_flash_imports(all_imports, qnames)
+    except ValueError as error:
+        p.error(str(error))
     if set(args.intrinsic_type) - set(imports):
         p.error('Selected intrinsic must be explicitly imported by the retained fixture')
     out.mkdir(parents=True, exist_ok=False)

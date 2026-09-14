@@ -42,7 +42,7 @@ import {
 } from "./contracts";
 import { assertLoadedCapabilityAuthority, Sha256Function, targetModuleSpecifier } from "./ledger";
 import { assertLoadedLocalTypeAuthority } from "./local-types";
-import { assertLoadedLocalMemberAuthority } from "./local-members";
+import { assertLoadedLocalMemberAuthority, localFileSignature } from "./local-members";
 import { extractLocalDeclaration } from "./local-declarations";
 import { AS3FileLocalClassScope, fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLocalIdentity";
 import { assertAuthenticatedRuntimeAuthoritySources, type RuntimeAuthoritySource } from "./type-authority";
@@ -635,10 +635,12 @@ function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefin
     current:CurrentLocalType, types:LoadedLocalTypeAuthority, members:LoadedLocalMemberAuthority | null,
     imports:SemanticImport[], importsByLocal:{[name:string]:SemanticImport}, node:TreeNode):SemanticImport | null {
     if (!proof) return null;
-    const target=types.entriesByIdentity[`${current.entry.module}\u0000${typeName}`];
-    if (!target || !target.importable || !["class","interface"].includes(target.typeKind)) return null;
-    const owner=types.entriesByIdentity[`${current.entry.module}\u0000${proof.ownerQName}`];
-    const declaration=members?.entriesByIdentity[`${current.entry.module}\u0000${proof.ownerQName}`];
+    const privateTarget = members ? localFileSignature(members,current.entry.module,typeName) : undefined;
+    const target=privateTarget?.type ?? types.entriesByIdentity[`${current.entry.module}\u0000${typeName}`];
+    if (!target || (!target.importable && !privateTarget) || !["class","interface"].includes(target.typeKind)) return null;
+    const privateOwner = members ? localFileSignature(members,current.entry.module,proof.ownerQName) : undefined;
+    const owner=privateOwner?.type ?? types.entriesByIdentity[`${current.entry.module}\u0000${proof.ownerQName}`];
+    const declaration=privateOwner?.member ?? members?.entriesByIdentity[`${current.entry.module}\u0000${proof.ownerQName}`];
     const element=(name:string):string=>name.startsWith("Vector.<") && name.endsWith(">")
         ? element(name.slice(8,-1)) : name;
     const signatureNames=[proof.member.returnType,proof.member.fieldType,...proof.member.parameters.map(parameter=>parameter.type)];
@@ -646,16 +648,17 @@ function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefin
         || !signatureNames.some(name=>name !== null && element(name) === typeName)
         || (owner.nodeId !== current.entry.nodeId && !current.entry.prerequisites.includes(owner.nodeId)
             && !imports.some(item=>item.authorityKind === "local" && item.localNodeId === owner.nodeId))
-        || (owner.nodeId !== target.nodeId && !owner.prerequisites.includes(target.nodeId)))
+        || (privateTarget ? privateTarget.owner.nodeId !== (privateOwner?.owner.nodeId ?? owner.nodeId)
+            : (owner.nodeId !== target.nodeId && !owner.prerequisites.includes(target.nodeId))))
         fail("HARDENED_SIGNATURE_TYPE_EDGE","signature type lacks its authenticated owner, member or dependency edge: "+typeName,node);
     const name=typeName.slice(typeName.lastIndexOf(".")+1);
-    if (current.entry.prerequisites.includes(target.nodeId)
+    if (!privateTarget && current.entry.prerequisites.includes(target.nodeId)
         && (!importsByLocal[name] || importsByLocal[name]!.sourceQualifiedName === typeName)) return null;
     const existing=imports.find(item=>item.sourceQualifiedName === typeName);
     if(existing) return existing;
     // Reserved aliases cannot be spelled by admitted original AS3 declarations.
     const alias="__as3Signature"+imports.length;
-    const item={...localSemanticImport(target,current,node,types,members),sourceLocalName:alias};
+    const item={...localSemanticImport(target,current,node,types,members,privateTarget?.name),sourceLocalName:alias};
     imports.push(item);importsByLocal[alias]=item;
     return item;
 }
@@ -2065,7 +2068,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             }
             assertLocalReceiverVisibility(readable[0]!, lookup.ownerQName!, receiverQName, context, node);
             return authoritySemanticType(readable[0]!.kind === "field"
-                ? readable[0]!.fieldType! : readable[0]!.returnType!, context, node);
+                ? readable[0]!.fieldType! : readable[0]!.returnType!, context, node,
+                {ownerQName: lookup.ownerQName!, member: readable[0]!});
         }
         if (expression.capabilitySource !== null) {
             const member = intrinsicMember(context, expression.capabilitySource, "read", expression.name);
@@ -2251,7 +2255,8 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
             }
             assertLocalReceiverVisibility(writable[0]!, lookup.ownerQName!, receiverQName, context, node);
             return authoritySemanticType(writable[0]!.kind === "field"
-                ? writable[0]!.fieldType! : writable[0]!.parameters[0]!.type, context, node);
+                ? writable[0]!.fieldType! : writable[0]!.parameters[0]!.type, context, node,
+                {ownerQName: lookup.ownerQName!, member: writable[0]!});
         }
         if (expression.capabilitySource !== null) {
             const member = intrinsicMember(context, expression.capabilitySource, "write", expression.name);
@@ -5425,10 +5430,12 @@ interface FileLocalCompilation {
 }
 function contextLocalMember(context: AdapterContext, module: string, qname: string): LocalMemberAuthorityEntry | undefined {
     return (context.fileCompilation?.owner.module === module ? context.fileCompilation.members[qname] : undefined)
+        ?? (context.localMemberAuthority ? localFileSignature(context.localMemberAuthority,module,qname)?.member : undefined)
         ?? context.localMemberAuthority?.entriesByIdentity[`${module}\u0000${qname}`];
 }
 function contextLocalType(context: AdapterContext, module: string, qname: string): LocalTypeMapping | undefined {
     return (context.fileCompilation?.owner.module === module ? context.fileCompilation.byQName[qname]?.type : undefined)
+        ?? (context.localMemberAuthority ? localFileSignature(context.localMemberAuthority,module,qname)?.type : undefined)
         ?? context.localTypeAuthority?.entriesByIdentity[`${module}\u0000${qname}`];
 }
 
@@ -5651,11 +5658,6 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
     });
     const resolveImplicitLocalType = (sourceName: string, expectedKind: "class" | "interface" | null,
         node: TreeNode, signature?: SignatureTypeProof): SemanticImport | null => {
-        if (signature && localAuthority && resolveCurrentLocal) {
-            const derived=signatureTypeImport(sourceName,signature,resolveCurrentLocal(),localAuthority,localMemberAuthority || null,
-                parsedImports.imports,parsedImports.importsByLocal,node);
-            if(derived) return derived;
-        }
         const scoped = fileCompilation?.byName[sourceName] ?? fileCompilation?.byQName[sourceName];
         const localName = scoped?.header.name ?? sourceName.slice(sourceName.lastIndexOf(".") + 1);
         const existing = parsedImports.importsByLocal[localName];
@@ -5668,6 +5670,11 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                 localMemberAuthority || null, scoped.header.name);
             parsedImports.imports.push(item); parsedImports.importsByLocal[localName] = item;
             return item;
+        }
+        if (signature && localAuthority && resolveCurrentLocal) {
+            const derived=signatureTypeImport(sourceName,signature,resolveCurrentLocal(),localAuthority,localMemberAuthority || null,
+                parsedImports.imports,parsedImports.importsByLocal,node);
+            if(derived) return derived;
         }
         if (existing) {
             if (sourceName.includes('.') && existing.sourceQualifiedName !== sourceName)

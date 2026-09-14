@@ -166,6 +166,11 @@ function resolveQName(entry, extract, rawName, requiredKind = null) {
     }
     if (rawName === extract.qualifiedName.slice(extract.qualifiedName.lastIndexOf(".") + 1)
         || rawName === extract.qualifiedName) return extract.qualifiedName;
+    const privateMatches = (extract.fileLocalClasses || []).filter(item => item.name === rawName);
+    if (privateMatches.length) {
+        if (privateMatches.length !== 1 || requiredKind === "interface") return null;
+        return `FilePrivate(${entry.module}:${entry.sourcePath})::${privateMatches[0].name}`;
+    }
     const localName = rawName.slice(rawName.lastIndexOf(".") + 1);
     const explicit = extract.imports.filter(item => !item.endsWith(".*")
         && item.slice(item.lastIndexOf(".") + 1) === localName);

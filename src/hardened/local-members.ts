@@ -7,7 +7,9 @@ import {
     LocalDeclarationParameter,
     LocalMemberAuthorityEntry,
     LocalMemberDeclaration,
+    LocalTypeMapping,
 } from "./contracts";
+import { fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLocalIdentity";
 import { assertLoadedLocalTypeAuthority } from "./local-types";
 
 export interface LocalMemberAuthorityInput {
@@ -71,7 +73,10 @@ function freeze<T>(value: T): T {
     return value;
 }
 
-function validType(value: unknown): value is string {
+function validType(value: unknown, scoped: ReadonlySet<string> = new Set()): value is string {
+    if (typeof value === "string" && scoped.has(value)) return true;
+    if (typeof value === "string" && value.startsWith("Vector.<") && value.endsWith(">"))
+        return validType(value.slice(8, -1), scoped);
     if (typeof value !== "string" || value.length > 1024 || !TYPE.test(value)) return false;
     if (!value.startsWith("Vector.<")) return true;
     let depth = 0;
@@ -87,17 +92,17 @@ function validType(value: unknown): value is string {
     return depth === 0 && value.endsWith(">");
 }
 
-function parameter(raw: unknown): LocalDeclarationParameter {
+function parameter(raw: unknown, scoped: ReadonlySet<string> = new Set()): LocalDeclarationParameter {
     if (!object(raw) || !exactKeys(raw, ["name", "optional", "rest", "type"])
         || typeof raw.name !== "string" || !IDENTIFIER.test(raw.name)
-        || !validType(raw.type) || typeof raw.optional !== "boolean" || typeof raw.rest !== "boolean"
+        || !validType(raw.type, scoped) || typeof raw.optional !== "boolean" || typeof raw.rest !== "boolean"
         || (raw.optional && raw.rest)) {
         fail("HARDENED_LOCAL_MEMBER_PARAMETER", "local member parameter is invalid");
     }
     return { name: raw.name, type: raw.type, optional: raw.optional, rest: raw.rest };
 }
 
-function member(raw: unknown): LocalDeclarationMember {
+function member(raw: unknown, scoped: ReadonlySet<string> = new Set()): LocalDeclarationMember {
     if (!object(raw) || !exactKeys(raw, [
         "fieldType", "kind", "modifiers", "name", "namespaceName", "parameters", "readonly", "returnType",
     ]) || typeof raw.kind !== "string" || !MEMBER_KINDS.has(raw.kind)
@@ -106,11 +111,11 @@ function member(raw: unknown): LocalDeclarationMember {
         || new Set(raw.modifiers).size !== raw.modifiers.length
         || (raw.namespaceName !== null && (typeof raw.namespaceName !== "string" || !IDENTIFIER.test(raw.namespaceName)))
         || !Array.isArray(raw.parameters) || typeof raw.readonly !== "boolean"
-        || (raw.returnType !== null && !validType(raw.returnType))
-        || (raw.fieldType !== null && !validType(raw.fieldType))) {
+        || (raw.returnType !== null && !validType(raw.returnType, scoped))
+        || (raw.fieldType !== null && !validType(raw.fieldType, scoped))) {
         fail("HARDENED_LOCAL_MEMBER_SIGNATURE", "local member signature is invalid");
     }
-    const parameters = raw.parameters.map(parameter);
+    const parameters = raw.parameters.map(value => parameter(value, scoped));
     const kind = raw.kind as LocalDeclarationMember["kind"];
     if ((kind === "field") !== (raw.fieldType !== null) || (kind === "field" && (parameters.length !== 0 || raw.returnType !== null))
         || (kind !== "field" && raw.fieldType !== null)
@@ -158,7 +163,7 @@ function fileLocalDeclarations(raw: unknown, ownerQualifiedName: string, sourceP
             || !qualifiedNames(item.implementsNames) || !Array.isArray(item.members)) {
             fail("HARDENED_LOCAL_FILE_DECLARATION", "file-local declaration does not match its source scope");
         }
-        const members = item.members.map(member);
+        const members = item.members.map(value => member(value));
         if (members.some(value => value.kind === "namespace"
             || (value.kind === "constructor" && value.name !== item.name))
             || members.filter(value => value.kind === "constructor").length > 1) {
@@ -175,7 +180,7 @@ function fileLocalDeclarations(raw: unknown, ownerQualifiedName: string, sourceP
     });
 }
 
-function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: string): LocalMemberDeclaration {
+function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: string, module: "application" | "bootstrap"): LocalMemberDeclaration {
     if (!object(raw) || !exactKeys(raw, ["baseQNames", "interfaceQNames", "members", "packageInitializer"]
         .concat(raw.finalClass === true ? ["finalClass"] : [])
         .concat(Object.prototype.hasOwnProperty.call(raw, "fileLocalClasses") ? ["fileLocalClasses"] : []))
@@ -186,6 +191,9 @@ function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: strin
         || new Set(raw.interfaceQNames).size !== raw.interfaceQNames.length) {
         fail("HARDENED_LOCAL_MEMBER_DECLARATION", "local declaration is invalid");
     }
+    const helpers = Object.prototype.hasOwnProperty.call(raw, "fileLocalClasses")
+        ? fileLocalDeclarations(raw.fileLocalClasses, ownerQualifiedName, sourcePath) : undefined;
+    const scoped = new Set((helpers || []).map(header => fileLocalClassIdentity({module, sourcePath, ownerQualifiedName, name: header.name}).key));
     let packageInitializer: LocalMemberDeclaration["packageInitializer"] = null;
     if (raw.packageInitializer !== null) {
         if (!object(raw.packageInitializer) || !exactKeys(raw.packageInitializer, ["argumentCount", "kind", "targetQName"])
@@ -199,10 +207,9 @@ function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: strin
         baseQNames: raw.baseQNames.slice() as string[],
         ...(raw.finalClass === true ? {finalClass:true as const} : {}),
         interfaceQNames: raw.interfaceQNames.slice() as string[],
-        members: raw.members.map(member),
+        members: raw.members.map(value => member(value, scoped)),
         packageInitializer,
-        ...(Object.prototype.hasOwnProperty.call(raw, "fileLocalClasses")
-            ? { fileLocalClasses: fileLocalDeclarations(raw.fileLocalClasses, ownerQualifiedName, sourcePath) } : {}),
+        ...(helpers ? { fileLocalClasses: helpers } : {}),
     };
 }
 
@@ -268,7 +275,7 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
             if (raw.holdCode !== null || raw.holdSha256 !== null || raw.declaration === null) {
                 fail("HARDENED_LOCAL_MEMBER_ENTRY", "complete local member entry has held state");
             }
-            parsedDeclaration = declaration(raw.declaration, raw.qname, localType.sourcePath);
+            parsedDeclaration = declaration(raw.declaration, raw.qname, localType.sourcePath, raw.module);
             if (raw.typeKind === "package") {
                 const localName = raw.qname.slice(raw.qname.lastIndexOf(".") + 1);
                 if (parsedDeclaration.baseQNames.length !== 0 || parsedDeclaration.interfaceQNames.length !== 0
@@ -315,6 +322,7 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
     };
     freeze(authority);
     AUTHORITIES.add(authority);
+    PRIVATE_SCOPES.set(authority, {types: localTypes, sha256, cache: new Map()});
     return authority;
 }
 
@@ -322,4 +330,62 @@ export function assertLoadedLocalMemberAuthority(value: LoadedLocalMemberAuthori
     if (!object(value) || !AUTHORITIES.has(value)) {
         fail("HARDENED_LOCAL_MEMBER_AUTHORITY_INSTANCE", "local signatures require an immutable loaded member authority");
     }
+}
+
+interface FileLocalSignature {
+    readonly owner: LocalTypeMapping;
+    readonly type: LocalTypeMapping;
+    readonly member: LocalMemberAuthorityEntry;
+    readonly name: string;
+}
+const PRIVATE_SCOPES = new WeakMap<LoadedLocalMemberAuthority, {
+    types: LoadedLocalTypeAuthority; sha256: LocalMemberSha256;
+    cache: Map<string, FileLocalSignature>;
+}>();
+
+/** Derive private identities only from a sealed, source-bound owner's retained headers. */
+export function localFileSignature(authority: LoadedLocalMemberAuthority, module: string, qname: string): FileLocalSignature | undefined {
+    assertLoadedLocalMemberAuthority(authority);
+    const state = PRIVATE_SCOPES.get(authority)!;
+    const key = `${module}\u0000${qname}`;
+    const cached = state.cache.get(key);
+    if (cached) return cached;
+    if (!qname.startsWith("FilePrivate(")) return undefined;
+    for (const entry of authority.entries) {
+        if (entry.module !== module || entry.status !== "complete") continue;
+        const owner = state.types.entriesByIdentity[`${module}\u0000${entry.qname}`]!;
+        const headers = entry.declaration?.fileLocalClasses || [];
+        const privateNames = new Map(headers.map(header => [header.name,
+            fileLocalClassIdentity({module: owner.module, sourcePath: owner.sourcePath, ownerQualifiedName: owner.qname, name: header.name}).key]));
+        const header = headers.find(value => privateNames.get(value.name) === qname);
+        if (!header) continue;
+        const resolve = (name: string): string => {
+            if (name.startsWith("Vector.<") && name.endsWith(">")) return `Vector.<${resolve(name.slice(8,-1))}>`;
+            if (["*","void","Array","Boolean","Class","Date","Error","Function","Namespace","Number","Object","RegExp","String","XML","XMLList","int","uint"].includes(name)) return name;
+            if (privateNames.has(name)) return privateNames.get(name)!;
+            const candidates = name.includes(".") ? [name] : [
+                ...header.imports.filter(value => !value.endsWith(".*") && value.endsWith("."+name)),
+                ...header.imports.filter(value => value.endsWith(".*")).map(value => value.slice(0,-1)+name), name];
+            const matches = [...new Set(candidates)].filter(value => {
+                if (value.startsWith("flash.")) return true;
+                const target = state.types.entriesByIdentity[`${module}\u0000${value}`];
+                return !!target && target.importable && (target.nodeId === owner.nodeId || owner.prerequisites.includes(target.nodeId));
+            });
+            if (matches.length !== 1) fail("HARDENED_LOCAL_FILE_SIGNATURE", "private signature type lacks one authenticated lexical binding: "+name);
+            return matches[0]!;
+        };
+        const type: LocalTypeMapping = {...owner, qname, importable:false,
+            nodeId: state.sha256(`${owner.nodeId}\u0000${header.sourceNodeId}`).slice(0,16),
+            prerequisites: [...new Set([...owner.prerequisites,owner.nodeId])].sort(),
+            targetPath: `${owner.targetPath.slice(0,-3)}.file-local/${header.name}.ts`};
+        const member: LocalMemberAuthorityEntry = {...entry, qname, nodeId:type.nodeId, declaration: {
+            ...(header.modifiers.includes("final") ? {finalClass:true as const} : {}),
+            baseQNames:header.extendsNames.map(resolve), interfaceQNames:header.implementsNames.map(resolve), packageInitializer:null,
+            members:header.members.map(value=>({...value, fieldType:value.fieldType===null?null:resolve(value.fieldType),
+                returnType:value.returnType===null?null:resolve(value.returnType),
+                parameters:value.parameters.map(parameter=>({...parameter,type:resolve(parameter.type)}))}))}};
+        const result = freeze({owner,type,member,name:header.name});
+        state.cache.set(key,result);return result;
+    }
+    return undefined;
 }
