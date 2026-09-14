@@ -906,7 +906,7 @@ try {
         assert.equal(sum.additionCoercion,true);
 
         assert.throws(()=>adaptError('return new ArgumentError("missing");',false),error=>error?.code === "HARDENED_NEW_AUTHORITY");
-        assert.throws(()=>adaptError('return new ArgumentError("missing");',true,'ArgumentError:Function'),error=>error?.code === "HARDENED_NEW_AUTHORITY");
+        assert.throws(()=>adaptError('return new ArgumentError("missing");',true,'ArgumentError:Function'),error=>error?.code === "HARDENED_NEW_SHADOW");
         for (const args of ['"message", "id"','"message", 7, 8'])
             assert.throws(()=>adaptError(`return new ArgumentError(${args});`),error=>error?.code === "HARDENED_ARGUMENT_ERROR_CONSTRUCTOR");
     }
@@ -1313,6 +1313,24 @@ try {
         for(const expression of ['/a/g.test(value)','/(a)/.test(value)','/a./.test(value)','/a+/.test(value)','/[^a]/.test(value)'])
             assert.throws(()=>adaptRegex(expression),error=>error.code==='HARDENED_REGEXP_GRAMMAR');
         assert.throws(()=>adaptRegex('/a/.test(value)','Boolean',false),error=>!!error.code);
+    }
+    {
+        const adaptEvents=(annotation='[Event(name="complete",type="flash.events.Event")]',authenticated=true,kind='class')=>{
+            const source=`package p {${annotation} public ${kind} EventProbe {}}`;
+            const semantic=built.adapter.adaptNormalizedParserAst(built.normalizer.normalizeParserAst(built.parse("EventProbe.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,authenticated?sourceMemberAuthority:undefined);
+            return {source,semantic};
+        };
+        const {source,semantic}=adaptEvents();const annotation=semantic.declaration.sourceEvents[0];
+        assert.equal(annotation.event,'complete');assert.equal(annotation.type,'flash.events.Event');
+        assert.equal(source.slice(annotation.sourceSpan.start,annotation.sourceSpan.end),'[Event(name="complete",type="flash.events.Event")]');
+        assert.equal(semantic.declaration.members.length,0);
+        assert.doesNotMatch(built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code,/dispatchEvent|complete|flash.events.Event/);
+        assert.equal(adaptEvents('[Event(type="p.Signal",name="one")][Event(name="two",type="p.Other")]').semantic.declaration.sourceEvents.length,2);
+        for(const metadata of ['[Event]','[Event(name="x")]','[Event(name="x",type="")]','[Event(name=NAME,type="p.E")]','[Event(name="x",name="y")]','[Event(name="x",type="p.E",other="y")]','[Event(name="x",type="p.E")][Event(name="x",type="p.E")]','[Event(name="x",type="p.E[]")]','[Other(name="x",type="p.E")]'])
+            assert.throws(()=>adaptEvents(metadata),error=>error.code==='HARDENED_CLASS_EVENT_METADATA');
+        assert.throws(()=>adaptEvents(undefined,false),error=>error.code==='HARDENED_CLASS_EVENT_METADATA');
+        assert.throws(()=>adaptEvents(undefined,true,'interface'),error=>error.code==='HARDENED_CLASS_EVENT_METADATA');
     }
     {
         const adaptBindable=(annotation='[Bindable(event="readyChange")]',declaration='public function get ready():Boolean{return true;}',authenticated=true)=>{

@@ -738,6 +738,13 @@ export interface InheritedAccessorForward {
     modifiers: SemanticModifier[];
 }
 
+/** Source-only Event annotation; default AIR compilation does not synthesize dispatch or metadata. */
+export interface SourceClassEvent extends SemanticIdentity {
+    name: "Event";
+    event: string;
+    type: string;
+}
+
 export interface SemanticClass extends SemanticIdentity {
     declarationKind: "class" | "interface";
     name: string;
@@ -747,6 +754,7 @@ export interface SemanticClass extends SemanticIdentity {
     implementsTypes: Array<{ type: SemanticType; runtimeName: string }>;
     members: SemanticMember[];
     inheritedAccessors?: InheritedAccessorForward[];
+    sourceEvents?: SourceClassEvent[];
 }
 
 export interface SemanticPackageField extends SemanticIdentity {

@@ -14,6 +14,7 @@ import {
     NormalizedParserNode,
     SemanticClass,
     SourceBindableEvent,
+    SourceClassEvent,
     InheritedAccessorForward,
     SemanticCatchClause,
     SemanticConstructor,
@@ -5512,7 +5513,38 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         fail("HARDENED_PACKAGE_CONTENT", "semantic adapter requires imports followed by exactly one class or interface", content);
     }
     const classNode = declarations[0]!;
-    onlyKinds(classNode, ["CONTENT", "EXTENDS", "IMPLEMENTS_LIST", "MOD_LIST", "NAME"]);
+    onlyKinds(classNode, ["CONTENT", "EXTENDS", "IMPLEMENTS_LIST", "MOD_LIST", "NAME", "META_LIST"]);
+    const classMetadata = one(classNode, "META_LIST", true);
+    const sourceEvents: SourceClassEvent[] = [];
+    if (classMetadata !== null) {
+        const reject = (): never => fail("HARDENED_CLASS_EVENT_METADATA",
+            "Only literal name/type Event annotations on an authenticated class are admitted", classMetadata);
+        if (classNode.kind !== "CLASS" || sourceMemberAuthority === undefined || classMetadata.children.length === 0) reject();
+        const names = new Set<string>();
+        for (const meta of classMetadata.children) {
+            if (meta.kind !== "META" || meta.children.length !== 1) reject();
+            const call = meta.children[0]!;
+            if (call.kind !== "CALL" || call.children.length !== 2 || call.children[0]!.kind !== "IDENTIFIER"
+                || call.children[0]!.text !== "Event" || call.children[1]!.kind !== "ARGUMENTS"
+                || call.children[1]!.children.length !== 2) reject();
+            const values: {[key: string]: string} = Object.create(null);
+            for (const option of call.children[1]!.children) {
+                if (option.kind !== "ASSIGN" || option.children.length !== 3 || option.children[0]!.kind !== "IDENTIFIER"
+                    || !["name", "type"].includes(option.children[0]!.text || "") || option.children[1]!.text !== "="
+                    || option.children[2]!.kind !== "LITERAL") reject();
+                const key = option.children[0]!.text!;
+                if (values[key] !== undefined) reject();
+                let literal: SemanticExpression;
+                try { literal = parseLiteral(option.children[2]!); } catch { return reject(); }
+                if (literal.kind !== "literal" || typeof literal.value !== "string" || literal.value.length === 0) return reject();
+                values[key] = literal.value;
+            }
+            if (!values.name || !values.type || !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(values.type)
+                || names.has(values.name)) reject();
+            names.add(values.name!);
+            sourceEvents.push(Object.assign(identity(meta), {name: "Event" as const, event: values.name!, type: values.type!}));
+        }
+    }
     const classNameNode = one(classNode, "NAME")!;
     const className = validateIdentifier(requiredText(classNameNode, "class name"), classNameNode);
     const outputModulePath = selectedFileClass?.outputModulePath ?? modulePath(packageName, className, packageNameNode);
@@ -5990,6 +6022,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         interfaceExtendsTypes: [],
         implementsTypes,
         members,
+        ...(sourceEvents.length ? {sourceEvents} : {}),
         ...(placeholder.inheritedAccessors?.length ? {inheritedAccessors: placeholder.inheritedAccessors} : {}),
     });
     const program: SemanticProgram = Object.assign(identity(root), {
