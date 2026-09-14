@@ -8,14 +8,15 @@ import { Sha256Function } from "./ledger";
 
 const SHA256 = /^[0-9a-f]{64}$/;
 
-// This is deliberately the intersection of the hardened parser's node kinds
-// and the closed structural vocabulary consumed by adapter.ts. Expanding it is
-// an admission decision, not a parser compatibility convenience.
+// Closed structural vocabulary consumed by declaration extraction and adapter.ts.
+// XML_LITERAL is retained as an exact source leaf for declaration authentication;
+// its execution remains a semantic hold in adapter.ts. Other expansion still
+// requires an explicit structural and semantic admission decision.
 const ADMITTED_KINDS = new Set([
     "ADD", "AND", "ARGUMENTS", "ARRAY", "ARRAY_ACCESSOR", "AS", "ASSIGN", "B_AND", "B_NOT", "B_OR", "B_XOR", "BLOCK", "BREAK", "CALL", "CLASS", "COMPILATION_UNIT", "CONDITION", "CONDITIONAL", "CONST_LIST", "CONTENT", "CONTINUE", "DELETE", "DOT",
     "CASE", "CASES", "CATCH", "COND", "DEFAULT", "DO", "ENCAPSULATED", "EQUALITY", "EXPR_LIST", "EXTENDS", "FINALLY", "FOR", "FOREACH", "FORIN", "FUNCTION", "GET", "IDENTIFIER", "IF", "IMPLEMENTS", "IMPLEMENTS_LIST", "IMPORT", "IN", "INIT", "INTERFACE", "ITER", "LABEL", "LITERAL", "MODIFIER",
     "LAMBDA", "META", "META_LIST", "MINUS", "MOD_LIST", "MULTIPLICATION", "NAME", "NAME_TYPE_INIT", "NAMESPACE", "NEW", "NOT", "OBJECT", "OP", "PACKAGE", "PARAMETER", "PARAMETER_LIST", "PLUS",
-    "OR", "POST_DEC", "POST_INC", "PRE_DEC", "PRE_INC", "PROP", "RELATION", "REST", "RETURN", "SET", "SHIFT", "SHORT_VECTOR", "STMT_EMPTY", "SWITCH", "SWITCH_BLOCK", "THROW", "TRY", "TYPE", "TYPEOF", "USE", "VALUE", "VAR", "VAR_LIST", "VECTOR", "WHILE",
+    "OR", "POST_DEC", "POST_INC", "PRE_DEC", "PRE_INC", "PROP", "RELATION", "REST", "RETURN", "SET", "SHIFT", "SHORT_VECTOR", "STMT_EMPTY", "SWITCH", "SWITCH_BLOCK", "THROW", "TRY", "TYPE", "TYPEOF", "USE", "VALUE", "VAR", "VAR_LIST", "VECTOR", "WHILE", "XML_LITERAL",
 ]);
 
 const RECOVERY_FIELDS = ["diagnostics", "errors", "recovered", "recovery"];
@@ -216,6 +217,10 @@ export function normalizeParserAst(
             span,
             text: normalizedText(node, sourceText, span, id),
         };
+        if (kind === "XML_LITERAL" && (children.length !== 0 || typeof output.text !== "string"
+            || output.text !== sourceText.slice(span.start, span.end))) {
+            fail("PARSER_NORMALIZER_XML_SOURCE", "XML literal must retain its complete exact source leaf", id);
+        }
         nodes.push(output);
         parserNodes.push(node);
         children.forEach((child, childIndex) => {

@@ -868,7 +868,7 @@ try {
             'var cursor:*=0; var values:Array=[4]; cursor+=1; return values[cursor];',
             'var cursor:*=0; var values:Array=[4]; var callback:Function=function():void {cursor=1;}; return values[cursor];',
             'var cursor:*=0; var values:Array=[4]; try {cursor=1;} catch(cursor:Error) {} return values[cursor];',
-        ]) assert.throws(()=>adapt(body), error=>error.code==='HARDENED_ARRAY_INDEX_TYPE');
+        ]) assert.doesNotThrow(()=>adapt(body), 'published dynamic Array reads preserve original keys');
     }
 
     {

@@ -160,3 +160,20 @@ test("file-local declaration extraction rejects malformed or unsupported file sc
     assert.equal(ordinary.ok, true);
     assert.equal(Object.hasOwn(JSON.parse(ordinary.json), "fileLocalClasses"), false);
 });
+
+
+test("XML literal bodies retain source-bound declarations without claiming body support", async () => {
+    const source = 'package p {\n import flash.display.DisplayObjectContainer;\n public class Markup {\n private static var owner:DisplayObjectContainer;\n public static function setBase(value:DisplayObjectContainer):void { owner=value; }\n public function markup():* {\n var result:*;\n result = <root>\n<icon iconUrl="miniStar"/>\n</root>;\n return result;\n }\n }\n}\n';
+    const first = await run(request(source));
+    assert.equal(first.ok, true, first.error);
+    const second = await run(request(source));
+    assert.equal(first.json, second.json);
+    const value = JSON.parse(first.json);
+    assert.equal(value.sourceSha256, sha256(source));
+    const method = value.members.find(member => member.name === "setBase");
+    assert.ok(method);
+    assert.deepEqual(method.modifiers, ["public", "static"]);
+    assert.equal(method.parameters[0].type, "DisplayObjectContainer");
+    assert.equal(method.returnType, "void");
+    assert.notEqual((await run(request(source.replace('miniStar', 'otherStar')))).json, first.json);
+});
