@@ -291,6 +291,19 @@ def overload_matches_native(signature, native):
             and matches(result.strip(), native['type']))
 
 
+def is_primitive_string_record(signature):
+    """Recognize only the bounded record read surface, never an Object write type.
+
+    Record values remain target types; the source declaration and census retain
+    Object. Do not admit aliases, arbitrary generics, unions or index signatures.
+    """
+    signature = signature.strip()
+    readonly = re.fullmatch(r'Readonly\s*<\s*(.*?)\s*>', signature)
+    if readonly:
+        signature = readonly[1]
+    return re.fullmatch(r'Record\s*<\s*string\s*,\s*(?:string|number|boolean)\s*>', signature) is not None
+
+
 def map_native_members(qname, roles, row, capability_id, classes, used_names):
     mappings, uses = [], []
     for native in native_members(classes, qname):
@@ -326,7 +339,8 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
                 target = value_type(candidate)
                 if native['access'] == 'write' and target in ('unknown', 'any'): return True
                 if native['access'] == 'read' and native['type'] == '*': return target == 'unknown'
-                if native['access'] == 'read' and native['type'] == 'Object' and target == 'unknown': return True
+                if native['access'] == 'read' and native['type'] == 'Object':
+                    if target == 'unknown' or is_primitive_string_record(target): return True
                 primitive = {'Boolean': 'boolean', 'Number': 'number', 'int': 'number', 'uint': 'number', 'String': 'string'}.get(native['type'])
                 if primitive:
                     return target == primitive or (primitive == 'string' and target in ('string | null', 'null | string')) or (native['scope'] == 'static' and native['access'] == 'read'

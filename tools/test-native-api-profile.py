@@ -172,6 +172,42 @@ public class Base {
         target['kind'] = 'set'
         self.assertEqual(api.map_native_members(*args), ([], []))
 
+    def test_native_object_record_reads_preserve_source_and_exact_target(self):
+        member = dict(name='parameters', access='read', scope='instance', constructor=False,
+            signature='public function get parameters() : Object', minArgs=0, maxArgs=0,
+            type='Object', parameters=[])
+        classes = {'flash.display.LoaderInfo': {'base': None, 'members': [member]}}
+        target = dict(name='parameters', scope='instance', kind='get+set', signature='Record<string, string>')
+        row = dict(module='LoaderInfo.ts', export='LoaderInfo', kind='class', signature='typeof LoaderInfo', members=[target])
+        args = ('flash.display.LoaderInfo', ['instance-member'], row, 'capability', classes, {'parameters'})
+        for signature in ['Record<string, string>', 'Readonly<Record<string, string>>',
+                          'Record<string, number>', 'Record<string, boolean>',
+                          'Readonly < Record < string , string > >']:
+            with self.subTest(signature=signature):
+                target['signature'] = signature
+                mappings, uses = api.map_native_members(*args)
+                self.assertEqual(len(mappings), 1)
+                self.assertEqual(mappings[0]['sourceMember']['signature'], member['signature'])
+                self.assertEqual(mappings[0]['targetMember']['signature'], signature)
+                self.assertEqual(uses[0]['signatures'][0]['returnType'], 'Object')
+                member['access'] = 'write'
+                self.assertEqual(api.map_native_members(*args), ([], []))
+                member['access'] = 'read'
+        for signature in ['Record<number, string>', 'Record<string | number, string>',
+                          'Record<string, any>', 'Record<string, unknown>', 'Record<string, object>',
+                          'Record<string, Function>', 'Record<string, string[]>',
+                          'Record<string, string | null>', 'Record<string, string> | null',
+                          'Record<string, Record<string, string>>', 'Readonly<Readonly<Record<string, string>>>',
+                          'Record<string, string', 'Readonly<Record<string, string>',
+                          'Record<string, string>>', 'Record<string, string, string>',
+                          'Record<string, string> & Extra', 'ReadonlyRecord<string, string>',
+                          '{ [key: string]: string }', 'Map<string, string>', 'object', 'string', 'any']:
+            target['signature'] = signature
+            self.assertEqual(api.map_native_members(*args), ([], []), signature)
+        target['signature'] = 'Record<string, string>'
+        row['members'].append(dict(target))
+        self.assertEqual(api.map_native_members(*args), ([], []))
+
     def test_native_constructor_does_not_admit_extra_host_parameters(self):
         member = dict(name='Loader', access='call', scope='static', constructor=True,
             signature='public function Loader()', minArgs=0, maxArgs=0,
