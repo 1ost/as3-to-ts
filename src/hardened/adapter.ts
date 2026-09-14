@@ -2672,10 +2672,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             });
             sourceType = semanticType(nameNode, name, name, [], undefined, context.classQualifiedName);
         } else {
-            if (!context.importsByLocal[name] && context.fileCompilation?.byName[name])
-                assertNoInheritedNativeFunctionShadow(context, name, nameNode);
-            const imported = context.importsByLocal[name] ?? (context.fileCompilation?.byName[name]
-                ? context.resolveImportedType(name, "class", nameNode) : null);
+            // A previously resolved same-package import must not hide a value binding
+            // in a later method. Proven Class parameters/locals returned above.
+            if (context.locals[name] || context.parameters[name] || context.fields[name]
+                || context.methods[name] || context.accessors[name])
+                fail("HARDENED_NEW_SHADOW", "constructor name is shadowed by a value binding", nameNode);
+            if (!context.importsByLocal[name] || context.importsByLocal[name]!.authorityKind === "local")
+                assertNoInheritedNativeFunctionShadow(context, name, nameNode, "HARDENED_NEW", "constructor");
+            // Use the shared resolver for separate-file same-package classes too.
+            // It requires exact source/member authority and a direct dependency edge.
+            const imported = context.importsByLocal[name] ?? context.resolveImportedType(name, "class", nameNode);
             if (imported?.authorityKind === "intrinsic"
                 && imported.sourceQualifiedName === "flash.utils.Dictionary") {
                 if (args.length > 1 || (args[0]
@@ -3930,10 +3936,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else if (context.baseSourceQName === "Array" && nativeArrayBase(context)) {
                 if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
                     fail("HARDENED_ARRAY_ARGUMENT","Array constructor arguments must produce values",node);
-            } else if (context.sourceMemberAuthority !== null && context.baseSourceQName === "flash.display.Bitmap") {
-                const mapping=memberMapping(context,context.baseSourceQName,"call","Bitmap",node);
-                if (!mapping || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "constructor")
-                    fail("HARDENED_SUPER_CONSTRUCTOR_AUTHORITY", "Bitmap super requires its authenticated native constructor",node);
+            } else if (context.sourceMemberAuthority !== null && context.baseSourceQName !== null
+                && ["flash.display.Bitmap","flash.events.Event","flash.events.ErrorEvent"].includes(context.baseSourceQName)) {
+                const constructorName=context.baseSourceQName.slice(context.baseSourceQName.lastIndexOf(".")+1);
+                const mapping=memberMapping(context,context.baseSourceQName,"call",constructorName,node);
+                if (!mapping || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "constructor"
+                    || mapping.targetMember?.kind !== "constructor" || mapping.targetMember.scope !== "static")
+                    fail("HARDENED_SUPER_CONSTRUCTOR_AUTHORITY", "Flash super requires its exact authenticated native and target constructor",node);
                 adaptMappedCall(mapping,args,node.children[1]!.children,context,node);
             } else if (args.length !== 0) {
                 fail("HARDENED_SUPER_ARITY", "Flash base constructor arguments remain outside the typed bridge subset", node);
