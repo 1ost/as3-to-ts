@@ -175,7 +175,7 @@ export interface NumericPredicateExpression extends SemanticIdentity {
 
 export interface MathExpression extends SemanticIdentity {
     kind: "math";
-    member: "PI" | "min" | "max" | "round";
+    member: "PI" | "min" | "max" | "round" | "abs";
     arguments: SemanticExpression[] | null;
 }
 

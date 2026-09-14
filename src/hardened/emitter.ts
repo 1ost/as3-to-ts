@@ -470,7 +470,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         if (expression.nativeArray)
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NewArray"),undefined,
                 [ts.factory.createArrayLiteralExpression(expression.arguments.map(argument=>expressionNode(argument,ts)))]);
-        if (["ArgumentError","RangeError"].includes(expression.sourceType.runtimeName || "")
+        if (["ArgumentError","RangeError","SecurityError"].includes(expression.sourceType.runtimeName || "")
             && expression.sourceType.emittedName === "__AS3"+expression.sourceType.runtimeName)
             return ts.factory.createNewExpression(ts.factory.createIdentifier(expression.sourceType.emittedName),undefined,
                 expression.arguments.map(argument => expressionNode(argument,ts)));
@@ -1696,10 +1696,9 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || programUsesRuntimeType(program) || referenceEnumeration || implementsTypes.length > 0 || programUsesVector(program)) {
         imports.push(runtimeTypeImport(ts,referenceEnumeration));
     }
-    for(const errorName of ["ArgumentError","RangeError"]) {
+    for(const errorName of ["ArgumentError","RangeError","SecurityError"]) {
         const nativeError=(value:any):boolean => value !== null && typeof value === "object" && (
-            value.kind === "new" && value.sourceType.emittedName === "__AS3"+errorName
-            && value.sourceType.runtimeName === errorName || Object.values(value).some(nativeError));
+            value.emittedName === "__AS3"+errorName && value.runtimeName === errorName || Object.values(value).some(nativeError));
         if(nativeError(program)) imports.push(ts.factory.createImportDeclaration(undefined,
             ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("AS3"+errorName),

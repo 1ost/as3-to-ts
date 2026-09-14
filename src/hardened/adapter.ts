@@ -873,7 +873,7 @@ function referenceParents(qname: string, context: AdapterContext): readonly stri
 function provenReferenceSubtype(source: SemanticType, target: SemanticType, context: AdapterContext): boolean {
     if (sameUnderlyingType(source, target)) return true;
     if (target.sourceName === "Array" && target.emittedName === "Array" && isArrayType(source,context)) return true;
-    if (context.sourceMemberAuthority !== null && ["ArgumentError","RangeError"].includes(source.sourceName)
+    if (context.sourceMemberAuthority !== null && ["ArgumentError","RangeError","SecurityError"].includes(source.sourceName)
         && source.emittedName === "__AS3"+source.sourceName && source.runtimeName === source.sourceName
         && target.sourceName === "Error" && target.emittedName === "Error") return true;
     if (source.runtimeName === null || target.runtimeName === null || source.typeArguments.length !== 0
@@ -1130,6 +1130,10 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
     if (sourceName === "Date" && context.className !== "Date" && !context.importsByLocal.Date
         && !context.resolveImportedType("Date", null, node) && hasNativeDateAuthority(context.sourceMemberAuthority))
         return semanticType(node,"Date","AS3Date",[],undefined,"Date");
+    if (sourceName === "SecurityError" && context.className !== sourceName
+        && !context.importsByLocal[sourceName] && !context.resolveImportedType(sourceName,null,node)
+        && context.sourceMemberAuthority?.entriesByQName.SecurityError?.baseQName === "Error")
+        return semanticType(node,sourceName,"__AS3SecurityError",[],undefined,sourceName);
     let semanticSourceName = sourceName;
     let emittedName = sourceName === "*" && context.sourceMemberAuthority !== null ? "unknown" : PRIMITIVE_TYPES[sourceName];
     let runtimeName: string | null = emittedName ? sourceName : null;
@@ -2567,15 +2571,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
     if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS") {
         const member = builtinMathMember(node.children[0]!, context);
         if (member !== null) {
-            if (member !== "min" && member !== "max" && member !== "round") fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
-            if (member === "round" && node.children[1]!.children.length !== 1)
-                fail("HARDENED_MATH_ARITY", "Math.round requires exactly one proven numeric argument", node);
+            if (member !== "min" && member !== "max" && member !== "round" && member !== "abs") fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
+            if ((member === "round" || member === "abs") && node.children[1]!.children.length !== 1)
+                fail("HARDENED_MATH_ARITY", `Math.${member} requires exactly one proven numeric argument`, node);
             const args = node.children[1]!.children.map(child => parseExpression(child, context, true));
             args.forEach((argument, index) => {
                 if (!["Number", "int", "uint"].includes(assignmentType(argument, context, node.children[1]!.children[index]!).sourceName))
                     fail("HARDENED_MATH_ARGUMENT", "Math arguments require proven numeric values", node.children[1]!.children[index]!);
             });
-            return Object.assign(identity(node), {kind: "math" as "math", member: member as "min" | "max" | "round", arguments: args});
+            return Object.assign(identity(node), {kind: "math" as "math", member: member as "min" | "max" | "round" | "abs", arguments: args});
         }
     }
     if (node.kind === "LITERAL") {
@@ -2704,22 +2708,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node), {kind:"new" as const,
                 sourceType:semanticType(node,"ArgumentError","__AS3ArgumentError",[],false,"ArgumentError"),arguments:args});
         }
-        if (name === "RangeError" && context.sourceMemberAuthority !== null && context.className !== name
+        if ((name === "RangeError" || name === "SecurityError" && context.sourceMemberAuthority?.entriesByQName.SecurityError?.baseQName === "Error") && context.sourceMemberAuthority !== null && context.className !== name
             && !context.locals[name] && !context.parameters[name] && !context.fields[name] && !context.methods[name]
             && !context.accessors[name] && !context.importsByLocal[name] && !context.resolveImportedType(name,null,nameNode)) {
             assertNoInheritedNativeFunctionShadow(context,name,nameNode);
             if(args.length>2 || args.some(argument=>assignmentType(argument,context,call).sourceName==="void"))
-                fail("HARDENED_RANGE_ERROR_CONSTRUCTOR","RangeError accepts zero to two value arguments",call);
+                fail(name === "RangeError" ? "HARDENED_RANGE_ERROR_CONSTRUCTOR" : "HARDENED_SECURITY_ERROR_CONSTRUCTOR",name+" accepts zero to two value arguments",call);
             if(args[1]) {
                 const idType=assignmentType(args[1],context,call);
                 // Primitive conversion and authenticated object literals share the existing Number runtime.
                 // An unknown host/object parameter does not itself prove a native coercion route.
                 if(!["Number","int","uint","String","Boolean","null","undefined"].includes(idType.sourceName)
                     && args[1].kind!=="object")
-                    fail("HARDENED_RANGE_ERROR_IDENTIFIER","RangeError identifier lacks a proven native numeric conversion route",call);
+                    fail(name === "RangeError" ? "HARDENED_RANGE_ERROR_IDENTIFIER" : "HARDENED_SECURITY_ERROR_IDENTIFIER",name+" identifier lacks a proven native numeric conversion route",call);
             }
             return Object.assign(identity(node),{kind:"new" as const,
-                sourceType:semanticType(node,"RangeError","__AS3RangeError",[],false,"RangeError"),arguments:args});
+                sourceType:semanticType(node,name,"__AS3"+name,[],false,name),arguments:args});
         }
         if (name === "Date" && context.className !== name && !context.locals[name] && !context.parameters[name]
             && !context.fields[name] && !context.methods[name] && !context.accessors[name] && !context.importsByLocal[name]
@@ -2939,6 +2943,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (["===","!=="].includes(operator) && context.sourceMemberAuthority !== null
             && ([leftType,rightType].some(type => dynamicObjectType(type,context))
                 || [leftType,rightType].every(type => isArrayType(type,context))
+                || [leftType,rightType].every(type => provenReferenceSubtype(type,
+                    semanticType(node,"Error","Error",[],false,"Error"),context))
                 || [leftType,rightType].every(type => type.runtimeName !== null
                     && (localQNameForType(type,context) !== null || mappedFlashQNameForType(type,context) !== null)))
             && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))) {
@@ -5147,7 +5153,9 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
             const type = withNullability(parseType(typeNode, context, false), false);
             const wildcardCatch = context.sourceMemberAuthority !== null
                 && type.sourceName === "*" && type.emittedName === "unknown";
-            if (!wildcardCatch && (type.sourceName !== "Error" || type.emittedName !== "Error")) {
+            const securityCatch = type.sourceName === "SecurityError" && type.emittedName === "__AS3SecurityError"
+                && context.sourceMemberAuthority?.entriesByQName.SecurityError?.baseQName === "Error";
+            if (!wildcardCatch && !securityCatch && (type.sourceName !== "Error" || type.emittedName !== "Error")) {
                 fail("HARDENED_CATCH_TYPE", "catch requires canonical Error or an authenticated wildcard type", typeNode);
             }
             const temporaryName = `__as3Caught${catchNode.id.slice(1)}`;
