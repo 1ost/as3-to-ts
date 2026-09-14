@@ -217,8 +217,14 @@ function ordinaryArray(value:unknown):unknown[] {
     return value;
 }
 /** Holes read as undefined; named numeric properties never change array length. */
-export function as3ArrayRead(value:unknown, index:number):unknown {
-    const array=ordinaryArray(value), key=numericKey(index);
+export function as3ArrayRead(value:unknown, index:unknown):unknown {
+    // Property names use the existing native String conversion, once. Do not
+    // collapse "01", negative values, null or named properties through Number.
+    const array=ordinaryArray(value);
+    if (typeof index === "symbol" || typeof index === "bigint")
+        throw new AS3ArrayOperationUnavailable("Host-only values are not ActionScript Array keys");
+    const key=as3NativeString(index);
+    if (key === "length") return array.length;
     const own=Object.getOwnPropertyDescriptor(array,key);
     if (Object.prototype.hasOwnProperty.call(Array.prototype,key)
         || Object.prototype.hasOwnProperty.call(Object.prototype,key) || own && !("value" in own))

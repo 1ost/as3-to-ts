@@ -3631,9 +3631,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             // the existing scalar boundary required by the typed Array helper.
             index = adaptAssignmentValue(semanticType(node, "Number", "number"), index, context, node.children[1]!);
         }
-        if (array && !["Number", "int", "uint"].includes(indexType.sourceName) && !provenWildcardIndex) {
+        if (array && !["Number", "int", "uint"].includes(indexType.sourceName) && !provenWildcardIndex
+            && (!valuePosition || indexType.sourceName === "void")) {
             fail("HARDENED_ARRAY_INDEX_TYPE",
-                "Array index requires a proven numeric source value", node.children[1]!);
+                "Dynamic Array key writes require retained key-conversion ordering; reads require a value", node.children[1]!);
         }
         if (ownRecord && (indexType.sourceName !== "String" || indexType.emittedName !== "string")) {
             fail("HARDENED_OWN_RECORD_KEY", "TTreeNode.FData requires one exact String key", node.children[1]!);
