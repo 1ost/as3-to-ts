@@ -1,3 +1,4 @@
+import { hasNativeDateAuthority } from "./native-date-authority";
 import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
 import {
     CallExpression,
@@ -1093,6 +1094,9 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
     if (sourceName === "void" && !allowVoid) {
         fail("HARDENED_VOID_TYPE", "void is not valid in this type position", node);
     }
+    if (sourceName === "Date" && context.className !== "Date" && !context.importsByLocal.Date
+        && !context.resolveImportedType("Date", null, node) && hasNativeDateAuthority(context.sourceMemberAuthority))
+        return semanticType(node,"Date","AS3Date",[],undefined,"Date");
     let semanticSourceName = sourceName;
     let emittedName = sourceName === "*" && context.sourceMemberAuthority !== null ? "unknown" : PRIMITIVE_TYPES[sourceName];
     let runtimeName: string | null = emittedName ? sourceName : null;
@@ -1228,6 +1232,11 @@ function authoritySemanticType(typeName: string, context: AdapterContext, node: 
     if (typeName.startsWith("Vector.<") && typeName.endsWith(">")) {
         const element = authoritySemanticType(typeName.slice("Vector.<".length, -1), context, node, signature);
         return semanticType(node, `Vector.<${element.sourceName}>`, "AS3Vector", [element]);
+    }
+    if(typeName === "Date" && hasNativeDateAuthority(context.sourceMemberAuthority)) {
+        if(context.className === "Date" || context.importsByLocal.Date || context.resolveImportedType("Date",null,node))
+            fail("HARDENED_DATE_TYPE_SHADOW","Native Date signature conflicts with a lexical class binding",node);
+        return semanticType(node,"Date","AS3Date",[],undefined,"Date");
     }
     const primitive = PRIMITIVE_TYPES[typeName];
     if (primitive) return semanticType(node, typeName, primitive, [], undefined, typeName);
@@ -1976,6 +1985,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             return authoritySemanticType(readable.kind === "field" ? readable.fieldType! : readable.returnType!, context, node);
         }
     }
+    if (expression.kind === "member" && expression.capabilitySource === "Date" && expression.name === "time"
+        && hasNativeDateAuthority(context.sourceMemberAuthority)) return semanticType(node,"Number","number");
     if (expression.kind === "member") {
         if (expression.capabilitySource === "Function" && expression.name === "length")
             return semanticType(node,"int","number");
@@ -2291,6 +2302,8 @@ function assertAssignmentCompatible(target: SemanticType, value: SemanticType, n
 }
 
 function referenceCoercionForType(type: SemanticType, context: AdapterContext): ReferenceCoercion | null {
+    if(type.sourceName==="Date" && type.emittedName==="AS3Date" && hasNativeDateAuthority(context.sourceMemberAuthority))
+        return {targetKind:"class",runtimeName:"Date"};
     if (type.sourceName === context.className)
         return {targetKind:"class", runtimeName:context.classQualifiedName};
     const imported = context.importsByLocal[type.sourceName];
@@ -2649,6 +2662,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return Object.assign(identity(node),{kind:"new" as const,
                 sourceType:semanticType(node,"RangeError","__AS3RangeError",[],false,"RangeError"),arguments:args});
         }
+        if (name === "Date" && context.className !== name && !context.locals[name] && !context.parameters[name]
+            && !context.fields[name] && !context.methods[name] && !context.accessors[name] && !context.importsByLocal[name]
+            && !context.resolveImportedType(name,null,nameNode) && hasNativeDateAuthority(context.sourceMemberAuthority)) {
+            assertNoInheritedNativeFunctionShadow(context,name,nameNode,"HARDENED_DATE","Date");
+            if(args.length!==0) fail("HARDENED_DATE_CONSTRUCTOR_ARITY","Only zero-argument Date construction is admitted",call);
+            return Object.assign(identity(node),{kind:"new" as const,sourceType:semanticType(node,"Date","AS3Date",[],false,"Date"),arguments:args});
+        }
         const embedded = context.fields[name]?.embeddedBitmap;
         if (embedded && !context.locals[name] && !context.parameters[name]) {
             if (args.length !== 0) fail("HARDENED_EMBED_CONSTRUCTOR_ARITY", "Embedded bitmap construction currently admits zero arguments", call);
@@ -2766,6 +2786,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             targetKind = "vector";
         } else if (runtimePrimitives.has(targetType.sourceName)) {
             targetKind = "primitive";
+        } else if (targetType.sourceName === "Date" && targetType.emittedName === "AS3Date"
+            && hasNativeDateAuthority(context.sourceMemberAuthority)) {
+            targetKind="class";runtimeName="Date";
         } else if (context.importsByLocal[targetType.sourceName]?.runtimeInterface) {
             targetKind = "interface";
             runtimeName = context.importsByLocal[targetType.sourceName]!.sourceQualifiedName;
@@ -2835,6 +2858,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const right = parseExpression(node.children[2]!, context, true);
         const leftType = assignmentType(left, context, node.children[0]!);
         const rightType = assignmentType(right, context, node.children[2]!);
+        if ([leftType,rightType].some(type=>type.sourceName==="Date" && type.emittedName==="AS3Date")
+            && !["===","!=="].includes(operator))
+            fail("HARDENED_DATE_COERCION","Date operators outside strict identity need separate native evidence",node);
         if ((operator === "&&" || operator === "||") && context.sourceMemberAuthority !== null) {
             if ([leftType,rightType].some(type => (valuePosition ? ["void","XML","XMLList"] : ["XML","XMLList"]).includes(type.sourceName)))
                 fail("HARDENED_LOGICAL_TYPE", "logical operands require supported AS3 value domains", node);
@@ -3584,6 +3610,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
             }
         }
+        if (target.kind !== "super" && target.kind !== "this") {
+            const dateType=assignmentType(target,context,node);
+            if(dateType.sourceName==="Date" && dateType.emittedName==="AS3Date" && hasNativeDateAuthority(context.sourceMemberAuthority)) {
+                if(!["valueOf","getTime","time"].includes(name) || valuePosition && name!=="time")
+                    fail("HARDENED_DATE_MEMBER","Date member or method closure is outside the evidenced subset",node);
+                return Object.assign(identity(node),{kind:"member" as const,target,name,targetNullable:dateType.nullable,capabilitySource:"Date"});
+            }
+        }
         let targetName: string | undefined;
         let capabilitySource: string | null = superOwnerQName;
         let targetNullable = false;
@@ -3787,6 +3821,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const targetType = withNullability(
                 parseType(Object.assign({}, rawCallee, { kind: "TYPE" }), context, false), false);
             const argument = rawArguments.length === 0 ? null : parseExpression(rawArguments[0]!, context, true);
+            if(argument && assignmentType(argument,context,node).emittedName==="AS3Date")
+                fail("HARDENED_DATE_COERCION","Date primitive conversion requires separate native evidence",node);
             return Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument });
         }
         if (rawCallee.kind === "DOT" && rawCallee.children.length === 2 && rawCallee.children[1]!.text === "call") {
@@ -3950,6 +3986,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else if (args.length !== 0) {
                 fail("HARDENED_SUPER_ARITY", "Flash base constructor arguments remain outside the typed bridge subset", node);
             }
+        } else if (callee.kind === "member" && callee.capabilitySource === "Date"
+            && hasNativeDateAuthority(context.sourceMemberAuthority)) {
+            if(!["valueOf","getTime"].includes(callee.name) || args.length!==0)
+                fail("HARDENED_DATE_CALL","Date calls require an evidenced zero-argument method",node);
+            resultType=semanticType(node,"Number","number");
         } else if (callee.kind === "member" && callee.target.kind === "super") {
             if (callee.capabilitySource === null) {
                 fail("HARDENED_SUPER_MEMBER", "super method call lacks authenticated owner identity", node);

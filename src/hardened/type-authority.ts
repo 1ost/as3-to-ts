@@ -1,3 +1,4 @@
+import { hasNativeDateAuthority } from "./native-date-authority";
 import { staticConstant } from "./static-constants";
 import { AS3FileLocalClassScope, fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLocalIdentity";
 import { LoadedSourceMemberAuthority, assertLoadedSourceMemberAuthority } from "./source-member-authority";
@@ -830,4 +831,13 @@ export function emitRuntimeApplicationEntry(modulePaths: readonly string[],
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_HASH", "runtime application entry SHA-256 function returned a non-canonical digest");
     }
     return Object.freeze({ path: "ApplicationEntry.generated.ts", code, sha256: digest });
+}
+
+/** A single intrinsic Date identity is registered only after exact SDK verification. */
+export function dateRuntimeTypeAuthoritySource(source: LoadedSourceMemberAuthority, runtimeSha256:string): RuntimeAuthorityClassSource {
+    if(!hasNativeDateAuthority(source) || !/^[a-f0-9]{64}$/.test(runtimeSha256))
+        throw new HardenedSemanticError("HARDENED_DATE_AUTHORITY","Date runtime requires verified SDK and runtime hashes");
+    return authenticatedSource({kind:"class",qname:"Date",base:null,interfaces:[],sourceSha256:runtimeSha256,
+        definitionSafe:true,module:"./AS3Date",constructorExport:"AS3Date",predicateExport:"isAS3Date",
+        constructionTargetExport:null,constructionProofExport:null,fields:[],evaluationOrder:null});
 }

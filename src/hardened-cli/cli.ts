@@ -1,3 +1,5 @@
+import { hasNativeDateAuthority } from "../hardened/native-date-authority";
+import { dateRuntimeTypeAuthoritySource } from "../hardened/type-authority";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { readFileSync, realpathSync, lstatSync } from "node:fs";
@@ -82,6 +84,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Array.ts": "e44e0129b2b07748fb4449a9cdcc325c7e4f082ca5ea3feab4f3feb20d99d57b",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
     "AS3ByteArrayNative.ts": "f6188ecdba0cb5180172da9a5533640aec0dc1ac7c0433b8e41aec3e02e744e3",
+    "AS3Date.ts": "2265a9bbda63966c86dc94eeec359c71fd32d64bae39265b4d6fa1cb1d618d99",
     "AS3ByteArray.ts": "1cf1a2f0f8abc200585b7b62a66724d0fee0ec03c397d96b769905d5a899e4b5",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
     "AS3ClassInitialization.ts": "5b446cdfe43be974455866ca93648b5625edb777938093979e0437aaa8dd501f",
@@ -220,7 +223,7 @@ function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<
 }
 
 function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): string {
-    const entries = ["AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
+    const entries = ["AS3Date", "AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
         "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3RegExp", "AS3Timer", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
     entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"
@@ -523,6 +526,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     && item.sourceQualifiedName === "flash.utils.ByteArray"))) {
                 runtimeAuthoritySources.push(byteArrayRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers,RUNTIME_SOURCE_SHA256["AS3ByteArray.ts"]!));
             }
+            if(hasNativeDateAuthority(transpileAuthority!.sourceMembers))
+                runtimeAuthoritySources.push(dateRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers!,RUNTIME_SOURCE_SHA256["AS3Date.ts"]!));
             runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value));
             const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
             const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code,

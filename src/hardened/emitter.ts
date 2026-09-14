@@ -233,6 +233,9 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3FunctionLength"),undefined,[target]);
         if (expression.capabilitySource === "String" && expression.name === "length")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringLength"),undefined,[target]);
+        if (expression.capabilitySource === "Date")
+            return ts.factory.createPropertyAccessExpression(ts.factory.createCallExpression(
+                ts.factory.createIdentifier("__as3DateReceiver"), undefined, [target]), expression.name);
         return ts.factory.createPropertyAccessExpression(
             expression.targetNullable ? ts.factory.createNonNullExpression(target) : target,
             expression.targetName || expression.name,
@@ -457,6 +460,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "new") {
+        if (expression.sourceType.sourceName === "Date" && expression.sourceType.emittedName === "AS3Date")
+            return ts.factory.createNewExpression(ts.factory.createIdentifier("AS3Date"),undefined,[]);
         if (expression.nativeArray)
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NewArray"),undefined,
                 [ts.factory.createArrayLiteralExpression(expression.arguments.map(argument=>expressionNode(argument,ts)))]);
@@ -1647,13 +1652,20 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3ObjectDispatch"),undefined));
     const globalCalls = new Map<string, Extract<SemanticExpression, {kind: "globalCall"}>>();
     let referenceEnumeration = false;
+    let usesNativeDate = false;
     const collectGlobals = (value: any): void => {
         if (!value || typeof value !== "object") return;
+        if (value.sourceName === "Date" && value.emittedName === "AS3Date") usesNativeDate = true;
         if (value.kind === "forEach" && value.bindingReference) referenceEnumeration = true;
         if (value.kind === "globalCall" || value.kind === "globalFunction") globalCalls.set(value.name, value);
         Object.keys(value).forEach(key => collectGlobals(value[key]));
     };
     collectGlobals(program);
+    if (usesNativeDate) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false,undefined,ts.factory.createIdentifier("AS3Date")),
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DateReceiver"),ts.factory.createIdentifier("__as3DateReceiver"))])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Date"),undefined));
     for (const [name, call] of [...globalCalls].sort(([left], [right]) => left.localeCompare(right)))
         imports.push(ts.factory.createImportDeclaration(undefined,
             ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([

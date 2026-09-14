@@ -1,3 +1,4 @@
+import { verifyNativeDateAuthority } from "../hardened/native-date-authority";
 import { loadByteArrayNativeTarget } from "../hardened/bytearray-native-authority";
 import { createHash } from "node:crypto";
 import {
@@ -311,7 +312,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
         || !exactKeys(profile.files, ["capabilityMapping", "dependencyGraphRaw", "dependencyGraphSemantic",
             "localMemberMap", "localTypeMap", "nativeTimerAuthority", "runtimeTypeAuthorityLock",
             "runtimeTypePredicates", "sourceManifest", "sourceMemberAuthority"].concat(
-                Object.prototype.hasOwnProperty.call(profile.files,"byteArrayNative") ? ["byteArrayNative"] : []))
+                Object.prototype.hasOwnProperty.call(profile.files,"byteArrayNative") ? ["byteArrayNative"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"nativeDate") ? ["nativeDate"] : []))
         || !exactKeys(profile.counts, ["localMembersComplete", "localMembersHeld", "localTypes", "mappedMembers", "mappedTypes", "sourceMemberTypes"])
         || !Array.isArray(profile.runtimePredicateQNames)
         || profile.runtimePredicateQNames.some(value => typeof value !== "string")) {
@@ -322,7 +324,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const profileRoot = dirname(resolve(profileLockPath));
     const files = profile.files as unknown as {
         capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
-        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile;
         runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
         sourceMemberAuthority: ProfileFile;
     };
@@ -400,6 +402,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             profile.runtimePredicateQNames as string[], sha256);
         const sourceMembers = loadSourceMemberAuthority(sourceMemberAuthorityJson,
             files.sourceMemberAuthority.sha256, sha256);
+        if(files.nativeDate) verifyNativeDateAuthority(sourceMembers,profileRoot,
+            profileFile(profileRoot,files.nativeDate,"native Date proof"),sourceManifestJson);
         if (Object.keys(sourceMembers.entriesByQName).length !== counts.sourceMemberTypes) {
             throw new CliError("application source member count differs from the profile lock", 6);
         }

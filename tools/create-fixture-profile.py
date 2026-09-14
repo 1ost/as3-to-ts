@@ -163,7 +163,10 @@ def main():
     p.add_argument('--intrinsic-type', action='append', default=[], choices=['flash.utils.Dictionary', 'flash.utils.ByteArray'],
                    help='Exercise the existing shared compiler intrinsic instead of the optional Laya facade')
     p.add_argument('--bytearray-native-uncompress', action='store_true', help='Authenticate zero-argument intrinsic decompression through shared Laya')
+    p.add_argument('--native-date', action='store_true', help='Authenticate the shared zero-argument Date intrinsic from exact SDK declarations')
     args = p.parse_args()
+    if args.native_date and not args.ffdec_jar:
+        p.error('--native-date requires exact SDK decompilation via --ffdec-jar')
     if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*', args.entry):
         p.error('Entry must be an AS3 class QName')
     source, laya, sdk, out = (x.resolve() for x in (args.source, args.laya, args.air_sdk, args.output))
@@ -258,6 +261,14 @@ def main():
         source_manifest['nativeSignaturesSha256'] = sha(out / 'sdk-signatures.json')
         source_manifest['nativeSdkSha256'] = sha(sdk / 'frameworks/libs/air/airglobal.swc')
         source_manifest['nativeDecompilerSha256'] = sha(args.ffdec_jar.resolve())
+        if args.native_date:
+            date_spec = importlib.util.spec_from_file_location('native_date_profile', ROOT / 'tools/native_date_profile.py')
+            date_helper = importlib.util.module_from_spec(date_spec); date_spec.loader.exec_module(date_helper)
+            date_evidence = date_helper.produce_native_date_profile(profile_root=out, air_sdk=sdk,
+                sdk_declaration=out / 'sdk-source/scripts/Date.as', sdk_signatures=out / 'sdk-signatures.json')
+            source_manifest.update(date_evidence['manifestPins'])
+            facade_inputs.update(date_evidence['generatorInputs'])
+            files['nativeDate'] = out / date_evidence['file']['path']
         write(files['sourceManifest'], source_manifest)
         local_types = json.loads(files['localTypeMap'].read_text())
         local_types['sourceManifestSha256'] = sha(files['sourceManifest'])
