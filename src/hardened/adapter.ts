@@ -13,6 +13,7 @@ import {
     NormalizedParserAst,
     NormalizedParserNode,
     SemanticClass,
+    SourceBindableEvent,
     InheritedAccessorForward,
     SemanticCatchClause,
     SemanticConstructor,
@@ -50,6 +51,7 @@ export interface TreeNode extends NormalizedParserNode {
 }
 
 interface MethodHeader {
+    sourceBindableEvent?: SourceBindableEvent;
     node: TreeNode;
     name: string;
     modifiers: SemanticModifier[];
@@ -5083,7 +5085,7 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
     if (node.kind !== "FUNCTION" && node.kind !== "GET" && node.kind !== "SET") {
         fail("HARDENED_METHOD_KIND", "callable form is unsupported", node);
     }
-    onlyKinds(node, ["BLOCK", "MOD_LIST", "NAME", "PARAMETER_LIST", "TYPE", "VECTOR"]);
+    onlyKinds(node, ["BLOCK", "MOD_LIST", "NAME", "PARAMETER_LIST", "TYPE", "VECTOR", "META_LIST"]);
     const nameNode = one(node, "NAME")!;
     const name = validateIdentifier(requiredText(nameNode, "method name"), nameNode);
     const accessor = node.kind === "GET" ? "getter" : node.kind === "SET" ? "setter" : null;
@@ -5097,6 +5099,28 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
         parseParameters(one(node, "PARAMETER_LIST")!, context), constructor, context, node);
     const memberModifiers = parseMemberModifiers(node, context);
     const modifiers = memberModifiers.modifiers;
+    const metadata=one(node,"META_LIST",true);
+    let sourceBindableEvent:SourceBindableEvent|undefined;
+    if(metadata!==null) {
+        const reject=():never=>fail("HARDENED_BINDABLE_METADATA",
+            "Only one explicit literal-event Bindable annotation on an authenticated public instance getter is admitted",metadata);
+        if(context.sourceMemberAuthority===null || accessor!=="getter" || modifiers.length!==1 || modifiers[0]!=="public"
+            || memberModifiers.namespaceName!==null || metadata.children.length!==1) reject();
+        const meta=metadata.children[0]!;
+        if(meta.kind!=="META" || meta.children.length!==1) reject();
+        const call=meta.children[0]!;
+        if(call.kind!=="CALL" || call.children.length!==2 || call.children[0]!.kind!=="IDENTIFIER"
+            || call.children[0]!.text!=="Bindable" || call.children[1]!.kind!=="ARGUMENTS"
+            || call.children[1]!.children.length!==1) reject();
+        const option=call.children[1]!.children[0]!;
+        if(option.kind!=="ASSIGN" || option.children.length!==3 || option.children[0]!.kind!=="IDENTIFIER"
+            || option.children[0]!.text!=="event" || option.children[1]!.text!=="="
+            || option.children[2]!.kind!=="LITERAL") reject();
+        let event:SemanticExpression;
+        try {event=parseLiteral(option.children[2]!);} catch {return reject();}
+        if(event.kind!=="literal" || typeof event.value!=="string" || event.value.length===0) return reject();
+        sourceBindableEvent=Object.assign(identity(metadata),{name:"Bindable" as const,event:event.value});
+    }
     if (constructor && (modifiers.indexOf("static") >= 0 || modifiers.indexOf("override") >= 0
         || memberModifiers.namespaceName !== null)) {
         fail("HARDENED_CONSTRUCTOR_STATIC", "constructor cannot be static", node);
@@ -5148,7 +5172,8 @@ function parseMethodHeader(node: TreeNode, className: string, context: AdapterCo
         }
     }
     return { node, name, modifiers, namespaceName: memberModifiers.namespaceName,
-        parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor };
+        parameters, returnType, block: one(node, "BLOCK")!, constructor, accessor,
+        ...(sourceBindableEvent ? {sourceBindableEvent} : {}) };
 }
 
 /** Semantic IR is acyclic; reject receiver references in pre-super local initializers. */
@@ -5882,6 +5907,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                 const getter: SemanticGetter = Object.assign(identity(node), {
                     kind: "getter" as "getter", name: header.name, modifiers: header.modifiers,
                     namespaceName: header.namespaceName, returnType: header.returnType!, body,
+                    ...(header.sourceBindableEvent ? {sourceBindableEvent:header.sourceBindableEvent} : {}),
                 });
                 members.push(getter);
             } else if (header.accessor === "setter") {

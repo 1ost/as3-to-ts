@@ -1314,6 +1314,26 @@ try {
             assert.throws(()=>adaptRegex(expression),error=>error.code==='HARDENED_REGEXP_GRAMMAR');
         assert.throws(()=>adaptRegex('/a/.test(value)','Boolean',false),error=>!!error.code);
     }
+    {
+        const adaptBindable=(annotation='[Bindable(event="readyChange")]',declaration='public function get ready():Boolean{return true;}',authenticated=true)=>{
+            const source=`package p {public class BindingProbe {${annotation} ${declaration}}}`;
+            const semantic=built.adapter.adaptNormalizedParserAst(built.normalizer.normalizeParserAst(built.parse("BindingProbe.as",source),source,sha256),
+                authority(built.ledger),source,sha256,undefined,undefined,undefined,referenceAuthority,
+                authenticated?sourceMemberAuthority:undefined);
+            return {source,semantic};
+        };
+        const {source,semantic}=adaptBindable();
+        const getter=semantic.declaration.members.find(member=>member.kind==='getter');
+        assert.equal(getter.sourceBindableEvent.event,'readyChange');assert.equal(getter.sourceBindableEvent.name,'Bindable');
+        assert.equal(source.slice(getter.sourceBindableEvent.sourceSpan.start,getter.sourceBindableEvent.sourceSpan.end),'[Bindable(event="readyChange")]');
+        const emitted=built.emitter.emitSemanticProgram(semantic,{compiler:ts49,expectedTypeScriptVersion:"4.9.5"}).code;
+        assert.match(emitted,/get ready\(\)/);assert.doesNotMatch(emitted,/Bindable|propertyChange|readyChange/);
+        for(const annotation of ['[Bindable]','[Bindable(event="")]','[Bindable(event=EVENT)]','[Other(event="x")]','[Bindable(event="x",other="y")]','[Bindable(event="x")][Bindable(event="y")]'])
+            assert.throws(()=>adaptBindable(annotation),error=>error.code==='HARDENED_BINDABLE_METADATA');
+        for(const declaration of ['public static function get ready():Boolean{return true;}','private function get ready():Boolean{return true;}','public function ready():Boolean{return true;}','public function set ready(value:Boolean):void{}'])
+            assert.throws(()=>adaptBindable(undefined,declaration),error=>error.code==='HARDENED_BINDABLE_METADATA');
+        assert.throws(()=>adaptBindable(undefined,undefined,false),error=>error.code==='HARDENED_BINDABLE_METADATA');
+    }
     const numericFieldSortSource='package p { public class FieldSort { public function run(values:Array):void { values.sortOn("priority",18); } } }';
     const numericFieldSortAst=built.normalizer.normalizeParserAst(
         built.parse("fixtures/FieldSort.as",numericFieldSortSource),numericFieldSortSource,sha256);

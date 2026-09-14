@@ -694,7 +694,14 @@ export interface SemanticMethod extends SemanticIdentity {
     body: SemanticStatement[];
 }
 
+/** Original annotation provenance; not a synthesized runtime binding contract. */
+export interface SourceBindableEvent extends SemanticIdentity {
+    name: "Bindable";
+    event: string;
+}
+
 export interface SemanticGetter extends SemanticIdentity {
+    sourceBindableEvent?: SourceBindableEvent;
     kind: "getter";
     name: string;
     modifiers: SemanticModifier[];
