@@ -307,7 +307,7 @@ export interface DictionaryHasExpression extends SemanticIdentity {
 
 export interface ObjectOperationExpression extends SemanticIdentity {
     kind: "objectOperation";
-    operation: "has" | "call";
+    operation: "has" | "call" | "functionAccessorCall";
     target: SemanticExpression;
     index: SemanticExpression;
     arguments: SemanticExpression[];

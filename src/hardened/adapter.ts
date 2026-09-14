@@ -4143,6 +4143,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 argumentsArray:Object.assign(identity(node),{kind:"array" as const,elements:args}),
                 resultType:semanticType(node,"*","unknown")});
         }
+        const functionGetter = callee.kind === "member" ? context.accessors[callee.name]?.getter : undefined;
+        if (context.sourceMemberAuthority !== null && callee.kind === "member" && callee.target.kind === "this"
+            && rawCallee.kind !== "IDENTIFIER" && context.lambdaDepth === 0
+            && context.currentCallable !== null && !context.currentCallable.modifiers.includes("static")
+            && functionGetter?.returnType?.sourceName === "Function"
+            && !functionGetter.modifiers.includes("static") && functionGetter.namespaceName === null) {
+            if (args.some(argument => assignmentType(argument,context,node).sourceName === "void"))
+                fail("HARDENED_FUNCTION_ARGUMENT", "Function accessor arguments must produce values", node);
+            // Explicit callproperty evaluates arguments before reading the getter.
+            // Reuse sealed trait lookup and method/source-lambda invocation rather
+            // than relaxing the own-data-slot contract of Function field calls.
+            return Object.assign(identity(node), {kind:"objectOperation" as const,operation:"functionAccessorCall" as const,
+                target:callee.target,index:Object.assign(identity(rawCallee),{kind:"literal" as const,value:callee.name}),
+                arguments:args,callerQName:context.classQualifiedName,
+                resultType:semanticType(node,"*","unknown")});
+        }
         if (context.sourceMemberAuthority !== null && callee.kind === "identifier"
             && (callee.bindingKind === "parameter" || callee.bindingKind === "local")
             && !context.locals[callee.name]?.lambdaSignature

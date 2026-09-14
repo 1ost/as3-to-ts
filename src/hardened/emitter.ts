@@ -301,7 +301,7 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         [expressionNode(expression.index,ts),expressionNode(expression.target,ts)]);
     if (expression.kind === "objectOperation") {
         const key = expressionNode(expression.index,ts), target = expressionNode(expression.target,ts);
-        return ts.factory.createCallExpression(ts.factory.createIdentifier(expression.operation === "has" ? "__as3ObjectIn" : "__as3ObjectCall"),undefined,
+        return ts.factory.createCallExpression(ts.factory.createIdentifier(expression.operation === "has" ? "__as3ObjectIn" : expression.operation === "functionAccessorCall" ? "__as3ObjectFunctionAccessorCall" : "__as3ObjectCall"),undefined,
             expression.operation === "has" ? [key,target] : [target,key,
                 ts.factory.createArrayLiteralExpression(expression.arguments.map(argument => expressionNode(argument,ts))),
                 ts.factory.createStringLiteral(expression.callerQName)]);
@@ -1656,7 +1656,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         || Object.values(value).some(usesObjectDispatch));
     if (usesObjectDispatch(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
-            ["as3ObjectRead","as3ObjectWrite","as3ObjectUpdate","as3ObjectDelete","as3ObjectIn","as3ObjectCall"].map(name =>
+            ["as3ObjectRead","as3ObjectWrite","as3ObjectUpdate","as3ObjectDelete","as3ObjectIn","as3ObjectCall","as3ObjectFunctionAccessorCall"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3ObjectDispatch"),undefined));
     const globalCalls = new Map<string, Extract<SemanticExpression, {kind: "globalCall"}>>();

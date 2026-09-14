@@ -308,6 +308,25 @@ export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:st
     return Reflect.apply(fn,value,args);
 }
 
+/** Explicit Function getter call: arguments have evaluated before this lookup. */
+export function as3ObjectFunctionAccessorCall(value:unknown,name:string,args:unknown[],caller:string):unknown {
+    const target=receiver(value);
+    lookupObjectCaller(caller);
+    const info=describe(target);
+    if (!info) return unavailable("Function accessor calls require a registered original instance");
+    const getter=findTrait(info,name,caller,false).find(member=>member.kind === "getter");
+    if (!getter || getter.type !== "Function")
+        return unavailable("Function accessor calls require an authenticated Function getter");
+    const fn=as3ObjectRead(value,name,caller);
+    if (typeof fn !== "function") {
+        const error=new TypeError("Error #1006: value is not a function.");
+        Object.defineProperty(error,"errorID",{value:1006}); throw error;
+    }
+    if (!isAS3MethodClosure(fn) && !isAS3SourceLambda(fn))
+        return unavailable("Function accessor values require an authenticated method closure or source lambda");
+    return Reflect.apply(fn,value,args);
+}
+
 /** Preserve source evaluation order: the in key evaluates before its receiver. */
 export function as3ObjectIn(key:unknown,value:unknown):boolean { return as3ObjectHas(value,key); }
 
