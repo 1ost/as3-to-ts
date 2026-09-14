@@ -1,0 +1,2 @@
+tests/native-assignments/oracle/* -text
+tests/native-assignments/RetainFlashAssignments.js text eol=lf

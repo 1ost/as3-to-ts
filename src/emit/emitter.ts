@@ -7,6 +7,7 @@ import {VERBOSE_MASK, AS3_UTIL, INTERFACE_METHOD, INTERFACE_INF, WARNINGS, FOR_I
 import ClassList, {ClassKind, ClassMember, ClassMemberKind, ClassRecord, ModifierKind, MODIFIERS} from "./classlist";
 import {ReportFlags} from '../reports/report-flags';
 import {NativeNamespaces} from './native-namespaces';
+import {logicalAssignmentType} from './logical-assignment';
 
 const util = require('util');
 
@@ -218,6 +219,7 @@ export default class Emitter {
 	public headOutput:string = "";
 
 	public output:string = '';
+	public logicalAssignmentTemps = new Map<Node, string[]>();
 	public index:number = 0;
 
 /*	public rootScope:Scope = null;
@@ -268,6 +270,8 @@ export default class Emitter {
 			this.catchup(this.source.length);
 		});
 		this.output = this.output.replace(/\s([^\n])\s*?=>/gm, " =>");//TODO hotfix. To remove new lines between arrow operator nad {
+		if (this.logicalAssignmentTemps.size)
+			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return this.headOutput + this.namespaces.keyDeclarations() + this.output;
 	}
 
@@ -1144,7 +1148,17 @@ function getNodeNameRecursive(objNode:Node):string{
 }
 
 function emitBlock(emitter:Emitter, node:Node):void {
+	// Logical assignments capture effectful receivers in ordinary function-local
+	// variables. Do not introduce an IIFE: that would change lexical arguments.
+	emitter.catchup(node.start + 1);
+	const insertion = emitter.output.length;
 	visitNodes(emitter, node.children);
+	const temporaries = emitter.logicalAssignmentTemps.get(node);
+	if (temporaries && temporaries.length) {
+		emitter.output = emitter.output.slice(0, insertion) + '\nvar ' + temporaries.join(', ') + ';\n'
+			+ emitter.output.slice(insertion);
+		emitter.logicalAssignmentTemps.delete(node);
+	}
 }
 function emitMinus(emitter:Emitter, node:Node):void {
 	//emitter.insert("-");
@@ -1984,13 +1998,15 @@ function emitCall(emitter:Emitter, node:Node):void {
 		else {
 			if (isCast(emitter, node)) {
 				emitter.catchup(node.start);
-				emitter.insert('<');
+				emitter.insert('(<');
 				const vec:Node = node.findChild(NodeKind.VECTOR);
 				visitNodes(emitter, [vec]);
 				emitter.insert('>');
 				const args:Node = node.findChild(NodeKind.ARGUMENTS);
 				emitter.skipTo(args.start);
 				visitNodes(emitter, [args]);
+				emitter.catchup(args.end);
+				emitter.insert(')');
 				return;
 			}
 		}
@@ -2005,11 +2021,13 @@ function emitCall(emitter:Emitter, node:Node):void {
 				emitter.catchup(node.start);
 			}
 			else {
-				emitter.insert('<');
+				emitter.insert('(<');
 				emitter.insert(rtype);
 				emitter.insert('>');
 				emitter.skipTo(args.start);
 				visitNodes(emitter, [args]);
+				emitter.catchup(args.end);
+				emitter.insert(')');
 				return;
 			}
 		}
@@ -2365,6 +2383,68 @@ function emitInit(emitter: Emitter, node: Node): void {
     emitIntegerCoercionEnd(emitter, as3Type);
 }
 
+function logicalAssignmentTemporary(emitter: Emitter, node: Node): string {
+    let body: Node = null;
+    for (let current = node; current && current.parent; current = current.parent) {
+        if ([NodeKind.FUNCTION, NodeKind.LAMBDA, NodeKind.GET, NodeKind.SET].indexOf(current.parent.kind) >= 0) {
+            if (current.kind === NodeKind.BLOCK) body = current;
+            break;
+        }
+    }
+    if (!body) throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture outside a function body');
+    const allocated: string[] = [];
+    emitter.logicalAssignmentTemps.forEach(names => allocated.push(...names));
+    let index = allocated.length;
+    let name: string;
+    do { name = '__as3_logical_receiver_' + index++; }
+    while (emitter.source.indexOf(name) >= 0 || allocated.indexOf(name) >= 0);
+    emitter.logicalAssignmentTemps.set(body, (emitter.logicalAssignmentTemps.get(body) || []).concat(name));
+    return name;
+}
+
+function emitLogicalAssignment(emitter: Emitter, node: Node): void {
+    const left = unwrapEncapsulatedExpression(node.children[0]);
+    const operator = node.children[1].text.slice(0, -1);
+    const right = node.children[2];
+    const type = logicalAssignmentType(left, name => emitter.findDefInScope(name));
+    if (['*', 'int', 'uint', 'Boolean', 'Object'].indexOf(type) < 0)
+        throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: selected-result coercion requires provider authority for ' + type);
+    emitter.catchup(node.start);
+    emitter.insert('(');
+    emitter.skipTo(left.start);
+    let reference: string;
+    if (left.kind === NodeKind.IDENTIFIER) {
+        const start = emitter.output.length;
+        visitNode(emitter, left);
+        emitter.catchup(left.end);
+        reference = emitter.output.slice(start);
+    } else if (left.kind === NodeKind.DOT && left.children[1].kind === NodeKind.LITERAL
+        && left.children[0].text !== 'super') {
+        emitter.namespaces.checkDot(left);
+        const temporary = logicalAssignmentTemporary(emitter, node);
+        emitter.insert(temporary + ' = ');
+        visitNode(emitter, left.children[0]);
+        emitter.catchup(getEffectiveNodeEnd(left.children[0]));
+        reference = temporary + '[' + JSON.stringify(left.children[1].text) + ']';
+        emitter.insert(', ' + reference);
+    } else {
+        throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: only identifier and ordinary dot references are proven');
+    }
+    emitter.insert(' = ');
+    const selected = type === 'Object' ? logicalAssignmentTemporary(emitter, node) : null;
+    if (selected) emitter.insert('(' + selected + ' = ');
+    if (type === 'int' || type === 'uint') emitIntegerCoercionStart(emitter);
+    else if (type === 'Boolean') emitter.insert('!!');
+    emitter.insert('(' + reference + ' ' + operator + ' (');
+    emitter.skipTo(getExpressionStart(right));
+    visitNode(emitter, right); emitter.catchup(getEffectiveNodeEnd(right));
+    emitter.insert('))');
+    if (type === 'int' || type === 'uint') emitIntegerCoercionEnd(emitter, type);
+    if (selected) emitter.insert(', ' + selected + ' === void 0 ? null : ' + selected + ')');
+    emitter.insert(')');
+    emitter.skipTo(getEffectiveNodeEnd(node));
+}
+
 function emitAssign(emitter: Emitter, node: Node): void {
     if (node.children.length !== 3) {
         emitter.catchup(node.start);
@@ -2375,6 +2455,10 @@ function emitAssign(emitter: Emitter, node: Node): void {
     let left = node.children[0];
     let operator = node.children[1];
     let right = node.children[2];
+    if (operator.text === '||=' || operator.text === '&&=') {
+        emitLogicalAssignment(emitter, node);
+        return;
+    }
     let target = getTypedAssignmentTarget(emitter, left);
     let supportedOperators = [
         '=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '>>>='

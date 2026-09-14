@@ -1,4 +1,5 @@
 export let AND = '&&';
+export let LOGICAL_AND_EQUAL = '&&=';
 export let AND_AS2 = 'and';
 export let AND_EQUAL = '&=';
 export let AT = '@';
@@ -28,6 +29,7 @@ export let LEFT_CURLY_BRACKET = '{';
 export let LEFT_PARENTHESIS = '(';
 export let LEFT_SQUARE_BRACKET = '[';
 export let LOGICAL_OR = '||';
+export let LOGICAL_OR_EQUAL = '||=';
 export let LOGICAL_OR_AS2 = 'or';
 export let MINUS = '-';
 export let MINUS_EQUAL = '-=';

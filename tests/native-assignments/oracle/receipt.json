@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "authority": "Independent reviewer actual deployed Flash26 captures; never native-generated expectations",
+  "files": [
+    {
+      "path": "AssignmentOracle.as",
+      "sha256": "e9b43e9b8b552f610ff3c6b1740c1faa3fec7bbedaa54c72efd50769c95d0320"
+    },
+    {
+      "path": "assignment-flash.json",
+      "sha256": "cc4763bb5d45edf28035c0d71dd99d5cc8dc345b6bf730d2d49dd69ce7eea491"
+    },
+    {
+      "path": "assignment-capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "ObjectAssignmentOracle.as",
+      "sha256": "558485d872ecad83136d850a76ad080f25db8d12c8583e8ae83485e5c1723d2a"
+    },
+    {
+      "path": "object-flash.json",
+      "sha256": "305f201c4e6cf7ea373e463d3e446fbb06dcfcc8f61d228aa15c6d89a5ab7530"
+    },
+    {
+      "path": "object-capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "object-provenance.json",
+      "sha256": "123b8849f2cd635df804770b708482efbbdcefad8bcfc555ffb33858ce2fbbb1"
+    }
+  ],
+  "assignment": {
+    "sourceSHA256": "e9b43e9b8b552f610ff3c6b1740c1faa3fec7bbedaa54c72efd50769c95d0320",
+    "swfSHA256": "6df1c54c4392d24bd5c934d78b17ff4278fed9d04e43486d82263f3a32938791",
+    "flashSHA256": "cc4763bb5d45edf28035c0d71dd99d5cc8dc345b6bf730d2d49dd69ce7eea491",
+    "captureSHA256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "commandHistory": "Original getter capture command transcript was not retained; source, SWF, capture script and observations are retained/hash identified."
+  },
+  "object": {
+    "provenanceSHA256": "123b8849f2cd635df804770b708482efbbdcefad8bcfc555ffb33858ce2fbbb1",
+    "rows": 162
+  },
+  "retentionScriptSHA256": "914e6963ac841785fdf426833c5c1320c9d6cf5ed310cb1847081970c0b50b33",
+  "productionAdmission": false
+}
