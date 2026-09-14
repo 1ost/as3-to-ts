@@ -4062,8 +4062,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
 
         if (context.sourceMemberAuthority !== null && callee.kind === "member" && callee.target.kind === "this"
-            && context.lambdaDepth === 0 && context.currentCallable !== null
-            && !context.currentCallable.modifiers.includes("static")
+            && (context.lambdaDepth === 0 || rawCallee.kind === "IDENTIFIER" && context.lambdaDepth > 0
+                && callee.target.lexicalName === "__as3LexicalReceiver" + context.lambdaDepth)
+            && context.currentCallable !== null && !context.currentCallable.modifiers.includes("static")
             && context.fields[callee.name]?.type.sourceName === "Function"
             && !context.fields[callee.name]!.modifiers.includes("static")
             && context.fields[callee.name]!.namespaceName === null) {
