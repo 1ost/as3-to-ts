@@ -435,7 +435,7 @@ export default class Emitter {
 	}
 	consumeRegExp(reg:RegExp, limit:number):void {
 		let matches = this.source.slice(this.index).match(reg);
-		if (matches.length < 1) return
+		if (!matches || matches.length < 1) return;
 		let matchStr = matches[0];
 		let index = this.source.indexOf(matchStr, this.index) + matchStr.length;
 		if (index > limit || index < this.index) return
@@ -2885,10 +2885,8 @@ function emitArray(emitter:Emitter, node:Node):void {
 	emitter.catchup(node.start);
 	emitter.insert('[');
 	if (node.children.length > 0) {
-		//emitter.skipTo(node.children[0].start);
 		emitter.skip(1);
-		//emitter.consume("\n", node.children[0].start);
-		emitter.consumeRegExp(/\s+(?=\W)/m, node.children[0].start);
+		// Preserve trivia; searching for whitespace can advance inside a comment.
 		visitNodes(emitter, node.children);
 		emitter.catchup(node.lastChild.end);
 	}
@@ -2902,4 +2900,3 @@ export function emit(ast:Node, source:string, options?:EmitterOptions):string {
 	let emitter = new Emitter(source, options);
 	return emitter.emit(ast);
 }
-

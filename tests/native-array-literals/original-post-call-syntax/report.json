@@ -1,0 +1,114 @@
+{
+  "rows": [
+    {
+      "id": "empty",
+      "expression": "new Array()[]",
+      "exitCode": 1,
+      "source": ".local\\array-literal-compiler-review\\post-call-syntax\\empty\\Probe.as",
+      "sourceSHA256": "e94bb77f16b937b25f068b53d8fbb8815a7bd70adb84e650fcf378447efcf627",
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+      "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\empty\\Probe.as(1): col: 124 Error: Syntax error.\n\npackage { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var value:*=new Array()[];} } }\n                                                                                                                           ^\n\n",
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\empty\\Probe.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\empty\\Probe.as"
+      ]
+    },
+    {
+      "id": "hole",
+      "expression": "new Array()[,]",
+      "exitCode": 2,
+      "source": ".local\\array-literal-compiler-review\\post-call-syntax\\hole\\Probe.as",
+      "sourceSHA256": "87a3099783b452aa945466390aeb55908aa3d897e217b722861e9e62aacc89c1",
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+      "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\hole\\Probe.as(1): col: 124 Error: Syntax error: expecting identifier before comma.\n\npackage { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var value:*=new Array()[,];} } }\n                                                                                                                           ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\hole\\Probe.as(1): col: 127 Error: Syntax error: expecting rightbracket before rightbrace.\n\npackage { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var value:*=new Array()[,];} } }\n                                                                                                                              ^\n\n",
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\hole\\Probe.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\hole\\Probe.as"
+      ]
+    },
+    {
+      "id": "middle-hole",
+      "expression": "new Array()[1,,]",
+      "exitCode": 2,
+      "source": ".local\\array-literal-compiler-review\\post-call-syntax\\middle-hole\\Probe.as",
+      "sourceSHA256": "afac0bd6fe2cbeca817647835bd07b5955154223a9795ae773e6a5584f52472a",
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+      "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\middle-hole\\Probe.as(1): col: 126 Error: Syntax error: expecting identifier before comma.\n\npackage { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var value:*=new Array()[1,,];} } }\n                                                                                                                             ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\middle-hole\\Probe.as(1): col: 129 Error: Syntax error: expecting rightbracket before rightbrace.\n\npackage { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var value:*=new Array()[1,,];} } }\n                                                                                                                                ^\n\n",
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\middle-hole\\Probe.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\middle-hole\\Probe.as"
+      ]
+    },
+    {
+      "id": "comma-expression",
+      "expression": "new Array()[1,2]",
+      "exitCode": 0,
+      "source": ".local\\array-literal-compiler-review\\post-call-syntax\\comma-expression\\Probe.as",
+      "sourceSHA256": "a19d79cbe82dd28e20b9821fc5cbe1ac6ed1fb7c37348b6529e4f04838099160",
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\comma-expression\\Probe.swf (668 bytes)\n",
+      "stderr": "",
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\comma-expression\\Probe.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\comma-expression\\Probe.as"
+      ]
+    },
+    {
+      "id": "trailing-comma",
+      "expression": "new Array()[1,]",
+      "exitCode": 2,
+      "source": ".local\\array-literal-compiler-review\\post-call-syntax\\trailing-comma\\Probe.as",
+      "sourceSHA256": "8458775c4ca1e640696a2eec977e7b62d0b561793191800c1cedcf6a70a812e8",
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+      "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\trailing-comma\\Probe.as(1): col: 126 Error: Syntax error: expecting identifier before rightbracket.\n\npackage { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var value:*=new Array()[1,];} } }\n                                                                                                                             ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\trailing-comma\\Probe.as(1): col: 128 Error: Syntax error: expecting rightbracket before rightbrace.\n\npackage { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var value:*=new Array()[1,];} } }\n                                                                                                                               ^\n\n",
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\trailing-comma\\Probe.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-literal-compiler-review\\post-call-syntax\\trailing-comma\\Probe.as"
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    }
+  ]
+}

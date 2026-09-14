@@ -12,3 +12,7 @@ tests/native-class-metadata/** -text whitespace=cr-at-eol
 
 tests/native-foreach-receivers/** -text whitespace=cr-at-eol
 tests/native-typeof/** -text whitespace=cr-at-eol
+
+tests/native-array-literals/** -text whitespace=cr-at-eol
+# Original comment-whitespace regressions intentionally retain spaces before newlines.
+tests/native-array-literals/**/*.as whitespace=cr-at-eol,-blank-at-eol

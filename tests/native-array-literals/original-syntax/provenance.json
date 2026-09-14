@@ -1,0 +1,72 @@
+{
+  "files": [
+    {
+      "path": "comment-linebreak/Probe.as",
+      "sha256": "30470954e5782682622c03ab19a61b5a7a23d5b7c17fb6225e6c63dda84654f7"
+    },
+    {
+      "path": "comment-linebreak/Probe.swf",
+      "sha256": "3f02abf0d8046f89ad1dd175a0b51eecdda00158e8b42317633fab35ec96ece2"
+    },
+    {
+      "path": "comment-spaces/Probe.as",
+      "sha256": "545dcd7de83001d676d903042f228f7b6b52dc06a49b5728ab4a05fbb2b4818b"
+    },
+    {
+      "path": "comment-spaces/Probe.swf",
+      "sha256": "04c42e18f7a4a03826b95ed9a86280b0638114d5c6f118599103720ee6f6944c"
+    },
+    {
+      "path": "malformed/Probe.as",
+      "sha256": "7a0fac3890839ae616b5c04c239e00c8a056d9d8e544083d395db162bb92c688"
+    },
+    {
+      "path": "report.json",
+      "sha256": "346e894f713f4cbf8872553735a36d639a16abd265760c1f970849d7adbe8cc4"
+    },
+    {
+      "path": "vector-comment/Probe.as",
+      "sha256": "0d1c8b5c6917e239a71b7fdb59dc1e7eede930d9f90cc71e88b9f10c0723aec3"
+    },
+    {
+      "path": "vector-comment/Probe.swf",
+      "sha256": "0c01ee17ca7bef65f36f6c2f3f4283b4d6c080152aed8e281ded4681a6b9dc9f"
+    },
+    {
+      "path": "vector-elision/Probe.as",
+      "sha256": "34fb88d70bacd859bcfa55cf212d0da7713ca8824a213944b44a3ef09a8366a4"
+    },
+    {
+      "path": "vector-empty/Probe.as",
+      "sha256": "10ab1ee04894300f9680bdbe3354c125afe32bb93a5ccb1cc72abaadec49d4c0"
+    },
+    {
+      "path": "vector-empty/Probe.swf",
+      "sha256": "c11b4fa2a5ef99699b7e077ffc2fa35ff6e3e553f8509a352b67dd8fa39539bc"
+    },
+    {
+      "path": "vector-hole-leading/Probe.as",
+      "sha256": "24473d6b3f23d0ef932e5f6d22c7ff588c20a03368a9c745bfc7b273639589dc"
+    },
+    {
+      "path": "vector-hole-middle/Probe.as",
+      "sha256": "7e52941b8ee759989a4ce6332e6316564c0485965c54a62d6400c6f86b859874"
+    },
+    {
+      "path": "vector-normal/Probe.as",
+      "sha256": "db5e2b893b46832a122d743214ab60031198ed983ff33507a3de2e812f5c9e83"
+    },
+    {
+      "path": "vector-normal/Probe.swf",
+      "sha256": "48aff60a7f55017691eba0a78396ee1a98126e797625888e45cbfb0d4abd9d2a"
+    },
+    {
+      "path": "vector-trailing/Probe.as",
+      "sha256": "03d15a6ad2ca9e22bb0ea68357dc3f3a6e8be14d2aa2c3af0ec20aeded09a27b"
+    },
+    {
+      "path": "vector-trailing/Probe.swf",
+      "sha256": "400c7e03a57a188f7f354aaa5d103a902a426fc93938f98e268b2474c55f2161"
+    }
+  ]
+}

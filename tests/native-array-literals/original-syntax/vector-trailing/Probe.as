@@ -1,0 +1,1 @@
+package { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var a:*=new <int>[1,];} } }

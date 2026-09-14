@@ -48,7 +48,17 @@ export function parsePrimaryExpression(parser:AS3Parser):Node {
     } else if (parser.tok.text === VECTOR) {
         return parseVector(parser);
     } else if (tokIs(parser, Operators.INFERIOR)) {
-        let res = tryParse(parser, () => parseShortVector(parser));
+        let vectorElementError:Error = null;
+        let res = tryParse(parser, () => {
+            try { return parseShortVector(parser); }
+            catch (error) {
+                // Once a Vector element list is recognized, a missing element
+                // must not be reinterpreted as a different expression.
+                if (error instanceof Error && error.message.indexOf('AS3_VECTOR_LITERAL:') === 0) vectorElementError = error;
+                throw error;
+            }
+        });
+        if (vectorElementError) throw vectorElementError;
         if (res) {
             return res;
         }
@@ -135,7 +145,9 @@ function parseEncapsulatedExpression(parser:AS3Parser):Node {
 
     let tok = consume(parser, Operators.LEFT_PARENTHESIS);
     let result:Node = createNode(NodeKind.ENCAPSULATED, {start: tok.index});
+    while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
     result.children.push(parseExpressionList(parser));
+    while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
     tok = consume(parser, Operators.RIGHT_PARENTHESIS);
     result.end = tok.end;
     return result;
@@ -463,9 +475,6 @@ function parseFunctionCall(parser:AS3Parser, node:Node):Node {
     while (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
         result.children.push(parseArgumentList(parser));
     }
-    while (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
-        result.children.push(parseArrayLiteral(parser));
-    }
     result.end = result.children.reduce((index:number, child:Node) => {
         return Math.max(index, child ? child.end : 0);
     }, 0);
@@ -528,7 +537,17 @@ function parseArrayAccessor(parser:AS3Parser, node:Node):Node {
     result.children.push(node);
     while (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
         nextToken(parser, true);
-        result.children.push(parseExpression(parser));
+        let index:Node = createNode(NodeKind.EXPR_LIST, {start: parser.tok.index});
+        while (true) {
+            if (tokIs(parser, Operators.RIGHT_SQUARE_BRACKET) || tokIs(parser, Operators.COMMA))
+                throw new Error('AS3_ARRAY_ACCESSOR: index expression required');
+            index.children.push(parseExpression(parser));
+            while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
+            if (!tokIs(parser, Operators.COMMA)) break;
+            nextToken(parser, true);
+        }
+        index.end = index.children[index.children.length - 1].end;
+        result.children.push(index.children.length === 1 ? index.children[0] : index);
         result.end = consume(parser, Operators.RIGHT_SQUARE_BRACKET).end;
     }
     return result;

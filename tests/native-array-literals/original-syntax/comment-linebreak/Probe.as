@@ -1,0 +1,2 @@
+package { import flash.display.Sprite; public class Probe extends Sprite { public function Probe(){var a:*=[/* a 
+ */1,,];} } }
