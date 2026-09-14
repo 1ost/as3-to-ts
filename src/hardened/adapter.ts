@@ -3610,7 +3610,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
             }
         }
-        if (target.kind !== "super" && target.kind !== "this") {
+        // An imported class/namespace is a static member receiver, not a Date
+        // instance. Keep its authenticated static lookup below; probing it as a
+        // value would reject intrinsic namespaces such as Endian prematurely.
+        const staticImportReceiver = target.kind === "identifier" && target.bindingKind === "import"
+            && context.importsByLocal[target.name]?.localValueType === null;
+        if (target.kind !== "super" && target.kind !== "this" && !staticImportReceiver) {
             const dateType=assignmentType(target,context,node);
             if(dateType.sourceName==="Date" && dateType.emittedName==="AS3Date" && hasNativeDateAuthority(context.sourceMemberAuthority)) {
                 if(!["valueOf","getTime","time"].includes(name) || valuePosition && name!=="time")
