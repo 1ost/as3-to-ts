@@ -352,3 +352,38 @@ test("default native host returns uint ids, invokes args, and cancels in real No
     });
     assert.equal(intervalCalls, 2);
 });
+
+
+test("timer execution capture retains registration ownership without changing cancellation and arguments", () => {
+ const {installAS3TimerExecutionCapture}=require(path.join(OUTPUT,"hardened-runtime/AS3TimerExecution.js"));
+ const scheduled=[],cancelled=[],rows=[];
+ const host={scheduleTimeout(callback){scheduled.push(callback);return callback;},cancelTimeout(handle){cancelled.push(handle);},scheduleInterval(callback){scheduled.push(callback);return callback;},cancelInterval(handle){cancelled.push(handle);}};
+ const runtime=new AS3TimerRuntime(host);
+ let captures=0;
+ const a=installAS3TimerExecutionCapture(callback=>{captures++;return ()=>{rows.push("a");callback();};});
+ assert.throws(()=>installAS3TimerExecutionCapture(x=>x),/already installed/);
+ const first=runtime.setTimeout((...args)=>rows.push(args),0,17,"arg");
+ a.dispose();assert.equal(a.disposed,true);
+ const b=installAS3TimerExecutionCapture(callback=>()=>{rows.push("b");callback();});
+ a.dispose();
+ const second=runtime.setTimeout(()=>rows.push("second"),0);
+ scheduled[0]();scheduled[0]();scheduled[1]();
+ assert.deepEqual(rows,["a",[17,"arg"],"b","second"]);assert.equal(captures,1);
+ const cleared=runtime.setInterval(()=>rows.push("must not run"),1);runtime.clearInterval(cleared);scheduled[2]();
+ assert.equal(rows.length,4);assert.equal(cancelled.length,1);
+ b.dispose();assert.equal(b.disposed,true);
+ const direct=new Error("direct");runtime.setTimeout(()=>{throw direct;},0);
+ assert.throws(()=>scheduled[3](),value=>value===direct);
+});
+
+test("failed callback capture rolls back timer IDs and preserves exact thrown values", () => {
+ const {installAS3TimerExecutionCapture}=require(path.join(OUTPUT,"hardened-runtime/AS3TimerExecution.js"));
+ const scheduled=[],host={scheduleTimeout(callback){scheduled.push(callback);return callback;},cancelTimeout(){},scheduleInterval(callback){return callback;},cancelInterval(){}};
+ const runtime=new AS3TimerRuntime(host,1);const failure={capture:true};
+ const lease=installAS3TimerExecutionCapture(()=>{throw failure;});
+ assert.throws(()=>runtime.setTimeout(()=>{},0),value=>value===failure);assert.equal(scheduled.length,0);lease.dispose();
+ assert.equal(runtime.setTimeout(()=>{},0),1);scheduled[0]();
+ const invalid=installAS3TimerExecutionCapture(()=>17);
+ assert.throws(()=>runtime.setTimeout(()=>{},0),/must return a callback/);invalid.dispose();
+ assert.equal(runtime.setTimeout(()=>{},0),1);
+});

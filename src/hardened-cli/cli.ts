@@ -111,6 +111,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3ObjectDispatch.ts": "0fb323e8165df6574e6ef336311ddc371fddea846b007b7c860a4c2bdcb12c93",
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
+    "AS3TimerExecution.ts": "00e35aeb6a277f03a04bd8187e4a5d011308bd5da325131f4c5fe69b601c23ba",
     "AS3Timer.ts": "639a0e3776611b3fd736305994d709b47af8465509bb9d2de440bc611a985851",
     "AS3Type.ts": "02f2acb486155e4718075f749cd45056c39175cb58c6c8aaf001af30b7104f60",
     "AS3Vector.ts": "6839a53b9987f70cd975367640d6f0b1deaef1d529e7b85c1ffe2ed0f3dca6ad",
@@ -118,7 +119,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "internal/AS3CaseTable.ts": "ed85937df05d8ba9015e3cd35b8d75ce46e56348547085c0d218426ed0a44fc5",
     "internal/AS3FileLocalIdentity.ts": "9adbd4a9ab454a7d8351982d6da643d6510d2486658305eb0530170651232abb",
     "internal/AS3TypeRegistry.ts": "e6517554b4493b3c400dbaa3077fac91e44a78141c526e3d3fac90b76d3eaf35",
-    "internal/AS3TimerRuntime.ts": "3204d4ee73defe74f71fd43f1e146f4ef21ee80784ba585ff52698c97f90285e",
+    "internal/AS3TimerRuntime.ts": "a72d45f5ba8351fd073fd284978c6b3c7c6dfbbc1adfba7d7ca3a4f058e13dea",
 });
 
 function runtimeCommonJs(code: string, fileName: string): string {
@@ -237,7 +238,7 @@ function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<
 
 function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): string {
     const entries = ["AS3Reflection", "AS3Date", "AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
-        "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3RegExp", "AS3Timer", "AS3Type", "AS3Vector"];
+        "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3RegExp", "AS3Timer", "AS3TimerExecution", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
     entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"
         ? "./AS3Timer.js" : "./AS3Authority.generated.js"; });

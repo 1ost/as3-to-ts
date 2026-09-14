@@ -1,3 +1,4 @@
+import { captureAS3TimerExecution } from "../AS3TimerExecution";
 export type AS3TimerClosure = Function;
 
 export interface AS3TimerHost {
@@ -80,11 +81,12 @@ export class AS3TimerRuntime {
         const entry: TimerEntry = { kind, hostHandle: null, closure, args: args.slice() };
         this.entries.set(id, entry);
         try {
+            const invoke = captureAS3TimerExecution(() => Reflect.apply(entry.closure, undefined, entry.args));
             const callback = () => {
                 const current = this.entries.get(id);
                 if (current !== entry) return;
                 if (current.kind === "timeout") this.entries.delete(id);
-                Reflect.apply(current.closure, undefined, current.args);
+                invoke();
             };
             entry.hostHandle = kind === "timeout"
                 ? this.host.scheduleTimeout(callback, normalizeDelay(delay))
