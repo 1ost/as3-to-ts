@@ -487,7 +487,17 @@ function parseArgumentList(parser:AS3Parser):Node {
 
 
 function parseDot(parser:AS3Parser, node:Node):Node {
+    let namespaceAccess = tokIs(parser, Operators.DOUBLE_COLUMN)
+        && !(node.kind === NodeKind.IDENTIFIER && node.text === 'CONFIG');
     nextToken(parser);
+    if (namespaceAccess) {
+        if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) {
+            throw new Error('AS3_NAMESPACE_UNSUPPORTED: computed or wildcard namespace selector');
+        }
+        let member = createNode(NodeKind.LITERAL, {tok: parser.tok});
+        nextToken(parser, true);
+        return createNode(NodeKind.NAMESPACE_ACCESS, {start: node.start, end: member.end}, node, member);
+    }
     if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
         nextToken(parser);
         let result:Node = createNode(NodeKind.E4X_FILTER, {start: parser.tok.index});

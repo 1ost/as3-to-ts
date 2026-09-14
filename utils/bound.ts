@@ -1,55 +1,56 @@
-/**
- * Binds an instance method to the containing class to persist the lexical scope of 'this'.
- * @param target The target class or prototype; used by the TypeScript compiler (omit function call brackets to use as a decorator).
- * @param propKey The property key of the target method; used by the TypeScript compiler (omit function call brackets to use as a decorator).
- */
-export function bound(target: any, propKey: string | symbol, descriptor: PropertyDescriptor) {
-    if (!target.hasOwnProperty("__boundMethods__"))
-        target.__boundMethods__ = {};
+const BOUND_METHODS = Symbol('as3-to-ts.boundMethods');
 
-    target.__boundMethods__[propKey] = target[propKey];
+/** Bind method closures on first access, including access inside constructors. */
+export function bound(target: any, propKey: string | symbol, descriptor: PropertyDescriptor): PropertyDescriptor {
+    const method = descriptor.value;
+    if (typeof method !== 'function') throw new TypeError('@bound requires a method');
+    if (!Object.prototype.hasOwnProperty.call(target, BOUND_METHODS)) {
+        Object.defineProperty(target, BOUND_METHODS, { value: new Set<PropertyKey>() });
+    }
+    target[BOUND_METHODS].add(propKey);
+    const closures = new WeakMap<object, Function>();
+    const getter = function(this: any): Function {
+        if (this === target) return method;
+        let closure = closures.get(this);
+        if (!closure) {
+            closure = method.bind(this);
+            closures.set(this, closure);
+        }
+        // A super.method access must never replace the derived override's
+        // instance property. Install only when ordinary lookup selects us.
+        if (!Object.prototype.hasOwnProperty.call(this, propKey)) {
+            for (let proto = Object.getPrototypeOf(this); proto; proto = Object.getPrototypeOf(proto)) {
+                const selected = Object.getOwnPropertyDescriptor(proto, propKey);
+                if (!selected) continue;
+                if (selected.get === getter) {
+                    Object.defineProperty(this, propKey, { value: closure, writable: true,
+                        configurable: true, enumerable: true });
+                }
+                break;
+            }
+        }
+        return closure;
+    };
+    return { configurable: descriptor.configurable, enumerable: descriptor.enumerable, get: getter,
+        set(this: any, value: any): void {
+            Object.defineProperty(this, propKey, { value, writable: true, configurable: true, enumerable: true });
+        } };
+}
 
-    return descriptor;
-
-    // var originalMethod = target[propKey] as Function;
-	//
-    // // Ensure the above type-assertion is valid at runtime.
-    // if (typeof originalMethod !== "function") throw new TypeError("@bound can only be used on methods.");
-	//
-    // if (typeof target === "function") {
-    //     // Static method, bind to class (if target is of type "function", the method decorator was used on a static method).
-    //     return {
-    //         value: function () {
-    //             return originalMethod.apply(target, arguments);
-    //         }
-    //     };
-    // } else if (typeof target === "object") {
-    //     // Instance method, bind to instance on first invocation (as that is the only way to access an instance from a decorator).
-    //     return {
-    //         get: function () {
-    //             // Create bound override on object instance. This will hide the original method on the prototype, and instead yield a bound version from the
-    //             // instance itself. The original method will no longer be accessible. Inside a getter, 'this' will refer to the instance.
-    //             var instance = this;
-	//
-    //             // Object.defineProperty(instance, propKey.toString(), {
-    //             //     value: function () {
-    //             //         // This is effectively a lightweight bind() that skips many (here unnecessary) checks found in native implementations.
-    //             //         return originalMethod.apply(instance, arguments);
-    //             //     }
-    //             // });
-	//
-    //             // The first invocation (per instance) will return the bound method from here. Subsequent calls will never reach this point, due to the way
-    //             // JavaScript runtimes look up properties on objects; the bound method, defined on the instance, will effectively hide it.
-    //             //return instance[propKey];
-    //             return function () {
-    //                 // This is effectively a lightweight bind() that skips many (here unnecessary) checks found in native implementations.
-    //                 return originalMethod.apply(instance, arguments);
-    //             }
-    //         },
-    //         set: function (value) {
-    //             originalMethod = value;
-	//
-    //         }
-    //     } as PropertyDescriptor;
-    // }
+/** Preserve the existing eager, own-method shape once construction completes. */
+export function bindDeclaredInstanceMethods(instance: any): void {
+    if (instance === null || (typeof instance !== 'object' && typeof instance !== 'function')) return;
+    const seen = new Set<PropertyKey>();
+    for (let proto = Object.getPrototypeOf(instance); proto; proto = Object.getPrototypeOf(proto)) {
+        const declared: Set<PropertyKey> = Object.prototype.hasOwnProperty.call(proto, BOUND_METHODS)
+            ? proto[BOUND_METHODS] : null;
+        for (const key of Reflect.ownKeys(proto)) {
+            if (seen.has(key)) continue;
+            seen.add(key);
+            if (declared && declared.has(key) && !Object.prototype.hasOwnProperty.call(instance, key)) {
+                // This invokes only the selected @bound getter, not the method.
+                Reflect.get(instance, key);
+            }
+        }
+    }
 }

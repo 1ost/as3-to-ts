@@ -1,11 +1,12 @@
 import NodeKind, {nodeKindName} from '../syntax/nodeKind';
 import * as Keywords from '../syntax/keywords';
-import Node, {createNode} from '../syntax/node';
+import Node, {createNode, outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
 import assign = require('object-assign')
 import {CustomVisitor} from "../custom-visitors"
 import {VERBOSE_MASK, AS3_UTIL, INTERFACE_METHOD, INTERFACE_INF, WARNINGS, FOR_IN_KEY, FOR_IN_OBJ, INDENT} from '../config';
 import ClassList, {ClassKind, ClassMember, ClassMemberKind, ClassRecord, ModifierKind, MODIFIERS} from "./classlist";
 import {ReportFlags} from '../reports/report-flags';
+import {NativeNamespaces} from './native-namespaces';
 
 const util = require('util');
 
@@ -91,6 +92,8 @@ export interface EmitterOptions {
 	useNamespaces:boolean;
 	customVisitors:CustomVisitor[];
 	definitionsByNamespace?:{[ns:string]:string[]};
+	/** Exact imported AS3 namespace QName -> URI identities, supplied by source discovery. */
+	namespaceUris?:{[qname:string]:string};
 }
 
 
@@ -105,6 +108,9 @@ const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.IMPORT]: emitImport,
 	[NodeKind.EMBED]: emitEmbed,
 	[NodeKind.USE]: emitUse,
+	[NodeKind.NAMESPACE_DECLARATION]: emitNamespaceDeclaration,
+	[NodeKind.NAMESPACE_ACCESS]: emitNamespaceAccess,
+	[NodeKind.NAME]: emitName,
 	[NodeKind.FUNCTION]: emitFunction,
 	[NodeKind.LAMBDA]: emitFunction,
 	[NodeKind.FOREACH]: emitForEach,
@@ -206,6 +212,7 @@ export default class Emitter {
 	}
 
 	public source:string;
+	public namespaces:NativeNamespaces;
 	public options:EmitterOptions;
 
 	public headOutput:string = "";
@@ -253,13 +260,15 @@ export default class Emitter {
 			console.log("emit() ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑");
 		}
 
+		const filtered = filterAST(ast);
+		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris);
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;
-			visitNode(this, filterAST(ast));
+			visitNode(this, filtered);
 			this.catchup(this.source.length);
 		});
 		this.output = this.output.replace(/\s([^\n])\s*?=>/gm, " =>");//TODO hotfix. To remove new lines between arrow operator nad {
-		return this.headOutput + this.output;
+		return this.headOutput + this.namespaces.keyDeclarations() + this.output;
 	}
 
 	enterScope(declarations:Declaration[]):Scope {
@@ -531,6 +540,47 @@ function emitMeta(emitter:Emitter, node:Node):void {
 function emitUse(emitter:Emitter, node:Node):void {
 	emitter.catchup(node.start);
 	emitter.commentNode(node, false);
+}
+
+function emitNamespaceDeclaration(emitter:Emitter, node:Node):void {
+    const uri = emitter.namespaces.declarationUri(node, []);
+    emitter.catchup(node.start);
+    emitter.insert('export const ' + node.findChild(NodeKind.NAME).text
+        + ' = globalThis.Symbol.for(' + JSON.stringify('as3.namespace.uri@1:' + uri) + ');');
+    emitter.skipTo(node.end);
+}
+
+function emitName(emitter:Emitter, node:Node):void {
+    const member = emitter.namespaces.member(node);
+    emitter.catchup(node.start);
+    if (!member) return;
+    emitter.insert('[' + emitter.namespaces.key(member.uri, member.name) + ']');
+    emitter.skipTo(node.end);
+}
+
+function emitNamespaceAccess(emitter:Emitter, node:Node):void {
+    const access = emitter.namespaces.access(node);
+    if (hasFunctionLocal(emitter, access.qualifier))
+        emitter.namespaces.fail('runtime namespace qualifier shadows a declaration: ' + access.qualifier);
+    if (access.receiver && access.receiver.text === emitter.currentClassName && hasFunctionLocal(emitter, access.receiver.text))
+        emitter.namespaces.fail('local receiver shadows its class name');
+    const receiverDefinition = access.receiver && emitter.findDefInScope(access.receiver.text);
+    emitter.namespaces.checkReceiver(node, receiverDefinition && receiverDefinition.type);
+    const target = emitter.namespaces.accessMember(node, receiverDefinition && receiverDefinition.type);
+    const reference = outerEncapsulatedExpression(node);
+    if (reference.parent && reference.parent.kind === NodeKind.ASSIGN && reference.parent.children[0] === reference
+        && target && target.declaration.kind === NodeKind.FUNCTION)
+        emitter.namespaces.fail('namespace method writes require separate lowering');
+    emitter.catchup(node.start);
+    if (access.receiver) {
+        visitNode(emitter, access.receiver);
+        emitter.catchup(getEffectiveNodeEnd(access.receiver));
+    } else {
+        const member = access.implicitMember;
+        emitter.insert(member.static ? member.owner.findChild(NodeKind.NAME).text : 'this');
+    }
+    emitter.insert('[' + emitter.namespaces.key(access.uri, access.name) + ']');
+    emitter.skipTo(node.end);
 }
 
 function emitEmbed(emitter:Emitter, node:Node):void {
@@ -1106,6 +1156,7 @@ function getClassDeclarations(emitter:Emitter, className:string, contentsNode:No
 
 	let resultDeclarations:Declaration[] = [];
 	contentsNode.forEach(node => {
+		if (emitter.namespaces.memberDeclaration(node)) return;
 
 		//let nameNode:Node;
 		let nameNodeList:Node[];
@@ -1271,7 +1322,7 @@ function emitClass(emitter:Emitter, node:Node):void {
 				isInterfaceLinkPrinted = true;
 			}
 			// console.log(node)
-			storeClassMember(node);
+			if (!emitter.namespaces.memberDeclaration(node)) storeClassMember(node);
 			switch (node.kind) {
 				case NodeKind.SET:
 					emitSet(emitter, node);
@@ -1443,7 +1494,7 @@ function emitObjectValue(emitter:Emitter, node:Node):void {
 }
 
 function emitNameTypeInit(emitter:Emitter, node:Node):void {
-	emitter.declareInScope({
+	if (!emitter.namespaces.member(node.findChild(NodeKind.NAME))) emitter.declareInScope({
 		name: node.findChild(NodeKind.NAME).text,
 		type: getDeclarationType(emitter, node),
 		as3Type: getAS3DeclarationType(node)
@@ -1466,6 +1517,7 @@ function emitMethod(emitter:Emitter, node:Node):void {
 		emitter.insert("@bound\n");
 		emitClassField(emitter, node);
 		emitter.consume('function', name.start);
+		emitName(emitter, name);
 		emitter.catchup(name.end);
 		//emitter.insert(" = ");
 
@@ -1646,14 +1698,10 @@ function emitGet(emitter:Emitter, node:Node):void {
 }
 
 function containsSuperCall(node:Node):boolean {
-	for (var i:number = 0; i < node.children.length; i++) {
-		var child = node.children[i];
-		if (child.text === 'super') {
-			return true;
-		}
-		return containsSuperCall(child);
-	}
-	return false;
+    if (node.kind === NodeKind.CALL && node.children[0].kind === NodeKind.IDENTIFIER
+        && node.children[0].text === 'super') return true;
+    return node.children.some(child => child && child.kind !== NodeKind.FUNCTION
+        && child.kind !== NodeKind.LAMBDA && containsSuperCall(child));
 }
 
 
@@ -1725,6 +1773,11 @@ function emitClassField(emitter:Emitter, node:Node):void {
 		emitter.catchup(mods.start);
 		mods.children.forEach(node => {
 			emitter.catchup(node.start);
+			if (emitter.namespaces.memberDeclaration(mods.parent)
+				&& ['static', 'public', 'private', 'protected', 'override', 'final'].indexOf(node.text) < 0) {
+				emitter.skipTo(node.end);
+				return;
+			}
 			if (node.text !== Keywords.PRIVATE &&
 				node.text !== Keywords.PUBLIC &&
 				node.text !== Keywords.PROTECTED &&
@@ -1849,6 +1902,25 @@ function emitNew(emitter:Emitter, node:Node):void {
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
+    const callee = node.children[0];
+    if (callee.kind === NodeKind.IDENTIFIER && callee.text === 'super') {
+        let owner = node.parent;
+        while (owner && owner.kind !== NodeKind.FUNCTION) owner = owner.parent;
+        let classNode = owner && owner.parent;
+        while (classNode && classNode.kind !== NodeKind.CLASS) classNode = classNode.parent;
+        if (owner && classNode && owner.findChild(NodeKind.NAME).text === classNode.findChild(NodeKind.NAME).text
+            && !classNode.findChild(NodeKind.EXTENDS)) {
+            const argumentsNode = node.findChild(NodeKind.ARGUMENTS);
+            if (!argumentsNode || argumentsNode.children.length)
+                throw new Error('AS3_IMPLICIT_OBJECT_SUPER_UNSUPPORTED: nonempty super arguments');
+            // AS3 supplies Object as the implicit base. Native classes without
+            // an extends clause already have that base and cannot call super().
+            emitter.catchup(node.start);
+            emitter.skipTo(node.end);
+            emitter.insert('/* implicit Object constructor */');
+            return;
+        }
+    }
 
 	let isNew = emitter.isNew;
 	emitter.isNew = false;
@@ -2187,10 +2259,24 @@ function findBoundDeclaration(emitter: Emitter, name: string, bound: string): De
  * them for compound assignment could change evaluation order or side effects.
  */
 function getTypedAssignmentTarget(emitter: Emitter, node: Node): TypedAssignmentTarget {
+    node = unwrapEncapsulatedExpression(node);
     let declaration: Declaration = null;
     let repeatText: string = null;
 
-    if (node.kind === NodeKind.IDENTIFIER) {
+    if (node.kind === NodeKind.NAMESPACE_ACCESS) {
+        const access = emitter.namespaces.access(node);
+        const receiver = access.receiver && emitter.findDefInScope(access.receiver.text);
+        const member = emitter.namespaces.accessMember(node, receiver && receiver.type);
+        if (member && member.declaration.kind === NodeKind.VAR_LIST) {
+            const field = member.declaration.findChild(NodeKind.NAME_TYPE_INIT);
+            declaration = { name: member.name, as3Type: getAS3DeclarationType(field) };
+            const receiverText = access.receiver
+                ? (receiver && receiver.bound ? receiver.bound + '.' : '') + access.receiver.text
+                : member.static ? member.owner.findChild(NodeKind.NAME).text : 'this';
+            repeatText = receiverText
+                + '[' + emitter.namespaces.key(member.uri, member.name) + ']';
+        }
+    } else if (node.kind === NodeKind.IDENTIFIER) {
         declaration = emitter.findDefInScope(node.text);
         if (declaration) {
             let identifier = emitter.getIdentifierRemap(node.text) || node.text;
@@ -2331,7 +2417,15 @@ function emitOr(emitter:Emitter, node:Node):void {
 }
 
 
+function hasFunctionLocal(emitter:Emitter, name:string):boolean {
+    for (let scope = emitter.scope; scope && scope !== emitter.rootScope; scope = scope.parent) {
+        if (!scope.className && scope.declarations.some(declaration => declaration.name === name && !declaration.bound)) return true;
+    }
+    return false;
+}
+
 export function emitIdent(emitter:Emitter, node:Node):void {
+	emitter.namespaces.checkIdentifier(node, hasFunctionLocal(emitter, node.text));
 	if (node.text == "getDefinitionByName") {
 		let pathToRoot = ClassList.getLastPathToRoot();
 		emitter.ensureImportIdentifier(AS3_UTIL, `${pathToRoot}${AS3_UTIL}`);
@@ -2423,6 +2517,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 }
 
 function emitDot(emitter:Emitter, node:Node) {
+	emitter.namespaces.checkDot(node);
 	let dotSibling = node.nextSibling;
 	let isConditionalCompilation = (dotSibling && dotSibling.kind === NodeKind.BLOCK);
 	let template = "if ($1)";

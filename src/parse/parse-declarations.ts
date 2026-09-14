@@ -60,6 +60,9 @@ function parsePackageContent(parser:AS3Parser):Node {
     while (!tokIs(parser, Operators.RIGHT_CURLY_BRACKET) && !tokIs(parser, Keywords.EOF)) {
         if (tokIs(parser, Keywords.IMPORT)) {
             result.children.push(parseImport(parser));
+        } else if (tokIs(parser, Keywords.NAMESPACE)) {
+            result.children.push(parseNamespaceDeclaration(parser, modifiers));
+            modifiers.length = 0;
         } else if (tokIs(parser, Keywords.USE)) {
             result.children.push(parseUse(parser));
         } else if (tokIs(parser, Keywords.INCLUDE) || tokIs(parser, Keywords.INCLUDE_AS2)) {
@@ -147,6 +150,23 @@ function parseUse(parser:AS3Parser):Node {
     });
     skip(parser, Operators.SEMI_COLUMN);
     return result;
+}
+
+
+function parseNamespaceDeclaration(parser:AS3Parser, modifiers:Token[]):Node {
+    let token = consume(parser, Keywords.NAMESPACE);
+    let name = createNode(NodeKind.NAME, {tok: parser.tok});
+    nextToken(parser);
+    if (!tokIs(parser, Operators.EQUAL)) {
+        throw new Error('AS3_NAMESPACE_UNSUPPORTED: namespace requires an explicit literal URI or alias');
+    }
+    nextToken(parser);
+    let value = parseExpression(parser);
+    let end = value.end;
+    if (tokIs(parser, Operators.SEMI_COLUMN)) end = consume(parser, Operators.SEMI_COLUMN).end;
+    return createNode(NodeKind.NAMESPACE_DECLARATION,
+        {start: modifiers.length ? modifiers[0].index : token.index, end: end},
+        convertModifiers(parser, modifiers), name, value);
 }
 
 
@@ -279,6 +299,10 @@ function parseClassContent(parser:AS3Parser):Node {
             parseClassConstant(parser, result, modifiers, meta);
         } else if (tokIs(parser, Keywords.IMPORT)) {
             result.children.push(parseImport(parser));
+        } else if (tokIs(parser, Keywords.USE)) {
+            result.children.push(parseUse(parser));
+        } else if (tokIs(parser, Keywords.NAMESPACE)) {
+            throw new Error('AS3_NAMESPACE_UNSUPPORTED: class-local namespace declaration');
         } else if (tokIs(parser, Keywords.INCLUDE) || tokIs(parser, Keywords.INCLUDE_AS2)) {
             result.children.push(parseIncludeExpression(parser));
         } else if (tokIs(parser, Keywords.FUNCTION)) {

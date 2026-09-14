@@ -15,6 +15,8 @@ export function parseStatement(parser:AS3Parser):Node {
 
     if (tokIs(parser, Keywords.FOR)) {
         result = parseFor(parser);
+    } else if (tokIs(parser, Keywords.USE) || tokIs(parser, Keywords.NAMESPACE)) {
+        throw new Error('AS3_NAMESPACE_UNSUPPORTED: function-local namespace scope');
     } else if (tokIs(parser, Keywords.IF)) {
         result = parseIf(parser);
     } else if (tokIs(parser, Keywords.SWITCH)) {

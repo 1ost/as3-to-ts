@@ -48,6 +48,18 @@ export function createNode(kind: NodeKind, options?: CreateNodeOptions, ... chil
     return node;
 }
 
+/** Parentheses preserve a single expression's reference; comma lists do not. */
+export function unwrapEncapsulatedExpression(node: Node): Node {
+    while (node.kind === NodeKind.ENCAPSULATED && node.children.length === 1) node = node.children[0];
+    return node;
+}
+
+export function outerEncapsulatedExpression(node: Node): Node {
+    while (node.parent && node.parent.kind === NodeKind.ENCAPSULATED
+        && node.parent.children.length === 1 && node.parent.children[0] === node) node = node.parent;
+    return node;
+}
+
 export default class Node {
     public kind: NodeKind;
     public start: number;
