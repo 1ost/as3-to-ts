@@ -226,7 +226,16 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
         members.push(callable(declaration, ""));
     } else if (declaration.kind === "NAMESPACE") {
         const memberModifiers = modifiers(declaration);
+        const initializer=one(declaration,"INIT",true);
+        let namespaceUri:string|undefined;
+        if(initializer) {
+            const literal=initializer.children.length===1 && initializer.children[0]!.kind==="LITERAL" ? initializer.children[0]!.text : null;
+            if(!literal || !literal.startsWith('"')) fail("HARDENED_NAMESPACE_INITIALIZER","namespace URI must be one exact string literal",initializer);
+            try { namespaceUri=JSON.parse(literal); } catch { fail("HARDENED_NAMESPACE_INITIALIZER","namespace URI literal is malformed",initializer); }
+            if(typeof namespaceUri!=="string") fail("HARDENED_NAMESPACE_INITIALIZER","namespace URI must be String",initializer);
+        }
         members.push({
+            ...(namespaceUri!==undefined ? {namespaceUri} : {}),
             kind: "namespace", name, modifiers: memberModifiers.values,
             namespaceName: memberModifiers.namespaceName, parameters: [], returnType: null,
             fieldType: null, readonly: false,
@@ -238,12 +247,14 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
                 members.push(callable(member, name));
             } else if (member.kind === "VAR_LIST" || member.kind === "CONST_LIST") {
                 members.push(...fields(member));
-            } else {
+            } else if (member.kind !== "IMPORT") {
                 fail("HARDENED_LOCAL_DECLARATION_MEMBER", "class member kind is not structurally admitted", member);
             }
         });
     }
-    const imports = content.children.filter(child => child.kind === "IMPORT").map(child => requiredText(child, "import"));
+    const imports = content.children.filter(child => child.kind === "IMPORT")
+        .concat(declaration.kind === "CLASS" ? one(declaration, "CONTENT")!.children.filter(child => child.kind === "IMPORT") : [])
+        .map(child => requiredText(child, "import"));
     if (new Set(imports).size !== imports.length) fail("HARDENED_LOCAL_DECLARATION_IMPORT", "import is duplicated", content);
     let packageInitializer: LocalDeclarationExtract["packageInitializer"] = null;
     if (declaration.kind === "CONST_LIST") {

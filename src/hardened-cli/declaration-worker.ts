@@ -2,11 +2,14 @@ import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import parse from "../parse/index";
-import { normalizeParserAst } from "../hardened/parser-normalizer";
+import { normalizeParserAst, normalizeIncludedSource } from "../hardened/parser-normalizer";
 import { extractLocalDeclaration } from "../hardened/local-declarations";
 import { errorMessage } from "./errors";
 
 interface DeclarationRequest {
+    includeEdges?: import("../hardened/source-includes").IncludeEdge[];
+    includeRootPath?: string;
+    includeFragments?: import("../hardened/source-includes").IncludeSource[];
     sourcePath: string;
     content: string;
     maxResultBytes: number;
@@ -35,7 +38,9 @@ function isRequest(value: unknown): value is DeclarationRequest {
     if (!value || typeof value !== "object") return false;
     const candidate = value as Record<string, unknown>;
     const keys = Object.keys(candidate).sort();
-    return keys.length === 4 && keys.join("|") === "content|maxResultBytes|sourcePath|workerSha256"
+    return (keys.join("|") === "content|maxResultBytes|sourcePath|workerSha256"
+        || keys.join("|") === "content|includeEdges|includeFragments|includeRootPath|maxResultBytes|sourcePath|workerSha256"
+        && typeof candidate.includeRootPath === "string" && Array.isArray(candidate.includeFragments))
         && typeof candidate.sourcePath === "string" && candidate.sourcePath.length > 0
         && typeof candidate.content === "string"
         && Number.isSafeInteger(candidate.maxResultBytes) && (candidate.maxResultBytes as number) > 0
@@ -70,7 +75,8 @@ process.once("message", (message: unknown) => {
     }
     try {
         const parsed = parse(message.sourcePath, message.content);
-        const normalized = normalizeParserAst(parsed, message.content, sha256);
+        const normalized = message.includeFragments ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments, sha256, message.includeEdges)
+            : normalizeParserAst(parsed, message.content, sha256);
         const result = extractLocalDeclaration(normalized, message.content, sha256, message.sourcePath);
         const json = `${JSON.stringify(result)}\n`;
         const byteLength = Buffer.byteLength(json, "utf8");

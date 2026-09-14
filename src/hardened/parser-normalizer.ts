@@ -1,3 +1,6 @@
+import parse from "../parse/index";
+import { inspectIncludeSyntax } from "./source-includes-parser";
+import { expandSourceIncludes } from "./source-includes";
 import Node from "../syntax/node";
 import { nodeKindName } from "../syntax/nodeKind";
 import { NormalizedParserAst, NormalizedParserNode, SourceSpan } from "./contracts";
@@ -243,4 +246,26 @@ export function normalizeParserAst(
         fingerprintSha256,
         nodes,
     });
+}
+
+/** The original source hash stays authoritative; expansion is retained separately. */
+export function normalizeIncludedSource(sourcePath: string, sourceText: string,
+    fragments: import("./source-includes").IncludeSource[], sha256: Sha256Function,
+    expectedEdges?: import("./source-includes").IncludeEdge[]): NormalizedParserAst {
+    const byPath = new Map(fragments.map(source => [source.path, source]));
+    if (byPath.size !== fragments.length) throw new Error("HARDENED_INCLUDE_PROOF: duplicate source");
+    const expanded = expandSourceIncludes(sourcePath, sourceText.replace(/\r\n?/g,"\n"), path => {
+        const source = byPath.get(path);
+        if (!source) throw new Error("HARDENED_INCLUDE_MISSING: " + path);
+        return source;
+    }, sha256, inspectIncludeSyntax);
+    if (expectedEdges) {
+        const owners=new Set([sourcePath,...expanded.proof.fragments.map(item=>item.path)]);
+        const canonical=(edges:import("./source-includes").IncludeEdge[]):string=>JSON.stringify([...new Set(edges.map(edge=>JSON.stringify([edge.ownerPath,edge.directiveStart,edge.directiveEnd,edge.specifier,edge.targetPath,edge.targetSha256])))].sort());
+        if(canonical(expanded.proof.edges)!==canonical(expectedEdges.filter(edge=>owners.has(edge.ownerPath))))
+            throw new Error("HARDENED_INCLUDE_PROOF: parser directives differ from retained inventory");
+    }
+    const ast = normalizeParserAst(parse(sourcePath, expanded.content), expanded.content, sha256);
+    return expanded.proof.edges.length === 0 ? normalizeParserAst(parse(sourcePath,sourceText),sourceText,sha256) : deepFreeze({...ast,
+        sourceSha256: sha256(sourceText), includeExpansion: expanded.proof});
 }

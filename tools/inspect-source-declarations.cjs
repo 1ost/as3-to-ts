@@ -3,6 +3,9 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto"),{fork}=require("node:child_process");
 const hash=bytes=>crypto.createHash("sha256").update(bytes).digest("hex");
 const root=fs.realpathSync(process.argv[2]),relative=process.argv.slice(3);
+const includeIndex=relative.indexOf('--source-includes');
+const includeFile=includeIndex<0?null:relative.splice(includeIndex,2)[1];
+const includes=includeFile?require('../lib/source-includes.js').loadSourceIncludes(fs.readFileSync(includeFile,'utf8')):null;
 const worker=path.resolve(__dirname,"../lib/declaration-worker.js"),workerSha256=hash(fs.readFileSync(worker));
 if(!relative.length || relative.length>10000)throw new Error("Provide a bounded set of relative AS3 source paths");
 async function inspect(sourcePath){
@@ -26,7 +29,8 @@ async function inspect(sourcePath){
    if(declaration.sourceSha256!==hash(content))return reject(new Error("Declaration source drift"));
    resolve({sourcePath,sourceSha256:hash(bytes),status:"complete",declaration});
   });
-  child.send({sourcePath,content,maxResultBytes:4*1024*1024,workerSha256});
+  if(includes && (!includes.inventory.roots.some(item=>item.path===sourcePath && item.sha256===hash(bytes)) || includes.inventory.sourceRoot!==root)) return reject(new Error('Include root identity mismatch'));
+  child.send({...includes?{includeRootPath:sourcePath,includeFragments:includes.fragments,includeEdges:includes.inventory.edges}:{},sourcePath,content,maxResultBytes:4*1024*1024,workerSha256});
  });
 }
 (async()=>{const entries=[];for(const name of relative)entries.push(await inspect(name));process.stdout.write(JSON.stringify({schema:"as3-source-declarations@1",workerSha256,entries})+"\n");})().catch(error=>{process.stderr.write(error.message+"\n");process.exitCode=1;});

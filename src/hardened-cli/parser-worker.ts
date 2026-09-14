@@ -1,11 +1,14 @@
 import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import parse from "../parse/index";
-import { normalizeParserAst } from "../hardened/parser-normalizer";
+import { normalizeParserAst, normalizeIncludedSource } from "../hardened/parser-normalizer";
 import { createHash } from "node:crypto";
 import { errorMessage } from "./errors";
 
 interface ParserRequest {
+    includeEdges?: import("../hardened/source-includes").IncludeEdge[];
+    includeRootPath?: string;
+    includeFragments?: import("../hardened/source-includes").IncludeSource[];
     sourcePath: string;
     content: string;
     maxAstBytes: number;
@@ -74,7 +77,9 @@ process.once("message", (message: unknown) => {
     try {
         const parsed = parse(message.sourcePath, message.content);
         const ast = message.format === "normalized"
-            ? normalizeParserAst(parsed, message.content,
+            ? message.includeFragments ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments,
+                bytes => createHash("sha256").update(bytes, "utf8").digest("hex"), message.includeEdges)
+                : normalizeParserAst(parsed, message.content,
                 bytes => createHash("sha256").update(bytes, "utf8").digest("hex"))
             : parsed;
         const json = `${JSON.stringify(ast, null, 2)}\n`;

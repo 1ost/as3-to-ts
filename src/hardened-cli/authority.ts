@@ -1,3 +1,4 @@
+import {loadSourceIncludes} from "./source-includes-authority";
 import { verifyNativeDescribeTypeAuthority } from "../hardened/native-describe-type-authority";
 import { loadReflectionProviderTarget, type ReflectionProviderTarget } from "../hardened/reflection-provider-authority";
 import { verifyNativeDateAuthority } from "../hardened/native-date-authority";
@@ -50,6 +51,7 @@ const COMPILED_AUTHORITY_LOCK = Object.freeze({
 });
 
 export interface TranspileAuthority {
+    sourceIncludes?: ReturnType<typeof loadSourceIncludes>;
     reflectionProvider?: ReflectionProviderTarget;
     authority: LoadedCapabilityAuthority;
     localTypes: LoadedLocalTypeAuthority;
@@ -317,6 +319,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             "runtimeTypePredicates", "sourceManifest", "sourceMemberAuthority"].concat(
                 Object.prototype.hasOwnProperty.call(profile.files,"byteArrayNative") ? ["byteArrayNative"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeDate") ? ["nativeDate"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"sourceIncludes") ? ["sourceIncludes"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeDescribeType") ? ["nativeDescribeType"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"reflectionProvider") ? ["reflectionProvider"] : []))
         || !exactKeys(profile.counts, ["localMembersComplete", "localMembersHeld", "localTypes", "mappedMembers", "mappedTypes", "sourceMemberTypes"])
@@ -329,7 +332,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const profileRoot = dirname(resolve(profileLockPath));
     const files = profile.files as unknown as {
         capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
-        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; nativeDescribeType?: ProfileFile; reflectionProvider?: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; sourceIncludes?: ProfileFile; nativeDescribeType?: ProfileFile; reflectionProvider?: ProfileFile;
         runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
         sourceMemberAuthority: ProfileFile;
     };
@@ -342,6 +345,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const nativeTimerAuthorityJson = profileFile(profileRoot, files.nativeTimerAuthority, "profile native timer authority");
     const runtimeTypeLockJson = profileFile(profileRoot, files.runtimeTypeAuthorityLock, "profile runtime type lock");
     const runtimeTypePredicatesJson = profileFile(profileRoot, files.runtimeTypePredicates, "profile runtime type predicates");
+    const sourceIncludes = files.sourceIncludes ? loadSourceIncludes(profileFile(profileRoot,files.sourceIncludes,"source includes")) : undefined;
     const sourceManifestJson = profileFile(profileRoot, files.sourceManifest, "profile source manifest");
     const sourceMemberAuthorityJson = profileFile(profileRoot, files.sourceMemberAuthority,
         "profile source member authority");
@@ -400,6 +404,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             expectedDeclarationWorkerSha256: String(localMember.declarationWorkerSha256),
             expectedSourceCensusSha256: profile.sourceCensusSha256 as string,
             expectedSchema: "as3-application-local-member-map@1",
+            ...(files.sourceIncludes ? {expectedSourceIncludesSha256:files.sourceIncludes.sha256} : {}),
         }, sha256, localTypes);
         if (Object.keys(authority.typeMappingsBySource).length !== counts.mappedTypes
             || Object.keys(authority.memberMappingsByKey).length !== counts.mappedMembers) {
@@ -426,6 +431,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             targetCapabilitiesSha256: profile.targetCapabilitiesSha256 as string,
             capabilityMappingSha256: files.capabilityMapping.sha256,
             runtimeTypeSources: withNativeObjectMemberCensus(runtimeTypeSources, sourceMembers), sourceMembers,
+            ...(sourceIncludes ? {sourceIncludes} : {}),
             nativeTimerAuthoritySha256: files.nativeTimerAuthority.sha256,
             runtimePackage: profile.runtimePackage as string, profileSha256: sha256(profileJson),
             applicationId: profile.applicationId as string, includeBigTurnTableDto: false,

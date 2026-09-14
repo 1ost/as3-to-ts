@@ -16,7 +16,7 @@ const BUILTINS = new Set([
 ]);
 
 const [typeMapArgument, outputArgument, sourceRepositoryArgument, workerArgument,
-    sourceCensusArgument, expectedSourceCensusSha256] = process.argv.slice(2);
+    sourceCensusArgument, expectedSourceCensusSha256, sourceIncludesArgument] = process.argv.slice(2);
 if (!typeMapArgument || !outputArgument || !sourceRepositoryArgument || !workerArgument
     || !sourceCensusArgument || !/^[0-9a-f]{64}$/.test(expectedSourceCensusSha256 || "")) {
     process.stderr.write("usage: node tools/generate-local-member-map.cjs <local-type-map> <output> <source-repository> <declaration-worker> <source-census> <expected-source-census-sha256>\n");
@@ -118,7 +118,17 @@ function readSource(entry) {
     return text;
 }
 
+const sourceIncludes = sourceIncludesArgument ? require("../lib/source-includes.js").loadSourceIncludes(
+    readCanonicalFile(sourceIncludesArgument,MAX_MAP_BYTES,"source includes").text) : null;
 function runWorker(entry, content) {
+    let includeEnvelope={};
+    if(sourceIncludes) {
+        const relative=path.relative(sourceIncludes.inventory.sourceRoot,path.resolve(sourceRepository,entry.sourcePath)).split(path.sep).join("/");
+        const root=sourceIncludes.inventory.roots.find(item=>item.path===relative);
+        if(!root || sha256(fs.readFileSync(path.resolve(sourceRepository,entry.sourcePath)))!==root.sha256)
+            throw new Error("Source does not match include root authority: "+entry.sourcePath);
+        includeEnvelope={includeRootPath:relative,includeFragments:sourceIncludes.fragments,includeEdges:sourceIncludes.inventory.edges};
+    }
     return new Promise((resolve, reject) => {
         const child = childProcess.fork(worker.lexical, [], {
             cwd: sourceRepository,
@@ -149,6 +159,7 @@ function runWorker(entry, content) {
             resolve(message);
         });
         child.send({
+            ...includeEnvelope,
             sourcePath: entry.sourcePath,
             content,
             maxResultBytes: MAX_RESULT_BYTES,
@@ -212,8 +223,17 @@ function canonicalizeExtract(entry, extract) {
         const fieldType = member.fieldType === null ? null : resolveQName(entry, extract, member.fieldType, null);
         if (parameters.some(parameter => parameter.type === null) || (member.returnType !== null && returnType === null)
             || (member.fieldType !== null && fieldType === null)) return { holdCode: "LOCAL_MEMBER_TYPE_RESOLUTION" };
+        let namespaceQName;
+        if(member.namespaceName!==null) {
+            const names=extract.imports.filter(q=>q.split('.').pop()===member.namespaceName);
+            const target=names.length===1 ? byIdentity.get(`${entry.module}\u0000${names[0]}`) : null;
+            if(!target || target.typeKind!=='package' || !entry.prerequisites.includes(target.nodeId)) return {holdCode:'LOCAL_MEMBER_NAMESPACE_RESOLUTION'};
+            namespaceQName=target.qname;
+        }
         members.push({
+            ...(namespaceQName ? {namespaceQName} : {}),
             kind: member.kind, name: member.name, modifiers: member.modifiers,
+            ...(member.namespaceUri!==undefined ? {namespaceUri:member.namespaceUri} : {}),
             namespaceName: member.namespaceName, parameters, returnType, fieldType, readonly: member.readonly,
         });
     }
@@ -281,6 +301,7 @@ async function main() {
     const output = {
         schema: applicationProfile ? "as3-application-local-member-map@1" : "bleach-local-as3-member-map@2",
         sourceCensusSha256,
+        ...(sourceIncludesArgument ? {sourceIncludesSha256:sha256(fs.readFileSync(sourceIncludesArgument))} : {}),
         localTypeMapSha256,
         declarationWorkerSha256: workerSha256,
         entryCount: entries.length,

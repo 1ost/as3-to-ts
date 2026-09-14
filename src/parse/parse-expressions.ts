@@ -481,6 +481,7 @@ function parseArgumentList(parser:AS3Parser):Node {
 
 
 function parseDot(parser:AS3Parser, node:Node):Node {
+    const separator = parser.tok.text;
     nextToken(parser);
     if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
         nextToken(parser);
@@ -495,7 +496,7 @@ function parseDot(parser:AS3Parser, node:Node):Node {
         result.end = node.end;
         return result;
     }
-    let result:Node = createNode(NodeKind.DOT, {start: node.start});
+    let result:Node = createNode(NodeKind.DOT, {start: node.start, ...(separator === Operators.DOUBLE_COLUMN ? {text:separator} : {})});
     result.children.push(node);
     result.children.push(createNode(NodeKind.LITERAL, {tok: parser.tok}));
     nextToken(parser, true);

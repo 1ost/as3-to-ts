@@ -186,6 +186,7 @@ def main():
     p.add_argument('--bytearray-native-uncompress', action='store_true', help='Authenticate zero-argument intrinsic decompression through shared Laya')
     p.add_argument('--native-date', action='store_true', help='Authenticate the shared zero-argument Date intrinsic from exact SDK declarations')
     p.add_argument('--native-describe-type', action='store_true', help='Retain exact SDK describeType proof; requires a separately verified reflection provider')
+    p.add_argument('--source-includes', action='store_true', help='Authenticate original include fragments separately from source declaration roots')
     args = p.parse_args()
     if args.native_describe_type and not args.ffdec_jar:
         p.error('--native-describe-type requires --ffdec-jar')
@@ -200,12 +201,27 @@ def main():
     sources=sorted(source.rglob('*.as'))
     if entry not in sources or len(sources)>128:
         p.error('Fixture requires its entry and at most 128 original AS3 source files')
-    text='\n'.join(file.read_text() for file in sources)
-    if len(sources) == 1:
+    out.mkdir(parents=True, exist_ok=False)
+    include_inventory = None
+    include_inventory_file = None
+    if args.source_includes:
+        def inspect_includes(paths):
+            return json.loads(subprocess.check_output(['node',str(ROOT/'tools/inspect-source-includes.cjs'),str(source),
+                *[file.relative_to(source).as_posix() for file in paths]],text=True))
+        inventory = inspect_includes(sources)
+        fragment_paths = {row['path'] for row in inventory['fragments']}
+        roots = [file for file in sources if file.relative_to(source).as_posix() not in fragment_paths]
+        if entry not in roots: p.error('Fixture entry cannot be only an included fragment')
+        include_inventory = inspect_includes(roots)
+        include_inventory_file = write(out / 'source-includes.json', include_inventory)
+        sources = roots
+    text='\n'.join(file.read_text() for file in source.rglob('*.as'))
+    if len(sources) == 1 and not args.source_includes:
         declarations=[{'path':entry,'qname':args.entry,'kind':'class'}]
     else:
         inspected=json.loads(subprocess.check_output(['node',str(ROOT/'tools/inspect-source-declarations.cjs'),str(source),
-            *[file.relative_to(source).as_posix() for file in sources]],text=True))
+            *[file.relative_to(source).as_posix() for file in sources],
+            *(['--source-includes',str(include_inventory_file)] if include_inventory_file else [])],text=True))
         if any(row['status'] != 'complete' for row in inspected['entries']):
             raise ValueError('Fixture declaration closure is held: '+json.dumps(inspected))
         declarations=[{'path':source/row['sourcePath'],'qname':row['declaration']['qualifiedName'],
@@ -219,7 +235,6 @@ def main():
         p.error(str(error))
     if set(args.intrinsic_type) - set(imports):
         p.error('Selected intrinsic must be explicitly imported by the retained fixture')
-    out.mkdir(parents=True, exist_ok=False)
     source_prefix=source.name+'/'
     target_prefix='generated/application/'
     source_roots={k:source_prefix for k in ('application','bootstrap')}
@@ -387,9 +402,11 @@ def main():
     if native_signatures is not None:
         mappings = native_api.select_supported_members(mappings, census, target, out)
     files['capabilityMapping'] = write(out / 'mapping.json', {'schema': 'as3-source-to-laya-capability-map@1', 'mappings': mappings})
+    if include_inventory_file: files['sourceIncludes'] = include_inventory_file
     files['localMemberMap'] = out / 'local-members.json'
     subprocess.run(['node', str(ROOT / 'tools/generate-local-member-map.cjs'), str(files['localTypeMap']),
-        str(files['localMemberMap']), str(source.parent), str(ROOT / 'lib/declaration-worker.js'), str(census), sha(census)], check=True)
+        str(files['localMemberMap']), str(source.parent), str(ROOT / 'lib/declaration-worker.js'), str(census), sha(census),
+        *([str(include_inventory_file)] if include_inventory_file else [])], check=True)
     timer = json.loads((ROOT / 'config/native-timer-authority.json').read_text())
     timer.update(schema='as3-native-timer-authority@1', module='@laya/as3-runtime/AS3Timer', sourceSha256=sha(ROOT / 'src/hardened-runtime/AS3Timer.ts'))
     files['nativeTimerAuthority'] = write(out / 'timer.json', timer)

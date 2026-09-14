@@ -1,3 +1,4 @@
+import { verifyIncludeExpansion } from "./source-includes";
 import { hasNativeDescribeTypeAuthority } from "./native-describe-type-authority";
 import { hasNativeDateAuthority } from "./native-date-authority";
 import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
@@ -183,7 +184,7 @@ function identity(node: TreeNode): SemanticIdentity {
 }
 
 export function buildTree(ast: NormalizedParserAst, sourceText: string, sha256: Sha256Function): TreeNode {
-    if (!isObject(ast) || !exactKeys(ast, ["fingerprintSha256", "nodes", "schema", "sourceSha256"])
+    if (!isObject(ast) || !exactKeys(ast, ["fingerprintSha256", "nodes", "schema", "sourceSha256"].concat(ast.includeExpansion ? ["includeExpansion"] : []))
         || ast.schema !== "authored-ui-as3-flat-ast@1" || typeof sourceText !== "string"
         || typeof sha256 !== "function" || !SHA256.test(ast.sourceSha256)
         || !SHA256.test(ast.fingerprintSha256) || !Array.isArray(ast.nodes) || ast.nodes.length === 0) {
@@ -192,6 +193,7 @@ export function buildTree(ast: NormalizedParserAst, sourceText: string, sha256: 
     if (sha256(sourceText) !== ast.sourceSha256 || sha256(JSON.stringify(ast.nodes)) !== ast.fingerprintSha256) {
         throw new HardenedSemanticError("HARDENED_NORMALIZED_AST_HASH", "normalized parser AST or source bytes do not match their authenticated SHA-256");
     }
+    if (ast.includeExpansion) sourceText = verifyIncludeExpansion(ast.includeExpansion, sourceText, sha256);
     const nodes: TreeNode[] = [];
     ast.nodes.forEach((raw, index) => {
         if (!isObject(raw) || !exactKeys(raw, ["id", "kind", "order", "parentId", "span", "text"])
@@ -323,7 +325,7 @@ function parseMemberModifiers(owner: TreeNode, context: AdapterContext): {
             fail("HARDENED_MODIFIER_NODE", "modifier list contains an unsupported node", node);
         }
         const modifier = requiredText(node, "modifier");
-        if (context.namespaceNames[modifier]) {
+        if (context.namespaceNames[modifier] || context.importsByLocal[modifier]?.compileTimeNamespace) {
             if (namespaceName !== null || seen[modifier]) {
                 fail("HARDENED_NAMESPACE_MODIFIER", "member namespace modifier is duplicated or ambiguous", node);
             }
@@ -603,6 +605,7 @@ function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLoca
     const localName = validateIdentifier(fileLocalName ?? target.qname.slice(target.qname.lastIndexOf(".") + 1), node);
     let localValueType: string | null = null;
     let compileTimeNamespace = false;
+    let namespaceUri:string|undefined;
     let localFunction: true | undefined;
     if (target.typeKind === "package") {
         if (localMemberAuthority === null) {
@@ -633,11 +636,12 @@ function localSemanticImport(target: LocalTypeMapping, currentLocal: CurrentLoca
             localValueType = "Function"; localFunction = true;
         }
         compileTimeNamespace = member.kind === "namespace";
+        if(compileTimeNamespace) namespaceUri=member.namespaceUri;
     }
     return Object.assign(identity(node), {
         authorityKind: "local" as "local", localNodeId: target.nodeId,
         runtimeConstructible: target.typeKind === "class", runtimeInterface: target.typeKind === "interface",
-        localValueType, compileTimeNamespace, ...(localFunction ? {localFunction} : {}),
+        localValueType, compileTimeNamespace, ...(namespaceUri!==undefined ? {namespaceUri} : {}), ...(localFunction ? {localFunction} : {}),
         sourceQualifiedName: target.qname, sourceLocalName: localName,
         targetModule: relativeLocalModule(currentLocal.outputModulePath, target, localTypeAuthority),
         targetExport: fileLocalName ? "__as3FileLocalClass" : localName,
@@ -1714,7 +1718,7 @@ function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: r
 }
 
 function localStaticNamedMembers(context: AdapterContext, qname: string, name: string,
-    node: TreeNode): LocalDeclarationMember[] {
+    node: TreeNode, namespaceQName?: string): LocalDeclarationMember[] {
     const entry = localDeclaration(context, qname, node);
     const currentPackage = context.classQualifiedName.slice(0,
         Math.max(0, context.classQualifiedName.lastIndexOf(".")));
@@ -1722,6 +1726,12 @@ function localStaticNamedMembers(context: AdapterContext, qname: string, name: s
     const matches = entry.declaration!.members.filter(member => member.name === name
         && member.kind !== "constructor" && member.modifiers.indexOf("static") >= 0);
     matches.forEach(member => {
+        if(namespaceQName!==undefined) {
+            if(member.namespaceQName!==namespaceQName || member.namespaceName===null || member.kind!=="field" || !member.readonly)
+                fail("HARDENED_NAMESPACE_MEMBER_IDENTITY","qualified namespace does not match exact readonly field authority",node);
+            return;
+        }
+        if(member.namespaceName!==null) fail("HARDENED_NAMESPACE_MEMBER_IDENTITY","namespaced static field requires an explicit authenticated namespace",node);
         const visibility = memberVisibility(member.modifiers);
         if (visibility !== "public" && !(visibility === "internal" && currentPackage === ownerPackage)) {
             fail("HARDENED_LOCAL_STATIC_VISIBILITY",
@@ -2101,7 +2111,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             }
             if (imported?.authorityKind === "local" && imported.localValueType === null) {
                 const members = localStaticNamedMembers(context, imported.sourceQualifiedName,
-                    expression.name, node);
+                    expression.name, node, expression.namespaceQName);
                 const readable = members.filter(member => member.kind === "getter" || member.kind === "field");
                 if (readable.length !== 1) {
                     fail("HARDENED_LOCAL_STATIC_READ",
@@ -3657,11 +3667,47 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         }
     }
+    if(node.kind==="DOT" && node.text==="::") {
+        if(node.children.length!==2 || node.children[1]!.kind!=="LITERAL" || !valuePosition)
+            fail("HARDENED_NAMESPACE_ACCESS","only namespace-qualified readonly field reads are admitted",node);
+        const prefix=node.children[0]!, name=validateIdentifier(requiredText(node.children[1]!,"namespace field"),node);
+        const namespaceNode=prefix.kind==="DOT" && prefix.text!=="::" ? prefix.children[1] : prefix;
+        if(!namespaceNode || !["IDENTIFIER","LITERAL"].includes(namespaceNode.kind) || !namespaceNode.text)
+            fail("HARDENED_NAMESPACE_ACCESS","namespace prefix must be an imported literal namespace",node);
+        const ns=namespaceNode.text, imported=context.importsByLocal[ns];
+        if(!imported?.compileTimeNamespace || imported.namespaceUri===undefined || context.locals[ns] || context.parameters[ns] || context.fields[ns] || context.methods[ns] || context.accessors[ns])
+            fail("HARDENED_NAMESPACE_AUTHORITY","namespace prefix lacks immutable source authority",node);
+        assertNoInheritedLocalValueShadow(context,ns,node);
+        if(prefix===namespaceNode) {
+            const field=context.fields[name];
+            if(!field || field.namespaceName!==ns || !field.modifiers.includes("static") || !field.readonly)
+                fail("HARDENED_NAMESPACE_MEMBER_IDENTITY","own namespace field is not one static const",node);
+            return currentClassMember(node,context,name);
+        }
+        const target=parseExpression(prefix.children[0]!,context,true);
+        if(target.kind!=="identifier" || target.bindingKind!=="import") fail("HARDENED_NAMESPACE_ACCESS","namespace target must be one imported class",node);
+        const owner=context.importsByLocal[target.name];
+        if(!owner || owner.authorityKind!=="local" || owner.compileTimeNamespace || owner.localValueType!==null)
+            fail("HARDENED_NAMESPACE_ACCESS","namespace target lacks local class authority",node);
+        const members=localStaticNamedMembers(context,owner.sourceQualifiedName,name,node,imported.sourceQualifiedName);
+        if(members.length!==1) fail("HARDENED_NAMESPACE_MEMBER_IDENTITY","namespace field is absent or ambiguous",node);
+        return {...identity(node),kind:"member",target,targetNullable:false,name,capabilitySource:owner.sourceQualifiedName,namespaceQName:imported.sourceQualifiedName};
+    }
     if (node.kind === "DOT") {
         if (node.children.length !== 2 || node.children[1]!.kind !== "LITERAL") {
             fail("HARDENED_MEMBER_SHAPE", "member expression has the wrong normalized shape", node);
         }
         const name = validateIdentifier(requiredText(node.children[1]!, "member name"), node.children[1]!);
+        const namespaceReceiver=node.children[0]!;
+        if(name==="uri" && namespaceReceiver.kind==="IDENTIFIER" && namespaceReceiver.text
+            && !context.locals[namespaceReceiver.text] && !context.parameters[namespaceReceiver.text]
+            && !context.fields[namespaceReceiver.text] && !context.methods[namespaceReceiver.text] && !context.accessors[namespaceReceiver.text]) {
+            const imported=context.importsByLocal[namespaceReceiver.text];
+            if(imported?.compileTimeNamespace && imported.namespaceUri!==undefined) {
+                assertNoInheritedLocalValueShadow(context,namespaceReceiver.text,namespaceReceiver);
+                return {...identity(node),kind:"literal",value:imported.namespaceUri};
+            }
+        }
         if (node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "Array" && (name === "NUMERIC" || name === "DESCENDING")
             && context.className !== "Array" && context.locals.Array === undefined && context.parameters.Array === undefined
             && context.fields.Array === undefined && context.methods.Array === undefined && context.accessors.Array === undefined
@@ -5825,7 +5871,9 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
     if (localMemberAuthority !== undefined && localAuthority === undefined) {
         fail("HARDENED_LOCAL_MEMBER_AUTHORITY_INSTANCE", "local member authority requires its local type authority", classNode);
     }
-    const parsedImports = parseImports(content, authority, localAuthority, resolveCurrentLocal,
+    const lexicalContent = {...content, children: content.children.concat(
+        classContentForNamespaces.children.filter(child => child.kind === "IMPORT"))};
+    const parsedImports = parseImports(lexicalContent, authority, localAuthority, resolveCurrentLocal,
         localMemberAuthority || null, sourceMemberAuthority);
     namespaceUseNodes.forEach((node) => {
         onlyKinds(node, []);
@@ -6243,7 +6291,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             }
             return;
         }
-        if (node.kind !== "USE") {
+        if (node.kind !== "USE" && node.kind !== "IMPORT") {
             fail("HARDENED_CLASS_MEMBER", "class member kind is unsupported: " + node.kind, node);
         }
     });

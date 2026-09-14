@@ -1,3 +1,5 @@
+import {includedSourceOrigins} from "../hardened/source-includes";
+import {loadSourceIncludes} from "./source-includes-authority";
 import { hasNativeDateAuthority } from "../hardened/native-date-authority";
 import { dateRuntimeTypeAuthoritySource } from "../hardened/type-authority";
 import { createHash } from "node:crypto";
@@ -47,6 +49,7 @@ interface FileLocalOutput {
 }
 
 interface TranspiledManifestFile {
+    sourceIncludes?: ReturnType<typeof includedProvenance>;
     fileLocalOutputs?: FileLocalOutput[];
     sourcePath: string;
     typescriptPath: string;
@@ -59,6 +62,8 @@ interface TranspiledManifestFile {
 }
 
 interface QualificationFile {
+    sourceIncludes?: ReturnType<typeof includedProvenance>;
+    sourceOrigins?: ReturnType<typeof includedSourceOrigins>;
     fileLocalOutputs?: FileLocalOutput[];
     sourcePath: string;
     sourceBytes: number;
@@ -70,6 +75,13 @@ interface QualificationFile {
     modulePath: string | null;
     normalizedFingerprintSha256: string | null;
     typescriptSha256: string | null;
+}
+
+function includedProvenance(ast: NormalizedParserAst) {
+    const proof=ast.includeExpansion!;
+    return {offsetUnit:proof.offsetUnit,sourceTextBasis:proof.sourceTextBasis,
+        expandedSha256:proof.expandedSha256,segments:proof.segments,edges:proof.edges,
+        fragments:proof.fragments.map(item=>({path:item.path,sha256:item.sha256}))};
 }
 
 function sha256(data: string | Buffer): string {
@@ -298,14 +310,31 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
         const localRuntimePrograms: SemanticProgram[] = [];
         const embeddedResources: Array<{id: string; sourcePath: string; path: string; sha256: string; bytes: number}> = [];
         const resourceInputs = new Map<string, string>();
+        const includedFragments: Array<{sourcePath:string;sourceSha256:string;sourceBytes:number}> = [];
         let totalOutputBytes = 0;
 
         for (const file of inputs.files) {
             const source = readInput(file);
+            const includeInventory=transpileAuthority?.sourceIncludes?.inventory;
+            if(includeInventory && !includeInventory.roots.some(item=>item.path===file.portablePath)) {
+                const fragment=includeInventory.fragments.find(item=>item.path===file.portablePath);
+                if(fragment) {
+                    if(fragment.sha256!==sha256(source.bytes) || fragment.bytes!==source.bytes.length) throw new CliError("Included fragment differs from authenticated source inventory",6);
+                    includedFragments.push({sourcePath:file.portablePath,sourceSha256:fragment.sha256,sourceBytes:fragment.bytes});
+                    continue;
+                }
+            }
             let parsedFile;
             try {
                 parsedFile = await parseIsolated(file.portablePath, source.content, options.limits,
-                    options.operation === "parse" ? "legacy" : "normalized", parserWorkerSha256);
+                    options.operation === "parse" ? "legacy" : "normalized", parserWorkerSha256,
+                    transpileAuthority?.sourceIncludes ? (() => {
+                        const includes=transpileAuthority!.sourceIncludes!;
+                        const root=includes.inventory.roots.find(item=>item.path===file.portablePath);
+                        if(!root) return undefined;
+                        if (root.sha256!==sha256(source.bytes)) throw new Error("HARDENED_INCLUDE_ROOT_IDENTITY: selected source differs from include authority");
+                        return {includeRootPath:root.path,includeFragments:includes.fragments,includeEdges:includes.inventory.edges};
+                    })() : undefined);
             } catch (error) {
                 if (options.operation !== "qualify") throw error;
                 qualificationFiles.push({
@@ -407,6 +436,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     throw new CliError("source unit emits colliding portable module paths", 4);
                 if (options.operation === "qualify") {
                     const current: QualificationFile = {
+                        ...(normalized.includeExpansion ? {sourceIncludes:includedProvenance(normalized)} : {}),
                         sourcePath: file.portablePath, sourceBytes: source.bytes.byteLength,
                         sourceSha256: sha256(source.bytes), status: "admitted", stage: null, code: null, message: null,
                         modulePath: primary.modulePath, normalizedFingerprintSha256: normalized.fingerprintSha256,
@@ -438,6 +468,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     writeArtifact(publication, output.packagePath.slice(0, -3) + ".js", javascript);
                 }
                 const transpiled: TranspiledManifestFile = {
+                    ...(normalized.includeExpansion ? {sourceIncludes:includedProvenance(normalized)} : {}),
                     sourcePath: file.portablePath, typescriptPath: primary.packagePath,
                     sourceBytes: source.bytes.byteLength, sourceSha256: sha256(source.bytes),
                     normalizedAstSha256: sha256(parsedFile.json), normalizedFingerprintSha256: normalized.fingerprintSha256,
@@ -451,7 +482,11 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     const normalized = (() => {
                         try { return JSON.parse(parsedFile.json) as NormalizedParserAst; } catch { return null; }
                     })();
+                    const originNode=error instanceof HardenedSemanticError && normalized?.includeExpansion
+                        ? normalized.nodes.find(node=>node.id===error.sourceNodeId) : undefined;
                     qualificationFiles.push({
+                        ...(normalized?.includeExpansion ? {sourceIncludes:includedProvenance(normalized)} : {}),
+                        ...(normalized?.includeExpansion && originNode?.span ? {sourceOrigins:includedSourceOrigins(normalized.includeExpansion,originNode.span.start,originNode.span.end)} : {}),
                         sourcePath: file.portablePath,
                         sourceBytes: source.bytes.byteLength,
                         sourceSha256: sha256(source.bytes),
@@ -566,6 +601,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             writeArtifact(publication, "__as3_runtime/ApplicationEntry.generated.js", entryJavaScript);
         }
 
+        if(transpileAuthority?.sourceIncludes) loadSourceIncludes(JSON.stringify(transpileAuthority.sourceIncludes.inventory));
         assertParserWorkerSha256(parserWorkerSha256);
         for (const [path, hash] of resourceInputs) {
             if (realpathSync.native(path) !== path || sha256(readFileSync(path)) !== hash)
@@ -606,6 +642,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             runtimePackage: transpileAuthority!.runtimePackage,
             classification: "capability-authenticated-typescript-proposal",
             embeddedResources,
+            ...(includedFragments.length ? {includedFragments} : {}),
             files: transpiledFiles,
         } : {
             schema: transpileAuthority!.profileSha256 === null
@@ -625,6 +662,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             runtimePackage: transpileAuthority!.runtimePackage,
             generatedTypeScriptMaterialized: false,
             counts: qualificationCounts,
+            ...(includedFragments.length ? {includedFragments} : {}),
             files: qualificationFiles,
         };
         const manifestJson = `${JSON.stringify(manifest, null, 2)}\n`;

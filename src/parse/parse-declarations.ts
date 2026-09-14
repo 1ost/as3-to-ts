@@ -128,11 +128,15 @@ function parseNamespaceDeclaration(parser:AS3Parser, meta:Node[], modifiers:Toke
     }
     const name = parser.tok;
     nextToken(parser);
-    if (tokIs(parser, Operators.EQUAL)) {
-        throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', 'an uninitialized namespace declaration',
-            'namespace declaration');
-    }
     const result = createNode(NodeKind.NAMESPACE, { start: tok.index, end: name.end, text: name.text });
+    if (tokIs(parser, Operators.EQUAL)) {
+        const assignment = consume(parser, Operators.EQUAL);
+        const value = parseExpression(parser);
+        const init = createNode(NodeKind.INIT, {start:assignment.index,end:value.end});
+        init.children.push(value);
+        result.children.push(init);
+        result.end = value.end;
+    }
     appendIfPresent(result, convertMeta(parser, meta));
     appendIfPresent(result, convertModifiers(parser, modifiers));
     result.start = result.children.reduce((index:number, child:Node) => Math.min(index, child.start), tok.index);
@@ -145,6 +149,9 @@ function parseImport(parser:AS3Parser):Node {
     consume(parser, Keywords.IMPORT);
     const nameStart = parser.tok.index;
     let name = parseImportName(parser);
+    // Imported identifiers are syntactic namespace candidates; semantic authority resolves their kind.
+    const importedName = name.text.slice(name.text.lastIndexOf(".") + 1);
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(importedName)) parser.activeNamespaces.add(importedName);
     let result:Node = createNode(NodeKind.IMPORT, {start: nameStart, end: name.end, text: name.text});
     skip(parser, Operators.SEMI_COLUMN);
     return result;
@@ -210,6 +217,7 @@ function parseIncludeExpression(parser:AS3Parser):Node {
     result.end = result.children.reduce((index:number, child:Node) => {
         return Math.max(index, child ? child.end : 0);
     }, 0);
+    skip(parser, Operators.SEMI_COLUMN);
     return result;
 }
 

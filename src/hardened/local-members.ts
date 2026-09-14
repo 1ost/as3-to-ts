@@ -13,6 +13,7 @@ import { fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLoca
 import { assertLoadedLocalTypeAuthority } from "./local-types";
 
 export interface LocalMemberAuthorityInput {
+    expectedSourceIncludesSha256?: string;
     json: string;
     sha256: string;
     expectedEntryCount: number;
@@ -105,7 +106,7 @@ function parameter(raw: unknown, scoped: ReadonlySet<string> = new Set()): Local
 function member(raw: unknown, scoped: ReadonlySet<string> = new Set()): LocalDeclarationMember {
     if (!object(raw) || !exactKeys(raw, [
         "fieldType", "kind", "modifiers", "name", "namespaceName", "parameters", "readonly", "returnType",
-    ]) || typeof raw.kind !== "string" || !MEMBER_KINDS.has(raw.kind)
+    ].concat(Object.prototype.hasOwnProperty.call(raw,"namespaceUri") ? ["namespaceUri"] : [], Object.prototype.hasOwnProperty.call(raw,"namespaceQName") ? ["namespaceQName"] : [])) || typeof raw.kind !== "string" || !MEMBER_KINDS.has(raw.kind)
         || typeof raw.name !== "string" || !IDENTIFIER.test(raw.name)
         || !Array.isArray(raw.modifiers) || raw.modifiers.some(item => typeof item !== "string" || !MODIFIERS.has(item))
         || new Set(raw.modifiers).size !== raw.modifiers.length
@@ -115,6 +116,8 @@ function member(raw: unknown, scoped: ReadonlySet<string> = new Set()): LocalDec
         || (raw.fieldType !== null && !validType(raw.fieldType, scoped))) {
         fail("HARDENED_LOCAL_MEMBER_SIGNATURE", "local member signature is invalid");
     }
+    if (Object.prototype.hasOwnProperty.call(raw,"namespaceUri") && (raw.kind!=="namespace" || typeof raw.namespaceUri!=="string")) fail("HARDENED_LOCAL_MEMBER_SIGNATURE","namespace URI is not an exact namespace declaration");
+    if(Object.prototype.hasOwnProperty.call(raw,"namespaceQName") && (raw.namespaceName===null || typeof raw.namespaceQName!=="string" || !QNAME.test(raw.namespaceQName))) fail("HARDENED_LOCAL_MEMBER_SIGNATURE","qualified namespace identity is invalid");
     const parameters = raw.parameters.map(value => parameter(value, scoped));
     const kind = raw.kind as LocalDeclarationMember["kind"];
     if ((kind === "field") !== (raw.fieldType !== null) || (kind === "field" && (parameters.length !== 0 || raw.returnType !== null))
@@ -128,6 +131,8 @@ function member(raw: unknown, scoped: ReadonlySet<string> = new Set()): LocalDec
         fail("HARDENED_LOCAL_MEMBER_SIGNATURE", "local member kind and signature disagree");
     }
     return {
+        ...(typeof raw.namespaceQName==="string" ? {namespaceQName:raw.namespaceQName} : {}),
+        ...(typeof raw.namespaceUri==="string" ? {namespaceUri:raw.namespaceUri} : {}),
         kind, name: raw.name, modifiers: raw.modifiers.slice() as string[],
         namespaceName: raw.namespaceName as string | null, parameters,
         returnType: raw.returnType as string | null, fieldType: raw.fieldType as string | null,
@@ -220,7 +225,7 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
     const inputKeys = [
         "expectedCompleteCount", "expectedDeclarationWorkerSha256", "expectedEntryCount", "expectedHeldCount",
         "expectedLocalTypeMapSha256", "expectedSourceCensusSha256", "json", "sha256",
-    ].concat(profiled ? ["expectedSchema"] : []);
+    ].concat(profiled ? ["expectedSchema"] : [], input.expectedSourceIncludesSha256 !== undefined ? ["expectedSourceIncludesSha256"] : []);
     if (!object(input) || !exactKeys(input as unknown as Record<string, unknown>, inputKeys)
         || typeof input.json !== "string" || typeof input.sha256 !== "string" || !SHA256.test(input.sha256)
         || sha256(input.json) !== input.sha256) {
@@ -233,13 +238,14 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
     if (!object(document) || !exactKeys(document, [
         "completeCount", "declarationWorkerSha256", "entries", "entryCount", "heldCount", "localTypeMapSha256",
         "schema", "sourceCensusSha256",
-    ]) || document.schema !== (profiled ? input.expectedSchema : "bleach-local-as3-member-map@2")
+    ].concat(input.expectedSourceIncludesSha256 !== undefined ? ["sourceIncludesSha256"] : [])) || document.schema !== (profiled ? input.expectedSchema : "bleach-local-as3-member-map@2")
         || !Array.isArray(document.entries)
         || document.entryCount !== input.expectedEntryCount || document.entries.length !== input.expectedEntryCount
         || document.completeCount !== input.expectedCompleteCount || document.heldCount !== input.expectedHeldCount
         || document.completeCount + document.heldCount !== document.entryCount
         || document.localTypeMapSha256 !== input.expectedLocalTypeMapSha256
         || document.declarationWorkerSha256 !== input.expectedDeclarationWorkerSha256
+        || (input.expectedSourceIncludesSha256 !== undefined && (!SHA256.test(input.expectedSourceIncludesSha256) || document.sourceIncludesSha256 !== input.expectedSourceIncludesSha256))
         || document.sourceCensusSha256 !== input.expectedSourceCensusSha256
         || `${canonical(document)}\n` !== input.json) {
         fail("HARDENED_LOCAL_MEMBER_SCHEMA", "local member authority schema, pins, counts, or canonical bytes are invalid");

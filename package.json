@@ -21,12 +21,13 @@
     "src/hardened-runtime/**/*.ts",
     "config/native-timer-authority.json",
     "config/big-turntable-inner-dto-authority.json",
-    "src/hardened-cli/THIRD_PARTY_NOTICES.md"
+    "src/hardened-cli/THIRD_PARTY_NOTICES.md",
+    "lib/source-includes.js"
   ],
   "scripts": {
     "clean": "node --eval \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
     "typecheck": "node node_modules/typescript/bin/tsc -p tsconfig.json && node node_modules/typescript/bin/tsc -p tsconfig.cli.json",
-    "build:bundle": "esbuild src/command.ts --bundle --platform=node --format=cjs --target=node24 --outfile=lib/command.js --metafile=lib/command.meta.json --legal-comments=eof && esbuild src/hardened-cli/parser-worker.ts --bundle --platform=node --format=cjs --target=node24 --outfile=lib/parser-worker.js --metafile=lib/parser-worker.meta.json --legal-comments=eof && esbuild src/hardened-cli/declaration-worker.ts --bundle --platform=node --format=cjs --target=node24 --outfile=lib/declaration-worker.js --metafile=lib/declaration-worker.meta.json --legal-comments=eof",
+    "build:bundle": "esbuild src/command.ts --bundle --platform=node --format=cjs --target=node24 --outfile=lib/command.js --metafile=lib/command.meta.json --legal-comments=eof && esbuild src/hardened-cli/parser-worker.ts --bundle --platform=node --format=cjs --target=node24 --outfile=lib/parser-worker.js --metafile=lib/parser-worker.meta.json --legal-comments=eof && esbuild src/hardened-cli/declaration-worker.ts --bundle --platform=node --format=cjs --target=node24 --outfile=lib/declaration-worker.js --metafile=lib/declaration-worker.meta.json --legal-comments=eof && esbuild src/hardened-cli/source-includes-tool.ts --bundle --platform=node --format=cjs --target=node24 --outfile=lib/source-includes.js --legal-comments=eof",
     "build": "npm run clean && npm run typecheck && npm run build:bundle",
     "test": "npm run build && node --test tests/hardened-cli/*.test.cjs tests/hardened-runtime/*.test.cjs",
     "audit": "npm audit --audit-level=high"

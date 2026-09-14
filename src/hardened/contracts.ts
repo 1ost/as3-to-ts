@@ -15,6 +15,7 @@ export interface NormalizedParserNode {
 }
 
 export interface NormalizedParserAst {
+    includeExpansion?: import("./source-includes").IncludeExpansion;
     schema: "authored-ui-as3-flat-ast@1";
     sourceSha256: string;
     fingerprintSha256: string;
@@ -139,6 +140,7 @@ export interface SemanticImport extends SemanticIdentity {
     localValueType: string | null;
     localFunction?: true;
     compileTimeNamespace: boolean;
+    namespaceUri?: string;
     sourceQualifiedName: string;
     sourceLocalName: string;
     targetModule: string;
@@ -228,6 +230,7 @@ export interface SuperExpression extends SemanticIdentity {
 }
 
 export interface MemberExpression extends SemanticIdentity {
+    namespaceQName?: string;
     kind: "member";
     superField?: true;
     target: SemanticExpression;
@@ -384,6 +387,8 @@ export interface LocalDeclarationParameter {
 }
 
 export interface LocalDeclarationMember {
+    namespaceQName?: string;
+    namespaceUri?: string;
     kind: "constructor" | "method" | "getter" | "setter" | "field" | "namespace";
     name: string;
     modifiers: string[];
