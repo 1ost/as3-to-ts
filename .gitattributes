@@ -9,3 +9,5 @@ tests/native-callable-prerequisites/** -text whitespace=cr-at-eol
 tests/native-super-methods/** -text whitespace=cr-at-eol
 
 tests/native-class-metadata/** -text whitespace=cr-at-eol
+
+tests/native-foreach-receivers/** -text whitespace=cr-at-eol

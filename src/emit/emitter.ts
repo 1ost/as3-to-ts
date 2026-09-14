@@ -1015,12 +1015,16 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let objNode = inNode.children[0];
 	let blockNode = node.children[2];
 
-	if (objNode.kind == NodeKind.ARRAY)
-	{
-		emitter.catchup(node.start);
+	// Keep the source receiver stable throughout enumeration, including after
+	// body assignments. The surrounding block also preserves an unbraced if/else.
+	let receiverName: string, keyName: string;
+	do {
 		emitter.loopObjectCounter++;
-		emitter.insert(`\tvar ${FOR_IN_OBJ}${emitter.loopObjectCounter};\n\t\t`);
-	}
+		receiverName = FOR_IN_OBJ + emitter.loopObjectCounter;
+		keyName = FOR_IN_KEY + emitter.loopObjectCounter;
+	} while (emitter.source.indexOf(receiverName) >= 0 || emitter.source.indexOf(keyName) >= 0);
+	emitter.catchup(node.start);
+	emitter.insert('{ var ' + receiverName + '; ');
 
 	let nameTypeInitNode = varNode.findChild(NodeKind.NAME_TYPE_INIT);
 	let nameNode:Node;
@@ -1030,7 +1034,7 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let variableContNode = nameTypeInitNode ? nameTypeInitNode : node;
 	nameNode = variableContNode.findChild(NodeKind.NAME);
 	typeNode = variableContNode.findChild(NodeKind.TYPE);
-	if (typeNode) {
+	if (typeNode && typeNode.text) {
 		emitter.catchup(node.start);
 		let typeRemapped = emitter.getTypeRemap(typeNode.text) || typeNode.text;
 		emitter.ensureImportIdentifier(typeRemapped);
@@ -1050,22 +1054,26 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	emitter.catchup(node.start + Keywords.FOR.length + 1);
 	emitter.skip(4); // "each"
 	emitter.catchup(varNode.start);
-	emitter.insert(`var ${FOR_IN_KEY}`);
-	emitter.declareInScope({name:FOR_IN_KEY});
+	emitter.insert(`var ${keyName}`);
+	emitter.declareInScope({name:keyName});
 	emitter.skipTo(varNode.end);
 
 	emitter.catchup(inNode.start);
 	emitter.insert(' ');
 
-	if (objNode.kind == NodeKind.ARRAY) {
-		emitter.catchup(objNode.start);
-		emitter.insert(` ${FOR_IN_OBJ}${emitter.loopObjectCounter} = `);
-	}
+	emitter.catchup(objNode.start);
+	emitter.insert('(' + receiverName + ' = ');
 	visitNodes(emitter, inNode.children);
-	emitter.catchup(blockNode.start + 1);
+	emitter.catchup(objNode.end);
+	emitter.insert(')');
+	const hasBlock = blockNode.kind === NodeKind.BLOCK;
+	emitter.catchup(blockNode.start + (hasBlock ? 1 : 0));
+	if (!hasBlock) emitter.insert('{');
 
 	let def = emitter.findDefInScope(nameNode.text);
-	if (def.type && castStr == "" ){
+	if (!def && !nameTypeInitNode)
+		throw new Error('AS3_FOREACH_UNSUPPORTED: unresolved iterator binding: ' + nameNode.text);
+	if (def && def.type && castStr == "" ){
 		castStr = `<${def.type.toString()}>`;
 	}
 	let declarationWord:string = "";
@@ -1088,39 +1096,37 @@ function emitForEach(emitter:Emitter, node:Node):void {
 		}
 	}
 
-
-
-	/*  if(!objNode.text){
-
-	 console.log("node", node);
-	 }*/
-
-	var obj_name = objNode.text;
-	if (objNode.kind == NodeKind.ARRAY) {
-		//TODO check nested object
-		emitter.insert(`\n\t\t\t${ declarationWord }${ nameNode.text }${ typeStr } =${ castStr }  ${ FOR_IN_OBJ }${emitter.loopObjectCounter}[${ FOR_IN_KEY }];\n`);
-
-	}
-	else{
-
-		if (objNode.children.length > 0 && obj_name == undefined) {
-			obj_name = getNodeNameRecursive(objNode);
-		}
-
-		emitter.insert(`\n\t\t\t${ declarationWord }${ nameNode.text }${ typeStr } = ${ castStr }`);
-		let lastIndex:number = emitter.getIndex();
-		let inNodeChild = inNode.children[0];
-		emitter.skipTo(inNode.start);
-		emitter.consume("in", inNodeChild.start);
-		visitNode(emitter, inNode);
-		emitter.catchup(inNode.end);
-		emitter.skipTo(lastIndex);
-		emitter.insert (`[${ FOR_IN_KEY }];\n`);
-
-	}
-
+	emitter.insert(`\n\t\t\t${declarationWord}${nameNode.text}${typeStr} = ${castStr}${receiverName}[${keyName}];\n`);
 	visitNode(emitter, blockNode);
-
+	// Legacy compound loop nodes can have end=-1; their last child still owns
+	// the complete final expression (including closing call parentheses).
+	const lastSourceEnd = (current:Node):number => current.children.reduce(
+		(end, child) => Math.max(end, lastSourceEnd(child)), current.end);
+	const statementEnd = lastSourceEnd(blockNode);
+	emitter.catchup(statementEnd);
+	if (!hasBlock) {
+		// The AS3 expression node excludes its optional terminator and trivia.
+		// Keep an explicit terminator inside the generated loop/if body so it
+		// cannot become a separate statement between the source if and else.
+		let end = statementEnd;
+		while (end < emitter.source.length) {
+			if (/\s/.test(emitter.source.charAt(end))) { end++; continue; }
+			if (emitter.source.substr(end, 2) === "/*") {
+				const close = emitter.source.indexOf("*/", end + 2);
+				if (close < 0) break;
+				end = close + 2; continue;
+			}
+			if (emitter.source.substr(end, 2) === "//") {
+				end += 2;
+				while (end < emitter.source.length && !/[\r\n]/.test(emitter.source.charAt(end))) end++;
+				continue;
+			}
+			break;
+		}
+		if (emitter.source.charAt(end) === ';') emitter.catchup(end + 1);
+	}
+	if (!hasBlock) emitter.insert('}');
+	emitter.insert('}');
 }
 
 function getNodeNameRecursive(objNode:Node):string{
