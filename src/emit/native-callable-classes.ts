@@ -13,6 +13,8 @@ interface SourceClass {
 export class NativeCallableClasses {
     private classes = new Map<string, SourceClass>();
     private own: SourceClass;
+    private sourceRoots = new Map<string, Node>();
+    private sourceTexts = new Map<string, string>();
     private ts: any;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
     constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string) {
@@ -26,6 +28,7 @@ export class NativeCallableClasses {
         const roots = new Map<string, Node>();
         Object.keys(options).forEach(qname => {
             if (typeof options[qname] !== 'string' || !lazy || lazy[qname] !== 'lazy') this.fail('source identity must be lazy: ' + qname);
+            this.sourceTexts.set(qname, options[qname]);
             const root = parse(qname + '.as', options[qname]), declarations: Node[] = [];
             const walk = (node: Node): void => {
                 if (!node) return;
@@ -139,7 +142,7 @@ export class NativeCallableClasses {
                 };
                 scanArguments(constructor.findChild(K.BLOCK));
             }
-            const value = {qname, name, base, fields, parameters, usesArguments, instanceMembers}; this.classes.set(qname, value); roots.set(qname, cls);
+            const value = {qname, name, base, fields, parameters, usesArguments, instanceMembers}; this.classes.set(qname, value); roots.set(qname, cls); this.sourceRoots.set(qname, cls);
             if (options[qname] === source) {
                 if (this.own) this.fail('ambiguous current source');
                 this.own = value;
@@ -181,6 +184,55 @@ export class NativeCallableClasses {
         const numberCoercion = unique('number'), intCoercion = unique('int'), uintCoercion = unique('uint');
         const sourceArguments = unique('arguments');
         const constructorCompletion = unique('constructorCompletion');
+        const superMethods: string[] = [];
+        const superMethodNames = new Map<string, string>();
+        const directSuper = (key: string, supplied: number): string => {
+            let owner = this.classes.get(this.own.base), depth = 0, method: Node;
+            for (; owner; owner = this.classes.get(owner.base), depth++) {
+                const content = this.sourceRoots.get(owner.qname).findChild(K.CONTENT);
+                const candidates = content.children.filter(member => member.findChild(K.NAME)
+                    && member.findChild(K.NAME).text === key);
+                if (candidates.length) {
+                    if (candidates.length !== 1 || candidates[0].kind !== K.FUNCTION)
+                        this.fail('super target must be an exact source instance method');
+                    method = candidates[0]; break;
+                }
+                if (owner.fields.some(field => field.name === key))
+                    this.fail('super target is a source field');
+            }
+            if (!method) this.fail('super method is absent from complete source ancestry');
+            if (key === owner.name) this.fail('super constructor is not an instance method');
+            const mods = method.findChild(K.MOD_LIST);
+            if (!mods || mods.children.some(mod => mod.text === 'private' || mod.text === 'static')
+                || !mods.children.some(mod => mod.text === 'public' || mod.text === 'protected'))
+                this.fail('super method visibility requires separate authority');
+            const parameters = method.findChild(K.PARAMETER_LIST).children;
+            let minimum = 0;
+            parameters.forEach(parameter => {
+                if (parameter.findChild(K.REST)) this.fail('super rest method signature');
+                const declaration = parameter.findChild(K.NAME_TYPE_INIT), type = declaration.findChild(K.TYPE);
+                if (!type || type.text !== 'Boolean') this.fail('super parameter coercion requires separately proved signature');
+                const init = declaration.findChild(K.INIT);
+                if (!init) minimum++;
+                else if (!/^\s*(true|false)\s*$/.test(this.sourceTexts.get(owner.qname).slice(init.start,init.end)))
+                    this.fail('super optional Boolean literal');
+            });
+            if (supplied < minimum || supplied > parameters.length)
+                this.fail('super call source arity differs from declared signature');
+            let capture = superMethodNames.get(key);
+            if (!capture) {
+                capture = unique('superMethod' + superMethods.length);
+                let prototype = baseName + '.prototype';
+                for (let index = 0; index < depth; index++) prototype = intrinsic + '.getPrototypeOf(' + prototype + ')';
+                superMethods.push('const ' + capture + ' = ' + intrinsic + '.getOwnPropertyDescriptor('
+                    + prototype + ', ' + JSON.stringify(key) + ')!.value;');
+                superMethodNames.set(key, capture);
+            }
+            const args = unique('superCallArguments');
+            return '((...' + args + ': any[]) => {'
+                + parameters.slice(0, supplied).map((_,index) => args + '[' + index + '] = !!' + args + '[' + index + '];').join('')
+                + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
+        };
         const text = (node: any): string => node.getText(file);
         const params = (member: any, signature: boolean): string => member.parameters.map((p: any) => {
             if (!signature) return text(p);
@@ -225,6 +277,17 @@ export class NativeCallableClasses {
                     this.fail('arguments.callee requires separate callable identity authority');
                 if (isSourceArguments(node) && !insideSuperArguments)
                     edits.push({start:node.getStart(file), end:node.end, value:sourceArguments});
+                if (node.kind === S.CallExpression && node.expression.kind === S.PropertyAccessExpression
+                    && node.expression.expression.kind === S.SuperKeyword) {
+                    if (constructor || nestedFunction || insideSuperArguments
+                        || member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword))
+                        this.fail('super direct method call requires an ordinary instance method body');
+                    if (node.arguments.some((argument: any) => argument.kind === S.SpreadElement))
+                        this.fail('spread super method arguments');
+                    edits.push({start:node.expression.getStart(file),end:node.expression.end,
+                        value:directSuper(node.expression.name.text,node.arguments.length)});
+                    node.arguments.forEach((argument: any) => walk(argument,false,nestedFunction)); return;
+                }
                 if (node.kind === S.SuperKeyword) this.fail('super property access requires separate receiver authority');
                 if (node.kind === S.ReturnStatement && constructor && !nestedFunction) {
                     if (node.expression) this.fail('constructor return value');
@@ -333,7 +396,7 @@ export class NativeCallableClasses {
             return value + ' = ' + (parameter.optional ? 'arguments.length <= ' + index + ' ? ' + defaultValue + ' : ' : '') + conversion + ';\n'
                 + 'if (arguments.length > ' + index + ') arguments[' + index + '] = ' + value + ';';
         }).join('\n');
-        const replacement = base + 'const ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
+        const replacement = base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
             + (ctor && ctor.parameters.length ? ', ' + params(ctor, true) : '') + ') {\n'
             + 'const ' + fresh + ' = ' + intrinsic + '.enter(this, ' + identity + ');\nlet ' + succeeded + ' = false;\ntry {\n'
             + arity + coercions

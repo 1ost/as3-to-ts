@@ -1,0 +1,40 @@
+[
+  {
+    "name": "Missing",
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original-arity\\Missing.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original-arity\\MissingOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original-arity",
+    "exitCode": 1,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original-arity\\MissingOracle.as(2): col: 82 Error: Incorrect number of arguments.  Expected 1.\n\nimport superprobe.Base;class Bad extends Base {public function run():void {super.selected();}}\n                                                                                 ^\n\n"
+  },
+  {
+    "name": "Extra",
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original-arity\\Extra.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original-arity\\ExtraOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original-arity",
+    "exitCode": 1,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original-arity\\ExtraOracle.as(2): col: 102 Error: Incorrect number of arguments.  Expected no more than 2.\n\nimport superprobe.Base;class Bad extends Base {public function run():void {super.selected(true,false,true);}}\n                                                                                                     ^\n\n"
+  }
+]

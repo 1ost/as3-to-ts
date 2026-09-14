@@ -16,6 +16,7 @@ function failure(id: number, name: string): Error {
 export const callableClassIntrinsics = Object.freeze({
     defineProperty: Object.defineProperty,
     getOwnPropertyDescriptor: Object.getOwnPropertyDescriptor,
+    getPrototypeOf: Object.getPrototypeOf,
     create: Object.create,
     assign: Object.assign,
     setPrototypeOf: Object.setPrototypeOf,

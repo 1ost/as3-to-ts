@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\SuperOracle.as",
+      "sha256": "7e36de98a95b1145271e1f97102f7182cbfb29893c1ffd7ffe9cf7f8f178cabc"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Base.as",
+      "sha256": "6b83618fd172ba427360fbe0360de73c0679c26bd066f1999a1ba581751e0056"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\DetachedLeaf.as",
+      "sha256": "726ad12d27da8bf429724cee4ef6ab1e705f33864478c53b50372dc82fd5a4a4"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Grandchild.as",
+      "sha256": "bf6bd6948b8a1d179866fb981715ea5f47355133c5a5aa8dac2dacdb74e0f6a5"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Journal.as",
+      "sha256": "efd3a988b1f7ca740fab275d615c0b7bbbcf592c1e2c4b1cc713eb84308cd113"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Leaf.as",
+      "sha256": "bc9584cbe487fd7cadc82794b377f717aa8a0b08555d959617cf4183726ca476"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Middle.as",
+      "sha256": "2e644c1b952723a269ea1079cf0d27703bed565d4498a75ea7b22fef08340cf8"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\capture.py",
+      "sha256": "f6fa5a98b7fd18e522be83ebf059992735174669666b6530d7b4943e1f9aa84a"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\oracle.swf",
+      "sha256": "459f2fec126f03191f94089da7c98c86aa2ba4e721597d2da5445e809b39b4bf"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\flash.json",
+      "sha256": "022a9a1d8ed56bd4c148bb2b82703f198d7ef9bb152107528e9e878ccf77a04f"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ]
+}

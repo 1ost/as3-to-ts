@@ -1,0 +1,122 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "sources/SuperOracle.as",
+      "sha256": "7e36de98a95b1145271e1f97102f7182cbfb29893c1ffd7ffe9cf7f8f178cabc",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\SuperOracle.as"
+    },
+    {
+      "path": "sources/superprobe/Base.as",
+      "sha256": "6b83618fd172ba427360fbe0360de73c0679c26bd066f1999a1ba581751e0056",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Base.as"
+    },
+    {
+      "path": "sources/superprobe/DetachedLeaf.as",
+      "sha256": "726ad12d27da8bf429724cee4ef6ab1e705f33864478c53b50372dc82fd5a4a4",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\DetachedLeaf.as"
+    },
+    {
+      "path": "sources/superprobe/Grandchild.as",
+      "sha256": "bf6bd6948b8a1d179866fb981715ea5f47355133c5a5aa8dac2dacdb74e0f6a5",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Grandchild.as"
+    },
+    {
+      "path": "sources/superprobe/Journal.as",
+      "sha256": "efd3a988b1f7ca740fab275d615c0b7bbbcf592c1e2c4b1cc713eb84308cd113",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Journal.as"
+    },
+    {
+      "path": "sources/superprobe/Leaf.as",
+      "sha256": "bc9584cbe487fd7cadc82794b377f717aa8a0b08555d959617cf4183726ca476",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Leaf.as"
+    },
+    {
+      "path": "sources/superprobe/Middle.as",
+      "sha256": "2e644c1b952723a269ea1079cf0d27703bed565d4498a75ea7b22fef08340cf8",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Middle.as"
+    },
+    {
+      "path": "capture.py",
+      "sha256": "f6fa5a98b7fd18e522be83ebf059992735174669666b6530d7b4943e1f9aa84a",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\capture.py"
+    },
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\capture.cjs"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "459f2fec126f03191f94089da7c98c86aa2ba4e721597d2da5445e809b39b4bf",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\oracle.swf"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "022a9a1d8ed56bd4c148bb2b82703f198d7ef9bb152107528e9e878ccf77a04f",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\flash.json"
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "0bf23e69a874da8b25fa13707c063bbdd9fa230e9b2f7aec2ad0b39f5f0fa4b2"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "8ec6d7d8eda5b22917068ae5829328adb8cbc4128db7499e1d3fc08dabb3dde4"
+    },
+    {
+      "path": "candidate-receipt.json",
+      "sha256": "408c29c30b781e63d464773f6cadae1746a8b2231728a41ab7a362c227bfdda0"
+    },
+    {
+      "path": "check-original-arity.py",
+      "sha256": "20348cb47a070981a7abef5cbff9a78818d09912d71e3736197c50372b4abb7a"
+    },
+    {
+      "path": "original-arity/commands.json",
+      "sha256": "c002aa7e3367aeb91c1160cc4541101b2c54ef1ba6a45eb4bf334776e276fe65"
+    },
+    {
+      "path": "original-arity/ExtraOracle.as",
+      "sha256": "9a3e3bb9e51d46a9d44dbf043af1d0ec1e1b58f0699a976e646633d1aa4463f2"
+    },
+    {
+      "path": "original-arity/MissingOracle.as",
+      "sha256": "918c30c794c076cfd0aec585006bc1f32e2da67a9b897a391f8c8de254b94400"
+    }
+  ],
+  "externalTools": [
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ],
+  "originalRows": 25,
+  "directRows": 23,
+  "held": [
+    {
+      "index": 23,
+      "id": "detached-stable-receiver-bound",
+      "expected": "detached:true:middle-zero",
+      "reason": "Detached super method reads are not admitted."
+    },
+    {
+      "index": 24,
+      "id": "detached-closure-extra-argument",
+      "expected": "detached-arity:1063",
+      "reason": "Detached super closure invocation is not admitted."
+    }
+  ]
+}

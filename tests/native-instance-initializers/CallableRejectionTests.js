@@ -10,7 +10,6 @@ for(const body of [
     'public function C(){super();return 1;}',
     'public function C(value:String){super();}',
     'public function C(...rest){super();}',
-    'public function C(){super();} public function f():*{return super.f();}',
     'public function C(){super();} public static function f():*{return C.call({});}',
     'public function C(){super();} public static function f():*{return C.apply({},[]);}',
     'public function C(){super();} public static function f():*{return (C).call({});}',

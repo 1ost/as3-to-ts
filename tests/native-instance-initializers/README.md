@@ -68,7 +68,7 @@ Current executable results:
   Both captures match both downstream targets. Intrinsics live outside authored
   scopes, and generated constructor identities use fresh outer bindings.
 - Strict TypeScript 2.5.2 checks cover class values, instances and inheritance.
-  Thirty negative cases reject missing common binding configuration, mixed chains, source-map mismatches, grouped
+  The remaining negative cases reject missing common binding configuration, mixed chains, source-map mismatches, grouped
   direct call/apply, prototype manipulation, unsupported parameter types, rest,
   constructor value returns, non-straight-line/repeated super, colliding slots and unproved
   synthesized derived constructors.
@@ -96,7 +96,7 @@ unmodified current engine declarations. Legacy TypeScript2.5 strict tests here
 use an explicitly adapted declaration syntax view; they are not current-engine
 production type-check evidence.
 
-Interface construction identity, super member calls/accessors, instance const
+Interface construction identity, unsupported super forms/accessors, instance const
 descriptors, full static/reflection metadata, arbitrary Class aliases and native
 Laya/provider bases remain unadmitted by these tests.
 
@@ -258,3 +258,17 @@ If this evidence is integrated, Git must preserve raw bytes with
 scripts listed in receipt.files: capture.py, CompareCurrentEmission.js,
 NativeLanguageConstraintTests.js and RetainEvidence.py. No Git attributes,
 commits or dependency pins were changed by this workpack.
+
+## Direct source super calls
+
+Direct `super.method(...)` now resolves the lexical source-base declaration and
+calls its unbound native function with the current receiver. The verified form
+covers ordinary instance methods targeting public/protected methods with zero or
+Boolean parameters and literal Boolean defaults. Argument expressions evaluate
+before coercion, and omitted argument counts are preserved. This includes the
+maintained TweenLite call to TweenCore.setEnabled.
+
+See `../native-super-methods` for original observations and current-engine type
+checks. Detached, computed, grouped, namespaced and accessor super forms, other
+parameter types, and native provider bases remain unimplemented. The source Class
+identity and dynamic-operation requirements above are unchanged.

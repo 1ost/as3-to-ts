@@ -1,0 +1,78 @@
+{
+  "schema": 1,
+  "engine": "d3db69240e22575d48828ae95b1243bc6e593ed1",
+  "implementationFiles": [
+    "src/emit/native-callable-classes.ts",
+    "utils/callableClass.ts",
+    "tests/native-instance-initializers/CallableRejectionTests.js"
+  ],
+  "checks": {
+    "originalFlashRows": 25,
+    "supportedDirectRows": 23,
+    "detachedRowsHeld": 2,
+    "nativeTargets": [
+      "ES5",
+      "ES2015"
+    ],
+    "browserRows": 23,
+    "strictTypeScript": "2.5.2",
+    "strictNullChecks": false,
+    "newRejections": 11,
+    "existingRejections": 29,
+    "originalCompilerArityRejections": 2,
+    "constructorRegressionRowsPerTarget": 49,
+    "argumentRegressionRowsPerTarget": 31,
+    "publicationAndInitializationRowsPerTarget": 26,
+    "hygieneRowsPerTarget": 11,
+    "replayRowsPerTarget": 20
+  },
+  "files": [
+    {
+      "path": "candidate/src/emit/native-callable-classes.ts",
+      "sha256": "a0e8026b3094f1ea626f5e2f10967cdfff47a6fc9b0646dd9755a7bc87acfd64",
+      "baselineSha256": "5c8344eb762eb0b6ba2462c46cdc06e79e2714a1f82bc28144f820fa1d0e9eda"
+    },
+    {
+      "path": "candidate/utils/callableClass.ts",
+      "sha256": "56c0d24d4de67795ca3842c59e6fe461aa6cdaf13d8d5c2aa79da90051b98aa3",
+      "baselineSha256": "84a11a568abb19f84328e5824dce8a2c26c5d5cf77a83ea4c8c5feee115ccfef"
+    },
+    {
+      "path": "candidate/tests/native-instance-initializers/CallableRejectionTests.js",
+      "sha256": "06980d9ba82ab5fdb5a2aa4ce766611c3e8ae35d0f755fde2cde7815572ceba0",
+      "baselineSha256": "5d9d8dbf2a13e087a75ae8697331a9cf703ff41d19f78cfd883c1e9bf7db0990"
+    },
+    {
+      "path": "direct-super.patch",
+      "sha256": "96fef745042d2f9ba72539d7b66ccdcec626ece740d891b97d32b446e955c24d"
+    },
+    {
+      "path": "flash-expanded\\provenance.json",
+      "sha256": "0bf23e69a874da8b25fa13707c063bbdd9fa230e9b2f7aec2ad0b39f5f0fa4b2"
+    },
+    {
+      "path": "flash-expanded\\oracle.swf",
+      "sha256": "459f2fec126f03191f94089da7c98c86aa2ba4e721597d2da5445e809b39b4bf"
+    },
+    {
+      "path": "flash-expanded\\flash.json",
+      "sha256": "022a9a1d8ed56bd4c148bb2b82703f198d7ef9bb152107528e9e878ccf77a04f"
+    },
+    {
+      "path": "original-arity\\commands.json",
+      "sha256": "c002aa7e3367aeb91c1160cc4541101b2c54ef1ba6a45eb4bf334776e276fe65"
+    },
+    {
+      "path": "native\\comparison.json",
+      "sha256": "0d4f55dd8ca1e6ca5a1cbfb194818f277b6e5bc2da79b7edc73db001da50510e"
+    },
+    {
+      "path": "native\\checks.json",
+      "sha256": "4b5cd98287867546d4490100ea18bd172f300b2afbaee67fd5ab621c45349e69"
+    },
+    {
+      "path": "browser\\report.json",
+      "sha256": "4c0ba23252206c7db9d9cc9232921b6b3f709bdd07bd1fa9bce3b1593edcb9f7"
+    }
+  ]
+}
