@@ -15,7 +15,16 @@ def canonical(value):
     return (json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode()
 
 
+def inspect_native_describe_type_inputs(air_sdk):
+    swc = Path(air_sdk).resolve() / "frameworks/libs/air/airglobal.swc"
+    if swc.is_symlink() or not swc.is_file():
+        raise ValueError("describeType proof requires an ordinary SDK SWC")
+    helper = Path(__file__).resolve()
+    return {str(swc): sha(swc), str(helper): sha(helper)}
+
+
 def produce_native_describe_type_profile(*, profile_root, air_sdk, sdk_declaration, sdk_signatures):
+    inspected = inspect_native_describe_type_inputs(air_sdk)
     root = Path(profile_root).resolve()
     swc = Path(air_sdk).resolve() / "frameworks/libs/air/airglobal.swc"
     declaration, signatures = Path(sdk_declaration), Path(sdk_signatures)
@@ -41,9 +50,9 @@ def produce_native_describe_type_profile(*, profile_root, air_sdk, sdk_declarati
              "signaturesPath": copied_signatures.relative_to(root).as_posix(), "signaturesSha256": sha(copied_signatures)}
     proof_file = root / "native-describe-type-proof.json"
     proof_file.write_bytes(canonical(proof))
-    if before != {str(path): sha(path) for path in (swc, declaration, signatures)}:
+    if before != {str(path): sha(path) for path in (swc, declaration, signatures)} or inspected != inspect_native_describe_type_inputs(air_sdk):
         raise ValueError("describeType evidence changed during generation")
     return {"file": {"path": proof_file.relative_to(root).as_posix(), "sha256": sha(proof_file)},
             "manifestPins": {"nativeSdkSha256": SDK_SHA, "nativeSignaturesSha256": sha(signatures),
                              "nativeDescribeTypeDeclarationSha256": SOURCE_SHA},
-            "generatorInputs": {**before, str(Path(__file__).resolve()): sha(Path(__file__).resolve())}}
+            "generatorInputs": inspected}

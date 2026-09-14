@@ -83,7 +83,7 @@ test('native describeType producer and verifier bind actual SDK *, shared provid
     targetCapabilityId: 'api.flash.utils', targets: rows.map(({module, export: name, signature, sha256}) =>
       ({module, export: name, signature, sha256})), targetSources};
   const provider = providers.loadReflectionProviderTarget(canonical(providerProof) + '\n', targetPath, targetJson);
-  const script = `import importlib.util,json,sys\nfrom pathlib import Path\ns=importlib.util.spec_from_file_location('producer',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nr=m.produce_native_describe_type_profile(profile_root=Path(sys.argv[2]),air_sdk=Path(sys.argv[3]),sdk_declaration=Path(sys.argv[4]),sdk_signatures=Path(sys.argv[5]));print(json.dumps(r))`;
+  const script = `import importlib.util,json,sys\nfrom pathlib import Path\ns=importlib.util.spec_from_file_location('producer',sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nbefore=list(Path(sys.argv[2]).iterdir());inputs=m.inspect_native_describe_type_inputs(Path(sys.argv[3]));assert list(Path(sys.argv[2]).iterdir())==before\nr=m.produce_native_describe_type_profile(profile_root=Path(sys.argv[2]),air_sdk=Path(sys.argv[3]),sdk_declaration=Path(sys.argv[4]),sdk_signatures=Path(sys.argv[5]));assert r["generatorInputs"]==inputs;print(json.dumps(r))`;
   function produce(out, source = declaration, input = signatures) {
     fs.mkdirSync(out);
     return cp.spawnSync(process.env.PYTHON || 'python3', ['-B', '-c', script,
