@@ -3512,6 +3512,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return {...identity(node),kind:"reflection",operation:"staticRead",arguments:[target,key],resultType:semanticType(node,"*","unknown")};
         }
         const ownerType = assignmentType(target, context, node.children[0]!);
+        const instanceQName=localQNameForType(ownerType,context);
+        const instanceBinding=target.kind === "this" || target.kind === "identifier" && ["local","parameter"].includes(target.bindingKind);
+        const instanceType=instanceQName && context.resolveCurrentLocal
+            ? contextLocalType(context,context.resolveCurrentLocal().entry.module,instanceQName) : undefined;
+        const instanceDeclaration=instanceQName && context.resolveCurrentLocal
+            ? contextLocalMember(context,context.resolveCurrentLocal().entry.module,instanceQName) : undefined;
+        const typedInstance=context.sourceMemberAuthority !== null && instanceBinding && !isArrayType(ownerType,context)
+            && instanceType?.typeKind === "class" && instanceDeclaration?.status === "complete" && instanceDeclaration.declaration !== null;
+        if (typedInstance) {
+            const index=parseExpression(node.children[1]!,context,true);
+            if (assignmentType(index,context,node.children[1]!).sourceName !== "String")
+                fail("HARDENED_LOCAL_INSTANCE_KEY","typed local instance indexing requires an evidenced String key",node.children[1]!);
+            return {...identity(node),kind:"index",accessKind:"object",target,targetNullable:ownerType.nullable,
+                index,callerQName:context.classQualifiedName,resultType:semanticType(node,"*","unknown")};
+        }
         if (dynamicObjectType(ownerType,context)) {
             const index = parseExpression(node.children[1]!,context,true);
             assertObjectKey(assignmentType(index,context,node.children[1]!),node.children[1]!);

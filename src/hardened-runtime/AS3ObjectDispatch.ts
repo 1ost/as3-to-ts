@@ -4,7 +4,7 @@ import { AS3ArgumentError, AS3RangeError } from "./AS3Error";
 import { as3StringSplit } from "./AS3Coerce";
 import { as3ArrayCall, as3ArrayDelete, as3ArrayRead, as3ArrayWrite, as3ArrayLengthWrite } from "./AS3Array";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
-import { lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
+import { lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, lookupNamedReferenceType, castReference, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod, isAS3MethodClosure } from "./AS3MethodClosure";
 
 type Member = AS3ObjectTraits["members"][number];
@@ -75,9 +75,8 @@ function findTrait(info:ClassInfo, key:string, caller:string | null, publicOnly:
             storage.add(namespace);
             const visible = member.visibility === "public" || !publicOnly && caller !== null && (
                 member.visibility === "private" && caller === owner.qname
-                || member.visibility === "internal" && lookupObjectCallerPackage(caller) === owner.packageName);
-            if (!publicOnly && member.visibility === "protected" && context.includes(owner.qname))
-                return unavailable("Protected dynamic lookup requires retained inheritance evidence");
+                || member.visibility === "internal" && lookupObjectCallerPackage(caller) === owner.packageName
+                || member.visibility === "protected" && context.includes(owner.qname));
             if (visible) matches.push(member);
         }
     }
@@ -167,6 +166,14 @@ function slotValue(type:string,value:unknown):unknown {
         case "Boolean": return Boolean(value);
         case "String": if (value !== null && typeof value === "object" || typeof value === "function") break;
             return value === null || value === undefined ? null : String(value);
+        default: {
+            // Only the sealed class/interface authority can admit reference slots.
+            // Primitive conversion holds above must not enter this branch.
+            let token: ReturnType<typeof lookupNamedReferenceType>;
+            try { token = lookupNamedReferenceType(type); }
+            catch { return unavailable(`Native slot reference type ${type} is not registered`); }
+            return castReference(value, token);
+        }
     }
     return unavailable(`Native slot coercion for ${type} requires further support`);
 }
