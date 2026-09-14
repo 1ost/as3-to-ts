@@ -3090,12 +3090,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_UNARY_BITWISE", "bitwise complement requires a proven numeric input", node);
         }
         if (operator !== "!" && operator !== "~" && operandType.sourceName !== "Number") {
-            fail("HARDENED_UNARY_NUMBER", "numeric unary operators require exact Number input", node);
+            if (context.sourceMemberAuthority === null
+                || !["*", "Object", "int", "uint", "String", "Boolean"].includes(operandType.sourceName))
+                fail("HARDENED_UNARY_NUMBER", "numeric unary operators require Number or an authenticated native numeric conversion", node);
+            // Preserve the source operand and its effects exactly once. Conversion
+            // precedes negation, including int-min promotion and signed zero.
+            operand=Object.assign(identity(node.children[0]!), {kind:"coercion" as const,
+                targetType:semanticType(node,"Number","number"),argument:operand});
         }
         return Object.assign(identity(node), {
             kind: "unary" as "unary", operator: operator as "+" | "-" | "!" | "~", operand,
             resultType: operator === "!" ? semanticType(node, "Boolean", "boolean", [], false)
-                : operator === "~" ? semanticType(node, "int", "number") : operandType,
+                : operator === "~" ? semanticType(node, "int", "number") : semanticType(node,"Number","number"),
         });
     }
     if (node.kind === "ENCAPSULATED") {
