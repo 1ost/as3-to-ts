@@ -1948,6 +1948,18 @@ function implicitThisMember(node: TreeNode, name: string, capabilitySource: stri
     });
 }
 
+/** Implicit inherited reads retain the instance captured at lambda creation. */
+function inheritedLexicalMember(node:TreeNode,context:AdapterContext,name:string,capabilitySource:string):SemanticExpression {
+    if(context.lambdaDepth===0) return implicitThisMember(node,name,capabilitySource);
+    if(context.sourceMemberAuthority===null || !context.currentCallable
+        || context.currentCallable.modifiers.includes("static"))
+        fail("HARDENED_LAMBDA_THIS","implicit inherited capture requires an authenticated instance scope",node);
+    context.lexicalThisUses++;
+    return Object.assign(identity(node),{kind:"member" as const,
+        target:Object.assign(identity(node),{kind:"this" as const,lexicalName:"__as3LexicalReceiver"+context.lambdaDepth}),
+        targetNullable:false,name,capabilitySource});
+}
+
 function currentClassIdentifier(node: TreeNode, context: AdapterContext): SemanticExpression {
     return Object.assign(identity(node), {
         kind: "identifier" as "identifier", name: context.className,
@@ -3375,9 +3387,6 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return implicitThisMember(node, name);
         }
         if (context.baseLocalQName !== null) {
-            if (context.lambdaDepth > 0) {
-                fail("HARDENED_LAMBDA_THIS", "implicit inherited this in anonymous functions remains held", node);
-            }
             const inherited = localInheritedNamedMembers(context, name, node);
             if (inherited.members.length > 0 && inherited.ownerQName !== null) {
                 inherited.members.forEach(member => assertInheritedVisibility(member, inherited.ownerQName!, context, node));
@@ -3389,13 +3398,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     fail("HARDENED_LOCAL_MEMBER_AMBIGUOUS", "inherited local member kind is ambiguous", node);
                 }
                 if (methods.length === 1) {
+                    if(context.lambdaDepth>0) fail("HARDENED_LAMBDA_THIS","inherited method capture requires separate native closure evidence",node);
                     if (valuePosition) return inheritedMethodValue(node,context,name,allowMethodClosure);
                     return implicitThisMember(node, name, inherited.ownerQName);
                 }
                 if ((valuePosition && !readable) || (!valuePosition && !readable && !writable)) {
                     fail("HARDENED_ACCESSOR_WRITE_ONLY", "inherited accessor cannot be used in this value position", node);
                 }
-                return implicitThisMember(node, name, inherited.ownerQName);
+                if(context.lambdaDepth>0 && !valuePosition)
+                    fail("HARDENED_LAMBDA_THIS","inherited lexical writes require separate native evidence",node);
+                return inheritedLexicalMember(node, context, name, inherited.ownerQName);
             }
         }
         if (context.baseSourceQName !== null || context.baseLocalQName !== null) {
@@ -3403,9 +3415,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 || (!valuePosition ? flashBaseMemberMapping(context, "write", name, node)
                     || flashBaseMemberMapping(context, "call", name, node) : null);
             if (mapping !== null) {
-                if (context.lambdaDepth > 0 || context.currentCallable?.modifiers.includes("static"))
-                    fail("HARDENED_LAMBDA_THIS", "implicit inherited member requires an instance scope", node);
-                return implicitThisMember(node, name, mapping.sourceQName);
+                if (context.currentCallable?.modifiers.includes("static") || context.lambdaDepth>0 && !valuePosition)
+                    fail("HARDENED_LAMBDA_THIS", "implicit inherited member requires a readable instance scope", node);
+                return inheritedLexicalMember(node, context, name, mapping.sourceQName);
             }
         }
         const implicit = context.resolveImportedType(name,null,node);
