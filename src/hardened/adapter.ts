@@ -3938,7 +3938,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
                     fail("HARDENED_ARRAY_ARGUMENT","Array constructor arguments must produce values",node);
             } else if (context.sourceMemberAuthority !== null && context.baseSourceQName !== null
-                && ["flash.display.Bitmap","flash.events.Event","flash.events.ErrorEvent"].includes(context.baseSourceQName)) {
+                && ["flash.display.Bitmap","flash.events.Event","flash.events.ErrorEvent","flash.events.EventDispatcher"].includes(context.baseSourceQName)) {
+                if (context.baseSourceQName === "flash.events.EventDispatcher" && args.some(usesConstructionReceiver))
+                    fail("HARDENED_SUPER_CONSTRUCTION_RECEIVER", "EventDispatcher super arguments cannot expose the receiver before construction", node);
                 const constructorName=context.baseSourceQName.slice(context.baseSourceQName.lastIndexOf(".")+1);
                 const mapping=memberMapping(context,context.baseSourceQName,"call",constructorName,node);
                 if (!mapping || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "constructor"
