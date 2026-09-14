@@ -1,0 +1,1 @@
+package reads{public class NewTarget{Journal.rows.push("new-init");public function NewTarget(value:*){Journal.rows.push("constructor");}}}

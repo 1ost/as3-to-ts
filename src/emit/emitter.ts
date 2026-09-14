@@ -8,6 +8,7 @@ import ClassList, {ClassKind, ClassMember, ClassMemberKind, ClassRecord, Modifie
 import {ReportFlags} from '../reports/report-flags';
 import {NativeNamespaces} from './native-namespaces';
 import {logicalAssignmentType} from './logical-assignment';
+import {NativeClassInitializers, NativeClassInitializationOptions} from './native-class-initializers';
 
 const util = require('util');
 
@@ -95,6 +96,7 @@ export interface EmitterOptions {
 	definitionsByNamespace?:{[ns:string]:string[]};
 	/** Exact imported AS3 namespace QName -> URI identities, supplied by source discovery. */
 	namespaceUris?:{[qname:string]:string};
+	nativeClassInitialization?: NativeClassInitializationOptions;
 }
 
 
@@ -118,6 +120,7 @@ const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.FORIN]: emitForIn,
 	[NodeKind.INTERFACE]: emitInterface,
 	[NodeKind.CLASS]: emitClass,
+	[NodeKind.CLASS_INITIALIZER]: emitClassInitializer,
 	[NodeKind.VECTOR]: emitVector,
 	[NodeKind.SHORT_VECTOR]: emitShortVector,
 	[NodeKind.TYPE]: emitType,
@@ -220,6 +223,8 @@ export default class Emitter {
 
 	public output:string = '';
 	public logicalAssignmentTemps = new Map<Node, string[]>();
+	public classInitializers: NativeClassInitializers;
+	public classFactory: {node: Node; value: string; fields: string[]; statements: string[]} = null;
 	public index:number = 0;
 
 /*	public rootScope:Scope = null;
@@ -264,6 +269,7 @@ export default class Emitter {
 
 		const filtered = filterAST(ast);
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris);
+		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization);
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;
 			visitNode(this, filtered);
@@ -1268,6 +1274,18 @@ function getClassDeclarations(emitter:Emitter, className:string, contentsNode:No
 
 function emitClass(emitter:Emitter, node:Node):void {
 	emitter.catchup(node.start);
+	const previousFactory = emitter.classFactory;
+	const lazy = emitter.classInitializers.enabled;
+	const sourceName = node.findChild(NodeKind.NAME).text;
+	if (lazy) {
+		const value = emitter.classInitializers.ownNames.get(node);
+		emitter.classFactory = {node, value, fields: [], statements: []};
+		const helperPath = (ClassList.getLastPathToRoot() || './') + 'nativeClass';
+		emitter.ensureImportIdentifier('declareNativeClass as ' + emitter.classInitializers.declareName, helperPath, false);
+		emitter.ensureImportIdentifier('readNativeClass as ' + emitter.classInitializers.readName, helperPath, false);
+		emitter.insert('export const ' + sourceName + ' = ' + emitter.classInitializers.declareName
+			+ '((' + value + '_finalize) => {\nlet ' + value + ': any;\n');
+	}
 	visitNode(emitter, node.findChild(NodeKind.META_LIST));
 	let mods = node.findChild(NodeKind.MOD_LIST);
 	if (mods && mods.children.length) {
@@ -1280,7 +1298,7 @@ function emitClass(emitter:Emitter, node:Node):void {
 			}
 			emitter.skipTo(node.end);
 		});
-		if (insertExport) {
+		if (insertExport && !lazy) {
 			emitter.insert('export');
 		}
 	}
@@ -1359,11 +1377,28 @@ function emitClass(emitter:Emitter, node:Node):void {
 		});
 
 		let pathToRoot = ClassList.getLastPathToRoot();
-		emitter.ensureImportIdentifier("classBound", `${pathToRoot}classBound`);
+		emitter.ensureImportIdentifier("classBound", `${lazy ? pathToRoot || './' : pathToRoot}classBound`);
 	});
 
 	emitter.catchup(node.end);
+	if (lazy) {
+		const factory = emitter.classFactory;
+		emitter.insert('\n' + factory.value + ' = ' + factory.value + '_finalize(' + sourceName + ');\n'
+			+ factory.fields.join('\n') + '\n' + factory.statements.join('\n')
+			+ '\nreturn ' + sourceName + ';\n});\nexport type ' + sourceName + ' = typeof ' + sourceName + '.prototype;\n');
+		emitter.classFactory = previousFactory;
+	}
 
+}
+
+function emitClassInitializer(emitter: Emitter, node: Node): void {
+	if (!emitter.classFactory) throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: no native class factory');
+	emitter.catchup(node.start);
+	const start = emitter.output.length;
+	emitter.withScope([], () => visitNodes(emitter, node.children));
+	emitter.catchup(node.end);
+	emitter.classFactory.statements.push(emitter.output.slice(start));
+	emitter.output = emitter.output.slice(0, start);
 }
 
 function storeClassMember(node:Node):void
@@ -1515,6 +1550,29 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 		as3Type: getAS3DeclarationType(node)
 	});
 	emitter.catchup(node.start);
+	const declaration = node.parent;
+	const mods = declaration && declaration.findChild(NodeKind.MOD_LIST);
+	if (emitter.classFactory && declaration && declaration.parent === emitter.classFactory.node.findChild(NodeKind.CONTENT)
+		&& mods && mods.children.some(mod => mod.text === 'static')) {
+		const init = node.findChild(NodeKind.INIT);
+		visitNodes(emitter, node.children.filter(child => child && child !== init));
+		const type = getAS3DeclarationType(node);
+		const last = node.findChild(NodeKind.TYPE) || node.findChild(NodeKind.NAME);
+		emitter.catchup(last.end);
+		if (init) {
+			emitter.skipTo(init.start);
+			const start = emitter.output.length;
+			visitNode(emitter, init);
+			emitter.catchup(getEffectiveNodeEnd(init));
+			emitter.classFactory.fields.push(emitter.classFactory.value + '[' + JSON.stringify(node.findChild(NodeKind.NAME).text)
+				+ '] = ' + emitter.output.slice(start) + ';');
+			emitter.output = emitter.output.slice(0, start);
+		}
+		const initial = type === 'int' || type === 'uint' ? '0' : type === 'Number' ? '(0 / 0)'
+			: type === 'Boolean' ? 'false' : !type || type === '*' ? 'void 0' : 'null';
+		emitter.insert(' = ' + initial);
+		return;
+	}
 	visitNodes(emitter, node.children);
 	if (namespaceMember && !node.findChild(NodeKind.INIT)) {
 		// AS3 slot defaults use source types before Number/int/uint are mapped to TS.
@@ -1534,7 +1592,7 @@ function emitMethod(emitter:Emitter, node:Node):void {
 	let name = node.findChild(NodeKind.NAME);
 	if (node.kind !== NodeKind.FUNCTION || name.text !== emitter.currentClassName) {
 		let pathToRoot = ClassList.getLastPathToRoot();
-		emitter.ensureImportIdentifier("bound", `${pathToRoot}bound`);
+		emitter.ensureImportIdentifier("bound", `${emitter.classInitializers.enabled ? pathToRoot || './' : pathToRoot}bound`);
 		let mods = node.findChild(NodeKind.MOD_LIST);
 		if (mods)
 			emitter.catchup(mods.start);
@@ -2021,6 +2079,9 @@ function emitCall(emitter:Emitter, node:Node):void {
 				emitter.catchup(node.start);
 			}
 			else {
+				const lazyCast = emitter.classInitializers.resolve(type, type.text) === 'lazy'
+					&& (!emitter.classFactory || type.text !== emitter.classFactory.node.findChild(NodeKind.NAME).text);
+				if (lazyCast) emitter.insert('(' + emitter.classInitializers.readName + '(' + type.text + ', "unsupported"), ');
 				emitter.insert('(<');
 				emitter.insert(rtype);
 				emitter.insert('>');
@@ -2028,6 +2089,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 				visitNodes(emitter, [args]);
 				emitter.catchup(args.end);
 				emitter.insert(')');
+				if (lazyCast) emitter.insert(')');
 				return;
 			}
 		}
@@ -2056,10 +2118,18 @@ function isCast(emitter:Emitter, node:Node):boolean {
 	}
 
 	const declaration = emitter.findDefInScope(type.text);
+	if (emitter.classInitializers.enabled && emitter.classInitializers.resolve(type, type.text)
+		&& (!declaration || !declaration.bound && !Object.prototype.hasOwnProperty.call(declaration, 'as3Type'))) {
+		emitter.ensureImportIdentifier(type.text);
+		return true;
+	}
 
 	if (declaration) {
 		return false;
 	}
+	if (emitter.classInitializers.enabled && GLOBAL_NAMES.indexOf(type.text) < 0
+		&& !emitter.classInitializers.resolve(type, type.text) && /^[A-Z]/.test(type.text))
+		throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unresolved cast class identity: ' + type.text);
 
 	// If the declaration is not found in scope, AND
 	// starts with an uppercase, consider it a cast.
@@ -2075,7 +2145,7 @@ function isCast(emitter:Emitter, node:Node):boolean {
 
 
 function emitCatch(emitter:Emitter, node:Node):void {
-	emitter.declareInScope({name: node.children[0].text})
+	emitter.declareInScope({name: node.children[0].text, as3Type: '*'})
 	emitter.catchup(node.start);
 	visitNodes(emitter, node.children);
 }
@@ -2088,6 +2158,8 @@ function emitRelation(emitter:Emitter, node:Node):void {
 	// Check for 'as' in relation.
 	let as = node.findChild(NodeKind.AS);
 	if (as) {
+		if (emitter.classInitializers.resolve(node, node.lastChild.text) === 'lazy')
+			throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: lazy-class as coercion requires separate type authority');
 		// TODO: implement relation with type cast to vectors
 		//       e.g. (myVector as Vector.<Boolean>)
 		if (node.lastChild.kind === NodeKind.IDENTIFIER) {
@@ -2213,7 +2285,11 @@ function emitRelation(emitter:Emitter, node:Node):void {
 				}
 				visitNode(emitter, leftIdent);
 				emitter.catchup(leftIdent.end);
-				emitter.insert(` instanceof ${rightIdent.text}`);
+				emitter.insert(' instanceof ');
+				if (emitter.classInitializers.enabled) {
+					emitter.skipTo(rightIdent.start);
+					visitNode(emitter, rightIdent);
+				} else emitter.insert(rightIdent.text);
 			}
 
 			emitter.skipTo(node.end);
@@ -2562,12 +2638,54 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	}
 
 	let def = emitter.findDefInScope(node.text);
+	if (emitter.classInitializers.enabled && def && (def.bound || Object.prototype.hasOwnProperty.call(def, 'as3Type')))
+		staticRef = null; // An own source binding shadows an inherited static name.
+	if (emitter.classInitializers.enabled && !staticRef && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def, 'as3Type'))) {
+		if (node.text.indexOf('.') >= 0) throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: qualified class-value syntax requires separate lowering');
+		const own = emitter.classFactory && emitter.classFactory.node.findChild(NodeKind.NAME).text;
+		const identity = emitter.classInitializers.resolve(node, node.text);
+		const receiver = outerEncapsulatedExpression(node);
+		if ((identity === 'lazy' || node.text === own) && receiver.parent
+			&& receiver.parent.kind === NodeKind.ARRAY_ACCESSOR && receiver.parent.children[0] === receiver)
+			throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: indexed lazy-class receivers require key-order and publication authority');
+		if (node.text === own && node.kind !== NodeKind.EXTENDS) {
+			emitter.insert(emitter.classFactory.value);
+			emitter.skipTo(node.end);
+			return;
+		}
+		if (identity === 'lazy') {
+			emitter.ensureImportIdentifier(node.text);
+			emitter.ensureImportIdentifier('readNativeClass as ' + emitter.classInitializers.readName,
+				(ClassList.getLastPathToRoot() || './') + 'nativeClass', false);
+			let context = 'value';
+			let expression = outerEncapsulatedExpression(node);
+			if (expression.parent && expression.parent.kind === NodeKind.DOT && expression.parent.children[0] === expression) {
+				context = 'read';
+				const member = outerEncapsulatedExpression(expression.parent), operation = member.parent;
+				if (operation && (operation.kind === NodeKind.ASSIGN && operation.children[0] === member
+					|| [NodeKind.PRE_INC, NodeKind.PRE_DEC, NodeKind.POST_INC, NodeKind.POST_DEC, NodeKind.DELETE].indexOf(operation.kind) >= 0))
+					context = 'unsupported';
+			} else if (node.kind === NodeKind.EXTENDS || expression.parent
+				&& [NodeKind.CALL, NodeKind.NEW, NodeKind.RELATION].indexOf(expression.parent.kind) >= 0) context = 'unsupported';
+			emitter.insert('(' + emitter.classInitializers.readName + '(' + node.text + ', ' + JSON.stringify(context) + '))');
+			emitter.skipTo(node.end);
+			return;
+		}
+		if (!identity && /^[A-Z]/.test(node.text) && GLOBAL_NAMES.indexOf(node.text) < 0)
+			throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unresolved class-value identity: ' + node.text);
+	}
 	if (def && def.bound) {
-		emitter.insert(def.bound + '.');
+		const factory = emitter.classFactory;
+		emitter.insert((factory && def.bound === factory.node.findChild(NodeKind.NAME).text ? factory.value : def.bound) + '.');
 	}
 	if (staticRef){
 		emitter.ensureImportIdentifier(staticRef.className);
-		emitter.insert(staticRef.className + ".");
+		if (emitter.classInitializers.enabled) {
+			const identity = emitter.classInitializers.resolveQualified(staticRef.getFullPath());
+			if (!identity) throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unresolved inherited static class: ' + staticRef.getFullPath());
+			emitter.insert(identity === 'lazy' ? '(' + emitter.classInitializers.readName + '(' + staticRef.className + ', "unsupported")).'
+				: staticRef.className + '.');
+		} else emitter.insert(staticRef.className + ".");
 	} else {
 		let isClassMember = ClassList.checkIsClassMember(node.text);
 		let IsSuperClassName = ClassList.checkIdentIsSuperClassName(node.text);

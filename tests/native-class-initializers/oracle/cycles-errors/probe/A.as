@@ -1,0 +1,1 @@
+package probe{public class A{public static var x:int=Log.mark("A-field")+B.y;public static var self:Class=A;Log.mark("A-body");}}

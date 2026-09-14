@@ -1,0 +1,56 @@
+{
+  "scope": "Read-only parser diagnosis and actual Flash class initialization ordering; no compiler/source edits",
+  "source": "game-client-flash/src/com/greensock/TweenMax.as",
+  "runtime": "Flash26 via isolated Electron PPAPI",
+  "inputs": [
+    {
+      "file": "InitOracle.as",
+      "sha256": "f1a9a9007b3cfc6231d76904c52cea9c77e060f1dc6800cf1546832ded58c3c0"
+    },
+    {
+      "file": "init/Log.as",
+      "sha256": "c977b6a8542434c279a3819d0426e8673c1908116fb817fff2ec8420ffc4ba98"
+    },
+    {
+      "file": "init/Base.as",
+      "sha256": "95777fba538ac1cdb08625da539de0a6c3097ee5ea605ad33179f578038f958c"
+    },
+    {
+      "file": "init/Subject.as",
+      "sha256": "af5790098a6bb4539106674531c8e6bd7dd083e36112693778e2dfebdd818fcb"
+    },
+    {
+      "file": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "file": "oracle.swf",
+      "sha256": "bbf72c959f9843d9e954d4459669ed8c763155faccd264be57df8533d5854c1a"
+    },
+    {
+      "file": "flash.json",
+      "sha256": "42401d088b2cddfa7b90b4cda387941a1b8aa2a8e3ea43b12e5a207a5529d715"
+    },
+    {
+      "file": "ast.json",
+      "sha256": "21f25e33f260b7beaed360eafcdda7e1e7db6ce19e29cc8ef42d49d7a9f8b288"
+    }
+  ],
+  "trace": [
+    "before-use",
+    "base-field",
+    "base-body",
+    "first-field",
+    "later-field",
+    "body:later=5,method=available",
+    "block",
+    "after-class-value",
+    "instance-field",
+    "base-constructor",
+    "subject-constructor",
+    "instance-field",
+    "base-constructor",
+    "subject-constructor",
+    "after-two-instances"
+  ]
+}

@@ -1,0 +1,1 @@
+package probe{public class Log{public static var rows:Array=[];public static var failure:Object={};public static function mark(s:String):int{rows.push(s);return rows.length;}public static function fail():int{rows.push("throw");throw failure;}}}

@@ -1,0 +1,1 @@
+package reads{public class CastTarget{Journal.rows.push("cast-init");}}

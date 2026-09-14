@@ -1,2 +1,4 @@
 tests/native-assignments/oracle/* -text
 tests/native-assignments/RetainFlashAssignments.js text eol=lf
+tests/native-class-initializers/oracle/** -text
+tests/native-class-initializers/RetainOracleEvidence.js text eol=lf

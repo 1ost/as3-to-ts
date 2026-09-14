@@ -9,6 +9,7 @@ import {parseQualifiedName, parseBlock, parseParameterList, parseNameTypeInit} f
 import {ASDOC_COMMENT, MULTIPLE_LINES_COMMENT} from './parser';
 import {VERBOSE_MASK} from '../config';
 import {parseExpression} from './parse-expressions';
+import {parseStatement} from './parse-statements';
 import {parseOptionalType} from './parse-types';
 import {ReportFlags} from '../reports/report-flags';
 
@@ -284,14 +285,12 @@ function parseClassContent(parser:AS3Parser):Node {
     let meta:Node[] = [];
 
     while (!tokIs(parser, Operators.RIGHT_CURLY_BRACKET)) {
+        if (tokIs(parser, Keywords.EOF)) throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unterminated class content');
         //if(VERBOSE >= 2) {
         if((VERBOSE_MASK & ReportFlags.PARSER_CONTENT) == ReportFlags.PARSER_CONTENT) {
             console.log("parse-declarations.ts - keyword: " + parser.tok.text + ", index: " + parser.tok.index);
         }
-        if (tokIs(parser, Operators.LEFT_CURLY_BRACKET)) {
-            result.children.push(parseBlock(parser));
-        }
-        if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
+        if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET) && classMetadataPrefix(parser)) {
             meta.push(parseMetaData(parser));
         } else if (tokIs(parser, Keywords.VAR)) {
             parseClassField(parser, result, modifiers, meta);
@@ -307,14 +306,74 @@ function parseClassContent(parser:AS3Parser):Node {
             result.children.push(parseIncludeExpression(parser));
         } else if (tokIs(parser, Keywords.FUNCTION)) {
             parseClassFunctions(parser, result, modifiers, meta);
-        } else {
+        } else if (startsWith(parser.tok.text, ASDOC_COMMENT)
+            || startsWith(parser.tok.text, MULTIPLE_LINES_COMMENT) || classDeclarationPrefix(parser)) {
             tryToParseCommentNode(parser, result, modifiers);
+        } else {
+            if (modifiers.length || meta.length)
+                throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: declaration prefix before statement');
+            const start = parser.tok.index;
+            const statement = parseStatement(parser);
+            result.children.push(createNode(NodeKind.CLASS_INITIALIZER,
+                {start, end: parser.tok.index}, statement));
         }
     }
     if (result.lastChild) {
         result.end = result.lastChild.end;
     }
     return result;
+}
+
+/** A namespace qualifier is a declaration prefix only before a declaration.
+ * Expression tokens (including a call's array argument) must never accumulate
+ * in the next field's MOD_LIST/META_LIST. Lookahead restores all scanner state.
+ */
+function classDeclarationPrefix(parser: AS3Parser): boolean {
+    const modifiers = ['public', 'private', 'protected', 'internal', 'static',
+        'override', 'final', 'native', 'dynamic'];
+    if (modifiers.indexOf(parser.tok.text) >= 0) return true;
+    if (!/^[A-Za-z_$][\w$]*$/.test(parser.tok.text)) return false;
+    const scanner: any = parser.scn;
+    const saved: any = {};
+    Object.keys(scanner).forEach(key => saved[key] = scanner[key]);
+    try {
+        let token = scanner.nextToken();
+        while (token.text === '\n' || modifiers.indexOf(token.text) >= 0
+            || startsWith(token.text, '/*') || startsWith(token.text, '//')) token = scanner.nextToken();
+        return ['var', 'const', 'function'].indexOf(token.text) >= 0;
+    } finally {
+        Object.keys(scanner).forEach(key => { if (!Object.prototype.hasOwnProperty.call(saved, key)) delete scanner[key]; });
+        Object.keys(saved).forEach(key => scanner[key] = saved[key]);
+    }
+}
+
+function classMetadataPrefix(parser: AS3Parser): boolean {
+    const scanner: any = parser.scn, saved: any = {};
+    Object.keys(scanner).forEach(key => saved[key] = scanner[key]);
+    try {
+        let token = scanner.nextToken();
+        if (!/^[A-Za-z_$][\w$]*$/.test(token.text)) return false;
+        token = scanner.nextToken();
+        if (token.text !== '(' && token.text !== ']') return false;
+        let depth = token.text === ']' ? 0 : 1;
+        while (depth) {
+            token = scanner.nextToken();
+            if (!token.text || token.text === Keywords.EOF)
+                throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unterminated class metadata or array expression');
+            if (token.text === '[') depth++;
+            if (token.text === ']') depth--;
+        }
+        do { token = scanner.nextToken(); }
+        while (token.text === '\n' || startsWith(token.text, '/*') || startsWith(token.text, '//'));
+        if (['[', 'var', 'const', 'function', 'public', 'private', 'protected', 'internal',
+            'static', 'override', 'final', 'native', 'dynamic'].indexOf(token.text) >= 0) return true;
+        if (!/^[A-Za-z_$][\w$]*$/.test(token.text)) return false;
+        token = scanner.nextToken();
+        return ['var', 'const', 'function', 'static'].indexOf(token.text) >= 0;
+    } finally {
+        Object.keys(scanner).forEach(key => { if (!Object.prototype.hasOwnProperty.call(saved, key)) delete scanner[key]; });
+        Object.keys(saved).forEach(key => scanner[key] = saved[key]);
+    }
 }
 
 

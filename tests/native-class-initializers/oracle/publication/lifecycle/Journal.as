@@ -1,0 +1,1 @@
+package lifecycle{public class Journal{public static var rows:Array=[];public static var leaked:Array=[];public static var failure:Object={};public static function record(s:String):int{rows.push(s);return rows.length;}public static function leak(value:Class):int{leaked.push(value);rows.push("leak");return 1;}public static function fail():int{rows.push("throw");throw failure;}}}

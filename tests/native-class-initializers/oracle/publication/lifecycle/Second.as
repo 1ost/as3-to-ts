@@ -1,0 +1,1 @@
+package lifecycle{public class Second{public static var back:Class=First;Journal.record("second-body");}}

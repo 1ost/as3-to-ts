@@ -1,0 +1,19 @@
+[
+  "before",
+  "A-field",
+  "B-field",
+  "A-failure-0:1009",
+  "A-field",
+  "B-field",
+  "A-failure-1:1009",
+  "B-field",
+  "A-field",
+  "B-failure-0:1009",
+  "B-field",
+  "A-field",
+  "B-failure-1:1009",
+  "throw",
+  "Failure-failure-0:true:sentinel",
+  "throw",
+  "Failure-failure-1:true:sentinel"
+]

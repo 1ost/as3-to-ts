@@ -1,0 +1,77 @@
+{
+  "commands": [
+    [
+      "java",
+      [
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\ReadsOracle.as"
+      ]
+    ],
+    [
+      "D:/bleach-oracle-electron/node_modules/electron/dist/electron.exe",
+      [
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\capture.cjs",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\flash.json",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+      ]
+    ]
+  ],
+  "inputs": [
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\ReadsOracle.as",
+      "sha256": "a0d380f55f41365fe91c720419b99694dfdc8d25d362a091d5210f5af56fa3b0"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\reads\\Journal.as",
+      "sha256": "df6426525597c4c2c7629771b9c46a1e37c55a85104f8b83d4a215166928d9bb"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\reads\\CastTarget.as",
+      "sha256": "6defd175259d3cb64b70897c3f2bb595feda60a324c5b8584ca10cc8fc508ef8"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\reads\\IsTarget.as",
+      "sha256": "5411d3017b62bc6d1e3e137678b901a5aa201b7582ab58cae7167a72b4361fb0"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\reads\\NewTarget.as",
+      "sha256": "955b0988fbae745094b8e01c34d087f33fe134c4adf7c6f6db5b9b294454fb2a"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\oracle.swf",
+      "sha256": "b07fbde9f0f0f9ac9146b46b9c66c32060751ae8be96cf868bf80e32fc90bd8d"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\flash.json",
+      "sha256": "d070963c129d87dcc36be86bd9884e86c580da8c55b660d4861cfbb0fdf7f127"
+    },
+    {
+      "file": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "file": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "file": "D:/bleach-oracle-electron/node_modules/electron/dist/electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ]
+}

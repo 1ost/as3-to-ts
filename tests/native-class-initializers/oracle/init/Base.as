@@ -1,0 +1,1 @@
+package init {public class Base { public static var base:int=Log.mark("base-field"); Log.mark("base-body"); public function Base(){Log.mark("base-constructor");} } }

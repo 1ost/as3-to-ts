@@ -1,0 +1,1 @@
+package reads{public class IsTarget{Journal.rows.push("is-init");}}

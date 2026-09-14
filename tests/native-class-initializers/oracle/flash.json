@@ -1,0 +1,17 @@
+[
+  "before-use",
+  "base-field",
+  "base-body",
+  "first-field",
+  "later-field",
+  "body:later=5,method=available",
+  "block",
+  "after-class-value",
+  "instance-field",
+  "base-constructor",
+  "subject-constructor",
+  "instance-field",
+  "base-constructor",
+  "subject-constructor",
+  "after-two-instances"
+]
