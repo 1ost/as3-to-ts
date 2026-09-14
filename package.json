@@ -13,7 +13,7 @@
     "test": "npm run pretest && npm run test:simple && npm run test:compound && npm run test:int-uint-assignment",
     "test:simple": "node tests/simple/SimpleTests.js",
     "test:compound": "node tests/compound/CompoundTests.js",
-    "test:int-uint-assignment": "node tests/int-uint-assignment/IntUintAssignmentLoweringTests.js",
+    "test:int-uint-assignment": "node tests/int-uint-assignment/IntUintAssignmentLoweringTests.js && node tests/int-uint-assignment/IndexedPostfixAssignmentTests.js",
     "test:simple:win": "node %NODE_DEBUG_OPTION% tests/simple/SimpleTests.js",
     "tsc": "tsc",
     "clean": "npm cache clean && npm run rimraf -- node_modules lib",
