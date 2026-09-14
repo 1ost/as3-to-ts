@@ -40,7 +40,7 @@ export interface EmittedTypeScript {
 }
 
 function modifierTokens(modifiers: SemanticModifier[], ts: TypeScriptCompilerApi): any[] {
-    return modifiers.map((modifier) => {
+    return modifiers.filter(modifier=>modifier !== "internal").map((modifier) => {
         if (modifier === "public") {
             return ts.factory.createModifier(ts.SyntaxKind.PublicKeyword);
         }
@@ -348,6 +348,10 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     }
     if (expression.kind === "globalFunction") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3TraceFunction"),undefined,[ts.factory.createIdentifier("__as3Global_"+expression.name)]);
+    if (expression.kind === "functionApply" && expression.invocation === "class") return ts.factory.createCallExpression(
+        ts.factory.createCallExpression(ts.factory.createIdentifier("__as3PrepareClassCall"),undefined,
+            [expressionNode(expression.target,ts),expressionNode(expression.receiver,ts),
+                ts.factory.createStringLiteral(expression.callerQName!)]),undefined,[expressionNode(expression.argumentsArray,ts)]);
     if (expression.kind === "functionApply" && expression.invocation === "direct") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3FunctionInvoke"),undefined,
         [expressionNode(expression.target,ts),expressionNode(expression.argumentsArray,ts)]);
@@ -1729,6 +1733,13 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ["as3DefineFunctionLength","as3DefineMethodLength","as3FunctionLength","as3SourceLambda","as3FunctionApply","as3FunctionCall","as3FunctionInvoke","as3FunctionFieldInvoke","as3CheckLambdaArity","as3FunctionArgument","as3CheckFunctionArity","as3CheckMethodMinimumArity","as3CheckMethodArity","as3TraceFunction"].map(name =>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Function"),undefined));
+    const classCall=(value:any):boolean => value !== null && typeof value === "object" && (
+        value.kind === "functionApply" && value.invocation === "class" || Object.values(value).some(classCall));
+    if (classCall(program)) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3PrepareClassCall"),
+                ts.factory.createIdentifier("__as3PrepareClassCall"))])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3ObjectDispatch"),undefined));
     const dictionarySlot = (value:any):boolean => value !== null && typeof value === "object" && (
         (value.kind === "coercion" || value.kind === "assignmentStorageCoercion") && value.slot
             && value.targetType.sourceName === "Dictionary"

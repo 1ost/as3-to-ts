@@ -331,14 +331,14 @@ function parseMemberModifiers(owner: TreeNode, context: AdapterContext): {
             seen[modifier] = true;
             return;
         }
-        if (!ALLOWED_MODIFIERS.has(modifier) || seen[modifier]) {
+        if ((!ALLOWED_MODIFIERS.has(modifier) && !(modifier === "internal" && context.sourceMemberAuthority !== null)) || seen[modifier]) {
             fail("HARDENED_MODIFIER", "modifier is unsupported or duplicated", node);
         }
         seen[modifier] = true;
         modifiers.push(modifier as SemanticModifier);
     });
     const accessModifiers = modifiers.filter((modifier) =>
-        modifier === "private" || modifier === "protected" || modifier === "public");
+        modifier === "private" || modifier === "protected" || modifier === "public" || modifier === "internal");
     if (accessModifiers.length > 1) {
         fail("HARDENED_MODIFIER_ACCESS", "declaration has conflicting access modifiers", owner);
     }
@@ -4005,6 +4005,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     fail("HARDENED_FUNCTION_APPLY_ARGUMENTS", "Function.apply requires an Array or null argument list", node);
                 return Object.assign(identity(node), {kind:"functionApply" as const,target,receiver,argumentsArray,
                     resultType:target.kind === "globalFunction" ? semanticType(node,"void","void") : semanticType(node,"*","unknown")});
+            }
+        }
+        if (context.sourceMemberAuthority !== null && rawCallee.kind === "ARRAY_ACCESSOR" && rawCallee.children.length === 2) {
+            const target=parseExpression(rawCallee.children[0]!,context,true);
+            const targetType=assignmentType(target,context,rawCallee.children[0]!);
+            if (targetType.sourceName === "Class" && targetType.emittedName === "__as3ClassValue") {
+                const receiver=parseExpression(rawCallee.children[1]!,context,true);
+                if (assignmentType(receiver,context,rawCallee.children[1]!).sourceName !== "String")
+                    fail("HARDENED_CLASS_CALL_KEY","Computed Class calls require a proven String key",rawCallee);
+                const elements=node.children[1]!.children.map(child=>parseExpression(child,context,true));
+                if (elements.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
+                    fail("HARDENED_CLASS_CALL_ARGUMENT","Class call arguments must produce values",node);
+                return {...identity(node),kind:"functionApply",invocation:"class",target,receiver,
+                    argumentsArray:{...identity(node),kind:"array",elements},callerQName:context.classQualifiedName,
+                    resultType:semanticType(node,"*","unknown")};
             }
         }
         let callee: SemanticExpression;

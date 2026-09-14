@@ -24,6 +24,8 @@ export interface RuntimeAuthorityClassSource {
     readonly sourceSha256: string;
     readonly fileLocalScope?: AS3FileLocalClassScope;
     readonly staticReflection?: {readonly variables: readonly {readonly name:string; readonly type:string}[]};
+    readonly staticCallTraits?: {readonly methods:readonly {readonly name:string; readonly visibility:"public"|"private"|"internal"|"protected";
+        readonly required:number;readonly total:number;readonly rest:boolean;readonly parameterTypes:readonly string[]}[];readonly noncallableNames:readonly string[];readonly unsupportedNames:readonly string[]};
     readonly definitionSafe: true;
     readonly module: string;
     readonly constructorExport: string;
@@ -270,6 +272,30 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
     });
     const staticReflection = staticVariables.every((variable): variable is {readonly name:string;readonly type:string} => variable !== null)
         ? Object.freeze({variables:Object.freeze(staticVariables)}) : undefined;
+    const staticMembers=program.declaration.members.filter(member=>member.kind !== "constructor" && member.modifiers.includes("static"));
+    const staticNames=staticMembers.map(member=>member.kind === "constructor" ? "" : member.name);
+    // An incomplete or ambiguous namespace inventory must not authorize lookup by spelling.
+    const staticCallTraits=staticMembers.every(member=>member.kind !== "constructor" && member.namespaceName === null)
+        && staticNames.every(name=>{
+            const same=staticMembers.filter(member=>member.kind !== "constructor" && member.name === name);
+            return same.length === 1 || same.length === 2 && same.some(member=>member.kind === "getter") && same.some(member=>member.kind === "setter");
+        }) ? Object.freeze({
+            methods:Object.freeze(staticMembers.filter(member=>member.kind === "method").map(member=>{
+                if (member.kind !== "method") throw new Error("Static method classification changed");
+                return Object.freeze({name:member.name,
+                    visibility:member.modifiers.includes("private") ? "private" as const : member.modifiers.includes("protected") ? "protected" as const
+                        : member.modifiers.includes("public") ? "public" as const : "internal" as const,
+                    required:member.parameters.filter(parameter=>!parameter.rest && parameter.defaultValue === null).length,
+                    total:member.parameters.filter(parameter=>!parameter.rest).length,
+                    rest:member.parameters.some(parameter=>parameter.rest),
+                    parameterTypes:Object.freeze(member.parameters.filter(parameter=>!parameter.rest)
+                        .map(parameter=>parameter.type.runtimeName ?? parameter.type.sourceName))});
+            }).sort((a,b)=>a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+            noncallableNames:Object.freeze(staticMembers.filter(member=>member.kind === "field"
+                && ["int","uint","Number","Boolean","String"].includes(member.type.sourceName)).map(member=>(member as SemanticField).name).sort()),
+            unsupportedNames:Object.freeze([...new Set(staticMembers.filter(member=>member.kind !== "method"
+                && !(member.kind === "field" && ["int","uint","Number","Boolean","String"].includes(member.type.sourceName)))
+                .map(member=>member.kind === "constructor" ? "" : member.name))].sort())}) : undefined;
     const source: RuntimeAuthorityClassSource = authenticatedSource({ kind: "class", qname,
         base: program.declaration.extendsType?.runtimeName ?? null,
         interfaces: Object.freeze(program.declaration.implementsTypes.map(item => item.runtimeName)),
@@ -279,6 +305,7 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
         constructionTargetExport: "as3ConstructionTarget", constructionProofExport: "isAS3ConstructionProof",
         fields,
         ...(staticReflection ? {staticReflection} : {}),
+        ...(staticCallTraits ? {staticCallTraits} : {}),
         // Only native-proven dynamic class scopes are admitted by the adapter.
         // Namespace names retain identity, not an inferred namespace URI.
         objectTraits: Object.freeze({ dynamic: program.declaration.modifiers.includes("dynamic"),
@@ -683,7 +710,8 @@ function sourceMetadata(entry: RuntimeAuthoritySource): object {
         : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
             sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}),
             ...(entry.fileLocalScope ? {fileLocalScope:entry.fileLocalScope} : {}),
-            ...(entry.staticReflection ? {staticReflection:entry.staticReflection} : {}) };
+            ...(entry.staticReflection ? {staticReflection:entry.staticReflection} : {}),
+            ...(entry.staticCallTraits ? {staticCallTraits:entry.staticCallTraits} : {}) };
 }
 
 function canonicalMetadata(entries: readonly RuntimeAuthoritySource[]): string {
@@ -782,7 +810,7 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
             return `    { kind: "interface", qname: ${quote(source.qname)}, bases: ${JSON.stringify(source.bases)} },`;
         }
         const index = importIndex.get(source)!;
-        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}${source.nativeObjectTraits ? `nativeObjectTraits: ${JSON.stringify(source.nativeObjectTraits)}, ` : ""}${source.fileLocalScope ? `fileLocalScope: ${JSON.stringify(source.fileLocalScope)}, ` : ""}${source.staticReflection ? `staticReflection: ${JSON.stringify(source.staticReflection)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
+        return `    { kind: "class", qname: ${quote(source.qname)}, base: ${source.base === null ? "null" : quote(source.base)}, interfaces: ${JSON.stringify(source.interfaces)}, sourceSha256: ${quote(source.sourceSha256)}, fields: ${JSON.stringify(source.fields)}, ${source.objectTraits ? `objectTraits: ${JSON.stringify(source.objectTraits)}, ` : ""}${source.nativeObjectTraits ? `nativeObjectTraits: ${JSON.stringify(source.nativeObjectTraits)}, ` : ""}${source.fileLocalScope ? `fileLocalScope: ${JSON.stringify(source.fileLocalScope)}, ` : ""}${source.staticReflection ? `staticReflection: ${JSON.stringify(source.staticReflection)}, ` : ""}${source.staticCallTraits ? `staticCallTraits: ${JSON.stringify(source.staticCallTraits)}, ` : ""}constructor: __as3Class${index}, predicate: __as3Predicate${index}, constructionTarget: ${source.constructionTargetExport === null ? "null" : `__as3ConstructionTarget${index}`}, constructionProof: ${source.constructionProofExport === null ? "null" : `__as3ConstructionProof${index}`} },`;
     });
     const qnames = ordered.map(source => source.qname);
     const code = [

@@ -1,10 +1,10 @@
 import { isAS3ReflectionValue, as3ReflectionVariable, as3ReflectionAttribute } from "./AS3Reflection";
-import { isAS3SourceLambda } from "./AS3Function";
+import { as3FunctionArgument, isAS3SourceLambda } from "./AS3Function";
 import { AS3ArgumentError, AS3RangeError, AS3SecurityError } from "./AS3Error";
 import { as3StringSplit } from "./AS3Coerce";
 import { as3ArrayCall, as3ArrayDelete, as3ArrayRead, as3ArrayWrite, as3ArrayLengthWrite } from "./AS3Array";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
-import { lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, lookupNamedReferenceType, castReference, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
+import { AS3Types, testType, lookupStaticCallClass, lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, lookupNamedReferenceType, castReference, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
 import { as3BindMethod, isAS3MethodClosure } from "./AS3MethodClosure";
 
 type Member = AS3ObjectTraits["members"][number];
@@ -224,6 +224,58 @@ export function as3ObjectDelete(value:unknown,key:unknown,caller:string | null =
     if (info && (!dynamicClass(info) || findTrait(info,name,caller,false).length)) return false;
     return Reflect.deleteProperty(target,name);
 }
+/** Source Class static calls. Error identities are native-proved; exact diagnostic strings need supplemental evidence. */
+function staticClassCall(value:Function,key:unknown,args:unknown[],caller:string|null):unknown {
+    const info=lookupStaticCallClass(value);
+    if (!info || info.traits===null) return unavailable("Class static calls lack authenticated source traits");
+    if (caller!==null) lookupObjectCaller(caller);
+    const name=keyName(key);
+    if (info.traits.unsupportedNames.includes(name)) return unavailable("Static value/accessor calls require native source authority support");
+    const method=info.traits.methods.find(item=>item.name===name);
+    if (method?.visibility==="protected") return unavailable("Protected static calls require native evidence");
+    const visible=method && (method.visibility==="public"
+        || method.visibility==="private" && caller===info.qname
+        || method.visibility==="internal" && caller!==null && lookupObjectCallerPackage(caller)===info.packageName);
+    if (!visible) {
+        const error=new TypeError(`Error #1006: ${name} is not a function.`);
+        Object.defineProperty(error,"errorID",{value:1006});throw error;
+    }
+    if (args.length<method.required || !method.rest && args.length>method.total)
+        throw new AS3ArgumentError(`Error #1063: Argument count mismatch on ${info.qname}/${name}(). Expected ${method.required}, got ${args.length}.`,1063);
+    const descriptor=Object.getOwnPropertyDescriptor(value,name);
+    if (!descriptor || !("value" in descriptor) || descriptor.value!==method.callable)
+        return unavailable("Authenticated static method storage changed");
+    // Convert every supplied fixed parameter left-to-right before the body. Rest
+    // values remain untyped; omitted optional parameters retain source defaults.
+    const converted=args.slice();
+    for(let index=0;index<Math.min(args.length,method.total);index++) {
+        const type=method.parameterTypes[index]!, argument=args[index];
+        if (["*","Object","String","Number","int","uint","Boolean","Array","Function"].includes(type))
+            converted[index]=as3FunctionArgument(argument,type);
+        else if(type==="Class") {
+            if(argument===null || argument===undefined) converted[index]=null;
+            else if(testType(argument,AS3Types.Class)) converted[index]=argument;
+            else {
+                const error=new TypeError("Error #1034: Type Coercion failed: cannot convert value to Class.");
+                Object.defineProperty(error,"errorID",{value:1034});throw error;
+            }
+        } else converted[index]=castReference(argument,lookupNamedReferenceType(type));
+    }
+    return Reflect.apply(method.callable,value,converted);
+}
+
+/** Emit prepare(receiver,key,caller)([arguments]) so null fails before argument effects.
+ * Only String keys are currently admitted; object-key conversion ordering remains held.
+ */
+export function as3PrepareClassCall(value:unknown,key:string,caller:string|null=null):(args:unknown[])=>unknown {
+    if (value===null || value===undefined) receiver(value);
+    if (typeof value!=="function" || !lookupStaticCallClass(value))
+        return unavailable("Computed Class calls require exact registered Class identity");
+    if (typeof key!=="string") return unavailable("Computed Class keys require authenticated String values");
+    if (caller!==null) lookupObjectCaller(caller);
+    return args=>staticClassCall(value,key,args,caller);
+}
+
 export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:string | null = null):unknown {
     if (isAS3ReflectionValue(value)) {
         if (caller !== null) lookupObjectCaller(caller);

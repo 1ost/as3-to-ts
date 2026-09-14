@@ -34,6 +34,15 @@ export interface AS3NativeObjectTraits {
     readonly sourceArtifactSha256: string;
 }
 
+/** Optional generated-source authority; not a claim about arbitrary host Class values. */
+export interface AS3StaticCallTraits {
+    readonly methods: readonly {readonly name:string; readonly visibility:"public"|"private"|"protected"|"internal";
+        readonly required:number; readonly total:number; readonly rest:boolean; readonly parameterTypes:readonly string[]}[];
+    readonly noncallableNames: readonly string[];
+    readonly unsupportedNames: readonly string[];
+}
+const STATIC_CALLS = new WeakMap<Function, Readonly<{methods:readonly Readonly<AS3StaticCallTraits["methods"][number] & {callable:Function}>[];noncallableNames:readonly string[];unsupportedNames:readonly string[]}>>();
+
 export interface AS3StaticReflectionTraits {
     readonly variables: readonly { readonly name: string; readonly type: string }[];
 }
@@ -51,6 +60,7 @@ export interface AS3ClassAuthorityEntry {
     readonly sourceSha256: string;
     readonly fileLocalScope?: AS3FileLocalClassScope;
     readonly staticReflection?: AS3StaticReflectionTraits;
+    readonly staticCallTraits?: AS3StaticCallTraits;
     readonly objectTraits?: AS3ObjectTraits;
     readonly nativeObjectTraits?: AS3NativeObjectTraits;
     readonly fields: readonly { readonly name: string; readonly policy: "zero" | "nan" | "false" | "null" | "undefined" }[];
@@ -432,7 +442,8 @@ function canonicalAuthorityMetadata(document: AS3TypeAuthorityDocument): string 
             : { kind: entry.kind, qname: entry.qname, base: entry.base, interfaces: entry.interfaces,
                 sourceSha256: entry.sourceSha256, fields: entry.fields, ...(entry.objectTraits ? {objectTraits:entry.objectTraits} : {}), ...(entry.nativeObjectTraits ? {nativeObjectTraits:entry.nativeObjectTraits} : {}),
                 ...(entry.fileLocalScope ? {fileLocalScope:entry.fileLocalScope} : {}),
-                ...(entry.staticReflection !== undefined ? {staticReflection:entry.staticReflection} : {}) }),
+                ...(entry.staticReflection !== undefined ? {staticReflection:entry.staticReflection} : {}),
+                ...(entry.staticCallTraits !== undefined ? {staticCallTraits:entry.staticCallTraits} : {}) }),
     });
 }
 
@@ -525,7 +536,7 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                 }, sealedClosure);
                 INTERFACE_TOKENS.set(entry.qname, token);
             } else if (entry.kind === "class") {
-                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), ...(entry.nativeObjectTraits ? ["nativeObjectTraits"] : []), ...(entry.fileLocalScope ? ["fileLocalScope"] : []), ...(entry.staticReflection !== undefined ? ["staticReflection"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
+                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), ...(entry.nativeObjectTraits ? ["nativeObjectTraits"] : []), ...(entry.fileLocalScope ? ["fileLocalScope"] : []), ...(entry.staticReflection !== undefined ? ["staticReflection"] : []), ...(entry.staticCallTraits !== undefined ? ["staticCallTraits"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
                     `AS3 class ${entry.qname}`);
                 if (entry.base !== null && (!seen.has(entry.base) || !CLASS_BY_QNAME.has(entry.base))) {
                     throw new TypeError(`AS3 class ${entry.qname} has a missing, cyclic, or out-of-order class base`);
@@ -559,6 +570,38 @@ export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): voi
                 if (scopedIdentity !== null && (scopedIdentity.key !== entry.qname
                     || !localConstruction || !entry.objectTraits || entry.nativeObjectTraits)) {
                     throw new TypeError("AS3 file-local class identity differs from its generated source scope");
+                }
+                if (entry.staticCallTraits !== undefined) {
+                    if (!localConstruction || !entry.objectTraits || entry.nativeObjectTraits)
+                        throw new TypeError("Static calls require generated source class authority");
+                    const traits=entry.staticCallTraits;
+                    exactKeys(traits,["methods","noncallableNames","unsupportedNames"],"AS3 static call traits");
+                    if (!Array.isArray(traits.methods)) throw new TypeError("Invalid static call methods");
+                    const names=new Set<string>();
+                    const methods=traits.methods.map((method: AS3StaticCallTraits["methods"][number]) => {
+                        exactKeys(method,["name","visibility","required","total","rest","parameterTypes"],"AS3 static call method");
+                        if (!stableRuntimeTypeName(method.name) || names.has(method.name)
+                            || !["public","private","protected","internal"].includes(method.visibility)
+                            || !Number.isSafeInteger(method.required) || !Number.isSafeInteger(method.total)
+                            || method.required<0 || method.total<method.required || typeof method.rest!=="boolean"
+                            || !Array.isArray(method.parameterTypes) || method.parameterTypes.length!==method.total
+                            || method.parameterTypes.some((type:unknown)=>typeof type!=="string" || type!=="*" && !stableRuntimeTypeName(type)))
+                            throw new TypeError("Invalid or duplicate static call method");
+                        names.add(method.name);
+                        const descriptor=Object.getOwnPropertyDescriptor(entry.constructor,method.name);
+                        if (!descriptor || !("value" in descriptor) || typeof descriptor.value!=="function")
+                            throw new TypeError("Static method lacks own generated callable storage");
+                        return Object.freeze({...method,parameterTypes:Object.freeze([...method.parameterTypes]),callable:descriptor.value as Function});
+                    });
+                    for (const list of [traits.noncallableNames,traits.unsupportedNames]) {
+                        validateQNameList(list,"AS3 static nonmethod names");
+                        for (const name of list) {
+                            if (names.has(name)) throw new TypeError("Conflicting static member spelling");
+                            names.add(name);
+                        }
+                    }
+                    STATIC_CALLS.set(entry.constructor,Object.freeze({methods:Object.freeze(methods),
+                        noncallableNames:Object.freeze([...traits.noncallableNames]),unsupportedNames:Object.freeze([...traits.unsupportedNames])}));
                 }
                 const reflectionName = scopedIdentity?.reflectionName ?? entry.qname;
                 if (entry.staticReflection !== undefined) {
@@ -720,4 +763,13 @@ export function getAS3StaticReflectionDescriptor(value: unknown): AS3StaticRefle
     const descriptor = typeof value === "function" && CLASS_TOKENS.has(value) ? STATIC_REFLECTION.get(value) : undefined;
     if (!descriptor) throw new TypeError("AS3 class has no sealed static reflection authority");
     return descriptor;
+}
+
+/** Exact constructor identity and own static traits only; never inherit JS constructor properties. */
+export function lookupStaticCallClass(value:unknown) {
+    requireSealed();
+    if (typeof value!=="function" || !CLASS_TOKENS.has(value)) return null;
+    const owner=CLASS_OBJECT_ENTRIES.get(value)!;
+    return Object.freeze({qname:owner.qname,packageName:owner.packageName,
+        diagnosticName:owner.diagnosticName,traits:STATIC_CALLS.get(value) ?? null});
 }

@@ -129,7 +129,7 @@ export interface SemanticType extends SemanticIdentity {
     typeArguments: SemanticType[];
 }
 
-export type SemanticModifier = "dynamic" | "final" | "public" | "private" | "protected" | "static" | "override";
+export type SemanticModifier = "internal" | "dynamic" | "final" | "public" | "private" | "protected" | "static" | "override";
 
 export interface SemanticImport extends SemanticIdentity {
     authorityKind: "flash" | "local" | "intrinsic" | "native-timer-function" | "native-reflection-function";
@@ -203,7 +203,8 @@ export interface GlobalFunctionExpression extends SemanticIdentity {
 }
 export interface FunctionApplyExpression extends SemanticIdentity {
     kind: "functionApply";
-    invocation?: "call" | "direct" | "field";
+    invocation?: "call" | "direct" | "field" | "class";
+    callerQName?: string;
     target: SemanticExpression;
     receiver: SemanticExpression;
     argumentsArray: SemanticExpression;

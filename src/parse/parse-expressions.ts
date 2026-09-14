@@ -431,6 +431,7 @@ function parseAccessExpression(parser:AS3Parser):Node {
     while (true) {
         if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
             node = parseFunctionCall(parser, node);
+            continue;
         }
         if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_COLUMN)) {
             node = parseDot(parser, node);
@@ -449,12 +450,7 @@ function parseFunctionCall(parser:AS3Parser, node:Node):Node {
     let result:Node = createNode(NodeKind.CALL, {start: node.start});
     result.children.push(node);
 
-    while (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
-        result.children.push(parseArgumentList(parser));
-    }
-    while (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
-        result.children.push(parseArrayLiteral(parser));
-    }
+    result.children.push(parseArgumentList(parser));
     result.end = result.children.reduce((index:number, child:Node) => {
         return Math.max(index, child ? child.end : 0);
     }, 0);
