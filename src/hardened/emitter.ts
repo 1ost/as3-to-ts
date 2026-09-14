@@ -246,6 +246,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             expression.targetName || expression.name,
         );
     }
+    if (expression.kind === "callableSelf") {
+        if (expression.lambdaName) return ts.factory.createIdentifier(expression.lambdaName);
+        const prototype=ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(expression.className!),"prototype");
+        return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindMethod"),undefined,
+            [ts.factory.createThis(),ts.factory.createPropertyAccessExpression(prototype,expression.methodName!)]);
+    }
     if (expression.kind === "methodClosure") {
         if (expression.staticTarget) return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindStaticMethod"),
             undefined, [expressionNode(expression.staticTarget,ts),ts.factory.createStringLiteral(expression.methodName)]);
@@ -628,7 +634,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("arguments"),"length"),
                 ts.factory.createNumericLiteral(expression.parameters.filter(p=>!p.rest && p.defaultValue === null).length),
                 expression.parameters.some(p=>p.rest) ? ts.factory.createNull() : ts.factory.createNumericLiteral(expression.parameters.length)]));
-        const sourceFn = ts.factory.createFunctionExpression(undefined, undefined, undefined, undefined,
+        const sourceFn = ts.factory.createFunctionExpression(undefined, undefined,
+            expression.selfName ? ts.factory.createIdentifier(expression.selfName) : undefined, undefined,
             expression.parameters.map(parameter => parameterNode(parameter, ts)),
             typeNode(expression.returnType, ts),
             ts.factory.createBlock([arity].concat(parameterSlotStatements(expression.parameters,ts),
@@ -1775,7 +1782,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (programUsesBigTurnTableInner(program)) {
         imports.push(bigTurnTableInnerRuntimeImport(ts));
     }
-    if (programHasKind(program,"methodClosure")) imports.push(methodClosureRuntimeImport(ts));
+    if (programHasKind(program,"methodClosure") || programHasKind(program,"callableSelf")) imports.push(methodClosureRuntimeImport(ts));
     if (program.declaration.declarationKind === "packageField" || program.declaration.declarationKind === "packageFunction") {
         const declaration = program.declaration.declarationKind === "packageFunction" ? packageFunctionNode(program,ts) : ts.factory.createVariableStatement(
             [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],

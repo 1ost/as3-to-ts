@@ -259,12 +259,20 @@ export interface CallExpression extends SemanticIdentity {
     resultType: SemanticType | null;
 }
 
+export interface CallableSelfExpression extends SemanticIdentity {
+    kind: "callableSelf";
+    lambdaName: string | null;
+    className: string | null;
+    methodName: string | null;
+}
+
 export interface LambdaExpression extends SemanticIdentity {
     kind: "lambda";
     parameters: SemanticParameter[];
     returnType: SemanticType;
     statements: SemanticStatement[];
     lexicalReceiver?: { name: string; outerName: string | null; className: string };
+    selfName?: string;
 }
 
 export interface ArrayExpression extends SemanticIdentity {
@@ -542,7 +550,7 @@ export interface ReflectionExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = CallableSelfExpression | ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |

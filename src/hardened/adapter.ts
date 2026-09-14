@@ -2037,6 +2037,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         if (forward) return forward.type;
     }
 
+    if (expression.kind === "callableSelf") return semanticType(node,"Function","Function",[],false);
     if (expression.kind === "globalFunction" || expression.kind === "identifier" && expression.bindingKind === "package-function")
         return semanticType(node,"Function","Function",[],false);
     if (expression.kind === "reflection" || expression.kind === "functionApply" || expression.kind === "regexpCall") return expression.resultType;
@@ -3235,6 +3236,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         return Object.assign(identity(node), {
             kind: "lambda" as "lambda", parameters, returnType, statements,
+            selfName: "__as3LambdaSelf" + (context.lambdaDepth + 1),
             ...(context.lexicalThisUses > priorLexicalThisUses ? { lexicalReceiver: {
                 name: "__as3LexicalReceiver" + (context.lambdaDepth + 1),
                 outerName: context.lambdaDepth ? "__as3LexicalReceiver" + context.lambdaDepth : null,
@@ -3712,6 +3714,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         const name = validateIdentifier(requiredText(node.children[1]!, "member name"), node.children[1]!);
         const namespaceReceiver=node.children[0]!;
+        if (name === "callee" && namespaceReceiver.kind === "IDENTIFIER" && namespaceReceiver.text === "arguments"
+            && !context.locals.arguments && !context.parameters.arguments && !context.fields.arguments
+            && !context.methods.arguments && !context.accessors.arguments && !context.importsByLocal.arguments) {
+            const callable=context.currentCallable;
+            if (!valuePosition || context.sourceMemberAuthority === null || !callable || callable.constructor
+                || callable.accessor !== null || callable.namespaceName !== null || callable.modifiers.includes("static")
+                || context.packageFunction)
+                fail("HARDENED_ARGUMENTS_CALLEE_SCOPE","arguments.callee requires an authenticated instance method or its source lambda",node);
+            if (context.lambdaDepth === 0 && (context.locals[context.className] || context.parameters[context.className]))
+                fail("HARDENED_ARGUMENTS_CALLEE_SCOPE","declaring-class lexical shadow requires separate callee identity lowering",node);
+            assertNoInheritedLocalValueShadow(context,"arguments",namespaceReceiver);
+            return Object.assign(identity(node),{kind:"callableSelf" as const,
+                lambdaName:context.lambdaDepth ? "__as3LambdaSelf"+context.lambdaDepth : null,
+                className:context.lambdaDepth ? null : context.className,
+                methodName:context.lambdaDepth ? null : callable.name});
+        }
         if(name==="uri" && namespaceReceiver.kind==="IDENTIFIER" && namespaceReceiver.text
             && !context.locals[namespaceReceiver.text] && !context.parameters[namespaceReceiver.text]
             && !context.fields[namespaceReceiver.text] && !context.methods[namespaceReceiver.text] && !context.accessors[namespaceReceiver.text]) {
