@@ -1,3 +1,4 @@
+import { loadReflectionProviderTarget, type ReflectionProviderTarget } from "../hardened/reflection-provider-authority";
 import { verifyNativeDateAuthority } from "../hardened/native-date-authority";
 import { loadByteArrayNativeTarget } from "../hardened/bytearray-native-authority";
 import { createHash } from "node:crypto";
@@ -48,6 +49,7 @@ const COMPILED_AUTHORITY_LOCK = Object.freeze({
 });
 
 export interface TranspileAuthority {
+    reflectionProvider?: ReflectionProviderTarget;
     authority: LoadedCapabilityAuthority;
     localTypes: LoadedLocalTypeAuthority;
     localMembers: LoadedLocalMemberAuthority;
@@ -313,7 +315,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             "localMemberMap", "localTypeMap", "nativeTimerAuthority", "runtimeTypeAuthorityLock",
             "runtimeTypePredicates", "sourceManifest", "sourceMemberAuthority"].concat(
                 Object.prototype.hasOwnProperty.call(profile.files,"byteArrayNative") ? ["byteArrayNative"] : [],
-                Object.prototype.hasOwnProperty.call(profile.files,"nativeDate") ? ["nativeDate"] : []))
+                Object.prototype.hasOwnProperty.call(profile.files,"nativeDate") ? ["nativeDate"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"reflectionProvider") ? ["reflectionProvider"] : []))
         || !exactKeys(profile.counts, ["localMembersComplete", "localMembersHeld", "localTypes", "mappedMembers", "mappedTypes", "sourceMemberTypes"])
         || !Array.isArray(profile.runtimePredicateQNames)
         || profile.runtimePredicateQNames.some(value => typeof value !== "string")) {
@@ -324,7 +327,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const profileRoot = dirname(resolve(profileLockPath));
     const files = profile.files as unknown as {
         capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
-        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; reflectionProvider?: ProfileFile;
         runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
         sourceMemberAuthority: ProfileFile;
     };
@@ -364,6 +367,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
         throw new CliError("application profile counts or runtime identity set do not match its pinned files", 6);
     }
     try {
+        const reflectionProvider=files.reflectionProvider ? loadReflectionProviderTarget(
+            profileFile(profileRoot,files.reflectionProvider,"reflection provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
         const byteArrayNative=files.byteArrayNative ? loadByteArrayNativeTarget(profileRoot,
             profileFile(profileRoot,files.byteArrayNative,"native ByteArray proof"),targetCapabilitiesPath,
             targetCapabilitiesJson,sourceMemberAuthorityJson,
@@ -408,7 +413,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             throw new CliError("application source member count differs from the profile lock", 6);
         }
         return Object.freeze({
-            authority, localTypes, localMembers, typeScriptVersion: profile.typeScriptVersion as string,
+            authority, localTypes, localMembers, ...(reflectionProvider ? {reflectionProvider} : {}), typeScriptVersion: profile.typeScriptVersion as string,
             sourceCensusSha256: profile.sourceCensusSha256 as string,
             targetCapabilitiesSha256: profile.targetCapabilitiesSha256 as string,
             capabilityMappingSha256: files.capabilityMapping.sha256,

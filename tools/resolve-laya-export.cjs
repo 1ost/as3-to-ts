@@ -55,6 +55,17 @@ if (!expected) throw new Error("Missing facade export");
 const matches = candidates.map((row, index) => ({ row, index, symbol: symbol(row.file, row.export) }))
     .filter(row => row.symbol === expected && expected.declarations?.some(declaration =>
         path.resolve(declaration.getSourceFile().fileName) === row.row.file
-        && (row.row.kind === "class" ? ts.isClassDeclaration(declaration) : ts.isInterfaceDeclaration(declaration))));
+        && (row.row.kind === "class" ? ts.isClassDeclaration(declaration)
+            : row.row.kind === "interface" ? ts.isInterfaceDeclaration(declaration)
+            : row.row.kind === "function" ? ts.isFunctionDeclaration(declaration) : false)));
 if (matches.length !== 1) throw new Error("No unique defining obligation for facade export");
+if (matches[0].row.kind === "function") {
+    const declarations = expected.declarations.filter(ts.isFunctionDeclaration);
+    const signatures = checker.getTypeOfSymbolAtLocation(expected, declarations[0]).getCallSignatures();
+    if (declarations.length !== 1 || signatures.length !== 1)
+        throw new Error("Function target must have one unambiguous declaration and signature");
+    const signature = checker.signatureToString(signatures[0], declarations[0],
+        ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.WriteArrowStyleSignature);
+    if (signature !== matches[0].row.signature) throw new Error("Function obligation signature differs from source");
+}
 process.stdout.write(JSON.stringify({ index: matches[0].index, inputs }) + "\n");
