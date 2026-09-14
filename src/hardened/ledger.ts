@@ -562,6 +562,25 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
         const textProperty = mapping.sourceQName === "flash.text.TextField" && mapping.sourceMember.access !== "call"
             && (TEXT_FIELD_PROPERTIES.has(mapping.sourceMember.name) || mapping.sourceMember.name === "textColor" && mapping.sourceMember.access === "read")
             && mapping.sourceRoles[0] === "instance-member";
+        const chromeTypes: {[name: string]: [string, string]} = {
+            textColor: ["uint", "number"], backgroundColor: ["uint", "number"],
+            background: ["Boolean", "boolean"], type: ["String", "string"],
+            border: ["Boolean", "boolean"], borderColor: ["uint", "number"],
+        };
+        const chromeType = chromeTypes[mapping.sourceMember.name];
+        const chromeWrite = mapping.sourceMember.access === "write";
+        const chromeSignature = chromeType && (chromeWrite
+            ? new RegExp("^public function set " + mapping.sourceMember.name + "\\([A-Za-z_$][A-Za-z0-9_$]*:" + chromeType[0] + "\\) : void$")
+            : new RegExp("^public function get " + mapping.sourceMember.name + "\\(\\) : " + chromeType[0] + "$"));
+        const textChromeProperty = !!chromeType && mapping.sourceQName === "flash.text.TextField"
+            && mapping.sourceRoles.length === 1 && mapping.sourceRoles[0] === "instance-member"
+            && mapping.targetCapabilityId === "api.flash.text"
+            && mapping.targetModule === "src/layaAir/flash/text/TextField.ts" && mapping.targetExport === "TextField"
+            && (chromeWrite || mapping.sourceMember.access === "read")
+            && mapping.sourceMember.minArgs === (chromeWrite ? 1 : 0) && mapping.sourceMember.maxArgs === (chromeWrite ? 1 : 0)
+            && !!chromeSignature && chromeSignature.test(mapping.sourceMember.signature)
+            && mapping.targetMember.name === mapping.sourceMember.name && mapping.targetMember.kind === "get+set"
+            && mapping.targetMember.scope === "instance" && mapping.targetMember.signature === chromeType[1];
         const leadingProperty = mapping.sourceQName === "flash.text.TextFormat"
             && mapping.targetModule === "src/layaAir/flash/text/TextFormat.ts" && mapping.targetExport === "TextFormat"
             && mapping.sourceMember.name === "leading" && mapping.targetMember.name === "leading"
@@ -585,7 +604,7 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
             && mappedPropertyType(mapping.sourceMember.signature,mapping.sourceMember.access)
                 === (expectedFormatType === "string" ? "string" : expectedFormatType === "number[]" ? "Array" : "Object")
             && [expectedFormatType,expectedFormatType+" | null","null | "+expectedFormatType].includes(formatSignature!);
-        if (!textProperty && !leadingProperty && !formatProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
+        if (!textProperty && !textChromeProperty && !leadingProperty && !formatProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
             || (mapping.sourceQName === "flash.text.TextField" ? mapping.sourceMember.name === "TextField"
                 ? mapping.sourceRoles[0] !== "constructor" : mapping.sourceRoles[0] !== "instance-member"
                 : mapping.sourceRoles[0] !== "constructor" || mapping.sourceMember.name !== mapping.targetExport))) {
