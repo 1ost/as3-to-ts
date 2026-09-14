@@ -1,0 +1,191 @@
+{
+  "schema": 1,
+  "scope": "Instance initialization diagnosis; runtimeAdmission remains false",
+  "compilerCommit": "18afdd776f22332c41b6520facf45fa237b78215",
+  "compilerFiles": [
+    {
+      "path": "src/emit/emitter.ts",
+      "sha256": "c99742dfc58282f4b2ea094dc7b02dda8a4702daccbfdac535bb6125364918b4"
+    },
+    {
+      "path": "src/emit/native-class-initializers.ts",
+      "sha256": "16a2357cfb8c85c066abc0c9144324437241608e528a61885108b9f3363eb295"
+    },
+    {
+      "path": "utils/nativeClass.ts",
+      "sha256": "a7c009093b6595a7eff00819b2942a4b570c3215774891e8a768c8f64f8a89a1"
+    },
+    {
+      "path": "utils/classBound.ts",
+      "sha256": "5518deb95419753cbff96cc3d3056651916e0641658fbf6c8224ece6bd1900ec"
+    },
+    {
+      "path": "utils/bound.ts",
+      "sha256": "ac1456b247647d4808f6405d2135b3927e26ee6483fd133cd0ccd9fd04ada8e5"
+    },
+    {
+      "path": "node_modules/typescript/lib/typescript.js",
+      "sha256": "98262ee92eaa2f6165d7181622dcc6a60828facfbe3aa1639dd03b2e4085d74e"
+    }
+  ],
+  "generatedOutputs": [
+    {
+      "path": "es5/Base.ts",
+      "sha256": "717a800de2922c0eecbfab83ff3a6ecb7511627645a4ad9a22bb4f7874aacc6d"
+    },
+    {
+      "path": "es5/BaseFailure.ts",
+      "sha256": "722d0906e335b22208368f5a0a7b3d2b94e7aa34d8beeb2046c6ac189b737eb9"
+    },
+    {
+      "path": "es5/Explicit.ts",
+      "sha256": "947b89e0ee7852baa7c02bed5a25a1d06ae79f82e7a04e1689667c6330fbf877"
+    },
+    {
+      "path": "es5/FieldFailure.ts",
+      "sha256": "539a60dc45c331853a350444b1f7eee7fe513dc0914bd1524d942b879c303368"
+    },
+    {
+      "path": "es5/Implicit.ts",
+      "sha256": "dced0d2f36c6a4b403ddc78a5d952684d5a7d715dc307d2c050b19219bd2ea15"
+    },
+    {
+      "path": "es5/Journal.ts",
+      "sha256": "52ec556d2d82148e2d730c65e14164908e8cc6b1c60800a01636ddd9a554871c"
+    },
+    {
+      "path": "es5/Leaf.ts",
+      "sha256": "9cb2bd82cec3f15fec84b573f40fb29972e2fe51434c43c5abefd2e85b69b0d1"
+    },
+    {
+      "path": "es5/Reentrant.ts",
+      "sha256": "4a59c106ae32b13d2fa2f766c2c25db986e30fa0c502ac9e09ec5e8b13628fcb"
+    },
+    {
+      "path": "es5/ThrowingBase.ts",
+      "sha256": "d8498bd89853b906113012bc48b09a1d10bb012451bd0dd1a0692146fb05a1ca"
+    },
+    {
+      "path": "es2015/Base.ts",
+      "sha256": "717a800de2922c0eecbfab83ff3a6ecb7511627645a4ad9a22bb4f7874aacc6d"
+    },
+    {
+      "path": "es2015/BaseFailure.ts",
+      "sha256": "722d0906e335b22208368f5a0a7b3d2b94e7aa34d8beeb2046c6ac189b737eb9"
+    },
+    {
+      "path": "es2015/Explicit.ts",
+      "sha256": "947b89e0ee7852baa7c02bed5a25a1d06ae79f82e7a04e1689667c6330fbf877"
+    },
+    {
+      "path": "es2015/FieldFailure.ts",
+      "sha256": "539a60dc45c331853a350444b1f7eee7fe513dc0914bd1524d942b879c303368"
+    },
+    {
+      "path": "es2015/Implicit.ts",
+      "sha256": "dced0d2f36c6a4b403ddc78a5d952684d5a7d715dc307d2c050b19219bd2ea15"
+    },
+    {
+      "path": "es2015/Journal.ts",
+      "sha256": "52ec556d2d82148e2d730c65e14164908e8cc6b1c60800a01636ddd9a554871c"
+    },
+    {
+      "path": "es2015/Leaf.ts",
+      "sha256": "9cb2bd82cec3f15fec84b573f40fb29972e2fe51434c43c5abefd2e85b69b0d1"
+    },
+    {
+      "path": "es2015/Reentrant.ts",
+      "sha256": "4a59c106ae32b13d2fa2f766c2c25db986e30fa0c502ac9e09ec5e8b13628fcb"
+    },
+    {
+      "path": "es2015/ThrowingBase.ts",
+      "sha256": "d8498bd89853b906113012bc48b09a1d10bb012451bd0dd1a0692146fb05a1ca"
+    }
+  ],
+  "files": [
+    {
+      "path": "oracle/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "oracle/commands.json",
+      "sha256": "5f6e168f7ec206cc161d095eb4354e3c0ac236de8c6a81b3f1ad59c1c5342314"
+    },
+    {
+      "path": "oracle/comparison.json",
+      "sha256": "788355babf3393053a67be62ca754aa2fb36a6815c083fbce218a770b5b9674e"
+    },
+    {
+      "path": "oracle/es2015/native.json",
+      "sha256": "f8bca7bfc0c5497495ae452ade05ff673036bea6f753e9b0b640fc9b18828612"
+    },
+    {
+      "path": "oracle/es5/native.json",
+      "sha256": "82e372c3e2fb820fcc4e36d63ba640fbfc9309317fe8ae915fda59d63c25ac2b"
+    },
+    {
+      "path": "oracle/flash.json",
+      "sha256": "e026977e86f85d77b4dfc80d29c8bf720036a1fca93e3dab17738f785c2e5858"
+    },
+    {
+      "path": "oracle/InstanceOracle.as",
+      "sha256": "df21f861fd37dc1f1a2803ab401f78b9bcb0f9893383e18ceccbe2c8fd0875b8"
+    },
+    {
+      "path": "oracle/instanceorder/Base.as",
+      "sha256": "d542ba1f519b2869d69b079eea01b78bec01eacc01ff0c54587fa4dee7b75e9e"
+    },
+    {
+      "path": "oracle/instanceorder/BaseFailure.as",
+      "sha256": "1abe4a934a110a1e7f98b05db71fc3465e64be98863fc32221b2974d83b14eb0"
+    },
+    {
+      "path": "oracle/instanceorder/Explicit.as",
+      "sha256": "2959940c00f9f00f6166c73581803c90fd87261f865979096c9e705b85c135dc"
+    },
+    {
+      "path": "oracle/instanceorder/FieldFailure.as",
+      "sha256": "e1317e281830d6a4824fe2b035b151605cbcdaa667da06c1ffdd0c25029d706b"
+    },
+    {
+      "path": "oracle/instanceorder/Implicit.as",
+      "sha256": "fe19a6f310aa8557d7ebc158e96f284146fba462e130bdc0db3ea6b03618e4c9"
+    },
+    {
+      "path": "oracle/instanceorder/Journal.as",
+      "sha256": "d3e223eda8050c3ec8487ea27737d8eef285056f242aca6a4fc284c074fe27f1"
+    },
+    {
+      "path": "oracle/instanceorder/Leaf.as",
+      "sha256": "6df804425fa30dc7c680705c5e9f0947a1db9a82b15ae9c3c986503a1e7619fd"
+    },
+    {
+      "path": "oracle/instanceorder/Reentrant.as",
+      "sha256": "007532b60ebe906e59fc4558be89833fafc46cfb042f354dc6a82cefed96f11d"
+    },
+    {
+      "path": "oracle/instanceorder/ThrowingBase.as",
+      "sha256": "66c6677c7947b11f1be7dcbc48d140f5fa4e61e7cd99b6f936bf3906e1c5f3ec"
+    },
+    {
+      "path": "oracle/provenance.json",
+      "sha256": "0bc6907c318d3ca6f27489aac229bceb895b92b8169ab91b4d07c76d4a22cd1c"
+    },
+    {
+      "path": "capture.py",
+      "sha256": "90b580badbcf86df6fe5291e2ad0af9ecdb5d07b679261cfb7ad34ec87e3fecd"
+    },
+    {
+      "path": "CompareCurrentEmission.js",
+      "sha256": "ac3d595a6718f4d6a1088c6e757fa3905b8f459eca239eee8e726667516eab2b"
+    },
+    {
+      "path": "NativeLanguageConstraintTests.js",
+      "sha256": "10033ec666f95eba784dd44485537742048f93c8d1276aab20500c3a3c69e524"
+    },
+    {
+      "path": "RetainEvidence.py",
+      "sha256": "1b4118c625102074a9000cc3c07dda0622cfd41dd1478094be6c81e1a5f66880"
+    }
+  ]
+}

@@ -8,7 +8,8 @@ import { bindDeclaredInstanceMethods } from './bound';
 export function classBound(target: any): any {
     return new Proxy(target, {
         construct(original: any, args: any[], newTarget: any): object {
-            const instance = Reflect.construct(original, args, newTarget);
+            // Reflect.construct returns an object; newer TypeScript infers unknown for an any target.
+            const instance = Reflect.construct(original, args, newTarget) as object;
             bindDeclaredInstanceMethods(instance);
             return instance;
         },

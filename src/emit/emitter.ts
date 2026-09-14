@@ -9,6 +9,7 @@ import {ReportFlags} from '../reports/report-flags';
 import {NativeNamespaces} from './native-namespaces';
 import {logicalAssignmentType} from './logical-assignment';
 import {NativeClassInitializers, NativeClassInitializationOptions} from './native-class-initializers';
+import {NativeCallableClasses, NativeCallableClassOptions} from './native-callable-classes';
 
 const util = require('util');
 
@@ -97,6 +98,11 @@ export interface EmitterOptions {
 	/** Exact imported AS3 namespace QName -> URI identities, supplied by source discovery. */
 	namespaceUris?:{[qname:string]:string};
 	nativeClassInitialization?: NativeClassInitializationOptions;
+	nativeCallableClasses?: NativeCallableClassOptions;
+	/** Common Laya AS3MethodBinding module; required by callable source emission. */
+	nativeCallableMethodBindingModule?: string;
+	/** Common Laya AS3Coercion module; required for callable numeric constructor parameters. */
+	nativeCallableCoercionModule?: string;
 }
 
 
@@ -278,7 +284,10 @@ export default class Emitter {
 		this.output = this.output.replace(/\s([^\n])\s*?=>/gm, " =>");//TODO hotfix. To remove new lines between arrow operator nad {
 		if (this.logicalAssignmentTemps.size)
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
-		return this.headOutput + this.namespaces.keyDeclarations() + this.output;
+		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
+			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule)
+			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
 	enterScope(declarations:Declaration[]):Scope {
@@ -2145,8 +2154,23 @@ function isCast(emitter:Emitter, node:Node):boolean {
 
 
 function emitCatch(emitter:Emitter, node:Node):void {
-	emitter.declareInScope({name: node.children[0].text, as3Type: '*'})
+	const name = node.findChild(NodeKind.NAME), type = node.findChild(NodeKind.TYPE);
+	if (emitter.options.nativeCallableClasses) {
+		if (type && type.text !== '*')
+			throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: typed catch requires AS3 exception dispatch');
+		if (node.previousSibling && node.previousSibling.kind === NodeKind.CATCH
+			|| node.nextSibling && node.nextSibling.kind === NodeKind.CATCH)
+			throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: multiple catch clauses require AS3 exception dispatch');
+	}
+	emitter.declareInScope({name: name.text, as3Type: '*'})
 	emitter.catchup(node.start);
+	if (type && type.text === '*') {
+		// JavaScript already catches every thrown value; TypeScript forbids a catch annotation.
+		emitter.catchup(name.end);
+		emitter.skipTo(type.end);
+		visitNodes(emitter, node.children.slice(node.children.indexOf(type) + 1));
+		return;
+	}
 	visitNodes(emitter, node.children);
 }
 
@@ -2407,7 +2431,12 @@ function getTypedAssignmentTarget(emitter: Emitter, node: Node): TypedAssignment
 }
 
 function emitIntegerCoercionStart(emitter: Emitter): void {
-    emitter.insert('(Number(');
+    if (emitter.options.nativeCallableClasses) {
+        let alias = '__as3_callable_integerIntrinsics';
+        while (emitter.source.indexOf(alias) >= 0) alias += '_';
+        emitter.ensureImportIdentifier('callableClassIntrinsics as ' + alias, (ClassList.getLastPathToRoot() || './') + 'callableClass', false);
+        emitter.insert('(' + alias + '.number(');
+    } else emitter.insert('(Number(');
 }
 
 function emitIntegerCoercionEnd(emitter: Emitter, as3Type: string): void {

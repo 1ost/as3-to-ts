@@ -1,0 +1,170 @@
+[
+  {
+    "target": "ES5",
+    "rows": [
+      [
+        "bindNew",
+        "ok",
+        7,
+        true,
+        1
+      ],
+      [
+        "freshPrototype",
+        "ok",
+        7,
+        true,
+        1
+      ],
+      [
+        "aliasCoerce",
+        "error",
+        1006,
+        1
+      ]
+    ],
+    "errors": [
+      {
+        "name": "aliasCoerce",
+        "error": "TypeError: Error #1006"
+      }
+    ],
+    "diagnostics": [],
+    "compilerHashes": {
+      "src/emit/native-callable-classes.ts": "c45395b564999f27b213bbf7d0d18df2f0518c772c6f3352b83a6ebe4d6a1b6a",
+      "lib/emit/native-callable-classes.js": "3280e8627af9684f4548a8831716bb15f92a29c8cf55449925f27ccf0b8a333f",
+      "utils/callableClass.ts": "5e6db61e3a9f37f97ce88f60d6e9e677024fee2f634ceb9393f4a94d5a8e2e70"
+    },
+    "mismatch": [
+      {
+        "expected": [
+          "bindNew",
+          "error",
+          1006,
+          0
+        ],
+        "actual": [
+          "bindNew",
+          "ok",
+          7,
+          true,
+          1
+        ]
+      },
+      {
+        "expected": [
+          "freshPrototype",
+          "error",
+          1006,
+          0
+        ],
+        "actual": [
+          "freshPrototype",
+          "ok",
+          7,
+          true,
+          1
+        ]
+      },
+      {
+        "expected": [
+          "aliasCoerce",
+          "ok",
+          7,
+          true,
+          1
+        ],
+        "actual": [
+          "aliasCoerce",
+          "error",
+          1006,
+          1
+        ]
+      }
+    ]
+  },
+  {
+    "target": "ES2015",
+    "rows": [
+      [
+        "bindNew",
+        "ok",
+        7,
+        true,
+        1
+      ],
+      [
+        "freshPrototype",
+        "ok",
+        7,
+        true,
+        1
+      ],
+      [
+        "aliasCoerce",
+        "error",
+        1006,
+        1
+      ]
+    ],
+    "errors": [
+      {
+        "name": "aliasCoerce",
+        "error": "TypeError: Error #1006"
+      }
+    ],
+    "diagnostics": [],
+    "compilerHashes": {
+      "src/emit/native-callable-classes.ts": "c45395b564999f27b213bbf7d0d18df2f0518c772c6f3352b83a6ebe4d6a1b6a",
+      "lib/emit/native-callable-classes.js": "3280e8627af9684f4548a8831716bb15f92a29c8cf55449925f27ccf0b8a333f",
+      "utils/callableClass.ts": "5e6db61e3a9f37f97ce88f60d6e9e677024fee2f634ceb9393f4a94d5a8e2e70"
+    },
+    "mismatch": [
+      {
+        "expected": [
+          "bindNew",
+          "error",
+          1006,
+          0
+        ],
+        "actual": [
+          "bindNew",
+          "ok",
+          7,
+          true,
+          1
+        ]
+      },
+      {
+        "expected": [
+          "freshPrototype",
+          "error",
+          1006,
+          0
+        ],
+        "actual": [
+          "freshPrototype",
+          "ok",
+          7,
+          true,
+          1
+        ]
+      },
+      {
+        "expected": [
+          "aliasCoerce",
+          "ok",
+          7,
+          true,
+          1
+        ],
+        "actual": [
+          "aliasCoerce",
+          "error",
+          1006,
+          1
+        ]
+      }
+    ]
+  }
+]

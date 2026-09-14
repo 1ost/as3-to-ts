@@ -1,0 +1,24 @@
+[
+  {
+    "target": "ES5",
+    "flashRows": 49,
+    "nativeRows": 52,
+    "exactMatch": false,
+    "firstDifference": 1,
+    "unexpectedFailure": null,
+    "runtimeAdmission": false
+  },
+  {
+    "target": "ES2015",
+    "flashRows": 49,
+    "nativeRows": 1,
+    "exactMatch": false,
+    "firstDifference": 1,
+    "unexpectedFailure": {
+      "name": "ReferenceError",
+      "message": "Must call super constructor in derived class before accessing 'this' or returning from derived constructor",
+      "errorID": null
+    },
+    "runtimeAdmission": false
+  }
+]

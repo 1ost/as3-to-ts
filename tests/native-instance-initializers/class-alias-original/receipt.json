@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "scope": "Unresolved original Flash Class alias bind, prototype delegate and coercion requirements; no fidelity admission",
+  "files": [
+    {
+      "path": "class-alias-original/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "class-alias-original/commands.json",
+      "sha256": "6d6dc87fc8aa8da246eca10c7b02b3179ee1975b331d7191e7f6f78373bfe4a9"
+    },
+    {
+      "path": "class-alias-original/EntryOracle.as",
+      "sha256": "fa030eaadca7eb475c34e276dd48f8b5761413f125c048403573d3a08dbc4cb9"
+    },
+    {
+      "path": "class-alias-original/entryreview/Probe.as",
+      "sha256": "040b4e5e267f0b3fe9c50401d3cf4676b74d2beb856a8f84f730e6ef1b98156d"
+    },
+    {
+      "path": "class-alias-original/entryreview/Subject.as",
+      "sha256": "fe4a2c2421628dbca961812496e06973a5bb71826d0201c515f25ea125c47d9b"
+    },
+    {
+      "path": "class-alias-original/flash.json",
+      "sha256": "0a7e1620d6ae0eb3d8af1e04c10191df538aa1806e44349f859a618a0b3171d7"
+    },
+    {
+      "path": "class-alias-original/provenance.json",
+      "sha256": "533bc42a73d6d4a8ed151491dd257ee797649147e2bb95ba574bc87889e2b1de"
+    },
+    {
+      "path": "class-alias-original/review-comparison.json",
+      "sha256": "9d00ef49b7e2e77b6cd9c924692e904f7efdf6694701b9f6482f641a451bf8c3"
+    },
+    {
+      "path": "RetainClassAliases.py",
+      "sha256": "9effead8ea0eed8cf2ab5b7fd6827ad0af6a0920cc47b1c8a26a4e8551e436fb"
+    }
+  ]
+}

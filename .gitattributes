@@ -2,3 +2,7 @@ tests/native-assignments/oracle/* -text
 tests/native-assignments/RetainFlashAssignments.js text eol=lf
 tests/native-class-initializers/oracle/** -text
 tests/native-class-initializers/RetainOracleEvidence.js text eol=lf
+
+# Retain original Flash evidence and receipt hashes byte-for-byte.
+tests/native-instance-initializers/** -text whitespace=cr-at-eol
+tests/native-callable-prerequisites/** -text whitespace=cr-at-eol

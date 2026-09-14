@@ -1,0 +1,22 @@
+[
+  "derived-field",
+  "active:1006",
+  "argument:start",
+  "argument-base-replay:1006",
+  "argument:end",
+  "base-field",
+  "base-body:3",
+  "derived-body:7",
+  "completed:1006",
+  "completed-value:42",
+  "failed-ready",
+  "field-throw",
+  "failure:true",
+  "failed:1006",
+  "failed-value:7",
+  "failed-ready",
+  "field-throw",
+  "failure:true",
+  "failed:1006",
+  "failed-value:7"
+]

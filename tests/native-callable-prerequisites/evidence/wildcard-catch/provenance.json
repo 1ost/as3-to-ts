@@ -1,0 +1,80 @@
+{
+  "files": [
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\sources\\CatchOracle.as",
+      "sha256": "52cf7c39887b0bed1ce9167a3b34444d97b62954494c5f1135afacee038b1678"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\sources\\catching\\Journal.as",
+      "sha256": "3eb45a3c1ed4c80cec6cf9129bec1ff361715bf5ef8ff609358527189384446a"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\sources\\catching\\Subject.as",
+      "sha256": "0d493b792fa0b1eb5094a3d9bd18288df2c3fd465b8aa0f9ef3638218d74ba68"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\capture.cjs",
+      "sha256": "a4f5a6f1b6177805f1fcec356d4ab39738e0efb96796aad1eba17e3e03fd85cb"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\oracle.swf",
+      "sha256": "89dd46a7a330d1d4f319b6a0bb430e86fae77d96710e83941e2c5b48b1547339"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\flash.json",
+      "sha256": "aa635d63e2a6bf8665452b5c364929e43c7374d4c495aa9da9840c4bd3237e59"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\capture.py",
+      "sha256": "039bb798709d3006aa199808d3396cd2ab2f7cb946d98c94e6c55c6eeed4f2d0"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-debug=true",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\sources",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\sources\\CatchOracle.as"
+      ],
+      "exitCode": 0,
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\oracle.swf (2119 bytes)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\capture.cjs",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-wildcard-catch\\flash-wcabljil\\flash.json",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+      ],
+      "exitCode": 0,
+      "stdout": "\n",
+      "stderr": ""
+    }
+  ]
+}

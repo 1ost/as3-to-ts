@@ -1,0 +1,369 @@
+import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
+import K from '../syntax/nodeKind';
+import parse = require('../parse');
+
+export interface NativeCallableClassOptions { [qname: string]: string; }
+interface SourceClass {
+    qname: string; name: string; base: string; fields: {name: string; value: string}[];
+    parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string}[]; usesArguments: boolean;
+    instanceMembers: {name: string; method: boolean}[];
+}
+
+/** Explicit closed-source prototype. No provider allocation or constructor-body dispatcher. */
+export class NativeCallableClasses {
+    private classes = new Map<string, SourceClass>();
+    private own: SourceClass;
+    private ts: any;
+    private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string) {
+        if (!options) return;
+        if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
+            || /[\r\n\u0000]/.test(methodBindingModule))
+            this.fail('callable source methods require the common AS3MethodBinding module');
+        if (typeof options !== 'object' || Array.isArray(options)
+            || Object.getPrototypeOf(options) !== Object.prototype && Object.getPrototypeOf(options) !== null)
+            this.fail('invalid exact source class map');
+        const roots = new Map<string, Node>();
+        Object.keys(options).forEach(qname => {
+            if (typeof options[qname] !== 'string' || !lazy || lazy[qname] !== 'lazy') this.fail('source identity must be lazy: ' + qname);
+            const root = parse(qname + '.as', options[qname]), declarations: Node[] = [];
+            const walk = (node: Node): void => {
+                if (!node) return;
+                node.children = node.children.filter(child => !!child);
+                if (node.kind === K.CLASS) declarations.push(node);
+                node.children.forEach(child => { if (child) child.parent = node; walk(child); });
+            };
+            walk(root);
+            if (declarations.length !== 1) this.fail('exactly one source class is required: ' + qname);
+            const cls = declarations[0], name = cls.findChild(K.NAME).text;
+            let pkg = cls.parent; while (pkg && pkg.kind !== K.PACKAGE) pkg = pkg.parent;
+            const namespace = pkg && pkg.findChild(K.NAME).text || '';
+            if ((namespace ? namespace + '.' : '') + name !== qname) this.fail('mismatched source identity: ' + qname);
+            const classAliases = new Set<string>(Object.keys(options).map(key => key.split('.').pop()));
+            const aliasScan = (node: Node): void => {
+                if (node.kind === K.NAME_TYPE_INIT && node.findChild(K.TYPE) && node.findChild(K.TYPE).text === 'Class')
+                    classAliases.add(node.findChild(K.NAME).text);
+                node.children.forEach(aliasScan);
+            };
+            aliasScan(cls);
+            const callScan = (node: Node): void => {
+                const receiver = node.children[0] && unwrapEncapsulatedExpression(node.children[0]);
+                if (node.kind === K.DOT && receiver && classAliases.has(receiver.text)
+                    && ['call', 'apply', 'bind', 'prototype'].indexOf(node.children[1].text) >= 0)
+                    this.fail('direct callable-constructor invocation/prototype manipulation');
+                if (node.kind === K.CALL && node.children[0] && classAliases.has(node.children[0].text)
+                    && !Object.keys(options).some(key => key.split('.').pop() === node.children[0].text))
+                    this.fail('dynamic Class invocation requires exact constructor authority');
+                node.children.forEach(callScan);
+            };
+            callScan(cls);
+            if (cls.findChild(K.IMPLEMENTS_LIST)) this.fail('interface construction identity requires separate authority');
+            let base = null;
+            const ext = cls.findChild(K.EXTENDS);
+            if (ext) {
+                if (ext.text.indexOf('.') >= 0) this.fail('qualified base syntax');
+                const candidates: string[] = [];
+                const local = (namespace ? namespace + '.' : '') + ext.text;
+                if (Object.prototype.hasOwnProperty.call(options, local)) candidates.push(local);
+                pkg.findChild(K.CONTENT).findChildren(K.IMPORT).forEach(imp => {
+                    const candidate = imp.text.endsWith('.*') ? imp.text.slice(0, -1) + ext.text : imp.text;
+                    if (candidate.split('.').pop() === ext.text && Object.prototype.hasOwnProperty.call(options, candidate)
+                        && candidates.indexOf(candidate) < 0) candidates.push(candidate);
+                });
+                if (candidates.length !== 1) this.fail('mixed/unknown/ambiguous base chain: ' + qname + ' extends ' + ext.text);
+                base = candidates[0];
+            }
+            const fields: {name: string; value: string}[] = [];
+            const instanceMembers: {name: string; method: boolean}[] = [];
+            cls.findChild(K.CONTENT).children.forEach(member => {
+                const mods = member.findChild(K.MOD_LIST);
+                const isStatic = mods && mods.children.some(mod => mod.text === 'static');
+                if (!isStatic && [K.FUNCTION, K.GET, K.SET].indexOf(member.kind) >= 0) {
+                    const memberName = member.findChild(K.NAME).text;
+                    if (memberName !== name) instanceMembers.push({name: memberName, method: member.kind === K.FUNCTION});
+                }
+                if (member.kind !== K.VAR_LIST && member.kind !== K.CONST_LIST) return;
+                if (member.kind === K.CONST_LIST && !isStatic) this.fail('instance const descriptors need separate authority');
+                if (isStatic) return;
+                member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
+                    const fieldName = field.findChild(K.NAME).text, typeNode = field.findChild(K.TYPE);
+                    instanceMembers.push({name: fieldName, method: false});
+                    if (['constructor', '__proto__', 'prototype'].indexOf(fieldName) >= 0) this.fail('reserved construction identity field');
+                    const type = typeNode && typeNode.text;
+                    fields.push({name: fieldName, value: type === 'int' || type === 'uint' ? '0' : type === 'Number' ? '(0/0)'
+                        : type === 'Boolean' ? 'false' : !type || type === '*' ? 'void 0' : 'null'});
+                });
+            });
+            const constructor = cls.findChild(K.CONTENT).children.find(member => member.kind === K.FUNCTION && member.findChild(K.NAME).text === name);
+            const parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string}[] = [];
+            let usesArguments = false;
+            if (constructor) {
+                constructor.findChild(K.PARAMETER_LIST).children.forEach(parameter => {
+                    if (parameter.findChild(K.REST)) this.fail('rest constructor argument authority');
+                    const value = parameter.findChild(K.NAME_TYPE_INIT), type = value.findChild(K.TYPE);
+                    const sourceType = type && type.text || '*';
+                    if (['Number', 'int', 'uint', 'Boolean', 'Object', '*'].indexOf(sourceType) < 0)
+                        this.fail('constructor parameter coercion needs common provider authority: ' + sourceType);
+                    if (['Number', 'int', 'uint'].indexOf(sourceType) >= 0
+                        && (typeof coercionModule !== 'string' || !coercionModule.trim()
+                            || /[\r\n\u0000]/.test(coercionModule)))
+                        this.fail('numeric constructor parameters require the common AS3Coercion module');
+                    const init = value.findChild(K.INIT);
+                    let defaultLiteral: string;
+                    if (init && ['Number', 'int', 'uint'].indexOf(sourceType) >= 0) {
+                        const expression = init.children[0];
+                        defaultLiteral = expression.kind === K.LITERAL ? expression.text
+                            : (expression.kind === K.MINUS || expression.kind === K.PLUS)
+                                && expression.children.length === 1 && expression.children[0].kind === K.LITERAL
+                                ? (expression.kind === K.MINUS ? '-' : '+') + expression.children[0].text : '';
+                        const numeric = /^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(defaultLiteral)
+                            ? Number(defaultLiteral) : NaN;
+                        if (/^[+-]?0[0-9]/.test(defaultLiteral) || !isFinite(numeric) || sourceType !== 'Number'
+                            && (Math.floor(numeric) !== numeric || numeric < (sourceType === 'int' ? -2147483648 : 0)
+                                || numeric > (sourceType === 'int' ? 2147483647 : 4294967295)))
+                            this.fail('numeric constructor default requires finite source literal authority');
+                    }
+                    parameters.push({name:value.findChild(K.NAME).text, type:sourceType, optional:!!init, defaultLiteral});
+                });
+                const scanArguments = (node: Node): void => {
+                    if (node.kind === K.FUNCTION || node.kind === K.LAMBDA) {
+                        const nested = (child: Node): void => {
+                            if (child.kind === K.IDENTIFIER && child.text === 'arguments')
+                                this.fail('nested function arguments require separate lexical scope authority');
+                            child.children.forEach(nested);
+                        };
+                        nested(node); return;
+                    }
+                    if (node.kind === K.IDENTIFIER && node.text === 'arguments') usesArguments = true;
+                    node.children.forEach(scanArguments);
+                };
+                scanArguments(constructor.findChild(K.BLOCK));
+            }
+            const value = {qname, name, base, fields, parameters, usesArguments, instanceMembers}; this.classes.set(qname, value); roots.set(qname, cls);
+            if (options[qname] === source) {
+                if (this.own) this.fail('ambiguous current source');
+                this.own = value;
+            }
+        });
+        if (!this.own) this.fail('current source bytes are absent from exact class map');
+        this.classes.forEach(value => {
+            const chain = new Set<string>(), slots = new Set<string>();
+            for (let current = value; current; current = this.classes.get(current.base)) {
+                if (chain.has(current.qname)) this.fail('cyclic source inheritance');
+                chain.add(current.qname);
+                current.fields.forEach(field => {
+                    if (slots.has(field.name)) this.fail('colliding source slot identity: ' + field.name);
+                    slots.add(field.name);
+                });
+            }
+        });
+        // This optional compiler pass uses the toolkit's installed TypeScript parser.
+        this.ts = require('typescript');
+    }
+
+    public lower(source: string): string {
+        if (!this.own) return source;
+        const ts = this.ts, S = ts.SyntaxKind, name = this.own.name;
+        const file = ts.createSourceFile('Callable.ts', source, ts.ScriptTarget.Latest, true);
+        if (file.parseDiagnostics.length) this.fail('intermediate native syntax');
+        let cls: any, alias: any;
+        const visit = (node: any): void => {
+            if (node.kind === S.ClassDeclaration && node.name.text === name) cls = node;
+            if (node.kind === S.TypeAliasDeclaration && node.name.text === name) alias = node;
+            ts.forEachChild(node, visit);
+        };
+        visit(file);
+        if (!cls || !alias) this.fail('expected complete native class and instance type');
+        const unique = (label: string): string => { let result = '__as3_callable_' + label; while (source.indexOf(result) >= 0) result += '_'; return result; };
+        const baseName = unique('base'), constructorType = unique('constructor'), bindName = unique('bind');
+        const intrinsic = unique('intrinsics'), identity = unique('identity'), fresh = unique('fresh'), succeeded = unique('succeeded');
+        const functionType = unique('functionType'), superArguments = unique('superArguments');
+        const numberCoercion = unique('number'), intCoercion = unique('int'), uintCoercion = unique('uint');
+        const sourceArguments = unique('arguments');
+        const constructorCompletion = unique('constructorCompletion');
+        const text = (node: any): string => node.getText(file);
+        const params = (member: any, signature: boolean): string => member.parameters.map((p: any) => {
+            if (!signature) return text(p);
+            return (p.dotDotDotToken ? '...' : '') + text(p.name) + (p.questionToken || p.initializer ? '?' : '')
+                + ': ' + (p.type ? text(p.type) : 'any');
+        }).join(', ');
+        const type = (node: any): string => node.type ? text(node.type) : 'any';
+        const instanceTypes: string[] = [], staticTypes: string[] = [], definitions: string[] = [], initializers: string[] = [];
+        const staticMethods: string[] = [];
+        let ctor: any, constructorReturns = 0;
+        const body = (member: any, constructor: boolean): string => {
+            if (!member.body) this.fail('bodyless member');
+            const edits: {start: number; end: number; value: string}[] = [];
+            let superCount = 0;
+            const isSourceArguments = (node: any): boolean => {
+                if (!constructor || node.kind !== S.Identifier || node.text !== 'arguments') return false;
+                if ((node.parent.kind === S.PropertyAccessExpression || node.parent.kind === S.PropertyAssignment)
+                    && node.parent.name === node) return false;
+                let scope = node.parent;
+                while (scope !== member.body && scope.kind !== S.FunctionExpression
+                    && scope.kind !== S.FunctionDeclaration && scope.kind !== S.ArrowFunction) scope = scope.parent;
+                return scope === member.body;
+            };
+            const argumentExpression = (node: any): string => {
+                let result = text(node);
+                const references: any[] = [];
+                const collect = (child: any): void => {
+                    if (isSourceArguments(child)) references.push(child);
+                    ts.forEachChild(child, collect);
+                };
+                collect(node);
+                references.sort((a,b) => b.getStart(file) - a.getStart(file)).forEach(reference => {
+                    const start = reference.getStart(file) - node.getStart(file);
+                    result = result.slice(0, start) + sourceArguments + result.slice(start + reference.end - reference.getStart(file));
+                });
+                return result;
+            };
+            const walk = (node: any, insideSuperArguments: boolean = false, nestedFunction: boolean = false): void => {
+                if (isSourceArguments(node) && (node.parent.kind === S.PropertyAccessExpression
+                        && node.parent.name.text === 'callee' || node.parent.kind === S.ElementAccessExpression
+                        && node.parent.argumentExpression.kind === S.StringLiteral && node.parent.argumentExpression.text === 'callee'))
+                    this.fail('arguments.callee requires separate callable identity authority');
+                if (isSourceArguments(node) && !insideSuperArguments)
+                    edits.push({start:node.getStart(file), end:node.end, value:sourceArguments});
+                if (node.kind === S.SuperKeyword) this.fail('super property access requires separate receiver authority');
+                if (node.kind === S.ReturnStatement && constructor && !nestedFunction) {
+                    if (node.expression) this.fail('constructor return value');
+                    constructorReturns++;
+                    // Exiting a labeled block preserves all source finally effects.
+                    // Completion is recorded only after those effects succeed.
+                    edits.push({start: node.getStart(file), end: node.end,
+                        value: 'break ' + constructorCompletion + ';'});
+                    return;
+                }
+                if (node.kind === S.CallExpression && node.expression.kind === S.SuperKeyword) {
+                    if (!constructor || node.parent.kind !== S.ExpressionStatement || node.parent.parent !== member.body)
+                        this.fail('non-straight-line super construction');
+                    if (++superCount > 1) this.fail('repeated super construction');
+                    edits.push({start: node.getStart(file), end: node.end,
+                        value: '{const ' + superArguments + ': any[] = [' + node.arguments.map(argumentExpression).join(', ') + ']; '
+                            + intrinsic + '.expectBase(this, ' + identity + ', ' + baseName + '); '
+                            + intrinsic + '.apply(' + baseName + ', this, ' + superArguments + '); }'});
+                    node.arguments.forEach((argument: any) => walk(argument, true, nestedFunction)); return;
+                }
+                const childFunction = nestedFunction || node.kind === S.FunctionExpression
+                    || node.kind === S.FunctionDeclaration || node.kind === S.ArrowFunction
+                    || node.kind === S.MethodDeclaration || node.kind === S.GetAccessor || node.kind === S.SetAccessor;
+                ts.forEachChild(node, (child: any) => walk(child, insideSuperArguments, childFunction));
+            };
+            walk(member.body);
+            if (constructor && this.own.base && superCount !== 1) this.fail('missing source-base constructor call');
+            let result = source.slice(member.body.getStart(file) + 1, member.body.end - 1);
+            const offset = member.body.getStart(file) + 1;
+            edits.sort((a,b) => b.start - a.start).forEach(edit => {
+                result = result.slice(0, edit.start - offset) + edit.value + result.slice(edit.end - offset);
+            });
+            return result;
+        };
+        const accessorTypes = new Set<string>();
+        cls.members.forEach((member: any) => {
+            const isStatic = member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword);
+            const destination = isStatic ? name : name + '.prototype';
+            if (member.kind === S.Constructor) { ctor = member; return; }
+            if (!member.name || member.name.kind !== S.Identifier) this.fail('computed member identity');
+            const key = member.name.text, encoded = JSON.stringify(key);
+            if (key === 'constructor') this.fail('reserved constructor member');
+            if (isStatic && ['prototype', 'call', 'apply', 'bind'].indexOf(key) >= 0)
+                this.fail('reserved static callable constructor identity');
+            if (member.kind === S.PropertyDeclaration) {
+                (isStatic ? staticTypes : instanceTypes).push(key + ': ' + type(member) + ';');
+                if (isStatic) definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
+                    + ', {value: ' + (member.initializer ? text(member.initializer) : 'void 0') + ', writable:true, enumerable:true, configurable:false});');
+                else if (member.initializer) initializers.push('this[' + encoded + '] = ' + text(member.initializer) + ';');
+                return;
+            }
+            const receiver = isStatic ? constructorType : name;
+            const functionValue = 'function(this: ' + receiver + (member.parameters.length ? ', ' : '') + params(member, false)
+                + ')' + (member.type ? ': ' + text(member.type) : '') + ' {' + body(member, false) + '}';
+            if (member.kind === S.MethodDeclaration) {
+                (isStatic ? staticTypes : instanceTypes).push(key + '(' + params(member, true) + '): ' + type(member) + ';');
+                definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
+                    + ', {value: ' + functionValue + ', writable:true, configurable:true, enumerable:false});');
+                if (isStatic) staticMethods.push(key);
+            } else if (member.kind === S.GetAccessor || member.kind === S.SetAccessor) {
+                const identity = (isStatic ? 'static.' : '') + key;
+                if (!accessorTypes.has(identity)) {
+                    (isStatic ? staticTypes : instanceTypes).push(key + ': ' + (member.kind === S.GetAccessor ? type(member) : type(member.parameters[0])) + ';');
+                    accessorTypes.add(identity);
+                }
+                definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
+                    + ', ' + intrinsic + '.assign({}, ' + intrinsic + '.getOwnPropertyDescriptor(' + destination + ', ' + encoded + '), {'
+                    + (member.kind === S.GetAccessor ? 'get' : 'set') + ': ' + functionValue + ', configurable:true, enumerable:false}));');
+            } else this.fail('unrecognized complete class member');
+        });
+        if (!ctor && this.own.base) this.fail('synthesized derived constructor needs source arity authority');
+        const chainFields: {name: string; value: string}[] = [];
+        for (let current = this.own; current; current = this.classes.get(current.base)) chainFields.push(...current.fields);
+        const memberNames = new Set<string>(), instanceMethods: string[] = [];
+        for (let current = this.own; current; current = this.classes.get(current.base)) {
+            current.instanceMembers.forEach(member => {
+                if (!memberNames.has(member.name)) {
+                    memberNames.add(member.name);
+                    if (member.method) instanceMethods.push(member.name);
+                }
+            });
+        }
+        const bindInstance = instanceMethods.map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
+        const defaults = chainFields.map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
+            + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
+        const ancestry = cls.heritageClauses && cls.heritageClauses[0];
+        const base = ancestry ? 'const ' + baseName + ' = ' + text(ancestry.types[0].expression) + ';\n' : '';
+        const sourceBaseName = this.own.base && this.classes.get(this.own.base).name;
+        const constructorBody = ctor ? body(ctor, true) : '';
+        const tail = ctor && ctor.body.statements[ctor.body.statements.length - 1];
+        const completion = !constructorReturns && tail && tail.kind === S.ThrowStatement ? '' : succeeded + ' = true;';
+        const completedBody = constructorReturns ? constructorCompletion + ': {\n' + constructorBody + '\n}' : constructorBody;
+        const required = this.own.parameters.filter(parameter => !parameter.optional).length;
+        const arity = 'if (arguments.length < ' + required
+            + (this.own.usesArguments ? '' : ' || arguments.length > ' + this.own.parameters.length)
+            + ') {throw ' + intrinsic + '.arityError();}\n';
+        const coercions = this.own.parameters.map((parameter, index) => {
+            const value = parameter.name;
+            const conversion = parameter.type === 'Number' ? numberCoercion + '(' + value + ')'
+                : parameter.type === 'int' ? intCoercion + '(' + value + ')' : parameter.type === 'uint' ? uintCoercion + '(' + value + ')'
+                : parameter.type === 'Boolean' ? '!!' + value : parameter.type === 'Object' ? '(' + value + ' === void 0 ? null : ' + value + ')' : value;
+            const defaultValue = parameter.defaultLiteral !== undefined
+                ? (parameter.type === 'Number' ? numberCoercion : parameter.type === 'int' ? intCoercion : uintCoercion)
+                    + '(' + parameter.defaultLiteral + ')'
+                : parameter.optional && text(ctor.parameters[index].initializer);
+            return value + ' = ' + (parameter.optional ? 'arguments.length <= ' + index + ' ? ' + defaultValue + ' : ' : '') + conversion + ';\n'
+                + 'if (arguments.length > ' + index + ') arguments[' + index + '] = ' + value + ';';
+        }).join('\n');
+        const replacement = base + 'const ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
+            + (ctor && ctor.parameters.length ? ', ' + params(ctor, true) : '') + ') {\n'
+            + 'const ' + fresh + ' = ' + intrinsic + '.enter(this, ' + identity + ');\nlet ' + succeeded + ' = false;\ntry {\n'
+            + arity + coercions
+            + (this.own.usesArguments ? '\nlet ' + sourceArguments + ': any[] = '
+                + intrinsic + '.apply(' + intrinsic + '.arraySlice, arguments, []);\n' : '') + '\nif (' + fresh + ') {\n' + defaults + '\n' + bindInstance + '\n}\n'
+            + initializers.join('\n') + '\n' + completedBody + '\n' + completion + '\n} finally { '
+            + intrinsic + '.leave(this, ' + identity + ', ' + succeeded + '); }\n} as any;\n'
+            + 'const ' + identity + ' = ' + name + ';\n'
+            + (this.own.base ? intrinsic + '.setPrototypeOf(' + name + ', ' + baseName + ');\n'
+                + name + '.prototype = ' + intrinsic + '.create(' + baseName + '.prototype);\n' : '')
+            + intrinsic + '.defineProperty(' + name + '.prototype, "constructor", {value:' + name + ', writable:false, configurable:true});\n'
+            + intrinsic + '.register(' + identity + ', ' + (this.own.base ? baseName : 'null') + ');\n'
+            + definitions.join('\n') + '\n'
+            + staticMethods.map(key => bindName + '(' + name + ', ' + JSON.stringify(key) + ');').join('\n');
+        const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
+            + ' {\n' + instanceTypes.join('\n') + '\n}\ninterface ' + constructorType
+            + ' extends ' + functionType + ' {new(' + (ctor ? params(ctor, true) : '') + '): ' + name + '; prototype: ' + name + ';\n'
+            + staticTypes.join('\n') + '\n}';
+        const replacements = [{start: cls.getStart(file), end: cls.end, value: replacement},
+            {start: alias.getStart(file), end: alias.end, value: surface}];
+        replacements.sort((a,b) => b.start - a.start).forEach(edit => source = source.slice(0,edit.start) + edit.value + source.slice(edit.end));
+        const boundImport = file.statements.find((node: any) => node.kind === S.ImportDeclaration && /(?:^|\/)bound$/.test(node.moduleSpecifier.text));
+        const helperPath = boundImport ? boundImport.moduleSpecifier.text : './bound';
+        return 'import {callableClassIntrinsics as ' + intrinsic + ', NativeCallableFunction as ' + functionType + '} from '
+            + JSON.stringify(helperPath.replace(/bound$/, 'callableClass')) + ';\n'
+            + 'import {bindAS3Method as ' + bindName + '} from '
+            + JSON.stringify(this.methodBindingModule) + ';\n'
+            + (this.own.parameters.some(parameter => ['Number', 'int', 'uint'].indexOf(parameter.type) >= 0)
+                ? 'import {as3CoerceNumber as ' + numberCoercion + ', as3CoerceInt as ' + intCoercion
+                    + ', as3CoerceUint as ' + uintCoercion + '} from ' + JSON.stringify(this.coercionModule) + ';\n' : '')
+            + source;
+    }
+}

@@ -1,0 +1,1 @@
+package numeric {public class NumericBase {public function NumericBase(a:Number,b:Number) {Recorder.rows.push("base:"+Recorder.bits(a)+":"+Recorder.bits(b));}}}

@@ -1,0 +1,3 @@
+const coerce = require('./AS3MethodBinding').as3CoerceNumber;
+exports.Recorder = {rows:[],failure:{},bits(value) {const b=new ArrayBuffer(8);new DataView(b).setFloat64(0,coerce(value));return Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,'0')).join('');},
+record(label,a,b,args){const R=exports.Recorder; R.rows.push(label+':'+R.bits(a)+':'+R.bits(b)+':'+args.length+':'+(args.length>0?R.bits(args[0]):'absent')+':'+(args.length>1?R.bits(args[1]):'absent'));}};

@@ -1,0 +1,1 @@
+package numeric {public class Derived extends NumericBase {public function Derived(a:Number,b:Number) {Recorder.rows.push("derived");super(arguments[0],arguments[1]);}}}

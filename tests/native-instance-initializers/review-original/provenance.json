@@ -1,0 +1,22 @@
+{
+  "files": {
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\ReviewOracle.as": "f7260a62464616b1fd163335dd08a590fa90bc834c37a581f45e919de8365af5",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\FailureLeaf.as": "7c3fc093e78c3fee9338dd1dcc3ad343ad90db034cf37547f3b537d81f9db700",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\LocalError.as": "5a489b292d01d854cc6a04eaeef0da9bfe086f555bc329f21caebce2f1129e72",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\LocalObject.as": "55c835bb83d0ba984c5cacc0318c7cc33ae8172573cbba8e380eb3e5f50a5dc3",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\LocalSelf.as": "71618990985a49d0af03e64d8bc0efb5fa32fcf9c6dce2bf525b41c3b495a730",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\ParameterError.as": "96ea369101ddf03460758dcaae68d45e3d4438fd4b46ea9b489283dd16336675",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\ParameterNumber.as": "1099a33ac1931e363b75f48dfc617fc6cbf6277aca43e6a26d473dc631c3b068",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\ParameterObject.as": "cbf80699fc88f85f28d3308e38d7a3793f7f897f052994fd7b7fc16a37e40505",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\ParameterSelf.as": "5c68d3f325e198c2c0d942c58f1645aa127d3dbff74694d822710b6c4ceac6ae",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\Root.as": "4dae2680bc402441b2917838c71207ea852164921048ecf03aa66a6e510cdc65",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\source\\adversary\\Subject.as": "32daa95320791a6437958ff8206c9dc604f47670258496604a492bbca7a19a83",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\flash-1\\capture.cjs": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\flash-1\\oracle.swf": "950fccddb7d4fb8e030db5747e85d235a611653a6749b3171baa605f0bc42fe3",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-adversarial\\flash-1\\flash.json": "5f06b6a50dc90c072e27c338cfe73fd3f9e94ea1ddf89b0491dd61dfda69358d",
+    "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b",
+    "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295",
+    "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+  }
+}

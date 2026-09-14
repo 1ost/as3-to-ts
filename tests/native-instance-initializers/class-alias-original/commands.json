@@ -1,0 +1,29 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-entry-2\\source",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-entry-2\\flash\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-entry-2\\source\\EntryOracle.as"
+    ],
+    "exitCode": 0,
+    "output": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-entry-2\\flash\\oracle.swf (1294 bytes)\n"
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-entry-2\\flash\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-entry-2\\flash\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\review-callable-entry-2\\flash\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "exitCode": 0,
+    "output": "\n"
+  }
+]

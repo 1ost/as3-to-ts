@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "scope": "Actual Flash active/completed/failed replay and legitimate source base entry",
+  "files": [
+    {
+      "path": "replay-original/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "replay-original/commands.json",
+      "sha256": "dffbb8d4d9b1f2161acf957982feac1237ebba2df052f2caa0db31b99da6ce80"
+    },
+    {
+      "path": "replay-original/flash.json",
+      "sha256": "a34100843d6551949a7cbe47188fade20998692f2236d09fd754287add47e1c3"
+    },
+    {
+      "path": "replay-original/provenance.json",
+      "sha256": "c439d3969275a80c4d0fa7ee5f48edd19fab8de2896bbff1d91c229cf4e72b54"
+    },
+    {
+      "path": "replay-original/replay/Base.as",
+      "sha256": "2ac08dcf6cad59efdb936a6dad66765e20ad6c656bac8230181d3107992f27b5"
+    },
+    {
+      "path": "replay-original/replay/Failed.as",
+      "sha256": "4b43f5d2bffe4c68e637e51d511e10a4db0ca86a57e2331ac60b8dd463d515c9"
+    },
+    {
+      "path": "replay-original/replay/Journal.as",
+      "sha256": "ab9319a44cf2d14e96cbc01f050696a1b42bce33d82710daf48e9134ad3a9c17"
+    },
+    {
+      "path": "replay-original/replay/Subject.as",
+      "sha256": "ae912dc742be82d84db8f113592421c0e2f1904318ee6095e4e476207b6141dc"
+    },
+    {
+      "path": "replay-original/ReplayOracle.as",
+      "sha256": "e6d9b412f38bd0c75b49fbbe3598937d6b1f7f19746638f0c98d75409fe93765"
+    },
+    {
+      "path": "CaptureReplay.py",
+      "sha256": "752449a48b4c7777fc42ced397c82ef063876d8d6c4e7d80ab7f3a5d70c8c6f4"
+    },
+    {
+      "path": "RetainReplay.py",
+      "sha256": "1a1dc401b5a469082708f8e6eced45ea016c3dc939997a34e69b91160a3cec99"
+    }
+  ]
+}
