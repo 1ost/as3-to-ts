@@ -4097,10 +4097,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (rawCallee.kind === "IDENTIFIER" && typeof rawCallee.text === "string"
                 && !context.parameters[rawCallee.text] && !context.importsByLocal[rawCallee.text]
                 && !context.locals[rawCallee.text] && !context.fields[rawCallee.text] && !context.methods[rawCallee.text]
-                && context.baseSourceQName !== null) {
+                && !context.accessors[rawCallee.text] && context.baseSourceQName !== null) {
                 const mapping = memberMapping(context, context.baseSourceQName, "call", rawCallee.text, rawCallee);
                 callee = mapping === null ? parseExpression(rawCallee, context, false)
-                    : implicitThisMember(rawCallee, rawCallee.text, mapping.sourceQName);
+                    : inheritedLexicalMember(rawCallee, context, rawCallee.text, mapping.sourceQName);
             } else {
                 callee = parseExpression(rawCallee, context, false);
             }
