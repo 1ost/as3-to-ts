@@ -3508,6 +3508,38 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 || (byteArray ? semanticType(node, "uint", "number") : semanticType(node, "*", "unknown")),
         });
     }
+    if (node.kind === "DOT" && context.localTypeAuthority && context.resolveCurrentLocal) {
+        const parts = (value: TreeNode): string[] | null => {
+            if (value.kind === "IDENTIFIER" && value.text && IDENTIFIER.test(value.text)) return [value.text];
+            if (value.kind !== "DOT" || value.children.length !== 2 || value.children[1]!.kind !== "LITERAL"
+                || !value.children[1]!.text || !IDENTIFIER.test(value.children[1]!.text!)) return null;
+            const prefix=parts(value.children[0]!);
+            return prefix ? [...prefix,value.children[1]!.text!] : null;
+        };
+        const qualified=parts(node);
+        if (qualified && qualified.length > 1) {
+            const root=qualified[0]!, qname=qualified.join("."), current=context.resolveCurrentLocal();
+            const target=context.localTypeAuthority.entriesByIdentity[`${current.entry.module}\u0000${qname}`];
+            const packageName=qname.slice(0,qname.lastIndexOf("."));
+            const importedPackage=Object.values(context.importsByLocal).some(item => item.authorityKind === "local"
+                && item.sourceQualifiedName.slice(0,item.sourceQualifiedName.lastIndexOf(".")) === packageName);
+            // AIR binds an imported package before a same-spelled local or
+            // parameter. The retained package import and exact class edge are
+            // required; the class index alone never reinterprets a value chain.
+            if (target?.importable && target.typeKind === "class" && importedPackage) {
+                if (context.className === root || context.fields[root] || context.methods[root]
+                    || context.accessors[root] || context.importsByLocal[root] || context.namespaceNames[root])
+                    fail("HARDENED_QUALIFIED_PACKAGE_SHADOW","qualified package conflicts with an unevidenced lexical declaration",node);
+                assertNoInheritedLocalValueShadow(context,root,node);
+                if (qname === context.classQualifiedName) return Object.assign(identity(node),{kind:"identifier" as const,
+                    name:context.className,bindingKind:"current-class" as const,bindingSourceQualifiedName:qname});
+                const imported=context.resolveImportedType(qname,"class",node);
+                if (imported) return Object.assign(identity(node),{kind:"identifier" as const,
+                    name:imported.sourceLocalName,bindingKind:"import" as const,
+                    bindingSourceQualifiedName:imported.sourceQualifiedName});
+            }
+        }
+    }
     if (node.kind === "DOT") {
         if (node.children.length !== 2 || node.children[1]!.kind !== "LITERAL") {
             fail("HARDENED_MEMBER_SHAPE", "member expression has the wrong normalized shape", node);
@@ -5675,6 +5707,20 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             const derived=signatureTypeImport(sourceName,signature,resolveCurrentLocal(),localAuthority,localMemberAuthority || null,
                 parsedImports.imports,parsedImports.importsByLocal,node);
             if(derived) return derived;
+        }
+        if (sourceName.includes(".") && localAuthority && resolveCurrentLocal) {
+            const current=resolveCurrentLocal();
+            const target=localAuthority.entriesByIdentity[`${current.entry.module}\u0000${sourceName}`];
+            if (target?.importable && target.typeKind === "class" && expectedKind !== "interface") {
+                if (target.nodeId !== current.entry.nodeId && !current.entry.prerequisites.includes(target.nodeId))
+                    fail("HARDENED_LOCAL_IMPORT_EDGE","qualified class lacks an authenticated dependency edge: "+sourceName,node);
+                const prior=parsedImports.imports.find(item=>item.sourceQualifiedName===sourceName);
+                if (prior) return prior;
+                const alias="__as3Qualified"+parsedImports.imports.length;
+                const item={...localSemanticImport(target,current,node,localAuthority,localMemberAuthority || null),sourceLocalName:alias};
+                parsedImports.imports.push(item);parsedImports.importsByLocal[alias]=item;
+                return item;
+            }
         }
         if (existing) {
             if (sourceName.includes('.') && existing.sourceQualifiedName !== sourceName)
