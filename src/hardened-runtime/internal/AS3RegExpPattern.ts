@@ -3,6 +3,7 @@ export function lowerAS3RegExpLiteral(literal:string):string {
     const reject=():never=>{throw new Error("unsupported native RegExp grammar");};
     if (literal.length > 2048 || literal[0] !== "/" || literal[literal.length-1] !== "/") reject();
     const source=literal.slice(1,-1); let offset=0,depth=0,budget=0;
+    const evidencedBoundedCharacterClass=source==="^[A-Za-z0-9._-]{1,64}$";
     const printable=(c:string)=>c.length===1 && c.charCodeAt(0)>=32 && c.charCodeAt(0)<=126;
     function escaped():string {
         const c=source[offset++];
@@ -34,9 +35,17 @@ export function lowerAS3RegExpLiteral(literal:string):string {
             if(c==="{") {
                 if(!atom) reject();
                 const count=/^(0|[1-9][0-9]{0,2})\}/.exec(source.slice(offset));
-                if(!count) return reject();
-                budget+=Number(count[1]);if(budget>1024) reject();
-                offset+=count[0].length;result+="{"+count[0];atom=false;continue;
+                if(count) {
+                    budget+=Number(count[1]);if(budget>1024) reject();
+                    offset+=count[0].length;result+="{"+count[0];atom=false;continue;
+                }
+                // Retained AIR/Chromium evidence admits only the exact main.as
+                // no-flag bounded character-class test. This is deliberately
+                // not a general {min,max} grammar.
+                if(!evidencedBoundedCharacterClass || result!=="^[A-Za-z0-9._-]"
+                    || source.slice(offset,offset+5)!=="1,64}") return reject();
+                budget+=64;if(budget>1024) reject();
+                offset+=5;result+="{1,64}";atom=false;continue;
             }
             if(c==="$") {
                 // AIR's final newline sequence is broader than ECMAScript's no-flag anchor.

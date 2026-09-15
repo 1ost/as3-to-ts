@@ -36,8 +36,53 @@ for(const [folder,name,count] of [['regexp-config-patterns','RegExpConfigPattern
   }
  });
 }
+test('exact bounded character-class test is bound to retained AIR/browser evidence',()=>{
+ const laya=fs.realpathSync(process.env.HARDENED_FIXTURE_LAYA||path.resolve(root,'../LayaAir')),
+  revision='575b82f69e3037c97be4115eec18f19f0d37fd53',fixture=path.join(laya,'tests/nativeFlashOracle/regexp-bounded-character-class');
+ const retained=require('node:child_process').spawnSync('git',['merge-base','--is-ancestor',revision,'HEAD'],{cwd:laya,encoding:'utf8'});
+ assert.equal(retained.status,0,retained.stderr||'bounded RegExp evidence revision is not retained');
+ const files={
+  'RegExpBoundedCharacterClassProbe.as':'a3fe091dcac06cc250acdda1d8ba5e91d9341e063206edef972de6c6fc15628c',
+  'scenario.json':'e972c76e15890b70ceb679bdd468251e976e734ca778107145cc1c3de1197248',
+  'native-air.json':'d4866b05c4431d314a3705ef67915dd7ec3897d3996362ed28e3170784ab599f',
+  'browser-pin.json':'4891a1b2122be1e60d94eafffced4c84009cfe1d8fc6cea3b5eb7777c97da3bc',
+  'run-browser.mjs':'115742667d40d5815de887c7effd713d5576f01da150723c71fa0f95fbcf0047',
+  'browser-air.json':'794b2e326d3905d5809ce73580e953ab521c00c6b71389fbe1974609c5e896dd',
+ };
+ for(const [name,digest] of Object.entries(files)) {
+  assert.equal(hash(require('node:child_process').execFileSync('git',['show',`${revision}:tests/nativeFlashOracle/regexp-bounded-character-class/${name}`],{cwd:laya})),digest,`Git object ${name}`);
+  assert.equal(hash(fs.readFileSync(path.join(fixture,name))),digest,name);
+ }
+ const native=JSON.parse(fs.readFileSync(path.join(fixture,'native-air.json'))),
+  relation=JSON.parse(fs.readFileSync(path.join(fixture,'browser-air.json'))),
+  scenario=JSON.parse(fs.readFileSync(path.join(fixture,'scenario.json'))),
+  observations=new Map(native.capture.state.observations.map(row=>[row.id,row.result])),
+  pattern='/^[A-Za-z0-9._-]{1,64}$/';
+ assert.equal(native.capture.runtime.version,'MAC 51,3,3,2');
+ assert.equal(relation.inputs.nativeEvidenceSha256,files['native-air.json']);
+ assert.equal(relation.relation.boundedCharacterClassWithAirAnchorLowering,'equal');
+ assert.equal(relation.relation.argumentEvaluationCount,'equal');
+ assert.equal(relation.observations.length,scenario.steps.length);
+ assert.equal(lower(pattern),'^[A-Za-z0-9._-]{1,64}(?=\\r\\n$|[\\n\\r\\v\\f\\u0085\\u2028\\u2029]$|$)');
+ for(const step of scenario.steps) {
+  let argumentEvaluations=0,actual;
+  if(step.calls[0].method==='inspect') {
+   const value=step.calls[0].args[0],counted=()=>{argumentEvaluations++;return value;};
+   actual={length:value.length,matched:matches(pattern,counted()),argumentEvaluations};
+  } else {
+   const throwing=()=>{argumentEvaluations++;throw new Error('regexp-argument-probe');};
+   try {matches(pattern,throwing());actual={kind:'return',argumentEvaluations};}
+   catch(error) {actual={kind:'throw',name:error.name,message:error.message,errorID:0,argumentEvaluations};}
+  }
+  assert.deepEqual(actual,observations.get(step.id),step.id);
+ }
+});
 test('unsupported native grammar stays explicit',()=>{
- for(const pattern of ['/a/g','/a/i','/a/m','/a./','/[^a]/','/(a)/','/a*/','/a+/','/a?/','/a{1,2}/','/\\d/','/\\n/','/[\\n]/','/a{9999}/','/(?:a{999}){999}/','/(?<=a)b/','/a/extra']) assert.throws(()=>lower(pattern),/unsupported/,pattern);
+ for(const pattern of ['/a/g','/a/i','/a/m','/a./','/[^a]/','/(a)/','/a*/','/a+/','/a?/','/a{1,2}/','/\\d/','/\\n/','/[\\n]/','/a{9999}/','/(?:a{999}){999}/','/(?<=a)b/','/a/extra',
+  '/^[A-Za-z0-9._-]{1,63}$/','/^[A-Za-z0-9._-]{0,64}$/','/^[A-Za-z0-9._-]{1,65}$/','/^[A-Za-z0-9._-]{1,}$/','/^[A-Za-z0-9._-]{,64}$/',
+  '/^[A-Za-z0-9._-]{64,1}$/','/^[A-Za-z0-9._-]{01,64}$/','/^[A-Za-z0-9._]{1,64}$/','/^[A-Za-z0-9._-]{1,64}?$/',
+  '/^(?:[A-Za-z0-9._-]){1,64}$/','/^[A-Za-z0-9._-]{1,64}{1}$/','/^[A-Za-z0-9._-]{1,64}$/g','/^[A-Za-z0-9._-]{1,64}/'])
+  assert.throws(()=>lower(pattern),/unsupported/,pattern);
  assert.throws(()=>replace('a','/a/',()=> 'b'),/unavailable/);
  for(const pattern of ['/hello/','/[A-Z]{2}/','/^(?:yes|no)$/','/ab(?=c|$)/']) assert.equal(typeof lower(pattern),'string');
 });

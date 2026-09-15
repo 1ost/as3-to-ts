@@ -132,7 +132,7 @@ function assertAuthenticatedSourceShape(file: import("./inputs").InputFile,
 
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Reflection.ts": "123dbfdc9fff41eed41f0ca3e6e8dc790cc6baed793fb506b9dd30c23210caae",
-    "internal/AS3RegExpPattern.ts": "036bdd8077771be4ee518d9b84b25a7ffc80309240ebb45f7f85aeb84c4d3319",
+    "internal/AS3RegExpPattern.ts": "c0136623a152442c46992c53d2485ab71a8ae7ac6a7e08a9f2193f4905f5f7c4",
     "AS3RegExp.ts": "5b254ea41376aafb0e3381bc7707381be9db9e241c8b514f4d372991fb95a574",
     "AS3Enumeration.ts": "183f10ec17e98fdf37158cc842fd608d449374082ccba5fb5aaa7230d7426bbd",
     "internal/AS3ArraySort.ts": "15a4cc94a7c485c2277343fea40695a80c8934cee925c86e8528ab42ae660fa4",

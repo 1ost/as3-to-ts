@@ -2588,6 +2588,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const rawPattern=operation==="test" ? receiver : operation==="replace" ? args[0] : undefined;
             if(rawPattern?.kind==="LITERAL" && rawPattern.text?.startsWith("/")) {
                 try {lowerAS3RegExpLiteral(rawPattern.text);} catch {fail("HARDENED_REGEXP_GRAMMAR","RegExp literal uses unsupported native grammar or flags",rawPattern);}
+                const boundedCharacterClass=rawPattern.text==="/^[A-Za-z0-9._-]{1,64}$/";
+                if(boundedCharacterClass && operation!=="test")
+                    fail("HARDENED_REGEXP_GRAMMAR","bounded character-class evidence admits only RegExp.test",node);
                 if(args.length!==(operation==="test"?1:2)) fail("HARDENED_REGEXP_ARITY","RegExp operation has unsupported arity",node);
                 const values=(operation==="test" ? args : [receiver,args[1]!]).map(child=>parseExpression(child,context,true));
                 if(operation==="replace" && assignmentType(values[0]!,context,receiver).sourceName!=="String")
@@ -2595,6 +2598,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 const inputType=assignmentType(values[values.length-1]!,context,node);
                 if(inputType.sourceName==="void" || operation==="replace" && inputType.sourceName==="Function")
                     fail("HARDENED_REGEXP_ARGUMENT","RegExp argument behavior is unsupported",node);
+                if(boundedCharacterClass && inputType.sourceName!=="String")
+                    fail("HARDENED_REGEXP_ARGUMENT","bounded character-class test requires a proven String argument",node);
                 return Object.assign(identity(node),{kind:"regexpCall" as const,operation:operation as "test"|"replace",
                     pattern:rawPattern.text,arguments:values,
                     resultType:semanticType(node,operation==="test"?"Boolean":"String",operation==="test"?"boolean":"string",[],false)});
