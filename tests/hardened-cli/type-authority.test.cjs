@@ -31,9 +31,12 @@ function loadLocalModule(file) {
 const staticConstants=loadLocalModule(path.join(ROOT,"src/hardened/static-constants.ts"));
 const localInterfaceLiteralReadAuthority=loadLocalModule(
     path.join(ROOT,"src/hardened/local-interface-literal-read-authority.ts"));
+const mappedNativeDynamicLiteralReadAuthority=loadLocalModule(
+    path.join(ROOT,"src/hardened/mapped-native-dynamic-literal-read-authority.ts"));
 const emitterModule=loadTranspiled(path.join(ROOT,"src/hardened/emitter.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}
     :specifier==="./adapter"?adapterModule:specifier==="./static-constants"?staticConstants
         :specifier==="./local-interface-literal-read-authority"?localInterfaceLiteralReadAuthority
+            :specifier==="./mapped-native-dynamic-literal-read-authority"?mappedNativeDynamicLiteralReadAuthority
             :specifier==="../hardened-runtime/internal/AS3FileLocalIdentity"?loadLocalModule(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts")):require(specifier));
 const sourceMembers=loadTranspiled(path.join(ROOT,"src/hardened/source-member-authority.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}:require(specifier));
 const source = fs.readFileSync(path.join(ROOT, "src/hardened/type-authority.ts"), "utf8");
@@ -72,6 +75,8 @@ test("type-authority harness resolves the emitter local-interface literal-read d
     assert.equal(localInterfaceLiteralReadAuthority.LOCAL_INTERFACE_LITERAL_READ_AUTHORITY.schema,
         "as3-local-interface-literal-public-trait-read-authority@1");
     assert.equal(typeof localInterfaceLiteralReadAuthority.assertLocalInterfaceLiteralReadProof,"function");
+    assert.equal(mappedNativeDynamicLiteralReadAuthority.MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY.schema,
+        "as3-mapped-native-dynamic-literal-public-read-authority@1");
 });
 
 test("mapped Laya predicate authority is pinned as one exact 62-type capability input",()=>{

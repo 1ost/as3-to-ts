@@ -21,9 +21,16 @@ rows.push({kind:"class",qname:"LocalChild",base:"NativeBase",interfaces:[],sourc
  objectTraits:{dynamic:false,members:[{name:"dispose",kind:"method",type:"Function",visibility:"public",namespaceName:null}]}});
 rows.push({kind:"class",qname:"UnknownNative",base:"NativeBase",interfaces:[],sourceSha256:"1".repeat(64),fields:[],
  nativeObjectTraits:{dynamic:null,names:[],sourceArtifactSha256:"e".repeat(64)}});
-const constructors=[DynamicClassProbe,ExternalDynamicClassProbe,ObjectErrorProbe,NativeBase,LocalChild,UnknownNative];
+const dynamicNativeBrands=new WeakSet(),dynamicSourceBrands=new WeakSet();
+class DynamicNative {constructor(){dynamicNativeBrands.add(this)}}
+class DynamicSource {constructor(){dynamicSourceBrands.add(this);this.hidden="private"}}
+rows.push({kind:"class",qname:"flash.display.MovieClip",base:null,interfaces:[],sourceSha256:"2".repeat(64),fields:[],
+ nativeObjectTraits:{dynamic:true,names:[],sourceArtifactSha256:"e".repeat(64)}});
+rows.push({kind:"class",qname:"DynamicSource",base:null,interfaces:[],sourceSha256:"3".repeat(64),fields:[],
+ objectTraits:{dynamic:true,members:[{name:"hidden",kind:"field",type:"String",visibility:"private",namespaceName:null}]}});
+const constructors=[DynamicClassProbe,ExternalDynamicClassProbe,ObjectErrorProbe,NativeBase,LocalChild,UnknownNative,DynamicNative,DynamicSource];
 const predicates=[v=>brands.has(v)&&!(v instanceof ObjectErrorProbe),v=>externalBrands.has(v),v=>v instanceof ObjectErrorProbe,
- v=>nativeBrands.has(v),v=>childBrands.has(v),v=>unknownBrands.has(v)];
+ v=>nativeBrands.has(v),v=>childBrands.has(v),v=>unknownBrands.has(v),v=>dynamicNativeBrands.has(v),v=>dynamicSourceBrands.has(v)];
 const metadata={schema:"as3-runtime-type-authority@1",qnames:rows.map(row=>row.qname),entries:rows};
 i.installAS3TypeAuthority({schema:metadata.schema,sha256:crypto.createHash("sha256").update(JSON.stringify(metadata)).digest("hex"),qnames:metadata.qnames,entries:rows.map((row,n)=>({...row,constructor:constructors[n],predicate:predicates[n],constructionTarget:null,constructionProof:null}))});
 test.after(()=>fs.rmSync(out,{recursive:true,force:true}));
@@ -159,6 +166,26 @@ test("native dynamic keys convert once, preserve fallback errors and check null 
   assert.deepEqual({calls,value},{calls:row.calls,value:row.value},row.id);
  }
  for(const key of [1n,Symbol()])assert.throws(()=>r.as3ObjectRead({},key),{name:"AS3ObjectDispatchUnavailable"});
+});
+
+test("authenticated mapped-native dynamic reads consult one own descriptor before missing fallback",()=>{
+ const target=new DynamicNative(),lock=new DynamicNative();
+ Object.defineProperty(target,"lock",{value:lock,writable:true,enumerable:true,configurable:true});
+ assert.equal(r.as3ObjectRead(target,"lock"),lock);
+ assert.equal(r.as3ObjectRead(target,"missing"),undefined);
+ let reads=0;
+ Object.defineProperty(target,"authored",{enumerable:true,configurable:true,get(){reads++;return lock;}});
+ assert.equal(r.as3ObjectRead(target,"authored"),lock);assert.equal(reads,1);
+ assert.equal(typeof r.as3ObjectRead(target,"toString"),"function","builtin fallback remains available without an own slot");
+ const forged=Object.create(DynamicNative.prototype);let forgedReads=0;
+ Object.defineProperty(forged,"lock",{get(){forgedReads++;return lock;}});
+ assert.throws(()=>r.as3ObjectRead(forged,"lock"),{name:"AS3ObjectDispatchUnavailable"});assert.equal(forgedReads,0);
+ const hidden=new DynamicSource();
+ assert.throws(()=>r.as3ObjectRead(hidden,"hidden","ExternalDynamicClassProbe"),
+  {name:"AS3ObjectDispatchUnavailable"},"an inaccessible generated trait must not become a public dynamic slot");
+ assert.equal(r.as3ObjectRead(hidden,"hidden","DynamicSource"),"private");
+ for(const value of [null,undefined])assert.throws(()=>r.as3ObjectRead(value,"lock"),
+  error=>error.name==="TypeError"&&error.errorID===(value===null?1009:1010));
 });
 
 test("SDK member absence permits local methods without exposing unresolved native methods",()=>{

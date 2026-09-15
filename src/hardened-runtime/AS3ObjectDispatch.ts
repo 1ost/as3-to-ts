@@ -85,6 +85,9 @@ function findTrait(info:ClassInfo, key:string, caller:string | null, publicOnly:
     if (storage.size > 1) return unavailable("Distinct namespace slots share a generated storage name");
     return matches;
 }
+function hasSourceTrait(info:ClassInfo,key:string):boolean {
+    return info.chain.some(owner=>owner.traits?.members.some(member=>member.name===key)===true);
+}
 function labelFunction(fn:Function,label:string):Function { NATIVE_FUNCTION_LABELS.set(fn,label); return fn; }
 export function as3ObjectFunctionLabel(value:unknown):string | null {
     return typeof value === "function" ? NATIVE_FUNCTION_LABELS.get(value) ?? null : null;
@@ -147,6 +150,14 @@ export function as3ObjectRead(value:unknown, key:unknown, caller:string | null =
             return result;
         }
         if (members.length) return unavailable("Write-only dynamic getter behavior is not retained");
+        // Generated source traits share JS property storage across AS3
+        // namespaces. Never reinterpret an inaccessible trait as a public
+        // dynamic slot merely because it has an own descriptor.
+        if(dynamicClass(info)) {
+            if(hasSourceTrait(info,name)) return unavailable("Inaccessible generated trait shares a dynamic property name");
+            const descriptor=Object.getOwnPropertyDescriptor(target,name);
+            if(descriptor!==undefined) return Reflect.get(target,name);
+        }
     } else if (Object.prototype.hasOwnProperty.call(target,name)) return Reflect.get(target,name);
     if (BUILTINS.has(name)) return BUILTINS.get(name);
     if (name === "constructor") {

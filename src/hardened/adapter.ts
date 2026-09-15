@@ -3,6 +3,7 @@ import { hasNativeDescribeTypeAuthority } from "./native-describe-type-authority
 import {nativeUriComponentAuthoritySha256} from "./native-uri-component-authority";
 import { hasNativeDateAuthority } from "./native-date-authority";
 import { localInterfaceLiteralReadProof } from "./local-interface-literal-read-authority";
+import { mappedNativeDynamicLiteralReadProof } from "./mapped-native-dynamic-literal-read-authority";
 import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
 import {
     CallExpression,
@@ -3648,6 +3649,33 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             return {...identity(node),kind:"reflection",operation:"staticRead",arguments:[target,key],resultType:semanticType(node,"*","unknown")};
         }
         const ownerType = assignmentType(target, context, node.children[0]!);
+        const mappedNativeImport=context.importsByLocal[ownerType.sourceName];
+        const mappedNativeInstance=ownerType.typeArguments.length===0&&ownerType.runtimeName!==null
+            &&mappedNativeImport?.authorityKind==="flash"&&mappedNativeImport.runtimeConstructible
+            &&!mappedNativeImport.runtimeInterface&&mappedNativeImport.localValueType===null
+            &&mappedNativeImport.sourceQualifiedName===ownerType.runtimeName
+            &&!(target.kind==="identifier"&&(target.bindingKind==="import"||target.bindingKind==="current-class"));
+        if(mappedNativeInstance) {
+            if(context.sourceMemberAuthority===null
+                ||context.sourceMemberAuthority.schema!=="as3-source-member-authority@2"
+                ||context.sourceMemberAuthority.entriesByQName[ownerType.runtimeName!]?.dynamic!==true) {
+                fail("HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY",
+                    "mapped native dynamic read requires exact @2 dynamic-class source member authority",node.children[0]!);
+            }
+            if(!valuePosition) fail("HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_CONTEXT",
+                "mapped native dynamic literal property authority is read-only and value-position-only",node);
+            const index=parseExpression(node.children[1]!,context,true);
+            if(index.kind!=="literal"||typeof index.value!=="string"
+                ||validateIdentifier(index.value,node.children[1]!)!==index.value) {
+                fail("HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_KEY",
+                    "mapped native dynamic read requires one literal public identifier key",node.children[1]!);
+            }
+            return {...identity(node),kind:"index",accessKind:"mappedNativeDynamicLiteralPublicTrait",target,
+                targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,
+                mappedNativeDynamicLiteralRead:mappedNativeDynamicLiteralReadProof(context.sourceMemberAuthority,
+                    ownerType.runtimeName!,index.value,mappedNativeImport.targetModule,mappedNativeImport.targetExport),
+                resultType:semanticType(node,"*","unknown")};
+        }
         const instanceQName=localQNameForType(ownerType,context);
         const instanceBinding=target.kind === "this" || target.kind === "identifier" && ["local","parameter"].includes(target.bindingKind);
         const instanceType=instanceQName && context.resolveCurrentLocal

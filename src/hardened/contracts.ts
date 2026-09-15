@@ -314,11 +314,13 @@ export interface OwnRecordExpression extends SemanticIdentity {
 export interface IndexExpression extends SemanticIdentity {
     kind: "index";
     accessKind: "object" | "vector" | "dictionary" | "byteArray" | "array" | "ownRecord"
-        | "bigTurnTableInnerRoot" | "bigTurnTableInnerCost" | "localInterfaceLiteralPublicTrait";
+        | "bigTurnTableInnerRoot" | "bigTurnTableInnerCost" | "localInterfaceLiteralPublicTrait"
+        | "mappedNativeDynamicLiteralPublicTrait";
     target: SemanticExpression;
     targetNullable: boolean;
     callerQName?: string;
     localInterfaceLiteralRead?: import("./local-interface-literal-read-authority").LocalInterfaceLiteralReadProof;
+    mappedNativeDynamicLiteralRead?: import("./mapped-native-dynamic-literal-read-authority").MappedNativeDynamicLiteralReadProof;
     index: SemanticExpression;
     resultType: SemanticType;
 }

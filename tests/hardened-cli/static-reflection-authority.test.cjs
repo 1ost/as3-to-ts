@@ -31,7 +31,10 @@ function loadLocalModule(file) {
 }
 const staticConstants=loadLocalModule(path.join(ROOT,"src/hardened/static-constants.ts"));
 const emitterModule=loadTranspiled(path.join(ROOT,"src/hardened/emitter.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}
-    :specifier==="./adapter"?adapterModule:specifier==="./static-constants"?staticConstants:specifier==="../hardened-runtime/internal/AS3FileLocalIdentity"?loadLocalModule(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts")):require(specifier));
+    :specifier==="./adapter"?adapterModule:specifier==="./static-constants"?staticConstants
+        :specifier==="./local-interface-literal-read-authority"?loadLocalModule(path.join(ROOT,"src/hardened/local-interface-literal-read-authority.ts"))
+            :specifier==="./mapped-native-dynamic-literal-read-authority"?loadLocalModule(path.join(ROOT,"src/hardened/mapped-native-dynamic-literal-read-authority.ts"))
+                :specifier==="../hardened-runtime/internal/AS3FileLocalIdentity"?loadLocalModule(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts")):require(specifier));
 const sourceMembers=loadTranspiled(path.join(ROOT,"src/hardened/source-member-authority.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}:require(specifier));
 const source = fs.readFileSync(path.join(ROOT, "src/hardened/type-authority.ts"), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020,
