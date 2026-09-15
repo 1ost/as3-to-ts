@@ -4084,7 +4084,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         && !valuePosition && (["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty"].includes(name)
                             || ["indexOf","filter"].includes(name) && targetType.sourceName === "Array");
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && (["indexOf", "substr", "toLowerCase", "charAt"].includes(name)
-                        || context.sourceMemberAuthority !== null && name === "split");
+                        || context.sourceMemberAuthority !== null && ["split","lastIndexOf","substring","slice"].includes(name));
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !functionLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
@@ -4294,6 +4294,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 // receiver is not statically rewritten into an Array cast.
                 if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
                     fail("HARDENED_OBJECT_CALL_ARGUMENT", "Dynamic push arguments must produce values", node);
+            } else if (callee.index.kind === "literal" && ["lastIndexOf","substring","slice"].includes(String(callee.index.value))) {
+                fail("HARDENED_OBJECT_CALL_TARGET", "String range/search calls require an authenticated primitive String receiver", node);
             } else if (callee.index.kind !== "literal" || typeof callee.index.value !== "string") {
                 fail("HARDENED_OBJECT_CALL_TARGET", "computed dynamic calls require retained native evaluation evidence", node);
             }
@@ -4380,7 +4382,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (args.length !== 0) fail("HARDENED_ERROR_CALL_ARITY", "Error.toString requires its retained zero-argument call", node);
             capabilitySource="Error";capabilityMember="toString";resultType=semanticType(node,"String","string");
         } else if (callee.kind === "member" && callee.capabilitySource === "String"
-            && assignmentType(callee.target, context, rawCallee).sourceName === "String") {
+            && assignmentType(callee.target, context, rawCallee).sourceName === "String"
+            && (!["lastIndexOf","substring","slice"].includes(callee.name) || context.sourceMemberAuthority !== null)) {
             if (callee.name === "split") {
                 if (args.length > 2) fail("HARDENED_STRING_ARITY", "String.split requires zero, one or two arguments", node);
                 capabilitySource="String";capabilityMember="split";
@@ -4390,6 +4393,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else if (callee.name === "charAt") {
                 if (args.length > 1) fail("HARDENED_STRING_ARITY", "String.charAt requires zero or one index argument", node);
                 capabilitySource="String"; capabilityMember="charAt";
+            } else if (["lastIndexOf","substring","slice"].includes(callee.name)) {
+                if (args.length > 2) fail("HARDENED_STRING_ARITY", `String.${callee.name} requires zero, one or two arguments`, node);
+                capabilitySource="String"; capabilityMember=callee.name;
             } else if (!["indexOf", "substr"].includes(callee.name) || args.length < 1 || args.length > 2)
                 fail("HARDENED_STRING_ARITY", "String method requires its native one or two arguments", node);
             args.forEach((argument, index) => {
@@ -4398,12 +4404,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     if (type.sourceName === "void") fail("HARDENED_STRING_ARGUMENT", "String.split requires value arguments", node);
                     return;
                 }
-                if (callee.name === "indexOf" && index === 0 ? type.sourceName !== "String"
-                    : !["Number", "int", "uint"].includes(type.sourceName))
+                const newRangeSearch=["lastIndexOf","substring","slice"].includes(callee.name);
+                const search=["indexOf","lastIndexOf"].includes(callee.name) && index===0;
+                const allowed=search ? newRangeSearch ? ["String","null"] : ["String"]
+                    : newRangeSearch ? ["Number","int","uint","null"] : ["Number","int","uint"];
+                if (!allowed.includes(type.sourceName) && !(newRangeSearch && argument.kind==="undefined"))
                     fail("HARDENED_STRING_ARGUMENT", "String argument lacks a proven native primitive type", node.children[1]!.children[index]!);
             });
             resultType = callee.name === "split" ? semanticType(node,"Array","Array",[],false)
-                : callee.name === "indexOf" ? semanticType(node, "int", "number")
+                : ["indexOf","lastIndexOf"].includes(callee.name) ? semanticType(node, "int", "number")
                 : semanticType(node, "String", "string", [], false);
         } else if (callee.kind === "identifier" && (callee.bindingKind === "package-function"
             || context.importsByLocal[callee.name]?.localFunction)) {

@@ -277,6 +277,14 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         if (expression.capabilitySource === "String" && expression.capabilityMember === "charAt" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringCharAt"),undefined,
                 [expressionNode(expression.callee.target,ts),...expression.arguments.map(argument=>expressionNode(argument,ts))]);
+        if (expression.capabilitySource === "String" && ["lastIndexOf","substring","slice"].includes(expression.capabilityMember || "")
+            && expression.callee.kind === "member") {
+            const helper={lastIndexOf:"__as3StringLastIndexOf",substring:"__as3StringSubstring",slice:"__as3StringSlice"}
+                [expression.capabilityMember!]!;
+            return ts.factory.createCallExpression(ts.factory.createIdentifier(helper),undefined,
+                [expressionNode(expression.callee.target,ts),ts.factory.createArrayLiteralExpression(
+                    expression.arguments.map(argument=>expressionNode(argument,ts)))]);
+        }
         if (expression.capabilitySource === "Error" && expression.capabilityMember === "toString" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ErrorToString"),undefined,[expressionNode(expression.callee.target,ts)]);
         if (expression.capabilitySource === "Array" && expression.callee.kind === "member")
@@ -1562,7 +1570,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3MathRound", "as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals", "as3Relation"].map(exported =>
+    const names = ["as3MathRound", "as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringLastIndexOf", "as3StringSubstring", "as3StringSlice", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals", "as3Relation"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
