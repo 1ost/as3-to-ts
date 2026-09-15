@@ -581,6 +581,22 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
             && !!chromeSignature && chromeSignature.test(mapping.sourceMember.signature)
             && mapping.targetMember.name === mapping.sourceMember.name && mapping.targetMember.kind === "get+set"
             && mapping.targetMember.scope === "instance" && mapping.targetMember.signature === chromeType[1];
+        const mouseWheelWrite = mapping.sourceMember.access === "write";
+        const mouseWheelSignature = mouseWheelWrite
+            ? /^public function set mouseWheelEnabled\([A-Za-z_$][A-Za-z0-9_$]*:Boolean\) : void$/
+            : /^public function get mouseWheelEnabled\(\) : Boolean$/;
+        const mouseWheelProperty = mapping.sourceQName === "flash.text.TextField"
+            && mapping.sourceMember.name === "mouseWheelEnabled"
+            && mapping.sourceRoles.length === 1 && mapping.sourceRoles[0] === "instance-member"
+            && mapping.targetCapabilityId === "api.flash.text"
+            && mapping.targetModule === "src/layaAir/flash/text/TextField.ts" && mapping.targetExport === "TextField"
+            && mapping.targetKind === "class" && mapping.targetSignature === "typeof TextField"
+            && (mouseWheelWrite || mapping.sourceMember.access === "read")
+            && mapping.sourceMember.minArgs === (mouseWheelWrite ? 1 : 0)
+            && mapping.sourceMember.maxArgs === (mouseWheelWrite ? 1 : 0)
+            && mouseWheelSignature.test(mapping.sourceMember.signature)
+            && mapping.targetMember.name === "mouseWheelEnabled" && mapping.targetMember.kind === "get+set"
+            && mapping.targetMember.scope === "instance" && mapping.targetMember.signature === "boolean";
         const leadingProperty = mapping.sourceQName === "flash.text.TextFormat"
             && mapping.targetModule === "src/layaAir/flash/text/TextFormat.ts" && mapping.targetExport === "TextFormat"
             && mapping.sourceMember.name === "leading" && mapping.targetMember.name === "leading"
@@ -604,7 +620,7 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
             && mappedPropertyType(mapping.sourceMember.signature,mapping.sourceMember.access)
                 === (expectedFormatType === "string" ? "string" : expectedFormatType === "number[]" ? "Array" : "Object")
             && [expectedFormatType,expectedFormatType+" | null","null | "+expectedFormatType].includes(formatSignature!);
-        if (!textProperty && !textChromeProperty && !leadingProperty && !formatProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
+        if (!textProperty && !textChromeProperty && !mouseWheelProperty && !leadingProperty && !formatProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
             || (mapping.sourceQName === "flash.text.TextField" ? mapping.sourceMember.name === "TextField"
                 ? mapping.sourceRoles[0] !== "constructor" : mapping.sourceRoles[0] !== "instance-member"
                 : mapping.sourceRoles[0] !== "constructor" || mapping.sourceMember.name !== mapping.targetExport))) {
@@ -653,8 +669,25 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
         return;
     }
     if (mapping.sourceMember.name === "scrollRect") {
-        throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
-            "Flash member is an explicit behavioral hold and cannot be mapped to an inherited native surface");
+        const source=mapping.sourceMember, read=source.access === "read";
+        const sourceSignature=read
+            ? /^public function get scrollRect\(\) : flash\.geom\.Rectangle$/
+            : /^public function set scrollRect\([A-Za-z_$][A-Za-z0-9_$]*:flash\.geom\.Rectangle\) : void$/;
+        if (mapping.sourceQName !== "flash.display.DisplayObject"
+            || mapping.targetCapabilityId !== "api.flash.display"
+            || mapping.targetModule !== "src/layaAir/flash/display/DisplayObject.ts"
+            || mapping.targetExport !== "DisplayObject" || mapping.targetKind !== "class"
+            || mapping.targetSignature !== "typeof DisplayObject"
+            || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "instance-member"
+            || (!read && source.access !== "write")
+            || source.minArgs !== (read ? 0 : 1) || source.maxArgs !== (read ? 0 : 1)
+            || !sourceSignature.test(source.signature)
+            || mapping.targetMember.name !== "scrollRect" || mapping.targetMember.kind !== "get+set"
+            || mapping.targetMember.scope !== "instance" || mapping.targetMember.signature !== "Rectangle") {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+                "Flash scrollRect requires the exact source-shaped DisplayObject bridge property");
+        }
+        return;
     }
     const exactGeometry = mapping.sourceQName === "flash.geom.Point" || mapping.sourceQName === "flash.geom.Rectangle";
     if (bitmap && mapping.sourceQName === "flash.display.BitmapDataChannel") {
@@ -688,6 +721,14 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
 
 function exactOwnedSourceMetadata(mapping: CapabilityMapping, use: { [key: string]: unknown },
     signature: { [key: string]: unknown }): boolean {
+    if (mapping.sourceQName === "flash.display.DisplayObject" && mapping.sourceMember?.name === "scrollRect") {
+        const read=mapping.sourceMember.access === "read";
+        return use.classification === "layaair-flash-api-bridge" && use.argumentCount === null
+            && use.receiverType === mapping.sourceQName && signature.declaredBy === mapping.sourceQName
+            && signature.kind === (read ? "get" : "set") && signature.static === false
+            && signature.minArgs === (read ? 0 : 1) && signature.maxArgs === (read ? 0 : 1)
+            && signature.returnType === (read ? "flash.geom.Rectangle" : "void");
+    }
     if (mapping.sourceMember !== null && TEXT_CONSTANT_QNAMES.has(mapping.sourceQName)) {
         return use.classification === "layaair-flash-api-bridge" && use.argumentCount === null
             && use.receiverType === mapping.sourceQName && signature.declaredBy === mapping.sourceQName
@@ -717,7 +758,10 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
         throw new HardenedSemanticError("HARDENED_SOURCE_CENSUS_SCHEMA", "source census lacks as3SourceCapabilities authority");
     }
     const apis = section.apis.filter((value: unknown) => isObject(value) && value.qname === mapping.sourceQName);
-    if (STRICT_SOURCE_QNAMES.has(mapping.sourceQName) && apis.length !== 1) {
+    const exactScrollRect=mapping.sourceQName === "flash.display.DisplayObject"
+        && mapping.sourceMember?.name === "scrollRect";
+    const strictSource=STRICT_SOURCE_QNAMES.has(mapping.sourceQName) || exactScrollRect;
+    if (strictSource && apis.length !== 1) {
         throw new HardenedSemanticError("HARDENED_SOURCE_CAPABILITY",
             "owned source API identity is absent or ambiguous", null);
     }
@@ -772,7 +816,12 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
             && value.qname === mapping.sourceQName && value.member === mapping.sourceMember!.name
             && value.access === mapping.sourceMember!.access
             && mapping.sourceRoles.length === 1 && value.context === mapping.sourceRoles[0]);
-        if (STRICT_SOURCE_QNAMES.has(mapping.sourceQName)) {
+        if (exactScrollRect && (uses.length !== 1 || !Array.isArray(uses[0]!.signatures)
+            || (uses[0]!.signatures as unknown[]).length !== 1)) {
+            throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY",
+                "scrollRect source member evidence is absent or ambiguous");
+        }
+        if (strictSource) {
             if (TEXT_CONSTANT_QNAMES.has(mapping.sourceQName) && uses.length !== 1) {
                 throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY",
                     "text constant source member evidence is absent or ambiguous");
@@ -964,7 +1013,8 @@ function findTargetCapability(target: { [key: string]: unknown }, mapping: Capab
     if (target.schema !== "laya-authored-content-capabilities@1" || !Array.isArray(target.capabilities)) {
         throw new HardenedSemanticError("HARDENED_TARGET_CAPABILITIES_SCHEMA", "target Laya capability document has the wrong schema");
     }
-    const strict = STRICT_SOURCE_QNAMES.has(mapping.sourceQName);
+    const strict = STRICT_SOURCE_QNAMES.has(mapping.sourceQName)
+        || mapping.sourceQName === "flash.display.DisplayObject" && mapping.sourceMember?.name === "scrollRect";
     const capabilities = target.capabilities.filter((value: unknown) => isObject(value)
         && value.id === mapping.targetCapabilityId);
     if (capabilities.length !== 1) {

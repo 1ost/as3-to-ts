@@ -4,7 +4,7 @@ import { hasNativeDateAuthority } from "./native-date-authority";
 import { staticConstant } from "./static-constants";
 import { AS3FileLocalClassScope, fileLocalClassIdentity } from "../hardened-runtime/internal/AS3FileLocalIdentity";
 import { LoadedSourceMemberAuthority, assertLoadedSourceMemberAuthority } from "./source-member-authority";
-import { HardenedSemanticError, SemanticExpression, SemanticField, SemanticMember, SemanticProgram } from "./contracts";
+import { ApplicationStartContract, HardenedSemanticError, SemanticExpression, SemanticField, SemanticMember, SemanticProgram } from "./contracts";
 import { assertAdaptedSemanticProgram } from "./adapter";
 import { emitSemanticProgram } from "./emitter";
 
@@ -673,6 +673,7 @@ export interface EmittedRuntimeApplicationEntry {
     readonly path: "ApplicationEntry.generated.ts";
     readonly code: string;
     readonly sha256: string;
+    readonly applicationStart?: Readonly<ApplicationStartContract&{constructorModulePath:string}>;
 }
 
 /** Derives one interface identity from an authenticated, side-effect-free semantic declaration. */
@@ -873,7 +874,8 @@ export function emitRuntimeTypeAuthority(sources: readonly RuntimeAuthoritySourc
 
 /** Emits the sole application entry; authority installation completes before any application module evaluates. */
 export function emitRuntimeApplicationEntry(modulePaths: readonly string[],
-    sha256: (canonicalUtf8: string) => string, programs: readonly SemanticProgram[] = []): EmittedRuntimeApplicationEntry {
+    sha256: (canonicalUtf8: string) => string, programs: readonly SemanticProgram[] = [],
+    applicationStart?:ApplicationStartContract): EmittedRuntimeApplicationEntry {
     if (!Array.isArray(modulePaths) || typeof sha256 !== "function"
         || modulePaths.some(path => typeof path !== "string" || !emittedApplicationModule(path))
         || new Set(modulePaths).size !== modulePaths.length) {
@@ -890,7 +892,42 @@ export function emitRuntimeApplicationEntry(modulePaths: readonly string[],
     functions.sort((left,right)=>left.outputModulePath.localeCompare(right.outputModulePath,"en"));
     if (new Set(functions.map(program=>program.outputModulePath)).size !== functions.length)
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_ENTRY", "function publication repeats an original declaration");
+    let startProgram:SemanticProgram|null=null;
+    if(applicationStart!==undefined) {
+        if(applicationStart.schema!=="as3-application-start-contract@1"
+            ||applicationStart.exportName!=="startAS3Application"
+            ||applicationStart.constructorArguments.length!==0
+            ||applicationStart.cancellation!=="abort-signal-before-construction@1"
+            ||applicationStart.result!=="constructed-instance")
+            throw new HardenedSemanticError("HARDENED_APPLICATION_START_CONTRACT","application start contract is invalid");
+        const candidates=programs.filter(program=>(program.packageName.length===0?program.declaration.name
+            :`${program.packageName}.${program.declaration.name}`)===applicationStart.qname);
+        if(candidates.length!==1)throw new HardenedSemanticError("HARDENED_APPLICATION_START_QNAME",
+            "application start QName must identify exactly one emitted declaration");
+        startProgram=candidates[0]!;assertAdaptedSemanticProgram(startProgram);
+        if(startProgram.fileLocalScope||startProgram.declaration.declarationKind!=="class"
+            ||!startProgram.declaration.modifiers.includes("public")
+            ||!ordered.includes(`application/${startProgram.outputModulePath}`))
+            throw new HardenedSemanticError("HARDENED_APPLICATION_START_QNAME",
+                "application start QName must identify one public application class");
+        const constructors=startProgram.declaration.members.filter(member=>member.kind==="constructor");
+        if(constructors.length>1||constructors.some(member=>!member.modifiers.includes("public")
+            ||member.parameters.some(parameter=>parameter.defaultValue===null&&!parameter.rest)))
+            throw new HardenedSemanticError("HARDENED_APPLICATION_START_CONSTRUCTOR",
+                "application start class must accept the authenticated zero-argument construction");
+    }
     const imports = ordered.map((path, index) => `import * as __as3Application${index} from ${quote(`./${path.slice(0, -3)}`)};`);
+    const startLines=startProgram===null?[]:[
+        "let __as3ApplicationStartConsumed = false;",
+        "export function startAS3Application(signal: AbortSignal): unknown {",
+        "    if (__as3ApplicationStartConsumed) throw new TypeError(\"AS3 application start is one-shot\");",
+        "    __as3ApplicationStartConsumed = true;",
+        "    if (arguments.length !== 1 || signal === null || typeof signal !== \"object\" || typeof signal.aborted !== \"boolean\" || typeof signal.addEventListener !== \"function\") throw new TypeError(\"AS3 application start signal is invalid\");",
+        "    if (signal.aborted) { const error = new Error(\"AS3 application start was aborted\"); error.name = \"AbortError\"; throw error; }",
+        `    return new __as3Application${ordered.indexOf(`application/${startProgram.outputModulePath}`)}[${quote(startProgram.declaration.name)}]();`,
+        "}",
+        "",
+    ];
     const code = [
         "// Generated authority-first application entry. Do not edit or bypass.",
         "import { AS3_TYPE_AUTHORITY_SHA256 as __as3TypeAuthoritySha256 } from \"./AS3Authority.generated\";",
@@ -905,13 +942,17 @@ export function emitRuntimeApplicationEntry(modulePaths: readonly string[],
             return `    Object.freeze({name: ${quote(name)}, definition: __as3Application${index}[${quote(program.declaration.name)}]}),`;
         }),
         "] as const);",
+        ...startLines,
         "",
     ].join("\n");
     const digest = sha256(code);
     if (!/^[0-9a-f]{64}$/.test(digest)) {
         throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_HASH", "runtime application entry SHA-256 function returned a non-canonical digest");
     }
-    return Object.freeze({ path: "ApplicationEntry.generated.ts", code, sha256: digest });
+    return Object.freeze({ path: "ApplicationEntry.generated.ts", code, sha256: digest,
+        ...(applicationStart&&startProgram?{applicationStart:Object.freeze({...applicationStart,
+            constructorArguments:Object.freeze([]) as readonly [],
+            constructorModulePath:`application/${startProgram.outputModulePath}`})}:{}) });
 }
 
 /** A single intrinsic Date identity is registered only after exact SDK verification. */

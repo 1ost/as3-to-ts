@@ -63,12 +63,12 @@ const semanticIdentity={sourceNodeId:"test",sourceSpan:null};
 const methodReturningNew=(name,runtimeName)=>({...semanticIdentity,kind:"method",name,modifiers:["public"],namespaceName:null,parameters:[],
     returnType:typeRef(runtimeName),body:[{...semanticIdentity,kind:"return",expression:{...semanticIdentity,kind:"new",sourceType:typeRef(runtimeName),arguments:[]}}]});
 
-test("mapped Laya predicate authority is pinned as one exact 28-type capability input",()=>{
+test("mapped Laya predicate authority is pinned as one exact 62-type capability input",()=>{
     const lock=JSON.parse(fs.readFileSync(path.join(ROOT,"config/runtime-type-authority-lock.json"),"utf8"));
-    assert.equal(lock.layaRevision,"ecade82aa369d890730c4dc847f9d769d74e8878");
-    assert.equal(lock.predicateAuthorityCanonicalLfSha256,"6e97bb0b9f46c7e112408f69da2683d6c5c49276a4322f14e772c4bc215fa976");
-    assert.equal(lock.predicateAuthorityEntryCount,28);
-    assert.equal(lock.predicateAuthorityQNames.length,28);
+    assert.equal(lock.layaRevision,"7e0784574e9566c19b32bcd33c0d2a23445a2f11");
+    assert.equal(lock.predicateAuthorityCanonicalLfSha256,"010dad6303ba5a6014f33c28b29fb9713f76b4698d82d155249b01858f469ae7");
+    assert.equal(lock.predicateAuthorityEntryCount,62);
+    assert.equal(lock.predicateAuthorityQNames.length,62);
     assert.equal(lock.predicateAuthorityQNames.at(-1),"flash.utils.Timer");
     assert.equal(lock.installation,"generated-package-internal-central-authority-before-application-entry");
     const inventory=JSON.parse(fs.readFileSync(path.join(ROOT,"package.json"),"utf8")).files;
@@ -240,6 +240,49 @@ test("application entry pins authority evaluation before every application modul
     assert.equal(entry.code.indexOf("./a/A") < entry.code.indexOf("./z/B"),true);
     ["../A.ts","/A.ts","C:/A.ts","a\\A.ts","a/../A.ts","node:fs.ts","ApplicationEntry.generated.ts"].forEach(module=>
         assert.throws(()=>emitRuntimeApplicationEntry([module],sha256),error=>error.code==="HARDENED_TYPE_AUTHORITY_ENTRY",module));
+});
+
+test("authenticated application start constructs one exact public root once after cancellation precheck",()=>{
+    const contract={schema:"as3-application-start-contract@1",qname:"ReleaseMain",exportName:"startAS3Application",
+        constructorArguments:[],cancellation:"abort-signal-before-construction@1",result:"constructed-instance"};
+    const root=classProgram("ReleaseMain",{packageName:"",outputModulePath:"ReleaseMain.ts"});
+    const entry=emitRuntimeApplicationEntry(["application/ReleaseMain.ts"],sha256,[root],contract);
+    assert.deepEqual(entry.applicationStart,{...contract,constructorModulePath:"application/ReleaseMain.ts"});
+    assert.match(entry.code,/export function startAS3Application\(signal: AbortSignal\): unknown/);
+    assert.match(entry.code,/return new __as3Application0\["ReleaseMain"\]\(\);/);
+    let constructions=0;
+    const load=()=>{
+        const compiled=ts.transpileModule(entry.code,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS}}).outputText,
+            value={exports:{}};
+        Function("require","module","exports",compiled)(specifier=>specifier==="./AS3Authority.generated"
+            ?{AS3_TYPE_AUTHORITY_SHA256:"a".repeat(64)}:{ReleaseMain:class ReleaseMain{constructor(){constructions++;}}},value,value.exports);
+        return value.exports;
+    };
+    const aborted=load(),controller=new AbortController();controller.abort();
+    assert.throws(()=>aborted.startAS3Application(controller.signal),error=>error.name==="AbortError");
+    assert.equal(constructions,0);assert.throws(()=>aborted.startAS3Application(new AbortController().signal),/one-shot/);
+    const started=load(),instance=started.startAS3Application(new AbortController().signal);
+    assert.equal(instance.constructor.name,"ReleaseMain");assert.equal(constructions,1);
+    assert.throws(()=>started.startAS3Application(new AbortController().signal),/one-shot/);
+    const invalid=load();assert.throws(()=>invalid.startAS3Application({aborted:false}),/signal is invalid/);
+    assert.throws(()=>invalid.startAS3Application(new AbortController().signal),/one-shot/);
+});
+
+test("application start contract rejects missing, non-public, and required-argument roots",()=>{
+    const contract={schema:"as3-application-start-contract@1",qname:"ReleaseMain",exportName:"startAS3Application",
+        constructorArguments:[],cancellation:"abort-signal-before-construction@1",result:"constructed-instance"};
+    const root=classProgram("ReleaseMain",{packageName:"",outputModulePath:"ReleaseMain.ts"});
+    assert.throws(()=>emitRuntimeApplicationEntry(["application/ReleaseMain.ts"],sha256,[],contract),
+        error=>error.code==="HARDENED_APPLICATION_START_QNAME");
+    assert.throws(()=>emitRuntimeApplicationEntry(["application/ReleaseMain.ts"],sha256,
+        [{...root,declaration:{...root.declaration,modifiers:[]}}],contract),error=>error.code==="HARDENED_APPLICATION_START_QNAME");
+    const parameter={...semanticIdentity,name:"required",rest:false,defaultValue:null,type:typeRef("Object")};
+    const constructor={...semanticIdentity,kind:"constructor",modifiers:["public"],parameters:[parameter],body:[]};
+    assert.throws(()=>emitRuntimeApplicationEntry(["application/ReleaseMain.ts"],sha256,
+        [{...root,declaration:{...root.declaration,members:[constructor]}}],contract),
+        error=>error.code==="HARDENED_APPLICATION_START_CONSTRUCTOR");
+    assert.throws(()=>emitRuntimeApplicationEntry(["application/ReleaseMain.ts"],sha256,[root],
+        {...contract,exportName:"launch"}),error=>error.code==="HARDENED_APPLICATION_START_CONTRACT");
 });
 
 test("local authority imports require a fresh definition-only proof",()=>{

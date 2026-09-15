@@ -22,6 +22,16 @@ export interface NormalizedParserAst {
     nodes: NormalizedParserNode[];
 }
 
+/** Independently authenticated application launch semantics carried by profile lock v2. */
+export interface ApplicationStartContract {
+    readonly schema: "as3-application-start-contract@1";
+    readonly qname: string;
+    readonly exportName: "startAS3Application";
+    readonly constructorArguments: readonly [];
+    readonly cancellation: "abort-signal-before-construction@1";
+    readonly result: "constructed-instance";
+}
+
 export interface SourceMemberMapping {
     name: string;
     access: "call" | "read" | "write";

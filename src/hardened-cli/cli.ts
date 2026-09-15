@@ -8,9 +8,20 @@ import { readFileSync, realpathSync, lstatSync } from "node:fs";
 import { dirname, join, posix, resolve, sep } from "node:path";
 import ts49 = require("typescript-4-9");
 import { CliError, errorMessage } from "./errors";
-import { discoverInputs, portableCollisionKey, readInput } from "./inputs";
+import { deriveAuthenticatedSourceClosure, discoverAuthenticatedInputs, discoverAuthenticatedSourcePlan,
+    discoverInputs, portableCollisionKey, readInput } from "./inputs";
 import { assertParserWorkerSha256, captureParserWorkerSha256, parseIsolated } from "./isolated-parser";
 import { HELP, parseArguments, TOOL_VERSION } from "./options";
+import { assertCompilerProviderAuthorityUnchanged, assertSecondaryAuthorityRequestUnchanged, emitSecondaryAuthorityReceipt,
+    canonicalJson, loadCompilerProviderAuthority, loadSecondaryAuthorityRequest, type CompilerProviderAuthority,
+    type EmittedSecondaryAuthority, type SecondaryArtifactIdentity,
+    type SecondaryModuleIdentity } from "./secondary-authority";
+import {emitBrowserSecondaryLinkerPackage,type BrowserLinkerProgram,
+    type EmittedBrowserLinkerPackage} from "./secondary-browser-linker";
+import {emitPrimarySecondaryHostPackage,exposePrimarySecondaryHostAdapter,
+    type EmittedPrimarySecondaryHostPackage} from "./primary-secondary-host";
+import {emitPrimaryHostBundleCandidate,type EmittedPrimaryHostBundleCandidate} from "./primary-host-bundle";
+import {emitBrowserEsmRuntime,type BrowserEsmSource,type EmittedBrowserEsmRuntime} from "./browser-esm-runtime";
 import { loadTranspileAuthority } from "./authority";
 import { targetModuleSpecifier } from "../hardened/ledger";
 import { adaptNormalizedParserAst } from "../hardened/adapter";
@@ -18,7 +29,7 @@ import { HardenedSemanticError, type NormalizedParserAst, type SemanticProgram }
 import { emitSemanticProgram } from "../hardened/emitter";
 import { byteArrayRuntimeTypeAuthoritySource, arrayRuntimeTypeAuthoritySource, assertLocalRuntimeDefinitionClosure, emitRuntimeApplicationEntry, emitRuntimeTypeAuthority, localRuntimeEmbeddedAuthoritySources, localRuntimeInterfaceAuthoritySource,
     localRuntimeTypeAuthoritySource, type EmittedRuntimeApplicationEntry,
-    type EmittedRuntimeAuthority, type RuntimeAuthoritySource } from "../hardened/type-authority";
+    type EmittedRuntimeAuthority, type RuntimeAuthorityClassSource,type RuntimeAuthoritySource } from "../hardened/type-authority";
 import {
     abandon,
     preparePublication,
@@ -88,6 +99,37 @@ function sha256(data: string | Buffer): string {
     return createHash("sha256").update(data).digest("hex");
 }
 
+function sourceAuthorityPath(file: import("./inputs").InputFile): string {
+    return file.sourceRelativePath;
+}
+
+function assertAuthenticatedSourceShape(file: import("./inputs").InputFile,
+    programs: readonly SemanticProgram[]): readonly string[] | null {
+    if (!file.expectedQNames || (!file.expectedLocalDependencies&&!file.allowedLocalDependencies)) return null;
+    if (programs.length !== 1) {
+        throw new HardenedSemanticError("HARDENED_SOURCE_CLOSURE_QNAME",
+            "authenticated multi-root sources must contain exactly one importable declaration");
+    }
+    const program = programs[0]!, qname = program.packageName.length === 0
+        ? program.declaration.name : `${program.packageName}.${program.declaration.name}`;
+    if (file.expectedQNames.length !== 1 || file.expectedQNames[0] !== qname) {
+        throw new HardenedSemanticError("HARDENED_SOURCE_CLOSURE_QNAME",
+            `semantic QName ${qname} differs from the authenticated source closure`);
+    }
+    const dependencies = [...new Set(programs.flatMap(item => item.imports
+        .filter(imported => imported.authorityKind === "local" && !imported.compileTimeNamespace)
+        .map(imported => imported.sourceQualifiedName)))].sort((left, right) =>
+            Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8")));
+    if (JSON.stringify(dependencies) !== JSON.stringify(file.expectedLocalDependencies)) {
+        if(file.expectedLocalDependencies) throw new HardenedSemanticError("HARDENED_SOURCE_CLOSURE_DEPENDENCIES",
+            `semantic local dependencies differ from the authenticated source closure for ${file.portablePath}`);
+        if(dependencies.some(dependency=>!file.allowedLocalDependencies!.includes(dependency)))
+            throw new HardenedSemanticError("HARDENED_SOURCE_PLAN_DEPENDENCIES",
+                `semantic local dependencies exceed the authenticated source plan for ${file.portablePath}`);
+    }
+    return Object.freeze(dependencies);
+}
+
 const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3Reflection.ts": "123dbfdc9fff41eed41f0ca3e6e8dc790cc6baed793fb506b9dd30c23210caae",
     "internal/AS3RegExpPattern.ts": "036bdd8077771be4ee518d9b84b25a7ffc80309240ebb45f7f85aeb84c4d3319",
@@ -103,7 +145,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3ClassInitialization.ts": "5b446cdfe43be974455866ca93648b5625edb777938093979e0437aaa8dd501f",
     "AS3Coerce.ts": "65a9b7f117472e183049fc7a22c51cfff2423e2b4607cf6d89460676f8ece39e",
     "AS3Error.ts": "84ef28906a1cf28f600bc36d554af3330b176c4fffa4f47e8f7384919256b134",
-    "AS3Embed.ts": "2b6d86b2dbc81595ebff44522c34da46edfda19472eb0541acb952072cfec550",
+    "AS3Embed.ts": "d757c027952372aed3ab06b20bd66de796005e2a32662f877c1913b8dabb5b49",
     "AS3Dictionary.ts": "6093e08ea252cc7926982934da92c1d7785d093880e196c798c67c5f8d7d8f84",
     "AS3Function.ts": "dcd4c0c60c72fad77cd6543fcda1c5e907e32741f4049779bc1096ef5dbd8812",
     "AS3MethodClosure.ts": "3021c90d64458b0aed10451eb36f87078c33386c43dcb741c3d34919cfdbfa60",
@@ -111,14 +153,15 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3ObjectDispatch.ts": "0fb323e8165df6574e6ef336311ddc371fddea846b007b7c860a4c2bdcb12c93",
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
-    "AS3TimerExecution.ts": "00e35aeb6a277f03a04bd8187e4a5d011308bd5da325131f4c5fe69b601c23ba",
+    "AS3TimerExecution.ts": "0ab89bfad74309ab98472a750925a557f199bf4844094e009a0751ba5d1294fe",
     "AS3Timer.ts": "639a0e3776611b3fd736305994d709b47af8465509bb9d2de440bc611a985851",
     "AS3Type.ts": "02f2acb486155e4718075f749cd45056c39175cb58c6c8aaf001af30b7104f60",
     "AS3Vector.ts": "6839a53b9987f70cd975367640d6f0b1deaef1d529e7b85c1ffe2ed0f3dca6ad",
     "internal/AS3NumberFormat.ts": "c7a2b808bd4bafded492a65acce6041f67601f2e56308fb2724443f8baa58bc4",
     "internal/AS3CaseTable.ts": "ed85937df05d8ba9015e3cd35b8d75ce46e56348547085c0d218426ed0a44fc5",
     "internal/AS3FileLocalIdentity.ts": "9adbd4a9ab454a7d8351982d6da643d6510d2486658305eb0530170651232abb",
-    "internal/AS3TypeRegistry.ts": "e6517554b4493b3c400dbaa3077fac91e44a78141c526e3d3fac90b76d3eaf35",
+    "internal/AS3TypeRegistry.ts": "524fe980ec5afc2573cb6a048efdc1bc6da50274073edd99cb65a09bf642b71d",
+    "internal/AS3PrimarySecondaryHost.ts": "23cbb0a1777d4dfae93fd766886f1dee5fb943403ca7a76ae92afad32b8f59ab",
     "internal/AS3TimerRuntime.ts": "a72d45f5ba8351fd073fd284978c6b3c7c6dfbbc1adfba7d7ca3a4f058e13dea",
 });
 
@@ -139,9 +182,9 @@ function runtimeEmbeddedCommonJs(code: string, fileName: string): string {
 }
 
 function runtimeBundleJavaScript(authorityCode: string, includeBigTurnTableDto: boolean,
-    byteArrayNative?: {targetModule:string;targetExport:string}): string {
+    byteArrayNative?: {targetModule:string;targetExport:string},includePrimarySecondaryHost=false): string {
     const modules = new Map<string, string>();
-    runtimeSourceTemplates(includeBigTurnTableDto).forEach(template => {
+    runtimeSourceTemplates(includeBigTurnTableDto,includePrimarySecondaryHost).forEach(template => {
         const moduleId = template.path.slice(0, -3) + ".js";
         const code=template.path==="AS3ByteArrayNative.ts" && byteArrayNative
             ? `import { ${byteArrayNative.targetExport} as NativeByteArray } from "${targetModuleSpecifier(byteArrayNative.targetModule)}";
@@ -183,7 +226,8 @@ export function uncompressNativeByteArray(state: {bytes:Uint8Array;position:numb
         lines.push(`function ${item.variable}() { return require(${JSON.stringify(item.specifier)}); }`);
     });
     lines.push("const __as3Modules = { __proto__: null,");
-    [...modules.entries()].sort(([left], [right]) => left.localeCompare(right)).forEach(([id, code]) => {
+    [...modules.entries()].sort(([left], [right]) => Buffer.compare(Buffer.from(left,"utf8"),Buffer.from(right,"utf8")))
+        .forEach(([id, code]) => {
         lines.push(`${JSON.stringify(id)}: function(module, exports, require) {\n${code}\n},`);
     });
     lines.push("};", "const __as3Cache = { __proto__: null };");
@@ -224,10 +268,11 @@ export function uncompressNativeByteArray(state: {bytes:Uint8Array;position:numb
     return lines.join("\n");
 }
 
-function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<{ path: string; code: string }> {
+function runtimeSourceTemplates(includeBigTurnTableDto: boolean,includePrimarySecondaryHost=false): ReadonlyArray<{ path: string; code: string }> {
     const root = resolve(join(__dirname, "..", "src", "hardened-runtime"));
     return Object.keys(RUNTIME_SOURCE_SHA256).filter(path => includeBigTurnTableDto
-        || path !== "AS3BigTurnTableInnerDto.ts").sort().map(path => {
+        || path !== "AS3BigTurnTableInnerDto.ts").filter(path=>includePrimarySecondaryHost
+            ||path!=="internal/AS3PrimarySecondaryHost.ts").sort().map(path => {
         const code = readFileSync(join(root, ...path.split("/")), "utf8").replace(/\r\n?/g, "\n");
         if (sha256(code) !== RUNTIME_SOURCE_SHA256[path]) {
             throw new CliError(`runtime package source drifted: ${path}`, 6);
@@ -236,7 +281,8 @@ function runtimeSourceTemplates(includeBigTurnTableDto: boolean): ReadonlyArray<
     });
 }
 
-function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): string {
+function runtimePackageJson(name: string, includeBigTurnTableDto: boolean, includeSecondaryAuthority: boolean,
+    includeBrowserAuthority:boolean): string {
     const entries = ["AS3Reflection", "AS3Date", "AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
         "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3RegExp", "AS3Timer", "AS3TimerExecution", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
@@ -244,8 +290,13 @@ function runtimePackageJson(name: string, includeBigTurnTableDto: boolean): stri
         ? "./AS3Timer.js" : "./AS3Authority.generated.js"; });
     exports["./AS3Authority"] = "./AS3Authority.generated.js";
     exports["./ApplicationEntry"] = "./ApplicationEntry.generated.js";
+    if (includeSecondaryAuthority) exports["./SecondaryAuthorityReceipt"] = "./SecondaryAuthority.receipt.json";
     return `${JSON.stringify({ name, version: "0.1.0", private: true,
         type: "commonjs", exports, files: ["AS3Authority.generated.js", "AS3Timer.js", "ApplicationEntry.generated.js",
+            ...(includeSecondaryAuthority ? ["AchievementModule.source-closure.json", "SecondaryAuthority.receipt.json"] : []),
+            ...(includeBrowserAuthority?["achievement-secondary-linker/*","achievement-primary-host/*",
+                "achievement-primary-host-bundle-candidate/*",
+                "achievement-primary-runtime/**/*.mjs"]:[]),
             "application/**/*.js"] }, null, 2)}\n`;
 }
 
@@ -290,14 +341,89 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
     }
 
     const { options } = parsed;
-    const inputs = discoverInputs(options.sourceDirectory, options.limits);
+    const inputs = options.operation !== "parse" && options.sourceClosurePath
+        ? discoverAuthenticatedInputs(options.sourceDirectory, options.sourceClosurePath, options.limits)
+        : options.operation !== "parse" && options.sourcePlanPath
+        ? discoverAuthenticatedSourcePlan(options.sourceDirectory,options.sourcePlanPath,options.limits)
+        : discoverInputs(options.sourceDirectory, options.limits);
     const parserWorkerSha256 = captureParserWorkerSha256();
     const transpileAuthority = options.operation !== "parse"
         ? loadTranspileAuthority(options.sourceCensusPath, options.targetCapabilitiesPath, options.profileLockPath)
         : null;
+    if (inputs.sourceClosureSha256 !== undefined||inputs.sourcePlanSha256!==undefined) {
+        if (transpileAuthority!.profileSha256 === null
+            || inputs.sourceClosureProfileSha256 !== transpileAuthority!.profileSha256) {
+            throw new CliError("source closure is not bound to the selected application profile", 6);
+        }
+        for (const module of ["application", "bootstrap"] as const) {
+            if (inputs.sourcePrefixes![module] !== transpileAuthority!.localTypes.sourceRoots[module]) {
+                throw new CliError(`source closure ${module} prefix differs from the selected application profile`, 6);
+            }
+        }
+    }
+    const authenticatedIncludeContexts=new Map<string,{includeRootPath:string;
+        includeFragments:import("../hardened/source-includes").IncludeSource[];
+        includeEdges:import("../hardened/source-includes").IncludeEdge[]}>();
+    if(inputs.authenticatedSourceDocument) {
+        const includedFiles=inputs.files.filter(file=>file.includeFragment);
+        const closureEdges=inputs.sourceIncludeEdges!;
+        if((includedFiles.length>0||closureEdges.application.length>0||closureEdges.bootstrap.length>0)
+            && !transpileAuthority!.sourceIncludes) throw new CliError("multi-root source includes lack profile authority",6);
+        if(transpileAuthority!.sourceIncludes) {
+            const authority=transpileAuthority!.sourceIncludes,inventory=authority.inventory;
+            const moduleIndex=inputs.roots.findIndex(root=>root===inventory.sourceRoot);
+            if(moduleIndex<0) {
+                if(includedFiles.length||closureEdges.application.length||closureEdges.bootstrap.length)
+                    throw new CliError("multi-root include authority source root has no exact closure owner",6);
+            } else {
+                const module=(moduleIndex===0?"application":"bootstrap") as "application"|"bootstrap";
+                const other=module==="application"?"bootstrap":"application";
+                if(inputs.files.some(file=>file.authorityModule===other&&file.includeFragment)||closureEdges[other].length)
+                    throw new CliError("multi-root include fragments and edges must remain within their authority root",6);
+                const roots=inputs.files.filter(file=>file.authorityModule===module&&!file.includeFragment
+                    && inventory.roots.some(row=>row.path===file.sourceRelativePath));
+                for(const file of roots) {
+                    const row=inventory.roots.find(item=>item.path===file.sourceRelativePath)!;
+                    if(row.sha256!==sha256(readInput(file).bytes)) throw new CliError("profile include root differs from authenticated closure",6);
+                }
+                const reachableEdges:typeof inventory.edges=[];const reachable=new Set(roots.map(file=>file.sourceRelativePath));
+                for(let changed=true;changed;) { changed=false; for(const edge of inventory.edges) if(reachable.has(edge.ownerPath)) {
+                    if(!reachableEdges.some(item=>canonicalJson(item)===canonicalJson(edge))) reachableEdges.push(edge);
+                    if(!reachable.has(edge.targetPath)){reachable.add(edge.targetPath);changed=true;}
+                }}
+                const expectedEdges=reachableEdges.sort((left,right)=>Buffer.compare(Buffer.from(canonicalJson(left),"utf8"),
+                    Buffer.from(canonicalJson(right),"utf8")));
+                if(canonicalJson(expectedEdges)!==canonicalJson(closureEdges[module]))
+                    throw new CliError("multi-root include edges differ from the exact profile-authority projection",6);
+                const expectedFragments=inventory.fragments.filter(item=>reachable.has(item.path))
+                    .sort((left,right)=>Buffer.compare(Buffer.from(left.path,"utf8"),Buffer.from(right.path,"utf8")));
+                const actualFragments=includedFiles.filter(file=>file.authorityModule===module)
+                    .sort((left,right)=>Buffer.compare(Buffer.from(left.sourceRelativePath,"utf8"),Buffer.from(right.sourceRelativePath,"utf8")));
+                if(expectedFragments.length!==actualFragments.length||expectedFragments.some((row,index)=>{
+                    const file=actualFragments[index];return !file||file.sourceRelativePath!==row.path
+                        ||file.byteLength!==row.bytes||sha256(readInput(file).bytes)!==row.sha256;
+                })) throw new CliError("multi-root include fragments differ from the exact profile-authority projection",6);
+                const fragments=authority.fragments.filter(item=>reachable.has(item.path));
+                for(const file of roots) authenticatedIncludeContexts.set(file.portablePath,{includeRootPath:file.sourceRelativePath,
+                    includeFragments:fragments,includeEdges:closureEdges[module] as import("../hardened/source-includes").IncludeEdge[]});
+            }
+        }
+    }
+    const secondaryRequest = options.operation === "transpile" && options.secondaryAuthorityPath
+        ? loadSecondaryAuthorityRequest(options.secondaryAuthorityPath) : null;
+    if (secondaryRequest && (secondaryRequest.applicationId !== transpileAuthority!.applicationId
+        || secondaryRequest.profileSha256 !== transpileAuthority!.profileSha256
+        || secondaryRequest.sourceClosureSha256 !== inputs.sourceClosureSha256)) {
+        throw new CliError("secondary authority request is not bound to the selected profile and source closure", 6);
+    }
+    const compilerProvider:CompilerProviderAuthority|null=secondaryRequest&&options.operation==="transpile"
+        ?loadCompilerProviderAuthority(options.compilerProviderPath!,secondaryRequest.compilerProviderSha256,{
+            packageLockSha256:sha256(readFileSync(join(__dirname,"..","package-lock.json"))),
+            commandSha256:sha256(readFileSync(join(__dirname,"command.js"))),parserWorkerSha256,
+        }):null;
     let publication: Publication | undefined;
     try {
-        publication = preparePublication(options.outputDirectory, inputs.root);
+        publication = preparePublication(options.outputDirectory, inputs.roots);
         const manifestFiles: ManifestFile[] = [];
         const transpiledFiles: TranspiledManifestFile[] = [];
         const qualificationFiles: QualificationFile[] = [];
@@ -305,10 +431,28 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
         const qualificationOwners = new Map<string, QualificationFile>();
         const localOutputDependencies = new Map<QualificationFile | TranspiledManifestFile, string[]>();
         let applicationEntry: EmittedRuntimeApplicationEntry | null = null;
+        let applicationStartEvidence:Readonly<{schema:"as3-application-start-evidence@1";
+            profileSha256:string;typeAuthoritySha256:string;
+            contract:NonNullable<EmittedRuntimeApplicationEntry["applicationStart"]>;
+            applicationEntry:Readonly<{path:string;bytes:number;sha256:string}>;
+            constructorModule:Readonly<{path:string;bytes:number;sha256:string;exportName:string}>}>|null=null;
         let runtimeAuthority: EmittedRuntimeAuthority | null = null;
+        let browserRuntimeAuthorityCode:string|null=null;
+        let secondaryAuthority: EmittedSecondaryAuthority | null = null;
+        let secondaryBrowserPackage:EmittedBrowserLinkerPackage|null=null;
+        let primarySecondaryHostPackage:EmittedPrimarySecondaryHostPackage|null=null;
+        let primaryHostBundleCandidate:EmittedPrimaryHostBundleCandidate|null=null;
+        let primaryBrowserRuntime:EmittedBrowserEsmRuntime|null=null;
+        let derivedSourceClosure:Readonly<{path:string;json:string;sha256:string}>|null=null;
         const runtimeAuthoritySources: RuntimeAuthoritySource[] = transpileAuthority === null
             ? [] : [...transpileAuthority.runtimeTypeSources];
         const localRuntimePrograms: SemanticProgram[] = [];
+        const secondaryModules = new Map<string, SecondaryModuleIdentity>();
+        const secondaryExecutableArtifacts: SecondaryArtifactIdentity[] = [];
+        const browserLinkerPrograms:BrowserLinkerProgram[]=[];
+        const browserAuthoritySources:RuntimeAuthorityClassSource[]=[];
+        const browserApplicationSources:Array<BrowserEsmSource&{sourceModule:"application"|"bootstrap"}>=[];
+        const derivedSemanticDependencies=new Map<string,readonly string[]>();
         const embeddedResources: Array<{id: string; sourcePath: string; path: string; sha256: string; bytes: number}> = [];
         const resourceInputs = new Map<string, string>();
         const includedFragments: Array<{sourcePath:string;sourceSha256:string;sourceBytes:number}> = [];
@@ -316,6 +460,10 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
 
         for (const file of inputs.files) {
             const source = readInput(file);
+            if(file.includeFragment) {
+                includedFragments.push({sourcePath:file.portablePath,sourceSha256:sha256(source.bytes),sourceBytes:source.bytes.length});
+                continue;
+            }
             const includeInventory=transpileAuthority?.sourceIncludes?.inventory;
             if(includeInventory && !includeInventory.roots.some(item=>item.path===file.portablePath)) {
                 const fragment=includeInventory.fragments.find(item=>item.path===file.portablePath);
@@ -329,14 +477,14 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             try {
                 parsedFile = await parseIsolated(file.portablePath, source.content, options.limits,
                     options.operation === "parse" ? "legacy" : "normalized", parserWorkerSha256,
-                    transpileAuthority?.sourceIncludes ? (() => {
+                    authenticatedIncludeContexts.get(file.portablePath) || (transpileAuthority?.sourceIncludes ? (() => {
                         const includes=transpileAuthority!.sourceIncludes!;
                         const root=includes.inventory.roots.find(item=>item.path===file.portablePath);
                         if(!root) return undefined;
                         if (root.sha256!==sha256(source.bytes)) throw new Error("HARDENED_INCLUDE_ROOT_IDENTITY: selected source differs from include authority");
                         if(!includes.inventory.edges.some(edge=>edge.ownerPath===root.path)) return undefined;
                         return {includeRootPath:root.path,includeFragments:includes.fragments,includeEdges:includes.inventory.edges};
-                    })() : undefined);
+                    })() : undefined));
             } catch (error) {
                 if (options.operation !== "qualify") throw error;
                 qualificationFiles.push({
@@ -372,8 +520,10 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 if (transpileAuthority!.profileSha256 !== null) {
                     const local = transpileAuthority!.localTypes;
                     const canonicalSourceSha256 = sha256(source.content.replace(/\r\n?/g, "\n"));
+                    const relativeSourcePath = sourceAuthorityPath(file);
                     const owners = local.entries.filter(entry =>
-                        entry.sourcePath === `${local.sourceRoots[entry.module]}${file.portablePath}`
+                        (file.authorityModule === undefined || entry.module === file.authorityModule)
+                        && entry.sourcePath === `${local.sourceRoots[entry.module]}${relativeSourcePath}`
                         && entry.sourceContentSha256 === canonicalSourceSha256);
                     if (owners.length !== 1) {
                         throw new HardenedSemanticError("HARDENED_APPLICATION_SOURCE_IDENTITY",
@@ -382,15 +532,17 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 }
                 const normalized = JSON.parse(parsedFile.json) as NormalizedParserAst;
                 const semantic = adaptNormalizedParserAst(normalized, transpileAuthority!.authority,
-                    source.content, value => sha256(value), transpileAuthority!.localTypes, file.portablePath,
+                    source.content, value => sha256(value), transpileAuthority!.localTypes, sourceAuthorityPath(file),
                     transpileAuthority!.localMembers, transpileAuthority!.runtimeTypeSources,
                     transpileAuthority!.sourceMembers || undefined);
                 const programs = [semantic, ...(semantic.fileLocalPrograms || [])];
+                const exactDependencies=assertAuthenticatedSourceShape(file, programs);
+                if(exactDependencies) derivedSemanticDependencies.set(file.portablePath,exactDependencies);
                 for (const program of programs) if (program.declaration.declarationKind === "class") for (const member of program.declaration.members) {
                     if (member.kind !== "field" || !member.embeddedBitmap) continue;
                     const asset = member.embeddedBitmap;
                     const resourcePath = resolve(dirname(file.absolutePath), asset.source);
-                    if (!resourcePath.startsWith(inputs.root + sep) || realpathSync.native(resourcePath) !== resourcePath
+                    if (!resourcePath.startsWith(file.sourceRoot + sep) || realpathSync.native(resourcePath) !== resourcePath
                         || !lstatSync(resourcePath).isFile() || lstatSync(resourcePath).size > 16 * 1024 * 1024) {
                         throw new HardenedSemanticError("HARDENED_EMBED_RESOURCE", "Embedded resource must be a bounded regular file within the source root");
                     }
@@ -428,6 +580,13 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                         packagePath: `__as3_runtime/application/${emitted.modulePath}`,
                         bytes: Buffer.byteLength(code, "utf8"), hash: sha256(code)};
                 });
+                if(secondaryRequest?.schema==="as3-secondary-browser-linker-request@2"&&file.authorityModule==="application") {
+                    if(programs.length!==1)throw new CliError("browser secondary application source emits file-local declarations",4);
+                    const qname=programs[0]!.packageName.length===0?programs[0]!.declaration.name
+                        :`${programs[0]!.packageName}.${programs[0]!.declaration.name}`;
+                    browserLinkerPrograms.push(Object.freeze({qname,program:programs[0]!,code:outputs[0]!.code,
+                        sourcePath:file.sourceRelativePath,sourceBytes:source.bytes.length,sourceSha256:sha256(source.bytes)}));
+                }
                 const primary = outputs[0]!;
                 const fileLocalOutputs = outputs.slice(1).map(output => ({sourceNodeId: output.program.declaration.sourceNodeId,
                     modulePath: output.modulePath, typescriptBytes: output.bytes, typescriptSha256: output.hash}));
@@ -463,6 +622,20 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 for (const output of outputs) {
                     localRuntimePrograms.push(output.program);
                     const javascript = runtimeCommonJs(output.code, output.packagePath);
+                    const qname = output.program.packageName.length === 0 ? output.program.declaration.name
+                        : `${output.program.packageName}.${output.program.declaration.name}`;
+                    if (secondaryModules.has(qname)) throw new CliError(`duplicate emitted QName: ${qname}`, 4);
+                    secondaryModules.set(qname, {qname, exportName:output.program.declaration.name,
+                        sourceModule:file.authorityModule!,
+                        sourcePath:file.portablePath,sourceBytes:source.bytes.byteLength,sourceSha256:sha256(source.bytes),
+                        typescriptPath:output.packagePath,typescriptBytes:output.bytes,typescriptSha256:output.hash,
+                        javascriptPath:output.packagePath.slice(0,-3)+".js",javascriptBytes:Buffer.byteLength(javascript,"utf8"),
+                        javascriptSha256:sha256(javascript)});
+                    secondaryExecutableArtifacts.push({path:output.packagePath.slice("__as3_runtime/".length,-3)+".js",
+                        bytes:Buffer.byteLength(javascript,"utf8"),sha256:sha256(javascript)});
+                    if(file.authorityModule)browserApplicationSources.push(Object.freeze({
+                        path:output.packagePath.slice("__as3_runtime/".length,-3)+".mjs",code:output.code,
+                        sourceModule:file.authorityModule}));
                     totalOutputBytes += output.bytes + Buffer.byteLength(javascript, "utf8");
                     if (totalOutputBytes > options.limits.maxTotalOutputBytes)
                         throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
@@ -525,6 +698,14 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     }
                 });
             }
+            if(inputs.sourcePlanSha256&&qualificationFiles.every(item=>item.status==="admitted")) {
+                const json=deriveAuthenticatedSourceClosure(inputs,derivedSemanticDependencies);
+                derivedSourceClosure=Object.freeze({path:"derived-source-closure.json",json,sha256:sha256(json)});
+                totalOutputBytes+=Buffer.byteLength(json,"utf8");
+                if(totalOutputBytes>options.limits.maxTotalOutputBytes)
+                    throw new CliError("derived source closure exceeds --max-total-output-bytes",5);
+                writeArtifact(publication,derivedSourceClosure.path,json);
+            }
         } else if (options.operation === "transpile") {
             const emittedModules = new Set(transpiledFiles.flatMap(item => [item.typescriptPath,
                 ...(item.fileLocalOutputs || []).map(output => `__as3_runtime/application/${output.modulePath}`)]).map(path => portableCollisionKey(path)));
@@ -539,10 +720,15 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 assertLocalRuntimeDefinitionClosure(localRuntimePrograms, ts49);
                 localRuntimePrograms.forEach(semantic => {
                     if (semantic.declaration.declarationKind === "class") {
-                        runtimeAuthoritySources.push(localRuntimeTypeAuthoritySource(semantic,
-                            `./application/${semantic.outputModulePath.slice(0, -3)}`));
-                        runtimeAuthoritySources.push(...localRuntimeEmbeddedAuthoritySources(semantic,
-                            `./application/${semantic.outputModulePath.slice(0, -3)}`));
+                        const source=localRuntimeTypeAuthoritySource(semantic,
+                            `./application/${semantic.outputModulePath.slice(0, -3)}`);
+                        const browserSecondary=secondaryRequest?.schema==="as3-secondary-browser-linker-request@2"
+                            &&browserLinkerPrograms.some(program=>program.qname===source.qname);
+                        if(browserSecondary)browserAuthoritySources.push(source);else runtimeAuthoritySources.push(source);
+                        const embedded=localRuntimeEmbeddedAuthoritySources(semantic,
+                            `./application/${semantic.outputModulePath.slice(0, -3)}`);
+                        if(browserSecondary&&embedded.length)throw new CliError("browser secondary application class has embedded type authority",6);
+                        runtimeAuthoritySources.push(...embedded);
                     } else if (semantic.declaration.declarationKind === "interface") {
                         runtimeAuthoritySources.push(localRuntimeInterfaceAuthoritySource(semantic));
                     }
@@ -551,7 +737,8 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                 throw new CliError(`transpile rejected runtime authority source set: ${errorMessage(error)}`, 4);
             }
             const packageJson = runtimePackageJson(transpileAuthority!.runtimePackage,
-                transpileAuthority!.includeBigTurnTableDto);
+                transpileAuthority!.includeBigTurnTableDto, secondaryRequest?.schema === "as3-secondary-authority-request@1",
+                secondaryRequest?.schema === "as3-secondary-browser-linker-request@2");
             writeArtifact(publication, "__as3_runtime/package.json", packageJson);
             totalOutputBytes += Buffer.byteLength(packageJson, "utf8");
             if (localRuntimePrograms.some(program=>program.declaration.declarationKind === "class"
@@ -571,23 +758,38 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     target: transpileAuthority!.reflectionProvider,
                     targetCapabilitiesJson: readFileSync(options.targetCapabilitiesPath!, "utf8"),
                 } : undefined);
+            if(secondaryRequest?.schema==="as3-secondary-browser-linker-request@2") {
+                if(runtimeAuthority.sha256!==secondaryRequest.primaryAuthority.typeAuthoritySha256)
+                    throw new CliError(`browser secondary primary type authority differs from the emitted sealed registry: expected ${runtimeAuthority.sha256}`,6);
+                browserRuntimeAuthorityCode=exposePrimarySecondaryHostAdapter(runtimeAuthority.code);
+            }
             const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
             const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code,
                 transpileAuthority!.includeBigTurnTableDto, transpileAuthority!.authority.byteArrayNative);
+            const authorityJavaScriptIdentity = {path:"AS3Authority.generated.js",
+                bytes:Buffer.byteLength(authorityJavaScript,"utf8"),sha256:sha256(authorityJavaScript)};
+            secondaryExecutableArtifacts.push(authorityJavaScriptIdentity);
             totalOutputBytes += Buffer.byteLength(authorityJavaScript, "utf8");
             if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
                 throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
             }
             writeArtifact(publication, runtimeAuthorityPath, authorityJavaScript);
             const timerFacadeJavaScript = runtimeTimerFacadeJavaScript();
+            const timerJavaScriptIdentity={path:"AS3Timer.js",bytes:Buffer.byteLength(timerFacadeJavaScript,"utf8"),
+                sha256:sha256(timerFacadeJavaScript)};
+            secondaryExecutableArtifacts.push(timerJavaScriptIdentity);
             totalOutputBytes += Buffer.byteLength(timerFacadeJavaScript, "utf8");
             if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
                 throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
             }
             writeArtifact(publication, "__as3_runtime/AS3Timer.js", timerFacadeJavaScript);
-            applicationEntry = emitRuntimeApplicationEntry(transpiledFiles.map(item =>
-                item.typescriptPath.slice("__as3_runtime/".length)),
-                value => sha256(value),localRuntimePrograms);
+            try {
+                applicationEntry = emitRuntimeApplicationEntry(transpiledFiles.map(item =>
+                    item.typescriptPath.slice("__as3_runtime/".length)),
+                    value => sha256(value),localRuntimePrograms,transpileAuthority!.applicationStart);
+            } catch(error) {
+                throw new CliError(`transpile rejected application entry: ${errorMessage(error)}`,4);
+            }
             const applicationEntryPath = `__as3_runtime/${applicationEntry.path}`;
             const entryCollisionKey = portableCollisionKey(applicationEntryPath);
             if (outputKeys.has(entryCollisionKey)) {
@@ -595,16 +797,118 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             }
             const entryBytes = Buffer.byteLength(applicationEntry.code, "utf8");
             const entryJavaScript = runtimeCommonJs(applicationEntry.code, applicationEntryPath);
+            secondaryExecutableArtifacts.push({path:"ApplicationEntry.generated.js",
+                bytes:Buffer.byteLength(entryJavaScript,"utf8"),sha256:sha256(entryJavaScript)});
             totalOutputBytes += entryBytes + Buffer.byteLength(entryJavaScript, "utf8");
             if (totalOutputBytes > options.limits.maxTotalOutputBytes) {
                 throw new CliError("TypeScript output set exceeds --max-total-output-bytes", 5);
             }
             writeArtifact(publication, applicationEntryPath, applicationEntry.code);
             writeArtifact(publication, "__as3_runtime/ApplicationEntry.generated.js", entryJavaScript);
+            if(applicationEntry.applicationStart) {
+                const startModule=secondaryModules.get(applicationEntry.applicationStart.qname);
+                if(!startModule||startModule.typescriptPath!==`__as3_runtime/${applicationEntry.applicationStart.constructorModulePath}`)
+                    throw new CliError("application start constructor output identity differs",6);
+                applicationStartEvidence=Object.freeze({schema:"as3-application-start-evidence@1",
+                    profileSha256:transpileAuthority!.profileSha256!,typeAuthoritySha256:runtimeAuthority.sha256,
+                    contract:applicationEntry.applicationStart,
+                    applicationEntry:Object.freeze({path:"__as3_runtime/ApplicationEntry.generated.js",
+                        bytes:Buffer.byteLength(entryJavaScript,"utf8"),sha256:sha256(entryJavaScript)}),
+                    constructorModule:Object.freeze({path:startModule.javascriptPath,bytes:startModule.javascriptBytes,
+                        sha256:startModule.javascriptSha256,exportName:startModule.exportName})});
+            }
+            if (secondaryRequest) {
+                const modules = secondaryRequest.exports.map(item => secondaryModules.get(item.qname));
+                if (modules.some(module => module === undefined)) {
+                    throw new CliError("secondary authority export is absent from the authenticated output set", 6);
+                }
+                const expectedExecutableQNames=inputs.files.filter(file=>!file.includeFragment)
+                    .flatMap(file=>file.expectedQNames||[]).sort((left,right)=>Buffer.compare(Buffer.from(left,"utf8"),Buffer.from(right,"utf8")));
+                const executableModules=[...secondaryModules.values()].sort((left,right)=>
+                    Buffer.compare(Buffer.from(left.qname,"utf8"),Buffer.from(right.qname,"utf8")));
+                if(canonicalJson(expectedExecutableQNames)!==canonicalJson(executableModules.map(module=>module.qname)))
+                    throw new CliError("secondary executable QName mapping differs from the authenticated source closure",6);
+                const sourceClosureBytes=readFileSync(options.sourceClosurePath!);
+                const sourceClosureIdentity={path:"AchievementModule.source-closure.json",bytes:sourceClosureBytes.length,
+                    sha256:sha256(sourceClosureBytes)};
+                if(sourceClosureIdentity.sha256!==inputs.sourceClosureSha256) throw new CliError("source closure changed during generation",6);
+                if(secondaryRequest.schema==="as3-secondary-authority-request@1") {
+                    writeArtifact(publication,`__as3_runtime/${sourceClosureIdentity.path}`,sourceClosureBytes);
+                    totalOutputBytes+=sourceClosureBytes.length;
+                    secondaryAuthority = emitSecondaryAuthorityReceipt(secondaryRequest, {
+                        applicationId: transpileAuthority!.applicationId, profileSha256: transpileAuthority!.profileSha256!,
+                        sourceClosureSha256: inputs.sourceClosureSha256!, typeAuthoritySha256: runtimeAuthority.sha256,
+                        compiler: {toolVersion:TOOL_VERSION,parserWorkerSha256,typeScriptVersion:transpileAuthority!.typeScriptVersion},
+                        compilerProvider:compilerProvider!,executableModules,
+                        packageMetadata: {path:"package.json",bytes:Buffer.byteLength(packageJson,"utf8"),sha256:sha256(packageJson)},
+                        runtimeAuthority: authorityJavaScriptIdentity,
+                        sourceClosure:sourceClosureIdentity,
+                        executableClosure: secondaryExecutableArtifacts.sort((left,right)=>
+                            Buffer.compare(Buffer.from(left.path,"utf8"),Buffer.from(right.path,"utf8"))),
+                        modules: modules as SecondaryModuleIdentity[],
+                    });
+                    totalOutputBytes += Buffer.byteLength(secondaryAuthority.json,"utf8");
+                    if (totalOutputBytes > options.limits.maxTotalOutputBytes) throw new CliError("secondary authority receipt exceeds output limit",5);
+                    writeArtifact(publication, `__as3_runtime/${secondaryAuthority.path}`, secondaryAuthority.json);
+                } else {
+                    secondaryBrowserPackage=emitBrowserSecondaryLinkerPackage(secondaryRequest,compilerProvider!,sourceClosureBytes,
+                        inputs.authenticatedSourceDocument,browserLinkerPrograms,browserAuthoritySources);
+                    for(const file of secondaryBrowserPackage.files) {
+                        totalOutputBytes+=file.identity.bytes;
+                        if(totalOutputBytes>options.limits.maxTotalOutputBytes)throw new CliError("browser secondary linker package exceeds output limit",5);
+                        writeArtifact(publication,`__as3_runtime/${secondaryBrowserPackage.root}/${file.path}`,file.body);
+                    }
+                    const browserRuntimeSources:BrowserEsmSource[]=[...runtimeSourceTemplates(
+                        transpileAuthority!.includeBigTurnTableDto,true).map(template=>Object.freeze({
+                            path:template.path.slice(0,-3)+".mjs",
+                            code:template.path==="AS3ByteArrayNative.ts"&&transpileAuthority!.authority.byteArrayNative
+                                ?`import { ${transpileAuthority!.authority.byteArrayNative.targetExport} as NativeByteArray } from "${targetModuleSpecifier(transpileAuthority!.authority.byteArrayNative.targetModule)}";\nexport function uncompressNativeByteArray(state: {bytes:Uint8Array;position:number;endian:string}) {\n    const value=new NativeByteArray(state.bytes.slice());\n    value.position=state.position;value.endian=state.endian;\n    value.uncompress();\n    return {bytes:new Uint8Array(value.buffer),position:value.position,endian:value.endian};\n}\n`
+                                :template.code})),
+                        Object.freeze({path:"AS3Authority.generated.mjs",code:browserRuntimeAuthorityCode!}),
+                        ...browserApplicationSources.filter(source=>source.sourceModule==="bootstrap")];
+                    const runtimeRoots=["AS3Authority.generated.mjs",...secondaryBrowserPackage.primaryHostInventory.runtimeImports.map(specifier=>{
+                        if(!specifier.startsWith(`${transpileAuthority!.runtimePackage}/`))
+                            throw new CliError(`browser primary runtime import is outside the compiler-owned package: ${specifier}`,6);
+                        return `${specifier.slice(transpileAuthority!.runtimePackage.length+1)}.mjs`;
+                    })];
+                    primaryBrowserRuntime=emitBrowserEsmRuntime(browserRuntimeSources,transpileAuthority!.runtimePackage,runtimeRoots);
+                    for(const file of primaryBrowserRuntime.files) {
+                        totalOutputBytes+=file.identity.bytes;
+                        if(totalOutputBytes>options.limits.maxTotalOutputBytes)throw new CliError("browser primary runtime exceeds output limit",5);
+                        writeArtifact(publication,`__as3_runtime/${primaryBrowserRuntime.root}/${file.path}`,file.body);
+                    }
+                    primarySecondaryHostPackage=emitPrimarySecondaryHostPackage(secondaryBrowserPackage,compilerProvider!,
+                        primaryBrowserRuntime,transpileAuthority!.runtimePackage,
+                        runtimeAuthoritySources.filter((source):source is RuntimeAuthorityClassSource=>source.kind==="class"));
+                    for(const file of primarySecondaryHostPackage.files) {
+                        totalOutputBytes+=file.identity.bytes;
+                        if(totalOutputBytes>options.limits.maxTotalOutputBytes)throw new CliError("browser primary host package exceeds output limit",5);
+                        writeArtifact(publication,`__as3_runtime/${primarySecondaryHostPackage.root}/${file.path}`,file.body);
+                    }
+                    primaryHostBundleCandidate=emitPrimaryHostBundleCandidate(primarySecondaryHostPackage,
+                        primaryBrowserRuntime,compilerProvider!);
+                    for(const file of primaryHostBundleCandidate.files) {
+                        totalOutputBytes+=file.identity.bytes;
+                        if(totalOutputBytes>options.limits.maxTotalOutputBytes)
+                            throw new CliError("browser primary host bundle candidate exceeds output limit",5);
+                        writeArtifact(publication,`__as3_runtime/${primaryHostBundleCandidate.root}/${file.path}`,file.body);
+                    }
+                }
+            }
         }
 
         if(transpileAuthority?.sourceIncludes) loadSourceIncludes(JSON.stringify(transpileAuthority.sourceIncludes.inventory));
         assertParserWorkerSha256(parserWorkerSha256);
+        for (const file of inputs.files) readInput(file);
+        if (inputs.sourceClosureSha256 !== undefined
+            && sha256(readFileSync(options.operation === "parse" ? "" : options.sourceClosurePath!)) !== inputs.sourceClosureSha256) {
+            throw new CliError("source closure changed during generation", 6);
+        }
+        if(inputs.sourcePlanSha256!==undefined&&options.operation!=="parse"
+            &&sha256(readFileSync(options.sourcePlanPath!))!==inputs.sourcePlanSha256)
+            throw new CliError("source plan changed during generation",6);
+        if (secondaryRequest) assertSecondaryAuthorityRequestUnchanged(secondaryRequest);
+        if(compilerProvider) assertCompilerProviderAuthorityUnchanged(compilerProvider);
         for (const [path, hash] of resourceInputs) {
             if (realpathSync.native(path) !== path || sha256(readFileSync(path)) !== hash)
                 throw new CliError("Embedded resource changed during generation", 6);
@@ -638,12 +942,32 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             runtimeAuthorityQNames: runtimeAuthority!.qnames,
             applicationEntryPath: `__as3_runtime/${applicationEntry!.path}`,
             applicationEntrySha256: applicationEntry!.sha256,
+            ...(applicationStartEvidence?{applicationStart:applicationStartEvidence}:{}),
             nativeTimerAuthoritySha256: transpileAuthority!.nativeTimerAuthoritySha256,
             applicationId: transpileAuthority!.applicationId,
             profileLockSha256: transpileAuthority!.profileSha256,
             runtimePackage: transpileAuthority!.runtimePackage,
             classification: "capability-authenticated-typescript-proposal",
             embeddedResources,
+            ...(secondaryAuthority ? {secondaryAuthorityReceiptPath:`__as3_runtime/${secondaryAuthority.path}`,
+                secondaryAuthorityReceiptSha256:secondaryAuthority.sha256} : {}),
+            ...(secondaryBrowserPackage?{secondaryBrowserLinkerPackageRoot:`__as3_runtime/${secondaryBrowserPackage.root}`,
+                secondaryBrowserLinkerReceipt:secondaryBrowserPackage.receipt,
+                secondaryBrowserLinkerModule:secondaryBrowserPackage.module,
+                secondaryBrowserLinkerTypeAuthority:secondaryBrowserPackage.typeAuthority,
+                secondaryBrowserLinkerSourceClosure:secondaryBrowserPackage.sourceClosure}:{}),
+            ...(primarySecondaryHostPackage?{primarySecondaryHostCandidatePackageRoot:`__as3_runtime/${primarySecondaryHostPackage.root}`,
+                primarySecondaryHostCandidateStatus:"held",
+                primarySecondaryHostCandidateHolds:["AP_ACHIEVEMENT_PRIMARY_HOST_BROWSER_ESM_CLOSURE_UNQUALIFIED"],
+                primarySecondaryHostCandidateReceipt:primarySecondaryHostPackage.receipt,
+                primarySecondaryHostCandidateModule:primarySecondaryHostPackage.module,
+                primaryBrowserRuntimeCandidateRoot:`__as3_runtime/${primaryBrowserRuntime!.root}`}:{}),
+            ...(primaryHostBundleCandidate?{primaryHostBundleCandidatePackageRoot:`__as3_runtime/${primaryHostBundleCandidate.root}`,
+                primaryHostBundleCandidateStatus:"held",
+                primaryHostBundleCandidateHolds:["AP_ACHIEVEMENT_PRIMARY_HOST_BROWSER_EXECUTION_UNVERIFIED"],
+                primaryHostBundleCandidateReceipt:primaryHostBundleCandidate.receipt,
+                primaryHostBundleCandidateModule:primaryHostBundleCandidate.module}:{}),
+            ...(inputs.sourceClosureSha256 ? {sourceClosureSha256: inputs.sourceClosureSha256} : {}),
             ...(includedFragments.length ? {includedFragments} : {}),
             files: transpiledFiles,
         } : {
@@ -663,7 +987,12 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             profileLockSha256: transpileAuthority!.profileSha256,
             runtimePackage: transpileAuthority!.runtimePackage,
             generatedTypeScriptMaterialized: false,
+            ...(transpileAuthority!.applicationStart?{applicationStartContract:transpileAuthority!.applicationStart}:{}),
             counts: qualificationCounts,
+            ...(inputs.sourceClosureSha256 ? {sourceClosureSha256: inputs.sourceClosureSha256} : {}),
+            ...(inputs.sourcePlanSha256?{sourcePlanSha256:inputs.sourcePlanSha256}:{}),
+            ...(derivedSourceClosure?{derivedSourceClosurePath:derivedSourceClosure.path,
+                derivedSourceClosureSha256:derivedSourceClosure.sha256}:{}),
             ...(includedFragments.length ? {includedFragments} : {}),
             files: qualificationFiles,
         };

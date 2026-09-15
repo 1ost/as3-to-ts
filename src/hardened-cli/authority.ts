@@ -35,9 +35,9 @@ const COMPILED_LOCAL_MEMBER_MAP_SHA256 = "663beb2c386797966f1acf8b5248eae41e2b0a
 const COMPILED_DECLARATION_WORKER_SHA256 = "87f04afe96e2713595eb8ed2998f158d43f57a65cbebb03d3a12be499f112db7";
 const COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = 2884;
 const COMPILED_LOCAL_MEMBER_HELD_COUNT = 39;
-const COMPILED_RUNTIME_TYPE_AUTHORITY_LOCK_SHA256 = "b7b1269ed917a945f0215a264c814a7282d735ba870b9b2b958b61f047965a29";
-const COMPILED_RUNTIME_TYPE_PREDICATES_SHA256 = "6e97bb0b9f46c7e112408f69da2683d6c5c49276a4322f14e772c4bc215fa976";
-const COMPILED_LAYA_RUNTIME_REVISION = "ecade82aa369d890730c4dc847f9d769d74e8878";
+const COMPILED_RUNTIME_TYPE_AUTHORITY_LOCK_SHA256 = "b65de797fc6ed702bc04b81c4a315e7a520cbf32efec32d177d354f334f877cb";
+const COMPILED_RUNTIME_TYPE_PREDICATES_SHA256 = "010dad6303ba5a6014f33c28b29fb9713f76b4698d82d155249b01858f469ae7";
+const COMPILED_LAYA_RUNTIME_REVISION = "7e0784574e9566c19b32bcd33c0d2a23445a2f11";
 
 const COMPILED_AUTHORITY_LOCK = Object.freeze({
     schema: "bleach-local-as3-authority-lock@1",
@@ -51,6 +51,7 @@ const COMPILED_AUTHORITY_LOCK = Object.freeze({
 });
 
 export interface TranspileAuthority {
+    applicationStart?: import("../hardened/contracts").ApplicationStartContract;
     sourceIncludes?: ReturnType<typeof loadSourceIncludes>;
     reflectionProvider?: ReflectionProviderTarget;
     authority: LoadedCapabilityAuthority;
@@ -303,9 +304,21 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
         throw new CliError("application profile lock must be canonical JSON with one trailing LF", 6);
     }
     const profile = parseProfileDocument(profileJson, "application profile lock");
-    if (!exactKeys(profile, ["applicationId", "counts", "files", "runtimePackage", "runtimePredicateQNames",
-        "schema", "sourceCensusSha256", "sourceRoots", "targetCapabilitiesSha256", "targetRoots", "typeScriptVersion"])
-        || profile.schema !== "as3-application-profile-lock@1"
+    const profileSchema=profile.schema;
+    const applicationStart=profile.applicationStart;
+    const profileKeys=["applicationId", "counts", "files", "runtimePackage", "runtimePredicateQNames",
+        "schema", "sourceCensusSha256", "sourceRoots", "targetCapabilitiesSha256", "targetRoots", "typeScriptVersion",
+        ...(profileSchema==="as3-application-profile-lock@2"?["applicationStart"]:[])];
+    if (!exactKeys(profile, profileKeys)
+        || (profileSchema !== "as3-application-profile-lock@1"&&profileSchema!=="as3-application-profile-lock@2")
+        || (profileSchema==="as3-application-profile-lock@2"&&(!exactKeys(applicationStart,
+            ["cancellation","constructorArguments","exportName","qname","result","schema"])
+            ||applicationStart.schema!=="as3-application-start-contract@1"
+            ||typeof applicationStart.qname!=="string"||!/^(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*[A-Za-z_$][A-Za-z0-9_$]*$/.test(applicationStart.qname)
+            ||applicationStart.exportName!=="startAS3Application"
+            ||!Array.isArray(applicationStart.constructorArguments)||applicationStart.constructorArguments.length!==0
+            ||applicationStart.cancellation!=="abort-signal-before-construction@1"
+            ||applicationStart.result!=="constructed-instance"))
         || typeof profile.applicationId !== "string" || !/^[a-z][a-z0-9-]{1,63}$/.test(profile.applicationId)
         || profile.typeScriptVersion !== "4.9.5"
         || typeof profile.runtimePackage !== "string"
@@ -426,6 +439,10 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             throw new CliError("application source member count differs from the profile lock", 6);
         }
         return Object.freeze({
+            ...(profileSchema==="as3-application-profile-lock@2"?{applicationStart:Object.freeze({
+                schema:"as3-application-start-contract@1" as const,qname:(applicationStart as Record<string,unknown>).qname as string,
+                exportName:"startAS3Application" as const,constructorArguments:Object.freeze([]) as readonly [],
+                cancellation:"abort-signal-before-construction@1" as const,result:"constructed-instance" as const})}:{}),
             authority, localTypes, localMembers, ...(reflectionProvider ? {reflectionProvider} : {}), typeScriptVersion: profile.typeScriptVersion as string,
             sourceCensusSha256: profile.sourceCensusSha256 as string,
             targetCapabilitiesSha256: profile.targetCapabilitiesSha256 as string,

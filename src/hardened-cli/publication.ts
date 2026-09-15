@@ -134,7 +134,7 @@ function releaseLock(publication: Publication): void {
     }
 }
 
-export function preparePublication(outputArgument: string, sourceRoot: string): Publication {
+export function preparePublication(outputArgument: string, sourceRoots: string | readonly string[]): Publication {
     const lexicalOutput = resolve(outputArgument);
     if (existsSync(lexicalOutput)) {
         throw new CliError("output directory already exists", 3);
@@ -165,7 +165,8 @@ export function preparePublication(outputArgument: string, sourceRoot: string): 
         }
     }
     const output = join(parent, outputName);
-    if (pathsOverlap(sourceRoot, output)) {
+    const roots = typeof sourceRoots === "string" ? [sourceRoots] : sourceRoots;
+    if (roots.some(sourceRoot => pathsOverlap(sourceRoot, output))) {
         throw new CliError("source and output directories must not overlap", 3);
     }
     const staging = join(parent, `.${outputName}.staging-${process.pid}-${randomBytes(12).toString("hex")}`);

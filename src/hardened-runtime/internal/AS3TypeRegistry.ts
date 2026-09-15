@@ -41,7 +41,9 @@ export interface AS3StaticCallTraits {
     readonly noncallableNames: readonly string[];
     readonly unsupportedNames: readonly string[];
 }
-const STATIC_CALLS = new WeakMap<Function, Readonly<{methods:readonly Readonly<AS3StaticCallTraits["methods"][number] & {callable:Function}>[];noncallableNames:readonly string[];unsupportedNames:readonly string[]}>>();
+type StaticCallAuthority=Readonly<{methods:readonly Readonly<AS3StaticCallTraits["methods"][number] & {callable:Function}>[];
+    noncallableNames:readonly string[];unsupportedNames:readonly string[]}>;
+const STATIC_CALLS = new WeakMap<Function, StaticCallAuthority>();
 
 export interface AS3StaticReflectionTraits {
     readonly variables: readonly { readonly name: string; readonly type: string }[];
@@ -79,6 +81,37 @@ export interface AS3TypeAuthorityDocument {
     readonly entries: readonly AS3AuthorityEntry[];
 }
 
+export interface AS3PrimaryTypeAuthorityReservation {
+    readonly schema:"as3-primary-type-authority-reservation@1";
+    readonly typeAuthoritySha256:string;
+    readonly qnames:readonly string[];
+}
+
+export interface AS3TypeAuthorityCommitReceipt {
+    readonly schema:"as3-type-authority-commit-receipt@1";
+    readonly typeAuthoritySha256:string;
+}
+
+export interface AS3SecondaryTypeAuthorityDocument {
+    readonly schema:"as3-runtime-secondary-type-authority@1";
+    readonly primarySha256:string;
+    readonly sha256:string;
+    readonly qnames:readonly string[];
+    readonly entries:readonly AS3AuthorityEntry[];
+}
+
+export interface AS3SecondaryTypeAuthorityReservation {
+    readonly primarySha256:string;
+    readonly sha256:string;
+    readonly qnames:readonly string[];
+}
+
+export interface AS3SecondaryTypeAuthorityLease {
+    readonly primarySha256:string;
+    readonly sha256:string;
+    readonly qnames:readonly string[];
+}
+
 const TYPE_TOKENS = new WeakSet<object>();
 const TYPE_DETAILS = new WeakMap<object, TypeDetails<unknown>>();
 const CLASS_TOKENS = new WeakMap<Function, AS3TypeToken<object>>();
@@ -104,26 +137,96 @@ const INTERFACE_TOKENS = new Map<string, AS3TypeToken<object>>();
 const VECTOR_TYPE_TOKENS = new WeakMap<object, AS3TypeToken<object>>();
 const VECTOR_TYPE_NAMES = new WeakMap<object, string>();
 const VECTOR_TYPE_PREDICATES = new WeakMap<object, (value: unknown) => boolean>();
-let authorityState: "open" | "installing" | "sealed" = "open";
+let authorityState: "open" | "validating" | "reserved" | "installing" | "sealed" | "poisoned" = "open";
 let installedAuthoritySha256: string | null = null;
+interface PrimaryValidationGuard {compromised:boolean}
+let activePrimaryValidation:PrimaryValidationGuard|null=null;
+interface PrimaryMutation {applied:boolean;readonly undo:()=>void}
+interface PrimaryOwner {
+    readonly reservation:AS3PrimaryTypeAuthorityReservation;
+    readonly receipt:AS3TypeAuthorityCommitReceipt;
+    readonly plan:readonly SecondaryPublication[];
+    readonly qnameEntries:ReadonlyMap<RuntimeConstructor,Readonly<{constructor:RuntimeConstructor;token:AS3TypeToken<object>}>>;
+    readonly journal:PrimaryMutation[];
+    state:"reserved"|"installing"|"committed"|"aborted"|"poisoned";
+}
+let activePrimaryOwner:PrimaryOwner|null=null;
+const AUTHENTIC_PRIMARY_RESERVATIONS=new WeakSet<object>();
+const PRIMARY_RESERVATION_OWNERS=new WeakMap<object,PrimaryOwner>();
+const AUTHENTIC_PRIMARY_RECEIPTS=new WeakSet<object>();
+let activeSecondaryReservation:AS3SecondaryTypeAuthorityReservation|null=null;
+const AUTHENTIC_SECONDARY_RESERVATIONS=new WeakSet<object>();
+const SECONDARY_MUTATION_SURFACES=Object.freeze([
+    "TYPE_TOKENS","TYPE_DETAILS","CLASS_TOKENS","CLASS_BY_QNAME","CLASS_INTERFACES","CLASS_PREDICATES",
+    "CLASS_CONSTRUCTION_TARGETS","CLASS_CONSTRUCTION_PROOFS","CLASS_FIELD_DEFAULTS","STATIC_CALLS","STATIC_REFLECTION",
+    "CLASS_OBJECT_ENTRIES","CLASS_BASES","REGISTERED_CLASSES","INTERFACE_TOKENS","INITIALIZED_INSTANCE_FIELDS",
+    "ACTIVE_CONSTRUCTIONS","PREPARED_CONSTRUCTION_FRAMES","AUTHENTIC_CONSTRUCTION_FRAMES",
+] as const);
+export type AS3SecondaryMutationSurface=typeof SECONDARY_MUTATION_SURFACES[number];
+interface SecondaryInterfacePublication {readonly kind:"interface";readonly qname:string;
+    readonly token:AS3TypeToken<object>;readonly details:TypeDetails<object>}
+interface SecondaryClassPublication {readonly kind:"class";readonly qname:string;
+    readonly constructor:RuntimeConstructor;readonly token:AS3TypeToken<object>;readonly details:TypeDetails<object>;
+    readonly interfaces:readonly object[];readonly predicate:(value:unknown)=>boolean;
+    readonly constructionTarget:((value:unknown)=>RuntimeConstructor|null)|null;
+    readonly constructionProof:((value:unknown)=>boolean)|null;
+    readonly fields:AS3ClassAuthorityEntry["fields"];readonly staticCalls:StaticCallAuthority|null;
+    readonly staticReflection:AS3StaticReflectionDescriptor|null;readonly objectEntry:Readonly<ClassObjectEntry>;
+    readonly base:RuntimeConstructor|null}
+type SecondaryPublication=SecondaryInterfacePublication|SecondaryClassPublication;
+interface SecondaryMutation {readonly surface:AS3SecondaryMutationSurface;readonly undo:()=>void}
+interface SecondaryOwner {
+    readonly reservation:AS3SecondaryTypeAuthorityReservation;
+    readonly plan:readonly SecondaryPublication[];
+    readonly mutations:Record<AS3SecondaryMutationSurface,number>;
+    readonly journal:SecondaryMutation[];
+    readonly constructors:Set<Function>;
+    readonly activeInstances:Set<object>;
+    readonly initializedInstances:Set<object>;
+    lease:AS3SecondaryTypeAuthorityLease|null;
+    state:"reserved"|"committed"|"sealed"|"poisoned"|"revoked";
+    preparedConstructions:number;
+    activeConstructions:number;
+    initializedOrLiveInstances:number;
+}
+const SECONDARY_RESERVATION_OWNERS=new WeakMap<object,SecondaryOwner>();
+const SECONDARY_CONSTRUCTOR_OWNERS=new WeakMap<Function,SecondaryOwner>();
+const SECONDARY_INSTANCE_OWNERS=new WeakMap<object,SecondaryOwner>();
+const SECONDARY_TOKEN_OWNERS=new WeakMap<object,SecondaryOwner>();
+const AUTHENTIC_SECONDARY_LEASES=new WeakSet<object>();
+const REVOKED_SECONDARY_CONSTRUCTORS=new WeakSet<Function>();
 const INITIALIZED_INSTANCE_FIELDS = new WeakSet<object>();
 const ACTIVE_CONSTRUCTIONS = new WeakMap<object, RuntimeConstructor>();
 interface PreparedConstructionFrame {
     readonly target: RuntimeConstructor;
+    readonly secondaryOwner:SecondaryOwner|null;
     state: "prepared" | "consumed" | "cancelled";
     [Symbol.iterator](): Iterator<never>;
 }
 const PREPARED_CONSTRUCTION_FRAMES: PreparedConstructionFrame[] = [];
 const AUTHENTIC_CONSTRUCTION_FRAMES = new WeakSet<object>();
 
+function adjustSecondaryMutation(owner:SecondaryOwner,surface:AS3SecondaryMutationSurface,delta:1|-1):void {
+    const next=owner.mutations[surface]+delta;
+    if(next<0) {owner.state="poisoned";throw new TypeError("AS3 secondary mutation ownership count underflowed");}
+    owner.mutations[surface]=next;
+}
+
 function constructionFrame(target: RuntimeConstructor): PreparedConstructionFrame {
+    const secondaryOwner=SECONDARY_CONSTRUCTOR_OWNERS.get(target)??null;
     const frame: PreparedConstructionFrame = {
         target,
+        secondaryOwner,
         state: "prepared",
         [Symbol.iterator](): Iterator<never> {
             return { next(): IteratorResult<never> { return { done: true, value: undefined as never }; } };
         },
     };
+    if(secondaryOwner) {
+        secondaryOwner.preparedConstructions+=1;
+        adjustSecondaryMutation(secondaryOwner,"PREPARED_CONSTRUCTION_FRAMES",1);
+        adjustSecondaryMutation(secondaryOwner,"AUTHENTIC_CONSTRUCTION_FRAMES",1);
+    }
     AUTHENTIC_CONSTRUCTION_FRAMES.add(frame);
     return frame;
 }
@@ -169,6 +272,7 @@ function stableRuntimeTypeName(name: unknown): name is string {
 
 function createTypeToken<T>(kind: AS3RuntimeTypeKind, name: string,
     test: (value: unknown) => value is T, referenceClosure?: readonly object[]): AS3TypeToken<T> {
+    rejectPrimaryMutationDuringTransaction("create an AS3 runtime type token");
     if (!stableRuntimeTypeName(name) || typeof test !== "function") {
         throw new TypeError("AS3 runtime type requires a stable name and predicate");
     }
@@ -179,9 +283,13 @@ function createTypeToken<T>(kind: AS3RuntimeTypeKind, name: string,
 }
 
 function requireToken<T>(value: AS3TypeToken<T>): TypeDetails<T> {
+    if(authorityState==="poisoned")throw new TypeError("AS3 primary runtime type authority is poisoned");
     if ((typeof value !== "object" && typeof value !== "function") || value === null || !TYPE_TOKENS.has(value)) {
         throw new TypeError("value is not an authenticated token for an AS3 runtime type");
     }
+    const secondaryOwner=SECONDARY_TOKEN_OWNERS.get(value as object);
+    if(secondaryOwner&&(secondaryOwner.state==="poisoned"||secondaryOwner.state==="revoked"))
+        throw new TypeError("AS3 secondary runtime type authority is poisoned or revoked");
     return TYPE_DETAILS.get(value as object)! as TypeDetails<T>;
 }
 
@@ -225,9 +333,16 @@ function requireSealed(): void {
     if (authorityState !== "sealed") throw new TypeError("AS3 type authority is not sealed before application evaluation");
 }
 
+function requireUsableSecondaryConstructor(constructor:Function):void {
+    const owner=SECONDARY_CONSTRUCTOR_OWNERS.get(constructor);
+    if(owner&&(owner.state==="poisoned"||owner.state==="revoked"))
+        throw new TypeError("AS3 secondary constructor authority is poisoned or revoked");
+}
+
 export function lookupClassType<T extends object>(name: string, constructor: RuntimeConstructor<T>): AS3TypeToken<T> {
     requireSealed();
     if (typeof constructor !== "function") throw new TypeError("AS3 class type requires a constructor");
+    requireUsableSecondaryConstructor(constructor);
     const byName = CLASS_BY_QNAME.get(name);
     if (!byName || byName.constructor !== constructor || CLASS_TOKENS.get(constructor) !== byName.token) {
         throw new TypeError("AS3 class type is not an exactly registered class");
@@ -283,6 +398,8 @@ export function referenceType<T extends object>(name: string,
 /** Read-only construction admission used by emitted constructors; it cannot brand or register a value. */
 export function canConstructAs(newTarget: unknown, declared: RuntimeConstructor): boolean {
     requireSealed();
+    if(typeof newTarget==="function")requireUsableSecondaryConstructor(newTarget);
+    requireUsableSecondaryConstructor(declared);
     return typeof newTarget === "function" && CLASS_TOKENS.has(newTarget)
         && CLASS_TOKENS.has(declared) && constructorIsSubtype(newTarget as RuntimeConstructor, declared);
 }
@@ -296,6 +413,8 @@ function validConstructionProof(constructor: RuntimeConstructor, proof: unknown)
 /** Zero-argument spread seam used immediately before a generated derived super call. */
 export function prepareConstruction(newTarget: unknown, declared: RuntimeConstructor, proof: unknown): readonly [] {
     requireSealed();
+    if(typeof newTarget==="function")requireUsableSecondaryConstructor(newTarget);
+    requireUsableSecondaryConstructor(declared);
     if (typeof newTarget !== "function" || !CLASS_TOKENS.has(newTarget) || !CLASS_TOKENS.has(declared)
         || !constructorIsSubtype(newTarget as RuntimeConstructor, declared) || !validConstructionProof(declared, proof)) {
         throw new TypeError("AS3 derived construction proof is invalid");
@@ -329,12 +448,20 @@ export function cancelPreparedConstruction(newTarget: unknown, proof: unknown, f
     }
     PREPARED_CONSTRUCTION_FRAMES.pop();
     frame.state = "cancelled";
+    if (frame.secondaryOwner) {
+        frame.secondaryOwner.preparedConstructions -= 1;
+        adjustSecondaryMutation(frame.secondaryOwner,"PREPARED_CONSTRUCTION_FRAMES",-1);
+        AUTHENTIC_CONSTRUCTION_FRAMES.delete(frame);
+        adjustSecondaryMutation(frame.secondaryOwner,"AUTHENTIC_CONSTRUCTION_FRAMES",-1);
+    }
 }
 
 /** Authenticates a generated constructor phase without exposing a brand/adopt operation. */
 export function enterConstruction(value: object, newTarget: unknown,
     declared: RuntimeConstructor, proof: unknown): void {
     requireSealed();
+    if(typeof newTarget==="function")requireUsableSecondaryConstructor(newTarget);
+    requireUsableSecondaryConstructor(declared);
     if ((typeof value !== "object" && typeof value !== "function") || value === null
         || typeof newTarget !== "function" || !CLASS_TOKENS.has(newTarget) || !CLASS_TOKENS.has(declared)
         || !constructorIsSubtype(newTarget as RuntimeConstructor, declared) || !validConstructionProof(declared, proof)) {
@@ -350,10 +477,23 @@ export function enterConstruction(value: object, newTarget: unknown,
     if (frame !== undefined && frame.target === target && frame.state === "prepared") {
         PREPARED_CONSTRUCTION_FRAMES.pop();
         frame.state = "consumed";
+        if (frame.secondaryOwner) {
+            frame.secondaryOwner.preparedConstructions -= 1;
+            adjustSecondaryMutation(frame.secondaryOwner,"PREPARED_CONSTRUCTION_FRAMES",-1);
+            AUTHENTIC_CONSTRUCTION_FRAMES.delete(frame);
+            adjustSecondaryMutation(frame.secondaryOwner,"AUTHENTIC_CONSTRUCTION_FRAMES",-1);
+        }
     } else if (target !== declared) {
         throw new TypeError("AS3 constructor entry lacks the target constructor handoff");
     }
     ACTIVE_CONSTRUCTIONS.set(value, target);
+    const secondaryOwner = SECONDARY_CONSTRUCTOR_OWNERS.get(target);
+    if (secondaryOwner) {
+        SECONDARY_INSTANCE_OWNERS.set(value, secondaryOwner);
+        secondaryOwner.activeConstructions += 1;
+        secondaryOwner.activeInstances.add(value);
+        adjustSecondaryMutation(secondaryOwner,"ACTIVE_CONSTRUCTIONS",1);
+    }
 }
 
 /** Removes an in-flight identity after a generated constructor throws. */
@@ -365,6 +505,13 @@ export function abortConstruction(value: object, newTarget: unknown,
         throw new TypeError("AS3 constructor abort is not authenticated");
     }
     ACTIVE_CONSTRUCTIONS.delete(value);
+    const secondaryOwner = SECONDARY_INSTANCE_OWNERS.get(value);
+    if (secondaryOwner) {
+        secondaryOwner.activeConstructions -= 1;
+        secondaryOwner.activeInstances.delete(value);
+        adjustSecondaryMutation(secondaryOwner,"ACTIVE_CONSTRUCTIONS",-1);
+        SECONDARY_INSTANCE_OWNERS.delete(value);
+    }
 }
 
 /** Closes the allocation proof only in the exact most-derived generated constructor. */
@@ -376,11 +523,19 @@ export function completeConstruction(value: object, newTarget: unknown,
         throw new TypeError("AS3 constructor completion is not authenticated");
     }
     ACTIVE_CONSTRUCTIONS.delete(value);
+    const secondaryOwner = SECONDARY_INSTANCE_OWNERS.get(value);
+    if (secondaryOwner) {
+        secondaryOwner.activeConstructions -= 1;
+        secondaryOwner.activeInstances.delete(value);
+        adjustSecondaryMutation(secondaryOwner,"ACTIVE_CONSTRUCTIONS",-1);
+        if(!secondaryOwner.initializedInstances.has(value)) SECONDARY_INSTANCE_OWNERS.delete(value);
+    }
 }
 
 /** Initializes authenticated AS3 slots once, before the first base constructor user statement. */
 export function initializeInstanceFields(value: object, newTarget: RuntimeConstructor): void {
     requireSealed();
+    requireUsableSecondaryConstructor(newTarget);
     if ((typeof value !== "object" && typeof value !== "function") || value === null
         || typeof newTarget !== "function" || !CLASS_TOKENS.has(newTarget)
         || ACTIVE_CONSTRUCTIONS.get(value) !== newTarget || pendingConstructionTarget(value) !== newTarget) {
@@ -397,10 +552,19 @@ export function initializeInstanceFields(value: object, newTarget: RuntimeConstr
         Object.defineProperty(value, field.name, { value: initial, writable: true, enumerable: true, configurable: true });
     }));
     INITIALIZED_INSTANCE_FIELDS.add(value);
+    const secondaryOwner = SECONDARY_CONSTRUCTOR_OWNERS.get(newTarget);
+    if (secondaryOwner) {
+        SECONDARY_INSTANCE_OWNERS.set(value, secondaryOwner);
+        secondaryOwner.initializedOrLiveInstances += 1;
+        secondaryOwner.initializedInstances.add(value);
+        secondaryOwner.state="sealed";
+        adjustSecondaryMutation(secondaryOwner,"INITIALIZED_INSTANCE_FIELDS",1);
+    }
 }
 
 export function registerVectorType<T extends object>(name: string, policy: object,
     predicate: (value: unknown) => boolean): AS3TypeToken<T> {
+    rejectPrimaryMutationDuringTransaction("register an AS3 Vector runtime type");
     if (!stableRuntimeTypeName(name) || typeof policy !== "object" || policy === null || typeof predicate !== "function") {
         throw new TypeError("AS3 Vector runtime type requires a stable name, policy, and module-owned predicate");
     }
@@ -426,6 +590,59 @@ function exactKeys(value: object, keys: readonly string[], label: string): void 
     if (actual.length !== keys.length || actual.some((key, index) => key !== keys[index])) {
         throw new TypeError(`${label} has non-canonical keys or order`);
     }
+}
+
+function rejectPrimaryMutationDuringTransaction(operation:string):void {
+    if(authorityState==="validating") {
+        if(activePrimaryValidation)activePrimaryValidation.compromised=true;
+        throw new TypeError(`Cannot ${operation} during AS3 primary authority validation`);
+    }
+    if(authorityState==="reserved"||authorityState==="installing")
+        throw new TypeError(`Cannot ${operation} during an AS3 primary authority transaction`);
+    if(authorityState==="poisoned")throw new TypeError("AS3 primary runtime type authority is poisoned");
+}
+
+/**
+ * Snapshot authority input without invoking user getters. Proxy reflection may
+ * itself execute traps, so the validation guard is established before this is
+ * called and any reentrant registry mutation permanently compromises the run.
+ */
+function snapshotAuthorityValue(value:unknown,seen=new Set<object>()):unknown {
+    if(value===null||typeof value==="string"||typeof value==="number"||typeof value==="boolean"
+        ||typeof value==="undefined"||typeof value==="function")return value;
+    if(typeof value!=="object")throw new TypeError("AS3 authority contains an unsupported value");
+    if(seen.has(value))throw new TypeError("AS3 authority contains a cyclic value");
+    seen.add(value);
+    try {
+        const prototype=Object.getPrototypeOf(value),array=Array.isArray(value);
+        if(array?prototype!==Array.prototype:prototype!==Object.prototype&&prototype!==null)
+            throw new TypeError("AS3 authority contains a foreign-prototype container");
+        const keys=Reflect.ownKeys(value),descriptors=Object.getOwnPropertyDescriptors(value);
+        if(keys.some(key=>typeof key!=="string"))throw new TypeError("AS3 authority contains a symbol key");
+        if(array) {
+            const lengthDescriptor=descriptors.length;
+            if(!lengthDescriptor||!("value" in lengthDescriptor)||!Number.isSafeInteger(lengthDescriptor.value)
+                ||lengthDescriptor.value<0||keys.length!==lengthDescriptor.value+1)
+                throw new TypeError("AS3 authority contains a sparse or widened array");
+            const result:unknown[]=[];
+            for(let index=0;index<lengthDescriptor.value;index+=1) {
+                const descriptor=descriptors[String(index)];
+                if(!descriptor||!("value" in descriptor)||!descriptor.enumerable)
+                    throw new TypeError("AS3 authority array contains an accessor or hidden element");
+                result.push(snapshotAuthorityValue(descriptor.value,seen));
+            }
+            return result;
+        }
+        const result=Object.create(prototype) as Record<string,unknown>;
+        for(const key of keys as string[]) {
+            const descriptor=descriptors[key];
+            if(!descriptor||!("value" in descriptor)||!descriptor.enumerable)
+                throw new TypeError("AS3 authority contains an accessor or hidden property");
+            Object.defineProperty(result,key,{value:snapshotAuthorityValue(descriptor.value,seen),
+                enumerable:true,writable:true,configurable:true});
+        }
+        return result;
+    } finally {seen.delete(value);}
 }
 
 function validateQNameList(value: readonly string[], label: string): void {
@@ -487,197 +704,605 @@ function sha256Ascii(value: string): string {
     return Array.from(h).map(value => value.toString(16).padStart(8, "0")).join("");
 }
 
-/** Package-internal: the package export map intentionally does not expose this module. */
-export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): void {
-    if (authorityState !== "open") throw new TypeError("AS3 type authority is already installing or sealed");
-    authorityState = "installing";
-    try {
-        exactKeys(document as unknown as object, ["schema", "sha256", "qnames", "entries"], "AS3 authority");
-        if (document.schema !== "as3-runtime-type-authority@1" || !/^[0-9a-f]{64}$/.test(document.sha256)) {
-            throw new TypeError("AS3 authority schema or SHA-256 is invalid");
-        }
-        validateQNameList(document.qnames, "AS3 authority qnames");
-        if (!Array.isArray(document.entries) || document.entries.length !== document.qnames.length) {
-            throw new TypeError("AS3 authority entry set does not match its exact QName set");
-        }
-        if (sha256Ascii(canonicalAuthorityMetadata(document)) !== document.sha256) {
-            throw new TypeError("AS3 authority canonical SHA-256 does not match its metadata");
-        }
-        const seen = new Set<string>();
-        document.entries.forEach((entry, index) => {
-            if (!entry || typeof entry !== "object" || entry.qname !== document.qnames[index]
-                || !stableRuntimeTypeName(entry.qname) || seen.has(entry.qname)
-                || INTERFACE_TOKENS.has(entry.qname) || CLASS_BY_QNAME.has(entry.qname)
-                || (entry.qname.startsWith("FilePrivate(") && (entry.kind !== "class" || !entry.fileLocalScope))) {
-                throw new TypeError("AS3 authority has duplicate, drifted, or out-of-order QName identity");
-            }
-            if (entry.kind === "interface") {
-                exactKeys(entry as unknown as object, ["kind", "qname", "bases"], `AS3 interface ${entry.qname}`);
-                validateQNameList(entry.bases, `AS3 interface ${entry.qname} bases`);
-                const bases = entry.bases.map((name: string) => {
-                    if (!seen.has(name)) throw new TypeError(`AS3 interface ${entry.qname} has a missing, cyclic, or out-of-order base`);
-                    const base = INTERFACE_TOKENS.get(name);
-                    if (!base) throw new TypeError(`AS3 interface ${entry.qname} base is not an interface`);
-                    return base;
-                });
-                const closure = new Set<object>();
-                bases.forEach((base: AS3TypeToken<object>) => {
-                    closure.add(base); interfaceClosure(base).forEach(item => closure.add(item));
-                });
-                let token: AS3TypeToken<object>;
-                const sealedClosure = Object.freeze(Array.from(closure));
-                token = createTypeToken<object>("interface", entry.qname, (value): value is object => {
-                    if ((typeof value !== "object" && typeof value !== "function") || value === null) return false;
-                    for (const constructor of REGISTERED_CLASSES) {
-                        if (!CLASS_INTERFACES.get(constructor)?.includes(token)) continue;
-                        if (classValueMatches(value, constructor as RuntimeConstructor)) return true;
+function canonicalSecondaryAuthorityMetadata(document:AS3SecondaryTypeAuthorityDocument):string {
+    return JSON.stringify({schema:document.schema,primarySha256:document.primarySha256,qnames:document.qnames,
+        entries:document.entries.map(entry=>entry.kind==="interface"
+            ?{kind:entry.kind,qname:entry.qname,bases:entry.bases}
+            :{kind:entry.kind,qname:entry.qname,base:entry.base,interfaces:entry.interfaces,
+                sourceSha256:entry.sourceSha256,fields:entry.fields,...(entry.objectTraits?{objectTraits:entry.objectTraits}:{}),
+                ...(entry.nativeObjectTraits?{nativeObjectTraits:entry.nativeObjectTraits}:{}),
+                ...(entry.fileLocalScope?{fileLocalScope:entry.fileLocalScope}:{}),
+                ...(entry.staticReflection!==undefined?{staticReflection:entry.staticReflection}:{}),
+                ...(entry.staticCallTraits!==undefined?{staticCallTraits:entry.staticCallTraits}:{})})});
+}
+
+function prepareSecondaryPublication(entries:readonly AS3AuthorityEntry[]):readonly SecondaryPublication[] {
+    const publications:SecondaryPublication[]=[];
+    const localTokens=new Map<string,AS3TypeToken<object>>();
+    const localDetails=new WeakMap<object,TypeDetails<object>>();
+    const localClasses=new Map<string,RuntimeConstructor>();
+    const tokenFor=(name:string):AS3TypeToken<object>=>localTokens.get(name)
+        ??CLASS_BY_QNAME.get(name)?.token??INTERFACE_TOKENS.get(name)!;
+    const detailsFor=(token:AS3TypeToken<object>):TypeDetails<object>=>localDetails.get(token as object)
+        ??requireKind(token,["class","interface"]);
+    for(const entry of entries) {
+        if(entry.kind==="interface") {
+            const closure=new Set<object>();
+            entry.bases.forEach(name=>{const base=tokenFor(name);closure.add(base);
+                (detailsFor(base).referenceClosure??[]).forEach(item=>closure.add(item));});
+            const sealedClosure=Object.freeze(Array.from(closure));
+            const token=Object.freeze({name:entry.qname});
+            const details:TypeDetails<object>=Object.freeze({kind:"interface",referenceClosure:sealedClosure,
+                test:(value:unknown):value is object=>{
+                    if((typeof value!=="object"&&typeof value!=="function")||value===null)return false;
+                    for(const constructor of REGISTERED_CLASSES) {
+                        if(!CLASS_INTERFACES.get(constructor)?.includes(token))continue;
+                        if(classValueMatches(value,constructor as RuntimeConstructor))return true;
                     }
                     return false;
-                }, sealedClosure);
-                INTERFACE_TOKENS.set(entry.qname, token);
-            } else if (entry.kind === "class") {
-                exactKeys(entry as unknown as object, ["kind", "qname", "base", "interfaces", "sourceSha256", "fields", ...(entry.objectTraits ? ["objectTraits"] : []), ...(entry.nativeObjectTraits ? ["nativeObjectTraits"] : []), ...(entry.fileLocalScope ? ["fileLocalScope"] : []), ...(entry.staticReflection !== undefined ? ["staticReflection"] : []), ...(entry.staticCallTraits !== undefined ? ["staticCallTraits"] : []), "constructor", "predicate", "constructionTarget", "constructionProof"],
-                    `AS3 class ${entry.qname}`);
-                if (entry.base !== null && (!seen.has(entry.base) || !CLASS_BY_QNAME.has(entry.base))) {
-                    throw new TypeError(`AS3 class ${entry.qname} has a missing, cyclic, or out-of-order class base`);
-                }
-                if (entry.base !== null && CLASS_OBJECT_ENTRIES.get(CLASS_BY_QNAME.get(entry.base)!.constructor)?.traits?.final)
-                    throw new TypeError(`AS3 class ${entry.qname} cannot extend final class ${entry.base}`);
-                validateQNameList(entry.interfaces, `AS3 class ${entry.qname} interfaces`);
-                const localConstruction = typeof entry.constructionTarget === "function" && typeof entry.constructionProof === "function";
-                const mappedConstruction = entry.constructionTarget === null && entry.constructionProof === null;
-                if (!/^[0-9a-f]{64}$/.test(entry.sourceSha256) || typeof entry.constructor !== "function" || typeof entry.predicate !== "function"
-                    || !Array.isArray(entry.fields) || entry.fields.some((field: AS3ClassAuthorityEntry["fields"][number]) => !field || typeof field !== "object"
-                        || Object.keys(field).join("\0") !== "name\0policy" || !stableRuntimeTypeName(field.name)
-                        || !["zero", "nan", "false", "null", "undefined"].includes(field.policy))
-                    || new Set(entry.fields.map((field: AS3ClassAuthorityEntry["fields"][number]) => field.name)).size !== entry.fields.length
-                    || (!localConstruction && !mappedConstruction)
-                    || CLASS_TOKENS.has(entry.constructor)) throw new TypeError(`AS3 class ${entry.qname} identity is invalid or reused`);
-                const closure = new Set<object>();
-                if (entry.base !== null) {
-                    const baseToken = CLASS_BY_QNAME.get(entry.base)!.token;
-                    closure.add(baseToken);
-                    (requireKind(baseToken, ["class"]).referenceClosure ?? []).forEach(item => closure.add(item));
-                    CLASS_INTERFACES.get(CLASS_BY_QNAME.get(entry.base)!.constructor)?.forEach(item => closure.add(item));
-                }
-                entry.interfaces.forEach((name: string) => {
-                    if (!seen.has(name)) throw new TypeError(`AS3 class ${entry.qname} has a missing or out-of-order interface`);
-                    const token = INTERFACE_TOKENS.get(name);
-                    if (!token) throw new TypeError(`AS3 class ${entry.qname} interface reference is not an interface`);
-                    closure.add(token); interfaceClosure(token).forEach(item => closure.add(item));
-                });
-                const scopedIdentity = entry.fileLocalScope ? fileLocalClassIdentity(entry.fileLocalScope) : null;
-                if (scopedIdentity !== null && (scopedIdentity.key !== entry.qname
-                    || !localConstruction || !entry.objectTraits || entry.nativeObjectTraits)) {
-                    throw new TypeError("AS3 file-local class identity differs from its generated source scope");
-                }
-                if (entry.staticCallTraits !== undefined) {
-                    if (!localConstruction || !entry.objectTraits || entry.nativeObjectTraits)
-                        throw new TypeError("Static calls require generated source class authority");
-                    const traits=entry.staticCallTraits;
-                    exactKeys(traits,["methods","noncallableNames","unsupportedNames"],"AS3 static call traits");
-                    if (!Array.isArray(traits.methods)) throw new TypeError("Invalid static call methods");
-                    const names=new Set<string>();
-                    const methods=traits.methods.map((method: AS3StaticCallTraits["methods"][number]) => {
-                        exactKeys(method,["name","visibility","required","total","rest","parameterTypes"],"AS3 static call method");
-                        if (!stableRuntimeTypeName(method.name) || names.has(method.name)
-                            || !["public","private","protected","internal"].includes(method.visibility)
-                            || !Number.isSafeInteger(method.required) || !Number.isSafeInteger(method.total)
-                            || method.required<0 || method.total<method.required || typeof method.rest!=="boolean"
-                            || !Array.isArray(method.parameterTypes) || method.parameterTypes.length!==method.total
-                            || method.parameterTypes.some((type:unknown)=>typeof type!=="string" || type!=="*" && !stableRuntimeTypeName(type)))
-                            throw new TypeError("Invalid or duplicate static call method");
-                        names.add(method.name);
-                        const descriptor=Object.getOwnPropertyDescriptor(entry.constructor,method.name);
-                        if (!descriptor || !("value" in descriptor) || typeof descriptor.value!=="function")
-                            throw new TypeError("Static method lacks own generated callable storage");
-                        return Object.freeze({...method,parameterTypes:Object.freeze([...method.parameterTypes]),callable:descriptor.value as Function});
-                    });
-                    for (const list of [traits.noncallableNames,traits.unsupportedNames]) {
-                        validateQNameList(list,"AS3 static nonmethod names");
-                        for (const name of list) {
-                            if (names.has(name)) throw new TypeError("Conflicting static member spelling");
-                            names.add(name);
-                        }
-                    }
-                    STATIC_CALLS.set(entry.constructor,Object.freeze({methods:Object.freeze(methods),
-                        noncallableNames:Object.freeze([...traits.noncallableNames]),unsupportedNames:Object.freeze([...traits.unsupportedNames])}));
-                }
-                const reflectionName = scopedIdentity?.reflectionName ?? entry.qname;
-                if (entry.staticReflection !== undefined) {
-                    const reflection = entry.staticReflection;
-                    if (!reflection || typeof reflection !== "object") throw new TypeError("Invalid static reflection traits");
-                    exactKeys(reflection, ["variables"], "AS3 static reflection traits");
-                    if (!Array.isArray(reflection.variables)) throw new TypeError("Invalid static reflection variables");
-                    const names = new Set<string>();
-                    const variables = reflection.variables.map((variable: AS3StaticReflectionTraits["variables"][number]) => {
-                        exactKeys(variable, ["name", "type"], "AS3 static reflection variable");
-                        if (!stableRuntimeTypeName(variable.name) || !stableRuntimeTypeName(variable.type) || names.has(variable.name))
-                            throw new TypeError("Invalid or duplicate static reflection variable");
-                        names.add(variable.name);
-                        return Object.freeze({name:variable.name, type:variable.type});
-                    });
-                    const qualifiedName = scopedIdentity ? reflectionName :
-                        entry.qname.includes(".") ? entry.qname.slice(0, entry.qname.lastIndexOf(".")) + "::" + entry.qname.slice(entry.qname.lastIndexOf(".") + 1) : entry.qname;
-                    STATIC_REFLECTION.set(entry.constructor, Object.freeze({qualifiedName, staticVariables:Object.freeze(variables)}));
-                }
+                }});
+            localTokens.set(entry.qname,token);localDetails.set(token,details);
+            publications.push(Object.freeze({kind:"interface",qname:entry.qname,token,details}));
+            continue;
+        }
+        const closure=new Set<object>();
+        let base:RuntimeConstructor|null=null;
+        if(entry.base!==null) {
+            const baseToken=tokenFor(entry.base);base=localClasses.get(entry.base)??CLASS_BY_QNAME.get(entry.base)!.constructor;
+            closure.add(baseToken);(detailsFor(baseToken).referenceClosure??[]).forEach(item=>closure.add(item));
+            const inherited=localClasses.has(entry.base)
+                ?(publications.find(item=>item.kind==="class"&&item.constructor===base) as SecondaryClassPublication).interfaces
+                :CLASS_INTERFACES.get(base)??[];
+            inherited.forEach(item=>closure.add(item));
+        }
+        entry.interfaces.forEach(name=>{const token=tokenFor(name);closure.add(token);
+            (detailsFor(token).referenceClosure??[]).forEach(item=>closure.add(item));});
+        const scopedIdentity=entry.fileLocalScope?fileLocalClassIdentity(entry.fileLocalScope):null;
+        if(scopedIdentity!==null&&(scopedIdentity.key!==entry.qname||entry.constructionTarget===null
+            ||entry.constructionProof===null||!entry.objectTraits||entry.nativeObjectTraits))
+            throw new TypeError("AS3 secondary file-local class identity differs from its generated source scope");
+        let staticCalls:StaticCallAuthority|null=null;
+        if(entry.staticCallTraits!==undefined) {
+            if(entry.constructionTarget===null||entry.constructionProof===null||!entry.objectTraits||entry.nativeObjectTraits)
+                throw new TypeError("Secondary static calls require generated source class authority");
+            const traits=entry.staticCallTraits;exactKeys(traits,["methods","noncallableNames","unsupportedNames"],
+                "AS3 secondary static call traits");
+            if(!Array.isArray(traits.methods))throw new TypeError("Invalid secondary static call methods");
+            const names=new Set<string>();
+            const methods=traits.methods.map(method=>{
+                exactKeys(method,["name","visibility","required","total","rest","parameterTypes"],
+                    "AS3 secondary static call method");
+                if(!stableRuntimeTypeName(method.name)||names.has(method.name)
+                    ||!["public","private","protected","internal"].includes(method.visibility)
+                    ||!Number.isSafeInteger(method.required)||!Number.isSafeInteger(method.total)||method.required<0
+                    ||method.total<method.required||typeof method.rest!=="boolean"||!Array.isArray(method.parameterTypes)
+                    ||method.parameterTypes.length!==method.total||method.parameterTypes.some((type:string)=>typeof type!=="string"
+                        ||type!=="*"&&!stableRuntimeTypeName(type)))throw new TypeError("Invalid secondary static call method");
+                names.add(method.name);const descriptor=Object.getOwnPropertyDescriptor(entry.constructor,method.name);
+                if(!descriptor||!("value" in descriptor)||typeof descriptor.value!=="function")
+                    throw new TypeError("Secondary static method lacks own generated callable storage");
+                return Object.freeze({...method,parameterTypes:Object.freeze([...method.parameterTypes]),callable:descriptor.value});
+            });
+            for(const list of [traits.noncallableNames,traits.unsupportedNames]) {validateQNameList(list,"AS3 secondary static nonmethod names");
+                for(const name of list){if(names.has(name))throw new TypeError("Conflicting secondary static member spelling");names.add(name);}}
+            staticCalls=Object.freeze({methods:Object.freeze(methods),noncallableNames:Object.freeze([...traits.noncallableNames]),
+                unsupportedNames:Object.freeze([...traits.unsupportedNames])});
+        }
+        const reflectionName=scopedIdentity?.reflectionName??entry.qname;
+        let staticReflection:AS3StaticReflectionDescriptor|null=null;
+        if(entry.staticReflection!==undefined) {
+            const reflection=entry.staticReflection;exactKeys(reflection,["variables"],"AS3 secondary static reflection traits");
+            if(!Array.isArray(reflection.variables))throw new TypeError("Invalid secondary static reflection variables");
+            const names=new Set<string>();
+            const variables=reflection.variables.map(variable=>{exactKeys(variable,["name","type"],"AS3 secondary static reflection variable");
+                if(!stableRuntimeTypeName(variable.name)||!stableRuntimeTypeName(variable.type)||names.has(variable.name))
+                    throw new TypeError("Invalid or duplicate secondary static reflection variable");
+                names.add(variable.name);return Object.freeze({...variable});});
+            const qualifiedName=scopedIdentity?reflectionName:entry.qname.includes(".")
+                ?entry.qname.slice(0,entry.qname.lastIndexOf("."))+"::"+entry.qname.slice(entry.qname.lastIndexOf(".")+1):entry.qname;
+            staticReflection=Object.freeze({qualifiedName,staticVariables:Object.freeze(variables)});
+        }
+        let objectTraits:AS3ObjectTraits|null=null;
+        if(entry.objectTraits) {
+            const traits=entry.objectTraits;exactKeys(traits,["dynamic",...(traits.final===true?["final"]:[]),"members"],
+                "AS3 secondary Object traits");
+            if(typeof traits.dynamic!=="boolean"||!Array.isArray(traits.members))throw new TypeError("Invalid secondary AS3 Object traits");
+            const names=new Set<string>();
+            const members=traits.members.map(member=>{exactKeys(member,["name","kind","type","visibility","namespaceName"],
+                "AS3 secondary Object member");const key=JSON.stringify([member.name,member.kind,member.visibility,member.namespaceName]);
+                if(!stableRuntimeTypeName(member.name)||!stableRuntimeTypeName(member.type)
+                    ||!["field","const","method","getter","setter"].includes(member.kind)
+                    ||!["public","private","protected","internal","namespace"].includes(member.visibility)
+                    ||member.namespaceName!==null&&!stableRuntimeTypeName(member.namespaceName)
+                    ||(member.visibility==="namespace")!==(member.namespaceName!==null)||names.has(key))
+                    throw new TypeError("Invalid AS3 Object member in publication plan");
+                names.add(key);return Object.freeze({...member});});
+            objectTraits=Object.freeze({dynamic:traits.dynamic,...(traits.final===true?{final:true as const}:{}),members:Object.freeze(members)});
+        }
+        let nativeTraits:AS3NativeObjectTraits|null=null;
+        if(entry.nativeObjectTraits) {
+            const traits=entry.nativeObjectTraits;exactKeys(traits,["dynamic","names","sourceArtifactSha256"],"AS3 secondary native Object census");
+            if(entry.objectTraits||(traits.dynamic!==null&&typeof traits.dynamic!=="boolean")||!/^[a-f0-9]{64}$/.test(traits.sourceArtifactSha256))
+                throw new TypeError("Invalid secondary AS3 native Object census");
+            validateQNameList(traits.names,"AS3 secondary native member names");
+            nativeTraits=Object.freeze({...traits,names:Object.freeze([...traits.names])});
+        }
+        const sealedClosure=Object.freeze(Array.from(closure));
+        const token=Object.freeze({name:reflectionName});
+        const details:TypeDetails<object>=Object.freeze({kind:"class",referenceClosure:sealedClosure,
+            test:(value:unknown):value is object=>classValueMatches(value,entry.constructor)});
+        const objectEntry=Object.freeze({qname:entry.qname,reflectionName,
+            diagnosticName:scopedIdentity?reflectionName.replace("::","."):entry.qname,
+            localName:scopedIdentity?.localName??entry.qname.slice(entry.qname.lastIndexOf(".")+1),
+            packageName:scopedIdentity?"":entry.qname.slice(0,Math.max(0,entry.qname.lastIndexOf("."))),
+            traits:objectTraits,nativeTraits});
+        const publication:SecondaryClassPublication=Object.freeze({kind:"class",qname:entry.qname,
+            constructor:entry.constructor,token,details,interfaces:sealedClosure,predicate:entry.predicate,
+            constructionTarget:entry.constructionTarget,constructionProof:entry.constructionProof,
+            fields:Object.freeze(entry.fields.map(field=>Object.freeze({...field}))),staticCalls,staticReflection,objectEntry,base});
+        localTokens.set(entry.qname,token);localDetails.set(token,details);localClasses.set(entry.qname,entry.constructor);
+        publications.push(publication);
+    }
+    return Object.freeze(publications);
+}
 
-                const predicate = entry.predicate;
-                let token: AS3TypeToken<object>;
-                token = createTypeToken<object>("class", reflectionName,
-                    (value): value is object => classValueMatches(value, entry.constructor),
-                    Object.freeze(Array.from(closure)));
-                CLASS_TOKENS.set(entry.constructor, token);
-                CLASS_BY_QNAME.set(entry.qname, Object.freeze({ constructor: entry.constructor, token }));
-                CLASS_INTERFACES.set(entry.constructor, Object.freeze(Array.from(closure)));
-                CLASS_PREDICATES.set(entry.constructor, predicate);
-                if (entry.constructionTarget !== null) CLASS_CONSTRUCTION_TARGETS.set(entry.constructor, entry.constructionTarget);
-                if (entry.constructionProof !== null) CLASS_CONSTRUCTION_PROOFS.set(entry.constructor, entry.constructionProof);
-                CLASS_FIELD_DEFAULTS.set(entry.constructor, Object.freeze(entry.fields.map(
-                    (field: AS3ClassAuthorityEntry["fields"][number]) => Object.freeze({ ...field }))));
-                if (entry.objectTraits) {
-                    const traits = entry.objectTraits;
-                    exactKeys(traits, ["dynamic", ...(traits.final === true ? ["final"] : []), "members"], "AS3 Object traits");
-                    if (typeof traits.dynamic !== "boolean" || !Array.isArray(traits.members)) throw new TypeError("Invalid AS3 Object traits");
-                    const names = new Set<string>();
-                    traits.members.forEach((member:AS3ObjectTraits["members"][number]) => {
-                        exactKeys(member, ["name", "kind", "type", "visibility", "namespaceName"], "AS3 Object member");
-                        if (!stableRuntimeTypeName(member.name) || !stableRuntimeTypeName(member.type)
-                            || !["field", "const", "method", "getter", "setter"].includes(member.kind)
-                            || !["public", "private", "protected", "internal", "namespace"].includes(member.visibility)
-                            || (member.namespaceName !== null && !stableRuntimeTypeName(member.namespaceName))
-                            || (member.visibility === "namespace") !== (member.namespaceName !== null)
-                            || names.has(JSON.stringify([member.name,member.kind,member.visibility,member.namespaceName]))) throw new TypeError("Invalid AS3 Object member");
-                        names.add(JSON.stringify([member.name,member.kind,member.visibility,member.namespaceName]));
-                    });
-                }
-                if (entry.nativeObjectTraits) {
-                    const traits=entry.nativeObjectTraits;
-                    exactKeys(traits,["dynamic","names","sourceArtifactSha256"],"AS3 native Object census");
-                    if (entry.objectTraits || traits.dynamic !== null && typeof traits.dynamic !== "boolean"
-                        || !/^[a-f0-9]{64}$/.test(traits.sourceArtifactSha256)) throw new TypeError("Invalid AS3 native Object census");
-                    validateQNameList(traits.names,"AS3 native member names");
-                }
-                CLASS_OBJECT_ENTRIES.set(entry.constructor, Object.freeze({qname:entry.qname,
-                    reflectionName, diagnosticName: scopedIdentity ? reflectionName.replace("::", ".") : entry.qname,
-                    localName: scopedIdentity?.localName ?? entry.qname.slice(entry.qname.lastIndexOf(".") + 1),
-                    packageName: scopedIdentity ? "" : entry.qname.slice(0, Math.max(0, entry.qname.lastIndexOf("."))),
-                    nativeTraits:entry.nativeObjectTraits ? Object.freeze({...entry.nativeObjectTraits,names:Object.freeze([...entry.nativeObjectTraits.names])}) : null, traits:entry.objectTraits
-                    ? Object.freeze({dynamic:entry.objectTraits.dynamic,
-                        ...(entry.objectTraits.final === true ? {final:true as const} : {}),
-                        members:Object.freeze(entry.objectTraits.members.map((member:AS3ObjectTraits["members"][number]) => Object.freeze({...member})))}) : null}));
-                CLASS_BASES.set(entry.constructor, entry.base === null ? null : CLASS_BY_QNAME.get(entry.base)!.constructor);
-                REGISTERED_CLASSES.push(entry.constructor);
-            } else {
-                throw new TypeError("AS3 authority contains an unknown entry kind");
+function preparePrimaryPublication(document:AS3TypeAuthorityDocument):readonly SecondaryPublication[] {
+    exactKeys(document as unknown as object,["schema","sha256","qnames","entries"],"AS3 authority");
+    if(document.schema!=="as3-runtime-type-authority@1"||!/^[0-9a-f]{64}$/.test(document.sha256))
+        throw new TypeError("AS3 authority schema or SHA-256 is invalid");
+    validateQNameList(document.qnames,"AS3 authority qnames");
+    if(!Array.isArray(document.entries)||document.entries.length!==document.qnames.length)
+        throw new TypeError("AS3 authority entry set does not match its exact QName set");
+    if(sha256Ascii(canonicalAuthorityMetadata(document))!==document.sha256)
+        throw new TypeError("AS3 authority canonical SHA-256 does not match its metadata");
+    const plannedKinds=new Map<string,"class"|"interface">(),plannedClasses=new Map<string,AS3ClassAuthorityEntry>();
+    const constructors=new Set<Function>();
+    for(let index=0;index<document.entries.length;index+=1) {
+        const entry=document.entries[index]!;
+        if(!entry||typeof entry!=="object"||entry.qname!==document.qnames[index]||!stableRuntimeTypeName(entry.qname)
+            ||plannedKinds.has(entry.qname)||INTERFACE_TOKENS.has(entry.qname)||CLASS_BY_QNAME.has(entry.qname)
+            ||entry.qname.startsWith("FilePrivate(")&&(entry.kind!=="class"||!entry.fileLocalScope))
+            throw new TypeError("AS3 authority has duplicate, drifted, or out-of-order QName identity");
+        const kind=(name:string):"class"|"interface"|null=>plannedKinds.get(name)??null;
+        if(entry.kind==="interface") {
+            exactKeys(entry as unknown as object,["kind","qname","bases"],`AS3 interface ${entry.qname}`);
+            validateQNameList(entry.bases,`AS3 interface ${entry.qname} bases`);
+            if(entry.bases.some((name:string)=>kind(name)!=="interface"))
+                throw new TypeError(`AS3 interface ${entry.qname} has a missing, cyclic, or out-of-order base`);
+            plannedKinds.set(entry.qname,"interface");continue;
+        }
+        if(entry.kind!=="class")throw new TypeError("AS3 authority contains an unknown entry kind");
+        exactKeys(entry as unknown as object,["kind","qname","base","interfaces","sourceSha256","fields",
+            ...(entry.objectTraits?["objectTraits"]:[]),...(entry.nativeObjectTraits?["nativeObjectTraits"]:[]),
+            ...(entry.fileLocalScope?["fileLocalScope"]:[]),...(entry.staticReflection!==undefined?["staticReflection"]:[]),
+            ...(entry.staticCallTraits!==undefined?["staticCallTraits"]:[]),"constructor","predicate","constructionTarget",
+            "constructionProof"],`AS3 class ${entry.qname}`);
+        if(entry.base!==null&&kind(entry.base)!=="class")
+            throw new TypeError(`AS3 class ${entry.qname} has a missing, cyclic, or out-of-order class base`);
+        const baseEntry=entry.base===null?null:plannedClasses.get(entry.base);
+        if(baseEntry?.objectTraits?.final)throw new TypeError(`AS3 class ${entry.qname} cannot extend final class ${entry.base}`);
+        validateQNameList(entry.interfaces,`AS3 class ${entry.qname} interfaces`);
+        if(entry.interfaces.some((name:string)=>kind(name)!=="interface"))
+            throw new TypeError(`AS3 class ${entry.qname} has a missing or out-of-order interface`);
+        const localConstruction=typeof entry.constructionTarget==="function"&&typeof entry.constructionProof==="function";
+        const mappedConstruction=entry.constructionTarget===null&&entry.constructionProof===null;
+        if(!/^[0-9a-f]{64}$/.test(entry.sourceSha256)||typeof entry.constructor!=="function"
+            ||typeof entry.predicate!=="function"||constructors.has(entry.constructor)||CLASS_TOKENS.has(entry.constructor)
+            ||!Array.isArray(entry.fields)||entry.fields.some((field:AS3ClassAuthorityEntry["fields"][number])=>!field||typeof field!=="object"
+                ||Object.keys(field).join("\0")!=="name\0policy"||!stableRuntimeTypeName(field.name)
+                ||!["zero","nan","false","null","undefined"].includes(field.policy))
+            ||new Set(entry.fields.map((field:AS3ClassAuthorityEntry["fields"][number])=>field.name)).size!==entry.fields.length||!localConstruction&&!mappedConstruction)
+            throw new TypeError(`AS3 class ${entry.qname} identity is invalid or reused`);
+        if(entry.fileLocalScope&&fileLocalClassIdentity(entry.fileLocalScope).key!==entry.qname)
+            throw new TypeError("AS3 file-local class identity differs from its source scope");
+        constructors.add(entry.constructor);plannedKinds.set(entry.qname,"class");plannedClasses.set(entry.qname,entry);
+    }
+    return prepareSecondaryPublication(document.entries);
+}
+
+function requirePrimaryOwner(reservation:AS3PrimaryTypeAuthorityReservation):PrimaryOwner {
+    if((typeof reservation!=="object"&&typeof reservation!=="function")||reservation===null
+        ||!AUTHENTIC_PRIMARY_RESERVATIONS.has(reservation as object))
+        throw new TypeError("AS3 primary authority reservation is not an owned identity");
+    const owner=PRIMARY_RESERVATION_OWNERS.get(reservation as object);
+    if(!owner||activePrimaryOwner!==owner||owner.reservation!==reservation)
+        throw new TypeError("AS3 primary authority reservation ownership differs");
+    return owner;
+}
+
+/**
+ * Validates and privately materializes the complete primary publication plan.
+ * It does not mutate registry identity. Constructing the document may already
+ * have evaluated class modules; that evaluation and later class initializers
+ * are outside this transaction and are never described as rollbackable.
+ */
+export function preflightAS3TypeAuthority(document:AS3TypeAuthorityDocument):AS3PrimaryTypeAuthorityReservation {
+    if(authorityState!=="open"||activePrimaryOwner!==null) {
+        if(authorityState==="validating"&&activePrimaryValidation)activePrimaryValidation.compromised=true;
+        throw new TypeError("AS3 type authority is already installing or sealed");
+    }
+    const guard:PrimaryValidationGuard={compromised:false};
+    activePrimaryValidation=guard;authorityState="validating";
+    try {
+        const snapshot=snapshotAuthorityValue(document) as AS3TypeAuthorityDocument;
+        const plan=preparePrimaryPublication(snapshot);
+        const reservation=Object.freeze({__proto__:null,schema:"as3-primary-type-authority-reservation@1" as const,
+            typeAuthoritySha256:snapshot.sha256,qnames:Object.freeze([...snapshot.qnames])}) as AS3PrimaryTypeAuthorityReservation;
+        const receipt=Object.freeze({__proto__:null,schema:"as3-type-authority-commit-receipt@1" as const,
+            typeAuthoritySha256:snapshot.sha256}) as AS3TypeAuthorityCommitReceipt;
+        const qnameEntries=new Map<RuntimeConstructor,Readonly<{constructor:RuntimeConstructor;token:AS3TypeToken<object>}>>();
+        for(const item of plan)if(item.kind==="class")qnameEntries.set(item.constructor,
+            Object.freeze({constructor:item.constructor,token:item.token}));
+        if(guard.compromised||activePrimaryValidation!==guard||authorityState!=="validating")
+            throw new TypeError("AS3 primary authority validation was reentered or compromised");
+        const owner:PrimaryOwner={reservation,receipt,plan,qnameEntries,journal:[],state:"reserved"};
+        AUTHENTIC_PRIMARY_RESERVATIONS.add(reservation as object);PRIMARY_RESERVATION_OWNERS.set(reservation as object,owner);
+        activePrimaryOwner=owner;activePrimaryValidation=null;authorityState="reserved";return reservation;
+    } catch(error) {
+        if(activePrimaryValidation===guard)activePrimaryValidation=null;
+        if(guard.compromised||authorityState!=="validating")authorityState="poisoned";
+        else authorityState="open";
+        throw error;
+    }
+}
+
+/** Releases a validated plan before publication. */
+export function abortAS3TypeAuthority(reservation:AS3PrimaryTypeAuthorityReservation):void {
+    const owner=requirePrimaryOwner(reservation);
+    if(owner.state!=="reserved"||authorityState!=="reserved"||owner.journal.length!==0)
+        throw new TypeError("AS3 primary authority reservation cannot abort after commit begins");
+    owner.state="aborted";AUTHENTIC_PRIMARY_RESERVATIONS.delete(reservation as object);
+    PRIMARY_RESERVATION_OWNERS.delete(reservation as object);activePrimaryOwner=null;authorityState="open";
+}
+
+function publishPrimaryMutation(owner:PrimaryOwner,apply:()=>void,undo:()=>void):void {
+    const mutation:PrimaryMutation={applied:false,undo};owner.journal.push(mutation);
+    mutation.applied=true;apply();
+}
+function publishPrimaryWeakSet(owner:PrimaryOwner,set:WeakSet<object>,key:object):void {
+    publishPrimaryMutation(owner,()=>set.add(key),()=>{if(set.has(key)&&!set.delete(key))
+        throw new TypeError("Primary WeakSet ownership drifted");});
+}
+function publishPrimaryWeakMap<K extends object,V>(owner:PrimaryOwner,map:WeakMap<K,V>,key:K,value:V):void {
+    publishPrimaryMutation(owner,()=>map.set(key,value),()=>{const current=map.get(key);if(current===value) {
+        if(!map.delete(key))throw new TypeError("Primary WeakMap ownership drifted");
+    } else if(current!==undefined)throw new TypeError("Primary WeakMap ownership drifted");});
+}
+function publishPrimaryMap<K,V>(owner:PrimaryOwner,map:Map<K,V>,key:K,value:V):void {
+    publishPrimaryMutation(owner,()=>map.set(key,value),()=>{const current=map.get(key);if(current===value) {
+        if(!map.delete(key))throw new TypeError("Primary Map ownership drifted");
+    } else if(current!==undefined||map.has(key))throw new TypeError("Primary Map ownership drifted");});
+}
+function undoPrimaryJournal(owner:PrimaryOwner):void {while(owner.journal.length!==0) {
+    const mutation=owner.journal.pop()!;if(mutation.applied)mutation.undo();
+}}
+
+/** Atomically publishes a fully preflighted primary plan and returns its nominal receipt. */
+export function commitAS3TypeAuthority(reservation:AS3PrimaryTypeAuthorityReservation):AS3TypeAuthorityCommitReceipt {
+    const owner=requirePrimaryOwner(reservation);
+    if(owner.state!=="reserved"||authorityState!=="reserved"||owner.journal.length!==0)
+        throw new TypeError("AS3 primary authority reservation is not commit-ready");
+    owner.state="installing";authorityState="installing";
+    try {
+        for(const item of owner.plan) {
+            publishPrimaryWeakSet(owner,TYPE_TOKENS,item.token);
+            publishPrimaryWeakMap(owner,TYPE_DETAILS,item.token,item.details);
+            if(item.kind==="interface") {publishPrimaryMap(owner,INTERFACE_TOKENS,item.qname,item.token);continue;}
+            const constructor=item.constructor;
+            publishPrimaryWeakMap(owner,CLASS_TOKENS,constructor,item.token);
+            publishPrimaryMap(owner,CLASS_BY_QNAME,item.qname,owner.qnameEntries.get(constructor)!);
+            publishPrimaryWeakMap(owner,CLASS_INTERFACES,constructor,item.interfaces);
+            publishPrimaryWeakMap(owner,CLASS_PREDICATES,constructor,item.predicate);
+            if(item.constructionTarget)publishPrimaryWeakMap(owner,CLASS_CONSTRUCTION_TARGETS,constructor,item.constructionTarget);
+            if(item.constructionProof)publishPrimaryWeakMap(owner,CLASS_CONSTRUCTION_PROOFS,constructor,item.constructionProof);
+            publishPrimaryWeakMap(owner,CLASS_FIELD_DEFAULTS,constructor,item.fields);
+            if(item.staticCalls)publishPrimaryWeakMap(owner,STATIC_CALLS,constructor,item.staticCalls);
+            if(item.staticReflection)publishPrimaryWeakMap(owner,STATIC_REFLECTION,constructor,item.staticReflection);
+            publishPrimaryWeakMap(owner,CLASS_OBJECT_ENTRIES,constructor,item.objectEntry);
+            publishPrimaryWeakMap(owner,CLASS_BASES,constructor,item.base);
+            publishPrimaryMutation(owner,()=>REGISTERED_CLASSES.push(constructor),()=>{
+                if(REGISTERED_CLASSES[REGISTERED_CLASSES.length-1]===constructor)REGISTERED_CLASSES.pop();
+                else if(REGISTERED_CLASSES.includes(constructor))throw new TypeError("Primary class order drifted");});
+        }
+        publishPrimaryWeakSet(owner,AUTHENTIC_PRIMARY_RECEIPTS,owner.receipt as object);
+        installedAuthoritySha256=reservation.typeAuthoritySha256;
+        owner.state="committed";authorityState="sealed";return owner.receipt;
+    } catch(error) {
+        try {undoPrimaryJournal(owner);} catch(rollbackError) {owner.state="poisoned";authorityState="poisoned";throw rollbackError;}
+        owner.state="poisoned";authorityState="poisoned";installedAuthoritySha256=null;throw error;
+    }
+}
+
+/** Owner-side terminal poison remains usable when receipt delivery or validation is ambiguous. */
+export function poisonAS3TypeAuthority(reservation:AS3PrimaryTypeAuthorityReservation):void {
+    const owner=requirePrimaryOwner(reservation);
+    if(owner.state!=="reserved"&&owner.state!=="committed")
+        throw new TypeError("AS3 primary authority cannot poison in this state");
+    if(owner.state==="committed")AUTHENTIC_PRIMARY_RECEIPTS.delete(owner.receipt as object);
+    owner.state="poisoned";authorityState="poisoned";
+}
+
+export function isAS3TypeAuthorityCommitReceipt(value:unknown):value is AS3TypeAuthorityCommitReceipt {
+    return (typeof value==="object"||typeof value==="function")&&value!==null
+        &&AUTHENTIC_PRIMARY_RECEIPTS.has(value as object);
+}
+
+export function primaryAuthorityTransactionStatus():Readonly<{phase:"open"|"validating"|"reserved"|"installing"|"sealed"|"poisoned";
+    typeAuthoritySha256:string|null;publishedMutations:number}> {
+    return Object.freeze({phase:authorityState,typeAuthoritySha256:activePrimaryOwner?.reservation.typeAuthoritySha256
+        ??installedAuthoritySha256,publishedMutations:activePrimaryOwner?.journal.length??0});
+}
+
+/**
+ * Package-internal fail-closed reservation only. This authenticates and closes a
+ * secondary extension plan without publishing tokens, constructors, traits, or
+ * predicates. A later transactional committer must consume this exact branded
+ * reservation; callers cannot turn it into registry authority themselves.
+ */
+export function preflightAS3SecondaryTypeAuthority(document:AS3SecondaryTypeAuthorityDocument):
+    AS3SecondaryTypeAuthorityReservation {
+    requireSealed();
+    if(activeSecondaryReservation!==null) throw new TypeError("An AS3 secondary authority reservation is already active");
+    exactKeys(document as unknown as object,["schema","primarySha256","sha256","qnames","entries"],"AS3 secondary authority");
+    if(document.schema!=="as3-runtime-secondary-type-authority@1"||document.primarySha256!==installedAuthoritySha256
+        ||!/^[0-9a-f]{64}$/.test(document.sha256)||sha256Ascii(canonicalSecondaryAuthorityMetadata(document))!==document.sha256)
+        throw new TypeError("AS3 secondary authority primary identity or canonical SHA-256 differs");
+    validateQNameList(document.qnames,"AS3 secondary authority qnames");
+    if(!Array.isArray(document.entries)||document.entries.length!==document.qnames.length)
+        throw new TypeError("AS3 secondary authority entry set does not match its exact QName set");
+    const plannedKinds=new Map<string,"class"|"interface">(),plannedClasses=new Map<string,AS3ClassAuthorityEntry>();
+    const constructors=new Set<Function>();
+    for(let index=0;index<document.entries.length;index+=1) {
+        const entry=document.entries[index]!;
+        if(!entry||typeof entry!=="object"||entry.qname!==document.qnames[index]||!stableRuntimeTypeName(entry.qname)
+            ||plannedKinds.has(entry.qname)||INTERFACE_TOKENS.has(entry.qname)||CLASS_BY_QNAME.has(entry.qname))
+            throw new TypeError("AS3 secondary authority has a collision, drift, or out-of-order QName");
+        const kind=(name:string):"class"|"interface"|null=>plannedKinds.get(name)
+            ??(CLASS_BY_QNAME.has(name)?"class":INTERFACE_TOKENS.has(name)?"interface":null);
+        if(entry.kind==="interface") {
+            exactKeys(entry as unknown as object,["kind","qname","bases"],`AS3 secondary interface ${entry.qname}`);
+            validateQNameList(entry.bases,`AS3 secondary interface ${entry.qname} bases`);
+            if(entry.bases.some((name:string)=>kind(name)!=="interface"))
+                throw new TypeError(`AS3 secondary interface ${entry.qname} has a missing, cyclic, or wrong-kind base`);
+            plannedKinds.set(entry.qname,"interface");
+            continue;
+        }
+        if(entry.kind!=="class") throw new TypeError("AS3 secondary authority contains an unknown entry kind");
+        exactKeys(entry as unknown as object,["kind","qname","base","interfaces","sourceSha256","fields",
+            ...(entry.objectTraits?["objectTraits"]:[]),...(entry.nativeObjectTraits?["nativeObjectTraits"]:[]),
+            ...(entry.fileLocalScope?["fileLocalScope"]:[]),...(entry.staticReflection!==undefined?["staticReflection"]:[]),
+            ...(entry.staticCallTraits!==undefined?["staticCallTraits"]:[]),"constructor","predicate","constructionTarget","constructionProof"],
+        `AS3 secondary class ${entry.qname}`);
+        if(entry.base!==null&&kind(entry.base)!=="class")
+            throw new TypeError(`AS3 secondary class ${entry.qname} has a missing, cyclic, or wrong-kind base`);
+        const baseEntry=entry.base===null?null:plannedClasses.get(entry.base);
+        const primaryBase=entry.base===null?null:CLASS_BY_QNAME.get(entry.base)?.constructor;
+        if(baseEntry?.objectTraits?.final||primaryBase&&CLASS_OBJECT_ENTRIES.get(primaryBase)?.traits?.final)
+            throw new TypeError(`AS3 secondary class ${entry.qname} cannot extend final class ${entry.base}`);
+        validateQNameList(entry.interfaces,`AS3 secondary class ${entry.qname} interfaces`);
+        if(entry.interfaces.some((name:string)=>kind(name)!=="interface"))
+            throw new TypeError(`AS3 secondary class ${entry.qname} has a missing or wrong-kind interface`);
+        const localConstruction=typeof entry.constructionTarget==="function"&&typeof entry.constructionProof==="function";
+        const mappedConstruction=entry.constructionTarget===null&&entry.constructionProof===null;
+        if(!/^[0-9a-f]{64}$/.test(entry.sourceSha256)||typeof entry.constructor!=="function"
+            ||typeof entry.predicate!=="function"||constructors.has(entry.constructor)||CLASS_TOKENS.has(entry.constructor)
+            ||REVOKED_SECONDARY_CONSTRUCTORS.has(entry.constructor)
+            ||!Array.isArray(entry.fields)||entry.fields.some((field:AS3ClassAuthorityEntry["fields"][number])=>!field||typeof field!=="object"
+                ||Object.keys(field).join("\0")!=="name\0policy"||!stableRuntimeTypeName(field.name)
+                ||!["zero","nan","false","null","undefined"].includes(field.policy))
+            ||new Set(entry.fields.map((field:AS3ClassAuthorityEntry["fields"][number])=>field.name)).size!==entry.fields.length||!localConstruction&&!mappedConstruction)
+            throw new TypeError(`AS3 secondary class ${entry.qname} identity is invalid or reused`);
+        if(entry.fileLocalScope&&fileLocalClassIdentity(entry.fileLocalScope).key!==entry.qname)
+            throw new TypeError("AS3 secondary file-local class identity differs from its source scope");
+        constructors.add(entry.constructor);plannedKinds.set(entry.qname,"class");plannedClasses.set(entry.qname,entry);
+    }
+    const plan=prepareSecondaryPublication(document.entries);
+    const reservation=Object.freeze({primarySha256:document.primarySha256,sha256:document.sha256,
+        qnames:Object.freeze([...document.qnames])});
+    const mutations=Object.create(null) as Record<AS3SecondaryMutationSurface,number>;
+    SECONDARY_MUTATION_SURFACES.forEach(surface=>{mutations[surface]=0;});
+    const owner:SecondaryOwner={reservation,plan,mutations,journal:[],constructors:new Set(),activeInstances:new Set(),
+        initializedInstances:new Set(),lease:null,state:"reserved",preparedConstructions:0,activeConstructions:0,
+        initializedOrLiveInstances:0};
+    AUTHENTIC_SECONDARY_RESERVATIONS.add(reservation);
+    SECONDARY_RESERVATION_OWNERS.set(reservation,owner);
+    activeSecondaryReservation=reservation;
+    return reservation;
+}
+
+function requireActiveSecondaryOwner(reservation:AS3SecondaryTypeAuthorityReservation):SecondaryOwner {
+    if((typeof reservation!=="object"&&typeof reservation!=="function")||reservation===null
+        ||!AUTHENTIC_SECONDARY_RESERVATIONS.has(reservation as object)||activeSecondaryReservation!==reservation)
+        throw new TypeError("AS3 secondary authority reservation is not the active owned identity");
+    const owner=SECONDARY_RESERVATION_OWNERS.get(reservation as object);
+    if(!owner||owner.reservation!==reservation)
+        throw new TypeError("AS3 secondary authority ownership state is inconsistent");
+    return owner;
+}
+
+function secondaryOwnerHasPublishedState(owner:SecondaryOwner):boolean {
+    return SECONDARY_MUTATION_SURFACES.some(surface=>owner.mutations[surface]!==0)
+        ||owner.preparedConstructions!==0||owner.activeConstructions!==0||owner.initializedOrLiveInstances!==0;
+}
+
+/** Releases an unused preflight reservation. No registry identity was published. */
+export function abortAS3SecondaryTypeAuthority(reservation:AS3SecondaryTypeAuthorityReservation):void {
+    requireSealed();
+    const owner=requireActiveSecondaryOwner(reservation);
+    if(owner.state!=="reserved"||secondaryOwnerHasPublishedState(owner))
+        throw new TypeError("AS3 secondary authority reservation cannot abort while owned registry or construction state remains");
+    AUTHENTIC_SECONDARY_RESERVATIONS.delete(reservation as object);
+    SECONDARY_RESERVATION_OWNERS.delete(reservation as object);
+    activeSecondaryReservation=null;
+}
+
+export function secondaryAuthorityReservationStatus():Readonly<{active:boolean;primarySha256:string|null;sha256:string|null}> {
+    return Object.freeze({active:activeSecondaryReservation!==null,
+        primarySha256:activeSecondaryReservation?.primarySha256??null,sha256:activeSecondaryReservation?.sha256??null});
+}
+
+export interface AS3SecondaryAuthorityOwnershipStatus {
+    readonly active:boolean;
+    readonly primarySha256:string|null;
+    readonly sha256:string|null;
+    readonly phase:"none"|"reserved"|"committed"|"sealed"|"poisoned"|"revoked";
+    readonly commitReady:boolean;
+    readonly rollbackable:boolean;
+    readonly blockers:readonly string[];
+    readonly unownedSurfaces:readonly AS3SecondaryMutationSurface[];
+    readonly surfaces:readonly Readonly<{surface:AS3SecondaryMutationSurface;mutationCount:number;
+        ownerSha256:string|null}>[];
+    readonly constructions:Readonly<{prepared:number;active:number;initializedOrLive:number}>;
+}
+
+/**
+ * Mechanically enumerates every mutable surface the transactional secondary
+ * committer journals. Counts can only belong to the exact active
+ * reservation. Construction liveness is deliberately conservative: an
+ * initialized secondary instance remains live until a future lease-specific
+ * disposal protocol can prove otherwise.
+ */
+export function secondaryAuthorityOwnershipStatus():AS3SecondaryAuthorityOwnershipStatus {
+    requireSealed();
+    const owner=activeSecondaryReservation===null?null:requireActiveSecondaryOwner(activeSecondaryReservation);
+    const blockers=owner===null?[]:owner.state==="sealed"?["secondary-application-lifetime-sealed"]
+        :owner.state==="poisoned"?["secondary-class-initialization-poisoned"]
+        :owner.preparedConstructions!==0?["secondary-prepared-construction-active"]
+        :owner.activeConstructions!==0?["secondary-construction-active"]
+        :owner.initializedOrLiveInstances!==0?["secondary-initialized-instance-live"]:[];
+    return Object.freeze({active:owner!==null,primarySha256:owner?.reservation.primarySha256??null,
+        sha256:owner?.reservation.sha256??null,phase:owner?.state??"none",commitReady:owner?.state==="reserved",
+        rollbackable:owner?.state==="committed"&&blockers.length===0,blockers:Object.freeze(blockers),
+        unownedSurfaces:Object.freeze([]),
+        surfaces:Object.freeze(SECONDARY_MUTATION_SURFACES.map(surface=>Object.freeze({surface,
+            mutationCount:owner?.mutations[surface]??0,
+            ownerSha256:owner&&owner.mutations[surface]!==0?owner.reservation.sha256:null}))),
+        constructions:Object.freeze({prepared:owner?.preparedConstructions??0,active:owner?.activeConstructions??0,
+            initializedOrLive:owner?.initializedOrLiveInstances??0})});
+}
+
+function publishSecondaryMutation(owner:SecondaryOwner,surface:AS3SecondaryMutationSurface,
+    apply:()=>void,undo:()=>void):void {
+    apply();owner.journal.push(Object.freeze({surface,undo}));adjustSecondaryMutation(owner,surface,1);
+}
+
+function undoSecondaryJournal(owner:SecondaryOwner):void {
+    while(owner.journal.length!==0) {
+        const mutation=owner.journal.pop()!;mutation.undo();adjustSecondaryMutation(owner,mutation.surface,-1);
+    }
+}
+
+function publishSecondaryWeakSet(owner:SecondaryOwner,surface:AS3SecondaryMutationSurface,set:WeakSet<object>,key:object):void {
+    publishSecondaryMutation(owner,surface,()=>set.add(key),()=>{if(!set.delete(key))throw new TypeError("Secondary WeakSet ownership drifted");});
+}
+function publishSecondaryWeakMap<K extends object,V>(owner:SecondaryOwner,surface:AS3SecondaryMutationSurface,
+    map:WeakMap<K,V>,key:K,value:V):void {
+    publishSecondaryMutation(owner,surface,()=>map.set(key,value),()=>{
+        if(map.get(key)!==value||!map.delete(key))throw new TypeError("Secondary WeakMap ownership drifted");});
+}
+function publishSecondaryMap<K,V>(owner:SecondaryOwner,surface:AS3SecondaryMutationSurface,
+    map:Map<K,V>,key:K,value:V):void {
+    publishSecondaryMutation(owner,surface,()=>map.set(key,value),()=>{
+        if(map.get(key)!==value||!map.delete(key))throw new TypeError("Secondary Map ownership drifted");});
+}
+
+/** Atomically publishes the fully precomputed plan and returns its exact rollback lease. */
+export function commitAS3SecondaryTypeAuthority(reservation:AS3SecondaryTypeAuthorityReservation):AS3SecondaryTypeAuthorityLease {
+    requireSealed();
+    const owner=requireActiveSecondaryOwner(reservation);
+    if(owner.state!=="reserved"||secondaryOwnerHasPublishedState(owner))
+        throw new TypeError("AS3 secondary authority commit found pre-existing owned state");
+    try {
+        for(const item of owner.plan) {
+            publishSecondaryWeakSet(owner,"TYPE_TOKENS",TYPE_TOKENS,item.token);
+            publishSecondaryWeakMap(owner,"TYPE_DETAILS",TYPE_DETAILS,item.token,item.details);
+            SECONDARY_TOKEN_OWNERS.set(item.token,owner);
+            if(item.kind==="interface") {
+                publishSecondaryMap(owner,"INTERFACE_TOKENS",INTERFACE_TOKENS,item.qname,item.token);
+                continue;
             }
-            seen.add(entry.qname);
-        });
-        installedAuthoritySha256 = document.sha256;
-        authorityState = "sealed";
-    } catch (error) {
-        // Installation happens before application evaluation. A failed partial
-        // install is permanently poisoned rather than permitting retry/widening.
+            const constructor=item.constructor;
+            publishSecondaryWeakMap(owner,"CLASS_TOKENS",CLASS_TOKENS,constructor,item.token);
+            const byQName=Object.freeze({constructor,token:item.token});
+            publishSecondaryMap(owner,"CLASS_BY_QNAME",CLASS_BY_QNAME,item.qname,byQName);
+            publishSecondaryWeakMap(owner,"CLASS_INTERFACES",CLASS_INTERFACES,constructor,item.interfaces);
+            publishSecondaryWeakMap(owner,"CLASS_PREDICATES",CLASS_PREDICATES,constructor,item.predicate);
+            if(item.constructionTarget)publishSecondaryWeakMap(owner,"CLASS_CONSTRUCTION_TARGETS",CLASS_CONSTRUCTION_TARGETS,
+                constructor,item.constructionTarget);
+            if(item.constructionProof)publishSecondaryWeakMap(owner,"CLASS_CONSTRUCTION_PROOFS",CLASS_CONSTRUCTION_PROOFS,
+                constructor,item.constructionProof);
+            publishSecondaryWeakMap(owner,"CLASS_FIELD_DEFAULTS",CLASS_FIELD_DEFAULTS,constructor,item.fields);
+            if(item.staticCalls)publishSecondaryWeakMap(owner,"STATIC_CALLS",STATIC_CALLS,constructor,item.staticCalls);
+            if(item.staticReflection)publishSecondaryWeakMap(owner,"STATIC_REFLECTION",STATIC_REFLECTION,constructor,item.staticReflection);
+            publishSecondaryWeakMap(owner,"CLASS_OBJECT_ENTRIES",CLASS_OBJECT_ENTRIES,constructor,item.objectEntry);
+            publishSecondaryWeakMap(owner,"CLASS_BASES",CLASS_BASES,constructor,item.base);
+            publishSecondaryMutation(owner,"REGISTERED_CLASSES",()=>REGISTERED_CLASSES.push(constructor),()=>{
+                if(REGISTERED_CLASSES[REGISTERED_CLASSES.length-1]!==constructor)throw new TypeError("Secondary class order drifted");
+                REGISTERED_CLASSES.pop();});
+            owner.constructors.add(constructor);SECONDARY_CONSTRUCTOR_OWNERS.set(constructor,owner);
+        }
+    } catch(error) {
+        try {undoSecondaryJournal(owner);} catch(rollbackError) {owner.state="poisoned";throw rollbackError;}
+        owner.constructors.forEach(constructor=>SECONDARY_CONSTRUCTOR_OWNERS.delete(constructor));owner.constructors.clear();
+        owner.plan.forEach(item=>SECONDARY_TOKEN_OWNERS.delete(item.token));
+        throw error;
+    }
+    const lease=Object.freeze({primarySha256:reservation.primarySha256,sha256:reservation.sha256,qnames:reservation.qnames});
+    owner.lease=lease;owner.state="committed";AUTHENTIC_SECONDARY_LEASES.add(lease);
+    return lease;
+}
+
+function requireActiveSecondaryLease(lease:AS3SecondaryTypeAuthorityLease):SecondaryOwner {
+    if((typeof lease!=="object"&&typeof lease!=="function")||lease===null||!AUTHENTIC_SECONDARY_LEASES.has(lease as object)
+        ||activeSecondaryReservation===null)throw new TypeError("AS3 secondary authority lease is not the active owned identity");
+    const owner=requireActiveSecondaryOwner(activeSecondaryReservation);
+    if(owner.lease!==lease)throw new TypeError("AS3 secondary authority lease changed ownership identity");
+    return owner;
+}
+
+/** Permanently retains the extension before arbitrary application initialization or side effects. */
+export function sealAS3SecondaryTypeAuthority(lease:AS3SecondaryTypeAuthorityLease):void {
+    requireSealed();
+    const owner=requireActiveSecondaryLease(lease);
+    if(owner.state!=="committed"&&owner.state!=="sealed")throw new TypeError("AS3 secondary authority cannot seal in this state");
+    owner.state="sealed";
+}
+
+/** Records an irreversible failed application initialization without removing registry identity. */
+export function poisonAS3SecondaryTypeAuthority(lease:AS3SecondaryTypeAuthorityLease):void {
+    requireSealed();const owner=requireActiveSecondaryLease(lease);
+    if(owner.state!=="committed"&&owner.state!=="sealed")throw new TypeError("AS3 secondary authority cannot poison in this state");
+    owner.state="poisoned";
+}
+
+/** Revokes every journal-owned registry mapping while preserving the sealed primary authority. */
+export function rollbackAS3SecondaryTypeAuthority(lease:AS3SecondaryTypeAuthorityLease):void {
+    requireSealed();const owner=requireActiveSecondaryLease(lease);
+    if(owner.state==="sealed"||owner.initializedOrLiveInstances!==0)
+        throw new TypeError("AS3 secondary authority rollback rejected after application-lifetime initialization seal");
+    if(owner.state==="poisoned")throw new TypeError("AS3 secondary authority rollback rejected after initialization poison");
+    if(owner.state!=="committed")throw new TypeError("AS3 secondary authority lease is not committed");
+    if(owner.preparedConstructions!==0||owner.activeConstructions!==0)
+        throw new TypeError("AS3 secondary authority rollback rejected during prepared or active construction");
+    try {undoSecondaryJournal(owner);} catch(error) {owner.state="poisoned";throw error;}
+    owner.plan.forEach(item=>SECONDARY_TOKEN_OWNERS.delete(item.token));
+    owner.constructors.forEach(constructor=>{SECONDARY_CONSTRUCTOR_OWNERS.delete(constructor);
+        REVOKED_SECONDARY_CONSTRUCTORS.add(constructor);});
+    owner.constructors.clear();owner.state="revoked";AUTHENTIC_SECONDARY_LEASES.delete(lease as object);
+    AUTHENTIC_SECONDARY_RESERVATIONS.delete(owner.reservation as object);
+    SECONDARY_RESERVATION_OWNERS.delete(owner.reservation as object);activeSecondaryReservation=null;
+}
+
+/** Package-internal: the package export map intentionally does not expose this module. */
+export function installAS3TypeAuthority(document: AS3TypeAuthorityDocument): void {
+    let reservation:AS3PrimaryTypeAuthorityReservation|null=null;
+    try {
+        reservation=preflightAS3TypeAuthority(document);
+        commitAS3TypeAuthority(reservation);
+        return;
+    } catch(error) {
+        if(reservation!==null&&authorityState!=="poisoned")poisonAS3TypeAuthority(reservation);
+        else if(reservation===null&&authorityState==="open")authorityState="poisoned";
         throw error;
     }
 }
@@ -728,6 +1353,7 @@ export function lookupObjectCallerPackage(qname: string): string {
 
 /** Class string labels come only from builtin or authenticated runtime identity. */
 export function lookupStringClassName(value:unknown):string | null {
+    if(authorityState==="poisoned")throw new TypeError("AS3 primary runtime type authority is poisoned");
     if (typeof value === "function") {
         const builtin = [Object,Array,Number,Boolean,String,Function].find(item => item === value);
         if (builtin) return builtin.name;
@@ -742,8 +1368,11 @@ export function lookupStringClassName(value:unknown):string | null {
 /** Authenticate deferred class initialization after the complete type authority seals. */
 export function classInitializationBase(constructor: unknown, proof: unknown): RuntimeConstructor | null {
     requireSealed();
+    if(typeof constructor==="function")requireUsableSecondaryConstructor(constructor);
     if (typeof constructor !== "function" || !CLASS_TOKENS.has(constructor) || !validConstructionProof(constructor as RuntimeConstructor, proof))
         throw new TypeError("AS3 class initialization lacks sealed construction authority");
+    const secondaryOwner=SECONDARY_CONSTRUCTOR_OWNERS.get(constructor);
+    if(secondaryOwner&&secondaryOwner.state==="committed")secondaryOwner.state="sealed";
     return CLASS_BASES.get(constructor) ?? null;
 }
 
@@ -751,7 +1380,7 @@ export function classInitializationBase(constructor: unknown, proof: unknown): R
 /** Read-only dynamic construction lookup; never adopts host constructors. */
 export function lookupDynamicConstruction(value:unknown):RuntimeConstructor | string | null {
     requireSealed();
-    if (typeof value === "function" && CLASS_TOKENS.has(value)) return value as RuntimeConstructor;
+    if (typeof value === "function" && CLASS_TOKENS.has(value)) {requireUsableSecondaryConstructor(value);return value as RuntimeConstructor;}
     if (value !== null && typeof value === "object" && TYPE_DETAILS.get(value)?.kind === "interface")
         return (value as AS3TypeToken<unknown>).name;
     return null;

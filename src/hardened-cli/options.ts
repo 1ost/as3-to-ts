@@ -31,6 +31,10 @@ export interface CapabilityRunOptions extends BaseRunOptions {
     sourceCensusPath: string;
     targetCapabilitiesPath: string;
     profileLockPath?: string;
+    sourceClosurePath?: string;
+    sourcePlanPath?: string;
+    secondaryAuthorityPath?: string;
+    compilerProviderPath?: string;
 }
 
 export type RunOptions = ParseRunOptions | CapabilityRunOptions;
@@ -82,7 +86,7 @@ const numericOptions: Readonly<Record<string, keyof Limits>> = {
     "--max-old-space-mb": "maxOldSpaceMb",
 };
 
-const authorityOptions = new Set(["--source-census", "--target-capabilities", "--profile-lock"]);
+const authorityOptions = new Set(["--source-census", "--target-capabilities", "--profile-lock", "--source-closure", "--source-plan", "--secondary-authority", "--compiler-provider"]);
 
 function parsePositiveInteger(option: string, value: string, ceiling: number): number {
     if (!/^[1-9][0-9]*$/.test(value)) {
@@ -172,9 +176,27 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
     const sourceCensusPath = authorities["--source-census"];
     const targetCapabilitiesPath = authorities["--target-capabilities"];
     const profileLockPath = authorities["--profile-lock"];
+    const sourceClosurePath = authorities["--source-closure"];
+    const sourcePlanPath = authorities["--source-plan"];
+    const secondaryAuthorityPath = authorities["--secondary-authority"];
+    const compilerProviderPath=authorities["--compiler-provider"];
     if (sourceCensusPath === undefined || targetCapabilitiesPath === undefined) {
         throw new CliError("transpile requires --source-census and --target-capabilities", 2);
     }
+    if ((sourceClosurePath !== undefined || sourcePlanPath !== undefined) && profileLockPath === undefined) {
+        throw new CliError("--source-closure and --source-plan require --profile-lock", 2);
+    }
+    if (sourceClosurePath !== undefined && sourcePlanPath !== undefined) {
+        throw new CliError("--source-closure and --source-plan are mutually exclusive", 2);
+    }
+    if (sourcePlanPath !== undefined && operation !== "qualify") {
+        throw new CliError("--source-plan is valid only for qualify", 2);
+    }
+    if (secondaryAuthorityPath !== undefined && (operation !== "transpile" || sourceClosurePath === undefined)) {
+        throw new CliError("--secondary-authority requires transpile with --source-closure", 2);
+    }
+    if((secondaryAuthorityPath===undefined)!==(compilerProviderPath===undefined))
+        throw new CliError("--secondary-authority and --compiler-provider are required together",2);
     return {
         mode: "run",
         options: {
@@ -185,14 +207,18 @@ export function parseArguments(argv: readonly string[]): ParsedArguments {
             sourceCensusPath,
             targetCapabilitiesPath,
             ...(profileLockPath === undefined ? {} : { profileLockPath }),
+            ...(sourceClosurePath === undefined ? {} : { sourceClosurePath }),
+            ...(sourcePlanPath === undefined ? {} : { sourcePlanPath }),
+            ...(secondaryAuthorityPath === undefined ? {} : { secondaryAuthorityPath }),
+            ...(compilerProviderPath===undefined?{}:{compilerProviderPath}),
         },
     };
 }
 
 export const HELP = `Usage:
   as3-frontend parse <source-directory> <output-directory> [options]
-  as3-frontend transpile <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [--profile-lock <file>] [options]
-  as3-frontend qualify <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [--profile-lock <file>] [options]
+  as3-frontend transpile <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [--profile-lock <file>] [--source-closure <file>] [--secondary-authority <file> --compiler-provider <file>] [options]
+  as3-frontend qualify <source-directory> <output-directory> --source-census <file> --target-capabilities <file> [--profile-lock <file>] [--source-closure <file> | --source-plan <file>] [options]
 
 Parse emits deterministic legacy-AST JSON artifacts. Transpile emits only the
 closed, capability-authenticated TypeScript subset. Qualify emits a report of
@@ -215,6 +241,10 @@ Options:
   --source-census <file>        Exact application AS3 capability census (transpile)
   --target-capabilities <file>  Exact Laya authored capability ledger (transpile)
   --profile-lock <file>         Optional exact application profile; omitted preserves Bleach defaults
+  --source-closure <file>       Exact profile-bound application/bootstrap source allow-list
+  --source-plan <file>          Qualify an authenticated dependency superset and derive its exact closure
+  --secondary-authority <file>  Authenticated inert-v1 or browser-linker-v2 request
+  --compiler-provider <file>    Exact executing compiler provenance authority
   --help                        Show this help
   --version                     Show the local tool version
 `;

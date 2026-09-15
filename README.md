@@ -48,9 +48,174 @@ replace `transpile` with `qualify`. Its sole output is a deterministic manifest
 containing one admitted/held record per source and counts by stable diagnostic
 code.
 
+An application profile may compile one exact feature root together with its
+exact bootstrap dependencies by adding `--source-closure <file>`. The legacy
+canonical `as3-authenticated-source-closure@1` form retains its strict no-include
+shape. The `as3-authenticated-source-closure@2` form additionally carries exact,
+per-root include fragment byte identities and directive edges. These must equal
+the reachable projection of the profile's existing source-include authority;
+cross-root include ownership is forbidden. Both forms are bound to the selected
+profile hash and contain, in fixed application/bootstrap order, repository-relative
+roots, profile source prefixes, source byte hashes, QNames, and exact semantic
+local dependencies. The positional source directory is the explicit canonical
+base, so durable output contains no host paths. Unlisted files are not discovered.
+
+Application profile lock v2 additionally carries one closed
+`as3-application-start-contract@1`. It binds the exact public root QName, the
+`startAS3Application` export, zero constructor arguments, cancellation before
+construction, and the constructed-instance result. The generated application
+entry consumes that operation once, checks the supplied `AbortSignal` before
+construction, and returns the exact root instance. Its manifest evidence binds
+both the application-entry JavaScript and constructor-module JavaScript bytes.
+This launch contract does not qualify the held browser facade or its definition
+evaluation provenance by itself.
+
+When bootstrap selection must begin conservatively, `qualify --source-plan`
+accepts canonical `as3-authenticated-source-plan@1`. It has the v2 root/include
+shape but names each file's sorted superset `allowedLocalDependencies`. Parsing
+must prove every semantic dependency lies inside that authenticated superset.
+Only a fully admitted plan emits canonical `derived-source-closure.json`, with
+the exact semantic dependencies under the v2 schema. `transpile` never accepts
+a plan and rechecks equality against that derived exact closure. Root reordering,
+path escape, source/fragment/edge drift, duplicate QNames, missing dependencies,
+and semantic dependency drift all fail closed. Existing single-root include
+behavior remains unchanged.
+
+For a separately loaded feature, `transpile` may also accept
+`--secondary-authority <file> --compiler-provider <file>`. This requires the authenticated source closure
+and emits only `SecondaryAuthority.receipt.json`: no secondary executable entry
+or eager import is generated. The canonical receipt binds the request, profile,
+source closure, compiler identity, runtime type authority metadata, actual
+runtime-authority JavaScript, package metadata, and the exact complete set of
+generated JavaScript files. It also publishes the exact canonical source
+closure as `AchievementModule.source-closure.json`. Its only accepted exports, in order, are
+`AchievementModule` and `achievement.ui.AchievementPresentationPart`. A host
+must authenticate the receipt and reject any missing, extra, or drifted package
+file before importing either module. The receipt deliberately does not assert
+AP's converter-provider identity and does not emit `AS3_SECONDARY_AUTHORITY`;
+an AP adapter must bind its separately authenticated repository/commit/lock
+provider contract to this receipt. The normal authority-first `ApplicationEntry`
+is unchanged.
+
+The compiler-provider authority additionally binds repository/commit claims to
+the exact executing `command.js`, parser worker, and local `package-lock.json`
+hashes; the request pins the authority document hash. The receipt classifies
+every emitted QName as application-owned or bootstrap-owned and publishes the
+intended browser linkage partition. Browser linkage in this legacy receipt remains explicitly held:
+no module is emitted until an import-free ESM factory can define only application
+QNames while accepting every bootstrap QName as an authenticated external
+constructor. The normal CommonJS package still contains bootstrap output and
+must not be mistaken for that browser factory.
+
+The executable browser lane is a separate, fail-closed opt-in. An exact
+`as3-secondary-browser-linker-request@2` on the same flags requires the v2
+source closure, the exact six ordered Achievement application classes, a
+pinned primary runtime/type identity, and the authenticated compiler-provider
+document. It emits `__as3_runtime/achievement-secondary-linker/` as an exact
+four-file package: the canonical source closure, canonical secondary type
+evidence, one import-free `AchievementModule.secondary-linker.mjs`, and its AP
+v3 receipt. The receipt keeps the evidence-file artifact hash distinct from the
+registry-canonical live type-document digest. The factory's sole export is `linkAS3SecondaryAuthority`; every
+bootstrap QName and runtime module is obtained by a literal call on the primary
+capability, while only the six application definitions evaluate in source
+order. Class initializers remain deferred and ordered. The generated factory
+opens a logical transaction before evaluation, submits the complete live
+constructor/predicate/trait document to preflight afterward, and aborts that
+transaction if definition evaluation or preflight fails. If later result assembly
+fails after preflight, it aborts the returned reservation instead of the consumed
+transaction. It returns the branded reservation, not a lease; the host must validate the linked result, commit the
+reservation, and seal the committed lease before running any initializer or
+other irreversible application effect. The surrounding
+CommonJS proposal remains outside this dedicated package and is not browser
+authority. Emission proves bytes and declared linkage only: it does not prove
+which executable ran, that a host imported the file, or that browser startup
+succeeded. The legacy v1 request continues to emit only its inert receipt.
+
+The same v2 lane emits a separate exact two-file
+`__as3_runtime/achievement-primary-host/` candidate plus a closed
+`achievement-primary-runtime/` ESM graph. Its sole host export,
+`createAchievementPrimarySecondaryLinkage`, is a one-shot factory configured by
+the package-internal registry adapter. The host statically imports every
+authenticated bootstrap definition and external runtime module, but does not
+copy bootstrap or secondary implementation into its package. Its canonical
+receipt binds the compiler provider, primary runtime artifact, exact secondary
+plan, ordered resolver inventories, every direct dependency's path, byte count
+and SHA-256 identity, every transitive static import, and the host module bytes. The six Achievement definitions
+are omitted from the sealed primary registry and may enter only through the
+secondary transaction. The receipt remains explicitly `held` with
+`AP_ACHIEVEMENT_PRIMARY_HOST_BROWSER_ESM_CLOSURE_UNQUALIFIED`: a native browser
+resolves multi-file module URLs after import, while AP currently authenticates
+handed-in bytes. A content-addressed module resolver could close that gap, or a
+future single import-free host with no dependencies could avoid it. Emission and
+dependency hashes therefore do not prove that AP imported those exact bytes or
+that startup reached the document constructor.
+The held artifact deliberately uses the distinct
+`ap-original-achievement-primary-host-candidate-receipt@1` schema and candidate-
+named manifest fields; it cannot be mistaken for AP's closed qualified host
+receipt or registration.
+
+The compiler also derives a second, separate two-file candidate at
+`__as3_runtime/achievement-primary-host-bundle-candidate/`. Its
+`AchievementModule.primary-host-bundle.mjs` has no static or dynamic imports,
+owns one synchronous cached module table for the complete reachable primary
+runtime/bootstrap closure, and exposes only
+`createAchievementPrimarySecondaryLinkage`. CommonJS factory bindings are
+private to the table; ordinary `module` and `exports` property names remain
+ordinary quoted data, while raw CommonJS identities, mutable ESM exports, and
+escaped or shadowed loader identities fail emission. Completed namespace
+objects are frozen. TypeScript's ES5 lowering preserves optional-chain behavior
+and removes template-literal syntax before the final AP-compatible AST audit;
+iterable-aware lowering retains native `Set`, `Map`, and iterator traversal.
+Every emitted JavaScript string token is re-encoded as JSON string syntax, so
+values such as NUL use `\u0000` instead of lexer-incompatible `\0`.
+The receipt records every embedded strongly connected component, and tests
+exercise single evaluation and live identity through a cyclic factory graph.
+The distinct
+`ap-original-achievement-primary-host-bundle-candidate-receipt@1` receipt binds
+the source host candidate and receipt, each embedded ESM input and derived
+factory body, its cycle inventory, and the final bundle bytes. Before copying
+any claim, emission revalidates the canonical closed source receipt, expected
+plan, literal definition/runtime imports, and the complete dependency-edge
+inventory against the embedded graph. Its runtime `dependencies` inventory
+is exactly empty because those inputs are embedded evidence, not URLs loaded at
+execution. This artifact remains `held` under
+`AP_ACHIEVEMENT_PRIMARY_HOST_BROWSER_EXECUTION_UNVERIFIED` until an AP-owned
+browser observer authenticates and executes the exact emitted bytes. Node or
+data-URL diagnostics do not clear that hold.
+
 The output directory must not exist. A successful run publishes it with one
 atomic directory rename after every source has parsed and every staged artifact
 has been revalidated. Failures leave no partial output directory.
+
+The package-internal type registry also exposes a secondary-authority preflight
+reservation for the future browser linker. It requires the primary authority to
+be sealed, binds its exact digest, validates a closed collision-free secondary
+QName/dependency plan, permits only one active reservation, and publishes no
+tokens, constructors, traits, predicates, or construction mappings. Only the
+identity-owned reservation can be aborted. Its ownership status enumerates the
+closed registry mutation surface and conservatively counts prepared/active
+constructions and initialized or live secondary instances. Commit precomputes
+and validates the complete publication, journals every identity-owned mutation,
+and returns an unforgeable rollback lease. Rollback rejects prepared or active
+construction, deletes every journal-owned mapping, and permanently revokes the
+secondary constructors and tokens while preserving the primary authority.
+Initialization seals the lease for application lifetime because arbitrary
+static or user side effects are not reversible; an explicit poison state keeps
+a failed initializer installed but unusable. This registry transaction is a
+linker prerequisite only and does not itself claim browser-linker readiness.
+
+`internal/AS3PrimarySecondaryHost.ts` is the package-internal adapter from the
+emitted linker protocol to that registry transaction. A host configuration is
+bound to the exact sealed primary type digest, one expected secondary plan, and
+literal definition and runtime-module inventories. Its receiver-branded,
+one-shot transaction, reservation, and lease wrappers retain the real internal
+reservation and lease identities; they expose commit/abort/seal/poison but no
+registry tokens, lookup maps, or rollback authority. Normal and legacy runtime
+lanes do not export this adapter. The v2 authority bundle exposes it only under
+an internal name consumed by the separately authenticated one-shot host.
+Production readiness remains held until AP authenticates and executes the exact
+import-free bundle bytes in its browser boundary (or installs and authenticates
+a content-addressed resolver for the multi-file candidate).
 
 Available limits are shown by:
 

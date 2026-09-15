@@ -572,6 +572,17 @@ function relativeLocalModule(currentModulePath: string, target: LocalTypeMapping
     return relative.startsWith(".") ? relative : `./${relative}`;
 }
 
+/** Application feature roots may consume their authenticated bootstrap closure; reverse edges stay forbidden. */
+function crossRootLocalType(authority: LoadedLocalTypeAuthority, currentModule: "application" | "bootstrap",
+    qname: string): LocalTypeMapping | null {
+    const matches = (["application", "bootstrap"] as const).map(module =>
+        authority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry);
+    if (matches.length !== 1) return null;
+    const target = matches[0]!;
+    return target.module === currentModule || currentModule === "application" && target.module === "bootstrap"
+        ? target : null;
+}
+
 function assertPackageRuntimeValue(authority: LoadedLocalMemberAuthority, module: "application" | "bootstrap",
     entry: LocalMemberAuthorityEntry, node: TreeNode): void {
     const declaration = entry.declaration;
@@ -660,11 +671,11 @@ function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefin
     imports:SemanticImport[], importsByLocal:{[name:string]:SemanticImport}, node:TreeNode):SemanticImport | null {
     if (!proof) return null;
     const privateTarget = members ? localFileSignature(members,current.entry.module,typeName) : undefined;
-    const target=privateTarget?.type ?? types.entriesByIdentity[`${current.entry.module}\u0000${typeName}`];
+    const target=privateTarget?.type ?? crossRootLocalType(types,current.entry.module,typeName);
     if (!target || (!target.importable && !privateTarget) || !["class","interface"].includes(target.typeKind)) return null;
     const privateOwner = members ? localFileSignature(members,current.entry.module,proof.ownerQName) : undefined;
-    const owner=privateOwner?.type ?? types.entriesByIdentity[`${current.entry.module}\u0000${proof.ownerQName}`];
-    const declaration=privateOwner?.member ?? members?.entriesByIdentity[`${current.entry.module}\u0000${proof.ownerQName}`];
+    const owner=privateOwner?.type ?? crossRootLocalType(types,current.entry.module,proof.ownerQName);
+    const declaration=privateOwner?.member ?? (owner ? members?.entriesByIdentity[`${owner.module}\u0000${proof.ownerQName}`] : undefined);
     const element=(name:string):string=>name.startsWith("Vector.<") && name.endsWith(">")
         ? element(name.slice(8,-1)) : name;
     const signatureNames=[proof.member.returnType,proof.member.fieldType,...proof.member.parameters.map(parameter=>parameter.type)];
@@ -673,7 +684,7 @@ function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefin
     // dependency reachability or an unrelated imported class's ancestry.
     const inheritedOwner = ():boolean => {
         if (!proof.receiverQName || !owner || !members) return false;
-        const start=types.entriesByIdentity[`${current.entry.module}\u0000${proof.receiverQName}`];
+        const start=crossRootLocalType(types,current.entry.module,proof.receiverQName);
         if (!start || (start.nodeId !== current.entry.nodeId
             && !current.entry.prerequisites.includes(start.nodeId)
             && !imports.some(item=>item.authorityKind === "local" && item.localNodeId === start.nodeId))) return false;
@@ -683,10 +694,10 @@ function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefin
             if (entry.nodeId === owner.nodeId) return true;
             if (visited.has(entry.nodeId)) return false;
             visited.add(entry.nodeId);visiting.add(entry.nodeId);
-            const row=members.entriesByIdentity[`${current.entry.module}\u0000${entry.qname}`];
+            const row=members.entriesByIdentity[`${entry.module}\u0000${entry.qname}`];
             if (!row || row.status !== "complete" || !row.declaration) return false;
             for (const base of row.declaration.baseQNames) {
-                const parent=types.entriesByIdentity[`${current.entry.module}\u0000${base}`];
+                const parent=crossRootLocalType(types,current.entry.module,base);
                 if (parent && entry.prerequisites.includes(parent.nodeId) && reaches(parent)) return true;
             }
             visiting.delete(entry.nodeId);return false;
@@ -798,11 +809,16 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
                 fail("HARDENED_LOCAL_IMPORT_AUTHORITY", "project-local wildcard import requires the authenticated dependency type map", node);
             }
             const currentLocal = resolveCurrentLocal();
-            const localMatches = localAuthority.entries.filter(target => target.module === currentLocal.entry.module
+            const localMatches = localAuthority.entries.filter(target =>
+                (target.module === currentLocal.entry.module
+                    || currentLocal.entry.module === "application" && target.module === "bootstrap")
                 && target.qname.startsWith(prefix) && !target.qname.slice(prefix.length).includes(".")
                 && target.importable
                 && currentLocal.entry.prerequisites.indexOf(target.nodeId) >= 0)
                 .sort((left, right) => compareUtf8(left.qname, right.qname));
+            if (localMatches.some((target, index) => index > 0 && localMatches[index - 1]!.qname === target.qname)) {
+                fail("HARDENED_LOCAL_IMPORT", "project-local wildcard import resolves an ambiguous cross-root QName", node);
+            }
             // An unused wildcard contributes no emitted binding. Any source identity actually
             // consumed later must still resolve through importsByLocal, so this does not create
             // an open package lookup or a fallback type.
@@ -830,7 +846,7 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
                 fail("HARDENED_LOCAL_IMPORT_AUTHORITY", "project-local import requires the authenticated dependency type map", node);
             }
             const currentLocal = resolveCurrentLocal();
-            const target = localAuthority.entriesByIdentity[`${currentLocal.entry.module}\u0000${qname}`];
+            const target = crossRootLocalType(localAuthority,currentLocal.entry.module,qname);
             if (!target || !target.importable) {
                 fail("HARDENED_LOCAL_IMPORT", "project-local import is absent, non-importable, or not a declared type: " + qname, node);
             }
@@ -3661,7 +3677,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const qualified=parts(node);
         if (qualified && qualified.length > 1) {
             const root=qualified[0]!, qname=qualified.join("."), current=context.resolveCurrentLocal();
-            const target=context.localTypeAuthority.entriesByIdentity[`${current.entry.module}\u0000${qname}`];
+            const target=crossRootLocalType(context.localTypeAuthority,current.entry.module,qname);
             const packageName=qname.slice(0,qname.lastIndexOf("."));
             const importedPackage=Object.values(context.importsByLocal).some(item => item.authorityKind === "local"
                 && item.sourceQualifiedName.slice(0,item.sourceQualifiedName.lastIndexOf(".")) === packageName);
@@ -4468,8 +4484,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
                 const method = methods[0]!;
                 assertInheritedVisibility(method, inherited.ownerQName!, context, node);
-                assertLocalMethodCall(method, args, node.children[1]!.children, context, node);
-                resultType = authoritySemanticType(method.returnType!, context, node);
+                assertLocalMethodCall(method, args, node.children[1]!.children, context, node,
+                    inherited.ownerQName!, context.classQualifiedName);
+                resultType = authoritySemanticType(method.returnType!, context, node, {
+                    ownerQName: inherited.ownerQName!, member: method, receiverQName: context.classQualifiedName,
+                });
             } else {
                 const mapping = memberMapping(context, callee.capabilitySource, "call", callee.name, node);
                 if (mapping === null) fail("HARDENED_CAPABILITY_CALL_ARITY",
@@ -5638,7 +5657,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         if (existing) return existing;
         const targetQName = sourceName.indexOf(".") >= 0 ? sourceName
             : packageName === "" ? sourceName : `${packageName}.${sourceName}`;
-        const target = localAuthority.entriesByIdentity[`${current.entry.module}\u0000${targetQName}`];
+        const target = crossRootLocalType(localAuthority,current.entry.module,targetQName);
         if (!target || !target.importable
             || (expectedKind !== null && target.typeKind !== expectedKind)) return null;
         if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {
@@ -5965,7 +5984,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         }
         if (sourceName.includes(".") && localAuthority && resolveCurrentLocal) {
             const current=resolveCurrentLocal();
-            const target=localAuthority.entriesByIdentity[`${current.entry.module}\u0000${sourceName}`];
+            const target=crossRootLocalType(localAuthority,current.entry.module,sourceName);
             if (target?.importable && target.typeKind === "class" && expectedKind !== "interface") {
                 if (target.nodeId !== current.entry.nodeId && !current.entry.prerequisites.includes(target.nodeId))
                     fail("HARDENED_LOCAL_IMPORT_EDGE","qualified class lacks an authenticated dependency edge: "+sourceName,node);
@@ -5996,7 +6015,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry);
         if (candidates.length === 0) return null;
         const current = resolveCurrentLocal();
-        const target = localAuthority.entriesByIdentity[`${current.entry.module}\u0000${qname}`];
+        const target = crossRootLocalType(localAuthority,current.entry.module,qname);
         if (!target || !target.importable
             || (expectedKind !== null && target.typeKind !== expectedKind)) return null;
         if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {

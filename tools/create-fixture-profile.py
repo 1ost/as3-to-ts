@@ -458,7 +458,10 @@ def main():
     timer.update(schema='as3-native-timer-authority@1', module='@laya/as3-runtime/AS3Timer', sourceSha256=sha(ROOT / 'src/hardened-runtime/AS3Timer.ts'))
     files['nativeTimerAuthority'] = write(out / 'timer.json', timer)
     members = json.loads(files['localMemberMap'].read_text())
-    write(out / 'profile-lock.json', {'schema': 'as3-application-profile-lock@1', 'applicationId': 'laya-native-oracle',
+    write(out / 'profile-lock.json', {'schema': 'as3-application-profile-lock@2', 'applicationId': 'laya-native-oracle',
+        'applicationStart': {'schema': 'as3-application-start-contract@1', 'qname': args.entry,
+            'exportName': 'startAS3Application', 'constructorArguments': [],
+            'cancellation': 'abort-signal-before-construction@1', 'result': 'constructed-instance'},
         'runtimePackage': '@laya/as3-runtime', 'typeScriptVersion': '4.9.5', 'sourceRoots': source_roots, 'targetRoots': target_roots,
         'sourceCensusSha256': sha(census), 'targetCapabilitiesSha256': sha(target), 'runtimePredicateQNames': sorted(selected),
         'counts': {'localTypes': len(declarations), 'localMembersComplete': members['completeCount'], 'localMembersHeld': members['heldCount'],
