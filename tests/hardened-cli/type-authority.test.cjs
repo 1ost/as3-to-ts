@@ -29,8 +29,12 @@ function loadLocalModule(file) {
     } catch(error) {localModules.delete(file);throw error;}
 }
 const staticConstants=loadLocalModule(path.join(ROOT,"src/hardened/static-constants.ts"));
+const localInterfaceLiteralReadAuthority=loadLocalModule(
+    path.join(ROOT,"src/hardened/local-interface-literal-read-authority.ts"));
 const emitterModule=loadTranspiled(path.join(ROOT,"src/hardened/emitter.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}
-    :specifier==="./adapter"?adapterModule:specifier==="./static-constants"?staticConstants:specifier==="../hardened-runtime/internal/AS3FileLocalIdentity"?loadLocalModule(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts")):require(specifier));
+    :specifier==="./adapter"?adapterModule:specifier==="./static-constants"?staticConstants
+        :specifier==="./local-interface-literal-read-authority"?localInterfaceLiteralReadAuthority
+            :specifier==="../hardened-runtime/internal/AS3FileLocalIdentity"?loadLocalModule(path.join(ROOT,"src/hardened-runtime/internal/AS3FileLocalIdentity.ts")):require(specifier));
 const sourceMembers=loadTranspiled(path.join(ROOT,"src/hardened/source-member-authority.ts"),specifier=>specifier==="./contracts"?{HardenedSemanticError}:require(specifier));
 const source = fs.readFileSync(path.join(ROOT, "src/hardened/type-authority.ts"), "utf8");
 const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020,
@@ -62,6 +66,13 @@ const prove=(...programs)=>{assertLocalRuntimeDefinitionClosure(programs,ts);ret
 const semanticIdentity={sourceNodeId:"test",sourceSpan:null};
 const methodReturningNew=(name,runtimeName)=>({...semanticIdentity,kind:"method",name,modifiers:["public"],namespaceName:null,parameters:[],
     returnType:typeRef(runtimeName),body:[{...semanticIdentity,kind:"return",expression:{...semanticIdentity,kind:"new",sourceType:typeRef(runtimeName),arguments:[]}}]});
+
+test("type-authority harness resolves the emitter local-interface literal-read dependency",()=>{
+    assert.equal(typeof emitterModule.emitSemanticProgram,"function");
+    assert.equal(localInterfaceLiteralReadAuthority.LOCAL_INTERFACE_LITERAL_READ_AUTHORITY.schema,
+        "as3-local-interface-literal-public-trait-read-authority@1");
+    assert.equal(typeof localInterfaceLiteralReadAuthority.assertLocalInterfaceLiteralReadProof,"function");
+});
 
 test("mapped Laya predicate authority is pinned as one exact 62-type capability input",()=>{
     const lock=JSON.parse(fs.readFileSync(path.join(ROOT,"config/runtime-type-authority-lock.json"),"utf8"));
