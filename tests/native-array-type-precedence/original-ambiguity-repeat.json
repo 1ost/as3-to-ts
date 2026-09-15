@@ -1,0 +1,41 @@
+{
+  "command": [
+    "java",
+    "-Xmx384m",
+    "-jar",
+    "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+    "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+    "-target-player=26.0",
+    "-swf-version=37",
+    "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\compiler\\tests\\native-array-type-precedence\\rejected-own\\rejected-original",
+    "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\original-ambiguity-repeat-configured\\oracle.swf",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\compiler\\tests\\native-array-type-precedence\\rejected-own\\rejected-original\\ConstructorOracle.as"
+  ],
+  "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\original-ambiguity-repeat-configured",
+  "PLAYERGLOBAL_HOME": "C:/Users/admin/AppData/Local/BleachPortTools/apache-flex-sdk-4.16.1/frameworks/libs/player",
+  "exitCode": 2,
+  "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+  "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\compiler\\tests\\native-array-type-precedence\\rejected-own\\rejected-original\\probe\\Array.as(4): col: 27 Error: Ambiguous reference to Array.\n\n  public static var cache:Array;\n                          ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\compiler\\tests\\native-array-type-precedence\\rejected-own\\rejected-original\\probe\\Array.as(3): col: 20 Error: Ambiguous reference to Array.\n\n  public var items:Array;\n                   ^\n\n",
+  "inputs": [
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\compiler\\tests\\native-array-type-precedence\\rejected-own\\rejected-original\\ConstructorOracle.as",
+      "sha256": "bb449cf9a263de1b39cf2327951ae39a4ee80f6c9472e8ff6d353906b0349d61"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\compiler\\tests\\native-array-type-precedence\\rejected-own\\rejected-original\\probe\\Array.as",
+      "sha256": "99e757c16c84595f58afd3abf8fbb25c6ba41fb232aebfba311f09a69cfb29ef"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-type-precedence-provider\\compiler\\tests\\native-array-type-precedence\\rejected-own\\rejected-original\\probe\\Holder.as",
+      "sha256": "65190274a3c31e8f578bf6be496377b9e04459cdb56bfb17d3155899ed7a72ee"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-field-type-final-review\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-field-type-final-review\\original-name-capture\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-field-type-final-review\\original\\ConstructorOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-field-type-final-review\\original-name-capture",
+    "exitCode": 2,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-field-type-final-review\\original\\probe\\Array.as(4): col: 27 Error: Ambiguous reference to Array.\n\n  public static var cache:Array;\n                          ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\array-field-type-final-review\\original\\probe\\Array.as(3): col: 20 Error: Ambiguous reference to Array.\n\n  public var items:Array;\n                   ^\n\n"
+  }
+]

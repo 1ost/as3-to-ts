@@ -1,0 +1,46 @@
+{
+  "instances": [
+    "<type name=\"probe::Array\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <variable name=\"items\" type=\"probe::Array\"/>\n</type>",
+    "<type name=\"probe::Holder\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <variable name=\"items\" type=\"Array\"/>\n</type>"
+  ],
+  "reflection": [
+    "<type name=\"probe::Array\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"cache\" type=\"probe::Array\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::Array\">\n    <extendsClass type=\"Object\"/>\n    <variable name=\"items\" type=\"probe::Array\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::Holder\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::Holder\">\n    <extendsClass type=\"Object\"/>\n    <variable name=\"items\" type=\"Array\"/>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "value": true,
+      "id": "own-default"
+    },
+    {
+      "value": true,
+      "id": "own-self-identity"
+    },
+    {
+      "value": true,
+      "id": "own-static-identity"
+    },
+    {
+      "id": "own-builtin-array-reject",
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      }
+    },
+    {
+      "value": true,
+      "id": "imported-default"
+    },
+    {
+      "id": "imported-source-array-identity",
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      }
+    },
+    {
+      "value": false,
+      "id": "imported-builtin-array-reject"
+    }
+  ]
+}
