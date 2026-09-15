@@ -20,7 +20,7 @@ export class NativeCallableClasses {
     private sourceTexts = new Map<string, string>();
     private ts: any;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string) {
         if (!options) return;
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
             || /[\r\n\u0000]/.test(methodBindingModule))
@@ -110,13 +110,22 @@ export class NativeCallableClasses {
                     if (parameter.findChild(K.REST)) this.fail('rest constructor argument authority');
                     const value = parameter.findChild(K.NAME_TYPE_INIT), type = value.findChild(K.TYPE);
                     const sourceType = type && type.text || '*';
-                    if (['Number', 'int', 'uint', 'Boolean', 'Object', '*'].indexOf(sourceType) < 0)
+                    if (['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
                         this.fail('constructor parameter coercion needs common provider authority: ' + sourceType);
+                    if (sourceType === 'String' && (typeof stringModule !== 'string' || !stringModule.trim()
+                        || /[\r\n\u0000]/.test(stringModule)))
+                        this.fail('String constructor parameters require the common AS3String provider module');
                     if (['Number', 'int', 'uint'].indexOf(sourceType) >= 0
                         && (typeof coercionModule !== 'string' || !coercionModule.trim()
                             || /[\r\n\u0000]/.test(coercionModule)))
                         this.fail('numeric constructor parameters require the common AS3Coercion module');
                     const init = value.findChild(K.INIT);
+                    if (init && sourceType === 'String') {
+                        const expression = init.children[0];
+                        if (!(expression.kind === K.IDENTIFIER && expression.text === 'null')
+                            && !(expression.kind === K.LITERAL && /^(?:"[\s\S]*"|'[\s\S]*')$/.test(expression.text)))
+                            this.fail('String constructor default requires source String or null literal authority');
+                    }
                     let defaultLiteral: string;
                     if (init && ['Number', 'int', 'uint'].indexOf(sourceType) >= 0) {
                         const expression = init.children[0];
@@ -195,6 +204,7 @@ export class NativeCallableClasses {
         const intrinsic = unique('intrinsics'), identity = unique('identity'), fresh = unique('fresh'), succeeded = unique('succeeded');
         const functionType = unique('functionType'), superArguments = unique('superArguments');
         const numberCoercion = unique('number'), intCoercion = unique('int'), uintCoercion = unique('uint');
+        const stringCoercion = unique('string');
         const sourceArguments = unique('arguments');
         const constructorCompletion = unique('constructorCompletion');
         const superMethods: string[] = [];
@@ -402,6 +412,7 @@ export class NativeCallableClasses {
             const value = parameter.name;
             const conversion = parameter.type === 'Number' ? numberCoercion + '(' + value + ')'
                 : parameter.type === 'int' ? intCoercion + '(' + value + ')' : parameter.type === 'uint' ? uintCoercion + '(' + value + ')'
+                : parameter.type === 'String' ? stringCoercion + '(' + value + ')'
                 : parameter.type === 'Boolean' ? '!!' + value : parameter.type === 'Object' ? '(' + value + ' === void 0 ? null : ' + value + ')' : value;
             const defaultValue = parameter.defaultLiteral !== undefined
                 ? (parameter.type === 'Number' ? numberCoercion : parameter.type === 'int' ? intCoercion : uintCoercion)
@@ -465,6 +476,8 @@ export class NativeCallableClasses {
             + (this.own.parameters.some(parameter => ['Number', 'int', 'uint'].indexOf(parameter.type) >= 0)
                 ? 'import {as3CoerceNumber as ' + numberCoercion + ', as3CoerceInt as ' + intCoercion
                     + ', as3CoerceUint as ' + uintCoercion + '} from ' + JSON.stringify(this.coercionModule) + ';\n' : '')
+            + (this.own.parameters.some(parameter => parameter.type === 'String')
+                ? 'import {as3CoerceString as ' + stringCoercion + '} from ' + JSON.stringify(this.stringModule) + ';\n' : '')
             + source;
     }
 }

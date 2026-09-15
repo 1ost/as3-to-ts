@@ -19,3 +19,6 @@ tests/native-array-literals/**/*.as whitespace=cr-at-eol,-blank-at-eol
 
 # Authenticate source Array allocation capture bytes.
 tests/native-array-allocation/** -text whitespace=cr-at-eol
+tests/native-string-constructors/** -text whitespace=cr-at-eol
+# Preserve authored whitespace in the unchanged maintained timing source.
+tests/native-string-constructors/evidence/sources/original/com/greensock/core/PropTween.as whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof

@@ -1,0 +1,1 @@
+package probe {public class SelfNode {public var next:SelfNode;public function SelfNode(v:SelfNode=null){Journal.add('self-body:'+(v===null?'null':v is SelfChild?'child':'node'));Journal.add('self-arguments:'+arguments.length+':'+(arguments[0]===undefined?'undefined':arguments[0]===null?'null':'other'));next=v;}}}

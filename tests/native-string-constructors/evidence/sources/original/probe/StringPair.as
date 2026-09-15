@@ -1,0 +1,1 @@
+package probe {public class StringPair {public var first:String;public var second:String;public function StringPair(a:String,b:String='default'){Journal.add('body:'+Journal.describe(a)+':'+Journal.describe(b));Journal.add('arguments:'+arguments.length+':'+typeof arguments[0]+':'+typeof arguments[1]);first=a;second=b;}}}

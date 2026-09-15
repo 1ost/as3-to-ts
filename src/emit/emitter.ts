@@ -105,6 +105,8 @@ export interface EmitterOptions {
 	nativeCallableMethodBindingModule?: string;
 	/** Common Laya AS3Coercion module; required for callable numeric constructor parameters. */
 	nativeCallableCoercionModule?: string;
+	/** Common Laya AS3String module; required for callable String constructor parameters. */
+	nativeCallableStringModule?: string;
 	nativeCallableMetadata?: NativeClassMetadataOptions;
 	/** Explicit common AS3ArrayCreation module for source Array literals only. */
 	nativeArrayCreationModule?: string;
@@ -300,7 +302,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 

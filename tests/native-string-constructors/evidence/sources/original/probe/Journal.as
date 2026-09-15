@@ -1,0 +1,1 @@
+package probe {public class Journal {public static var events:Array=[];public static function add(s:String):void{events.push(s);} public static function describe(v:*):String{return v===null?'null':typeof v+':'+String(v);}}}

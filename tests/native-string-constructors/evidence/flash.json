@@ -1,0 +1,347 @@
+{
+  "rows": [
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "events": [],
+      "id": "string-required-missing"
+    },
+    {
+      "value": [
+        "x",
+        "default"
+      ],
+      "events": [
+        "arg:a",
+        "body:string:x:string:default",
+        "arguments:1:string:undefined"
+      ],
+      "id": "string-default"
+    },
+    {
+      "value": [
+        null,
+        null
+      ],
+      "events": [
+        "arg:a",
+        "arg:b",
+        "body:null:null",
+        "arguments:2:object:object"
+      ],
+      "id": "string-null"
+    },
+    {
+      "value": [
+        null,
+        null
+      ],
+      "events": [
+        "arg:a",
+        "arg:b",
+        "body:null:null",
+        "arguments:2:object:object"
+      ],
+      "id": "string-undefined"
+    },
+    {
+      "value": [
+        "123",
+        "true"
+      ],
+      "events": [
+        "arg:a",
+        "arg:b",
+        "body:string:123:string:true",
+        "arguments:2:string:string"
+      ],
+      "id": "string-scalars"
+    },
+    {
+      "value": [
+        "a",
+        "b"
+      ],
+      "events": [
+        "arg:a",
+        "arg:b",
+        "a:toString",
+        "b:toString",
+        "body:string:a:string:b",
+        "arguments:2:string:string"
+      ],
+      "id": "string-hooks-order"
+    },
+    {
+      "value": [
+        "17",
+        "default"
+      ],
+      "events": [
+        "a:toString",
+        "a:valueOf",
+        "body:string:17:string:default",
+        "arguments:1:string:undefined"
+      ],
+      "id": "string-hook-null"
+    },
+    {
+      "value": [
+        "undefined",
+        "default"
+      ],
+      "events": [
+        "a:toString",
+        "body:string:undefined:string:default",
+        "arguments:1:string:undefined"
+      ],
+      "id": "string-hook-undefined"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1050
+      },
+      "events": [
+        "arg:a",
+        "arg:b",
+        "a:toString",
+        "a:valueOf"
+      ],
+      "id": "string-hook-object"
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 7001
+      },
+      "events": [
+        "arg:a",
+        "arg:b",
+        "a:toString"
+      ],
+      "id": "string-hook-throw"
+    },
+    {
+      "value": "body-return",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "arg:extra",
+        "a:toString",
+        "b:toString",
+        "body:string:a:string:b",
+        "arguments:3:string:string"
+      ],
+      "id": "string-too-many"
+    },
+    {
+      "value": null,
+      "events": [
+        "body:null"
+      ],
+      "id": "optional-missing"
+    },
+    {
+      "value": null,
+      "events": [
+        "body:null"
+      ],
+      "id": "optional-undefined"
+    },
+    {
+      "value": null,
+      "events": [
+        "body:null"
+      ],
+      "id": "optional-null"
+    },
+    {
+      "value": true,
+      "events": [
+        "self-body:null",
+        "self-arguments:0:undefined"
+      ],
+      "id": "self-missing"
+    },
+    {
+      "value": true,
+      "events": [
+        "arg:v",
+        "self-body:null",
+        "self-arguments:1:null"
+      ],
+      "id": "self-undefined"
+    },
+    {
+      "value": true,
+      "events": [
+        "arg:v",
+        "self-body:null",
+        "self-arguments:1:null"
+      ],
+      "id": "self-null"
+    },
+    {
+      "value": true,
+      "events": [
+        "arg:v",
+        "self-body:node",
+        "self-arguments:1:other"
+      ],
+      "id": "self-exact"
+    },
+    {
+      "value": true,
+      "events": [
+        "arg:v",
+        "self-body:child",
+        "self-arguments:1:other"
+      ],
+      "id": "self-child"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "events": [
+        "arg:v"
+      ],
+      "id": "self-object"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "events": [
+        "arg:v"
+      ],
+      "id": "self-number"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "events": [
+        "arg:v"
+      ],
+      "id": "self-class"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "events": [
+        "arg:v",
+        "arg:extra"
+      ],
+      "id": "self-too-many"
+    },
+    {
+      "value": true,
+      "events": [
+        "self-body:node",
+        "self-arguments:1:other",
+        "child-body"
+      ],
+      "id": "child-self"
+    },
+    {
+      "value": [
+        "x",
+        "n",
+        0,
+        true
+      ],
+      "events": [],
+      "id": "actual-six"
+    },
+    {
+      "value": [
+        "p",
+        "n",
+        3,
+        true,
+        true
+      ],
+      "events": [
+        "arg:property",
+        "arg:name",
+        "arg:next",
+        "arg:priority",
+        "p:toString",
+        "n:toString"
+      ],
+      "id": "actual-eight-links"
+    },
+    {
+      "value": [
+        null,
+        null,
+        true
+      ],
+      "events": [],
+      "id": "actual-undefined"
+    },
+    {
+      "value": [
+        null,
+        null,
+        true
+      ],
+      "events": [],
+      "id": "actual-null"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "events": [
+        "arg:property",
+        "arg:name",
+        "arg:next",
+        "p:toString",
+        "n:toString"
+      ],
+      "id": "actual-wrong-self"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "events": [],
+      "id": "actual-self-Class"
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "events": [
+        "arg:property",
+        "arg:name"
+      ],
+      "id": "actual-too-few"
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "events": [
+        "arg:property",
+        "arg:name",
+        "arg:extra"
+      ],
+      "id": "actual-too-many"
+    }
+  ]
+}
