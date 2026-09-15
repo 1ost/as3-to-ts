@@ -144,6 +144,9 @@ export function as3NumberToFixed(value:unknown, precision:unknown=0):string {
 }
 
 /** Both operand expressions evaluate before the native addition conversion. */
+export function as3Add(left:string, right:unknown):string;
+export function as3Add(left:unknown, right:string):string;
+export function as3Add(left:unknown, right:unknown):string|number;
 export function as3Add(left:unknown, right:unknown):string|number {
     return as3NativeAdd(left,right);
 }

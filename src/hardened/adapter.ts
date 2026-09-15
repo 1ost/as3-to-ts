@@ -3061,8 +3061,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (operator === "+" && context.sourceMemberAuthority !== null
             && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))
             && [leftType,rightType].some(type => ["*","Object","Array","Function"].includes(type.sourceName))) {
+            const stringResult = [leftType,rightType].some(type => type.sourceName === "String"
+                && type.emittedName === "string" && !type.nullable);
             return Object.assign(identity(node), {kind:"binary" as const,operator:"+" as const,
-                left,right,additionCoercion:true as const,resultType:semanticType(node,"*","unknown")});
+                left,right,additionCoercion:true as const,resultType:stringResult
+                    ? semanticType(node,"String","string",[],false) : semanticType(node,"*","unknown")});
         }
         if (["-","*","/","%"].includes(operator) && context.sourceMemberAuthority !== null
             && [leftType,rightType].some(type => type.sourceName === "*")
