@@ -100,6 +100,7 @@ interface AdapterContext {
         node: TreeNode, signature?: SignatureTypeProof) => SemanticImport | null;
     mappingsBySource: { [name: string]: CapabilityMapping };
     memberMappingsByKey: { [name: string]: CapabilityMapping };
+    intrinsicTypesBySource: LoadedCapabilityAuthority["intrinsicTypesBySource"];
     intrinsicMembersByKey: LoadedCapabilityAuthority["intrinsicMembersByKey"];
     nativeTimerFunctionsBySource: { [name: string]: NativeTimerFunctionMapping };
     baseSourceQName: string | null;
@@ -670,20 +671,18 @@ function oneType(node: TreeNode): TreeNode {
     return matches[0]!;
 }
 
-/** Import a type proved by a used declaration without granting a source-level name. */
-function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefined,
+/** Prove that a declaration-owned signature type is reachable from this source. */
+function authenticatedSignatureOwner(typeName:string, proof:SignatureTypeProof,
     current:CurrentLocalType, types:LoadedLocalTypeAuthority, members:LoadedLocalMemberAuthority | null,
-    imports:SemanticImport[], importsByLocal:{[name:string]:SemanticImport}, node:TreeNode):SemanticImport | null {
-    if (!proof) return null;
-    const privateTarget = members ? localFileSignature(members,current.entry.module,typeName) : undefined;
-    const target=privateTarget?.type ?? crossRootLocalType(types,current.entry.module,typeName);
-    if (!target || (!target.importable && !privateTarget) || !["class","interface"].includes(target.typeKind)) return null;
+    imports:SemanticImport[], node:TreeNode):LocalTypeMapping {
     const privateOwner = members ? localFileSignature(members,current.entry.module,proof.ownerQName) : undefined;
     const owner=privateOwner?.type ?? crossRootLocalType(types,current.entry.module,proof.ownerQName);
-    const declaration=privateOwner?.member ?? (owner ? members?.entriesByIdentity[`${owner.module}\u0000${proof.ownerQName}`] : undefined);
+    const declaration=privateOwner?.member
+        ?? (owner ? members?.entriesByIdentity[`${owner.module}\u0000${proof.ownerQName}`] : undefined);
     const element=(name:string):string=>name.startsWith("Vector.<") && name.endsWith(">")
         ? element(name.slice(8,-1)) : name;
-    const signatureNames=[proof.member.returnType,proof.member.fieldType,...proof.member.parameters.map(parameter=>parameter.type)];
+    const signatureNames=[proof.member.returnType,proof.member.fieldType,
+        ...proof.member.parameters.map(parameter=>parameter.type)];
     // The used receiver may inherit the declaration without importing its owner.
     // Follow only that receiver's authenticated base edges, never arbitrary
     // dependency reachability or an unrelated imported class's ancestry.
@@ -709,12 +708,30 @@ function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefin
         };
         return reaches(start);
     };
-    if (!owner || !declaration || declaration.status !== "complete" || !declaration.declaration?.members.includes(proof.member)
+    if (!owner || !declaration || declaration.status !== "complete"
+        || !declaration.declaration?.members.includes(proof.member)
         || !signatureNames.some(name=>name !== null && element(name) === typeName)
         || (owner.nodeId !== current.entry.nodeId && !current.entry.prerequisites.includes(owner.nodeId)
-            && !imports.some(item=>item.authorityKind === "local" && item.localNodeId === owner.nodeId) && !inheritedOwner())
-        || (privateTarget ? privateTarget.owner.nodeId !== (privateOwner?.owner.nodeId ?? owner.nodeId)
-            : (owner.nodeId !== target.nodeId && !owner.prerequisites.includes(target.nodeId))))
+            && !imports.some(item=>item.authorityKind === "local" && item.localNodeId === owner.nodeId)
+            && !inheritedOwner())) {
+        fail("HARDENED_SIGNATURE_TYPE_EDGE",
+            "signature type lacks its authenticated owner, member or dependency edge: "+typeName,node);
+    }
+    return owner;
+}
+
+/** Import a type proved by a used declaration without granting a source-level name. */
+function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefined,
+    current:CurrentLocalType, types:LoadedLocalTypeAuthority, members:LoadedLocalMemberAuthority | null,
+    imports:SemanticImport[], importsByLocal:{[name:string]:SemanticImport}, node:TreeNode):SemanticImport | null {
+    if (!proof) return null;
+    const privateTarget = members ? localFileSignature(members,current.entry.module,typeName) : undefined;
+    const target=privateTarget?.type ?? crossRootLocalType(types,current.entry.module,typeName);
+    if (!target || (!target.importable && !privateTarget) || !["class","interface"].includes(target.typeKind)) return null;
+    const privateOwner = members ? localFileSignature(members,current.entry.module,proof.ownerQName) : undefined;
+    const owner=authenticatedSignatureOwner(typeName,proof,current,types,members,imports,node);
+    if (privateTarget ? privateTarget.owner.nodeId !== (privateOwner?.owner.nodeId ?? owner.nodeId)
+        : (owner.nodeId !== target.nodeId && !owner.prerequisites.includes(target.nodeId)))
         fail("HARDENED_SIGNATURE_TYPE_EDGE","signature type lacks its authenticated owner, member or dependency edge: "+typeName,node);
     const name=typeName.slice(typeName.lastIndexOf(".")+1);
     if (!privateTarget && current.entry.prerequisites.includes(target.nodeId)
@@ -1353,6 +1370,20 @@ function authoritySemanticType(typeName: string, context: AdapterContext, node: 
     if (importedName) {
         return semanticType(node, importedName, importedName, [], undefined,
             context.importsByLocal[importedName]!.sourceQualifiedName);
+    }
+    if (typeName === "flash.utils.Dictionary" && signature
+        && context.localTypeAuthority && context.localMemberAuthority && context.resolveCurrentLocal
+        && context.intrinsicTypesBySource[typeName]) {
+        const intrinsic=context.intrinsicTypesBySource[typeName]!;
+        if (!intrinsic.sourceRoles.includes("import") || !intrinsic.sourceRoles.includes("instance-member")
+            || intrinsic.targetKind !== "class" || intrinsic.targetExport !== "AS3Dictionary"
+            || intrinsic.targetSignature !== "new (weakKeys?: boolean): AS3Dictionary") {
+            fail("HARDENED_SIGNATURE_INTRINSIC",
+                "authority-derived Dictionary signature lacks its exact intrinsic capability",node);
+        }
+        authenticatedSignatureOwner(typeName,signature,context.resolveCurrentLocal(),
+            context.localTypeAuthority,context.localMemberAuthority,Object.values(context.importsByLocal),node);
+        return semanticType(node,"Dictionary","Dictionary",[],undefined,typeName);
     }
     const implicit = context.resolveImportedType(typeName, null, node, signature);
     if (implicit) return semanticType(node, implicit.sourceLocalName, implicit.sourceLocalName, [], undefined, implicit.sourceQualifiedName);
@@ -4335,7 +4366,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (callee.bindingKind === "current-class" || imported?.runtimeInterface || imported?.runtimeConstructible) {
                 const targetType = parseType({...rawCallee, kind:"TYPE"}, context, false);
                 const reference = referenceCoercionForType(targetType, context);
-                if (reference && reference.runtimeName === callee.bindingSourceQualifiedName) {
+                if (reference && reference.runtimeName === callee.bindingSourceQualifiedName
+                    && targetType.runtimeName === callee.bindingSourceQualifiedName) {
                     if (args.length !== 1) fail("HARDENED_REFERENCE_CAST_ARITY", "reference cast requires exactly one value", node);
                     return Object.assign(identity(node), {kind:"coercion" as const, reference,
                         targetType:withNullability(targetType,true), argument:args[0]!});
@@ -5937,6 +5969,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         className: name, classQualifiedName: qname, extendsType: null,
         importsByLocal: parsedImports.importsByLocal, resolveImportedType: resolveImplicitLocalType,
         mappingsBySource: authority.typeMappingsBySource, memberMappingsByKey: authority.memberMappingsByKey,
+        intrinsicTypesBySource: authority.intrinsicTypesBySource,
         intrinsicMembersByKey: authority.intrinsicMembersByKey,
         nativeTimerFunctionsBySource: authority.nativeTimerFunctionsBySource,
         baseSourceQName: null, baseLocalQName: null,
@@ -6301,6 +6334,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         resolveImportedType: resolveImplicitLocalType,
         mappingsBySource: authority.typeMappingsBySource,
         memberMappingsByKey: authority.memberMappingsByKey,
+        intrinsicTypesBySource: authority.intrinsicTypesBySource,
         intrinsicMembersByKey: authority.intrinsicMembersByKey,
         nativeTimerFunctionsBySource: authority.nativeTimerFunctionsBySource,
         baseSourceQName: null,
