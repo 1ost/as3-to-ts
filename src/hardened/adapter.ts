@@ -2714,16 +2714,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
     if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS") {
         const member = builtinMathMember(node.children[0]!, context);
         if (member !== null) {
-            if (member !== "min" && member !== "max" && member !== "round" && member !== "abs") fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
-            if ((member === "round" || member === "abs") && node.children[1]!.children.length !== 1)
+            if (member !== "min" && member !== "max" && member !== "round" && member !== "abs" && member !== "ceil") fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
+            if ((member === "round" || member === "abs" || member === "ceil") && node.children[1]!.children.length !== 1)
                 fail("HARDENED_MATH_ARITY", `Math.${member} requires exactly one proven numeric argument`, node);
             const args = node.children[1]!.children.map(child => parseExpression(child, context, true));
             args.forEach((argument, index) => {
-                if (!["Number", "int", "uint"].includes(assignmentType(argument, context, node.children[1]!.children[index]!).sourceName))
+                const type=assignmentType(argument, context, node.children[1]!.children[index]!);
+                if (!["Number", "int", "uint"].includes(type.sourceName) || member === "ceil" && type.nullable)
                     fail("HARDENED_MATH_ARGUMENT", "Math arguments require proven numeric values", node.children[1]!.children[index]!);
             });
-            return Object.assign(identity(node), {kind: "math" as "math", member: member as "min" | "max" | "round" | "abs", arguments: args});
+            return Object.assign(identity(node), {kind: "math" as "math", member: member as "min" | "max" | "round" | "abs" | "ceil", arguments: args});
         }
+        const rawMath=node.children[0]!;
+        if(rawMath.kind==="DOT" && rawMath.children.length===2 && rawMath.children[0]!.kind==="IDENTIFIER"
+            && rawMath.children[0]!.text==="Math")
+            fail("HARDENED_MATH_SHADOW","A source binding shadows the authenticated intrinsic Math object",rawMath);
     }
     if (node.kind === "LITERAL") {
         return parseLiteral(node);

@@ -193,7 +193,7 @@ export interface EncodeUriComponentExpression extends SemanticIdentity {
 
 export interface MathExpression extends SemanticIdentity {
     kind: "math";
-    member: "PI" | "min" | "max" | "round" | "abs";
+    member: "PI" | "min" | "max" | "round" | "abs" | "ceil";
     arguments: SemanticExpression[] | null;
 }
 
