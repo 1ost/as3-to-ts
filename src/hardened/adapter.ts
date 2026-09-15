@@ -5289,7 +5289,7 @@ function predeclareLocals(block: TreeNode, context: AdapterContext): void {
             };
             return;
         }
-        if (node.kind === "BLOCK") {
+        if (node.kind === "BLOCK" || node.kind === "SWITCH_BLOCK") {
             node.children.forEach(visit);
             return;
         }
