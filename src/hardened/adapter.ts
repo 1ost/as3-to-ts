@@ -40,6 +40,7 @@ import {
     SameClassStaticVoidCall,
     SemanticSetter,
     SemanticStatement,
+    SemanticSwitchCase,
     SemanticType,
     ReferenceCoercion,
     HardenedSemanticError,
@@ -5433,12 +5434,25 @@ function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {
     if (statements.length === 0) return false;
     const last = statements[statements.length - 1]!;
     return last.kind === "return" || last.kind === "throw" || (last.kind === "label" && statementsAlwaysReturn([last.statement]))
+        || (last.kind === "switch" && switchAlwaysReturns(last.cases))
         || (last.kind === "if" && (last.condition.kind === "literal" && last.condition.value === true
             ? statementsAlwaysReturn(last.thenStatements)
             : last.condition.kind === "literal" && last.condition.value === false
                 ? last.elseStatements !== null && statementsAlwaysReturn(last.elseStatements)
                 : last.elseStatements !== null && statementsAlwaysReturn(last.thenStatements)
                     && statementsAlwaysReturn(last.elseStatements)));
+}
+
+function switchAlwaysReturns(cases: SemanticSwitchCase[]): boolean {
+    if (!cases.some(clause => clause.test === null)) return false;
+    let successorAlwaysReturns = false;
+    for (let index = cases.length - 1; index >= 0; index -= 1) {
+        const statements = cases[index]!.statements;
+        successorAlwaysReturns = statements.length === 0
+            ? successorAlwaysReturns : statementsAlwaysReturn(statements);
+        if (!successorAlwaysReturns) return false;
+    }
+    return true;
 }
 
 /**
