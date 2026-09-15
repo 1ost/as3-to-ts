@@ -201,6 +201,37 @@ test('numeric Array access rejects unproved host properties without invoking get
  assert.equal(calls,0);
 });
 
+test('typed Array numeric updates retain AIR Number coercion and prefix/postfix results',()=>{
+ const {as3ArrayUpdate,AS3ArrayOperationUnavailable}=require(path.join(OUTPUT,'hardened-runtime/AS3Array.js'));
+ const fixture=path.join(process.env.HARDENED_FIXTURE_LAYA,'tests/nativeFlashOracle/date-calendar-construction');
+ const native=JSON.parse(fs.readFileSync(path.join(fixture,'native-air.json'),'utf8'));
+ const hash=value=>require('node:crypto').createHash('sha256').update(value).digest('hex');
+ assert.equal(hash(fs.readFileSync(path.join(fixture,'DateCalendarConstructionProbe.as'))),'679e829bfdc783b994c612a396c418e7512a52a8b32d72c680ccaf5de4effa41');
+ assert.equal(hash(fs.readFileSync(path.join(fixture,'scenario.json'))),native.scenarioSha256);
+ assert.equal(native.capture.state.observations[0].id,'main-open-date-shape');
+ assert.equal(native.capture.state.observations[0].result.at(-1),true);
+
+ const launch=['2026','08','07','10','00','00'];
+ assert.equal(as3ArrayUpdate(launch,1,0,true),7);assert.equal(launch[1],7);
+ const prefix=['4',null,undefined,true];
+ assert.equal(as3ArrayUpdate(prefix,0,1,true),5);assert.equal(prefix[0],5);
+ assert.equal(as3ArrayUpdate(prefix,1,1,true),1);assert.equal(prefix[1],1);
+ assert.ok(Number.isNaN(as3ArrayUpdate(prefix,2,1,true)));assert.ok(Number.isNaN(prefix[2]));
+ assert.equal(as3ArrayUpdate(prefix,3,1,true),2);assert.equal(prefix[3],2);
+ const postfix=[4];assert.equal(as3ArrayUpdate(postfix,0,1,false),4);assert.equal(postfix[0],5);
+
+ const unsupported=Symbol('host-only'),failed=[unsupported];
+ assert.throws(()=>as3ArrayUpdate(failed,0,1,true),/Host-only primitive/);assert.equal(failed[0],unsupported);
+ let getterCalls=0;const accessor=[];Object.defineProperty(accessor,'0',{get(){getterCalls++;return 4;}});
+ assert.throws(()=>as3ArrayUpdate(accessor,0,1,true),AS3ArrayOperationUnavailable);assert.equal(getterCalls,0);
+ const fixed=[4];Object.freeze(fixed);assert.throws(()=>as3ArrayUpdate(fixed,0,1,true),AS3ArrayOperationUnavailable);assert.equal(fixed[0],4);
+ assert.throws(()=>as3ArrayUpdate(null,0,1,true),{name:'TypeError',errorID:1009});
+ const untouched=[4];
+ for(const args of [[untouched,'0',1,true],[untouched,0,2,true],[untouched,0,1,0]])
+  assert.throws(()=>as3ArrayUpdate(...args),AS3ArrayOperationUnavailable);
+ assert.deepEqual(untouched,[4]);
+});
+
 
 test('Array subclass constructor lengths retain native errors and foreign prototypes remain unavailable',()=>{
  const {as3ArrayConstructorArguments,as3ArrayRead}=require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));

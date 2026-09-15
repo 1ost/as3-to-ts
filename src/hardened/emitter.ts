@@ -618,6 +618,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 [ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Number"),undefined,[expressionNode(expression.target,ts)])]);
         }
 
+        if (expression.target.kind === "index" && expression.target.accessKind === "array")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayUpdate"),undefined,[
+                expressionNode(expression.target.target,ts),expressionNode(expression.target.index,ts),
+                ts.factory.createNumericLiteral(expression.operator === "++" ? 1 : 0),
+                expression.prefix ? ts.factory.createTrue() : ts.factory.createFalse()]);
         if (expression.target.kind === "index" && expression.target.accessKind === "object")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectUpdate"),undefined,[
                 expressionNode(expression.target.target,ts),expressionNode(expression.target.index,ts),
@@ -1562,6 +1567,8 @@ function arrayRuntimeImport(ts: TypeScriptCompilerApi): any {
                 ts.factory.createIdentifier("__as3ArrayRead")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayWrite"),
                 ts.factory.createIdentifier("__as3ArrayWrite")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayUpdate"),
+                ts.factory.createIdentifier("__as3ArrayUpdate")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayLengthWrite"),
                 ts.factory.createIdentifier("__as3ArrayLengthWrite")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3ArrayCall"),

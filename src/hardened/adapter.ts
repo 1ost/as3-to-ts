@@ -3251,6 +3251,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const dynamicLocalUpdate = context.sourceMemberAuthority !== null && resultType.sourceName === "*"
             && parsedTarget.kind === "identifier" && ["local","parameter"].includes(parsedTarget.bindingKind);
         if (dynamicLocalUpdate) resultType = semanticType(node,"Number","number");
+        if (context.sourceMemberAuthority !== null && parsedTarget.kind === "index" && parsedTarget.accessKind === "array")
+            resultType = semanticType(node,"Number","number");
         if (context.sourceMemberAuthority !== null && parsedTarget.kind === "index" && parsedTarget.accessKind === "object")
             resultType = semanticType(node,"Number","number");
         if (!["Number", "int", "uint"].includes(resultType.sourceName) || resultType.emittedName !== "number") {

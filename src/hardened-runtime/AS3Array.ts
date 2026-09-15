@@ -260,6 +260,16 @@ export function as3ArrayWrite<T>(value: unknown, index: number, item: T): T {
     return item;
 }
 
+/** Numeric typed-Array updates retain the prior value for postfix results. */
+export function as3ArrayUpdate(value:unknown,index:number,increment:0 | 1,prefix:boolean):number {
+    if (typeof index !== "number" || increment !== 0 && increment !== 1 || typeof prefix !== "boolean")
+        throw new AS3ArrayOperationUnavailable("Array updates require an authenticated numeric key and operation");
+    const prior=as3NativeNumber(as3ArrayRead(value,index));
+    const next=increment ? prior+1 : prior-1;
+    as3ArrayWrite(value,index,next);
+    return prefix ? next : prior;
+}
+
 /** Native push/pop/shift/unshift retain values, identities and uint lengths. */
 export function as3ArrayCall(value:unknown, method:"push" | "unshift", args:unknown[]):number;
 export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown[]):unknown;
