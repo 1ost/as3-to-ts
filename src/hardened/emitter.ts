@@ -1065,6 +1065,18 @@ function classInitializationNode(program: SemanticProgram, ts: TypeScriptCompile
     const assignments = fields.filter(field => field.initializer !== null && !field.embeddedBitmap && !staticConstant(field.initializer,fields)).map(field =>
         ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createIdentifier("__as3InitializeStaticField"),
             undefined, [owner, proof, ts.factory.createStringLiteral(field.name), expressionNode(field.initializer!, ts)])));
+    const initializer = program.declaration.classInitializer;
+    if (initializer !== undefined) {
+        if (initializer.kind !== "sameClassStaticVoidCall" || initializer.ownerName !== program.declaration.name
+            || initializer.ownerQualifiedName !== (program.packageName ? `${program.packageName}.${program.declaration.name}` : program.declaration.name)
+            || initializer.argumentCount !== 0
+            || initializer.evidenceRevision !== "e04a2f051c188df8fc9396ff7c0b15f481062f7b") {
+            throw new HardenedSemanticError("HARDENED_EMIT_CLASS_INITIALIZER",
+                "semantic class initializer is not the authenticated narrow operation", initializer.sourceNodeId);
+        }
+        assignments.push(ts.factory.createExpressionStatement(ts.factory.createCallExpression(
+            ts.factory.createPropertyAccessExpression(owner, initializer.methodName), undefined, [])));
+    }
     return ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createIdentifier("__as3DefineClassInitialization"),
         undefined, [owner, proof, ts.factory.createArrayLiteralExpression(slots), ts.factory.createArrowFunction(undefined, undefined, [],
             undefined, ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken), ts.factory.createBlock(assignments, true))]));

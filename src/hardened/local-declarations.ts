@@ -139,6 +139,38 @@ function fields(node: TreeNode): LocalDeclarationMember[] {
     }));
 }
 
+function classInitializer(node: TreeNode, className: string, members: LocalDeclarationMember[],
+    content: TreeNode): LocalDeclarationExtract["classInitializer"] {
+    const position = content.children.indexOf(node);
+    const before = content.children.slice(0, position);
+    const after = content.children.slice(position + 1);
+    const staticField = (child: TreeNode): boolean => (child.kind === "VAR_LIST" || child.kind === "CONST_LIST")
+        && modifiers(child).values.includes("static");
+    if (position < 0 || before.some(child => child.kind !== "IMPORT" && child.kind !== "USE" && !staticField(child))
+        || after.some(child => !["FUNCTION", "GET", "SET"].includes(child.kind))) {
+        fail("HARDENED_CLASS_INITIALIZER_ORDER",
+            "same-class cinit call must follow static fields and precede callable declarations", node);
+    }
+    if (node.kind !== "CALL" || node.children.length !== 2 || node.children[0]!.kind !== "DOT"
+        || node.children[0]!.text !== null || node.children[0]!.children.length !== 2
+        || node.children[0]!.children[0]!.kind !== "IDENTIFIER"
+        || node.children[0]!.children[0]!.text !== className
+        || node.children[0]!.children[1]!.kind !== "LITERAL"
+        || node.children[1]!.kind !== "ARGUMENTS" || node.children[1]!.children.length !== 0) {
+        fail("HARDENED_CLASS_INITIALIZER_SHAPE",
+            "class cinit admits only CurrentClass.literalStaticMethod()", node);
+    }
+    const methodName = identifier(node.children[0]!.children[1]!, "class initializer method");
+    const matches = members.filter(member => member.kind === "method" && member.name === methodName
+        && member.namespaceName === null && member.modifiers.includes("static") && member.returnType === "void"
+        && member.parameters.every(parameter => parameter.optional || parameter.rest));
+    if (matches.length !== 1) {
+        fail("HARDENED_CLASS_INITIALIZER_SIGNATURE",
+            "class cinit target must be one unnamespaced static zero-required-argument void method", node);
+    }
+    return { kind: "same-class-static-void-call", ownerName: className, methodName, argumentCount: 0 };
+}
+
 function fileLocalClasses(root: TreeNode, packageNode: TreeNode, ownerQualifiedName: string,
     sourcePath: string | undefined): FileLocalClassDeclaration[] {
     const nodes: TreeNode[] = [];
@@ -220,6 +252,7 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
     }
     const qualifiedName = packageName === "" ? name : `${packageName}.${name}`;
     const members: LocalDeclarationMember[] = [];
+    let initializerNode: TreeNode | undefined;
     if (declaration.kind === "CONST_LIST") {
         members.push(...fields(declaration));
     } else if (declaration.kind === "FUNCTION") {
@@ -247,11 +280,18 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
                 members.push(callable(member, name));
             } else if (member.kind === "VAR_LIST" || member.kind === "CONST_LIST") {
                 members.push(...fields(member));
+            } else if (member.kind === "CALL") {
+                if (initializerNode !== undefined) {
+                    fail("HARDENED_CLASS_INITIALIZER_SHAPE", "class admits at most one narrow cinit call", member);
+                }
+                initializerNode = member;
             } else if (member.kind !== "IMPORT") {
                 fail("HARDENED_LOCAL_DECLARATION_MEMBER", "class member kind is not structurally admitted", member);
             }
         });
     }
+    const initializer = initializerNode === undefined ? undefined
+        : classInitializer(initializerNode, name, members, one(declaration, "CONTENT")!);
     const imports = content.children.filter(child => child.kind === "IMPORT")
         .concat(declaration.kind === "CLASS" ? one(declaration, "CONTENT")!.children.filter(child => child.kind === "IMPORT") : [])
         .map(child => requiredText(child, "import"));
@@ -288,6 +328,7 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
             .flatMap(list => list.children.map(child => requiredText(child, "implemented type"))),
         members,
         packageInitializer,
+        ...(initializer !== undefined ? {classInitializer: initializer} : {}),
     };
     const locals = fileLocalClasses(root, packageNode, qualifiedName, sourcePath);
     if (locals.length > 0) result.fileLocalClasses = locals;

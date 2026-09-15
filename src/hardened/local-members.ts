@@ -188,6 +188,7 @@ function fileLocalDeclarations(raw: unknown, ownerQualifiedName: string, sourceP
 function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: string, module: "application" | "bootstrap"): LocalMemberDeclaration {
     if (!object(raw) || !exactKeys(raw, ["baseQNames", "interfaceQNames", "members", "packageInitializer"]
         .concat(raw.finalClass === true ? ["finalClass"] : [])
+        .concat(Object.prototype.hasOwnProperty.call(raw, "classInitializer") ? ["classInitializer"] : [])
         .concat(Object.prototype.hasOwnProperty.call(raw, "fileLocalClasses") ? ["fileLocalClasses"] : []))
         || !Array.isArray(raw.baseQNames) || !Array.isArray(raw.interfaceQNames) || !Array.isArray(raw.members)
         || raw.baseQNames.some(item => typeof item !== "string" || !QNAME.test(item))
@@ -200,6 +201,7 @@ function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: strin
         ? fileLocalDeclarations(raw.fileLocalClasses, ownerQualifiedName, sourcePath) : undefined;
     const scoped = new Set((helpers || []).map(header => fileLocalClassIdentity({module, sourcePath, ownerQualifiedName, name: header.name}).key));
     let packageInitializer: LocalMemberDeclaration["packageInitializer"] = null;
+    let classInitializer: LocalMemberDeclaration["classInitializer"];
     if (raw.packageInitializer !== null) {
         if (!object(raw.packageInitializer) || !exactKeys(raw.packageInitializer, ["argumentCount", "kind", "targetQName"])
             || raw.packageInitializer.kind !== "new" || raw.packageInitializer.argumentCount !== 0
@@ -208,12 +210,31 @@ function declaration(raw: unknown, ownerQualifiedName: string, sourcePath: strin
         }
         packageInitializer = { kind: "new", targetQName: raw.packageInitializer.targetQName, argumentCount: 0 };
     }
+    if (Object.prototype.hasOwnProperty.call(raw, "classInitializer")) {
+        const value = raw.classInitializer;
+        if (!object(value) || !exactKeys(value, ["argumentCount", "kind", "methodName", "ownerQName"])
+            || value.kind !== "same-class-static-void-call" || value.ownerQName !== ownerQualifiedName
+            || value.argumentCount !== 0 || typeof value.methodName !== "string" || !IDENTIFIER.test(value.methodName)) {
+            fail("HARDENED_LOCAL_MEMBER_CLASS_INITIALIZER", "local class initializer authority is invalid");
+        }
+        const targets = raw.members.filter((member: unknown) => object(member)
+            && member.kind === "method" && member.name === value.methodName
+            && member.namespaceName === null && Array.isArray(member.modifiers) && member.modifiers.includes("static")
+            && member.returnType === "void" && Array.isArray(member.parameters)
+            && member.parameters.every((parameter: unknown) => object(parameter) && (parameter.optional === true || parameter.rest === true)));
+        if (targets.length !== 1) {
+            fail("HARDENED_LOCAL_MEMBER_CLASS_INITIALIZER", "local class initializer target signature is invalid");
+        }
+        classInitializer = {kind:value.kind, ownerQName:value.ownerQName,
+            methodName:value.methodName, argumentCount:0};
+    }
     return {
         baseQNames: raw.baseQNames.slice() as string[],
         ...(raw.finalClass === true ? {finalClass:true as const} : {}),
         interfaceQNames: raw.interfaceQNames.slice() as string[],
         members: raw.members.map(value => member(value, scoped)),
         packageInitializer,
+        ...(classInitializer !== undefined ? {classInitializer} : {}),
         ...(helpers ? { fileLocalClasses: helpers } : {}),
     };
 }
@@ -298,6 +319,9 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
             } else if (parsedDeclaration.packageInitializer !== null
                 || parsedDeclaration.members.some(item => item.kind === "namespace")) {
                 fail("HARDENED_LOCAL_MEMBER_ENTRY", "class or interface declaration contains a package namespace");
+            }
+            if (raw.typeKind !== "class" && parsedDeclaration.classInitializer !== undefined) {
+                fail("HARDENED_LOCAL_MEMBER_CLASS_INITIALIZER", "only a class may declare a class initializer");
             }
             completeCount += 1;
         } else {

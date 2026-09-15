@@ -376,6 +376,7 @@ function assertDeferredStaticInitialization(program: SemanticProgram, ts49: Runt
             && ts49.isIdentifier(node.expression) && node.expression.text === "__as3DefineClassInitialization");
     const call=calls[0], callback=call?.arguments[3], slots=call?.arguments[2];
     const expected=fields.filter(field=>field.initializer!==null && !field.embeddedBitmap && !staticConstant(field.initializer,fields));
+    const classInitializer=program.declaration.classInitializer;
     const statements=callback && ts49.isArrowFunction(callback) && ts49.isBlock(callback.body) ? callback.body.statements : null;
     const valid = declaration && properties.length===fields.length && properties.every(property=>property.initializer && scalar(property.initializer))
         && calls.length===1 && call && call.arguments.length===4 && ts49.isIdentifier(call.arguments[0]!) && call.arguments[0]!.text===program.declaration.name
@@ -385,14 +386,23 @@ function assertDeferredStaticInitialization(program: SemanticProgram, ts49: Runt
             && slot.properties.every(ts49.isPropertyAssignment)
             && ts49.isStringLiteral(slot.properties[0]!.initializer) && slot.properties[0]!.initializer.text===fields[index]!.name
             && scalar(slot.properties[1]!.initializer))
-        && statements && statements.length===expected.length && statements.every((statement,index)=>{
+        && statements && statements.length===expected.length+(classInitializer===undefined?0:1)
+        && statements.slice(0,expected.length).every((statement,index)=>{
             if (!ts49.isExpressionStatement(statement) || !ts49.isCallExpression(statement.expression)) return false;
             const assignment=statement.expression;
             return ts49.isIdentifier(assignment.expression) && assignment.expression.text==="__as3InitializeStaticField"
                 && assignment.arguments.length===4 && ts49.isIdentifier(assignment.arguments[0]!) && assignment.arguments[0]!.text===program.declaration.name
                 && ts49.isIdentifier(assignment.arguments[1]!) && assignment.arguments[1]!.text==="__as3ConstructionProof"
                 && ts49.isStringLiteral(assignment.arguments[2]!) && assignment.arguments[2]!.text===expected[index]!.name;
-        });
+        }) && (classInitializer===undefined || (()=>{
+            const statement=statements[expected.length];
+            if(!statement || !ts49.isExpressionStatement(statement) || !ts49.isCallExpression(statement.expression)) return false;
+            const invocation=statement.expression;
+            return invocation.arguments.length===0 && ts49.isPropertyAccessExpression(invocation.expression)
+                && ts49.isIdentifier(invocation.expression.expression)
+                && invocation.expression.expression.text===program.declaration.name
+                && invocation.expression.name.text===classInitializer.methodName;
+        })());
     if (!valid) throw new HardenedSemanticError("HARDENED_TYPE_AUTHORITY_STATIC_INIT",
         `local runtime identity ${program.declaration.name} lacks a definition-only static initializer proof`);
 }

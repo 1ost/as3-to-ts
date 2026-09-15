@@ -37,6 +37,7 @@ import {
     SemanticPackageField,
     SemanticPackageFunction,
     SemanticProgram,
+    SameClassStaticVoidCall,
     SemanticSetter,
     SemanticStatement,
     SemanticType,
@@ -5459,6 +5460,67 @@ function sameClassLiteralBooleanStaticConstant(expression: SemanticExpression,
     return matches.length === 1 ? field.initializer.value : null;
 }
 
+const SAME_CLASS_STATIC_CINIT_EVIDENCE_REVISION = "e04a2f051c188df8fc9396ff7c0b15f481062f7b" as const;
+
+function adaptSameClassStaticInitializer(classContent: TreeNode, context: AdapterContext): SameClassStaticVoidCall | undefined {
+    const calls = classContent.children.filter(child => child.kind === "CALL");
+    if (calls.length > 1) fail("HARDENED_CLASS_INITIALIZER_SHAPE", "class admits at most one narrow cinit call", calls[1]!);
+    const node = calls[0];
+    if (node === undefined) {
+        if (context.localMemberAuthority !== null && context.resolveCurrentLocal !== null) {
+            const current = context.resolveCurrentLocal();
+            const entry = contextLocalMember(context, current.entry.module, context.classQualifiedName);
+            if (entry?.status === "complete" && entry.declaration?.classInitializer !== undefined) {
+                fail("HARDENED_CLASS_INITIALIZER_AUTHORITY", "local authority claims a class initializer absent from source", classContent);
+            }
+        }
+        return undefined;
+    }
+    const position = classContent.children.indexOf(node);
+    const before = classContent.children.slice(0, position);
+    const after = classContent.children.slice(position + 1);
+    const staticField = (child: TreeNode): boolean => (child.kind === "VAR_LIST" || child.kind === "CONST_LIST")
+        && parseMemberModifiers(child, context).modifiers.includes("static");
+    if (before.some(child => child.kind !== "IMPORT" && child.kind !== "USE" && !staticField(child))
+        || after.some(child => !["FUNCTION", "GET", "SET"].includes(child.kind))) {
+        fail("HARDENED_CLASS_INITIALIZER_ORDER",
+            "same-class cinit call must follow static fields and precede callable declarations", node);
+    }
+    const target = node.children[0], argumentsNode = node.children[1];
+    if (node.children.length !== 2 || target?.kind !== "DOT" || target.text !== null
+        || target.children.length !== 2 || target.children[0]!.kind !== "IDENTIFIER"
+        || target.children[0]!.text !== context.className || target.children[1]!.kind !== "LITERAL"
+        || argumentsNode?.kind !== "ARGUMENTS" || argumentsNode.children.length !== 0) {
+        fail("HARDENED_CLASS_INITIALIZER_SHAPE", "class cinit admits only CurrentClass.literalStaticMethod()", node);
+    }
+    const methodName = validateIdentifier(requiredText(target.children[1]!, "class initializer method"), target.children[1]!);
+    const header = context.methods[methodName];
+    if (!header || header.constructor || header.accessor !== null || header.namespaceName !== null
+        || !header.modifiers.includes("static") || header.returnType?.sourceName !== "void"
+        || header.parameters.some(parameter => parameter.defaultValue === null && !parameter.rest)) {
+        fail("HARDENED_CLASS_INITIALIZER_SIGNATURE",
+            "class cinit target must be one unnamespaced static zero-required-argument void method", node);
+    }
+    const declaration = localDeclaration(context, context.classQualifiedName, node).declaration!;
+    const proof = declaration.classInitializer;
+    const signatures = declaration.members.filter(member => member.kind === "method" && member.name === methodName
+        && member.namespaceName === null && member.modifiers.includes("static") && member.returnType === "void"
+        && member.parameters.every(parameter => parameter.optional || parameter.rest));
+    if (!proof || proof.kind !== "same-class-static-void-call" || proof.ownerQName !== context.classQualifiedName
+        || proof.methodName !== methodName || proof.argumentCount !== 0 || signatures.length !== 1) {
+        fail("HARDENED_CLASS_INITIALIZER_AUTHORITY",
+            "class cinit call differs from its exact local-member authority", node);
+    }
+    return Object.assign(identity(node), {
+        kind: "sameClassStaticVoidCall" as const,
+        ownerName: context.className,
+        ownerQualifiedName: context.classQualifiedName,
+        methodName,
+        argumentCount: 0 as const,
+        evidenceRevision: SAME_CLASS_STATIC_CINIT_EVIDENCE_REVISION,
+    });
+}
+
 function containsFunctionScopedDeclaration(node: TreeNode | null): boolean {
     if (node === null) return false;
     if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST" || node.kind === "FUNCTION") return true;
@@ -6355,6 +6417,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             }
         }
     });
+    const classInitializer = adaptSameClassStaticInitializer(classContent, placeholder);
     placeholder.inheritedAccessors = [];
     if (placeholder.sourceMemberAuthority !== null && extendsType !== null) {
         for (const [name, pair] of Object.entries(placeholder.accessors)) {
@@ -6479,6 +6542,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             }
             return;
         }
+        if (node.kind === "CALL" && classInitializer?.sourceNodeId === node.id) return;
         if (node.kind !== "USE" && node.kind !== "IMPORT") {
             fail("HARDENED_CLASS_MEMBER", "class member kind is unsupported: " + node.kind, node);
         }
@@ -6508,6 +6572,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         interfaceExtendsTypes: [],
         implementsTypes,
         members,
+        ...(classInitializer !== undefined ? {classInitializer} : {}),
         ...(sourceEvents.length ? {sourceEvents} : {}),
         ...(placeholder.inheritedAccessors?.length ? {inheritedAccessors: placeholder.inheritedAccessors} : {}),
     });

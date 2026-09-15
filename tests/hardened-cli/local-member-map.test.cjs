@@ -64,11 +64,13 @@ test("local member map is deterministic and resolves authenticated inheritance s
         const childSource = "package p { public class Child extends Base { public function Child(){super();} override protected function run(value:Vector.<int>):String{return null;} } }";
         const packageSource = "package p { public const Shared:Base = new Base(); }";
         const namespaceSource = "package p { public namespace InternalSpace; }";
+        const initializerSource = "package p { public class Initializer { public static var state:Object = {}; Initializer.initialize(); public static function initialize():void {} } }";
         const sources = [
             ["game-client/tapplication_main/src/p/Base.as", baseSource],
             ["game-client/tapplication_main/src/p/Child.as", childSource],
             ["game-client/tapplication_main/src/p/Shared.as", packageSource],
             ["game-client/tapplication_main/src/p/InternalSpace.as", namespaceSource],
+            ["game-client/tapplication_main/src/p/Initializer.as", initializerSource],
         ];
         sources.forEach(([portable, source]) => {
             const target = path.join(root, ...portable.split("/"));
@@ -80,6 +82,7 @@ test("local member map is deterministic and resolves authenticated inheritance s
             entry("p.Child", "0000000000000002", sources[1][0], childSource, ["0000000000000001"]),
             entry("p.Shared", "0000000000000003", sources[2][0], packageSource, ["0000000000000001"], "package"),
             entry("p.InternalSpace", "0000000000000004", sources[3][0], namespaceSource, [], "package"),
+            entry("p.Initializer", "0000000000000005", sources[4][0], initializerSource, []),
         ];
         const map = {
             dependencyGraphRawSha256: "2".repeat(64), dependencyGraphSemanticSha256: "3".repeat(64),
@@ -106,8 +109,8 @@ test("local member map is deterministic and resolves authenticated inheritance s
         assert.equal(fs.readFileSync(first).compare(fs.readFileSync(second)), 0);
         const value = JSON.parse(fs.readFileSync(first, "utf8"));
         assert.equal(value.schema, "bleach-local-as3-member-map@2");
-        assert.equal(value.entryCount, 4);
-        assert.equal(value.completeCount, 4);
+        assert.equal(value.entryCount, 5);
+        assert.equal(value.completeCount, 5);
         assert.equal(value.heldCount, 0);
         assert.equal(value.sourceCensusSha256, censusSha256);
         const base = value.entries.find(item => item.qname === "p.Base");
@@ -123,6 +126,8 @@ test("local member map is deterministic and resolves authenticated inheritance s
             { kind: "new", targetQName: "p.Base", argumentCount: 0 });
         assert.equal(value.entries.find(item => item.qname === "p.InternalSpace").declaration.members[0].kind,
             "namespace");
+        assert.deepEqual(value.entries.find(item => item.qname === "p.Initializer").declaration.classInitializer,
+            { kind: "same-class-static-void-call", ownerQName: "p.Initializer", methodName: "initialize", argumentCount: 0 });
 
         const ambiguousCensus = {
             as3SourceCapabilities: { apis: [

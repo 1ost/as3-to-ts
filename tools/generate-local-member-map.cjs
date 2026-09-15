@@ -239,6 +239,7 @@ function canonicalizeExtract(entry, extract) {
         });
     }
     let packageInitializer = null;
+    let classInitializer;
     if (entry.typeKind === "package" && members.length === 1 && members[0].kind === "field") {
         const raw = extract.packageInitializer;
         if (!raw || raw.kind !== "new" || raw.argumentCount !== 0 || typeof raw.typeName !== "string") {
@@ -252,6 +253,21 @@ function canonicalizeExtract(entry, extract) {
     } else if (extract.packageInitializer !== null) {
         return { holdCode: "LOCAL_PACKAGE_INITIALIZER" };
     }
+    if (extract.classInitializer !== undefined) {
+        const raw = extract.classInitializer;
+        const localName = extract.qualifiedName.slice(extract.qualifiedName.lastIndexOf(".") + 1);
+        if (entry.typeKind !== "class" || !raw || Object.keys(raw).sort().join("|") !== "argumentCount|kind|methodName|ownerName"
+            || raw.kind !== "same-class-static-void-call" || raw.ownerName !== localName
+            || raw.argumentCount !== 0 || typeof raw.methodName !== "string"
+            || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(raw.methodName)) {
+            return { holdCode: "LOCAL_MEMBER_CLASS_INITIALIZER" };
+        }
+        const targets = members.filter(member => member.kind === "method" && member.name === raw.methodName
+            && member.namespaceName === null && member.modifiers.includes("static") && member.returnType === "void"
+            && member.parameters.every(parameter => parameter.optional || parameter.rest));
+        if (targets.length !== 1) return { holdCode: "LOCAL_MEMBER_CLASS_INITIALIZER" };
+        classInitializer = {kind:raw.kind,ownerQName:extract.qualifiedName,methodName:raw.methodName,argumentCount:0};
+    }
     return {
         holdCode: null,
         declaration: {
@@ -260,6 +276,7 @@ function canonicalizeExtract(entry, extract) {
             interfaceQNames: interfaceNames,
             members,
             packageInitializer,
+            ...(classInitializer ? {classInitializer} : {}),
             ...(extract.fileLocalClasses ? {fileLocalClasses:extract.fileLocalClasses} : {}),
         },
     };

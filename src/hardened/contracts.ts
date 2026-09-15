@@ -449,6 +449,7 @@ export interface LocalDeclarationExtract {
     implementsNames: string[];
     members: LocalDeclarationMember[];
     packageInitializer: { kind: "new"; typeName: string; argumentCount: 0 } | null;
+    classInitializer?: { kind: "same-class-static-void-call"; ownerName: string; methodName: string; argumentCount: 0 };
     fileLocalClasses?: FileLocalClassDeclaration[];
 }
 
@@ -458,6 +459,7 @@ export interface LocalMemberDeclaration {
     interfaceQNames: string[];
     members: LocalDeclarationMember[];
     packageInitializer: { kind: "new"; targetQName: string; argumentCount: 0 } | null;
+    classInitializer?: { kind: "same-class-static-void-call"; ownerQName: string; methodName: string; argumentCount: 0 };
     fileLocalClasses?: FileLocalClassDeclaration[];
 }
 
@@ -790,8 +792,19 @@ export interface SemanticClass extends SemanticIdentity {
     interfaceExtendsTypes: SemanticType[];
     implementsTypes: Array<{ type: SemanticType; runtimeName: string }>;
     members: SemanticMember[];
+    classInitializer?: SameClassStaticVoidCall;
     inheritedAccessors?: InheritedAccessorForward[];
     sourceEvents?: SourceClassEvent[];
+}
+
+/** Authenticated narrow AS3 class-body cinit statement; not a general statement list. */
+export interface SameClassStaticVoidCall extends SemanticIdentity {
+    kind: "sameClassStaticVoidCall";
+    ownerName: string;
+    ownerQualifiedName: string;
+    methodName: string;
+    argumentCount: 0;
+    evidenceRevision: "e04a2f051c188df8fc9396ff7c0b15f481062f7b";
 }
 
 export interface SemanticPackageField extends SemanticIdentity {

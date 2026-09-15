@@ -330,6 +330,14 @@ function parseClassContent(parser:AS3Parser):Node {
         } else if (isDeclarationModifier(parser.tok.text) || parser.activeNamespaces.has(parser.tok.text)) {
             modifiers.push(parser.tok);
             nextTokenIgnoringDocumentation(parser);
+        } else if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) {
+            if (modifiers.length !== 0 || meta.length !== 0) {
+                throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
+                    'a class member following declaration metadata and modifiers', 'class body');
+            }
+            const expression = parseExpression(parser);
+            consume(parser, Operators.SEMI_COLUMN);
+            result.children.push(expression);
         } else {
             throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
                 'a class member or declaration modifier', 'class body');
