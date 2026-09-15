@@ -2,6 +2,7 @@ import { verifyIncludeExpansion } from "./source-includes";
 import { hasNativeDescribeTypeAuthority } from "./native-describe-type-authority";
 import {nativeUriComponentAuthoritySha256} from "./native-uri-component-authority";
 import { hasNativeDateAuthority } from "./native-date-authority";
+import { localInterfaceLiteralReadProof } from "./local-interface-literal-read-authority";
 import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
 import {
     CallExpression,
@@ -3653,6 +3654,28 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_LOCAL_INSTANCE_KEY","typed local instance indexing requires an evidenced String key",node.children[1]!);
             return {...identity(node),kind:"index",accessKind:"object",target,targetNullable:ownerType.nullable,
                 index,callerQName:context.classQualifiedName,resultType:semanticType(node,"*","unknown")};
+        }
+        const localInterfaceType=context.sourceMemberAuthority !== null && !isArrayType(ownerType,context)
+            && ownerType.runtimeName===instanceQName && ownerType.typeArguments.length===0
+            && instanceType?.typeKind==="interface" && instanceType.importable;
+        if(localInterfaceType) {
+            if(instanceDeclaration?.typeKind!=="interface"||instanceDeclaration.status!=="complete"
+                ||instanceDeclaration.declaration===null) {
+                fail("HARDENED_LOCAL_MEMBER_HELD",
+                    `local interface ${instanceQName} lacks one complete declaration authority`,node.children[0]!);
+            }
+            if(!valuePosition) fail("HARDENED_LOCAL_INTERFACE_LITERAL_READ_CONTEXT",
+                "local interface literal property authority is read-only and value-position-only",node);
+            const index=parseExpression(node.children[1]!,context,true);
+            if(index.kind!=="literal"||typeof index.value!=="string"
+                ||validateIdentifier(index.value,node.children[1]!)!==index.value) {
+                fail("HARDENED_LOCAL_INTERFACE_LITERAL_READ_KEY",
+                    "local interface public-trait read requires one literal public identifier key",node.children[1]!);
+            }
+            return {...identity(node),kind:"index",accessKind:"localInterfaceLiteralPublicTrait",target,
+                targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,
+                localInterfaceLiteralRead:localInterfaceLiteralReadProof(instanceQName!,index.value),
+                resultType:semanticType(node,"*","unknown")};
         }
         if (dynamicObjectType(ownerType,context)) {
             const index = parseExpression(node.children[1]!,context,true);

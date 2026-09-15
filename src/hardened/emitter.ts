@@ -13,6 +13,7 @@ import {
     HardenedSemanticError,
 } from "./contracts";
 import { assertAdaptedSemanticProgram } from "./adapter";
+import { assertLocalInterfaceLiteralReadProof } from "./local-interface-literal-read-authority";
 import { staticConstant } from "./static-constants";
 
 export interface TypeScriptCompilerApi {
@@ -323,6 +324,23 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 ts.factory.createStringLiteral(expression.callerQName)]);
     }
     if (expression.kind === "index") {
+        if (expression.accessKind === "localInterfaceLiteralPublicTrait") {
+            if(expression.index.kind!=="literal"||typeof expression.index.value!=="string"
+                ||!expression.callerQName||!expression.localInterfaceLiteralRead) {
+                throw new HardenedSemanticError("HARDENED_EMIT_LOCAL_INTERFACE_LITERAL_READ",
+                    "local interface literal read lacks its exact semantic identity");
+            }
+            assertLocalInterfaceLiteralReadProof(expression.localInterfaceLiteralRead,
+                expression.localInterfaceLiteralRead.receiverQName,expression.index.value);
+            const nominalReceiver=ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Cast"),undefined,[
+                expressionNode(expression.target,ts),
+                ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NamedReferenceType"),undefined,
+                    [ts.factory.createStringLiteral(expression.localInterfaceLiteralRead.receiverQName)]),
+            ]);
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectRead"),undefined,
+                [nominalReceiver,ts.factory.createStringLiteral(expression.index.value),
+                    ts.factory.createStringLiteral(expression.callerQName)]);
+        }
         if (expression.accessKind === "object") return ts.factory.createCallExpression(
             ts.factory.createIdentifier("__as3ObjectRead"),undefined,[expressionNode(expression.target,ts),
                 expressionNode(expression.index,ts),ts.factory.createStringLiteral(expression.callerQName!)]);
@@ -1692,7 +1710,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                 ts.factory.createIdentifier("__as3ObjectLiteral"))])),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Object"), undefined));
     const usesObjectDispatch = (value:any):boolean => value !== null && typeof value === "object" && (
-        value.kind === "objectOperation" || value.kind === "index" && value.accessKind === "object"
+        value.kind === "objectOperation" || value.kind === "index"
+            && (value.accessKind === "object"||value.accessKind === "localInterfaceLiteralPublicTrait")
         || Object.values(value).some(usesObjectDispatch));
     if (usesObjectDispatch(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(
