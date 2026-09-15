@@ -106,6 +106,8 @@ export interface EmitterOptions {
 	/** Common Laya AS3Coercion module; required for callable numeric constructor parameters. */
 	nativeCallableCoercionModule?: string;
 	nativeCallableMetadata?: NativeClassMetadataOptions;
+	/** Explicit common AS3ArrayCreation module for source Array literals only. */
+	nativeArrayCreationModule?: string;
 }
 
 
@@ -278,6 +280,13 @@ export default class Emitter {
 			console.log("emit() ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑");
 		}
 
+		if (this.options.nativeArrayCreationModule !== undefined) {
+			const module = this.options.nativeArrayCreationModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_ARRAY_CREATION_UNSUPPORTED: explicit common Array creation module required');
+			if (!this.options.nativeCallableClasses || !this.options.nativeClassInitialization || this.options.useNamespaces)
+				throw new Error('AS3_ARRAY_CREATION_UNSUPPORTED: callable source classes with lazy initialization and module imports required');
+		}
 		const filtered = filterAST(ast);
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris);
 		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization);
@@ -2883,6 +2892,17 @@ function emitLiteral(emitter:Emitter, node:Node):void {
 
 function emitArray(emitter:Emitter, node:Node):void {
 	emitter.catchup(node.start);
+	// The Vector parser also uses ARRAY for its element list. That list is transport,
+	// while any nested ARRAY expression is still a genuine source Array literal.
+	const allocate = emitter.options.nativeArrayCreationModule !== undefined
+		&& (!node.parent || node.parent.kind !== NodeKind.SHORT_VECTOR);
+	if (allocate) {
+		let helper = '__as3_source_arrayLiteral';
+		while (emitter.source.indexOf(helper) >= 0) helper += '_';
+		emitter.ensureImportIdentifier('as3CreateArrayLiteral as ' + helper, emitter.options.nativeArrayCreationModule, false);
+		emitter.nativeSourceHelpers.add(helper);
+		emitter.insert(helper + '(');
+	}
 	emitter.insert('[');
 	if (node.children.length > 0) {
 		emitter.skip(1);
@@ -2891,6 +2911,7 @@ function emitArray(emitter:Emitter, node:Node):void {
 		emitter.catchup(node.lastChild.end);
 	}
 	emitter.insert(']');
+	if (allocate) emitter.insert(')');
 	emitter.skipTo(node.end);
 }
 

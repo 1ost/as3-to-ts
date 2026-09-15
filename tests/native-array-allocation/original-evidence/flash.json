@@ -1,0 +1,271 @@
+{
+  "rows": [
+    {
+      "value": {
+        "length": 3,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": 1,
+              "kind": "number"
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "value": "undefined",
+              "kind": "undefined"
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "length": 1,
+              "kind": "Array",
+              "slots": [
+                {
+                  "value": {
+                    "value": 2,
+                    "kind": "number"
+                  },
+                  "own": true
+                }
+              ]
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 0
+    },
+    {
+      "value": {
+        "length": 1,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": 3,
+              "kind": "number"
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 1
+    },
+    {
+      "value": {
+        "length": 2,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": true,
+              "kind": "boolean"
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "value": false,
+              "kind": "boolean"
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 2
+    },
+    {
+      "value": {
+        "length": 1,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": true,
+              "kind": "boolean"
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 3
+    },
+    {
+      "value": {
+        "length": 3,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": 0,
+              "kind": "number"
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "length": 1,
+              "kind": "Array",
+              "slots": [
+                {
+                  "value": {
+                    "value": 1,
+                    "kind": "number"
+                  },
+                  "own": true
+                }
+              ]
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "value": 2,
+              "kind": "number"
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 4
+    },
+    {
+      "value": {
+        "length": 3,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": 4,
+              "kind": "number"
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "value": "undefined",
+              "kind": "undefined"
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "length": 1,
+              "kind": "Array",
+              "slots": [
+                {
+                  "value": {
+                    "value": 5,
+                    "kind": "number"
+                  },
+                  "own": true
+                }
+              ]
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 5
+    },
+    {
+      "value": {
+        "length": 1,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": false,
+              "kind": "boolean"
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 6
+    },
+    {
+      "value": {
+        "length": 2,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": "stop",
+              "kind": "string"
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "value": 1,
+              "kind": "number"
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 7
+    },
+    {
+      "value": {
+        "length": 2,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "length": 1,
+              "kind": "Array",
+              "slots": [
+                {
+                  "value": {
+                    "value": 9,
+                    "kind": "number"
+                  },
+                  "own": true
+                }
+              ]
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "length": 0,
+              "kind": "Array",
+              "slots": []
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 8
+    },
+    {
+      "value": {
+        "length": 2,
+        "kind": "Array",
+        "slots": [
+          {
+            "value": {
+              "value": true,
+              "kind": "boolean"
+            },
+            "own": true
+          },
+          {
+            "value": {
+              "value": false,
+              "kind": "boolean"
+            },
+            "own": true
+          }
+        ]
+      },
+      "index": 9
+    }
+  ]
+}
