@@ -476,7 +476,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     }
     if (expression.kind === "new") {
         if (expression.sourceType.sourceName === "Date" && expression.sourceType.emittedName === "AS3Date")
-            return ts.factory.createNewExpression(ts.factory.createIdentifier("AS3Date"),undefined,[]);
+            return ts.factory.createNewExpression(ts.factory.createIdentifier("AS3Date"),undefined,
+                expression.arguments.map(argument=>expressionNode(argument,ts)));
         if (expression.nativeArray)
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NewArray"),undefined,
                 [ts.factory.createArrayLiteralExpression(expression.arguments.map(argument=>expressionNode(argument,ts)))]);

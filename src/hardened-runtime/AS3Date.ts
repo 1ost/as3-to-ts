@@ -1,4 +1,4 @@
-/** Zero-argument Date subset; SDK constructors/calendar parsing remain compiler holds. */
+/** Authenticated zero-argument and six-number local-calendar Date subset. */
 const NativeDate = Date;
 const nativeValueOf = Date.prototype.valueOf;
 const values = new WeakMap<object, Date>();
@@ -21,9 +21,13 @@ function milliseconds(value: object): number {
     return nativeValueOf.call(date);
 }
 export class AS3Date {
-    constructor() {
-        if(arguments.length!==0) throw new TypeError("Only zero-argument Date construction is supported");
-        values.set(this,new NativeDate());
+    constructor(...args: [] | [number, number, number, number, number, number]) {
+        if(args.length!==0 && args.length!==6)
+            throw new TypeError("Date construction requires zero arguments or six numeric calendar components");
+        if(args.length===6 && args.some(value=>typeof value!=="number"))
+            throw new TypeError("Six-component Date construction requires numeric arguments");
+        values.set(this,args.length===0 ? new NativeDate()
+            : new NativeDate(args[0],args[1],args[2],args[3],args[4],args[5]));
     }
     [Symbol.toPrimitive](): never { throw new TypeError("Date primitive conversion is outside the supported native subset"); }
     valueOf(): number { return milliseconds(this); }

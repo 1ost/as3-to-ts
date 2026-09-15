@@ -2787,7 +2787,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             && !context.fields[name] && !context.methods[name] && !context.accessors[name] && !context.importsByLocal[name]
             && !context.resolveImportedType(name,null,nameNode) && hasNativeDateAuthority(context.sourceMemberAuthority)) {
             assertNoInheritedNativeFunctionShadow(context,name,nameNode,"HARDENED_DATE","Date");
-            if(args.length!==0) fail("HARDENED_DATE_CONSTRUCTOR_ARITY","Only zero-argument Date construction is admitted",call);
+            if(args.length!==0 && args.length!==6)
+                fail("HARDENED_DATE_CONSTRUCTOR_ARITY","Date construction admits only zero arguments or six numeric calendar components",call);
+            if(args.length===6 && args.some(argument=>!["Number","int","uint"].includes(assignmentType(argument,context,call).sourceName)))
+                fail("HARDENED_DATE_CONSTRUCTOR_TYPE","Six-component Date construction requires exact proven numeric arguments",call);
             return Object.assign(identity(node),{kind:"new" as const,sourceType:semanticType(node,"Date","AS3Date",[],false,"Date"),arguments:args});
         }
         const embedded = context.fields[name]?.embeddedBitmap;
@@ -4729,16 +4732,25 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             if (conditionOwner.children.length !== 1) {
                 fail("HARDENED_IF_CONDITION", "if statement requires exactly one condition expression", conditionOwner);
             }
-            const condition = adaptCondition(parseExpression(conditionOwner.children[0]!, context, true), context,
+            let condition = adaptCondition(parseExpression(conditionOwner.children[0]!, context, true), context,
                 conditionOwner.children[0]!, "HARDENED_IF_BOOLEAN",
                 "if condition requires an exact Boolean expression or application-profile AS3 coercion");
+            const constant = sameClassLiteralBooleanStaticConstant(condition, context);
             const parseBranch = (branch: TreeNode): SemanticStatement[] => branch.kind === "BLOCK"
                 ? parseBlock(branch, context, constructor, derived, expectedReturn, false)
                 : [parseStatementNode(branch, context, constructor, derived, expectedReturn, false)];
+            const thenBranch = node.children[1]!;
+            const elseBranch = node.children.length === 3 ? node.children[2]! : null;
+            const folded = constant !== null
+                && !containsFunctionScopedDeclaration(constant ? elseBranch : thenBranch);
+            if (folded) condition = Object.assign(identity(conditionOwner.children[0]!), {
+                kind: "literal" as const, value: constant,
+            });
             return Object.assign(identity(node), {
                 kind: "if" as "if", condition,
-                thenStatements: parseBranch(node.children[1]!),
-                elseStatements: node.children.length === 3 ? parseBranch(node.children[2]!) : null,
+                thenStatements: folded && constant === false ? [] : parseBranch(thenBranch),
+                elseStatements: elseBranch === null ? null
+                    : folded && constant === true ? [] : parseBranch(elseBranch),
             });
         }
         if (node.kind === "WHILE") {
@@ -5360,8 +5372,48 @@ function statementsAlwaysReturn(statements: SemanticStatement[]): boolean {
     if (statements.length === 0) return false;
     const last = statements[statements.length - 1]!;
     return last.kind === "return" || last.kind === "throw" || (last.kind === "label" && statementsAlwaysReturn([last.statement]))
-        || (last.kind === "if" && last.elseStatements !== null
-        && statementsAlwaysReturn(last.thenStatements) && statementsAlwaysReturn(last.elseStatements));
+        || (last.kind === "if" && (last.condition.kind === "literal" && last.condition.value === true
+            ? statementsAlwaysReturn(last.thenStatements)
+            : last.condition.kind === "literal" && last.condition.value === false
+                ? last.elseStatements !== null && statementsAlwaysReturn(last.elseStatements)
+                : last.elseStatements !== null && statementsAlwaysReturn(last.thenStatements)
+                    && statementsAlwaysReturn(last.elseStatements)));
+}
+
+/**
+ * A method cannot execute before its declaring class has initialized. It is therefore safe to replace a read of an
+ * exact same-class private static Boolean constant with its literal value, but only when the original source bytes and
+ * declaration are both present in the authenticated local authorities. Cross-class constants intentionally remain
+ * runtime reads because their initialization ordering needs separate evidence.
+ */
+function sameClassLiteralBooleanStaticConstant(expression: SemanticExpression,
+    context: AdapterContext): boolean | null {
+    if (expression.kind !== "member" || expression.target.kind !== "identifier"
+        || expression.target.bindingKind !== "current-class"
+        || expression.target.bindingSourceQualifiedName !== context.classQualifiedName
+        || expression.capabilitySource !== context.classQualifiedName || expression.namespaceQName !== undefined
+        || !context.localMemberAuthority || !context.resolveCurrentLocal) return null;
+    const field = context.fields[expression.name];
+    if (!field || !field.readonly || field.namespaceName !== null
+        || field.type.sourceName !== "Boolean" || field.type.emittedName !== "boolean"
+        || field.modifiers.length !== 2 || field.modifiers[0] !== "private" || field.modifiers[1] !== "static"
+        || field.initializer?.kind !== "literal" || typeof field.initializer.value !== "boolean") return null;
+    const current = context.resolveCurrentLocal();
+    const declaration = contextLocalMember(context, current.entry.module, context.classQualifiedName);
+    if (!declaration || declaration.status !== "complete" || !declaration.declaration) return null;
+    const matches = declaration.declaration.members.filter(member => member.kind === "field"
+        && member.name === expression.name && member.readonly && member.namespaceName === null
+        && member.fieldType === "Boolean" && member.modifiers.length === 2
+        && member.modifiers[0] === "private" && member.modifiers[1] === "static");
+    return matches.length === 1 ? field.initializer.value : null;
+}
+
+function containsFunctionScopedDeclaration(node: TreeNode | null): boolean {
+    if (node === null) return false;
+    if (node.kind === "VAR_LIST" || node.kind === "CONST_LIST" || node.kind === "FUNCTION") return true;
+    if ((node.kind === "FORIN" || node.kind === "FOREACH")
+        && node.children.some(child => child.kind === "VAR")) return true;
+    return node.children.some(containsFunctionScopedDeclaration);
 }
 
 function parseField(list: TreeNode, context: AdapterContext, readonly: boolean, headersOnly: boolean = false): SemanticField[] {
@@ -5413,16 +5465,24 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean, 
             fail("HARDENED_MEMBER_DUPLICATE", "class member identity is duplicated", nameNode);
         }
         const init = one(declaration, "INIT", true);
+        let fieldType = parseType(oneType(declaration), context, false);
         let initializer: SemanticExpression | null = null;
         if (init !== null) {
             if (init.children.length !== 1) {
                 fail("HARDENED_INITIALIZER_SHAPE", "field initializer has the wrong normalized shape", init);
             }
             if (!headersOnly) initializer = parseExpression(init.children[0]!, context, true, false, false);
+            else if (readonly && memberModifiers.namespaceName === null && fieldType.sourceName === "Boolean"
+                && fieldType.emittedName === "boolean" && modifiers.length === 2
+                && modifiers[0] === "private" && modifiers[1] === "static"
+                && ["LITERAL", "IDENTIFIER"].includes(init.children[0]!.kind)
+                && ["true", "false"].includes(init.children[0]!.text || "")) {
+                initializer = parseLiteral(init.children[0]!.kind === "IDENTIFIER"
+                    ? Object.assign({}, init.children[0]!, {kind: "LITERAL"}) : init.children[0]!);
+            }
         } else if (readonly && embeddedSource === null) {
             fail("HARDENED_CONST_INITIALIZER", "AS3 const fields require an explicit admitted initializer", declaration);
         }
-        let fieldType = parseType(oneType(declaration), context, false);
         if (embeddedSource !== null && (fieldType.sourceName !== "Class" || init !== null)) {
             fail("HARDENED_EMBED_FIELD", "Embed supplies the initializer of an otherwise uninitialized Class field", declaration);
         }
