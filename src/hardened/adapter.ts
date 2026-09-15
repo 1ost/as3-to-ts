@@ -2132,7 +2132,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
             return authoritySemanticType(readable.kind === "field" ? readable.fieldType! : readable.returnType!, context, node);
         }
     }
-    if (expression.kind === "member" && expression.capabilitySource === "Date" && expression.name === "time"
+    if (expression.kind === "member" && expression.capabilitySource === "Date"
+        && ["minutes","time","timezoneOffset"].includes(expression.name)
         && hasNativeDateAuthority(context.sourceMemberAuthority)) return semanticType(node,"Number","number");
     if (expression.kind === "member") {
         if (expression.capabilitySource === "Function" && expression.name === "length")
@@ -2281,6 +2282,9 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
 }
 
 function assignmentTargetType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
+    if(expression.kind==="member" && expression.capabilitySource==="Date"
+        && ["minutes","time"].includes(expression.name) && hasNativeDateAuthority(context.sourceMemberAuthority))
+        return semanticType(node,"Number","number");
     if (expression.kind === "member" && expression.target.kind === "super" && context.baseLocalQName !== null
         && expression.capabilitySource !== null && !context.mappingsBySource[expression.capabilitySource]) {
         const inherited = localInheritedMember(context, expression.name, expression.superField ? "field" : "setter", null, node);
@@ -2837,9 +2841,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             && !context.resolveImportedType(name,null,nameNode) && hasNativeDateAuthority(context.sourceMemberAuthority)) {
             assertNoInheritedNativeFunctionShadow(context,name,nameNode,"HARDENED_DATE","Date");
             if(args.length!==0 && args.length!==6)
-                fail("HARDENED_DATE_CONSTRUCTOR_ARITY","Date construction admits only zero arguments or six numeric calendar components",call);
-            if(args.length===6 && args.some(argument=>!["Number","int","uint"].includes(assignmentType(argument,context,call).sourceName)))
-                fail("HARDENED_DATE_CONSTRUCTOR_TYPE","Six-component Date construction requires exact proven numeric arguments",call);
+                fail("HARDENED_DATE_CONSTRUCTOR_ARITY","Date construction admits only zero arguments or six proven primitive calendar components",call);
+            if(args.length===6 && args.some(argument=>{
+                const type=assignmentType(argument,context,call);
+                return type.nullable || !["String","Number","int","uint"].includes(type.sourceName)
+                    || type.emittedName!==(type.sourceName==="String"?"string":"number");
+            })) fail("HARDENED_DATE_CONSTRUCTOR_TYPE",
+                "Six-component Date construction requires non-null primitive String or numeric arguments",call);
             return Object.assign(identity(node),{kind:"new" as const,sourceType:semanticType(node,"Date","AS3Date",[],false,"Date"),arguments:args});
         }
         const embedded = context.fields[name]?.embeddedBitmap;
@@ -3948,7 +3956,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (target.kind !== "super" && target.kind !== "this" && !staticImportReceiver) {
             const dateType=assignmentType(target,context,node);
             if(dateType.sourceName==="Date" && dateType.emittedName==="AS3Date" && hasNativeDateAuthority(context.sourceMemberAuthority)) {
-                if(!["valueOf","getTime","time"].includes(name) || valuePosition && name!=="time")
+                const method=["valueOf","getTime","setTime","setHours"].includes(name);
+                const property=["minutes","time","timezoneOffset"].includes(name);
+                if(!method && !property || valuePosition && method)
                     fail("HARDENED_DATE_MEMBER","Date member or method closure is outside the evidenced subset",node);
                 return Object.assign(identity(node),{kind:"member" as const,target,name,targetNullable:dateType.nullable,capabilitySource:"Date"});
             }
@@ -4367,8 +4377,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
         } else if (callee.kind === "member" && callee.capabilitySource === "Date"
             && hasNativeDateAuthority(context.sourceMemberAuthority)) {
-            if(!["valueOf","getTime"].includes(callee.name) || args.length!==0)
-                fail("HARDENED_DATE_CALL","Date calls require an evidenced zero-argument method",node);
+            const arity=callee.name==="setTime"?1:callee.name==="setHours"?3
+                : ["valueOf","getTime"].includes(callee.name)?0:null;
+            if(arity===null || args.length!==arity)
+                fail("HARDENED_DATE_CALL","Date call does not match an evidenced exact method arity",node);
+            if(args.some((argument,index)=>{
+                const type=assignmentType(argument,context,node.children[1]!.children[index]!);
+                return type.nullable || type.sourceName!=="Number" || type.emittedName!=="number";
+            })) fail("HARDENED_DATE_CALL_TYPE","Date mutation calls require exact Number arguments",node);
+            capabilitySource="Date";
+            capabilityMember=callee.name;
             resultType=semanticType(node,"Number","number");
         } else if (callee.kind === "member" && callee.target.kind === "super") {
             if (callee.capabilitySource === null) {

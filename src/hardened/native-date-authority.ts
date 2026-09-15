@@ -38,14 +38,32 @@ export function verifyNativeDateAuthority(source: LoadedSourceMemberAuthority, p
     const signaturesJson=readFileSync(signaturesFile,"utf8");
     if(sha(signaturesJson)!==proof.signaturesSha256) reject();
     let signatures:any;try { signatures=JSON.parse(signaturesJson); } catch { return reject(); }
-    const constructors=signatures?.classes?.Date?.members?.filter((member:any)=>member.constructor===true);
+    const members=signatures?.classes?.Date?.members;
+    const constructors=members?.filter((member:any)=>member.constructor===true);
     if(!Array.isArray(constructors) || constructors.length!==1 || constructors[0].signature!==constructor
         || constructors[0].minArgs!==0 || constructors[0].maxArgs!==7 || constructors[0].type!=="Date") reject();
+    const exactPublicMember=(access:string,name:string,signature:string,type:string,minArgs:number,maxArgs:number):boolean=>{
+        const rows=members?.filter((member:any)=>member.constructor===false && member.scope==="instance"
+            && member.access===access && member.name===name);
+        return Array.isArray(rows) && rows.length===1 && rows[0].signature===signature
+            && rows[0].type===type && rows[0].minArgs===minArgs && rows[0].maxArgs===maxArgs;
+    };
+    if(!exactPublicMember("read","minutes","public function get minutes() : Number","Number",0,0)
+        || !exactPublicMember("write","minutes","public function set minutes(value:Number) : *","Number",1,1)
+        || !exactPublicMember("read","time","public function get time() : Number","Number",0,0)
+        || !exactPublicMember("write","time","public function set time(value:Number) : *","Number",1,1)
+        || !exactPublicMember("read","timezoneOffset","public function get timezoneOffset() : Number","Number",0,0)) reject();
     const text=readFileSync(file,"utf8");
     if(sha(text)!==proof.declarationSha256) reject();
     const lines=text.split(/\r?\n/).map(line=>line.trim());
     for(const signature of [constructor,"AS3 native function valueOf() : Number;","AS3 native function getTime() : Number;",
-        "public function get time() : Number","public dynamic class Date"])
+        "private native function _setTime(param1:Number) : Number;","AS3 function setTime(t:* = undefined) : Number",
+        "private native function _setHours(... rest) : Number;",
+        "AS3 function setHours(hour:* = undefined, min:* = undefined, sec:* = undefined, ms:* = undefined) : Number",
+        "AS3 native function getMinutes() : Number;","AS3 native function getTimezoneOffset() : Number;",
+        "public function get minutes() : Number","public function set minutes(value:Number) : *",
+        "public function get time() : Number","public function set time(value:Number) : *",
+        "public function get timezoneOffset() : Number","public dynamic class Date"])
         if(lines.filter(line=>line===signature).length!==1) reject();
     verified.add(source);
 }

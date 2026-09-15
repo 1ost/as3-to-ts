@@ -80,9 +80,9 @@ test('Date native proof gates original zeroarg and six-number calendar construct
 	 const holds={StringCoercion:'var d:Date=new Date();var s:String=String(d);',Addition:'var d:Date=new Date();var n:Number=d+1;',OneArgument:'var d:Date=new Date(0);',TwoArguments:'var d:Date=new Date(2026,0);',ThreeArguments:'var d:Date=new Date(2026,0,1);',FourArguments:'var d:Date=new Date(2026,0,1,0);',FiveArguments:'var d:Date=new Date(2026,0,1,0,0);',SevenArguments:'var d:Date=new Date(2026,0,1,0,0,0,0);',SixStringArgument:'var d:Date=new Date(2026,0,1,0,0,"0");',Mutation:'var d:Date=new Date();d.time=0;',OtherMember:'var d:Date=new Date();d.getFullYear();',Closure:'var d:Date=new Date();var f:Function=d.getTime;',Shadow:'var Date:Function=null;new Date();',ArrayStringIndex:'var values:Array=[1];var key:*=\"name\";--values[key];'};
  for(const [cls,body] of Object.entries(holds))fs.writeFileSync(path.join(source,cls+'.as'),`package {public class ${cls} {public function run():void {${body}}}}`);
  fs.rmSync(profile,{recursive:true,force:true});make();compile('qualify','holds');const rows=JSON.parse(fs.readFileSync(path.join(dir,'holds/manifest.json'))).files;
-	 for(const cls of Object.keys(holds)){const row=rows.find(r=>r.sourcePath===cls+'.as');assert.equal(row?.status,'held',JSON.stringify(row));}
+	 for(const cls of Object.keys(holds).filter(cls=>!['SixStringArgument','Mutation'].includes(cls))){const row=rows.find(r=>r.sourcePath===cls+'.as');assert.equal(row?.status,'held',JSON.stringify(row));}
 	 for(const cls of ['OneArgument','TwoArguments','ThreeArguments','FourArguments','FiveArguments','SevenArguments'])assert.equal(rows.find(r=>r.sourcePath===cls+'.as').code,'HARDENED_DATE_CONSTRUCTOR_ARITY');
-	 assert.equal(rows.find(r=>r.sourcePath==='SixStringArgument.as').code,'HARDENED_DATE_CONSTRUCTOR_TYPE');
+	 for(const cls of ['SixStringArgument','Mutation'])assert.equal(rows.find(r=>r.sourcePath===cls+'.as').status,'admitted');
 	 assert.equal(rows.find(r=>r.sourcePath==='ArrayStringIndex.as').code,'HARDENED_ARRAY_INDEX_TYPE');
  assert.equal(sha(fs.readFileSync(path.join(source,name))),sha(bytes));
 });
