@@ -1268,6 +1268,29 @@ function admittedArity(parameters: SemanticParameter[], argumentCount: number): 
     return argumentCount >= minimum && (parameters.some(parameter => parameter.rest) || argumentCount <= parameters.length);
 }
 
+function canonicalizeAdmittedStringLiteral(text: string): string {
+    let canonical = '"';
+    for (let index = 1; index < text.length - 1; index++) {
+        const current = text[index]!;
+        if (current !== "\\") {
+            canonical += current;
+            continue;
+        }
+        const escaped = text[index + 1];
+        if (escaped === "'") {
+            canonical += escaped;
+            index++;
+            continue;
+        }
+        canonical += current;
+        if (escaped !== undefined && index + 1 < text.length - 1) {
+            canonical += escaped;
+            index++;
+        }
+    }
+    return canonical + '"';
+}
+
 function parseLiteral(node: TreeNode): SemanticExpression {
     const text = requiredText(node, "literal");
     let value: string | number | boolean | null;
@@ -1283,9 +1306,9 @@ function parseLiteral(node: TreeNode): SemanticExpression {
         }
     } else if (text.startsWith('"') && text.endsWith('"')) {
         try {
-            value = JSON.parse(text);
+            value = JSON.parse(canonicalizeAdmittedStringLiteral(text));
         } catch (_error) {
-            fail("HARDENED_LITERAL_STRING", "string literal is not canonical JSON-compatible source", node);
+            fail("HARDENED_LITERAL_STRING", "string literal is outside the admitted AS3 escape subset", node);
         }
     } else {
         fail("HARDENED_LITERAL", "literal is outside the admitted scalar subset", node);
