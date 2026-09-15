@@ -1,0 +1,29 @@
+{
+  "instanceXML": "<type name=\"probe::Holder\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"String\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"next\" type=\"String\"/>\n</type>",
+  "classXML": "<type name=\"probe::Holder\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::Holder\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"String\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"next\" type=\"String\"/>\n  </factory>\n</type>",
+  "rows": [
+    {
+      "value": true,
+      "id": "omitted-null"
+    },
+    {
+      "value": true,
+      "id": "null-null"
+    },
+    {
+      "value": true,
+      "id": "undefined-null"
+    },
+    {
+      "value": "12",
+      "id": "numeric-string"
+    },
+    {
+      "value": [
+        "hook-result",
+        1
+      ],
+      "id": "object-string-hook"
+    }
+  ]
+}

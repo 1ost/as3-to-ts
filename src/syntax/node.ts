@@ -4,6 +4,7 @@ import {VERBOSE_MASK} from '../config';
 import {ReportFlags} from '../reports/report-flags';
 
 interface CreateNodeOptions {
+    qualifiedName?: string;
     start?: number;
     end?: number;
     text?: string;
@@ -37,6 +38,7 @@ export function createNode(kind: NodeKind, options?: CreateNodeOptions, ... chil
     node.start = start;
     node.end = end;
     node.text = text;
+    if (options && options.qualifiedName) node.qualifiedName = options.qualifiedName;
     node.children = children;
 
     //if(VERBOSE >= 3) {
@@ -61,6 +63,8 @@ export function outerEncapsulatedExpression(node: Node): Node {
 }
 
 export default class Node {
+    /** Full source type spelling when the legacy text retains only its terminal name. */
+    public qualifiedName?: string;
     public kind: NodeKind;
     public start: number;
     public end: number;

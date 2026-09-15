@@ -1,0 +1,19 @@
+{
+  "classXML": "<type name=\"probe::String\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::String\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"probe::String\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"next\" type=\"*\"/>\n  </factory>\n</type>",
+  "rows": [
+    {
+      "value": true,
+      "id": "own-String-null"
+    },
+    {
+      "value": true,
+      "id": "own-String-self"
+    },
+    {
+      "error": 1034,
+      "name": "TypeError",
+      "id": "own-String-plain"
+    }
+  ],
+  "instanceXML": "<type name=\"probe::String\" base=\"Object\" isDynamic=\"false\" isFinal=\"true\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"probe::String\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"next\" type=\"*\"/>\n</type>"
+}

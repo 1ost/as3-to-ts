@@ -1,0 +1,46 @@
+{
+  "instances": [
+    "<type name=\"probe::Number\" base=\"Object\" isDynamic=\"false\" isFinal=\"true\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"probe::Number\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"next\" type=\"probe::Number\"/>\n</type>",
+    "<type name=\"probe::Boolean\" base=\"Object\" isDynamic=\"false\" isFinal=\"true\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"probe::Boolean\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"next\" type=\"probe::Boolean\"/>\n</type>"
+  ],
+  "rows": [
+    {
+      "value": true,
+      "id": "Number/static-null"
+    },
+    {
+      "value": true,
+      "id": "Number/instance-null"
+    },
+    {
+      "value": true,
+      "id": "Number/self"
+    },
+    {
+      "error": 1034,
+      "name": "TypeError",
+      "id": "Number/wrong"
+    },
+    {
+      "value": true,
+      "id": "Boolean/static-null"
+    },
+    {
+      "value": true,
+      "id": "Boolean/instance-null"
+    },
+    {
+      "value": true,
+      "id": "Boolean/self"
+    },
+    {
+      "error": 1034,
+      "name": "TypeError",
+      "id": "Boolean/wrong"
+    }
+  ],
+  "reflection": [
+    "<type name=\"probe::Number\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"stored\" type=\"probe::Number\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::Number\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"probe::Number\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"next\" type=\"probe::Number\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::Boolean\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"stored\" type=\"probe::Boolean\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::Boolean\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"probe::Boolean\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"next\" type=\"probe::Boolean\"/>\n  </factory>\n</type>"
+  ]
+}

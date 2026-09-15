@@ -1,6 +1,7 @@
 import Node from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
+import {nativeSourceTypeIdentity} from './native-source-type';
 
 export interface NativeClassMetadataOptions {
     module: string;
@@ -19,6 +20,7 @@ export function validateNativeClassMetadata(qname: string, source: string, input
     if (classes.length !== 1) fail('exactly one source class');
     const cls = classes[0], name = cls.findChild(K.NAME).text;
     const pkg = tree.findChild(K.PACKAGE).findChild(K.NAME).text;
+    const imports = tree.findChild(K.PACKAGE).findChild(K.CONTENT).findChildren(K.IMPORT).map(node => node.text);
     if (pkg + '.' + name !== qname || record.metadata.name !== qname.replace(/\.([^.]*)$/, '::$1')) fail('source declaration identity');
     if (cls.findChild(K.EXTENDS) || record.metadata.base !== 'Object') fail('reference declaration ancestry integration pending');
     const mods = (node: Node): string[] => {const value = node.findChild(K.MOD_LIST); return value ? value.children.map(x => x.text) : [];};
@@ -34,7 +36,11 @@ export function validateNativeClassMetadata(qname: string, source: string, input
         const side = flags.indexOf('static') >= 0 ? 'statics' : 'instance';
         if (member.kind === K.VAR_LIST || member.kind === K.CONST_LIST) {
             member.findChildren(K.NAME_TYPE_INIT).forEach(field => surfaces[side].push({name: field.findChild(K.NAME).text,
-                kind: member.kind === K.VAR_LIST ? 'variable' : 'constant', type: (field.findChild(K.TYPE) || {text: '*'}).text}));
+                kind: member.kind === K.VAR_LIST ? 'variable' : 'constant',
+                // The exact reflected declaration authenticates this own-class
+                // spelling; other reference names still need separate binding.
+                type: nativeSourceTypeIdentity(field.findChild(K.TYPE), qname, imports) === qname
+                    ? record.metadata.name : nativeSourceTypeIdentity(field.findChild(K.TYPE), qname, imports)}));
         } else if (member.kind === K.FUNCTION) {
             const method = member.findChild(K.NAME).text; if (method === name) return;
             surfaces[side].push({name: method, kind: 'method', parameterCount: member.findChild(K.PARAMETER_LIST).children.length});

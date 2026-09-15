@@ -1,0 +1,50 @@
+{
+  "files": [
+    {
+      "path": "original\\ClassConversionOracle.as",
+      "sha256": "3d637d8f907cedb2dc8109a98711a4caf57bb3e3d674c7a4894b91ac4c46ad2d"
+    },
+    {
+      "path": "original\\probe\\String.as",
+      "sha256": "611918fe71107db9471a82b23c161ba1c5064d459b73d5f3a7a6207ab70c4a0d"
+    },
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "capture.py",
+      "sha256": "7ef99b8c5a23681579e7ec4a6dabc8edd7df89c6af5b6a27810ff78b0c6110b6"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "e97ddf3f4fb4a188c7be47dd9b0bca5f11bc46b49e9017261ed37514e1ef1285"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "3a74932f8e96802a1835e6aebf27a6a936c883723eae18ea99ab0531b46d308e"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "b8f16fddcebb90339593a2d9e402098bc0488abcfcf69e1437a0bdda1ba0a83d"
+    }
+  ],
+  "tools": [
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ]
+}

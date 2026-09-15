@@ -1,4 +1,5 @@
 import {NativeClassMetadataOptions} from './native-class-metadata';
+import {nativeSourceTypeIdentity} from './native-source-type';
 import {insideTypeOf, sourceIdentifier, typeOfBinding} from './native-typeof';
 import NodeKind, {nodeKindName} from '../syntax/nodeKind';
 import * as Keywords from '../syntax/keywords';
@@ -457,6 +458,9 @@ export default class Emitter {
 	 * Utilities
 	 */
 	ensureImportIdentifier(identifier:string, from = `./${identifier}`, checkGlobals:boolean = true):void {
+		// The enclosing source declaration is local even when its name is followed
+		// by a newline/comment instead of the legacy textual space match below.
+		if (identifier === this.currentClassName) return;
 		if (identifier == "number" || identifier == "number[]"
 			|| identifier == "any" || identifier == "any[]"
 			|| identifier == "boolean" || identifier == "boolean[]"
@@ -624,6 +628,16 @@ function emitEmbed(emitter:Emitter, node:Node):void {
 }
 
 function emitImport(emitter:Emitter, node:Node):void {
+	// A same-file source Class owns its name ahead of an imported declaration.
+	// AS3 imports are lexical declarations, not eager JavaScript module effects.
+	const importedName = node.text.split('.').pop();
+	if (emitter.options.nativeCallableClasses && importedName !== '*'
+		&& node.parent && node.parent.findChildren(NodeKind.CLASS)
+			.some(declaration => declaration.findChild(NodeKind.NAME).text === importedName)) {
+		emitter.catchup(node.start);
+		emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+		return;
+	}
 	let statement = Keywords.IMPORT + " ";
 /*	let split = node.text.split('.');
 	let name = split[split.length - 1];
@@ -750,7 +764,7 @@ function getDeclarationType(emitter:Emitter, node:Node):string {
 	let typeNode = node && node.findChild(NodeKind.TYPE);
 
 	if (typeNode) {
-		declarationType = emitter.getTypeRemap(typeNode.text) || typeNode.text;
+		declarationType = typeNode.qualifiedName ? typeNode.text : emitter.getTypeRemap(typeNode.text) || typeNode.text;
 	}
 
 	return declarationType;
@@ -758,7 +772,7 @@ function getDeclarationType(emitter:Emitter, node:Node):string {
 
 function getAS3DeclarationType(node:Node):string {
 	let typeNode = node && node.findChild(NodeKind.TYPE);
-	return typeNode && typeNode.text || null;
+	return typeNode && (typeNode.qualifiedName || typeNode.text) || null;
 }
 
 function emitInterface(emitter:Emitter, node:Node):void {
@@ -1947,15 +1961,30 @@ function emitType(emitter:Emitter, node:Node):void {
 
 	emitter.skipTo(node.end);
 
+	let sourceClassType = !!node.qualifiedName;
+	if (emitter.options.nativeCallableMetadata) {
+		let declaration = node.parent;
+		while (declaration && declaration.kind !== NodeKind.CLASS) declaration = declaration.parent;
+		let pkg = declaration && declaration.parent;
+		while (pkg && pkg.kind !== NodeKind.PACKAGE) pkg = pkg.parent;
+		if (declaration && pkg) {
+			const name = declaration.findChild(NodeKind.NAME).text;
+			const namespace = pkg.findChild(NodeKind.NAME).text;
+			const identity = nativeSourceTypeIdentity(node, namespace + '.' + name,
+				pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.IMPORT).map(value => value.text));
+			if (identity === namespace + '.' + name) sourceClassType = true;
+		}
+	}
+
 	// ensure type is imported
 	if (
-		GLOBAL_NAMES.indexOf(node.text) === -1 && !emitter.getTypeRemap(node.text) &&
+		sourceClassType || GLOBAL_NAMES.indexOf(node.text) === -1 && !emitter.getTypeRemap(node.text) &&
 		TYPE_REMAP_VALUES.indexOf(node.text) === -1
 	) {
 		emitter.ensureImportIdentifier(node.text);
 	}
 
-	let typeName = emitter.getTypeRemap(node.text) || node.text;
+	let typeName = sourceClassType ? node.text : emitter.getTypeRemap(node.text) || node.text;
 
 	emitter.insert(typeName);
 }

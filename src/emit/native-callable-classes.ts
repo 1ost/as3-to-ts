@@ -4,6 +4,7 @@ import {NativeClassMetadataOptions, validateNativeClassMetadata} from './native-
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
+import {nativeSourceTypeIdentity} from './native-source-type';
 
 export interface NativeCallableClassOptions { [qname: string]: string; }
 interface SourceClass {
@@ -46,6 +47,7 @@ export class NativeCallableClasses {
             if (metadata) validateNativeTypeOf(cls, options[qname], Object.keys(lazy));
             let pkg = cls.parent; while (pkg && pkg.kind !== K.PACKAGE) pkg = pkg.parent;
             const namespace = pkg && pkg.findChild(K.NAME).text || '';
+            const imports = pkg.findChild(K.CONTENT).findChildren(K.IMPORT).map(node => node.text);
             if ((namespace ? namespace + '.' : '') + name !== qname) this.fail('mismatched source identity: ' + qname);
             const classAliases = new Set<string>(Object.keys(options).map(key => key.split('.').pop()));
             const aliasScan = (node: Node): void => {
@@ -97,7 +99,7 @@ export class NativeCallableClasses {
                     const fieldName = field.findChild(K.NAME).text, typeNode = field.findChild(K.TYPE);
                     instanceMembers.push({name: fieldName, method: false});
                     if (['constructor', '__proto__', 'prototype'].indexOf(fieldName) >= 0) this.fail('reserved construction identity field');
-                    const type = typeNode && typeNode.text;
+                    const type = nativeSourceTypeIdentity(typeNode, qname, imports);
                     fields.push({name: fieldName, value: type === 'int' || type === 'uint' ? '0' : type === 'Number' ? '(0/0)'
                         : type === 'Boolean' ? 'false' : !type || type === '*' ? 'void 0' : 'null'});
                 });
@@ -109,9 +111,10 @@ export class NativeCallableClasses {
                 constructor.findChild(K.PARAMETER_LIST).children.forEach(parameter => {
                     if (parameter.findChild(K.REST)) this.fail('rest constructor argument authority');
                     const value = parameter.findChild(K.NAME_TYPE_INIT), type = value.findChild(K.TYPE);
-                    const sourceType = type && type.text || '*';
-                    if (['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
-                        this.fail('constructor parameter coercion needs common provider authority: ' + sourceType);
+                    const sourceType = nativeSourceTypeIdentity(type, qname, imports);
+                    const selfReference = !!metadata && sourceType === qname;
+                    if (!selfReference && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
+                        this.fail('constructor parameter coercion needs common provider authority: ' + (type && type.text || '*') + ' (' + sourceType + ')');
                     if (sourceType === 'String' && (typeof stringModule !== 'string' || !stringModule.trim()
                         || /[\r\n\u0000]/.test(stringModule)))
                         this.fail('String constructor parameters require the common AS3String provider module');
@@ -120,6 +123,8 @@ export class NativeCallableClasses {
                             || /[\r\n\u0000]/.test(coercionModule)))
                         this.fail('numeric constructor parameters require the common AS3Coercion module');
                     const init = value.findChild(K.INIT);
+                    if (selfReference && (!init || init.children[0].kind !== K.IDENTIFIER || init.children[0].text !== 'null'))
+                        this.fail('self-reference constructor parameter requires an optional null default');
                     if (init && sourceType === 'String') {
                         const expression = init.children[0];
                         if (!(expression.kind === K.IDENTIFIER && expression.text === 'null')
@@ -413,6 +418,8 @@ export class NativeCallableClasses {
             const conversion = parameter.type === 'Number' ? numberCoercion + '(' + value + ')'
                 : parameter.type === 'int' ? intCoercion + '(' + value + ')' : parameter.type === 'uint' ? uintCoercion + '(' + value + ')'
                 : parameter.type === 'String' ? stringCoercion + '(' + value + ')'
+                : this.metadata && parameter.type === this.own.qname
+                    ? provider + '.as3CoerceReference(' + value + ',' + declaration + '.type)'
                 : parameter.type === 'Boolean' ? '!!' + value : parameter.type === 'Object' ? '(' + value + ' === void 0 ? null : ' + value + ')' : value;
             const defaultValue = parameter.defaultLiteral !== undefined
                 ? (parameter.type === 'Number' ? numberCoercion : parameter.type === 'int' ? intCoercion : uintCoercion)
@@ -440,8 +447,8 @@ export class NativeCallableClasses {
                 + provider + '.registerFlashTypeMetadata(' + name + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].metadata) + ');\n'
                 + provider + '.registerAS3Class(' + name + ', []);\n'
                 + 'const ' + generation + ' = ' + declaration + '.publishGeneration(' + name + ');\n'
-                + provider + '.registerAS3PropertyTraits(' + name + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].instanceTraits)
-                    + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].staticTraits) + ');\n'
+                + provider + '.registerAS3PropertyTraits(' + name + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].instanceTraits, declaration)
+                    + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].staticTraits, declaration) + ');\n'
                 + provider + '.registerAS3Constructor(' + name + ', {minimum:' + required + ', maximum:'
                     + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
@@ -468,7 +475,7 @@ export class NativeCallableClasses {
         const boundImport = file.statements.find((node: any) => node.kind === S.ImportDeclaration && /(?:^|\/)bound$/.test(node.moduleSpecifier.text));
         const helperPath = boundImport ? boundImport.moduleSpecifier.text : './bound';
         return (this.metadata ? 'import * as ' + provider + ' from ' + JSON.stringify(this.metadata.module) + ';\n'
-            + 'const ' + declaration + ' = ' + provider + '.declareAS3ReferenceType(' + JSON.stringify(this.metadata.classes[this.own.qname].metadata.name) + ');\n' : '')
+            + 'const ' + declaration + ' = ' + provider + '.declareAS3ReferenceType<' + name + '>(' + JSON.stringify(this.metadata.classes[this.own.qname].metadata.name) + ');\n' : '')
             + 'import {callableClassIntrinsics as ' + intrinsic + ', NativeCallableFunction as ' + functionType + '} from '
             + JSON.stringify(helperPath.replace(/bound$/, 'callableClass')) + ';\n'
             + 'import {bindAS3Method as ' + bindName + '} from '
@@ -479,5 +486,17 @@ export class NativeCallableClasses {
             + (this.own.parameters.some(parameter => parameter.type === 'String')
                 ? 'import {as3CoerceString as ' + stringCoercion + '} from ' + JSON.stringify(this.stringModule) + ';\n' : '')
             + source;
+    }
+
+    /** Bind authenticated self-typed storage to the existing private declaration. */
+    private emitPropertyTraits(traits: any[], declaration: string): string {
+        const name = this.metadata.classes[this.own.qname].metadata.name;
+        return '[' + traits.map(trait => {
+            if (trait.type !== name) return JSON.stringify(trait);
+            const fields = Object.keys(trait).filter(key => key !== 'type')
+                .map(key => JSON.stringify(key) + ':' + JSON.stringify(trait[key]));
+            fields.push('"type":{name:' + JSON.stringify(name) + ',reference:' + declaration + '.type}');
+            return '{' + fields.join(',') + '}';
+        }).join(',') + ']';
     }
 }

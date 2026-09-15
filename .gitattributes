@@ -22,3 +22,7 @@ tests/native-array-allocation/** -text whitespace=cr-at-eol
 tests/native-string-constructors/** -text whitespace=cr-at-eol
 # Preserve authored whitespace in the unchanged maintained timing source.
 tests/native-string-constructors/evidence/sources/original/com/greensock/core/PropTween.as whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+tests/native-self-constructors/** -text whitespace=cr-at-eol
+# Verbatim maintained PropTween source retains authored blank-line whitespace.
+tests/native-self-constructors/evidence/sources/original/com/greensock/core/PropTween.as whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
