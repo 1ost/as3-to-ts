@@ -447,8 +447,8 @@ export class NativeCallableClasses {
                 + provider + '.registerFlashTypeMetadata(' + name + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].metadata) + ');\n'
                 + provider + '.registerAS3Class(' + name + ', []);\n'
                 + 'const ' + generation + ' = ' + declaration + '.publishGeneration(' + name + ');\n'
-                + provider + '.registerAS3PropertyTraits(' + name + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].instanceTraits, declaration)
-                    + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].staticTraits, declaration) + ');\n'
+                + provider + '.registerAS3PropertyTraits(' + name + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].instanceTraits, declaration, intrinsic)
+                    + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].staticTraits, declaration, intrinsic) + ');\n'
                 + provider + '.registerAS3Constructor(' + name + ', {minimum:' + required + ', maximum:'
                     + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
@@ -488,14 +488,16 @@ export class NativeCallableClasses {
             + source;
     }
 
-    /** Bind authenticated self-typed storage to the existing private declaration. */
-    private emitPropertyTraits(traits: any[], declaration: string): string {
+    /** Bind authenticated reference storage without resolving authored names at runtime. */
+    private emitPropertyTraits(traits: any[], declaration: string, intrinsic: string): string {
         const name = this.metadata.classes[this.own.qname].metadata.name;
         return '[' + traits.map(trait => {
-            if (trait.type !== name) return JSON.stringify(trait);
+            const reference = trait.type === name ? declaration + '.type'
+                : trait.type === 'Array' ? intrinsic + '.array' : null;
+            if (!reference) return JSON.stringify(trait);
             const fields = Object.keys(trait).filter(key => key !== 'type')
                 .map(key => JSON.stringify(key) + ':' + JSON.stringify(trait[key]));
-            fields.push('"type":{name:' + JSON.stringify(name) + ',reference:' + declaration + '.type}');
+            fields.push('"type":{name:' + JSON.stringify(trait.type) + ',reference:' + reference + '}');
             return '{' + fields.join(',') + '}';
         }).join(',') + ']';
     }
