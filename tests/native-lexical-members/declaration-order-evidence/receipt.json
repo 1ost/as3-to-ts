@@ -1,0 +1,207 @@
+{
+  "status": "original-evidence-ready",
+  "finalCaptures": [
+    "capture-e",
+    "capture-f"
+  ],
+  "completeSourceClass": "probe.DeclarationOrder",
+  "rows": 89,
+  "repeatRowsEqual": true,
+  "repeatReflectionTraitSetsEqual": true,
+  "rawReflectionDocumentsEqual": true,
+  "classReflectionDocumentsPerCapture": 1,
+  "instanceReflectionDocumentsPerCapture": 1,
+  "publicMethodsInEachCompleteProjection": 90,
+  "sourceSHA256": "c68b88a9fa7ec6fcdf8376c2005f98a9ca1c9300de57d18b4441f442bba2ff5f",
+  "oracleSHA256": "43ae404d1bb9ed0aca4da3b6b279ff3f2fb45090844586be69426fba5b56dab9",
+  "checkedBoundaryFacts": [
+    "private-field-later-local",
+    "private-field-self-initializer",
+    "private-field-earlier-false-block",
+    "private-field-runtime-earlier-false",
+    "private-field-runtime-later-false",
+    "private-field-uninitialized",
+    "private-field-throwing-initializer",
+    "private-field-parameter-redeclaration",
+    "private-method-later-local",
+    "private-method-self-initializer",
+    "private-method-false-type",
+    "private-method-runtime-later-false",
+    "private-method-uninitialized",
+    "private-method-throwing-initializer",
+    "private-method-parameter-redeclaration",
+    "private-parameter-shadow",
+    "private-catch-shadow",
+    "private-catch-var-after",
+    "protected-field-later-local",
+    "protected-field-self-initializer",
+    "protected-field-earlier-false-block",
+    "protected-field-runtime-earlier-false",
+    "protected-field-runtime-later-false",
+    "protected-field-uninitialized",
+    "protected-field-throwing-initializer",
+    "protected-field-parameter-redeclaration",
+    "protected-method-later-local",
+    "protected-method-self-initializer",
+    "protected-method-false-type",
+    "protected-method-runtime-later-false",
+    "protected-method-uninitialized",
+    "protected-method-throwing-initializer",
+    "protected-method-parameter-redeclaration",
+    "protected-parameter-shadow",
+    "protected-catch-shadow",
+    "protected-catch-var-after",
+    "public-field-later-local",
+    "public-field-self-initializer",
+    "public-field-earlier-false-block",
+    "public-field-runtime-earlier-false",
+    "public-field-runtime-later-false",
+    "public-field-uninitialized",
+    "public-field-throwing-initializer",
+    "public-field-parameter-redeclaration",
+    "public-method-later-local",
+    "public-method-self-initializer",
+    "public-method-false-type",
+    "public-method-runtime-later-false",
+    "public-method-uninitialized",
+    "public-method-throwing-initializer",
+    "public-method-parameter-redeclaration",
+    "public-parameter-shadow",
+    "public-catch-shadow",
+    "public-catch-var-after"
+  ],
+  "previousFrozenReviewUnchanged": true,
+  "scope": "Original source evidence and correction constraints only. No production implementation, compiler/engine/main composition changes or readiness claims. Earlier a/b/c exploratory captures retained separately.",
+  "files": [
+    {
+      "path": "capture-e/commands.json",
+      "sha256": "02a10b14274cf3e50e8bea30cbf7a2ed75de7360e1577ad4b7a72a82834db424",
+      "bytes": 3301
+    },
+    {
+      "path": "capture-e/flash.json",
+      "sha256": "3813124f4541b17c8c64cedfe93dbd1a4f9edf09e2012016cb27016ae2baba82",
+      "bytes": 31445
+    },
+    {
+      "path": "capture-e/oracle.swf",
+      "sha256": "f3285f7be9eece584347e9b534d62516485746a4677cca0c3336d3278c9e3cb6",
+      "bytes": 4644
+    },
+    {
+      "path": "capture-e/provenance.json",
+      "sha256": "136815c992776f643be53b270239bcf609d321e6c348950e112b31d3deddfb1e",
+      "bytes": 1858
+    },
+    {
+      "path": "capture-e/sources/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+      "bytes": 1785
+    },
+    {
+      "path": "capture-e/sources/capture.py",
+      "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+      "bytes": 2178
+    },
+    {
+      "path": "capture-e/sources/original/ConstructorOracle.as",
+      "sha256": "43ae404d1bb9ed0aca4da3b6b279ff3f2fb45090844586be69426fba5b56dab9",
+      "bytes": 11568
+    },
+    {
+      "path": "capture-e/sources/original/probe/DeclarationOrder.as",
+      "sha256": "c68b88a9fa7ec6fcdf8376c2005f98a9ca1c9300de57d18b4441f442bba2ff5f",
+      "bytes": 9120
+    },
+    {
+      "path": "capture-e.log",
+      "sha256": "fb8fdc38ee8eff700ded03a78dc5f51df9483d94acde488cf42a189e4fea5693",
+      "bytes": 24086
+    },
+    {
+      "path": "capture-f/commands.json",
+      "sha256": "1f7cb26dcb3fcd6665388ac3bccfecff273479021e9f4518aaea0624e1d00ef4",
+      "bytes": 3301
+    },
+    {
+      "path": "capture-f/flash.json",
+      "sha256": "3813124f4541b17c8c64cedfe93dbd1a4f9edf09e2012016cb27016ae2baba82",
+      "bytes": 31445
+    },
+    {
+      "path": "capture-f/oracle.swf",
+      "sha256": "457e5a828ef6af45e358d4e0ac6b496a2e47b37724768b9ef90d747dbca78efb",
+      "bytes": 4643
+    },
+    {
+      "path": "capture-f/provenance.json",
+      "sha256": "f4320d55ea485972d661080adeee8c31d6aa336213cb8ed1a23bba2ce4f9410c",
+      "bytes": 1858
+    },
+    {
+      "path": "capture-f/sources/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+      "bytes": 1785
+    },
+    {
+      "path": "capture-f/sources/capture.py",
+      "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+      "bytes": 2178
+    },
+    {
+      "path": "capture-f/sources/original/ConstructorOracle.as",
+      "sha256": "43ae404d1bb9ed0aca4da3b6b279ff3f2fb45090844586be69426fba5b56dab9",
+      "bytes": 11568
+    },
+    {
+      "path": "capture-f/sources/original/probe/DeclarationOrder.as",
+      "sha256": "c68b88a9fa7ec6fcdf8376c2005f98a9ca1c9300de57d18b4441f442bba2ff5f",
+      "bytes": 9120
+    },
+    {
+      "path": "capture-f.log",
+      "sha256": "40da6cb834d34ed9d4e3acb86046b5e5aeb757eba41754c0fe49bcbe5c889bfc",
+      "bytes": 24086
+    },
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+      "bytes": 1785
+    },
+    {
+      "path": "capture.py",
+      "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+      "bytes": 2178
+    },
+    {
+      "path": "cases.json",
+      "sha256": "9572e7e81ba02e12a50a4f85c408f27302e91c03048e805e2b138d8355be38cf",
+      "bytes": 18390
+    },
+    {
+      "path": "original/ConstructorOracle.as",
+      "sha256": "43ae404d1bb9ed0aca4da3b6b279ff3f2fb45090844586be69426fba5b56dab9",
+      "bytes": 11568
+    },
+    {
+      "path": "original/probe/DeclarationOrder.as",
+      "sha256": "c68b88a9fa7ec6fcdf8376c2005f98a9ca1c9300de57d18b4441f442bba2ff5f",
+      "bytes": 9120
+    },
+    {
+      "path": "prepare.py",
+      "sha256": "279c0a23f2cfa8f244520510ec4024aa0f5786c21ef8af54f4f56be28bd068f8",
+      "bytes": 6866
+    },
+    {
+      "path": "README.md",
+      "sha256": "9e46acfd6531f9bfcf34060ccc268ab617b7123f2dff244586d2321995b296e3",
+      "bytes": 3961
+    },
+    {
+      "path": "verify-and-freeze.py",
+      "sha256": "b0fb3fc688255c33f7820e1ccb0bc86ccefe399f86f9e2591b1204e0aefb2d05",
+      "bytes": 4594
+    }
+  ]
+}

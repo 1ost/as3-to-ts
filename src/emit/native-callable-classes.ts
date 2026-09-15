@@ -1,3 +1,4 @@
+import {NativeLexicalMembers} from './native-lexical-members';
 import {lowerNativeSourceOperations} from './native-source-operations';
 import {validateNativeTypeOf} from './native-typeof';
 import {NativeClassMetadataOptions, validateNativeClassMetadata} from './native-class-metadata';
@@ -21,7 +22,7 @@ export class NativeCallableClasses {
     private sourceTexts = new Map<string, string>();
     private ts: any;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers) {
         if (!options) return;
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
             || /[\r\n\u0000]/.test(methodBindingModule))
@@ -33,7 +34,7 @@ export class NativeCallableClasses {
         Object.keys(options).forEach(qname => {
             if (typeof options[qname] !== 'string' || !lazy || lazy[qname] !== 'lazy') this.fail('source identity must be lazy: ' + qname);
             this.sourceTexts.set(qname, options[qname]);
-            if (metadata) validateNativeClassMetadata(qname, options[qname], metadata);
+            if (metadata) validateNativeClassMetadata(qname, options[qname], metadata, lexical);
             const root = parse(qname + '.as', options[qname]), declarations: Node[] = [];
             const walk = (node: Node): void => {
                 if (!node) return;
@@ -88,13 +89,14 @@ export class NativeCallableClasses {
             cls.findChild(K.CONTENT).children.forEach(member => {
                 const mods = member.findChild(K.MOD_LIST);
                 const isStatic = mods && mods.children.some(mod => mod.text === 'static');
-                if (!isStatic && [K.FUNCTION, K.GET, K.SET].indexOf(member.kind) >= 0) {
+                const lexicalMember = lexical && lexical.qname === qname && lexical.proves(member);
+                if (!isStatic && !lexicalMember && [K.FUNCTION, K.GET, K.SET].indexOf(member.kind) >= 0) {
                     const memberName = member.findChild(K.NAME).text;
                     if (memberName !== name) instanceMembers.push({name: memberName, method: member.kind === K.FUNCTION});
                 }
                 if (member.kind !== K.VAR_LIST && member.kind !== K.CONST_LIST) return;
                 if (member.kind === K.CONST_LIST && !isStatic) this.fail('instance const descriptors need separate authority');
-                if (isStatic) return;
+                if (isStatic || lexicalMember) return;
                 member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
                     const fieldName = field.findChild(K.NAME).text, typeNode = field.findChild(K.TYPE);
                     instanceMembers.push({name: fieldName, method: false});
@@ -349,7 +351,7 @@ export class NativeCallableClasses {
             edits.sort((a,b) => b.start - a.start).forEach(edit => {
                 result = result.slice(0, edit.start - offset) + edit.value + result.slice(edit.end - offset);
             });
-            return this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique) : result;
+            return this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
         };
         const accessorTypes = new Set<string>();
         cls.members.forEach((member: any) => {
@@ -357,11 +359,16 @@ export class NativeCallableClasses {
             const destination = isStatic ? name : name + '.prototype';
             if (member.kind === S.Constructor) { ctor = member; return; }
             if (!member.name || member.name.kind !== S.Identifier) this.fail('computed member identity');
-            const key = member.name.text, encoded = JSON.stringify(key);
+            const key = member.name.text, lexicalMember = this.lexical && this.lexical.trait(key, !!isStatic);
+            const encoded = lexicalMember ? lexicalMember.key : JSON.stringify(key);
             if (key === 'constructor') this.fail('reserved constructor member');
             if (isStatic && ['prototype', 'call', 'apply', 'bind'].indexOf(key) >= 0)
                 this.fail('reserved static callable constructor identity');
             if (member.kind === S.PropertyDeclaration) {
+                if (lexicalMember) {
+                    if (!isStatic && member.initializer) initializers.push('this[' + lexicalMember.key + '] = ' + text(member.initializer) + ';');
+                    return;
+                }
                 (isStatic ? staticTypes : instanceTypes).push(key + ': ' + type(member) + ';');
                 if (isStatic) definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
                     + ', {value: ' + (member.initializer ? text(member.initializer) : 'void 0') + ', writable:true, enumerable:true, configurable:false});');
@@ -370,12 +377,14 @@ export class NativeCallableClasses {
             }
             const receiver = isStatic ? constructorType : name;
             const functionValue = 'function(this: ' + receiver + (member.parameters.length ? ', ' : '') + params(member, false)
-                + ')' + (member.type ? ': ' + text(member.type) : '') + ' {' + body(member, false) + '}';
+                + ')' + (member.type ? ': ' + text(member.type) : '') + ' {'
+                + (this.lexical ? provider + '.as3CheckArgumentCount(arguments.length,' + member.parameters.length + ',' + member.parameters.length + ');' : '')
+                + body(member, false) + '}';
             if (member.kind === S.MethodDeclaration) {
-                (isStatic ? staticTypes : instanceTypes).push(key + '(' + params(member, true) + '): ' + type(member) + ';');
+                if (!lexicalMember) (isStatic ? staticTypes : instanceTypes).push(key + '(' + params(member, true) + '): ' + type(member) + ';');
                 definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
                     + ', {value: ' + functionValue + ', writable:true, configurable:true, enumerable:false});');
-                if (isStatic) staticMethods.push(key);
+                if (isStatic && !lexicalMember) staticMethods.push(key);
             } else if (member.kind === S.GetAccessor || member.kind === S.SetAccessor) {
                 const identity = (isStatic ? 'static.' : '') + key;
                 if (!accessorTypes.has(identity)) {
@@ -400,7 +409,8 @@ export class NativeCallableClasses {
             });
         }
         const bindInstance = instanceMethods.map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
-        const defaults = (this.metadata ? generation + '.enterInstance(this);\n' : '') + chainFields.map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
+        const defaults = (this.metadata ? generation + '.enterInstance(this);\n' : '')
+            + (this.lexical ? this.lexical.provider + '.initializeAS3LexicalInstance(' + this.lexical.scope + ',this);\n' : '') + chainFields.map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
             + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
         const ancestry = cls.heritageClauses && cls.heritageClauses[0];
         const base = ancestry ? 'const ' + baseName + ' = ' + text(ancestry.types[0].expression) + ';\n' : '';
@@ -428,13 +438,13 @@ export class NativeCallableClasses {
             return value + ' = ' + (parameter.optional ? 'arguments.length <= ' + index + ' ? ' + defaultValue + ' : ' : '') + conversion + ';\n'
                 + 'if (arguments.length > ' + index + ') arguments[' + index + '] = ' + value + ';';
         }).join('\n');
-        const replacement = base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
+        const replacement = (this.lexical ? this.lexical.traits.map(t=>'const ' + t.key + '=' + intrinsic + '.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
             + (ctor && ctor.parameters.length ? ', ' + params(ctor, true) : '') + ') {\n'
             + 'const ' + fresh + ' = ' + intrinsic + '.enter(this, ' + identity + ');\nlet ' + succeeded + ' = false;\ntry {\n'
             + arity + coercions
             + (this.own.usesArguments ? '\nlet ' + sourceArguments + ': any[] = '
                 + intrinsic + '.apply(' + intrinsic + '.arraySlice, arguments, []);\n' : '') + '\nif (' + fresh + ') {\n' + defaults + '\n' + bindInstance + '\n}\n'
-            + (this.metadata ? lowerNativeSourceOperations(initializers.join('\n'), provider, compilerHelpers, unique) : initializers.join('\n')) + '\n' + completedBody + '\n' + completion + '\n} finally { '
+            + (this.metadata ? lowerNativeSourceOperations(initializers.join('\n'), provider, compilerHelpers, unique, this.lexical) : initializers.join('\n')) + '\n' + completedBody + '\n' + completion + '\n} finally { '
             + intrinsic + '.leave(this, ' + identity + ', ' + succeeded + '); }\n} as any;\n'
             + 'const ' + identity + ' = ' + name + ';\n'
             + (this.own.base ? intrinsic + '.setPrototypeOf(' + name + ', ' + baseName + ');\n'
@@ -449,6 +459,7 @@ export class NativeCallableClasses {
                 + 'const ' + generation + ' = ' + declaration + '.publishGeneration(' + name + ');\n'
                 + provider + '.registerAS3PropertyTraits(' + name + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].instanceTraits, declaration, intrinsic)
                     + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].staticTraits, declaration, intrinsic) + ');\n'
+                + (this.lexical ? this.lexicalPublication(name, intrinsic) : '')
                 + provider + '.registerAS3Constructor(' + name + ', {minimum:' + required + ', maximum:'
                     + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
@@ -468,13 +479,14 @@ export class NativeCallableClasses {
                 const statement = statements[i];
                 if (statement.kind === S.ReturnStatement) break;
                 replacements.push({start: statement.getStart(file), end: statement.end,
-                    value: lowerNativeSourceOperations(text(statement), provider, compilerHelpers, unique)});
+                    value: lowerNativeSourceOperations(text(statement), provider, compilerHelpers, unique, this.lexical)});
             }
         }
         replacements.sort((a,b) => b.start - a.start).forEach(edit => source = source.slice(0,edit.start) + edit.value + source.slice(edit.end));
         const boundImport = file.statements.find((node: any) => node.kind === S.ImportDeclaration && /(?:^|\/)bound$/.test(node.moduleSpecifier.text));
         const helperPath = boundImport ? boundImport.moduleSpecifier.text : './bound';
-        return (this.metadata ? 'import * as ' + provider + ' from ' + JSON.stringify(this.metadata.module) + ';\n'
+        return (this.lexical ? 'import * as ' + this.lexical.provider + ' from ' + JSON.stringify(this.lexical.module) + ';\n' : '')
+            + (this.metadata ? 'import * as ' + provider + ' from ' + JSON.stringify(this.metadata.module) + ';\n'
             + 'const ' + declaration + ' = ' + provider + '.declareAS3ReferenceType<' + name + '>(' + JSON.stringify(this.metadata.classes[this.own.qname].metadata.name) + ');\n' : '')
             + 'import {callableClassIntrinsics as ' + intrinsic + ', NativeCallableFunction as ' + functionType + '} from '
             + JSON.stringify(helperPath.replace(/bound$/, 'callableClass')) + ';\n'
@@ -486,6 +498,17 @@ export class NativeCallableClasses {
             + (this.own.parameters.some(parameter => parameter.type === 'String')
                 ? 'import {as3CoerceString as ' + stringCoercion + '} from ' + JSON.stringify(this.stringModule) + ';\n' : '')
             + source;
+    }
+
+    private lexicalPublication(name: string, intrinsic: string): string {
+        const lexical = this.lexical;
+        const specs = lexical.traits.map(t => '{name:' + JSON.stringify(t.name) + ',visibility:' + JSON.stringify(t.visibility)
+            + ',static:' + t.static + ',kind:' + JSON.stringify(t.kind)
+            + (t.kind === 'method' ? ',key:' + t.key + ',parameterCount:' + t.parameterCount
+                : ',type:' + (t.type === 'Array' ? '{name:"Array",reference:' + intrinsic + '.array}' : JSON.stringify(t.type || '*'))) + '}');
+        return 'const ' + lexical.scope + '=' + lexical.provider + '.registerAS3LexicalMembers(' + name + ',null,[' + specs.join(',') + ']);\n'
+            + lexical.traits.map(t=>'const ' + t.access + '=' + lexical.provider + '.resolveAS3LexicalMember(' + lexical.scope + ','
+                + JSON.stringify(t.name) + ',' + JSON.stringify(t.visibility) + ',' + t.static + ');').join('\n') + '\n';
     }
 
     /** Bind authenticated reference storage without resolving authored names at runtime. */

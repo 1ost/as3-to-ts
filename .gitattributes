@@ -26,3 +26,6 @@ tests/native-string-constructors/evidence/sources/original/com/greensock/core/Pr
 tests/native-self-constructors/** -text whitespace=cr-at-eol
 # Verbatim maintained PropTween source retains authored blank-line whitespace.
 tests/native-self-constructors/evidence/sources/original/com/greensock/core/PropTween.as whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve authenticated lexical source, captures and receipts.
+tests/native-lexical-members/** -text whitespace=cr-at-eol

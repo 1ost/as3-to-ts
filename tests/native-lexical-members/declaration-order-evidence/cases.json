@@ -1,0 +1,625 @@
+[
+  {
+    "id": "private-field-later-local",
+    "body": "var before:*=pf; var pf:*=\"local\"; return [before,pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case0"
+  },
+  {
+    "id": "private-field-self-initializer",
+    "body": "var pf:*=pf; return [pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case1"
+  },
+  {
+    "id": "private-field-earlier-false-block",
+    "body": "if(false){var pf:*=\"local\";} return [pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case2"
+  },
+  {
+    "id": "private-field-later-false-block",
+    "body": "var before:*=pf; if(false){var pf:*=\"local\";} return [before,pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case3"
+  },
+  {
+    "id": "private-field-earlier-true-block",
+    "body": "if(true){var pf:*=\"local\";} return [pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case4"
+  },
+  {
+    "id": "private-field-later-true-block",
+    "body": "var before:*=pf; if(true){var pf:*=\"local\";} return [before,pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case5"
+  },
+  {
+    "id": "protected-field-later-local",
+    "body": "var before:*=qf; var qf:*=\"local\"; return [before,qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case6"
+  },
+  {
+    "id": "protected-field-self-initializer",
+    "body": "var qf:*=qf; return [qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case7"
+  },
+  {
+    "id": "protected-field-earlier-false-block",
+    "body": "if(false){var qf:*=\"local\";} return [qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case8"
+  },
+  {
+    "id": "protected-field-later-false-block",
+    "body": "var before:*=qf; if(false){var qf:*=\"local\";} return [before,qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case9"
+  },
+  {
+    "id": "protected-field-earlier-true-block",
+    "body": "if(true){var qf:*=\"local\";} return [qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case10"
+  },
+  {
+    "id": "protected-field-later-true-block",
+    "body": "var before:*=qf; if(true){var qf:*=\"local\";} return [before,qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case11"
+  },
+  {
+    "id": "public-field-later-local",
+    "body": "var before:*=uf; var uf:*=\"local\"; return [before,uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case12"
+  },
+  {
+    "id": "public-field-self-initializer",
+    "body": "var uf:*=uf; return [uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case13"
+  },
+  {
+    "id": "public-field-earlier-false-block",
+    "body": "if(false){var uf:*=\"local\";} return [uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case14"
+  },
+  {
+    "id": "public-field-later-false-block",
+    "body": "var before:*=uf; if(false){var uf:*=\"local\";} return [before,uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case15"
+  },
+  {
+    "id": "public-field-earlier-true-block",
+    "body": "if(true){var uf:*=\"local\";} return [uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case16"
+  },
+  {
+    "id": "public-field-later-true-block",
+    "body": "var before:*=uf; if(true){var uf:*=\"local\";} return [before,uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case17"
+  },
+  {
+    "id": "private-method-later-local",
+    "body": "var before:*=pm; var pm:*=\"local\"; return [before===this.pm,pm];",
+    "params": "",
+    "args": "",
+    "method": "case18"
+  },
+  {
+    "id": "private-method-call-before-local",
+    "body": "var before:*=pm(); var pm:*=\"local\"; return [before,pm];",
+    "params": "",
+    "args": "",
+    "method": "case19"
+  },
+  {
+    "id": "private-method-self-initializer",
+    "body": "var pm:*=pm; return [pm===this.pm,typeof pm];",
+    "params": "",
+    "args": "",
+    "method": "case20"
+  },
+  {
+    "id": "private-method-later-false-block",
+    "body": "var before:*=pm; if(false){var pm:*=\"local\";} return [before===this.pm,pm];",
+    "params": "",
+    "args": "",
+    "method": "case21"
+  },
+  {
+    "id": "private-method-earlier-false-block",
+    "body": "if(false){var pm:*=\"local\";} return [pm,this.pm()];",
+    "params": "",
+    "args": "",
+    "method": "case22"
+  },
+  {
+    "id": "protected-method-later-local",
+    "body": "var before:*=qm; var qm:*=\"local\"; return [before===this.qm,qm];",
+    "params": "",
+    "args": "",
+    "method": "case23"
+  },
+  {
+    "id": "protected-method-call-before-local",
+    "body": "var before:*=qm(); var qm:*=\"local\"; return [before,qm];",
+    "params": "",
+    "args": "",
+    "method": "case24"
+  },
+  {
+    "id": "protected-method-self-initializer",
+    "body": "var qm:*=qm; return [qm===this.qm,typeof qm];",
+    "params": "",
+    "args": "",
+    "method": "case25"
+  },
+  {
+    "id": "protected-method-later-false-block",
+    "body": "var before:*=qm; if(false){var qm:*=\"local\";} return [before===this.qm,qm];",
+    "params": "",
+    "args": "",
+    "method": "case26"
+  },
+  {
+    "id": "protected-method-earlier-false-block",
+    "body": "if(false){var qm:*=\"local\";} return [qm,this.qm()];",
+    "params": "",
+    "args": "",
+    "method": "case27"
+  },
+  {
+    "id": "public-method-later-local",
+    "body": "var before:*=um; var um:*=\"local\"; return [before===this.um,um];",
+    "params": "",
+    "args": "",
+    "method": "case28"
+  },
+  {
+    "id": "public-method-call-before-local",
+    "body": "var before:*=um(); var um:*=\"local\"; return [before,um];",
+    "params": "",
+    "args": "",
+    "method": "case29"
+  },
+  {
+    "id": "public-method-self-initializer",
+    "body": "var um:*=um; return [um===this.um,typeof um];",
+    "params": "",
+    "args": "",
+    "method": "case30"
+  },
+  {
+    "id": "public-method-later-false-block",
+    "body": "var before:*=um; if(false){var um:*=\"local\";} return [before===this.um,um];",
+    "params": "",
+    "args": "",
+    "method": "case31"
+  },
+  {
+    "id": "public-method-earlier-false-block",
+    "body": "if(false){var um:*=\"local\";} return [um,this.um()];",
+    "params": "",
+    "args": "",
+    "method": "case32"
+  },
+  {
+    "id": "private-parameter-shadow",
+    "body": "return [pf,this.pf];",
+    "params": "pf:*",
+    "args": "\"parameter\"",
+    "method": "case33"
+  },
+  {
+    "id": "private-catch-shadow",
+    "body": "var before:*=pf; var inside:*; try{throw \"caught\";}catch(pf:*){inside=pf;} return [before,inside,pf];",
+    "params": "",
+    "args": "",
+    "method": "case34"
+  },
+  {
+    "id": "private-catch-var-after",
+    "body": "try{throw \"caught\";}catch(e:*){var pf:*=\"local\";}return [pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case35"
+  },
+  {
+    "id": "protected-parameter-shadow",
+    "body": "return [qf,this.qf];",
+    "params": "qf:*",
+    "args": "\"parameter\"",
+    "method": "case36"
+  },
+  {
+    "id": "protected-catch-shadow",
+    "body": "var before:*=qf; var inside:*; try{throw \"caught\";}catch(qf:*){inside=qf;} return [before,inside,qf];",
+    "params": "",
+    "args": "",
+    "method": "case37"
+  },
+  {
+    "id": "protected-catch-var-after",
+    "body": "try{throw \"caught\";}catch(e:*){var qf:*=\"local\";}return [qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case38"
+  },
+  {
+    "id": "public-parameter-shadow",
+    "body": "return [uf,this.uf];",
+    "params": "uf:*",
+    "args": "\"parameter\"",
+    "method": "case39"
+  },
+  {
+    "id": "public-catch-shadow",
+    "body": "var before:*=uf; var inside:*; try{throw \"caught\";}catch(uf:*){inside=uf;} return [before,inside,uf];",
+    "params": "",
+    "args": "",
+    "method": "case40"
+  },
+  {
+    "id": "public-catch-var-after",
+    "body": "try{throw \"caught\";}catch(e:*){var uf:*=\"local\";}return [uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case41"
+  },
+  {
+    "id": "private-multideclaration-order",
+    "body": "var before:*=pf,pf:*=\"local\"; return [before,pf];",
+    "params": "",
+    "args": "",
+    "method": "case42"
+  },
+  {
+    "id": "private-reverse-multideclaration-order",
+    "body": "var pf:*=\"local\",after:*=pf; return [after,pf];",
+    "params": "",
+    "args": "",
+    "method": "case43"
+  },
+  {
+    "id": "private-local-before-catch",
+    "body": "var pf:*=\"local\";var inside:*;try{throw \"caught\";}catch(pf:*){inside=pf;}return [inside,pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case44"
+  },
+  {
+    "id": "private-catch-before-later-local",
+    "body": "var before:*;try{throw \"caught\";}catch(pf:*){before=pf;}var between:*=pf;var pf:*=\"local\";return [before,between,pf];",
+    "params": "",
+    "args": "",
+    "method": "case45"
+  },
+  {
+    "id": "private-local-declared-in-other-catch",
+    "body": "var before:*=pf;try{throw \"caught\";}catch(e:*){var pf:*=\"local\";}return [before,pf];",
+    "params": "",
+    "args": "",
+    "method": "case46"
+  },
+  {
+    "id": "private-two-conditional-branches",
+    "body": "var before:*=pf;if(false){var pf:*=\"first\";}else{pf=\"second\";}return [before,pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case47"
+  },
+  {
+    "id": "private-conditional-initializer-self",
+    "body": "if(true){var pf:*=pf;}return [pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case48"
+  },
+  {
+    "id": "private-parameter-later-var",
+    "body": "var before:*=pf;var pf:*=\"local\";return [before,pf,this.pf];",
+    "params": "pf:*",
+    "args": "\"parameter\"",
+    "method": "case49"
+  },
+  {
+    "id": "private-field-runtime-earlier-true",
+    "body": "if(flag){var pf:*=\"local\";}return [pf,typeof pf,this.pf];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case50"
+  },
+  {
+    "id": "private-field-runtime-later-true",
+    "body": "var before:*=pf;if(flag){var pf:*=\"local\";}return [before,pf,typeof pf,this.pf];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case51"
+  },
+  {
+    "id": "private-field-runtime-earlier-false",
+    "body": "if(flag){var pf:*=\"local\";}return [pf,typeof pf,this.pf];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case52"
+  },
+  {
+    "id": "private-field-runtime-later-false",
+    "body": "var before:*=pf;if(flag){var pf:*=\"local\";}return [before,pf,typeof pf,this.pf];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case53"
+  },
+  {
+    "id": "protected-field-runtime-earlier-true",
+    "body": "if(flag){var qf:*=\"local\";}return [qf,typeof qf,this.qf];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case54"
+  },
+  {
+    "id": "protected-field-runtime-later-true",
+    "body": "var before:*=qf;if(flag){var qf:*=\"local\";}return [before,qf,typeof qf,this.qf];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case55"
+  },
+  {
+    "id": "protected-field-runtime-earlier-false",
+    "body": "if(flag){var qf:*=\"local\";}return [qf,typeof qf,this.qf];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case56"
+  },
+  {
+    "id": "protected-field-runtime-later-false",
+    "body": "var before:*=qf;if(flag){var qf:*=\"local\";}return [before,qf,typeof qf,this.qf];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case57"
+  },
+  {
+    "id": "public-field-runtime-earlier-true",
+    "body": "if(flag){var uf:*=\"local\";}return [uf,typeof uf,this.uf];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case58"
+  },
+  {
+    "id": "public-field-runtime-later-true",
+    "body": "var before:*=uf;if(flag){var uf:*=\"local\";}return [before,uf,typeof uf,this.uf];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case59"
+  },
+  {
+    "id": "public-field-runtime-earlier-false",
+    "body": "if(flag){var uf:*=\"local\";}return [uf,typeof uf,this.uf];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case60"
+  },
+  {
+    "id": "public-field-runtime-later-false",
+    "body": "var before:*=uf;if(flag){var uf:*=\"local\";}return [before,uf,typeof uf,this.uf];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case61"
+  },
+  {
+    "id": "private-method-false-type",
+    "body": "if(false){var pm:*=\"local\";}return [typeof pm,pm===this.pm];",
+    "params": "",
+    "args": "",
+    "method": "case62"
+  },
+  {
+    "id": "private-method-runtime-later-true",
+    "body": "var before:*=pm;if(flag){var pm:*=\"local\";}return [before===this.pm,typeof pm,pm===this.pm];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case63"
+  },
+  {
+    "id": "private-method-runtime-later-false",
+    "body": "var before:*=pm;if(flag){var pm:*=\"local\";}return [before===this.pm,typeof pm,pm===this.pm];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case64"
+  },
+  {
+    "id": "protected-method-false-type",
+    "body": "if(false){var qm:*=\"local\";}return [typeof qm,qm===this.qm];",
+    "params": "",
+    "args": "",
+    "method": "case65"
+  },
+  {
+    "id": "protected-method-runtime-later-true",
+    "body": "var before:*=qm;if(flag){var qm:*=\"local\";}return [before===this.qm,typeof qm,qm===this.qm];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case66"
+  },
+  {
+    "id": "protected-method-runtime-later-false",
+    "body": "var before:*=qm;if(flag){var qm:*=\"local\";}return [before===this.qm,typeof qm,qm===this.qm];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case67"
+  },
+  {
+    "id": "public-method-false-type",
+    "body": "if(false){var um:*=\"local\";}return [typeof um,um===this.um];",
+    "params": "",
+    "args": "",
+    "method": "case68"
+  },
+  {
+    "id": "public-method-runtime-later-true",
+    "body": "var before:*=um;if(flag){var um:*=\"local\";}return [before===this.um,typeof um,um===this.um];",
+    "params": "flag:*",
+    "args": "true",
+    "method": "case69"
+  },
+  {
+    "id": "public-method-runtime-later-false",
+    "body": "var before:*=um;if(flag){var um:*=\"local\";}return [before===this.um,typeof um,um===this.um];",
+    "params": "flag:*",
+    "args": "false",
+    "method": "case70"
+  },
+  {
+    "id": "private-field-uninitialized",
+    "body": "var before:*=pf;var pf:*;return [before,pf,typeof pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case71"
+  },
+  {
+    "id": "private-field-parameter-redeclaration",
+    "body": "var before:*=pf;var pf:*=\"local\";return [before,pf,this.pf];",
+    "params": "pf:*",
+    "args": "\"parameter\"",
+    "method": "case72"
+  },
+  {
+    "id": "private-field-throwing-initializer",
+    "body": "var before:*=pf;try{var pf:*=this.throwInit();}catch(e:*){}return [before,pf,typeof pf,this.pf];",
+    "params": "",
+    "args": "",
+    "method": "case73"
+  },
+  {
+    "id": "protected-field-uninitialized",
+    "body": "var before:*=qf;var qf:*;return [before,qf,typeof qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case74"
+  },
+  {
+    "id": "protected-field-parameter-redeclaration",
+    "body": "var before:*=qf;var qf:*=\"local\";return [before,qf,this.qf];",
+    "params": "qf:*",
+    "args": "\"parameter\"",
+    "method": "case75"
+  },
+  {
+    "id": "protected-field-throwing-initializer",
+    "body": "var before:*=qf;try{var qf:*=this.throwInit();}catch(e:*){}return [before,qf,typeof qf,this.qf];",
+    "params": "",
+    "args": "",
+    "method": "case76"
+  },
+  {
+    "id": "public-field-uninitialized",
+    "body": "var before:*=uf;var uf:*;return [before,uf,typeof uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case77"
+  },
+  {
+    "id": "public-field-parameter-redeclaration",
+    "body": "var before:*=uf;var uf:*=\"local\";return [before,uf,this.uf];",
+    "params": "uf:*",
+    "args": "\"parameter\"",
+    "method": "case78"
+  },
+  {
+    "id": "public-field-throwing-initializer",
+    "body": "var before:*=uf;try{var uf:*=this.throwInit();}catch(e:*){}return [before,uf,typeof uf,this.uf];",
+    "params": "",
+    "args": "",
+    "method": "case79"
+  },
+  {
+    "id": "private-method-uninitialized",
+    "body": "var before:*=pm;var pm:*;return [before===this.pm,typeof pm,pm===this.pm];",
+    "params": "",
+    "args": "",
+    "method": "case80"
+  },
+  {
+    "id": "private-method-parameter-redeclaration",
+    "body": "var before:*=pm;var pm:*=\"local\";return [before,pm];",
+    "params": "pm:*",
+    "args": "\"parameter\"",
+    "method": "case81"
+  },
+  {
+    "id": "private-method-throwing-initializer",
+    "body": "var before:*=pm;try{var pm:*=this.throwInit();}catch(e:*){}return [before===this.pm,typeof pm,pm===this.pm];",
+    "params": "",
+    "args": "",
+    "method": "case82"
+  },
+  {
+    "id": "protected-method-uninitialized",
+    "body": "var before:*=qm;var qm:*;return [before===this.qm,typeof qm,qm===this.qm];",
+    "params": "",
+    "args": "",
+    "method": "case83"
+  },
+  {
+    "id": "protected-method-parameter-redeclaration",
+    "body": "var before:*=qm;var qm:*=\"local\";return [before,qm];",
+    "params": "qm:*",
+    "args": "\"parameter\"",
+    "method": "case84"
+  },
+  {
+    "id": "protected-method-throwing-initializer",
+    "body": "var before:*=qm;try{var qm:*=this.throwInit();}catch(e:*){}return [before===this.qm,typeof qm,qm===this.qm];",
+    "params": "",
+    "args": "",
+    "method": "case85"
+  },
+  {
+    "id": "public-method-uninitialized",
+    "body": "var before:*=um;var um:*;return [before===this.um,typeof um,um===this.um];",
+    "params": "",
+    "args": "",
+    "method": "case86"
+  },
+  {
+    "id": "public-method-parameter-redeclaration",
+    "body": "var before:*=um;var um:*=\"local\";return [before,um];",
+    "params": "um:*",
+    "args": "\"parameter\"",
+    "method": "case87"
+  },
+  {
+    "id": "public-method-throwing-initializer",
+    "body": "var before:*=um;try{var um:*=this.throwInit();}catch(e:*){}return [before===this.um,typeof um,um===this.um];",
+    "params": "",
+    "args": "",
+    "method": "case88"
+  }
+]

@@ -22,6 +22,7 @@ export const callableClassIntrinsics = Object.freeze({
     setPrototypeOf: Object.setPrototypeOf,
     number: Number,
     array: Array,
+    symbol: Symbol,
     arraySlice: Array.prototype.slice,
     apply: Reflect.apply,
     arityError: (): Error => failure(1063, 'ArgumentError'),

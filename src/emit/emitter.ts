@@ -13,6 +13,7 @@ import {NativeNamespaces} from './native-namespaces';
 import {logicalAssignmentType} from './logical-assignment';
 import {NativeClassInitializers, NativeClassInitializationOptions} from './native-class-initializers';
 import {NativeCallableClasses, NativeCallableClassOptions} from './native-callable-classes';
+import {NativeLexicalMembers} from './native-lexical-members';
 
 const util = require('util');
 
@@ -109,6 +110,7 @@ export interface EmitterOptions {
 	/** Common Laya AS3String module; required for callable String constructor parameters. */
 	nativeCallableStringModule?: string;
 	nativeCallableMetadata?: NativeClassMetadataOptions;
+    nativeLexicalMembersModule?: string;
 	/** Explicit common AS3ArrayCreation module for source Array literals only. */
 	nativeArrayCreationModule?: string;
 }
@@ -181,6 +183,8 @@ export function visitNode(emitter:Emitter, node:Node):void {
 		}
 	}
 
+	if (emitter.lexical && emitter.lexical.emit(emitter, node, visitNode)) return;
+
 	let visitor = VISITORS[node.kind] || function (emitter:Emitter, node:Node):void {
 			emitter.catchup(node.start);
 			visitNodes(emitter, node.children);
@@ -215,6 +219,7 @@ function filterAST(node:Node):Node {
 
 
 export default class Emitter {
+    lexical: NativeLexicalMembers;
     /** Exact compiler-created callable imports; authored imports grant no exemption. */
     public nativeSourceHelpers = new Set<string>();
 	public isNew:boolean = false;
@@ -291,6 +296,11 @@ export default class Emitter {
 				throw new Error('AS3_ARRAY_CREATION_UNSUPPORTED: callable source classes with lazy initialization and module imports required');
 		}
 		const filtered = filterAST(ast);
+        if (this.options.nativeLexicalMembersModule !== undefined) {
+            if (!this.options.nativeCallableClasses || !this.options.nativeClassInitialization || this.options.useNamespaces)
+                throw new Error('AS3_LEXICAL_COMPILER_UNSUPPORTED: authenticated lazy callable source required');
+            this.lexical = new NativeLexicalMembers(this.source, filtered, this.options.nativeLexicalMembersModule, this.options.nativeCallableMetadata);
+        }
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris);
 		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization);
 		this.withScope([], (rootScope) => {
@@ -303,7 +313,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -1609,7 +1619,8 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 			const start = emitter.output.length;
 			visitNode(emitter, init);
 			emitter.catchup(getEffectiveNodeEnd(init));
-			emitter.classFactory.fields.push(emitter.classFactory.value + '[' + JSON.stringify(node.findChild(NodeKind.NAME).text)
+			const lexical = emitter.lexical && emitter.lexical.trait(node.findChild(NodeKind.NAME).text, true);
+            emitter.classFactory.fields.push(emitter.classFactory.value + '[' + (lexical ? lexical.key : JSON.stringify(node.findChild(NodeKind.NAME).text))
 				+ '] = ' + emitter.output.slice(start) + ';');
 			emitter.output = emitter.output.slice(0, start);
 		}
@@ -2213,16 +2224,19 @@ function emitCatch(emitter:Emitter, node:Node):void {
 			|| node.nextSibling && node.nextSibling.kind === NodeKind.CATCH)
 			throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: multiple catch clauses require AS3 exception dispatch');
 	}
-	emitter.declareInScope({name: name.text, as3Type: '*'})
+	const catchScope = emitter.lexical && emitter.enterScope([]);
+    emitter.declareInScope({name: name.text, as3Type: '*'})
 	emitter.catchup(node.start);
 	if (type && type.text === '*') {
 		// JavaScript already catches every thrown value; TypeScript forbids a catch annotation.
 		emitter.catchup(name.end);
 		emitter.skipTo(type.end);
 		visitNodes(emitter, node.children.slice(node.children.indexOf(type) + 1));
+        if (catchScope) emitter.exitScope(catchScope);
 		return;
 	}
 	visitNodes(emitter, node.children);
+    if (catchScope) emitter.exitScope(catchScope);
 }
 
 

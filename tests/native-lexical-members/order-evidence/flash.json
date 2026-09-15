@@ -1,0 +1,69 @@
+{
+  "reflection": [
+    "<type name=\"probe::LexicalOrder\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"initialized\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n  <factory type=\"probe::LexicalOrder\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"getValue\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n    <method name=\"once\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n    <method name=\"state\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n    <method name=\"arity\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n    <method name=\"assign\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "value": [
+        3,
+        3
+      ],
+      "events": [],
+      "id": "static-initializer-order"
+    },
+    {
+      "value": 111,
+      "events": [],
+      "id": "receiver-key-arguments-once"
+    },
+    {
+      "value": [
+        111,
+        8
+      ],
+      "events": [],
+      "id": "after-once"
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "id": "argument-effects-before-arity",
+      "events": []
+    },
+    {
+      "value": [
+        211,
+        8
+      ],
+      "events": [],
+      "id": "after-arity"
+    },
+    {
+      "value": 19,
+      "events": [
+        "outer"
+      ],
+      "id": "reentrant-write"
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 0
+      },
+      "id": "throwing-write",
+      "events": [
+        "throw"
+      ]
+    },
+    {
+      "value": 19,
+      "events": [],
+      "id": "after-throw"
+    }
+  ],
+  "instances": [
+    "<type name=\"probe::LexicalOrder\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"getValue\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n  <method name=\"once\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n  <method name=\"state\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n  <method name=\"arity\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\"/>\n  <method name=\"assign\" declaredBy=\"probe::LexicalOrder\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>"
+  ]
+}

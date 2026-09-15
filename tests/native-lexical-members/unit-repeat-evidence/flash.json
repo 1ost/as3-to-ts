@@ -1,0 +1,181 @@
+{
+  "rows": [
+    {
+      "events": [],
+      "value": [
+        1,
+        2,
+        9,
+        0,
+        "public"
+      ],
+      "id": "defaults"
+    },
+    {
+      "events": [],
+      "value": true,
+      "id": "array-fresh"
+    },
+    {
+      "events": [],
+      "value": [
+        "7",
+        7
+      ],
+      "id": "field-write"
+    },
+    {
+      "events": [],
+      "value": "8",
+      "id": "protected-write"
+    },
+    {
+      "events": [],
+      "value": 7,
+      "id": "implicit"
+    },
+    {
+      "events": [],
+      "value": [
+        true,
+        true,
+        7
+      ],
+      "id": "closure-stable"
+    },
+    {
+      "events": [],
+      "value": [
+        7,
+        7,
+        0
+      ],
+      "id": "closure-receiver"
+    },
+    {
+      "events": [],
+      "value": [
+        "11",
+        1
+      ],
+      "id": "protected-closure"
+    },
+    {
+      "events": [],
+      "value": [
+        "12",
+        12,
+        true,
+        1
+      ],
+      "id": "static-closure"
+    },
+    {
+      "events": [],
+      "value": "parameter",
+      "id": "parameter-shadow"
+    },
+    {
+      "events": [],
+      "value": "local",
+      "id": "local-shadow"
+    },
+    {
+      "events": [],
+      "value": "caught",
+      "id": "catch-shadow"
+    },
+    {
+      "events": [],
+      "value": 7,
+      "id": "catch-after"
+    },
+    {
+      "events": [],
+      "value": 7,
+      "id": "dynamic-private"
+    },
+    {
+      "events": [],
+      "value": [
+        "13",
+        13
+      ],
+      "id": "dynamic-write"
+    },
+    {
+      "events": [],
+      "value": 13,
+      "id": "dynamic-call"
+    },
+    {
+      "events": [],
+      "value": "public",
+      "id": "dynamic-public"
+    },
+    {
+      "error": {
+        "name": "ReferenceError",
+        "errorID": 1069
+      },
+      "events": [],
+      "id": "public-qname-private"
+    },
+    {
+      "error": {
+        "name": "ReferenceError",
+        "errorID": 1069
+      },
+      "events": [],
+      "id": "external-private"
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "events": [],
+      "id": "private-arity-extra"
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "events": [],
+      "id": "protected-arity-missing"
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "events": [],
+      "id": "protected-arity-extra"
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "events": [],
+      "id": "static-arity-missing"
+    },
+    {
+      "events": [
+        "valueOf"
+      ],
+      "value": [
+        {},
+        14
+      ],
+      "id": "coercion-order"
+    }
+  ],
+  "reflection": [
+    "<type name=\"probe::LexicalUnit\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"staticRead\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"callback\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <factory type=\"probe::LexicalUnit\">\n    <extendsClass type=\"Object\"/>\n    <variable name=\"publicValue\" type=\"*\"/>\n    <method name=\"dynamicWrite\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"implicit\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n    <method name=\"dynamicCall\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"parameterShadow\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"read\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n    <method name=\"arrayIdentity\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n    <method name=\"localShadow\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n    <method name=\"write\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"arrayRead\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n    <method name=\"catchShadow\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n    <method name=\"catchAfter\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n    <method name=\"closure\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n    <method name=\"invoke\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"dynamicRead\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"protectedClosure\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  </factory>\n</type>"
+  ],
+  "instances": [
+    "<type name=\"probe::LexicalUnit\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <variable name=\"publicValue\" type=\"*\"/>\n  <method name=\"dynamicWrite\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"implicit\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"dynamicCall\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"parameterShadow\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"read\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"arrayIdentity\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"localShadow\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"write\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"arrayRead\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"catchShadow\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"catchAfter\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"closure\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n  <method name=\"invoke\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"dynamicRead\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"protectedClosure\" declaredBy=\"probe::LexicalUnit\" returnType=\"*\"/>\n</type>"
+  ]
+}

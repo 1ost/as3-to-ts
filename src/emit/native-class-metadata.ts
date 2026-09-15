@@ -1,4 +1,5 @@
 import Node from '../syntax/node';
+import {NativeLexicalMembers} from './native-lexical-members';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {nativeSourceTypeIdentity} from './native-source-type';
@@ -9,7 +10,7 @@ export interface NativeClassMetadataOptions {
 }
 
 /** Source completeness is validated here; authenticated reflection ordering is a toolkit input. */
-export function validateNativeClassMetadata(qname: string, source: string, input: NativeClassMetadataOptions): void {
+export function validateNativeClassMetadata(qname: string, source: string, input: NativeClassMetadataOptions, lexical?: NativeLexicalMembers): void {
     const fail = (reason: string): never => {throw new Error('AS3_CLASS_METADATA_UNSUPPORTED: ' + reason);};
     if (!input || typeof input.module !== 'string' || !input.module.trim() || /[\r\n\u0000]/.test(input.module)) fail('common metadata provider module');
     const record = input.classes && input.classes[qname];
@@ -29,7 +30,8 @@ export function validateNativeClassMetadata(qname: string, source: string, input
     cls.findChild(K.CONTENT).children.forEach(member => {
         const flags = mods(member);
         if (flags.indexOf('public') < 0) {
-            if ([K.VAR_LIST, K.CONST_LIST, K.FUNCTION, K.GET, K.SET].indexOf(member.kind) >= 0)
+            if ([K.VAR_LIST, K.CONST_LIST, K.FUNCTION, K.GET, K.SET].indexOf(member.kind) >= 0
+                && !(lexical && lexical.source === source && lexical.qname === qname && lexical.proves(member)))
                 fail('nonpublic source members require lexical namespace dispatch');
             return;
         }
