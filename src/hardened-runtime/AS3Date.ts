@@ -37,13 +37,20 @@ function numberArgument(value: unknown, operation: string): number {
 }
 type CalendarComponent = number | string;
 export class AS3Date {
-    constructor(...args: [] | [CalendarComponent, CalendarComponent, CalendarComponent,
+    constructor();
+    constructor(value: number);
+    constructor(year: CalendarComponent, month: CalendarComponent, date: CalendarComponent,
+        hours: CalendarComponent, minutes: CalendarComponent, seconds: CalendarComponent);
+    constructor(...args: [] | [number] | [CalendarComponent, CalendarComponent, CalendarComponent,
         CalendarComponent, CalendarComponent, CalendarComponent]) {
-        if(args.length!==0 && args.length!==6)
-            throw new TypeError("Date construction requires zero arguments or six proven primitive calendar components");
+        if(args.length!==0 && args.length!==1 && args.length!==6)
+            throw new TypeError("Date construction requires zero arguments, one exact Number, or six proven primitive calendar components");
+        if(args.length===1 && typeof args[0]!=="number")
+            throw new TypeError("One-argument Date construction requires an exact Number");
         if(args.length===6 && args.some(value=>typeof value!=="number" && typeof value!=="string"))
             throw new TypeError("Six-component Date construction requires primitive String or Number arguments");
         if(args.length===0) values.set(this,new NativeDate());
+        else if(args.length===1) values.set(this,new NativeDate(args[0]));
         else {
             // JavaScript evaluates all constructor arguments before entering this
             // body. Convert only the already-captured primitive values, in order.

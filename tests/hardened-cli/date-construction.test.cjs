@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),test=require('node:test'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),cp=require('node:child_process'),crypto=require('node:crypto');
 const root=path.resolve(__dirname,'../..'),sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 const canonical=v=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(canonical).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}';
-test('Date native proof gates original zeroarg and six-number calendar construction, methods, property and identity',t=>{
+test('Date native proof gates original zeroarg, numeric epoch and six-number calendar construction, methods, property and identity',t=>{
  const air=process.env.HARDENED_FIXTURE_AIR_SDK,laya=process.env.HARDENED_FIXTURE_LAYA,ffdec=process.env.HARDENED_FIXTURE_FFDEC;assert.ok(air&&laya&&ffdec);
  const calendarEvidenceRevision='da111701143e44ac03a060cad5c269c301f32fa9';
  const retainedRevision=cp.spawnSync('git',['merge-base','--is-ancestor',calendarEvidenceRevision,'HEAD'],{cwd:laya,encoding:'utf8'});
@@ -80,9 +80,9 @@ test('Date native proof gates original zeroarg and six-number calendar construct
 	 const holds={StringCoercion:'var d:Date=new Date();var s:String=String(d);',Addition:'var d:Date=new Date();var n:Number=d+1;',OneArgument:'var d:Date=new Date(0);',TwoArguments:'var d:Date=new Date(2026,0);',ThreeArguments:'var d:Date=new Date(2026,0,1);',FourArguments:'var d:Date=new Date(2026,0,1,0);',FiveArguments:'var d:Date=new Date(2026,0,1,0,0);',SevenArguments:'var d:Date=new Date(2026,0,1,0,0,0,0);',SixStringArgument:'var d:Date=new Date(2026,0,1,0,0,"0");',Mutation:'var d:Date=new Date();d.time=0;',OtherMember:'var d:Date=new Date();d.getFullYear();',Closure:'var d:Date=new Date();var f:Function=d.getTime;',Shadow:'var Date:Function=null;new Date();',ArrayStringIndex:'var values:Array=[1];var key:*=\"name\";--values[key];'};
  for(const [cls,body] of Object.entries(holds))fs.writeFileSync(path.join(source,cls+'.as'),`package {public class ${cls} {public function run():void {${body}}}}`);
  fs.rmSync(profile,{recursive:true,force:true});make();compile('qualify','holds');const rows=JSON.parse(fs.readFileSync(path.join(dir,'holds/manifest.json'))).files;
-	 for(const cls of Object.keys(holds).filter(cls=>!['SixStringArgument','Mutation'].includes(cls))){const row=rows.find(r=>r.sourcePath===cls+'.as');assert.equal(row?.status,'held',JSON.stringify(row));}
-	 for(const cls of ['OneArgument','TwoArguments','ThreeArguments','FourArguments','FiveArguments','SevenArguments'])assert.equal(rows.find(r=>r.sourcePath===cls+'.as').code,'HARDENED_DATE_CONSTRUCTOR_ARITY');
-	 for(const cls of ['SixStringArgument','Mutation'])assert.equal(rows.find(r=>r.sourcePath===cls+'.as').status,'admitted');
+	 for(const cls of Object.keys(holds).filter(cls=>!['OneArgument','SixStringArgument','Mutation'].includes(cls))){const row=rows.find(r=>r.sourcePath===cls+'.as');assert.equal(row?.status,'held',JSON.stringify(row));}
+	 for(const cls of ['TwoArguments','ThreeArguments','FourArguments','FiveArguments','SevenArguments'])assert.equal(rows.find(r=>r.sourcePath===cls+'.as').code,'HARDENED_DATE_CONSTRUCTOR_ARITY');
+	 for(const cls of ['OneArgument','SixStringArgument','Mutation'])assert.equal(rows.find(r=>r.sourcePath===cls+'.as').status,'admitted');
 	 assert.equal(rows.find(r=>r.sourcePath==='ArrayStringIndex.as').code,'HARDENED_ARRAY_INDEX_TYPE');
  assert.equal(sha(fs.readFileSync(path.join(source,name))),sha(bytes));
 });

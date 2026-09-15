@@ -2872,8 +2872,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             && !context.fields[name] && !context.methods[name] && !context.accessors[name] && !context.importsByLocal[name]
             && !context.resolveImportedType(name,null,nameNode) && hasNativeDateAuthority(context.sourceMemberAuthority)) {
             assertNoInheritedNativeFunctionShadow(context,name,nameNode,"HARDENED_DATE","Date");
-            if(args.length!==0 && args.length!==6)
-                fail("HARDENED_DATE_CONSTRUCTOR_ARITY","Date construction admits only zero arguments or six proven primitive calendar components",call);
+            if(args.length!==0 && args.length!==1 && args.length!==6)
+                fail("HARDENED_DATE_CONSTRUCTOR_ARITY","Date construction admits only zero arguments, one exact Number, or six proven primitive calendar components",call);
+            if(args.length===1) {
+                const type=assignmentType(args[0]!,context,call);
+                if(type.nullable || type.sourceName!=="Number" || type.emittedName!=="number")
+                    fail("HARDENED_DATE_CONSTRUCTOR_TYPE","One-argument Date construction requires a non-null exact Number",call);
+            }
             if(args.length===6 && args.some(argument=>{
                 const type=assignmentType(argument,context,call);
                 return type.nullable || !["String","Number","int","uint"].includes(type.sourceName)
