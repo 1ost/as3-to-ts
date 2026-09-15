@@ -185,6 +185,12 @@ export interface NumericPredicateExpression extends SemanticIdentity {
     arguments: SemanticExpression[];
 }
 
+export interface EncodeUriComponentExpression extends SemanticIdentity {
+    kind: "encodeUriComponent";
+    argument: SemanticExpression;
+    authoritySha256: string;
+}
+
 export interface MathExpression extends SemanticIdentity {
     kind: "math";
     member: "PI" | "min" | "max" | "round" | "abs";
@@ -560,7 +566,7 @@ export interface ReflectionExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = CallableSelfExpression | ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = CallableSelfExpression | ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | EncodeUriComponentExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |

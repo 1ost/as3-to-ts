@@ -240,10 +240,13 @@ def main():
     p.add_argument('--bytearray-native-uncompress', action='store_true', help='Authenticate zero-argument intrinsic decompression through shared Laya')
     p.add_argument('--native-date', action='store_true', help='Authenticate the shared zero-argument Date intrinsic from exact SDK declarations')
     p.add_argument('--native-describe-type', action='store_true', help='Retain exact SDK describeType proof; requires a separately verified reflection provider')
+    p.add_argument('--native-uri-component', action='store_true', help='Authenticate exact one-String encodeURIComponent from retained AIR/browser evidence')
     p.add_argument('--source-includes', action='store_true', help='Authenticate original include fragments separately from source declaration roots')
     args = p.parse_args()
     if args.native_describe_type and not args.ffdec_jar:
         p.error('--native-describe-type requires --ffdec-jar')
+    if args.native_uri_component and not args.ffdec_jar:
+        p.error('--native-uri-component requires --ffdec-jar')
     if args.native_date and not args.ffdec_jar:
         p.error('--native-date requires exact SDK decompilation via --ffdec-jar')
     if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*', args.entry):
@@ -371,6 +374,14 @@ def main():
             source_manifest.update(describe_evidence['manifestPins'])
             facade_inputs.update(describe_evidence['generatorInputs'])
             files['nativeDescribeType'] = out / describe_evidence['file']['path']
+        if args.native_uri_component:
+            uri_spec = importlib.util.spec_from_file_location('native_uri_component_profile', ROOT / 'tools/native_uri_component_profile.py')
+            uri_helper = importlib.util.module_from_spec(uri_spec); uri_spec.loader.exec_module(uri_helper)
+            uri_evidence = uri_helper.produce_native_uri_component_profile(profile_root=out, air_sdk=sdk, laya=laya,
+                sdk_declaration=out / 'sdk-source/scripts/encodeURIComponent.as', sdk_signatures=out / 'sdk-signatures.json')
+            source_manifest.update(uri_evidence['manifestPins'])
+            facade_inputs.update(uri_evidence['generatorInputs'])
+            files['nativeUriComponent'] = out / uri_evidence['file']['path']
         write(files['sourceManifest'], source_manifest)
         local_types = json.loads(files['localTypeMap'].read_text())
         local_types['sourceManifestSha256'] = sha(files['sourceManifest'])

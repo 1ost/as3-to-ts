@@ -1,5 +1,6 @@
 import {loadSourceIncludes} from "./source-includes-authority";
 import { verifyNativeDescribeTypeAuthority } from "../hardened/native-describe-type-authority";
+import {verifyNativeUriComponentAuthority} from "../hardened/native-uri-component-authority";
 import { loadReflectionProviderTarget, type ReflectionProviderTarget } from "../hardened/reflection-provider-authority";
 import { verifyNativeDateAuthority } from "../hardened/native-date-authority";
 import { loadByteArrayNativeTarget } from "../hardened/bytearray-native-authority";
@@ -35,9 +36,9 @@ const COMPILED_LOCAL_MEMBER_MAP_SHA256 = "663beb2c386797966f1acf8b5248eae41e2b0a
 const COMPILED_DECLARATION_WORKER_SHA256 = "87f04afe96e2713595eb8ed2998f158d43f57a65cbebb03d3a12be499f112db7";
 const COMPILED_LOCAL_MEMBER_COMPLETE_COUNT = 2884;
 const COMPILED_LOCAL_MEMBER_HELD_COUNT = 39;
-const COMPILED_RUNTIME_TYPE_AUTHORITY_LOCK_SHA256 = "fd3b2f5142e47cfbd5623d6e3b326bbd7f24935e696935de3768d264b7b30fe6";
+const COMPILED_RUNTIME_TYPE_AUTHORITY_LOCK_SHA256 = "2daf16c475335ebf28928b913d13507467b653a796752c9ad3427b8611a5e9d3";
 const COMPILED_RUNTIME_TYPE_PREDICATES_SHA256 = "010dad6303ba5a6014f33c28b29fb9713f76b4698d82d155249b01858f469ae7";
-const COMPILED_LAYA_RUNTIME_REVISION = "da111701143e44ac03a060cad5c269c301f32fa9";
+const COMPILED_LAYA_RUNTIME_REVISION = "df3ae0dfca172349d5433531768be01a3c48587b";
 
 const COMPILED_AUTHORITY_LOCK = Object.freeze({
     schema: "bleach-local-as3-authority-lock@1",
@@ -334,6 +335,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeDate") ? ["nativeDate"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"sourceIncludes") ? ["sourceIncludes"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeDescribeType") ? ["nativeDescribeType"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"nativeUriComponent") ? ["nativeUriComponent"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"reflectionProvider") ? ["reflectionProvider"] : []))
         || !exactKeys(profile.counts, ["localMembersComplete", "localMembersHeld", "localTypes", "mappedMembers", "mappedTypes", "sourceMemberTypes"])
         || !Array.isArray(profile.runtimePredicateQNames)
@@ -345,7 +347,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const profileRoot = dirname(resolve(profileLockPath));
     const files = profile.files as unknown as {
         capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
-        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; sourceIncludes?: ProfileFile; nativeDescribeType?: ProfileFile; reflectionProvider?: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; sourceIncludes?: ProfileFile; nativeDescribeType?: ProfileFile; nativeUriComponent?: ProfileFile; reflectionProvider?: ProfileFile;
         runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
         sourceMemberAuthority: ProfileFile;
     };
@@ -435,6 +437,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
                 profileFile(profileRoot, files.nativeDescribeType, "native describeType proof"),
                 sourceManifestJson, reflectionProvider, targetCapabilitiesJson);
         }
+        if(files.nativeUriComponent) verifyNativeUriComponentAuthority(sourceMembers,profileRoot,
+            profileFile(profileRoot,files.nativeUriComponent,"native URI component proof"),sourceManifestJson);
         if (Object.keys(sourceMembers.entriesByQName).length !== counts.sourceMemberTypes) {
             throw new CliError("application source member count differs from the profile lock", 6);
         }

@@ -1,5 +1,6 @@
 import { verifyIncludeExpansion } from "./source-includes";
 import { hasNativeDescribeTypeAuthority } from "./native-describe-type-authority";
+import {nativeUriComponentAuthoritySha256} from "./native-uri-component-authority";
 import { hasNativeDateAuthority } from "./native-date-authority";
 import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
 import {
@@ -2065,6 +2066,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     }
     if (expression.kind === "undefined") return semanticType(node, "*", "unknown");
     if (expression.kind === "numericPredicate") return semanticType(node,"Boolean","boolean",[],false);
+    if (expression.kind === "encodeUriComponent") return semanticType(node,"String","string",[],false);
     if (expression.kind === "math" || expression.kind === "parseInteger") return semanticType(node, "Number", "number", [], false, "Number");
     if (expression.kind === "globalCall") return semanticType(node, "void", "void", [], false);
     if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
@@ -2589,6 +2591,27 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 argument, context, argumentNodes[index]!);
         });
         return Object.assign(identity(node), {kind: "parseInteger" as "parseInteger", arguments: args});
+    }
+    if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length === 2
+        && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "IDENTIFIER"
+        && node.children[0]!.text === "encodeURIComponent" && context.className !== "encodeURIComponent"
+        && !context.locals.encodeURIComponent && !context.parameters.encodeURIComponent
+        && !context.fields.encodeURIComponent && !context.methods.encodeURIComponent
+        && !context.accessors.encodeURIComponent && !context.importsByLocal.encodeURIComponent
+        && !context.resolveImportedType("encodeURIComponent",null,node)) {
+        assertNoInheritedNativeFunctionShadow(context,"encodeURIComponent",node);
+        const authoritySha256=nativeUriComponentAuthoritySha256(context.sourceMemberAuthority);
+        if(authoritySha256===null) fail("HARDENED_IDENTIFIER_SCOPE",
+            "encodeURIComponent lacks authenticated package-global URI authority",node);
+        const argumentNodes=node.children[1]!.children;
+        if(argumentNodes.length!==1) fail("HARDENED_URI_COMPONENT_ARITY",
+            "authenticated encodeURIComponent requires exactly one argument",node);
+        const argument=parseExpression(argumentNodes[0]!,context,true);
+        const argumentType=assignmentType(argument,context,argumentNodes[0]!);
+        if(argumentType.sourceName!=="String"||argumentType.emittedName!=="string")
+            fail("HARDENED_URI_COMPONENT_ARGUMENT",
+                "authenticated encodeURIComponent requires one statically proven String argument",argumentNodes[0]!);
+        return Object.assign(identity(node),{kind:"encodeUriComponent" as const,argument,authoritySha256});
     }
     if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS"
         && node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "trace"

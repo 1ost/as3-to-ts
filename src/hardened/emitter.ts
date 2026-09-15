@@ -185,6 +185,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "parseInteger") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3ParseInt"), undefined,
         expression.arguments.map(argument => expressionNode(argument, ts)));
+    if (expression.kind === "encodeUriComponent") return ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3EncodeURIComponent"),undefined,[expressionNode(expression.argument,ts)]);
     if (expression.kind === "globalCall") return ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3Global_" + expression.name), undefined,
         expression.arguments.map(argument => ts.factory.createCallExpression(
@@ -832,6 +834,8 @@ function boundMethodNames(program: SemanticProgram): string[] {
             if (!expression.staticTarget) names[expression.methodName] = true;
         } else if (expression.kind === "member") {
             inspectExpression(expression.target);
+        } else if (expression.kind === "encodeUriComponent") {
+            inspectExpression(expression.argument);
         } else if (expression.kind === "regexpCall" || expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger" || expression.kind === "numericPredicate") {
             expression.arguments?.forEach(inspectExpression);
         } else if (expression.kind === "call") {
@@ -1355,6 +1359,7 @@ function programUsesVector(program: SemanticProgram): boolean {
         if (expression.kind === "index") return visitType(expression.resultType)
             || visitExpression(expression.target) || visitExpression(expression.index);
         if (expression.kind === "member") return visitExpression(expression.target);
+        if(expression.kind==="encodeUriComponent") return visitExpression(expression.argument);
         if (expression.kind === "regexpCall" || expression.kind === "math" || expression.kind === "globalCall" || expression.kind === "parseInteger" || expression.kind === "numericPredicate") return expression.arguments?.some(visitExpression) || false;
         if (expression.kind === "call") return visitExpression(expression.callee) || expression.arguments.some(visitExpression);
         if (expression.kind === "assignment") return visitExpression(expression.target) || visitExpression(expression.value);
@@ -1695,6 +1700,11 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ["as3DescribeTypeStatic","as3ReflectionVariable","as3ReflectionStaticRead"].map(name=>
                 ts.factory.createImportSpecifier(false,ts.factory.createIdentifier(name),ts.factory.createIdentifier("__"+name))))),
         ts.factory.createStringLiteral("@bleach/as3-runtime/AS3Reflection"),undefined));
+    if(programHasKind(program,"encodeUriComponent")) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3EncodeURIComponent"),
+                ts.factory.createIdentifier("__as3EncodeURIComponent"))])),
+        ts.factory.createStringLiteral("@bleach/as3-runtime/AS3URI"),undefined));
     for (const [name, call] of [...globalCalls].sort(([left], [right]) => left.localeCompare(right)))
         imports.push(ts.factory.createImportDeclaration(undefined,
             ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([

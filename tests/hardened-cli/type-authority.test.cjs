@@ -65,7 +65,7 @@ const methodReturningNew=(name,runtimeName)=>({...semanticIdentity,kind:"method"
 
 test("mapped Laya predicate authority is pinned as one exact 62-type capability input",()=>{
     const lock=JSON.parse(fs.readFileSync(path.join(ROOT,"config/runtime-type-authority-lock.json"),"utf8"));
-    assert.equal(lock.layaRevision,"da111701143e44ac03a060cad5c269c301f32fa9");
+    assert.equal(lock.layaRevision,"df3ae0dfca172349d5433531768be01a3c48587b");
     assert.equal(lock.predicateAuthorityCanonicalLfSha256,"010dad6303ba5a6014f33c28b29fb9713f76b4698d82d155249b01858f469ae7");
     assert.equal(lock.predicateAuthorityEntryCount,62);
     assert.equal(lock.predicateAuthorityQNames.length,62);

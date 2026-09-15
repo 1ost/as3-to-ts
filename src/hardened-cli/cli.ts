@@ -140,6 +140,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
     "AS3ByteArrayNative.ts": "f6188ecdba0cb5180172da9a5533640aec0dc1ac7c0433b8e41aec3e02e744e3",
     "AS3Date.ts": "a261c75f50824ec3b23c165dd4879778fca508114f5c25eb1ab1e69c21b0bcab",
+    "AS3URI.ts": "2264c65a2c22fa66d4d14b97b299fe88ba0342f924cc948bf20df159c5cee8bf",
     "AS3ByteArray.ts": "1cf1a2f0f8abc200585b7b62a66724d0fee0ec03c397d96b769905d5a899e4b5",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
     "AS3ClassInitialization.ts": "5b446cdfe43be974455866ca93648b5625edb777938093979e0437aaa8dd501f",
@@ -283,7 +284,7 @@ function runtimeSourceTemplates(includeBigTurnTableDto: boolean,includePrimarySe
 
 function runtimePackageJson(name: string, includeBigTurnTableDto: boolean, includeSecondaryAuthority: boolean,
     includeBrowserAuthority:boolean): string {
-    const entries = ["AS3Reflection", "AS3Date", "AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
+    const entries = ["AS3Reflection", "AS3Date", "AS3URI", "AS3Array", ...(includeBigTurnTableDto ? ["AS3BigTurnTableInnerDto"] : []), "AS3ByteArray", "AS3ClassInitialization", "AS3Coerce", "AS3Dictionary", "AS3Enumeration", "AS3Embed", "AS3Error", "AS3Function",
         "AS3MethodClosure", "AS3Object", "AS3ObjectDispatch", "AS3OwnRecord", "AS3RegExp", "AS3Timer", "AS3TimerExecution", "AS3Type", "AS3Vector"];
     const exports: Record<string, string> = Object.create(null) as Record<string, string>;
     entries.forEach(name => { exports[`./${name}`] = name === "AS3Timer"

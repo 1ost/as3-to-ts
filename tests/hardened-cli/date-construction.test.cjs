@@ -4,7 +4,9 @@ const root=path.resolve(__dirname,'../..'),sha=b=>crypto.createHash('sha256').up
 const canonical=v=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(canonical).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canonical(v[k])).join(',')+'}';
 test('Date native proof gates original zeroarg and six-number calendar construction, methods, property and identity',t=>{
  const air=process.env.HARDENED_FIXTURE_AIR_SDK,laya=process.env.HARDENED_FIXTURE_LAYA,ffdec=process.env.HARDENED_FIXTURE_FFDEC;assert.ok(air&&laya&&ffdec);
- const layaRevision=cp.spawnSync('git',['rev-parse','HEAD'],{cwd:laya,encoding:'utf8'});assert.equal(layaRevision.status,0,layaRevision.stderr);assert.equal(layaRevision.stdout.trim(),'da111701143e44ac03a060cad5c269c301f32fa9');
+ const calendarEvidenceRevision='da111701143e44ac03a060cad5c269c301f32fa9';
+ const retainedRevision=cp.spawnSync('git',['merge-base','--is-ancestor',calendarEvidenceRevision,'HEAD'],{cwd:laya,encoding:'utf8'});
+ assert.equal(retainedRevision.status,0,retainedRevision.stderr||'Date evidence revision is not retained by the selected Laya commit');
  const fixture=process.env.HARDENED_FIXTURE_SOURCE||path.join(laya,'tests/nativeFlashOracle/date-construction'),retained=JSON.parse(fs.readFileSync(path.join(fixture,'native-air.json')));
  const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'date-cli-')));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const source=path.join(dir,'source'),profile=path.join(dir,'profile');fs.mkdirSync(source);
  const name='DateConstructionProbe.as',bytes=fs.readFileSync(path.join(fixture,name));assert.equal(sha(bytes),retained.sourceFiles[name]);fs.writeFileSync(path.join(source,name),bytes);
