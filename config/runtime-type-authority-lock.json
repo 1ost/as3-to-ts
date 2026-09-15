@@ -1,6 +1,6 @@
 {
   "schema": "bleach-as3-runtime-type-authority-lock@1",
-  "layaRevision": "7e0784574e9566c19b32bcd33c0d2a23445a2f11",
+  "layaRevision": "da111701143e44ac03a060cad5c269c301f32fa9",
   "predicateAuthorityPath": "docTool/architecture/flash-runtime-type-predicates.json",
   "predicateAuthorityCanonicalLfSha256": "010dad6303ba5a6014f33c28b29fb9713f76b4698d82d155249b01858f469ae7",
   "predicateAuthorityEntryCount": 62,
