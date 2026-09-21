@@ -1,0 +1,15 @@
+const fs=require('fs'),path=require('path'),crypto=require('crypto'),assert=require('node:assert/strict');const {compiler,config}=require('./config.cjs'),parse=require(path.join(compiler,'lib/parse')),emit=require(path.join(compiler,'lib/emit'));
+const checks=[];function rejects(id,change,re){const c=config();delete c.options.nativeArrayCreationModule;change(c);assert.throws(()=>emit(parse('RelationalReview.as',c.source),c.source,c.options),re,id);checks.push(id);}
+for(const [id,value] of [['empty',''],['space',' '],['null',null],['object',{}],['newline','./AS3\nRelational'],['quote','./"host'],['slash','./x\\host'],['unicode','./x\u2028host']])rejects('module-'+id,c=>{c.options.nativeRelationalModule=value;},/AS3_RELATIONAL_COMPILER_UNSUPPORTED: explicit/);
+for(const field of ['nativeCallableClasses','nativeClassInitialization','nativeCallableMetadata','nativeLexicalMembersModule'])rejects('missing-'+field,c=>{delete c.options[field];},/AS3_RELATIONAL_COMPILER_UNSUPPORTED: authenticated/);
+rejects('namespace-mode',c=>{c.options.useNamespaces=true;},/AS3_(ARRAY_CREATION|RELATIONAL_COMPILER)_UNSUPPORTED/);
+rejects('stale-source-hash',c=>{c.options.nativeCallableMetadata.classes['probe.RelationalReview'].sourceSha256='0'.repeat(64);},/authenticated source bytes/);
+rejects('missing-source-metadata',c=>{delete c.options.nativeCallableMetadata.classes['probe.RelationalReview'];},/authenticated source bytes/);
+rejects('source-mismatch',c=>{c.source+='\n';c.options.nativeCallableClasses['probe.RelationalReview']=c.source;},/authenticated source bytes/);
+rejects('unpublished-class-context',c=>{c.options.nativeClassInitialization.classes={};},/UNSUPPORTED/);
+rejects('wrong-callable-source',c=>{c.options.nativeCallableClasses['probe.RelationalReview']+='\n';},/UNSUPPORTED/);
+rejects('false-metadata-name',c=>{c.options.nativeCallableMetadata.classes['probe.RelationalReview'].metadata.name='counterfeit::Class';},/UNSUPPORTED/);
+rejects('as2-alias',c=>{c.source=c.source.replace('left<right','left lt right');c.options.nativeCallableClasses['probe.RelationalReview']=c.source;c.options.nativeCallableMetadata.classes['probe.RelationalReview'].sourceSha256=crypto.createHash('sha256').update(c.source).digest('hex');},/mixed relation operators and AS2 aliases/);
+for(const capture of ['capture-e','capture-f']){const c=config('mixed4',capture);assert.throws(()=>emit(parse('RelationalReview.as',c.source),c.source,c.options),/mixed relation operators and AS2 aliases/);checks.push('complete-mixed4-'+capture);}
+const c=config();delete c.options.nativeRelationalModule;const old=emit(parse('RelationalReview.as',c.source),c.source,c.options);assert(!old.includes('from "./AS3Relational"'));assert(old.includes('left<right'));checks.push('no-opt-in-preserves-original-route');
+const out=path.join(compiler,'.cache/native-relational');fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,'guards.json'),JSON.stringify({checks,mixedOriginalRowsHeld:4,wholeMixedSourcesHeld:2,noMixedNativeRowsAdmitted:true},null,2));console.log(JSON.stringify({compilerGuards:checks.length}));

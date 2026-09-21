@@ -111,6 +111,10 @@ export interface EmitterOptions {
 	nativeCallableStringModule?: string;
 	nativeCallableMetadata?: NativeClassMetadataOptions;
     nativeLexicalMembersModule?: string;
+    nativeTypedLocals?: boolean;
+    nativeTypedLocalAdditionModule?: string;
+    /** Explicit common AS3Relational module for authenticated source comparisons. */
+    nativeRelationalModule?: string;
 	/** Explicit common AS3ArrayCreation module for source Array literals only. */
 	nativeArrayCreationModule?: string;
 }
@@ -145,6 +149,7 @@ const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.NEW]: emitNew,
 	[NodeKind.RELATION]: emitRelation,
 	[NodeKind.ASSIGN]: emitAssign,
+    [NodeKind.ADD]: emitAdd,
 	[NodeKind.INIT]: emitInit,
 	[NodeKind.OP]: emitOp,
 	[NodeKind.OR]: emitOr,
@@ -295,11 +300,25 @@ export default class Emitter {
 			if (!this.options.nativeCallableClasses || !this.options.nativeClassInitialization || this.options.useNamespaces)
 				throw new Error('AS3_ARRAY_CREATION_UNSUPPORTED: callable source classes with lazy initialization and module imports required');
 		}
+        if (this.options.nativeRelationalModule !== undefined) {
+            const module = this.options.nativeRelationalModule;
+            if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+                throw new Error('AS3_RELATIONAL_COMPILER_UNSUPPORTED: explicit common relational module required');
+            if (!this.options.nativeCallableClasses || !this.options.nativeClassInitialization
+                || !this.options.nativeCallableMetadata || this.options.nativeLexicalMembersModule === undefined
+                || this.options.useNamespaces)
+                throw new Error('AS3_RELATIONAL_COMPILER_UNSUPPORTED: authenticated lazy callable metadata and lexical source required');
+        }
 		const filtered = filterAST(ast);
+        if (this.options.nativeTypedLocals && !this.options.nativeLexicalMembersModule)
+            throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: authenticated lexical source required');
+        if (this.options.nativeTypedLocals && [this.options.nativeCallableCoercionModule,this.options.nativeCallableStringModule,this.options.nativeTypedLocalAdditionModule]
+            .some(module => typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module)))
+            throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: explicit common coercion, String and addition modules required');
         if (this.options.nativeLexicalMembersModule !== undefined) {
             if (!this.options.nativeCallableClasses || !this.options.nativeClassInitialization || this.options.useNamespaces)
                 throw new Error('AS3_LEXICAL_COMPILER_UNSUPPORTED: authenticated lazy callable source required');
-            this.lexical = new NativeLexicalMembers(this.source, filtered, this.options.nativeLexicalMembersModule, this.options.nativeCallableMetadata);
+            this.lexical = new NativeLexicalMembers(this.source, filtered, this.options.nativeLexicalMembersModule, this.options.nativeCallableMetadata, this.options.nativeTypedLocals === true);
         }
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris);
 		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization);
@@ -313,7 +332,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -2242,6 +2261,48 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 function emitRelation(emitter:Emitter, node:Node):void {
 
+    if (emitter.options.nativeRelationalModule !== undefined) {
+        const symbolic = ['<', '<=', '>', '>='];
+        const aliases = ['lt', 'le', 'gt', 'ge'];
+        const operators = node.children.filter((_, index) => index % 2 === 1);
+        if (operators.some(operator => operator && symbolic.concat(aliases).indexOf(operator.text) >= 0)) {
+            if (node.children.length < 3 || node.children.length % 2 !== 1
+                || node.children.some(child => !child)
+                || operators.some(operator => operator.kind !== NodeKind.OP || symbolic.indexOf(operator.text) < 0))
+                throw new Error('AS3_RELATIONAL_COMPILER_UNSUPPORTED: mixed relation operators and AS2 aliases held');
+            const exports = ['as3LessThan', 'as3LessThanOrEqual', 'as3GreaterThan', 'as3GreaterThanOrEqual'];
+            const helper = (operator: string): string => {
+                const exported = exports[symbolic.indexOf(operator)];
+                let local = '__as3_source_' + exported;
+                while (emitter.source.indexOf(local) >= 0) local += '_';
+                emitter.ensureImportIdentifier(exported + ' as ' + local, emitter.options.nativeRelationalModule, false);
+                emitter.nativeSourceHelpers.add(local);
+                return local;
+            };
+            emitter.catchup(node.start);
+            // Fold only original source comparisons. Both expressions evaluate
+            // left-to-right; the common helper owns primitive conversion order.
+            const through = (index: number): void => {
+                if (index === 0) {
+                    visitNode(emitter, node.children[0]);
+                    emitter.catchup(getEffectiveNodeEnd(node.children[0]));
+                    return;
+                }
+                const operator = node.children[index - 1], right = node.children[index];
+                emitter.insert('(' + helper(operator.text) + '(');
+                through(index - 2);
+                emitter.catchup(operator.start);
+                emitter.insert(','); emitter.skipTo(operator.end);
+                emitter.catchup(getExpressionStart(right));
+                visitNode(emitter, right); emitter.catchup(getEffectiveNodeEnd(right));
+                emitter.insert('))');
+            };
+            through(node.children.length - 1);
+            emitter.skipTo(getEffectiveNodeEnd(node));
+            return;
+        }
+    }
+
 	emitter.catchup(node.start);
     const sourceOperand = emitter.source.slice(node.lastChild.start, node.lastChild.end).trim();
     const relationType = sourceOperand === 'int' || sourceOperand === 'uint' ? sourceOperand : node.lastChild.text;
@@ -2501,6 +2562,7 @@ function findBoundDeclaration(emitter: Emitter, name: string, bound: string): De
  * them for compound assignment could change evaluation order or side effects.
  */
 function getTypedAssignmentTarget(emitter: Emitter, node: Node): TypedAssignmentTarget {
+    if (emitter.lexical && emitter.lexical.typedLocals && emitter.lexical.typedLocals.owns(node, emitter)) return null;
     node = unwrapEncapsulatedExpression(node);
     let declaration: Declaration = null;
     let repeatText: string = null;
@@ -2589,7 +2651,7 @@ function emitInit(emitter: Emitter, node: Node): void {
         : null;
 
     emitter.catchup(node.start);
-    if (!isIntegerAS3Type(as3Type)) {
+    if (!isIntegerAS3Type(as3Type) || emitter.lexical && emitter.lexical.typedLocals && emitter.lexical.typedLocals.owns(declarationNode, emitter)) {
         visitNodes(emitter, node.children);
         return;
     }
@@ -2672,7 +2734,26 @@ function emitAssign(emitter: Emitter, node: Node): void {
     let left = node.children[0];
     let operator = node.children[1];
     let right = node.children[2];
+    if ((operator.text === '+=' || operator.text === '=') && emitter.lexical && emitter.lexical.typedLocals) {
+        const target = emitter.lexical.typedLocals.wildcardReference(left, emitter);
+        if (target && (operator.text === '+=' || target.write)) {
+            emitter.catchup(node.start);
+            emitter.insert(target.write ? target.write + '(' : '(' + target.reference + '=');
+            emitter.skipTo(getEffectiveNodeEnd(left));
+            emitter.catchup(operator.start);
+            emitter.skipTo(operator.end);
+            if (operator.text === '+=') emitter.insert('(<any>' + sourceAdditionHelper(emitter) + '(' + (target.read ? target.read + '()' : target.reference) + ',');
+            emitter.catchup(getExpressionStart(right));
+            visitNode(emitter, right);
+            emitter.catchup(getEffectiveNodeEnd(right));
+            emitter.insert(operator.text === '+=' ? ')))' : ')');
+            emitter.skipTo(getEffectiveNodeEnd(node));
+            return;
+        }
+    }
     if (operator.text === '||=' || operator.text === '&&=') {
+        if (emitter.lexical && emitter.lexical.typedLocals && emitter.lexical.typedLocals.owns(left, emitter))
+            throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: typed logical assignment held');
         emitLogicalAssignment(emitter, node);
         return;
     }
@@ -2706,6 +2787,48 @@ function emitAssign(emitter: Emitter, node: Node): void {
         emitter.insert(')');
         emitIntegerCoercionEnd(emitter, target.declaration.as3Type);
     }
+}
+
+function sourceAdditionHelper(emitter: Emitter): string {
+    let helper = '__as3_source_add';
+    while (emitter.source.indexOf(helper) >= 0) helper += '_';
+    emitter.ensureImportIdentifier('as3Add as ' + helper, emitter.options.nativeTypedLocalAdditionModule, false);
+    emitter.nativeSourceHelpers.add(helper);
+    return helper;
+}
+
+/** Mark original source addition before any generated callable/local scaffolding. */
+function emitAdd(emitter: Emitter, node: Node): void {
+    if (!emitter.lexical || !emitter.lexical.typedLocals
+        || !node.children.some(child => child.kind === NodeKind.OP && child.text === '+')) {
+        emitter.catchup(node.start);
+        visitNodes(emitter, node.children);
+        return;
+    }
+    const helper = sourceAdditionHelper(emitter);
+    emitter.catchup(node.start);
+    // ADD contains a flat, left-associative sequence of + and - operands.
+    // Nest the source operations without evaluating an operand more than once.
+    const through = (index: number): void => {
+        if (index === 0) {
+            visitNode(emitter, node.children[0]);
+            emitter.catchup(getEffectiveNodeEnd(node.children[0]));
+            return;
+        }
+        const operator = node.children[index - 1], right = node.children[index];
+        const addition = operator.text === '+';
+        emitter.insert(addition ? '(<any>' + helper + '(' : '(');
+        through(index - 2);
+        emitter.catchup(operator.start);
+        emitter.insert(addition ? ',' : '-');
+        emitter.skipTo(operator.end);
+        emitter.catchup(getExpressionStart(right));
+        visitNode(emitter, right);
+        emitter.catchup(getEffectiveNodeEnd(right));
+        emitter.insert(addition ? '))' : ')');
+    };
+    through(node.children.length - 1);
+    emitter.skipTo(getEffectiveNodeEnd(node));
 }
 
 function emitOp(emitter:Emitter, node:Node):void {
@@ -2946,7 +3069,8 @@ function emitArray(emitter:Emitter, node:Node):void {
 		while (emitter.source.indexOf(helper) >= 0) helper += '_';
 		emitter.ensureImportIdentifier('as3CreateArrayLiteral as ' + helper, emitter.options.nativeArrayCreationModule, false);
 		emitter.nativeSourceHelpers.add(helper);
-		emitter.insert(helper + '(');
+		// Keep the replacement an expression even when '[' touched return/throw/typeof.
+		emitter.insert('(' + helper + '(');
 	}
 	emitter.insert('[');
 	if (node.children.length > 0) {
@@ -2956,7 +3080,7 @@ function emitArray(emitter:Emitter, node:Node):void {
 		emitter.catchup(node.lastChild.end);
 	}
 	emitter.insert(']');
-	if (allocate) emitter.insert(')');
+	if (allocate) emitter.insert('))');
 	emitter.skipTo(node.end);
 }
 

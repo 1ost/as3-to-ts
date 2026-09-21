@@ -6,6 +6,7 @@ import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {nativeSourceTypeIdentity} from './native-source-type';
+import {NativeDeclarationDomain, nativeDeclarationDomainFor} from './native-declaration-plan';
 
 export interface NativeCallableClassOptions { [qname: string]: string; }
 interface SourceClass {
@@ -21,9 +22,11 @@ export class NativeCallableClasses {
     private sourceRoots = new Map<string, Node>();
     private sourceTexts = new Map<string, string>();
     private ts: any;
+    private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string) {
         if (!options) return;
+        this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
             || /[\r\n\u0000]/.test(methodBindingModule))
             this.fail('callable source methods require the common AS3MethodBinding module');
@@ -34,7 +37,6 @@ export class NativeCallableClasses {
         Object.keys(options).forEach(qname => {
             if (typeof options[qname] !== 'string' || !lazy || lazy[qname] !== 'lazy') this.fail('source identity must be lazy: ' + qname);
             this.sourceTexts.set(qname, options[qname]);
-            if (metadata) validateNativeClassMetadata(qname, options[qname], metadata, lexical);
             const root = parse(qname + '.as', options[qname]), declarations: Node[] = [];
             const walk = (node: Node): void => {
                 if (!node) return;
@@ -44,6 +46,21 @@ export class NativeCallableClasses {
             };
             walk(root);
             if (declarations.length !== 1) this.fail('exactly one source class is required: ' + qname);
+            // A source map shares declaration inputs, not a lexical capability.
+            // The current emitter plan can only prove its own exact source/qname.
+            let classLexical: NativeLexicalMembers;
+            if (metadata) {
+                try {
+                    if (lexical) classLexical = lexical.qname === qname && lexical.source === options[qname]
+                        ? lexical
+                        : new NativeLexicalMembers(options[qname], root, lexical.module, metadata, !!lexical.typedLocals);
+                    validateNativeClassMetadata(qname, options[qname], metadata, classLexical);
+                } catch (error) {
+                    if (error instanceof Error) error.message += ' [source-map declaration: ' + qname + ']';
+                    throw error;
+                }
+            }
+
             const cls = declarations[0], name = cls.findChild(K.NAME).text;
             if (metadata) validateNativeTypeOf(cls, options[qname], Object.keys(lazy));
             let pkg = cls.parent; while (pkg && pkg.kind !== K.PACKAGE) pkg = pkg.parent;
@@ -89,7 +106,7 @@ export class NativeCallableClasses {
             cls.findChild(K.CONTENT).children.forEach(member => {
                 const mods = member.findChild(K.MOD_LIST);
                 const isStatic = mods && mods.children.some(mod => mod.text === 'static');
-                const lexicalMember = lexical && lexical.qname === qname && lexical.proves(member);
+                const lexicalMember = classLexical && classLexical.proves(member);
                 if (!isStatic && !lexicalMember && [K.FUNCTION, K.GET, K.SET].indexOf(member.kind) >= 0) {
                     const memberName = member.findChild(K.NAME).text;
                     if (memberName !== name) instanceMembers.push({name: memberName, method: member.kind === K.FUNCTION});
@@ -264,6 +281,7 @@ export class NativeCallableClasses {
                 + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
         };
         const provider = unique('provider'), declaration = unique('declaration'), generation = unique('generation');
+        const localCoercion = unique('localCoercion'), localString = unique('localString'), localAddition = unique('localAddition');
         const text = (node: any): string => node.getText(file);
         const params = (member: any, signature: boolean): string => member.parameters.map((p: any) => {
             if (!signature) return text(p);
@@ -351,7 +369,10 @@ export class NativeCallableClasses {
             edits.sort((a,b) => b.start - a.start).forEach(edit => {
                 result = result.slice(0, edit.start - offset) + edit.value + result.slice(edit.end - offset);
             });
-            return this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
+            result = this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
+            if (this.lexical && this.lexical.typedLocals) result = this.lexical.typedLocals.lower(result, constructor ? this.own.name : member.name.text,
+                !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), provider, localCoercion, localString, localAddition, intrinsic + '.array', unique);
+            return result;
         };
         const accessorTypes = new Set<string>();
         cls.members.forEach((member: any) => {
@@ -485,9 +506,18 @@ export class NativeCallableClasses {
         replacements.sort((a,b) => b.start - a.start).forEach(edit => source = source.slice(0,edit.start) + edit.value + source.slice(edit.end));
         const boundImport = file.statements.find((node: any) => node.kind === S.ImportDeclaration && /(?:^|\/)bound$/.test(node.moduleSpecifier.text));
         const helperPath = boundImport ? boundImport.moduleSpecifier.text : './bound';
+        const planned = this.declarationDomain && this.declarationDomain.bindings.find(binding => binding.qname === this.own.qname);
+        if (this.declarationDomain && !planned) this.fail('current source declaration is absent from its compiler domain');
+        const domainImport = planned ? unique('declarationDomain') : '';
         return (this.lexical ? 'import * as ' + this.lexical.provider + ' from ' + JSON.stringify(this.lexical.module) + ';\n' : '')
+            + (this.lexical && this.lexical.typedLocals ? 'import * as ' + localCoercion + ' from ' + JSON.stringify(this.coercionModule) + ';\n'
+                + 'import * as ' + localString + ' from ' + JSON.stringify(this.stringModule) + ';\n'
+                + 'import * as ' + localAddition + ' from ' + JSON.stringify(this.localAdditionModule) + ';\n' : '')
             + (this.metadata ? 'import * as ' + provider + ' from ' + JSON.stringify(this.metadata.module) + ';\n'
-            + 'const ' + declaration + ' = ' + provider + '.declareAS3ReferenceType<' + name + '>(' + JSON.stringify(this.metadata.classes[this.own.qname].metadata.name) + ');\n' : '')
+            + (planned ? 'import * as ' + domainImport + ' from ' + JSON.stringify(this.declarationDomain.module) + ';\n'
+                + 'const ' + declaration + ' = {type:' + domainImport + '.' + planned.tokenExport
+                + ' as ' + provider + '.AS3DeclarationType<' + name + '>,publishGeneration:' + domainImport + '.' + planned.publishExport + '};\n'
+                : 'const ' + declaration + ' = ' + provider + '.declareAS3ReferenceType<' + name + '>(' + JSON.stringify(this.metadata.classes[this.own.qname].metadata.name) + ');\n') : '')
             + 'import {callableClassIntrinsics as ' + intrinsic + ', NativeCallableFunction as ' + functionType + '} from '
             + JSON.stringify(helperPath.replace(/bound$/, 'callableClass')) + ';\n'
             + 'import {bindAS3Method as ' + bindName + '} from '

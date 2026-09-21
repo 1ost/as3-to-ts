@@ -1,0 +1,43 @@
+{
+  "status": "research-complete-no-implementation-admission",
+  "compilerCommit": "1ebbed38900ed88c5c0bfa4723de61f408a86b9a",
+  "engineCommit": "6aba63414d3e63db6ebe120af9c396741759e5cc",
+  "fullSources": 5,
+  "fullMetadataRecords": 5,
+  "allOriginalGuardsReproduced": true,
+  "ownFirstControlRetainsAllFive": true,
+  "proptweenRootCause": "TweenPlugin metadata validated using only the current PropTween lexical plan",
+  "derivedRootCause": "Compiler Object-root planning, metadata ancestry and null lexical base publication remain bounded",
+  "currentProviderChecks": {
+    "lexical": {
+      "rows": 39,
+      "guards": 49,
+      "held": 11
+    },
+    "accessor": {
+      "rows": 57,
+      "guards": 87,
+      "held": 4
+    },
+    "runtimes": [
+      "Node",
+      "Chromium"
+    ]
+  },
+  "retainedStandaloneProptweenRows": 97,
+  "standaloneRerun": false,
+  "mainEdited": false,
+  "pinsEdited": false,
+  "sourceOrMetadataPruned": false,
+  "guardBypass": false,
+  "wholeTimingReady": false,
+  "manifest": {
+    "path": "research-files.json",
+    "sha256": "2910515a838cde6c6fbce86a80060c2ec81baafd5233702267297de8d2610342",
+    "files": 59
+  },
+  "archive": {
+    "path": "research-evidence.zip",
+    "sha256": "d27b6cfd21ba55cc97ac859a6620c7421f283174595ba38e8b3b22f3e95e4be8"
+  }
+}

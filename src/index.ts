@@ -5,3 +5,5 @@ import * as KeyWords from "./syntax/keywords";
 import * as Operators from "./syntax/operators";
 
 export {Parser, Scanner, Emitter, KeyWords, Operators};
+export {createNativeDeclarationDomain, NativeDeclarationDomain, NativeDeclarationDomainInput,
+    NativeDeclarationBinding, NativeDeclarationReference} from './emit/native-declaration-plan';

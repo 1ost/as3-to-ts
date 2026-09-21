@@ -301,8 +301,15 @@ function parseReturnStatement(parser:AS3Parser):Node {
     let index = parser.tok.index,
         end = parser.tok.end;
     nextTokenAllowNewLine(parser);
-    if (tokIs(parser, NEW_LINE) || tokIs(parser, Operators.SEMI_COLUMN)) {
-        nextToken(parser, true);
+    // Documentation/block comments are trivia here, not expression identifiers.
+    // A line break inside a block comment still terminates a source return.
+    let commentLineBreak = false;
+    while (parser.tok.text.indexOf('/*') === 0) {
+        commentLineBreak = commentLineBreak || /[\r\n]/.test(parser.tok.text);
+        nextTokenAllowNewLine(parser);
+    }
+    if (commentLineBreak || tokIs(parser, NEW_LINE) || tokIs(parser, Operators.SEMI_COLUMN)) {
+        if (tokIs(parser, NEW_LINE) || tokIs(parser, Operators.SEMI_COLUMN)) nextToken(parser, true);
         result = createNode(NodeKind.RETURN, {start: index, end: end});
     } else {
         let expr = parseExpression(parser);
@@ -315,6 +322,7 @@ function parseReturnStatement(parser:AS3Parser):Node {
 
 function parseThrowStatement(parser:AS3Parser):Node {
     let tok = consume(parser, Keywords.THROW);
+    while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
     let expr = parseExpression(parser);
 
     return createNode(NodeKind.RETURN, {start: tok.index, end: expr.end}, expr);

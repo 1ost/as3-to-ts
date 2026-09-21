@@ -15,7 +15,10 @@
     "test:compound": "node tests/compound/CompoundTests.js",
     "test:int-uint-assignment": "node tests/int-uint-assignment/IntUintAssignmentLoweringTests.js && node tests/int-uint-assignment/IndexedPostfixAssignmentTests.js",
     "test:native-namespaces": "node tests/native-namespaces/NativeNamespacesTests.js && node tests/native-namespaces/NativeNamespacesTests.js --es5 && node tests/native-namespaces/InheritedNamespacesTests.js",
+    "test:native-lexical-map": "node tests/native-lexical-map/run.cjs && node tests/native-lexical-map/run.cjs --typed-locals && node tests/native-lexical-map/guards.cjs && node tests/native-lexical-map/timing.cjs",
     "test:native-lexical-members": "node tests/native-lexical-members/run.cjs && node tests/native-lexical-members/run.cjs --order && node tests/native-lexical-members/guards.cjs && node tests/native-lexical-members/declaration-order-guards.cjs",
+    "test:native-typed-locals": "node tests/native-typed-locals/run.cjs && node tests/native-typed-locals/guards.cjs",
+    "test:native-addition-expressions": "node tests/native-addition-review/run.cjs && node tests/native-addition-placement/run.cjs && node tests/native-addition-placement/verify-boundaries.cjs && node tests/native-addition-placement/guards.cjs && node tests/native-addition-placement/holds.cjs && node tests/native-array-allocation/token-boundaries.cjs",
     "test:native-constructors": "node tests/native-constructors/NativeConstructorsTests.js",
     "test:simple:win": "node %NODE_DEBUG_OPTION% tests/simple/SimpleTests.js",
     "tsc": "tsc",
@@ -25,7 +28,8 @@
     "prebuild": "npm run clean:dist",
     "build": "npm run tsc",
     "version": "npm run build",
-    "postversion": "git push && git push --tags && npm publish"
+    "postversion": "git push && git push --tags && npm publish",
+    "test:native-relational": "node tests/native-relational/run.cjs && node tests/native-relational/guards.cjs && node tests/native-relational/ownership.cjs"
   },
   "keywords": [
     "actionscript",
@@ -43,7 +47,7 @@
   "bugs": {
     "url": "https://github.com/as3web/as3-to-ts/issues"
   },
-  "author": "François de Campredon <francois.de.campredon@gmail.com>",
+  "author": "Fran\u00e7ois de Campredon <francois.de.campredon@gmail.com>",
   "contributors": [
     {
       "name": "Endel Dreyer"

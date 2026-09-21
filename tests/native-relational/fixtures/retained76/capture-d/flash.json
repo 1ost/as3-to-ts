@@ -1,0 +1,1214 @@
+{
+  "instanceXML": "<type name=\"probe::RelationalReview\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"lt\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"gtOrder\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"le\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"ge\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"leOrder\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"gt\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"geOrder\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"ltOrder\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+  "rows": [
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": true,
+      "id": "strings-11-2-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": true,
+      "id": "strings-11-2-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": false,
+      "id": "strings-11-2-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": false,
+      "id": "strings-11-2-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "value": 2,
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "string-number-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "value": 2,
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "string-number-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "value": 2,
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "string-number-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "value": 2,
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "string-number-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": 11,
+          "type": "number"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": false,
+      "id": "number-string-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": 11,
+          "type": "number"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": false,
+      "id": "number-string-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": 11,
+          "type": "number"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": true,
+      "id": "number-string-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": 11,
+          "type": "number"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": true,
+      "id": "number-string-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "",
+          "type": "string"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "empty-number-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "",
+          "type": "string"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "empty-number-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "",
+          "type": "string"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "empty-number-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "",
+          "type": "string"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "empty-number-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "NaN",
+          "type": "number"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "nan-left-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "NaN",
+          "type": "number"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "nan-left-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "NaN",
+          "type": "number"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "nan-left-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "NaN",
+          "type": "number"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "nan-left-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "value": "NaN",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "nan-right-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "value": "NaN",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "nan-right-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "value": "NaN",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "nan-right-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "value": "NaN",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "nan-right-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "type": "undefined"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "undefined-left-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "type": "undefined"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "undefined-left-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "type": "undefined"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "undefined-left-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "type": "undefined"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "undefined-left-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "type": "undefined"
+        }
+      ],
+      "value": false,
+      "id": "undefined-right-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "type": "undefined"
+        }
+      ],
+      "value": false,
+      "id": "undefined-right-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "type": "undefined"
+        }
+      ],
+      "value": false,
+      "id": "undefined-right-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "type": "undefined"
+        }
+      ],
+      "value": false,
+      "id": "undefined-right-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "type": "null"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "null-number-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "type": "null"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "null-number-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "type": "null"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "null-number-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "type": "null"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "null-number-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "-0",
+          "type": "number"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "negative-positive-zero-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "-0",
+          "type": "number"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "negative-positive-zero-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "-0",
+          "type": "number"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "negative-positive-zero-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "-0",
+          "type": "number"
+        },
+        {
+          "value": "+0",
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "negative-positive-zero-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "value": "-0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "positive-negative-zero-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "value": "-0",
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "positive-negative-zero-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "value": "-0",
+          "type": "number"
+        }
+      ],
+      "value": false,
+      "id": "positive-negative-zero-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "+0",
+          "type": "number"
+        },
+        {
+          "value": "-0",
+          "type": "number"
+        }
+      ],
+      "value": true,
+      "id": "positive-negative-zero-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": true,
+          "type": "boolean"
+        },
+        {
+          "value": "1",
+          "type": "string"
+        }
+      ],
+      "value": false,
+      "id": "boolean-string-lt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": true,
+          "type": "boolean"
+        },
+        {
+          "value": "1",
+          "type": "string"
+        }
+      ],
+      "value": true,
+      "id": "boolean-string-le",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": true,
+          "type": "boolean"
+        },
+        {
+          "value": "1",
+          "type": "string"
+        }
+      ],
+      "value": false,
+      "id": "boolean-string-gt",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": true,
+          "type": "boolean"
+        },
+        {
+          "value": "1",
+          "type": "string"
+        }
+      ],
+      "value": true,
+      "id": "boolean-string-ge",
+      "events": []
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "valueOf": "null",
+          "toString": "11",
+          "type": "source-object"
+        },
+        {
+          "valueOf": "null",
+          "toString": "2",
+          "type": "source-object"
+        }
+      ],
+      "value": true,
+      "id": "null-hooks-lt",
+      "events": [
+        "left:valueOf",
+        "left:toString",
+        "right:valueOf",
+        "right:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": true,
+      "id": "order-lt",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "left:valueOf",
+        "left:toString",
+        "right:valueOf",
+        "right:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "valueOf": "null",
+          "toString": "11",
+          "type": "source-object"
+        },
+        {
+          "valueOf": "null",
+          "toString": "2",
+          "type": "source-object"
+        }
+      ],
+      "value": true,
+      "id": "null-hooks-le",
+      "events": [
+        "right:valueOf",
+        "right:toString",
+        "left:valueOf",
+        "left:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": true,
+      "id": "order-le",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:valueOf",
+        "left:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "valueOf": "null",
+          "toString": "11",
+          "type": "source-object"
+        },
+        {
+          "valueOf": "null",
+          "toString": "2",
+          "type": "source-object"
+        }
+      ],
+      "value": false,
+      "id": "null-hooks-gt",
+      "events": [
+        "right:valueOf",
+        "right:toString",
+        "left:valueOf",
+        "left:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": false,
+      "id": "order-gt",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:valueOf",
+        "left:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "valueOf": "null",
+          "toString": "11",
+          "type": "source-object"
+        },
+        {
+          "valueOf": "null",
+          "toString": "2",
+          "type": "source-object"
+        }
+      ],
+      "value": false,
+      "id": "null-hooks-ge",
+      "events": [
+        "left:valueOf",
+        "left:toString",
+        "right:valueOf",
+        "right:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": false,
+      "id": "order-ge",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "left:valueOf",
+        "left:toString",
+        "right:valueOf",
+        "right:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "valueOf": "null",
+          "toString": "2",
+          "type": "source-object"
+        }
+      ],
+      "value": true,
+      "id": "string-left-hook-lt",
+      "events": [
+        "right:valueOf",
+        "right:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "valueOf": "null",
+          "toString": "11",
+          "type": "source-object"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": true,
+      "id": "hook-left-string-lt",
+      "events": [
+        "left:valueOf",
+        "left:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "valueOf": "null",
+          "toString": "2",
+          "type": "source-object"
+        }
+      ],
+      "value": true,
+      "id": "string-left-hook-le",
+      "events": [
+        "right:valueOf",
+        "right:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "valueOf": "null",
+          "toString": "11",
+          "type": "source-object"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": true,
+      "id": "hook-left-string-le",
+      "events": [
+        "left:valueOf",
+        "left:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "valueOf": "null",
+          "toString": "2",
+          "type": "source-object"
+        }
+      ],
+      "value": false,
+      "id": "string-left-hook-gt",
+      "events": [
+        "right:valueOf",
+        "right:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "valueOf": "null",
+          "toString": "11",
+          "type": "source-object"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": false,
+      "id": "hook-left-string-gt",
+      "events": [
+        "left:valueOf",
+        "left:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "value": "11",
+          "type": "string"
+        },
+        {
+          "valueOf": "null",
+          "toString": "2",
+          "type": "source-object"
+        }
+      ],
+      "value": false,
+      "id": "string-left-hook-ge",
+      "events": [
+        "right:valueOf",
+        "right:toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [
+        {
+          "valueOf": "null",
+          "toString": "11",
+          "type": "source-object"
+        },
+        {
+          "value": "2",
+          "type": "string"
+        }
+      ],
+      "value": false,
+      "id": "hook-left-string-ge",
+      "events": [
+        "left:valueOf",
+        "left:toString"
+      ]
+    },
+    {
+      "inputs": [],
+      "id": "throw-left-gt",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:throw"
+      ],
+      "thrownSame": true
+    },
+    {
+      "inputs": [],
+      "id": "throw-left-le",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:throw"
+      ],
+      "thrownSame": true
+    },
+    {
+      "inputs": [],
+      "id": "throw-right-gt",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:throw"
+      ],
+      "thrownSame": true
+    },
+    {
+      "inputs": [],
+      "id": "throw-right-le",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:throw"
+      ],
+      "thrownSame": true
+    },
+    {
+      "inputs": [],
+      "id": "throw-rhs-gt",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "rhs:throw"
+      ],
+      "thrownSame": true
+    },
+    {
+      "inputs": [],
+      "id": "throw-rhs-le",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "rhs:throw"
+      ],
+      "thrownSame": true
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": true,
+      "id": "rhs-change-left-gt",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:rhs-new-valueOf"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": false,
+      "id": "rhs-change-left-le",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:rhs-new-valueOf"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": false,
+      "id": "live-right-gt",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:change-right"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": true,
+      "id": "live-right-le",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:change-right"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": false,
+      "id": "live-fallback-gt",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:change-fallback",
+        "left:new-toString"
+      ]
+    },
+    {
+      "valueType": "boolean",
+      "inputs": [],
+      "value": true,
+      "id": "live-fallback-le",
+      "events": [
+        "expr:left",
+        "expr:right",
+        "right:valueOf",
+        "right:toString",
+        "left:change-fallback",
+        "left:new-toString"
+      ]
+    }
+  ],
+  "classXML": "<type name=\"probe::RelationalReview\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::RelationalReview\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"lt\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"gtOrder\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"le\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"ge\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"leOrder\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"gt\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"geOrder\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"ltOrder\" declaredBy=\"probe::RelationalReview\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>"
+}

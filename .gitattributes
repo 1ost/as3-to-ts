@@ -29,3 +29,17 @@ tests/native-self-constructors/evidence/sources/original/com/greensock/core/Prop
 
 # Preserve authenticated lexical source, captures and receipts.
 tests/native-lexical-members/** -text whitespace=cr-at-eol
+
+# Preserve authenticated typed-local original sources, captures and receipts.
+tests/native-typed-locals/** -text whitespace=cr-at-eol
+tests/native-addition-review/** -text whitespace=cr-at-eol
+tests/native-addition-placement/** -text whitespace=cr-at-eol
+
+# Preserve original lexical-map captures and complete source evidence.
+tests/native-lexical-map/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve authenticated relational compiler fixtures and receipt bytes.
+tests/native-relational/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve complete declaration-domain captures and receipts.
+tests/native-declaration-domain/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof

@@ -1,6 +1,7 @@
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {nativeSourceTypeIdentity} from './native-source-type';
+import {NativeTypedLocals} from './native-typed-locals';
 
 export interface NativeLexicalTrait {
     name: string; visibility: 'private' | 'protected'; static: boolean;
@@ -15,7 +16,8 @@ export class NativeLexicalMembers {
     readonly scope: string;
     readonly provider: string;
     private owner: Node;
-    constructor(readonly source: string, root: Node, readonly module: string, metadata: any) {
+    readonly typedLocals: NativeTypedLocals;
+    constructor(readonly source: string, root: Node, readonly module: string, metadata: any, typedLocals: boolean = false) {
         if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
             this.fail('explicit common lexical provider module required');
         const classes: Node[] = [];
@@ -29,7 +31,7 @@ export class NativeLexicalMembers {
             if ((n.kind === K.VAR_LIST || n.kind === K.CONST_LIST) && n.parent !== this.owner.findChild(K.CONTENT))
                 n.findChildren(K.NAME_TYPE_INIT).forEach(value => {
                     const type=value.findChild(K.TYPE);
-                    if(type&&type.text!=='*')this.fail('typed local initialization/coercion held in lexical slice');
+                    if(type&&type.text!=='*'&&!typedLocals)this.fail('typed local initialization/coercion held in lexical slice');
                 });
             n.children.forEach(functionScope);
         };
@@ -40,6 +42,7 @@ export class NativeLexicalMembers {
         if (!record || require('crypto').createHash('sha256').update(source).digest('hex') !== record.sourceSha256)
             this.fail('exact authenticated source bytes required');
         if (this.owner.findChild(K.EXTENDS) || this.owner.findChild(K.IMPLEMENTS_LIST)) this.fail('Object-root declaration required');
+        if (typedLocals) this.typedLocals = new NativeTypedLocals(this.owner, this.qname, imports);
         this.scope = this.unique('scope'); this.provider = this.unique('provider');
         this.owner.findChild(K.CONTENT).children.forEach(member => {
             if ([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind) < 0) return;

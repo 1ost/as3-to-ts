@@ -1,0 +1,1 @@
+const cp=require('child_process'),path=require('path');cp.execFileSync(process.env.PYTHON,[path.join(__dirname,'verify-originals.py')],{stdio:'inherit',windowsHide:true});for(const fixture of ['retained76','expressions14','collision'])cp.execFileSync(process.execPath,[path.join(__dirname,'run-fixture.cjs'),fixture],{stdio:'inherit',windowsHide:true});

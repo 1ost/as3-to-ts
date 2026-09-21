@@ -1,0 +1,1 @@
+package domain.b { import domain.a.Node; public class Node { public var next:domain.b.Node; public static var defaultNode:domain.b.Node; public function Node(value:domain.b.Node=null) {this.next=value;} public function link(value:*):* {this.next=value;return this.next;} } }

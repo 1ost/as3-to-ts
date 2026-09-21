@@ -1,0 +1,1431 @@
+{
+  "scope": "Original reflection projection only; runtime/source dispatch not admitted",
+  "receiptSHA256": "cb460fd363a4f277b2dc31d436c7257a43c3a0896f8bd5aac05d9fe05253e2a6",
+  "parserInputs": [
+    {
+      "source_path": "as3-to-layaair-porting-kit/tools/portkit/as3_parser.py",
+      "path": "vendor/bleach_portkit/as3_parser.py",
+      "sha256": "858e49039185ecf0109400ae7d864e7e74a2aa011c681085dcf092a0dad2c6b1"
+    },
+    {
+      "source_path": "as3-to-layaair-porting-kit/tools/portkit/model.py",
+      "path": "vendor/bleach_portkit/model.py",
+      "sha256": "383ae419c0078134e5ffa6839ed0d3bf8efecd42d944a3ca77d0cf172f5a7181"
+    },
+    {
+      "source_path": "as3-to-layaair-porting-kit/tools/portkit/source_literals.py",
+      "path": "vendor/bleach_portkit/source_literals.py",
+      "sha256": "eb35e9aecfb1b541d57d71114d535c2ba8876873760b33cd72da37f2da9f4e62"
+    }
+  ],
+  "nativeReady": false,
+  "classes": {
+    "com.greensock.core.PropTween": {
+      "sourceSha256": "e71959076819c4dbcd840bda7fbcfdc14b46d61eb1ca46f749c7280892a394b8",
+      "metadata": {
+        "name": "com.greensock.core::PropTween",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": true,
+        "instance": {
+          "variables": [
+            {
+              "name": "nextNode",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "com.greensock.core::PropTween"
+            },
+            {
+              "name": "property",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "String"
+            },
+            {
+              "name": "start",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "Number"
+            },
+            {
+              "name": "prevNode",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "com.greensock.core::PropTween"
+            },
+            {
+              "name": "priority",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "int"
+            },
+            {
+              "name": "change",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "Number"
+            },
+            {
+              "name": "name",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "String"
+            },
+            {
+              "name": "target",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "Object"
+            },
+            {
+              "name": "isPlugin",
+              "declaredBy": "com.greensock.core::PropTween",
+              "type": "Boolean"
+            }
+          ],
+          "constants": [],
+          "methods": [],
+          "accessors": []
+        },
+        "statics": {
+          "variables": [],
+          "constants": [],
+          "methods": [],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ]
+        }
+      },
+      "instanceTraits": [
+        {
+          "name": "nextNode",
+          "kind": "variable",
+          "type": "com.greensock.core::PropTween"
+        },
+        {
+          "name": "property",
+          "kind": "variable",
+          "type": "String"
+        },
+        {
+          "name": "start",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "prevNode",
+          "kind": "variable",
+          "type": "com.greensock.core::PropTween"
+        },
+        {
+          "name": "priority",
+          "kind": "variable",
+          "type": "int"
+        },
+        {
+          "name": "change",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "name",
+          "kind": "variable",
+          "type": "String"
+        },
+        {
+          "name": "target",
+          "kind": "variable",
+          "type": "Object"
+        },
+        {
+          "name": "isPlugin",
+          "kind": "variable",
+          "type": "Boolean"
+        }
+      ],
+      "staticTraits": []
+    },
+    "com.greensock.plugins.TweenPlugin": {
+      "sourceSha256": "e7e4b26c38d45e1faf5adda4d5808caeee8d83abe10e1e7fc1ea8dfb6cedf786",
+      "metadata": {
+        "name": "com.greensock.plugins::TweenPlugin",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [
+            {
+              "name": "onInitAllProps",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Function"
+            },
+            {
+              "name": "priority",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "int"
+            },
+            {
+              "name": "onEnable",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Function"
+            },
+            {
+              "name": "propName",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "String"
+            },
+            {
+              "name": "onDisable",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Function"
+            },
+            {
+              "name": "overwriteProps",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Array"
+            },
+            {
+              "name": "round",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Boolean"
+            },
+            {
+              "name": "onComplete",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Function"
+            },
+            {
+              "name": "activeDisable",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Boolean"
+            }
+          ],
+          "constants": [],
+          "methods": [
+            {
+              "name": "onInitTween",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "parameterCount": 3
+            },
+            {
+              "name": "killProps",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "parameterCount": 1
+            }
+          ],
+          "accessors": [
+            {
+              "name": "changeFactor",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "access": "readwrite"
+            }
+          ]
+        },
+        "statics": {
+          "variables": [],
+          "constants": [
+            {
+              "name": "API",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Number"
+            },
+            {
+              "name": "VERSION",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "type": "Number"
+            }
+          ],
+          "methods": [
+            {
+              "name": "activate",
+              "declaredBy": "com.greensock.plugins::TweenPlugin",
+              "parameterCount": 1
+            }
+          ],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ]
+        }
+      },
+      "instanceTraits": [
+        {
+          "name": "onInitAllProps",
+          "kind": "variable",
+          "type": "Function"
+        },
+        {
+          "name": "priority",
+          "kind": "variable",
+          "type": "int"
+        },
+        {
+          "name": "onEnable",
+          "kind": "variable",
+          "type": "Function"
+        },
+        {
+          "name": "propName",
+          "kind": "variable",
+          "type": "String"
+        },
+        {
+          "name": "onDisable",
+          "kind": "variable",
+          "type": "Function"
+        },
+        {
+          "name": "overwriteProps",
+          "kind": "variable",
+          "type": "Array"
+        },
+        {
+          "name": "round",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "onComplete",
+          "kind": "variable",
+          "type": "Function"
+        },
+        {
+          "name": "activeDisable",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "changeFactor",
+          "kind": "accessor",
+          "type": "Number"
+        },
+        {
+          "name": "onInitTween",
+          "kind": "method"
+        },
+        {
+          "name": "killProps",
+          "kind": "method"
+        }
+      ],
+      "staticTraits": [
+        {
+          "name": "API",
+          "kind": "constant",
+          "type": "Number"
+        },
+        {
+          "name": "VERSION",
+          "kind": "constant",
+          "type": "Number"
+        },
+        {
+          "name": "activate",
+          "kind": "method"
+        }
+      ]
+    },
+    "com.greensock.core.TweenCore": {
+      "sourceSha256": "3f883b6e1ac8183c1d8a371bc46395daa5b8f1ee4e2e44452ab0418bff620c12",
+      "metadata": {
+        "name": "com.greensock.core::TweenCore",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [
+            {
+              "name": "cachedTimeScale",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "timeline",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::SimpleTimeline"
+            },
+            {
+              "name": "cachedPauseTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "active",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cachedOrphan",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "vars",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Object"
+            },
+            {
+              "name": "cachedReversed",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cachedTotalDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cacheIsDirty",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "initted",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cachedPaused",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "gc",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "data",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "*"
+            },
+            {
+              "name": "cachedStartTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "nextNode",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::TweenCore"
+            },
+            {
+              "name": "cachedTotalTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "prevNode",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::TweenCore"
+            },
+            {
+              "name": "cachedDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            }
+          ],
+          "constants": [],
+          "methods": [
+            {
+              "name": "setEnabled",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 2
+            },
+            {
+              "name": "pause",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "kill",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "resume",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "play",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "invalidate",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "complete",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 2
+            },
+            {
+              "name": "restart",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 2
+            },
+            {
+              "name": "reverse",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 1
+            },
+            {
+              "name": "renderTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 3
+            }
+          ],
+          "accessors": [
+            {
+              "name": "totalDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "currentTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "delay",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "duration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "paused",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "totalTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "startTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "reversed",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            }
+          ]
+        },
+        "statics": {
+          "variables": [],
+          "constants": [
+            {
+              "name": "version",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            }
+          ],
+          "methods": [],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ]
+        }
+      },
+      "instanceTraits": [
+        {
+          "name": "cachedTimeScale",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "timeline",
+          "kind": "variable",
+          "type": "com.greensock.core::SimpleTimeline"
+        },
+        {
+          "name": "cachedPauseTime",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "active",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "cachedOrphan",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "vars",
+          "kind": "variable",
+          "type": "Object"
+        },
+        {
+          "name": "cachedReversed",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "cachedTotalDuration",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "cacheIsDirty",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "initted",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "cachedPaused",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "gc",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "data",
+          "kind": "variable",
+          "type": "*"
+        },
+        {
+          "name": "cachedStartTime",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "cachedTime",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "nextNode",
+          "kind": "variable",
+          "type": "com.greensock.core::TweenCore"
+        },
+        {
+          "name": "cachedTotalTime",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "prevNode",
+          "kind": "variable",
+          "type": "com.greensock.core::TweenCore"
+        },
+        {
+          "name": "cachedDuration",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "totalDuration",
+          "kind": "accessor",
+          "type": "Number"
+        },
+        {
+          "name": "currentTime",
+          "kind": "accessor",
+          "type": "Number"
+        },
+        {
+          "name": "delay",
+          "kind": "accessor",
+          "type": "Number"
+        },
+        {
+          "name": "duration",
+          "kind": "accessor",
+          "type": "Number"
+        },
+        {
+          "name": "paused",
+          "kind": "accessor",
+          "type": "Boolean"
+        },
+        {
+          "name": "totalTime",
+          "kind": "accessor",
+          "type": "Number"
+        },
+        {
+          "name": "startTime",
+          "kind": "accessor",
+          "type": "Number"
+        },
+        {
+          "name": "reversed",
+          "kind": "accessor",
+          "type": "Boolean"
+        },
+        {
+          "name": "setEnabled",
+          "kind": "method"
+        },
+        {
+          "name": "pause",
+          "kind": "method"
+        },
+        {
+          "name": "kill",
+          "kind": "method"
+        },
+        {
+          "name": "resume",
+          "kind": "method"
+        },
+        {
+          "name": "play",
+          "kind": "method"
+        },
+        {
+          "name": "invalidate",
+          "kind": "method"
+        },
+        {
+          "name": "complete",
+          "kind": "method"
+        },
+        {
+          "name": "restart",
+          "kind": "method"
+        },
+        {
+          "name": "reverse",
+          "kind": "method"
+        },
+        {
+          "name": "renderTime",
+          "kind": "method"
+        }
+      ],
+      "staticTraits": [
+        {
+          "name": "version",
+          "kind": "constant",
+          "type": "Number"
+        }
+      ]
+    },
+    "com.greensock.core.SimpleTimeline": {
+      "sourceSha256": "f4fa50eb42f3133efbbbb09a6615239904228f8bc81034766d80011b6c2d68df",
+      "metadata": {
+        "name": "com.greensock.core::SimpleTimeline",
+        "base": "com.greensock.core::TweenCore",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [
+            {
+              "name": "timeline",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::SimpleTimeline"
+            },
+            {
+              "name": "vars",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Object"
+            },
+            {
+              "name": "autoRemoveChildren",
+              "declaredBy": "com.greensock.core::SimpleTimeline",
+              "type": "Boolean"
+            },
+            {
+              "name": "initted",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "gc",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "data",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "*"
+            },
+            {
+              "name": "cachedStartTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTotalTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTotalDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTimeScale",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedPauseTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "active",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cachedOrphan",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cachedReversed",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cacheIsDirty",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cachedPaused",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "nextNode",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::TweenCore"
+            },
+            {
+              "name": "prevNode",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::TweenCore"
+            }
+          ],
+          "constants": [],
+          "methods": [
+            {
+              "name": "setEnabled",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 2
+            },
+            {
+              "name": "kill",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "insert",
+              "declaredBy": "com.greensock.core::SimpleTimeline",
+              "parameterCount": 2
+            },
+            {
+              "name": "remove",
+              "declaredBy": "com.greensock.core::SimpleTimeline",
+              "parameterCount": 2
+            },
+            {
+              "name": "invalidate",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "complete",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 2
+            },
+            {
+              "name": "reverse",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 1
+            },
+            {
+              "name": "pause",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "play",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "resume",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "restart",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 2
+            },
+            {
+              "name": "renderTime",
+              "declaredBy": "com.greensock.core::SimpleTimeline",
+              "parameterCount": 3
+            }
+          ],
+          "accessors": [
+            {
+              "name": "currentTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "duration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "rawTime",
+              "declaredBy": "com.greensock.core::SimpleTimeline",
+              "access": "readonly"
+            },
+            {
+              "name": "totalDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "totalTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "startTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "reversed",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "paused",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "delay",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            }
+          ]
+        },
+        "statics": {
+          "variables": [],
+          "constants": [],
+          "methods": [],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ]
+        }
+      },
+      "instanceTraits": [
+        {
+          "name": "autoRemoveChildren",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "rawTime",
+          "kind": "accessor",
+          "type": "Number"
+        },
+        {
+          "name": "insert",
+          "kind": "method"
+        },
+        {
+          "name": "remove",
+          "kind": "method"
+        },
+        {
+          "name": "renderTime",
+          "kind": "method"
+        }
+      ],
+      "staticTraits": []
+    },
+    "com.greensock.TweenLite": {
+      "sourceSha256": "92cc8f2fb203d1d60c101ab5c1757cd04f86962d09ac9dddfef3b46e549ba766",
+      "metadata": {
+        "name": "com.greensock::TweenLite",
+        "base": "com.greensock.core::TweenCore",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [
+            {
+              "name": "timeline",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::SimpleTimeline"
+            },
+            {
+              "name": "vars",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Object"
+            },
+            {
+              "name": "initted",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "gc",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "data",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "*"
+            },
+            {
+              "name": "cachedStartTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTotalTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTotalDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedTimeScale",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "cachedPauseTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Number"
+            },
+            {
+              "name": "propTweenLookup",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Object"
+            },
+            {
+              "name": "active",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "ratio",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Number"
+            },
+            {
+              "name": "cachedOrphan",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cachedReversed",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cacheIsDirty",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "cachedPT1",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "com.greensock.core::PropTween"
+            },
+            {
+              "name": "cachedPaused",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "Boolean"
+            },
+            {
+              "name": "target",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Object"
+            },
+            {
+              "name": "nextNode",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::TweenCore"
+            },
+            {
+              "name": "prevNode",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "type": "com.greensock.core::TweenCore"
+            }
+          ],
+          "constants": [],
+          "methods": [
+            {
+              "name": "setEnabled",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 2
+            },
+            {
+              "name": "kill",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "invalidate",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 0
+            },
+            {
+              "name": "complete",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 2
+            },
+            {
+              "name": "reverse",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 1
+            },
+            {
+              "name": "pause",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "play",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "resume",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 0
+            },
+            {
+              "name": "restart",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "parameterCount": 2
+            },
+            {
+              "name": "killVars",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 2
+            },
+            {
+              "name": "renderTime",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 3
+            }
+          ],
+          "accessors": [
+            {
+              "name": "currentTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "duration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "totalDuration",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "totalTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "startTime",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "reversed",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "paused",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            },
+            {
+              "name": "delay",
+              "declaredBy": "com.greensock.core::TweenCore",
+              "access": "readwrite"
+            }
+          ]
+        },
+        "statics": {
+          "variables": [
+            {
+              "name": "fastEaseLookup",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "flash.utils::Dictionary"
+            },
+            {
+              "name": "onPluginEvent",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Function"
+            },
+            {
+              "name": "overwriteManager",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Object"
+            },
+            {
+              "name": "killDelayedCallsTo",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Function"
+            },
+            {
+              "name": "rootFrame",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Number"
+            },
+            {
+              "name": "defaultEase",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Function"
+            },
+            {
+              "name": "rootTimeline",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "com.greensock.core::SimpleTimeline"
+            },
+            {
+              "name": "plugins",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Object"
+            },
+            {
+              "name": "rootFramesTimeline",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "com.greensock.core::SimpleTimeline"
+            },
+            {
+              "name": "masterList",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "flash.utils::Dictionary"
+            }
+          ],
+          "constants": [
+            {
+              "name": "version",
+              "declaredBy": "com.greensock::TweenLite",
+              "type": "Number"
+            }
+          ],
+          "methods": [
+            {
+              "name": "killTweensOf",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 3
+            },
+            {
+              "name": "initClass",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 0
+            },
+            {
+              "name": "to",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 3
+            },
+            {
+              "name": "from",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 3
+            },
+            {
+              "name": "delayedCall",
+              "declaredBy": "com.greensock::TweenLite",
+              "parameterCount": 4
+            }
+          ],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ]
+        }
+      },
+      "instanceTraits": [
+        {
+          "name": "propTweenLookup",
+          "kind": "variable",
+          "type": "Object"
+        },
+        {
+          "name": "ratio",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "cachedPT1",
+          "kind": "variable",
+          "type": "com.greensock.core::PropTween"
+        },
+        {
+          "name": "target",
+          "kind": "variable",
+          "type": "Object"
+        },
+        {
+          "name": "setEnabled",
+          "kind": "method"
+        },
+        {
+          "name": "invalidate",
+          "kind": "method"
+        },
+        {
+          "name": "killVars",
+          "kind": "method"
+        },
+        {
+          "name": "renderTime",
+          "kind": "method"
+        }
+      ],
+      "staticTraits": [
+        {
+          "name": "fastEaseLookup",
+          "kind": "variable",
+          "type": "flash.utils::Dictionary"
+        },
+        {
+          "name": "onPluginEvent",
+          "kind": "variable",
+          "type": "Function"
+        },
+        {
+          "name": "overwriteManager",
+          "kind": "variable",
+          "type": "Object"
+        },
+        {
+          "name": "killDelayedCallsTo",
+          "kind": "variable",
+          "type": "Function"
+        },
+        {
+          "name": "rootFrame",
+          "kind": "variable",
+          "type": "Number"
+        },
+        {
+          "name": "defaultEase",
+          "kind": "variable",
+          "type": "Function"
+        },
+        {
+          "name": "rootTimeline",
+          "kind": "variable",
+          "type": "com.greensock.core::SimpleTimeline"
+        },
+        {
+          "name": "plugins",
+          "kind": "variable",
+          "type": "Object"
+        },
+        {
+          "name": "version",
+          "kind": "constant",
+          "type": "Number"
+        },
+        {
+          "name": "rootFramesTimeline",
+          "kind": "variable",
+          "type": "com.greensock.core::SimpleTimeline"
+        },
+        {
+          "name": "masterList",
+          "kind": "variable",
+          "type": "flash.utils::Dictionary"
+        },
+        {
+          "name": "killTweensOf",
+          "kind": "method"
+        },
+        {
+          "name": "initClass",
+          "kind": "method"
+        },
+        {
+          "name": "to",
+          "kind": "method"
+        },
+        {
+          "name": "from",
+          "kind": "method"
+        },
+        {
+          "name": "delayedCall",
+          "kind": "method"
+        }
+      ]
+    }
+  }
+}

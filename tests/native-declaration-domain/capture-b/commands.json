@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\capture-b\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\original\\ConstructorOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\capture-b",
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\capture-b\\oracle.swf (1858 bytes)\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\original\\ConstructorOracle.as(4): col: 104 Warning: variable 'rows' has no type declaration.\n\nvar a:domain.a.Node=new domain.a.Node(),b:domain.b.Node=new domain.b.Node(),anchor:Anchor=new Anchor(),rows=[];\n                                                                                                       ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\original\\ConstructorOracle.as(13): col: 113 Warning: variable 'reflection' has no type declaration.\n\nvar classes=[domain.a.Node,domain.b.Node,Anchor,CycleA,CycleB],instances=[a,b,anchor,new CycleA(),new CycleB()],reflection=[],instanceXML=[];\n                                                                                                                ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\original\\ConstructorOracle.as(13): col: 64 Warning: variable 'instances' has no type declaration.\n\nvar classes=[domain.a.Node,domain.b.Node,Anchor,CycleA,CycleB],instances=[a,b,anchor,new CycleA(),new CycleB()],reflection=[],instanceXML=[];\n                                                               ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\original\\ConstructorOracle.as(13): col: 5 Warning: variable 'classes' has no type declaration.\n\nvar classes=[domain.a.Node,domain.b.Node,Anchor,CycleA,CycleB],instances=[a,b,anchor,new CycleA(),new CycleB()],reflection=[],instanceXML=[];\n    ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\original\\ConstructorOracle.as(13): col: 127 Warning: variable 'instanceXML' has no type declaration.\n\nvar classes=[domain.a.Node,domain.b.Node,Anchor,CycleA,CycleB],instances=[a,b,anchor,new CycleA(),new CycleB()],reflection=[],instanceXML=[];\n                                                                                                                              ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\original\\ConstructorOracle.as(15): col: 5 Warning: variable 'output' has no type declaration.\n\nvar output={rows:rows,reflection:reflection,instances:instanceXML};ExternalInterface.addCallback(\"snapshot\",function():String{return encodeURIComponent(JSON.stringify(output));});\n    ^\n\n"
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\capture-b\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\capture-b\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\foreign-local-compiler-correction\\capture-b",
+    "exitCode": 0,
+    "stdout": "\n",
+    "stderr": ""
+  }
+]

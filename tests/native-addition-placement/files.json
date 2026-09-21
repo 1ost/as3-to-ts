@@ -1,0 +1,66 @@
+[
+  {
+    "path": "evidence/commands.json",
+    "sha256": "d4245c251108e520e86563df2a8bf2cd98b9a211fac0f4b816d1ca6785cad5e6"
+  },
+  {
+    "path": "evidence/flash.json",
+    "sha256": "a11aa9ab839f7ddc84d8361a5b6e87cffd7af444f0e742aad98d542aca7b20ed"
+  },
+  {
+    "path": "evidence/oracle.swf",
+    "sha256": "45154a6de3bfc15100eeece82f7ca7fc68bf6905390e59fe6a79c73a409eeff7"
+  },
+  {
+    "path": "evidence/provenance.json",
+    "sha256": "ab5b1cc0893160670ffe06f2347d67a3e8d9a15f8aec1a45cedb98eac2a41096"
+  },
+  {
+    "path": "evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "evidence/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "evidence/sources/original/ConstructorOracle.as",
+    "sha256": "f852f4ae4879d92ad15289f8dc5982ebd00bf39e60892bc4d88054e6fdb06b46"
+  },
+  {
+    "path": "evidence/sources/original/probe/Placement.as",
+    "sha256": "93b19857ef4cb1b1c303f3fdb74f9aaa9c8277c862c122fe97fe086d68cebe05"
+  },
+  {
+    "path": "repeat-evidence/commands.json",
+    "sha256": "99e671f3473dae4f2a63a34b8e02e5b389b3079ca03398f43978cd1cfdde9bc2"
+  },
+  {
+    "path": "repeat-evidence/flash.json",
+    "sha256": "d377bce099ebb839c66b6fdb713622e41eba3e0bc9fc75fccf6780fbe75e742c"
+  },
+  {
+    "path": "repeat-evidence/oracle.swf",
+    "sha256": "1d03c50c08877970a7ead6a6a4fcaa7103a52aa87645fb3fad7b3602b07d642d"
+  },
+  {
+    "path": "repeat-evidence/provenance.json",
+    "sha256": "96484a8a2f98dbbce914c87174776463e66384046ec3f34b03603bf02475b931"
+  },
+  {
+    "path": "repeat-evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "repeat-evidence/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "repeat-evidence/sources/original/ConstructorOracle.as",
+    "sha256": "f852f4ae4879d92ad15289f8dc5982ebd00bf39e60892bc4d88054e6fdb06b46"
+  },
+  {
+    "path": "repeat-evidence/sources/original/probe/Placement.as",
+    "sha256": "93b19857ef4cb1b1c303f3fdb74f9aaa9c8277c862c122fe97fe086d68cebe05"
+  }
+]

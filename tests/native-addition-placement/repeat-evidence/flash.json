@@ -1,0 +1,287 @@
+{
+  "instances": [
+    "<type name=\"probe::Placement\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <variable name=\"state\" type=\"*\"/>\n  <variable name=\"field\" type=\"*\"/>\n  <variable name=\"constructed\" type=\"*\"/>\n  <method name=\"case3\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case16\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case29\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case4\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case17\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case30\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case5\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case18\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case6\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n  <method name=\"case19\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case7\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case20\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case8\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case21\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case9\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case22\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case10\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case23\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n  <method name=\"case11\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n  <method name=\"case24\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case12\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n  <method name=\"case25\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case0\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case13\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n  <method name=\"case26\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case1\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case14\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case27\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n  <method name=\"case2\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case15\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case28\" declaredBy=\"probe::Placement\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>"
+  ],
+  "reflection": [
+    "<type name=\"probe::Placement\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"staticValue\" type=\"*\"/>\n  <variable name=\"hook\" type=\"*\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::Placement\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <variable name=\"state\" type=\"*\"/>\n    <variable name=\"field\" type=\"*\"/>\n    <variable name=\"constructed\" type=\"*\"/>\n    <method name=\"case3\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case16\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case29\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case4\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case17\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case30\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case5\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case18\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case6\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n    <method name=\"case19\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case7\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case20\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case8\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case21\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case9\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case22\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case10\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case23\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n    <method name=\"case11\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n    <method name=\"case24\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case12\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n    <method name=\"case25\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case0\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case13\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n    <method name=\"case26\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case1\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case14\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case27\" declaredBy=\"probe::Placement\" returnType=\"*\"/>\n    <method name=\"case2\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case15\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case28\" declaredBy=\"probe::Placement\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "events": [
+        "toString",
+        "toString"
+      ],
+      "value": [
+        "fs",
+        "cs"
+      ],
+      "id": "construction-order"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "xs",
+      "id": "no-local-string-left"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "xs",
+      "id": "typed-string-left"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "xs",
+      "id": "local-initializer"
+    },
+    {
+      "events": [
+        "toString",
+        "toString"
+      ],
+      "value": "xss",
+      "id": "nested-left-chain"
+    },
+    {
+      "events": [
+        "valueOf",
+        "valueOf"
+      ],
+      "value": 13,
+      "id": "mixed-subtract-add"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": true,
+      "id": "mixed-add-subtract"
+    },
+    {
+      "events": [],
+      "value": [
+        "x3.9",
+        3
+      ],
+      "id": "assignment-operand"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "2xs",
+      "id": "nested-right-add"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "xs4",
+      "id": "helper-name-collision"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "xs",
+      "id": "operator-comments"
+    },
+    {
+      "events": [
+        "valueOf"
+      ],
+      "value": 10,
+      "id": "unary-plus"
+    },
+    {
+      "events": [],
+      "value": "fs",
+      "id": "instance-initializer"
+    },
+    {
+      "events": [],
+      "value": "cs",
+      "id": "constructor-body"
+    },
+    {
+      "events": [],
+      "value": "s1,2",
+      "id": "static-initializer"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        "xs",
+        "xs"
+      ],
+      "id": "wildcard-local"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "xs",
+      "id": "wildcard-parameter"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        "xs",
+        "xs"
+      ],
+      "id": "wildcard-local-rhs-write"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        "boom",
+        "changed"
+      ],
+      "id": "wildcard-local-rhs-throw"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        "boom",
+        "changed"
+      ],
+      "id": "wildcard-parameter-rhs-throw"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        [
+          "outers",
+          "x"
+        ],
+        "outers"
+      ],
+      "id": "wildcard-catch-shadow"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "xs",
+      "id": "wildcard-catch-local"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        "xs",
+        "xs",
+        "field"
+      ],
+      "id": "wildcard-field-shadow"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        "xs",
+        "xs",
+        "field"
+      ],
+      "id": "wildcard-parameter-field-shadow"
+    },
+    {
+      "events": [],
+      "value": [
+        "x",
+        "changed"
+      ],
+      "id": "catch-shadow-direct-write"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        [
+          "outers",
+          "x"
+        ],
+        "outers"
+      ],
+      "id": "catch-shadow-compound-rhs-write"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        [
+          "boom",
+          "x"
+        ],
+        "changed"
+      ],
+      "id": "catch-shadow-compound-rhs-throw"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        [
+          "outers",
+          "x"
+        ],
+        "outers"
+      ],
+      "id": "catch-shadow-parameter"
+    },
+    {
+      "events": [],
+      "value": "changed",
+      "id": "catch-unique-direct-write"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        "xs",
+        "xs"
+      ],
+      "id": "implicit-wildcard-local"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": "xs",
+      "id": "explicit-parameter-annotation-control"
+    },
+    {
+      "events": [
+        "toString"
+      ],
+      "value": [
+        [
+          "outers",
+          "x"
+        ],
+        "outers"
+      ],
+      "id": "capture-parameter-name-collision"
+    }
+  ]
+}

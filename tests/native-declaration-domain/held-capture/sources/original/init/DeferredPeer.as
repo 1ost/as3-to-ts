@@ -1,0 +1,1 @@
+package init { public class DeferredPeer { public static var stamp:*=mark(); private static function mark():* {State.events.push("Peer.cinit");return 1;} public function DeferredPeer() {State.events.push("Peer.ctor");} } }

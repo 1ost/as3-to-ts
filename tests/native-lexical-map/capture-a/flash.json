@@ -1,0 +1,154 @@
+{
+  "instances": [
+    "<type name=\"probe::Left\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <method name=\"closure\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n  <method name=\"write\" declaredBy=\"probe::Left\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"protectedRead\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n  <method name=\"read\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n  <method name=\"invoke\" declaredBy=\"probe::Left\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"peer\" declaredBy=\"probe::Left\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"make\" declaredBy=\"probe::Left\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"crossStatic\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n</type>",
+    "<type name=\"probe::Right\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <method name=\"closure\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n  <method name=\"write\" declaredBy=\"probe::Right\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"protectedRead\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n  <method name=\"read\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n  <method name=\"invoke\" declaredBy=\"probe::Right\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"peer\" declaredBy=\"probe::Right\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"make\" declaredBy=\"probe::Right\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"crossStatic\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n</type>"
+  ],
+  "reflection": [
+    "<type name=\"probe::Left\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"marker\" type=\"*\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"readStatic\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n  <factory type=\"probe::Left\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <method name=\"closure\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n    <method name=\"write\" declaredBy=\"probe::Left\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"protectedRead\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n    <method name=\"read\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n    <method name=\"invoke\" declaredBy=\"probe::Left\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"peer\" declaredBy=\"probe::Left\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"make\" declaredBy=\"probe::Left\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"crossStatic\" declaredBy=\"probe::Left\" returnType=\"*\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::Right\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"marker\" type=\"*\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"readStatic\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n  <factory type=\"probe::Right\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <method name=\"closure\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n    <method name=\"write\" declaredBy=\"probe::Right\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"protectedRead\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n    <method name=\"read\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n    <method name=\"invoke\" declaredBy=\"probe::Right\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"peer\" declaredBy=\"probe::Right\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"make\" declaredBy=\"probe::Right\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"crossStatic\" declaredBy=\"probe::Right\" returnType=\"*\"/>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "value": [
+        "left-secret",
+        "init-L",
+        "left-token",
+        "left-marker"
+      ],
+      "id": "left-read"
+    },
+    {
+      "value": [
+        "right-secret",
+        "init-R",
+        "right-token",
+        "right-marker"
+      ],
+      "id": "right-read"
+    },
+    {
+      "value": [
+        "left-secret",
+        "changed-L",
+        "left-token",
+        "left-marker"
+      ],
+      "id": "left-write"
+    },
+    {
+      "value": [
+        "right-secret",
+        "changed-R",
+        "right-token",
+        "right-marker"
+      ],
+      "id": "right-write"
+    },
+    {
+      "value": [
+        "left-secret",
+        "arg-L"
+      ],
+      "id": "left-private-call"
+    },
+    {
+      "value": [
+        "right-secret",
+        "arg-R"
+      ],
+      "id": "right-private-call"
+    },
+    {
+      "value": "changed-L",
+      "id": "left-protected"
+    },
+    {
+      "value": "changed-R",
+      "id": "right-protected"
+    },
+    {
+      "value": "left-token",
+      "id": "left-static"
+    },
+    {
+      "value": "right-token",
+      "id": "right-static"
+    },
+    {
+      "value": [
+        "right-secret",
+        "changed-R",
+        "right-token",
+        "right-marker"
+      ],
+      "id": "left-peer"
+    },
+    {
+      "value": [
+        "left-secret",
+        "changed-L",
+        "left-token",
+        "left-marker"
+      ],
+      "id": "right-peer"
+    },
+    {
+      "value": [
+        "right-marker",
+        "right-token"
+      ],
+      "id": "left-cross-static"
+    },
+    {
+      "value": [
+        "left-marker",
+        "left-token"
+      ],
+      "id": "right-cross-static"
+    },
+    {
+      "value": [
+        "right-secret",
+        "made-R",
+        "right-token",
+        "right-marker"
+      ],
+      "id": "left-made"
+    },
+    {
+      "value": [
+        "left-secret",
+        "made-L",
+        "left-token",
+        "left-marker"
+      ],
+      "id": "right-made"
+    },
+    {
+      "value": true,
+      "id": "left-closure-stable"
+    },
+    {
+      "value": true,
+      "id": "right-closure-stable"
+    },
+    {
+      "value": true,
+      "id": "distinct-closures"
+    },
+    {
+      "value": [
+        "left-secret",
+        "closure-L"
+      ],
+      "id": "left-closure-call"
+    },
+    {
+      "value": [
+        "right-secret",
+        "closure-R"
+      ],
+      "id": "right-closure-call"
+    }
+  ]
+}

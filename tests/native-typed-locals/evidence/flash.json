@@ -1,0 +1,490 @@
+{
+  "rows": [
+    {
+      "value": [
+        [
+          "NaN",
+          0,
+          0,
+          false,
+          null,
+          null,
+          null
+        ],
+        [
+          "NaN",
+          0,
+          0,
+          false,
+          null,
+          null,
+          null
+        ]
+      ],
+      "events": [],
+      "id": "entry-defaults"
+    },
+    {
+      "value": [
+        "NaN",
+        null,
+        0
+      ],
+      "events": [],
+      "id": "runtime-skipped"
+    },
+    {
+      "value": [
+        [
+          0,
+          "NaN",
+          "i",
+          3,
+          "NaN",
+          "n"
+        ],
+        3,
+        7.5
+      ],
+      "events": [],
+      "id": "source-order"
+    },
+    {
+      "value": [
+        2,
+        "shared"
+      ],
+      "events": [],
+      "id": "block-shared"
+    },
+    {
+      "value": [
+        [
+          0,
+          1,
+          2
+        ],
+        3,
+        3
+      ],
+      "events": [],
+      "id": "loop-no-reset"
+    },
+    {
+      "value": [
+        4.9,
+        4,
+        4294967295,
+        false
+      ],
+      "events": [],
+      "id": "scalar-initializers"
+    },
+    {
+      "value": [
+        3.9,
+        "-2.8",
+        -2
+      ],
+      "events": [],
+      "id": "raw-int-writes"
+    },
+    {
+      "value": [
+        true,
+        6.5
+      ],
+      "events": [
+        "valueOf"
+      ],
+      "id": "raw-number-hook"
+    },
+    {
+      "value": [
+        true,
+        "converted"
+      ],
+      "events": [
+        "toString"
+      ],
+      "id": "raw-string-hook"
+    },
+    {
+      "value": [
+        "undefined",
+        "null"
+      ],
+      "events": [],
+      "id": "object-undefined"
+    },
+    {
+      "value": [
+        "undefined",
+        "null",
+        "null",
+        "null"
+      ],
+      "events": [],
+      "id": "string-null"
+    },
+    {
+      "value": [
+        "undefined",
+        "null",
+        "null",
+        "null"
+      ],
+      "events": [],
+      "id": "array-null"
+    },
+    {
+      "value": [
+        true,
+        3,
+        "text"
+      ],
+      "events": [],
+      "id": "object-values"
+    },
+    {
+      "value": [
+        true,
+        true
+      ],
+      "events": [],
+      "id": "array-identity"
+    },
+    {
+      "value": [
+        "TypeError",
+        1034,
+        true
+      ],
+      "events": [],
+      "id": "array-error-retains"
+    },
+    {
+      "value": true,
+      "events": [],
+      "id": "bool-no-hooks"
+    },
+    {
+      "value": [
+        true,
+        7,
+        7.9
+      ],
+      "events": [
+        "valueOf",
+        "valueOf"
+      ],
+      "id": "chain-raw-object"
+    },
+    {
+      "value": [
+        2,
+        "str",
+        2.8
+      ],
+      "events": [
+        "valueOf",
+        "toString",
+        "valueOf"
+      ],
+      "id": "multiple-types"
+    },
+    {
+      "value": [
+        42,
+        9
+      ],
+      "events": [
+        "valueOf"
+      ],
+      "id": "throw-retains"
+    },
+    {
+      "value": "NaN",
+      "events": [
+        "valueOf"
+      ],
+      "id": "initializer-throw-default"
+    },
+    {
+      "value": [
+        -2147483648,
+        1,
+        2147483647,
+        0
+      ],
+      "events": [],
+      "id": "int-wrap"
+    },
+    {
+      "value": [
+        4294967295,
+        0,
+        4294967295,
+        0
+      ],
+      "events": [],
+      "id": "uint-wrap"
+    },
+    {
+      "value": [
+        -2147483648,
+        -2147483648,
+        2147483647,
+        -2147483648
+      ],
+      "events": [],
+      "id": "int-prefix-overflow"
+    },
+    {
+      "value": [
+        2147483647,
+        2147483647,
+        -2147483648,
+        2147483647
+      ],
+      "events": [],
+      "id": "int-prefix-underflow"
+    },
+    {
+      "value": [
+        4294967296,
+        0,
+        4294967295,
+        0
+      ],
+      "events": [],
+      "id": "uint-prefix-overflow"
+    },
+    {
+      "value": [
+        -1,
+        4294967295,
+        0,
+        4294967295
+      ],
+      "events": [],
+      "id": "uint-prefix-underflow"
+    },
+    {
+      "value": [
+        2147483648,
+        -2147483648,
+        1.5,
+        1,
+        "3.9",
+        3
+      ],
+      "events": [],
+      "id": "int-compound"
+    },
+    {
+      "value": [
+        -1,
+        4294967295,
+        4294967296,
+        0
+      ],
+      "events": [],
+      "id": "uint-compound"
+    },
+    {
+      "value": [
+        5.8,
+        5
+      ],
+      "events": [
+        "valueOf"
+      ],
+      "id": "compound-hook"
+    },
+    {
+      "value": [
+        42,
+        3
+      ],
+      "events": [
+        "valueOf"
+      ],
+      "id": "compound-throw"
+    },
+    {
+      "value": [
+        "-0",
+        1
+      ],
+      "events": [],
+      "id": "negative-zero"
+    },
+    {
+      "value": [
+        "caught",
+        7
+      ],
+      "events": [],
+      "id": "catch-shadow"
+    },
+    {
+      "value": 3,
+      "events": [],
+      "id": "catch-body-local"
+    },
+    {
+      "value": [
+        [
+          0,
+          1,
+          2
+        ],
+        2,
+        3
+      ],
+      "events": [],
+      "id": "postfix-index-pattern"
+    },
+    {
+      "value": [
+        [
+          30,
+          20,
+          10
+        ],
+        -1,
+        10
+      ],
+      "events": [],
+      "id": "countdown-pattern"
+    },
+    {
+      "value": [
+        [
+          "NaN",
+          0,
+          0,
+          false
+        ],
+        [
+          0,
+          0,
+          0,
+          false
+        ]
+      ],
+      "events": [],
+      "id": "null-undefined-numbers"
+    },
+    {
+      "value": [
+        42,
+        "old"
+      ],
+      "events": [
+        "toString"
+      ],
+      "id": "string-throw"
+    },
+    {
+      "value": [
+        2147483647,
+        2147483647,
+        -2,
+        4294967294
+      ],
+      "events": [],
+      "id": "bitwise-compounds"
+    },
+    {
+      "value": [
+        "NaN",
+        0
+      ],
+      "events": [],
+      "id": "runtime-skipped-loop"
+    },
+    {
+      "value": [
+        2,
+        5
+      ],
+      "events": [],
+      "id": "repeated-uninitialized"
+    },
+    {
+      "value": [
+        5.8,
+        5
+      ],
+      "events": [
+        "valueOf"
+      ],
+      "id": "compound-rhs-write"
+    },
+    {
+      "value": [
+        42,
+        20
+      ],
+      "events": [
+        "valueOf"
+      ],
+      "id": "compound-rhs-write-throw"
+    },
+    {
+      "value": [
+        "4.9",
+        4
+      ],
+      "events": [],
+      "id": "write-before-declaration"
+    },
+    {
+      "value": [
+        4,
+        11
+      ],
+      "events": [],
+      "id": "typed-object-receiver"
+    },
+    {
+      "value": [
+        8,
+        9
+      ],
+      "events": [],
+      "id": "typed-public-field-shadow"
+    },
+    {
+      "value": [
+        3,
+        "NaN"
+      ],
+      "events": [],
+      "id": "constructor-locals"
+    },
+    {
+      "value": [
+        24,
+        21,
+        1,
+        1,
+        1,
+        5,
+        3,
+        1,
+        1
+      ],
+      "events": [],
+      "id": "numeric-compounds"
+    }
+  ],
+  "instances": [
+    "<type name=\"probe::TypedLocals\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <variable name=\"marker\" type=\"*\"/>\n  <variable name=\"constructorState\" type=\"*\"/>\n  <method name=\"case14\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case27\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case40\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case2\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case15\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case28\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case41\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case3\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case16\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case29\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case42\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case4\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case17\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case30\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case43\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case5\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case18\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case31\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case44\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case6\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case19\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case32\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case45\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case7\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case20\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case33\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case46\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case8\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case21\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case34\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case9\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case22\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case35\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case10\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case23\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case36\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case11\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case24\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case37\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case12\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case25\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case38\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case0\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case13\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case26\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"case39\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n  <method name=\"case1\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>"
+  ],
+  "reflection": [
+    "<type name=\"probe::TypedLocals\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"kind\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <factory type=\"probe::TypedLocals\">\n    <extendsClass type=\"Object\"/>\n    <variable name=\"marker\" type=\"*\"/>\n    <variable name=\"constructorState\" type=\"*\"/>\n    <method name=\"case14\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case27\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case40\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case2\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case15\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case28\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case41\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case3\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case16\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case29\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case42\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case4\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case17\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case30\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case43\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case5\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case18\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case31\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case44\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case6\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case19\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case32\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case45\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case7\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case20\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case33\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case46\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case8\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case21\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case34\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case9\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case22\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case35\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case10\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case23\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case36\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case11\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case24\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case37\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case12\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case25\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case38\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case0\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case13\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case26\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"case39\" declaredBy=\"probe::TypedLocals\" returnType=\"*\"/>\n    <method name=\"case1\" declaredBy=\"probe::TypedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>"
+  ]
+}

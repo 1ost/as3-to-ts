@@ -1,0 +1,66 @@
+[
+  {
+    "path": "evidence/commands.json",
+    "sha256": "5795c1e82cc52e03337f1b6299e5e8879bcdd7471b72cddaca0dc2facd2aafc1"
+  },
+  {
+    "path": "evidence/flash.json",
+    "sha256": "0b96c801496365861db4d8c789f7b9312a395b395b819ef57dfc429643ef3e6b"
+  },
+  {
+    "path": "evidence/oracle.swf",
+    "sha256": "e9e0840f18aaeb087d3a7f8ff4fa2df749a55941038234da5f4500157ffea4b4"
+  },
+  {
+    "path": "evidence/provenance.json",
+    "sha256": "b1d3742b88b7201f8790c2b90b4ab91bf9f22c7fcdc2c0995a5319e3e9c750db"
+  },
+  {
+    "path": "evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "evidence/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "evidence/sources/original/ConstructorOracle.as",
+    "sha256": "f17e7e2af505c4276954f4ff4d40b49284782b744800dfc6bfa1c98c4d13bb64"
+  },
+  {
+    "path": "evidence/sources/original/probe/LocalReview.as",
+    "sha256": "7320377c9d2ae23697547a616a435968b83e4fc5ed35e758039657de16523137"
+  },
+  {
+    "path": "repeat-evidence/commands.json",
+    "sha256": "84054d2413a9a4ae93e20aaa4729e605a95eb9a7506eaf603a87ff5a73d477a0"
+  },
+  {
+    "path": "repeat-evidence/flash.json",
+    "sha256": "72dbc665c1e93dea042bba3bc957ed84e61ea87a7faf9dfc2083334adac71c57"
+  },
+  {
+    "path": "repeat-evidence/oracle.swf",
+    "sha256": "b857dc5beec54ec8a4fd1ddaba11afdb36bcb64fb65274fc1ef89e3da4e591b6"
+  },
+  {
+    "path": "repeat-evidence/provenance.json",
+    "sha256": "5a6a6efa2fb2cec05c1f6d7f311ce3bc1483908af1cb644c0e76515eed3a5876"
+  },
+  {
+    "path": "repeat-evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "repeat-evidence/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "repeat-evidence/sources/original/ConstructorOracle.as",
+    "sha256": "f17e7e2af505c4276954f4ff4d40b49284782b744800dfc6bfa1c98c4d13bb64"
+  },
+  {
+    "path": "repeat-evidence/sources/original/probe/LocalReview.as",
+    "sha256": "7320377c9d2ae23697547a616a435968b83e4fc5ed35e758039657de16523137"
+  }
+]

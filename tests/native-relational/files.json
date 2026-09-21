@@ -1,0 +1,274 @@
+[
+  {
+    "path": "fixtures/collision/capture-c/commands.json",
+    "sha256": "e901e93efc7d790fe7732c9d80e32bd8dc29d0d5a86547f13793c39f5f1421e2"
+  },
+  {
+    "path": "fixtures/collision/capture-c/flash.json",
+    "sha256": "6efd5aa1da5b317f270857f2f70bfdf0eecf32b2a8afe3de6687919476db15d5"
+  },
+  {
+    "path": "fixtures/collision/capture-c/oracle.swf",
+    "sha256": "dbb6024c2de4105901d3c493ed7b9eaed8d1762e85f97e63d033a887567c1b60"
+  },
+  {
+    "path": "fixtures/collision/capture-c/provenance.json",
+    "sha256": "066acea2f56066a426ea62d411b19fbc90528cbe753cb07ef541a2b3e002119a"
+  },
+  {
+    "path": "fixtures/collision/capture-c/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "fixtures/collision/capture-c/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "fixtures/collision/capture-c/sources/original/ConstructorOracle.as",
+    "sha256": "21fe7fe0dc9af74f6b197d50cfd4d064609dc7ad5ec4ef287ef02794ab22dec2"
+  },
+  {
+    "path": "fixtures/collision/capture-c/sources/original/probe/RelationalReview.as",
+    "sha256": "5cc6e5f88bc45613e6c6ebe0b6a5f711145d685a1ba5d54a1845504ac6260320"
+  },
+  {
+    "path": "fixtures/collision/capture-d/commands.json",
+    "sha256": "c8bb32c2f7b13a8d556d1bfa587af6d787eef33c2f263b406632cf42abf48bff"
+  },
+  {
+    "path": "fixtures/collision/capture-d/flash.json",
+    "sha256": "98a2100e9360830f21b5b9cb19e6e55b812bf711f1d328d4a35b76d38cb2032e"
+  },
+  {
+    "path": "fixtures/collision/capture-d/oracle.swf",
+    "sha256": "d1bda4b5b581550816c014f15f144eef7060c5d66f0c6f2f29cb1e509b52a2f1"
+  },
+  {
+    "path": "fixtures/collision/capture-d/provenance.json",
+    "sha256": "7a581e85295bb4aef8967fc2f00b972f395bd644f99405c423084974e116fd5b"
+  },
+  {
+    "path": "fixtures/collision/capture-d/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "fixtures/collision/capture-d/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "fixtures/collision/capture-d/sources/original/ConstructorOracle.as",
+    "sha256": "21fe7fe0dc9af74f6b197d50cfd4d064609dc7ad5ec4ef287ef02794ab22dec2"
+  },
+  {
+    "path": "fixtures/collision/capture-d/sources/original/probe/RelationalReview.as",
+    "sha256": "5cc6e5f88bc45613e6c6ebe0b6a5f711145d685a1ba5d54a1845504ac6260320"
+  },
+  {
+    "path": "fixtures/collision/driver.js",
+    "sha256": "8acc19d672564827b494a141c83752dc5a56ac03df544e28a1c52f33a6bc0db0"
+  },
+  {
+    "path": "fixtures/expressions14/capture-c/commands.json",
+    "sha256": "6818b9f410ed29a740c65d5fe8675fd6b2bd8db9ac442b753d1db5d995cf9896"
+  },
+  {
+    "path": "fixtures/expressions14/capture-c/flash.json",
+    "sha256": "b2d45dc437f8afac115ce107e69d6234af887b6e4ff47eeaf40e628d1073301a"
+  },
+  {
+    "path": "fixtures/expressions14/capture-c/oracle.swf",
+    "sha256": "face488ae37f9cbcc44bfe753a8d4e561696c6e313fefe484de63b812f4ba89f"
+  },
+  {
+    "path": "fixtures/expressions14/capture-c/provenance.json",
+    "sha256": "34fe80a56fcf3b48205a3a709e1a01c93fc0ee0897efa51845a470db28a2fdce"
+  },
+  {
+    "path": "fixtures/expressions14/capture-c/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "fixtures/expressions14/capture-c/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "fixtures/expressions14/capture-c/sources/original/ConstructorOracle.as",
+    "sha256": "035d33a63dfe02c3f55f5db830daf8e19638eec57875fec0ccde357e0c07c753"
+  },
+  {
+    "path": "fixtures/expressions14/capture-c/sources/original/probe/RelationalReview.as",
+    "sha256": "0ba441e8e0b619299b872454e6081de4e4a1c8c3cdd9bf1934d32d5e82709817"
+  },
+  {
+    "path": "fixtures/expressions14/capture-d/commands.json",
+    "sha256": "042541bd9d1a3792255bb58249f56fa59518449d3ddfc0caea19164fe9358982"
+  },
+  {
+    "path": "fixtures/expressions14/capture-d/flash.json",
+    "sha256": "e2bad7ec8d6b69a695f247b163c7d5121fcd9eb6204fdc8234fd268cd7675ade"
+  },
+  {
+    "path": "fixtures/expressions14/capture-d/oracle.swf",
+    "sha256": "eb222090654842aa1d782d6ee28f593745e4210b42b46b39e6113aa6cce5fcab"
+  },
+  {
+    "path": "fixtures/expressions14/capture-d/provenance.json",
+    "sha256": "fbb712694877ac7344475b5e466432bf85eee85d68bddc266d90cf06b5ced0e6"
+  },
+  {
+    "path": "fixtures/expressions14/capture-d/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "fixtures/expressions14/capture-d/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "fixtures/expressions14/capture-d/sources/original/ConstructorOracle.as",
+    "sha256": "035d33a63dfe02c3f55f5db830daf8e19638eec57875fec0ccde357e0c07c753"
+  },
+  {
+    "path": "fixtures/expressions14/capture-d/sources/original/probe/RelationalReview.as",
+    "sha256": "0ba441e8e0b619299b872454e6081de4e4a1c8c3cdd9bf1934d32d5e82709817"
+  },
+  {
+    "path": "fixtures/expressions14/driver.js",
+    "sha256": "9fb2027d5a3a97a3b4ed026e8004478014ea8a083d452492a851698ed37bc79c"
+  },
+  {
+    "path": "fixtures/mixed4/capture-e/commands.json",
+    "sha256": "ffa6ea600424e17ddf23b9852190ac9f382c20ba773a51a4ed610207096f38f7"
+  },
+  {
+    "path": "fixtures/mixed4/capture-e/flash.json",
+    "sha256": "f04a6ec7b2281385cfff84b4abf5a2c6f1f2fb33951733d6394dedd22751d905"
+  },
+  {
+    "path": "fixtures/mixed4/capture-e/oracle.swf",
+    "sha256": "1768bb691675c8e913167cc323164c81a9b0307e46f588e7f37513db123b1bc4"
+  },
+  {
+    "path": "fixtures/mixed4/capture-e/provenance.json",
+    "sha256": "790a54d97117ec3a6c1b345e2f46c4beefb45d19eb3b47920228c2733430f04c"
+  },
+  {
+    "path": "fixtures/mixed4/capture-e/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "fixtures/mixed4/capture-e/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "fixtures/mixed4/capture-e/sources/original/ConstructorOracle.as",
+    "sha256": "658b926dc50f1e58e3292e6c078589c2df708aec0b9862164604f05077b047f0"
+  },
+  {
+    "path": "fixtures/mixed4/capture-e/sources/original/probe/RelationalReview.as",
+    "sha256": "309fb86672fe95d51dec215563be22b560a27852778d9c6a184439b52e97ce1d"
+  },
+  {
+    "path": "fixtures/mixed4/capture-f/commands.json",
+    "sha256": "7983403bf444e42c4d3b94c069f2b514ea02b8e917c74659aff75c3d624f7a92"
+  },
+  {
+    "path": "fixtures/mixed4/capture-f/flash.json",
+    "sha256": "56a4401cd251ef33dc4afd6c194b9101a409437b03399299c15e5a329f43ffac"
+  },
+  {
+    "path": "fixtures/mixed4/capture-f/oracle.swf",
+    "sha256": "e82117a5d0bbe5d019e11c8a80a49923d911f5f858cc3100ae37dece16bbe9a7"
+  },
+  {
+    "path": "fixtures/mixed4/capture-f/provenance.json",
+    "sha256": "190b6059d1b49b484aac0a160de2cdbaa6be00f73b14ede6c59909cced5b961b"
+  },
+  {
+    "path": "fixtures/mixed4/capture-f/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "fixtures/mixed4/capture-f/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "fixtures/mixed4/capture-f/sources/original/ConstructorOracle.as",
+    "sha256": "658b926dc50f1e58e3292e6c078589c2df708aec0b9862164604f05077b047f0"
+  },
+  {
+    "path": "fixtures/mixed4/capture-f/sources/original/probe/RelationalReview.as",
+    "sha256": "309fb86672fe95d51dec215563be22b560a27852778d9c6a184439b52e97ce1d"
+  },
+  {
+    "path": "fixtures/mixed4/driver.js",
+    "sha256": "be4172a6b74c7bb2269fd401de52becd12dfa86f772ce0ae9316adaec7d00a3e"
+  },
+  {
+    "path": "fixtures/retained76/capture-c/commands.json",
+    "sha256": "f9d444921771464bc5c968a5b1ecfe2fbb63b0f59eec80c565314ea3cb1bc4ab"
+  },
+  {
+    "path": "fixtures/retained76/capture-c/flash.json",
+    "sha256": "79aa0ae64f3428d7f6c2e1ad9d45607b230c42cd96c9cde9ccb10db37b9fc0df"
+  },
+  {
+    "path": "fixtures/retained76/capture-c/oracle.swf",
+    "sha256": "ecf44f736e39d999dbfd7b29c11ca373928ccc97923ec44b97baddac7f36cc88"
+  },
+  {
+    "path": "fixtures/retained76/capture-c/provenance.json",
+    "sha256": "e4c894d29cb3f50c7dd21e21cb08250c6ed9e20ea4089765e0ceb603459e32ee"
+  },
+  {
+    "path": "fixtures/retained76/capture-c/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "fixtures/retained76/capture-c/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "fixtures/retained76/capture-c/sources/original/ConstructorOracle.as",
+    "sha256": "17fd83639fb2f0237e3786225fc1f62ad9cbb5a71539c58d070dc308f9c5b5ca"
+  },
+  {
+    "path": "fixtures/retained76/capture-c/sources/original/probe/RelationalReview.as",
+    "sha256": "d646558796aaef500c8d40577c9484e58fc16017b712d46833a099991a7622f8"
+  },
+  {
+    "path": "fixtures/retained76/capture-d/commands.json",
+    "sha256": "6e7f4c1a9b1362c33dc181b1fe15fb2a40071270902f8608de0fef6331063cdd"
+  },
+  {
+    "path": "fixtures/retained76/capture-d/flash.json",
+    "sha256": "79aa0ae64f3428d7f6c2e1ad9d45607b230c42cd96c9cde9ccb10db37b9fc0df"
+  },
+  {
+    "path": "fixtures/retained76/capture-d/oracle.swf",
+    "sha256": "2b190613cd2c112c2922a915a5518deb2032f96c113f2e01ee148d4e1ec4ab60"
+  },
+  {
+    "path": "fixtures/retained76/capture-d/provenance.json",
+    "sha256": "f3b8d94cd652727f9239df4b60be691a416e333d06ca21a541c3a560e21e124c"
+  },
+  {
+    "path": "fixtures/retained76/capture-d/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "fixtures/retained76/capture-d/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "fixtures/retained76/capture-d/sources/original/ConstructorOracle.as",
+    "sha256": "17fd83639fb2f0237e3786225fc1f62ad9cbb5a71539c58d070dc308f9c5b5ca"
+  },
+  {
+    "path": "fixtures/retained76/capture-d/sources/original/probe/RelationalReview.as",
+    "sha256": "d646558796aaef500c8d40577c9484e58fc16017b712d46833a099991a7622f8"
+  },
+  {
+    "path": "fixtures/retained76/driver.js",
+    "sha256": "7c520af184f4dd5bdc4fbb46f8ce76a2d8a25bb8731c9c598d59ca8983b16162"
+  }
+]

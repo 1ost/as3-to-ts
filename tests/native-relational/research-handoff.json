@@ -1,0 +1,41 @@
+{
+  "status": "research-complete-no-implementation",
+  "compilerCommit": "1ebbed38900ed88c5c0bfa4723de61f408a86b9a",
+  "engineCommit": "4c3eaf32cefc654e8b086036705c5576b9b4edf4",
+  "retained76": {
+    "matches": 50,
+    "mismatches": 26
+  },
+  "new14": {
+    "methods": 10,
+    "matches": 5,
+    "mismatches": 9,
+    "repeatedOriginal": true
+  },
+  "mixed4": {
+    "repeatedOriginal": true,
+    "wholeSourceCompilerHeld": true,
+    "nativeAdmitted": 0
+  },
+  "actualTypeFiles": 755,
+  "runtimeGraphModules": 62,
+  "typeDiagnostics": 0,
+  "runtimes": [
+    "Node",
+    "Chromium"
+  ],
+  "targets": [
+    "ES5",
+    "ES2015"
+  ],
+  "sourceComparisons": [
+    8,
+    13
+  ],
+  "generatedArityComparisonsPerClass": 2,
+  "sourceEdits": 0,
+  "pinsEdits": 0,
+  "providerReviewSHA256": "02a94b84e8819a870d9ec08470b721863ff2f05d641a8a9f084f1ed4b0a188d1",
+  "manifestSHA256": "e093bf055423a06d6f3ed4373fbacd31ef42b6c3968b106406daf745f7cd557b",
+  "reportSHA256": "66ffe6422708c794ab1c6f6b9956c94201d7d288714eab97ff8cb25d207e7fa0"
+}
