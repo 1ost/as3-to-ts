@@ -182,6 +182,9 @@ const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.SHORT_VECTOR]: emitShortVector,
 	[NodeKind.TYPE]: emitType,
 	[NodeKind.CALL]: emitCall,
+	[NodeKind.LABEL]: emitStatementLabel,
+	[NodeKind.BREAK]: emitStatementJump,
+	[NodeKind.CONTINUE]: emitStatementJump,
 	[NodeKind.CATCH]: emitCatch,
 	[NodeKind.NEW]: emitNew,
 	[NodeKind.RELATION]: emitRelation,
@@ -272,6 +275,8 @@ export default class Emitter {
 	public isExtended:boolean = false;
 	public skipNewLines:boolean = false;
 	public loopObjectCounter:number = 0;
+	/** Label held while a lowering inserts a wrapper around the labelled loop. */
+	public pendingStatementLabel:string = null;
 
 	private _emitThisForNextIdent:boolean = true;
 	get emitThisForNextIdent():boolean {
@@ -1273,6 +1278,10 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	} while (emitter.source.indexOf(receiverName) >= 0 || emitter.source.indexOf(keyName) >= 0);
 	emitter.catchup(node.start);
 	emitter.insert('{ var ' + receiverName + '; ');
+	if (emitter.pendingStatementLabel) {
+		emitter.insert(emitter.pendingStatementLabel + ': ');
+		emitter.pendingStatementLabel = null;
+	}
 
 	let nameTypeInitNode = varNode.findChild(NodeKind.NAME_TYPE_INIT);
 	let nameNode:Node;
@@ -1444,6 +1453,32 @@ function emitBlock(emitter:Emitter, node:Node):void {
 			+ emitter.output.slice(insertion);
 		emitter.logicalAssignmentTemps.delete(node);
 	}
+}
+
+function emitStatementLabel(emitter:Emitter, node:Node):void {
+	const name = node.children[0];
+	const statement = node.children[1];
+	if (!name || !statement) throw new Error('AS3_LABEL_UNSUPPORTED: malformed statement label');
+	emitter.catchup(node.start);
+	if (statement.kind === NodeKind.FOREACH) {
+		// for-each lowering introduces a capture block before the actual loop;
+		// hold the label until that loop is emitted so `continue label` remains
+		// legal and targets the AS3 loop rather than the implementation block.
+		emitter.pendingStatementLabel = name.text;
+		emitter.skipTo(name.end + 1);
+	} else {
+		emitter.insert(name.text + ':');
+		emitter.skipTo(name.end + 1);
+	}
+	visitNode(emitter, statement);
+}
+
+function emitStatementJump(emitter:Emitter, node:Node):void {
+	// The legacy generic visitor treats a labelled target as an instance
+	// identifier (`this.loop0`). Preserve AS3's raw `break label` / `continue
+	// label` spelling; TypeScript uses the same statement-label grammar.
+	emitter.catchup(node.start);
+	emitter.catchup(node.end);
 }
 
 function nativeDictionaryEnumerationReceiver(emitter:Emitter, node:Node):boolean {

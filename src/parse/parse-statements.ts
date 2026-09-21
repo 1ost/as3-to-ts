@@ -13,7 +13,9 @@ import {NEW_LINE} from './parser';
 export function parseStatement(parser:AS3Parser):Node {
     let result:Node;
 
-    if (tokIs(parser, Keywords.FOR)) {
+    if (isStatementLabel(parser)) {
+        result = parseStatementLabel(parser);
+    } else if (tokIs(parser, Keywords.FOR)) {
         result = parseFor(parser);
     } else if (tokIs(parser, Keywords.USE) || tokIs(parser, Keywords.NAMESPACE)) {
         throw new Error('AS3_NAMESPACE_UNSUPPORTED: function-local namespace scope');
@@ -49,6 +51,24 @@ export function parseStatement(parser:AS3Parser):Node {
         result = parseExpressionList(parser);
         skip(parser, Operators.SEMI_COLUMN);
     }
+    return result;
+}
+
+function isStatementLabel(parser:AS3Parser):boolean {
+    if (!parser.tok || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) return false;
+    const checkpoint = parser.scn.getCheckPoint();
+    const next = parser.scn.nextToken();
+    parser.scn.rewind(checkpoint);
+    return !!next && next.text === ':';
+}
+
+function parseStatementLabel(parser:AS3Parser):Node {
+    const label = parser.tok;
+    const name = createNode(NodeKind.IDENTIFIER, {tok: label});
+    nextToken(parser, true);
+    consume(parser, ':');
+    const statement = parseStatement(parser);
+    const result = createNode(NodeKind.LABEL, {start: label.index, end: statement.end}, name, statement);
     return result;
 }
 
