@@ -144,6 +144,8 @@ export interface EmitterOptions {
 	nativeObjectCreationModule?:string;
 	/** Authenticated common AS3Property module for SDK Dictionary property access. */
 	nativeDictionaryPropertyModule?:string;
+	/** Authenticated common AS3Property module for typed dynamic indexed writes. */
+	nativeDynamicPropertyWritesModule?:string;
 }
 
 
@@ -405,6 +407,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['compiler.AS3Property']
 				&& this.options.importModules['compiler.AS3Property'] !== module)
 				throw new Error('AS3_DICTIONARY_PROPERTY_UNSUPPORTED: AS3Property import binding disagrees with nativeDictionaryPropertyModule');
+		}
+		if (this.options.nativeDynamicPropertyWritesModule !== undefined) {
+			const module = this.options.nativeDynamicPropertyWritesModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: explicit common AS3Property module required');
+			if (this.options.importModules && this.options.importModules['compiler.AS3Property']
+				&& this.options.importModules['compiler.AS3Property'] !== module)
+				throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: AS3Property import binding disagrees with nativeDynamicPropertyWritesModule');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2754,6 +2764,14 @@ function emitBuiltinObjectCreation(emitter:Emitter, node:Node):boolean {
 
 interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; }
 
+function propertyHelper(emitter:Emitter, exported:string, module:string):string {
+	let helper = '__as3_' + exported;
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier(exported + ' as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	return helper;
+}
+
 function dictionaryAccess(emitter:Emitter, node:Node):DictionaryAccess {
 	const module = emitter.options.nativeDictionaryPropertyModule;
 	if (module === undefined || !node || (node.kind !== NodeKind.DOT && node.kind !== NodeKind.ARRAY_ACCESSOR)
@@ -2769,12 +2787,7 @@ function dictionaryAccess(emitter:Emitter, node:Node):DictionaryAccess {
 }
 
 function dictionaryHelper(emitter:Emitter, exported:string):string {
-	let helper = '__as3_' + exported;
-	while (emitter.source.indexOf(helper) >= 0) helper += '_';
-	emitter.ensureImportIdentifier(exported + ' as ' + helper,
-		emitter.options.nativeDictionaryPropertyModule, false);
-	emitter.nativeSourceHelpers.add(helper);
-	return helper;
+	return propertyHelper(emitter, exported, emitter.options.nativeDictionaryPropertyModule);
 }
 
 function emitDictionaryKey(emitter:Emitter, access:DictionaryAccess):void {
@@ -2788,6 +2801,10 @@ function emitDictionaryKey(emitter:Emitter, access:DictionaryAccess):void {
 		visitNode(emitter, access.key);
 		emitter.catchup(access.key.end);
 	}
+}
+
+function emitPropertyKey(emitter:Emitter, access:DictionaryAccess):void {
+	emitDictionaryKey(emitter, access);
 }
 
 function emitDictionaryProperty(emitter:Emitter, node:Node, exported:string):boolean {
@@ -2809,6 +2826,33 @@ function emitDictionaryPropertyAssignment(emitter:Emitter, target:Node, value:No
 	emitter.catchup(target.parent.start);
 	emitter.insert(helper + '(');
 	emitDictionaryKey(emitter, access);
+	emitter.insert(', ');
+	emitter.skipTo(value.start);
+	visitNode(emitter, value);
+	emitter.catchup(getEffectiveNodeEnd(value));
+	emitter.insert(')');
+	emitter.skipTo(getEffectiveNodeEnd(target.parent));
+	return true;
+}
+
+function dynamicWriteAccess(emitter:Emitter, node:Node):DictionaryAccess {
+	const module = emitter.options.nativeDynamicPropertyWritesModule;
+	if (module === undefined || !node || node.kind !== NodeKind.ARRAY_ACCESSOR || node.children.length !== 2)
+		return null;
+	const receiver = node.children[0], key = node.children[1];
+	if (!receiver || !key || receiver.kind !== NodeKind.IDENTIFIER) return null;
+	const definition = emitter.findDefInScope(receiver.text);
+	if (!definition || definition.as3Type !== 'Object' && definition.as3Type !== '*') return null;
+	return {receiver, key};
+}
+
+function emitDynamicPropertyAssignment(emitter:Emitter, target:Node, value:Node):boolean {
+	const access = dynamicWriteAccess(emitter, target);
+	if (!access) return false;
+	const helper = propertyHelper(emitter, 'as3SetProperty', emitter.options.nativeDynamicPropertyWritesModule);
+	emitter.catchup(target.parent.start);
+	emitter.insert(helper + '(');
+	emitPropertyKey(emitter, access);
 	emitter.insert(', ');
 	emitter.skipTo(value.start);
 	visitNode(emitter, value);
@@ -3470,6 +3514,7 @@ function emitAssign(emitter: Emitter, node: Node): void {
     let operator = node.children[1];
     let right = node.children[2];
     if (operator.text === '=' && emitDictionaryPropertyAssignment(emitter, left, right)) return;
+    if (operator.text === '=' && emitDynamicPropertyAssignment(emitter, left, right)) return;
     if ((operator.text === '+=' || operator.text === '=') && emitter.lexical && emitter.lexical.typedLocals) {
         const target = emitter.lexical.typedLocals.wildcardReference(left, emitter);
         if (target && (operator.text === '+=' || target.write)) {

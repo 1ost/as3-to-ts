@@ -328,4 +328,31 @@ assert.throws(() => generate(dictionarySource, {
     nativeDictionaryPropertyModule: './other',
 }), /AS3_DICTIONARY_PROPERTY_UNSUPPORTED/);
 
+const dynamicWriteOptions = {
+    ...options,
+    importModules: { 'compiler.AS3Property': './AS3Property' },
+    nativeReflectionQueryModule: undefined,
+    nativeDynamicPropertyWritesModule: './AS3Property',
+};
+const dynamicWriteSource = `package probe {
+ public class DynamicWrites {
+  public function objectWrite(target:Object, key:Object, value:Object):Object {
+   return target[key] = value;
+  }
+  public function wildcardWrite(target:*, key:Object, value:Object):* {
+   target[key] = value; return value;
+  }
+  public function ordinary(target:Object):Object { return target; }
+ }
+}`;
+const dynamicWriteOutput = generate(dynamicWriteSource, dynamicWriteOptions);
+assert.match(dynamicWriteOutput, /as3SetProperty as __as3_as3SetProperty/);
+assert.match(dynamicWriteOutput, /return __as3_as3SetProperty\(target, key, value\)/);
+assert.match(dynamicWriteOutput, /__as3_as3SetProperty\(target, key, value\); return value/);
+assert.match(dynamicWriteOutput, /return target;/);
+assert.throws(() => generate(dynamicWriteSource, {
+    ...dynamicWriteOptions,
+    nativeDynamicPropertyWritesModule: './other',
+}), /AS3_DYNAMIC_PROPERTY_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');
