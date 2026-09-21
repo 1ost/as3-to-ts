@@ -64,14 +64,21 @@ export class NativeNamespaces {
             if (!owner || !node.parent || node.parent.kind !== NodeKind.CONTENT)
                 this.fail('namespace member outside a class');
             this.hierarchy(owner);
-            if (mods.children.some(mod => mod.text === 'override'))
-                this.fail('namespace member overrides require separate lowering');
+            const overridden = mods.children.some(mod => mod.text === 'override');
             const names = [NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(node.kind) >= 0
                 ? node.findChildren(NodeKind.NAME_TYPE_INIT).map(value => value.findChild(NodeKind.NAME))
                 : [node.findChild(NodeKind.NAME)];
             if (names.length !== 1) this.fail('multiple namespace fields in one declaration');
             const member: NamespaceMember = { uri: this.resolve(node, qualifier[0].text), name: names[0].text,
                 owner, static: mods.children.some(mod => mod.text === 'static'), declaration: node };
+            if (overridden) {
+                if ([NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET].indexOf(node.kind) < 0)
+                    this.fail('namespace field overrides require separate lowering');
+                const base = this.hierarchy(owner).slice(1).map(candidate =>
+                    this.findMember(candidate, member.uri, member.name, member.static, true)).find(value => !!value);
+                if (!base || base.declaration.kind !== node.kind)
+                    this.fail('namespace override requires a matching inherited member: ' + member.name);
+            }
             this.members.forEach(previous => {
                 if (previous.owner === owner && previous.uri === member.uri && previous.name === member.name
                     && previous.static === member.static) {
@@ -86,7 +93,7 @@ export class NativeNamespaces {
         this.members.forEach(member => {
             if (member.static) return;
             this.hierarchy(member.owner).slice(1).forEach(base => {
-                if (this.findMember(base, member.uri, member.name, false, true))
+                if (!this.isOverride(member) && this.findMember(base, member.uri, member.name, false, true))
                     this.fail('namespace member redeclaration in an inherited class: ' + member.name);
             });
         });
@@ -215,6 +222,11 @@ export class NativeNamespaces {
     }
 
     member(name: Node): NamespaceMember { return this.members.get(name); }
+
+    private isOverride(member: NamespaceMember): boolean {
+        const mods = member.declaration.findChild(NodeKind.MOD_LIST);
+        return !!mods && mods.children.some(mod => mod.text === 'override');
+    }
 
     memberDeclaration(node: Node): boolean {
         let found = false;

@@ -80,6 +80,22 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   const methodKey=Symbol.for('as3.namespace.member@1:'+JSON.stringify(['urn:inherited','add']));
   assert.equal(first[methodKey],closure,'inherited method uses the original URI/name authority');
 
+  const overrideSource=`package overrides {
+    public namespace n="urn:override";
+    public class Base {
+      n function value():String { return "base"; }
+    }
+    public class Child extends Base {
+      override n function value():String { return "child"; }
+      public function read():Array { return [this.n::value(), n::value()]; }
+    }
+  }`;
+  execute(generate(overrideSource).replace(/^\s*import [^\r\n]+/gm,''));
+  const overridden=new context.exports.Child();
+  assert.deepEqual(Array.from(overridden.read()),['child','child']);
+  const overrideKey=Symbol.for('as3.namespace.member@1:'+JSON.stringify(['urn:override','value']));
+  assert.equal(overridden[overrideKey](), 'child');
+
   const defaultsSource=`package defaults {
     public namespace n="urn:defaults";
     public class SlotReference {}
@@ -135,7 +151,7 @@ const invalid=[
   'public dynamic class Base {n var x:int;} public class Child extends Base {}',
   'public class Base extends Child {} public class Child extends Base { n var x:int; }',
   'public class Base {n var x:int;} public class Child extends Base { n var x:int; }',
-  'public class Base {n function f():void{}} public class Child extends Base { override n function f():void{} }',
+  'public class Base {n function f():void{}} public class Child extends Base { override n var f:int; }',
   'public class Base {n var x:int;} public class Child extends Base {public function f():*{return super.n::x;}}',
   'public class Base {n static var x:int;} public class Child extends Base {public function f():*{return Child.n::x;}}',
   'public class Base {n var x:int;} public class Child extends Base {public function f():*{return x;}}',
