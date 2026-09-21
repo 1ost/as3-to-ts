@@ -33,6 +33,7 @@ export interface NativeSourceAncestryPlan {
     classes: {[qname: string]: NativeSourceAncestryClass};
     namespaceUris: {[qname: string]: string};
     sourceHashes: {[qname: string]: string};
+    parseErrors: {[qname: string]: string};
 }
 
 function fail(message: string): never { throw new Error('AS3_SOURCE_ANCESTRY_UNSUPPORTED: ' + message); }
@@ -111,13 +112,21 @@ function memberNames(node: Node): Node[] {
 export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput): NativeSourceAncestryPlan {
     if (!input || !input.sources || typeof input.sources !== 'object' || Array.isArray(input.sources))
         return fail('complete source table required');
-    const roots: {[qname: string]: Node} = {}, sourceHashes: {[qname: string]: string} = {};
+    const roots: {[qname: string]: Node} = {}, sourceHashes: {[qname: string]: string} = {}, parseErrors: {[qname: string]: string} = {};
     const declarations: {[qname: string]: {root: Node; node: Node}} = {};
     const configured = input.namespaceUris || {};
     Object.keys(input.sources).sort().forEach(qname => {
         const record = input.sources[qname];
         if (!record || typeof record.source !== 'string') return fail('source text required: ' + qname);
-        const root = parse(qname + '.as', record.source);
+        let root: Node;
+        try { root = parse(qname + '.as', record.source); }
+        catch (error) {
+            // A review scope may contain an independently malformed source.
+            // Keep it out of ancestry authority so its own emission reports the
+            // parser error, while valid source siblings remain compilable.
+            parseErrors[qname] = String(error && (error.stack || error));
+            return;
+        }
         normalize(root); roots[qname] = root;
         if (record.sourceSha256 !== undefined) sourceHashes[qname] = record.sourceSha256;
         declarationNodes(root).forEach(node => {
@@ -164,5 +173,5 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
     const namespaceUris: {[qname: string]: string} = {};
     Object.keys(declarations).sort().forEach(qname => { namespaceUris[qname] = resolveNamespace(declarations[qname].root, qname, declarations, configured); });
     Object.keys(configured).forEach(qname => { if (namespaceUris[qname] === undefined) namespaceUris[qname] = configured[qname]; });
-    return {version:1, classes, namespaceUris, sourceHashes};
+    return {version:1, classes, namespaceUris, sourceHashes, parseErrors};
 }
