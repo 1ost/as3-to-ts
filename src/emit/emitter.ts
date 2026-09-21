@@ -138,6 +138,8 @@ export interface EmitterOptions {
 	nativeComputedTypeTestModule?:string;
 	/** Authenticated common AS3String module for direct no-argument toString calls. */
 	nativeDirectToStringModule?:string;
+	/** Authenticated common AS3String module for explicit builtin String(value). */
+	nativeStringCoercionModule?:string;
 }
 
 
@@ -373,6 +375,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['compiler.AS3String']
 				&& this.options.importModules['compiler.AS3String'] !== module)
 				throw new Error('AS3_DIRECT_TOSTRING_UNSUPPORTED: AS3String import binding disagrees with nativeDirectToStringModule');
+		}
+		if (this.options.nativeStringCoercionModule !== undefined) {
+			const module = this.options.nativeStringCoercionModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_STRING_COERCION_UNSUPPORTED: explicit common AS3String module required');
+			if (this.options.importModules && this.options.importModules['compiler.AS3String']
+				&& this.options.importModules['compiler.AS3String'] !== module)
+				throw new Error('AS3_STRING_COERCION_UNSUPPORTED: AS3String import binding disagrees with nativeStringCoercionModule');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2565,6 +2575,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitReflectionQuery(emitter, node)) return;
 	if (emitReflectionXML(emitter, node)) return;
 	if (emitDirectToString(emitter, node)) return;
+	if (emitBuiltinStringCoercion(emitter, node)) return;
     const callee = node.children[0];
     if (!emitter.isNew && callee.kind === NodeKind.IDENTIFIER && emitter.nativeGlobals.resolve(callee))
         throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: callable builtin conversion requires native lowering: ' + callee.text);
@@ -2700,6 +2711,29 @@ function emitDirectToString(emitter:Emitter, node:Node):boolean {
 	emitter.insert(helper + '(');
 	visitNode(emitter, receiver);
 	emitter.catchup(receiver.end);
+	emitter.insert(')');
+	emitter.skipTo(node.end);
+	return true;
+}
+
+function emitBuiltinStringCoercion(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeStringCoercionModule;
+	if (module === undefined || !node || node.kind !== NodeKind.CALL || node.children.length < 2)
+		return false;
+	const callee = node.children[0], args = node.findChild(NodeKind.ARGUMENTS);
+	if (!callee || callee.kind !== NodeKind.IDENTIFIER || callee.text !== 'String'
+		|| emitter.findDefInScope('String') || !args) return false;
+	if (args.children.length !== 1)
+		throw new Error('AS3_STRING_COERCION_UNSUPPORTED: builtin String requires exactly one source argument');
+	let helper = '__as3_as3String';
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier('as3String as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '(');
+	emitter.skipTo(args.children[0].start);
+	visitNode(emitter, args.children[0]);
+	emitter.catchup(args.end - (emitter.source.charAt(args.end - 1) === ')' ? 1 : 0));
 	emitter.insert(')');
 	emitter.skipTo(node.end);
 	return true;

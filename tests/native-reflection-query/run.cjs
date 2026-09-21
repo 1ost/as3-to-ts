@@ -247,4 +247,27 @@ assert.throws(() => generate(directStringSource, {
     nativeDirectToStringModule: './other',
 }), /AS3_DIRECT_TOSTRING_UNSUPPORTED/);
 
+const stringCoercionOptions = {
+    ...options,
+    importModules: { 'compiler.AS3String': './AS3String' },
+    nativeReflectionQueryModule: undefined,
+    nativeStringCoercionModule: './AS3String',
+};
+const stringCoercionSource = `package probe {
+ public class StringCoercion {
+  public function convert(value:Object):String { return String(value); }
+  public function shadow(String:Function, value:Object):String { return String(value); }
+ }
+}`;
+const stringCoercionOutput = generate(stringCoercionSource, stringCoercionOptions);
+assert.match(stringCoercionOutput, /as3String as __as3_as3String/);
+assert.match(stringCoercionOutput, /__as3_as3String\(value\)/);
+assert.match(stringCoercionOutput, /return String\(value\)/);
+assert.throws(() => generate(stringCoercionSource.replace('String(value)', 'String()'), stringCoercionOptions),
+    /AS3_STRING_COERCION_UNSUPPORTED/);
+assert.throws(() => generate(stringCoercionSource, {
+    ...stringCoercionOptions,
+    nativeStringCoercionModule: './other',
+}), /AS3_STRING_COERCION_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');
