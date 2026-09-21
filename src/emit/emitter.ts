@@ -14,6 +14,7 @@ import {logicalAssignmentType} from './logical-assignment';
 import {NativeClassInitializers, NativeClassInitializationOptions} from './native-class-initializers';
 import {NativeCallableClasses, NativeCallableClassOptions} from './native-callable-classes';
 import {NativeLexicalMembers} from './native-lexical-members';
+import {NativeGlobalModules} from './native-global-modules';
 
 const util = require('util');
 
@@ -125,6 +126,8 @@ export interface EmitterOptions {
 	nativeReflectionQueryModule?: string;
 	/** Common XML reflection module for authenticated describeType XML access. */
 	nativeReflectionXMLModule?: string;
+	/** Builtin AS3 global names and their authenticated common modules. */
+	nativeGlobalModules?:{[name:string]:string};
 }
 
 
@@ -233,6 +236,7 @@ function filterAST(node:Node):Node {
 
 
 export default class Emitter {
+    nativeGlobals:NativeGlobalModules;
     lexical: NativeLexicalMembers;
     /** Exact compiler-created callable imports; authored imports grant no exemption. */
     public nativeSourceHelpers = new Set<string>();
@@ -329,6 +333,8 @@ export default class Emitter {
                 throw new Error('AS3_RELATIONAL_COMPILER_UNSUPPORTED: authenticated lazy callable metadata and lexical source required');
         }
 		const filtered = filterAST(ast);
+        this.nativeGlobals = new NativeGlobalModules(this.source, this.options.nativeGlobalModules,
+            this.options.definitionsByNamespace, this.options.useNamespaces);
         if (this.options.nativeTypedLocals && !this.options.nativeLexicalMembersModule)
             throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: authenticated lexical source required');
         if (this.options.nativeTypedLocals && [this.options.nativeCallableCoercionModule,this.options.nativeCallableStringModule,this.options.nativeTypedLocalAdditionModule]
@@ -2019,6 +2025,12 @@ function emitType(emitter:Emitter, node:Node):void {
 
 	emitter.skipTo(node.end);
 
+    const global = emitter.nativeGlobals.resolve(node, true);
+    if (global) {
+        emitter.ensureImportIdentifier(global.name + ' as ' + global.alias, global.module, false);
+        emitter.insert(global.alias);
+        return;
+    }
 	let sourceClassType = !!node.qualifiedName;
 	if (emitter.options.nativeCallableMetadata) {
 		let declaration = node.parent;
@@ -2341,6 +2353,8 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitReflectionQuery(emitter, node)) return;
 	if (emitReflectionXML(emitter, node)) return;
     const callee = node.children[0];
+    if (!emitter.isNew && callee.kind === NodeKind.IDENTIFIER && emitter.nativeGlobals.resolve(callee))
+        throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: callable builtin conversion requires native lowering: ' + callee.text);
     if (callee.kind === NodeKind.IDENTIFIER && callee.text === 'super') {
         let owner = node.parent;
         while (owner && owner.kind !== NodeKind.FUNCTION) owner = owner.parent;
@@ -3125,6 +3139,15 @@ function hasFunctionLocal(emitter:Emitter, name:string):boolean {
 }
 
 export function emitIdent(emitter:Emitter, node:Node):void {
+    const global = emitter.nativeGlobals.resolve(node);
+    if (global) {
+        emitter.ensureImportIdentifier(global.name + ' as ' + global.alias, global.module, false);
+        emitter.catchup(node.start);
+        emitter.insert(global.alias);
+        emitter.skipTo(node.end);
+        emitter.emitThisForNextIdent = true;
+        return;
+    }
 	let preservedTypeOfName: string;
 	if (emitter.options.nativeCallableMetadata && insideTypeOf(node)
 		&& !(node.parent.kind === NodeKind.DOT && node.parent.children[0] !== node)) {

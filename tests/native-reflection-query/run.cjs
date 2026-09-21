@@ -88,4 +88,21 @@ assert.match(xmlOutput, /__as3_xmlDescendantsByName\(__as3_describeTypeXML\(valu
 const wildcardXML = xmlSource.replace('..method.length()', '..*.(name() == "method").length()');
 assert.throws(() => generate(wildcardXML, xmlOptions), /AS3_REFLECTION_XML_UNSUPPORTED/);
 
+const globalOptions = {
+    ...options,
+    importModules: {},
+    nativeReflectionQueryModule: undefined,
+    nativeGlobalModules: { XML: './XML', QName: './QName' },
+};
+const globalSource = `package probe {
+ public class ReflectionQuery {
+  public function make():XML { return new XML("<a/>"); }
+  public function preserve(XML:Function):XML { return new XML("<b/>"); }
+ }
+}`;
+const globalOutput = generate(globalSource, globalOptions);
+assert.match(globalOutput, /import \{ XML as __as3_global_XML \} from "\.\/XML"/);
+assert.match(globalOutput, /new __as3_global_XML/);
+assert.doesNotMatch(globalOutput, /import \{ XML \} from/);
+
 console.log('Native reflection query lowering passed');
