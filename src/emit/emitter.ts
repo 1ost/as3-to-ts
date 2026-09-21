@@ -148,6 +148,8 @@ export interface EmitterOptions {
 	nativeDynamicPropertyWritesModule?:string;
 	/** Authenticated common AS3ArraySort module for source Array.sortOn calls. */
 	nativeArraySortModule?:string;
+	/** Authenticated source enumeration providers; currently Dictionary-only. */
+	nativeEnumeration?:{dictionaryModule?:string; coercionModule?:string; stringModule?:string};
 }
 
 
@@ -425,6 +427,15 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['flash.utils.AS3ArraySort']
 				&& this.options.importModules['flash.utils.AS3ArraySort'] !== module)
 				throw new Error('AS3_ARRAY_SORT_UNSUPPORTED: AS3ArraySort import binding disagrees with nativeArraySortModule');
+		}
+		if (this.options.nativeEnumeration !== undefined) {
+			const enumeration = this.options.nativeEnumeration;
+			if (!enumeration || typeof enumeration.dictionaryModule !== 'string' || !enumeration.dictionaryModule.trim()
+				|| typeof enumeration.coercionModule !== 'string' || !enumeration.coercionModule.trim()
+				|| typeof enumeration.stringModule !== 'string' || !enumeration.stringModule.trim())
+				throw new Error('AS3_ENUMERATION_UNSUPPORTED: complete common enumeration modules required');
+			if (this.options.nativeDictionaryPropertyModule === undefined)
+				throw new Error('AS3_ENUMERATION_UNSUPPORTED: Dictionary property provider required for values');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -1167,6 +1178,7 @@ function emitForIn(emitter:Emitter, node:Node):void {
 	let varNode = initNode.children[0];
 	let inNode = node.children[1];
 	let blockNode = node.children[2];
+	const dictionaryReceiver = nativeDictionaryEnumerationReceiver(emitter, inNode && inNode.children[0]);
 	let nameTypeInitNode = varNode.findChild(NodeKind.NAME_TYPE_INIT);
 	let typeStr = "";
 	if (nameTypeInitNode) {
@@ -1199,6 +1211,13 @@ function emitForIn(emitter:Emitter, node:Node):void {
 		visitNode(emitter, initNode);
 	}
 
+	if (dictionaryReceiver) {
+		emitter.skipTo(inNode.start);
+		emitter.insert(' of ');
+		emitDictionaryEnumerationKeys(emitter, inNode.children[0]);
+		emitDictionaryEnumerationBlock(emitter, blockNode);
+		return;
+	}
 	emitter.catchup(inNode.start);
 	emitter.insert(' ');
 	/*    emitter.skip(Keywords.IN.length + 1); // replace "in " with "of "
@@ -1213,6 +1232,8 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let inNode = node.children[1];
 	let objNode = inNode.children[0];
 	let blockNode = node.children[2];
+	const dictionaryReceiver = nativeDictionaryEnumerationReceiver(emitter, objNode);
+	const enumerationKeys = dictionaryReceiver ? dictionaryEnumerationHelper(emitter, 'as3EnumerableKeys') : null;
 
 	// Keep the source receiver stable throughout enumeration, including after
 	// body assignments. The surrounding block also preserves an unbraced if/else.
@@ -1257,14 +1278,22 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	emitter.declareInScope({name:keyName});
 	emitter.skipTo(varNode.end);
 
-	emitter.catchup(inNode.start);
-	emitter.insert(' ');
+	if (dictionaryReceiver) {
+		emitter.skipTo(inNode.start);
+		emitter.insert(' of ');
+	} else {
+		emitter.catchup(inNode.start);
+		emitter.insert(' ');
+	}
 
-	emitter.catchup(objNode.start);
-	emitter.insert('(' + receiverName + ' = ');
+	if (dictionaryReceiver) emitter.skipTo(objNode.start);
+	else emitter.catchup(objNode.start);
+	if (dictionaryReceiver) emitter.insert(enumerationKeys + '(' + receiverName + ' = ');
+	else emitter.insert('(' + receiverName + ' = ');
 	visitNodes(emitter, inNode.children);
 	emitter.catchup(objNode.end);
-	emitter.insert(')');
+	if (dictionaryReceiver) emitter.insert('))');
+	else emitter.insert(')');
 	const hasBlock = blockNode.kind === NodeKind.BLOCK;
 	emitter.catchup(blockNode.start + (hasBlock ? 1 : 0));
 	if (!hasBlock) emitter.insert('{');
@@ -1295,7 +1324,10 @@ function emitForEach(emitter:Emitter, node:Node):void {
 		}
 	}
 
-	emitter.insert(`\n\t\t\t${declarationWord}${nameNode.text}${typeStr} = ${castStr}${receiverName}[${keyName}];\n`);
+	if (dictionaryReceiver) {
+		const get = dictionaryEnumerationHelper(emitter, 'as3GetProperty');
+		emitter.insert(`\n\t\t\t${declarationWord}${nameNode.text}${typeStr} = ${castStr}${get}(${receiverName}, ${keyName});\n`);
+	} else emitter.insert(`\n\t\t\t${declarationWord}${nameNode.text}${typeStr} = ${castStr}${receiverName}[${keyName}];\n`);
 	visitNode(emitter, blockNode);
 	// Legacy compound loop nodes can have end=-1; their last child still owns
 	// the complete final expression (including closing call parentheses).
@@ -1384,6 +1416,28 @@ function emitBlock(emitter:Emitter, node:Node):void {
 			+ emitter.output.slice(insertion);
 		emitter.logicalAssignmentTemps.delete(node);
 	}
+}
+
+function nativeDictionaryEnumerationReceiver(emitter:Emitter, node:Node):boolean {
+	return !!(emitter.options.nativeEnumeration && isDictionaryReceiver(emitter, node));
+}
+
+function dictionaryEnumerationHelper(emitter:Emitter, exported:string):string {
+	return propertyHelper(emitter, exported, emitter.options.nativeDictionaryPropertyModule);
+}
+
+function emitDictionaryEnumerationKeys(emitter:Emitter, node:Node):void {
+	const helper = dictionaryEnumerationHelper(emitter, 'as3EnumerableKeys');
+	emitter.insert(helper + '(');
+	emitter.skipTo(node.start);
+	visitNode(emitter, node);
+	emitter.catchup(node.end);
+	emitter.insert(')');
+	emitter.skipTo(node.end);
+}
+
+function emitDictionaryEnumerationBlock(emitter:Emitter, node:Node):void {
+	visitNode(emitter, node);
 }
 
 interface NumericParameterPlan {
@@ -2775,6 +2829,14 @@ function emitBuiltinObjectCreation(emitter:Emitter, node:Node):boolean {
 
 interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; }
 
+function isDictionaryReceiver(emitter:Emitter, node:Node):boolean {
+	if (!node || node.kind !== NodeKind.IDENTIFIER) return false;
+	const definition = emitter.findDefInScope(node.text);
+	const dictionary = emitter.findDefInScope('Dictionary');
+	return !!definition && (definition.as3Type === 'Dictionary' || definition.as3Type === 'flash.utils.Dictionary')
+		&& !!dictionary && dictionary.sourceImport === 'flash.utils.Dictionary';
+}
+
 function propertyHelper(emitter:Emitter, exported:string, module:string):string {
 	let helper = '__as3_' + exported;
 	while (emitter.source.indexOf(helper) >= 0) helper += '_';
@@ -2789,10 +2851,7 @@ function dictionaryAccess(emitter:Emitter, node:Node):DictionaryAccess {
 		|| node.children.length !== 2) return null;
 	const receiver = node.children[0], key = node.children[1];
 	if (!receiver || !key || receiver.kind !== NodeKind.IDENTIFIER) return null;
-	const definition = emitter.findDefInScope(receiver.text);
-	const dictionary = emitter.findDefInScope('Dictionary');
-	if (!definition || (definition.as3Type !== 'Dictionary' && definition.as3Type !== 'flash.utils.Dictionary')
-		|| !dictionary || dictionary.sourceImport !== 'flash.utils.Dictionary') return null;
+	if (!isDictionaryReceiver(emitter, receiver)) return null;
 	return node.kind === NodeKind.DOT && key.kind === NodeKind.LITERAL
 		? {receiver, key, literalKey:key.text} : {receiver, key};
 }

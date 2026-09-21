@@ -378,4 +378,31 @@ assert.throws(() => generate(arraySortSource, {
     nativeArraySortModule: './other',
 }), /AS3_ARRAY_SORT_UNSUPPORTED/);
 
+const enumerationOptions = {
+    ...dictionaryOptions,
+    nativeEnumeration: {
+        dictionaryModule: './Dictionary',
+        coercionModule: './AS3Coercion',
+        stringModule: './AS3String',
+    },
+};
+const enumerationSource = `package probe {
+ import flash.utils.Dictionary;
+ public class Enumeration {
+  public function keys(values:Dictionary):void { for (var key:String in values) trace(key); }
+  public function values(values:Dictionary):void { for each (var value:Object in values) trace(value); }
+  public function ordinary(values:Object):void { for (var key:String in values) trace(key); }
+ }
+}`;
+const enumerationOutput = generate(enumerationSource, enumerationOptions);
+assert.match(enumerationOutput, /as3EnumerableKeys as __as3_as3EnumerableKeys/);
+assert.match(enumerationOutput, /for \(key of __as3_as3EnumerableKeys\(values\)\)/);
+assert.match(enumerationOutput, /as3GetProperty as __as3_as3GetProperty/);
+assert.match(enumerationOutput, /__as3_as3GetProperty\(__\$nflvObject\d+, __\$nflvKey\d+\)/);
+assert.match(enumerationOutput, /for \(key  in values\)/);
+assert.throws(() => generate(enumerationSource, {
+    ...dictionaryOptions,
+    nativeEnumeration: { dictionaryModule: './Dictionary' },
+}), /AS3_ENUMERATION_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');
