@@ -1016,9 +1016,17 @@ function emitInterface(emitter:Emitter, node:Node):void {
 							if (nameTypeInitNode)
 							{
 								let nameNode = nameTypeInitNode.findChild(NodeKind.NAME);
-								let typeParamNode = nameTypeInitNode.findChild(NodeKind.TYPE);
-								let initNode = nameTypeInitNode.findChild(NodeKind.INIT);
-								if (initNode)
+							let typeParamNode = nameTypeInitNode.findChild(NodeKind.TYPE);
+							let initNode = nameTypeInitNode.findChild(NodeKind.INIT);
+							// Interface signatures are emitted through this specialized path
+							// instead of the ordinary NAME_TYPE_INIT visitor.  Reuse the
+							// numeric declaration guard here so parser spans for unary
+							// defaults (for example `int = -1`) cannot leak `-1` into the
+							// generated TypeScript type.
+							if (emitNumericParameterDeclaration(emitter, nameTypeInitNode)) {
+								continue;
+							}
+							if (initNode)
 								{
 									//visitNode(emitter, nameNode);
 									//emitter.skipTo(nameNode.start);
