@@ -129,4 +129,39 @@ assert.match(proxyOutput, /protected\s+getProperty/);
 assert.match(proxyOutput, /flashProxyDeclaredProperties/);
 assert.doesNotMatch(proxyOutput, /namespace\.member/);
 
+const sourceErrorOptions = {
+    ...options,
+    importModules: { 'flash.errors.AS3SourceError': './AS3SourceError' },
+    nativeReflectionQueryModule: undefined,
+    nativeSourceErrorModule: './AS3SourceError',
+};
+const sourceError = `package probe {
+ public class SourceErrors {
+  public function make():Object {
+   return new Error("message", 7);
+  }
+  public function argument():Object {
+   return new ArgumentError("argument");
+  }
+  public function reference():Object {
+   return new ReferenceError();
+  }
+  public function shadow(Error:Function):Object {
+   return new Error("shadow");
+  }
+ }
+}`;
+const sourceErrorOutput = generate(sourceError, sourceErrorOptions);
+assert.match(sourceErrorOutput, /as3CreateError as __as3_as3CreateError/);
+assert.match(sourceErrorOutput, /__as3_as3CreateError\("message", 7\)/);
+assert.doesNotMatch(sourceErrorOutput, /__as3_as3CreateError\("message", 7\)\)/);
+assert.match(sourceErrorOutput, /__as3_as3CreateArgumentError\("argument"\)/);
+assert.match(sourceErrorOutput, /__as3_as3CreateReferenceError\(\)/);
+assert.match(sourceErrorOutput, /new Error\("shadow"\)/);
+
+assert.throws(() => generate(sourceError, {
+    ...sourceErrorOptions,
+    nativeSourceErrorModule: './other',
+}), /AS3_SOURCE_ERROR_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');

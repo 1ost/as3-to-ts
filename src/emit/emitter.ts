@@ -130,6 +130,8 @@ export interface EmitterOptions {
 	nativeGlobalModules?:{[name:string]:string};
 	/** Authenticated common flash.utils.Proxy module. */
 	nativeProxyModule?:string;
+	/** Authenticated common source Error construction module. */
+	nativeSourceErrorModule?:string;
 }
 
 
@@ -333,6 +335,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['flash.utils.Proxy']
 				&& this.options.importModules['flash.utils.Proxy'] !== module)
 				throw new Error('AS3_PROXY_UNSUPPORTED: Proxy import binding disagrees with nativeProxyModule');
+		}
+		if (this.options.nativeSourceErrorModule !== undefined) {
+			const module = this.options.nativeSourceErrorModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_SOURCE_ERROR_UNSUPPORTED: explicit common source Error module required');
+			if (this.options.importModules && this.options.importModules['flash.errors.AS3SourceError']
+				&& this.options.importModules['flash.errors.AS3SourceError'] !== module)
+				throw new Error('AS3_SOURCE_ERROR_UNSUPPORTED: source Error import binding disagrees with nativeSourceErrorModule');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2152,12 +2162,53 @@ function emitShortVector(emitter:Emitter, node:Node):void {
 
 
 function emitNew(emitter:Emitter, node:Node):void {
+	if (emitSourceErrorConstruction(emitter, node)) return;
 	emitter.catchup(node.start);
 	emitter.isNew = true;
 	emitter.emitThisForNextIdent = false;
 	visitNodes(emitter, node.children);
 	emitter.isNew = false;
 	emitter.emitThisForNextIdent = true;
+}
+
+function emitSourceErrorConstruction(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeSourceErrorModule;
+	if (module === undefined || !node || node.kind !== NodeKind.NEW || node.children.length !== 1)
+		return false;
+	const call = node.children[0];
+	if (!call || call.kind !== NodeKind.CALL || call.children.length < 2)
+		return false;
+	const callee = call.children[0];
+	if (!callee || callee.kind !== NodeKind.IDENTIFIER || emitter.findDefInScope(callee.text))
+		return false;
+	const exports:{[name:string]:string} = {
+		Error: 'as3CreateError',
+		ArgumentError: 'as3CreateArgumentError',
+		ReferenceError: 'as3CreateReferenceError'
+	};
+	const exported = exports[callee.text];
+	if (!exported) return false;
+	const args = call.findChild(NodeKind.ARGUMENTS);
+	if (!args) return false;
+	let helper = '__as3_' + exported;
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier(exported + ' as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '(');
+	if (args.children.length) {
+		emitter.skipTo(args.children[0].start);
+		visitNodes(emitter, args.children);
+		// Replace the source call's closing parenthesis with the helper's one;
+		// retain any source whitespace immediately before it.
+		const close = args.end > args.start && emitter.source.charAt(args.end - 1) === ')' ? args.end - 1 : args.end;
+		emitter.catchup(close);
+	} else {
+		emitter.skipTo(args.end);
+	}
+	emitter.insert(')');
+	emitter.skipTo(node.end);
+	return true;
 }
 
 interface ReflectionQueryStep {
