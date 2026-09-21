@@ -2859,7 +2859,17 @@ function emitCall(emitter:Emitter, node:Node):void {
 		}
 	}
 
- 	if (isRETURNINDEXEDARRAY == false)visitNodes(emitter, node.children);
+	 if (isRETURNINDEXEDARRAY == false) {
+		// `new Type().method()` is parsed as NEW(CALL(DOT(CALL(Type),
+		// method))). Carry construction into the receiver call only; without
+		// this, the receiver is misclassified as a cast and emits
+		// `new (<Type>()).method()`.
+		const chainedConstructor = isNew && callee && callee.kind === NodeKind.DOT
+			&& callee.children[0] && callee.children[0].kind === NodeKind.CALL;
+		if (chainedConstructor) emitter.isNew = true;
+		visitNodes(emitter, node.children);
+		if (chainedConstructor) emitter.isNew = false;
+	 }
 
 }
 
