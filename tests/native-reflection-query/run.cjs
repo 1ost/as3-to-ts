@@ -405,4 +405,33 @@ assert.throws(() => generate(enumerationSource, {
     nativeEnumeration: { dictionaryModule: './Dictionary' },
 }), /AS3_ENUMERATION_UNSUPPORTED/);
 
+const tweenOptions = {
+    ...options,
+    importModules: { 'migration.FlashTweenRuntime': './FlashTweenRuntime' },
+    nativeReflectionQueryModule: undefined,
+    nativeTweenModule: './FlashTweenRuntime',
+    nativeTweenSourcePlans: { source: 'fixture', calls: [{ start: 0, end: 1 }] },
+};
+const tweenSource = `package probe {
+ public class TweenMigration {
+  public function run(target:Object, duration:Number, vars:Object):Object {
+   return TweenMax.to(target, duration, vars);
+  }
+  public function lite(target:Object, duration:Number, vars:Object):Object {
+   return TweenLite.to(target, duration, vars);
+  }
+  public function shadow(TweenMax:Function, target:Object, duration:Number, vars:Object):Object {
+   return TweenMax.to(target, duration, vars);
+  }
+ }
+}`;
+const tweenOutput = generate(tweenSource, tweenOptions);
+assert.match(tweenOutput, /FlashTweenRuntime as __as3_FlashTweenRuntime/);
+assert.match(tweenOutput, /__as3_FlashTweenRuntime\.current\(\)\.to\(target, duration, vars\)/);
+assert.match(tweenOutput, /return TweenMax\.to\(target, duration, vars\)/);
+assert.throws(() => generate(tweenSource, {
+    ...tweenOptions,
+    nativeTweenModule: './other',
+}), /AS3_TWEEN_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');

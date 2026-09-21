@@ -150,6 +150,10 @@ export interface EmitterOptions {
 	nativeArraySortModule?:string;
 	/** Authenticated source enumeration providers; currently Dictionary-only. */
 	nativeEnumeration?:{dictionaryModule?:string; coercionModule?:string; stringModule?:string};
+	/** Authenticated modern GSAP migration runtime module. */
+	nativeTweenModule?:string;
+	/** Source-authenticated tween call spans for migration-specific plans. */
+	nativeTweenSourcePlans?:{source:string; calls:ReadonlyArray<{start:number; end:number; callSha256?:string}>};
 }
 
 
@@ -436,6 +440,22 @@ export default class Emitter {
 				throw new Error('AS3_ENUMERATION_UNSUPPORTED: complete common enumeration modules required');
 			if (this.options.nativeDictionaryPropertyModule === undefined)
 				throw new Error('AS3_ENUMERATION_UNSUPPORTED: Dictionary property provider required for values');
+		}
+		if (this.options.nativeTweenModule !== undefined) {
+			const module = this.options.nativeTweenModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_TWEEN_UNSUPPORTED: explicit FlashTweenRuntime module required');
+			if (this.options.importModules && this.options.importModules['migration.FlashTweenRuntime']
+				&& this.options.importModules['migration.FlashTweenRuntime'] !== module)
+				throw new Error('AS3_TWEEN_UNSUPPORTED: FlashTweenRuntime import binding disagrees with nativeTweenModule');
+			if (this.options.nativeTweenSourcePlans !== undefined) {
+				const plan = this.options.nativeTweenSourcePlans;
+				if (!plan || typeof plan.source !== 'string' || !Array.isArray(plan.calls))
+					throw new Error('AS3_TWEEN_UNSUPPORTED: invalid authenticated source plan');
+				for (const call of plan.calls)
+					if (!call || !Number.isSafeInteger(call.start) || !Number.isSafeInteger(call.end) || call.start < 0 || call.end <= call.start)
+						throw new Error('AS3_TWEEN_UNSUPPORTED: invalid authenticated call span');
+			}
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2675,6 +2695,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitBuiltinStringCoercion(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
 	if (emitArraySortOn(emitter, node)) return;
+	if (emitTweenTo(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
     const callee = node.children[0];
     if (!emitter.isNew && callee.kind === NodeKind.IDENTIFIER && emitter.nativeGlobals.resolve(callee))
@@ -2994,6 +3015,33 @@ function emitArraySortOn(emitter:Emitter, node:Node):boolean {
 		visitNodes(emitter, args.children);
 		const close = args.end > args.start && emitter.source.charAt(args.end - 1) === ')' ? args.end - 1 : args.end;
 		emitter.catchup(close);
+	}
+	emitter.insert(')');
+	emitter.skipTo(node.end);
+	return true;
+}
+
+function emitTweenTo(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeTweenModule;
+	if (module === undefined || !node || node.kind !== NodeKind.CALL || node.children.length < 2) return false;
+	const callee = node.children[0], args = node.findChild(NodeKind.ARGUMENTS);
+	if (!callee || callee.kind !== NodeKind.DOT || callee.children.length !== 2 || !args) return false;
+	const receiver = callee.children[0], name = callee.children[1];
+	if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || (receiver.text !== 'TweenMax' && receiver.text !== 'TweenLite')
+		|| emitter.findDefInScope(receiver.text) || !name || name.kind !== NodeKind.LITERAL || name.text !== 'to') return false;
+	let helper = '__as3_FlashTweenRuntime';
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier('FlashTweenRuntime as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '.current().to(');
+	if (args.children.length) {
+		emitter.skipTo(args.children[0].start);
+		visitNodes(emitter, args.children);
+		const close = args.end > args.start && emitter.source.charAt(args.end - 1) === ')' ? args.end - 1 : args.end;
+		emitter.catchup(close);
+	} else {
+		emitter.skipTo(args.end);
 	}
 	emitter.insert(')');
 	emitter.skipTo(node.end);
