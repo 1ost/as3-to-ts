@@ -132,6 +132,8 @@ export interface EmitterOptions {
 	nativeProxyModule?:string;
 	/** Authenticated common source Error construction module. */
 	nativeSourceErrorModule?:string;
+	/** Authenticated common numeric parameter coercion module. */
+	nativeNumericMethodParametersModule?:string;
 }
 
 
@@ -343,6 +345,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['flash.errors.AS3SourceError']
 				&& this.options.importModules['flash.errors.AS3SourceError'] !== module)
 				throw new Error('AS3_SOURCE_ERROR_UNSUPPORTED: source Error import binding disagrees with nativeSourceErrorModule');
+		}
+		if (this.options.nativeNumericMethodParametersModule !== undefined) {
+			const module = this.options.nativeNumericMethodParametersModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_NUMERIC_PARAMETERS_UNSUPPORTED: explicit common numeric coercion module required');
+			if (this.options.importModules && this.options.importModules['flash.utils.AS3Coercion']
+				&& this.options.importModules['flash.utils.AS3Coercion'] !== module)
+				throw new Error('AS3_NUMERIC_PARAMETERS_UNSUPPORTED: numeric coercion import binding disagrees with nativeNumericMethodParametersModule');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -1293,6 +1303,7 @@ function emitBlock(emitter:Emitter, node:Node):void {
 	// Logical assignments capture effectful receivers in ordinary function-local
 	// variables. Do not introduce an IIFE: that would change lexical arguments.
 	emitter.catchup(node.start + 1);
+	emitNumericMethodParameterCoercion(emitter, node);
 	const insertion = emitter.output.length;
 	visitNodes(emitter, node.children);
 	const temporaries = emitter.logicalAssignmentTemps.get(node);
@@ -1302,6 +1313,90 @@ function emitBlock(emitter:Emitter, node:Node):void {
 		emitter.logicalAssignmentTemps.delete(node);
 	}
 }
+
+interface NumericParameterPlan {
+	name:string;
+	type:string;
+	index:number;
+	init:Node;
+}
+
+function numericParameterPlans(emitter:Emitter, block:Node):NumericParameterPlan[] {
+	if (emitter.options.nativeNumericMethodParametersModule === undefined || !block.parent)
+		return [];
+	if ([NodeKind.FUNCTION, NodeKind.SET].indexOf(block.parent.kind) < 0) return [];
+	const parameters = block.parent.findChild(NodeKind.PARAMETER_LIST);
+	if (!parameters) return [];
+	const result:NumericParameterPlan[] = [];
+	parameters.children.forEach((parameter, index) => {
+		const value = parameter && parameter.findChild(NodeKind.NAME_TYPE_INIT);
+		const type = value && value.findChild(NodeKind.TYPE);
+		const name = value && value.findChild(NodeKind.NAME);
+		if (!value || !type || !name || ['Number', 'int', 'uint'].indexOf(type.text) < 0) return;
+		result.push({name:name.text, type:type.text, index, init:value.findChild(NodeKind.INIT)});
+	});
+	return result;
+}
+
+function numericCoercionExport(type:string):string {
+	return type === 'Number' ? 'as3CoerceNumber' : type === 'int' ? 'as3CoerceInt' : 'as3CoerceUint';
+}
+
+function numericDefaultSource(emitter:Emitter, plan:NumericParameterPlan):string {
+	if (!plan.init) return null;
+	let value = emitter.sourceBetween(plan.init.start, plan.init.end).trim();
+	if (!value && plan.init.children.length === 1
+		&& [NodeKind.MINUS, NodeKind.PLUS].indexOf(plan.init.children[0].kind) >= 0) {
+		const unary = plan.init.children[0], literal = unary.children.length === 1 && unary.children[0];
+		if (literal && literal.kind === NodeKind.LITERAL)
+			value = (unary.kind === NodeKind.MINUS ? '-' : '+') + emitter.sourceBetween(literal.start, literal.end).trim();
+	}
+	if (!/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(value)
+		|| /^[+-]?0[0-9]/.test(value))
+		throw new Error('AS3_NUMERIC_PARAMETERS_UNSUPPORTED: default must be an exact numeric literal: ' + plan.name);
+	return value;
+}
+
+function emitNumericMethodParameterCoercion(emitter:Emitter, block:Node):void {
+	const plans = numericParameterPlans(emitter, block);
+	if (!plans.length) return;
+	const module = emitter.options.nativeNumericMethodParametersModule;
+	const helpers:{[type:string]:string} = {};
+	plans.forEach(plan => {
+		const exported = numericCoercionExport(plan.type);
+		if (!helpers[exported]) {
+			let local = '__as3_' + exported;
+			while (emitter.source.indexOf(local) >= 0 || Object.keys(helpers).some(key => helpers[key] === local)) local += '_';
+			emitter.ensureImportIdentifier(exported + ' as ' + local, module, false);
+			emitter.nativeSourceHelpers.add(local);
+			helpers[exported] = local;
+		}
+	});
+	const lines = plans.map(plan => {
+		const helper = helpers[numericCoercionExport(plan.type)];
+		const converted = helper + '(' + plan.name + ')';
+		if (!plan.init) return plan.name + ' = ' + converted + ';';
+		const fallback = helper + '(' + numericDefaultSource(emitter, plan) + ')';
+		return plan.name + ' = arguments.length <= ' + plan.index + ' ? ' + fallback + ' : ' + converted + ';';
+	});
+	emitter.insert('\n' + lines.join('\n') + '\n');
+}
+
+function emitNumericParameterDeclaration(emitter:Emitter, node:Node):boolean {
+	if (emitter.options.nativeNumericMethodParametersModule === undefined
+		|| !node.parent || node.parent.kind !== NodeKind.PARAMETER) return false;
+	const value = node, type = value.findChild(NodeKind.TYPE), name = value.findChild(NodeKind.NAME);
+	if (!type || !name || ['Number', 'int', 'uint'].indexOf(type.text) < 0) return false;
+	const init = value.findChild(NodeKind.INIT);
+	emitter.catchup(value.start);
+	emitter.insert(name.text + (init ? '?:' : ':'));
+	emitter.skipTo(type.start);
+	visitNode(emitter, type);
+	if (init) emitter.skipTo(value.end);
+	else emitter.skipTo(type.end);
+	return true;
+}
+
 function emitMinus(emitter:Emitter, node:Node):void {
 	//emitter.insert("-");
 	visitNodes(emitter, node.children);
@@ -1700,6 +1795,7 @@ function emitObjectValue(emitter:Emitter, node:Node):void {
 }
 
 function emitNameTypeInit(emitter:Emitter, node:Node):void {
+	if (emitNumericParameterDeclaration(emitter, node)) return;
 	const namespaceMember = emitter.namespaces.member(node.findChild(NodeKind.NAME));
 	if (!namespaceMember) emitter.declareInScope({
 		name: node.findChild(NodeKind.NAME).text,

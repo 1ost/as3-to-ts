@@ -164,4 +164,28 @@ assert.throws(() => generate(sourceError, {
     nativeSourceErrorModule: './other',
 }), /AS3_SOURCE_ERROR_UNSUPPORTED/);
 
+const numericOptions = {
+    ...options,
+    importModules: { 'flash.utils.AS3Coercion': './AS3Coercion' },
+    nativeReflectionQueryModule: undefined,
+    nativeNumericMethodParametersModule: './AS3Coercion',
+};
+const numericSource = `package probe {
+ public class NumericParameters {
+  public function read(value:int, amount:Number = 2, mask:uint = 3):Number {
+   return value + amount + mask;
+  }
+ }
+}`;
+const numericOutput = generate(numericSource, numericOptions);
+assert.match(numericOutput, /read\(value:number, amount\?:number, mask\?:number\)/);
+assert.match(numericOutput, /as3CoerceInt as __as3_as3CoerceInt/);
+assert.match(numericOutput, /arguments\.length <= 1 \? __as3_as3CoerceNumber\(2\)/);
+assert.match(numericOutput, /arguments\.length <= 2 \? __as3_as3CoerceUint\(3\)/);
+assert.doesNotMatch(numericOutput, /amount\?:number =/);
+assert.match(generate(numericSource.replace('= 2', '= -2'), numericOptions),
+    /__as3_as3CoerceNumber\(-2\)/);
+assert.throws(() => generate(numericSource.replace('= 2', '= getDefault()'), numericOptions),
+    /AS3_NUMERIC_PARAMETERS_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');
