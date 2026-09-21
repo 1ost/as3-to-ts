@@ -887,6 +887,9 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 	if (node.text.indexOf("*") !== -1) {
 		let ns = node.text.substring(0, node.text.length - 2);
 		let definitions = emitter.options.definitionsByNamespace[ns];
+		// Flush the source prefix (including the preceding import's semicolon)
+		// before inserting bindings for this wildcard.
+		emitter.catchup(node.start);
 
 		let skipTo = node.end + Keywords.IMPORT.length + 2;
 
