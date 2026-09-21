@@ -105,4 +105,28 @@ assert.match(globalOutput, /import \{ XML as __as3_global_XML \} from "\.\/XML"/
 assert.match(globalOutput, /new __as3_global_XML/);
 assert.doesNotMatch(globalOutput, /import \{ XML \} from/);
 
+const proxyOptions = {
+    ...options,
+    importModules: {
+        'flash.utils.Proxy': './Proxy',
+        'flash.utils.flash_proxy': './Proxy',
+    },
+    nativeReflectionQueryModule: undefined,
+    nativeProxyModule: './Proxy',
+};
+const proxySource = `package probe {
+ import flash.utils.Proxy;
+ import flash.utils.flash_proxy;
+ public class ReflectionProxy extends Proxy {
+  public function ReflectionProxy() { super(); }
+  public var declaredField:*;
+  flash_proxy function getProperty(name:*):* { return null; }
+ }
+}`;
+const proxyOutput = generate(proxySource, proxyOptions);
+assert.match(proxyOutput, /extends Proxy/);
+assert.match(proxyOutput, /protected\s+getProperty/);
+assert.match(proxyOutput, /flashProxyDeclaredProperties/);
+assert.doesNotMatch(proxyOutput, /namespace\.member/);
+
 console.log('Native reflection query lowering passed');

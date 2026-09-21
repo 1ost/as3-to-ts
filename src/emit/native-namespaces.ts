@@ -26,7 +26,7 @@ export class NativeNamespaces {
     private openedAccesses = new Map<Node, NamespaceAccess>();
     private configured: {[qname: string]: string};
 
-    constructor(private root: Node, private source: string, namespaceUris?: {[qname: string]: string}) {
+    constructor(private root: Node, private source: string, namespaceUris?: {[qname: string]: string}, private proxyEnabled = false) {
         if (namespaceUris !== undefined && (!namespaceUris || typeof namespaceUris !== 'object' || Array.isArray(namespaceUris)))
             this.fail('namespaceUris must be a QName-to-URI object');
         this.configured = namespaceUris || {};
@@ -149,7 +149,13 @@ export class NativeNamespaces {
         if (!extension) return [owner];
         const baseName = extension.text;
         const base = this.classType(owner, baseName);
-        if (!base) this.fail('namespace inheritance requires a proven same-file ordinary base: ' + baseName);
+        if (!base) {
+            const pkg = this.ancestor(owner, NodeKind.PACKAGE);
+            const importedProxy = pkg && pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.IMPORT)
+                .some(item => item.text === 'flash.utils.Proxy' && baseName === 'Proxy');
+            if (this.proxyEnabled && importedProxy) return [owner];
+            this.fail('namespace inheritance requires a proven same-file ordinary base: ' + baseName);
+        }
         if (base.start > owner.start)
             this.fail('forward namespace base declaration requires class scheduling: ' + baseName);
         return [owner].concat(this.hierarchy(base, active.concat(owner)));
@@ -181,7 +187,8 @@ export class NativeNamespaces {
 
     private lookup(node: Node, name: string): string {
         const matches = this.candidates(node, name).filter(qname => this.declarations.has(qname)
-            || Object.prototype.hasOwnProperty.call(this.configured, qname));
+            || Object.prototype.hasOwnProperty.call(this.configured, qname)
+            || this.proxyEnabled && qname === 'flash.utils.flash_proxy');
         if (matches.length !== 1) this.fail('unresolved or ambiguous namespace: ' + name);
         return matches[0];
     }
@@ -189,7 +196,8 @@ export class NativeNamespaces {
     resolve(node: Node, name: string): string {
         const qname = this.lookup(node, name);
         const declaration = this.declarations.get(qname);
-        return declaration ? this.declarationUri(declaration, []) : this.configured[qname];
+        return declaration ? this.declarationUri(declaration, []) : qname === 'flash.utils.flash_proxy'
+            ? 'http://www.adobe.com/2006/actionscript/flash/proxy' : this.configured[qname];
     }
 
     declarationUri(node: Node, active: Node[]): string {

@@ -128,6 +128,8 @@ export interface EmitterOptions {
 	nativeReflectionXMLModule?: string;
 	/** Builtin AS3 global names and their authenticated common modules. */
 	nativeGlobalModules?:{[name:string]:string};
+	/** Authenticated common flash.utils.Proxy module. */
+	nativeProxyModule?:string;
 }
 
 
@@ -264,6 +266,7 @@ export default class Emitter {
 	public logicalAssignmentTemps = new Map<Node, string[]>();
 	public classInitializers: NativeClassInitializers;
 	public classFactory: {node: Node; value: string; fields: string[]; statements: string[]} = null;
+	public proxyClass = false;
 	public index:number = 0;
 
 /*	public rootScope:Scope = null;
@@ -323,6 +326,14 @@ export default class Emitter {
 			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
 				throw new Error('AS3_REFLECTION_XML_UNSUPPORTED: explicit common reflection XML module required');
 		}
+		if (this.options.nativeProxyModule !== undefined) {
+			const module = this.options.nativeProxyModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_PROXY_UNSUPPORTED: explicit common Proxy module required');
+			if (this.options.importModules && this.options.importModules['flash.utils.Proxy']
+				&& this.options.importModules['flash.utils.Proxy'] !== module)
+				throw new Error('AS3_PROXY_UNSUPPORTED: Proxy import binding disagrees with nativeProxyModule');
+		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
             if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
@@ -345,7 +356,8 @@ export default class Emitter {
                 throw new Error('AS3_LEXICAL_COMPILER_UNSUPPORTED: authenticated lazy callable source required');
             this.lexical = new NativeLexicalMembers(this.source, filtered, this.options.nativeLexicalMembersModule, this.options.nativeCallableMetadata, this.options.nativeTypedLocals === true);
         }
-		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris);
+		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris,
+			this.options.nativeProxyModule !== undefined);
 		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization);
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;
@@ -647,6 +659,12 @@ function emitName(emitter:Emitter, node:Node):void {
     const member = emitter.namespaces.member(node);
     emitter.catchup(node.start);
     if (!member) return;
+    if (emitter.options.nativeProxyModule !== undefined
+        && member.uri === 'http://www.adobe.com/2006/actionscript/flash/proxy') {
+        emitter.insert(node.text);
+        emitter.skipTo(node.end);
+        return;
+    }
     emitter.insert('[' + emitter.namespaces.key(member.uri, member.name) + ']');
     emitter.skipTo(node.end);
 }
@@ -1441,8 +1459,28 @@ function emitClass(emitter:Emitter, node:Node):void {
 		})
 	}
 
+	const previousProxyClass = emitter.proxyClass;
+	emitter.proxyClass = emitter.options.nativeProxyModule !== undefined
+		&& !!extendsNode && extendsNode.text === 'Proxy';
 	emitter.withScope(getClassDeclarations(emitter, name.text, contentsNode), scope => {
 		scope.className = name.text;
+		if (emitter.proxyClass) {
+			const fields:string[] = [];
+			contentsNode.forEach(member => {
+				if (member.kind !== NodeKind.VAR_LIST && member.kind !== NodeKind.CONST_LIST) return;
+				member.findChildren(NodeKind.NAME_TYPE_INIT).forEach(field => {
+					const fieldName = field.findChild(NodeKind.NAME);
+					if (fieldName) fields.push(fieldName.text);
+				});
+			});
+			if (fields.length) {
+				let helper = '__as3_declareFlashProxyProperties';
+				while (emitter.source.indexOf(helper) >= 0) helper += '_';
+				emitter.ensureImportIdentifier('declareFlashProxyProperties as ' + helper, emitter.options.nativeProxyModule, false);
+				emitter.catchup(content.start);
+				emitter.insert('\nstatic readonly flashProxyDeclaredProperties = ' + helper + '(' + fields.map(field => JSON.stringify(field)).join(', ') + ');\n');
+			}
+		}
 		let isInterfaceLinkPrinted:boolean = false;
 		contentsNode.forEach(node => {
 			visitNode(emitter, node.findChild(NodeKind.META_LIST));
@@ -1487,6 +1525,7 @@ function emitClass(emitter:Emitter, node:Node):void {
 		let pathToRoot = ClassList.getLastPathToRoot();
 		emitter.ensureImportIdentifier("classBound", `${lazy ? pathToRoot || './' : pathToRoot}classBound`);
 	});
+	emitter.proxyClass = previousProxyClass;
 
 	emitter.catchup(node.end);
 	if (lazy) {
@@ -1979,6 +2018,12 @@ function emitClassField(emitter:Emitter, node:Node):void {
 			}
 			emitter.catchup(node.end);
 		});
+		const name = node.findChild(NodeKind.NAME);
+		const member = name && emitter.namespaces.member(name);
+		if (member && emitter.options.nativeProxyModule !== undefined
+			&& member.uri === 'http://www.adobe.com/2006/actionscript/flash/proxy'
+			&& node.kind === NodeKind.FUNCTION)
+			emitter.insert('protected ');
 	}
 }
 
