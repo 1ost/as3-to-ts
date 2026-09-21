@@ -68,8 +68,6 @@ export class NativeNamespaces {
             this.hierarchy(owner);
             if (mods.children.some(mod => mod.text === 'override'))
                 this.fail('namespace member overrides require separate lowering');
-            if (node.kind === NodeKind.FUNCTION && mods.children.some(mod => mod.text === 'static'))
-                this.fail('static namespace method closures require separate lowering');
             const names = [NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(node.kind) >= 0
                 ? node.findChildren(NodeKind.NAME_TYPE_INIT).map(value => value.findChild(NodeKind.NAME))
                 : [node.findChild(NodeKind.NAME)];
