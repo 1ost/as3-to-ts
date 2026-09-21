@@ -29,7 +29,8 @@
     "build": "npm run tsc",
     "version": "npm run build",
     "postversion": "git push && git push --tags && npm publish",
-    "test:native-relational": "node tests/native-relational/run.cjs && node tests/native-relational/guards.cjs && node tests/native-relational/ownership.cjs"
+    "test:native-relational": "node tests/native-relational/run.cjs && node tests/native-relational/guards.cjs && node tests/native-relational/ownership.cjs",
+    "test:native-reflection-query": "node tests/native-reflection-query/run.cjs"
   },
   "keywords": [
     "actionscript",

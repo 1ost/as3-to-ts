@@ -90,6 +90,8 @@ interface Declaration {
 	/** The source AS3 type before TypeScript remapping (for example int/uint). */
 	as3Type?:string;
 	bound?:string;
+	/** Exact AS3 import that introduced this binding, when it is an import. */
+	sourceImport?:string;
 }
 
 
@@ -98,6 +100,8 @@ export interface EmitterOptions {
 	lineSeparator:string;
 	useNamespaces:boolean;
 	customVisitors:CustomVisitor[];
+	/** Authenticated AS3 QName -> generated module path bindings for bulk emission. */
+	importModules?:{[qname:string]:string};
 	definitionsByNamespace?:{[ns:string]:string[]};
 	/** Exact imported AS3 namespace QName -> URI identities, supplied by source discovery. */
 	namespaceUris?:{[qname:string]:string};
@@ -117,6 +121,8 @@ export interface EmitterOptions {
     nativeRelationalModule?: string;
 	/** Explicit common AS3ArrayCreation module for source Array literals only. */
 	nativeArrayCreationModule?: string;
+	/** Common reflection query module for literal describeType E4X counts. */
+	nativeReflectionQueryModule?: string;
 }
 
 
@@ -299,6 +305,11 @@ export default class Emitter {
 				throw new Error('AS3_ARRAY_CREATION_UNSUPPORTED: explicit common Array creation module required');
 			if (!this.options.nativeCallableClasses || !this.options.nativeClassInitialization || this.options.useNamespaces)
 				throw new Error('AS3_ARRAY_CREATION_UNSUPPORTED: callable source classes with lazy initialization and module imports required');
+		}
+		if (this.options.nativeReflectionQueryModule !== undefined) {
+			const module = this.options.nativeReflectionQueryModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_REFLECTION_QUERY_UNSUPPORTED: explicit common reflection query module required');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -708,6 +719,7 @@ function emitImport(emitter:Emitter, node:Node):void {
 
 	let text = node.text.concat();
 	let hasCustomVisitor = false;
+	const mappedModule = emitter.options.importModules && emitter.options.importModules[node.text];
 
 	// apply custom visitor import maps
 	for (let i = 0, l = emitter.options.customVisitors.length; i < l; i++) {
@@ -747,7 +759,7 @@ function emitImport(emitter:Emitter, node:Node):void {
 			emitter.catchup(node.end + statement.length);
 		}
 
-		emitter.declareInScope({name});
+		emitter.declareInScope({name, sourceImport: node.text});
 
 	} else {
 
@@ -756,6 +768,14 @@ function emitImport(emitter:Emitter, node:Node):void {
 
 		let split = text.split(".");
 		let name = split.pop();
+		if (mappedModule) {
+			if (typeof mappedModule !== 'string' || !mappedModule.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(mappedModule))
+				throw new Error('AS3_IMPORT_MODULE_UNSUPPORTED: invalid authenticated module for ' + node.text);
+			emitter.insert(`{ ${ name } } from "${ mappedModule }"`);
+			emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+			emitter.declareInScope({name, sourceImport: node.text});
+			return;
+		}
 
 		// Find current module name to output relative import
 		let currentModule = "";
@@ -771,7 +791,7 @@ function emitImport(emitter:Emitter, node:Node):void {
 		text = `{ ${ name } } from "${ getRelativePath(currentModule.split("."), text.split(".")) }"`;
 		emitter.insert(text);
 		emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
-		emitter.declareInScope({name});
+		emitter.declareInScope({name, sourceImport: node.text});
 	}
 }
 
@@ -2075,7 +2095,132 @@ function emitNew(emitter:Emitter, node:Node):void {
 	emitter.emitThisForNextIdent = true;
 }
 
+interface ReflectionQueryStep {
+	kind:'child'|'filter';
+	name?:string;
+	attribute?:string;
+	value?:string;
+}
+
+interface ReflectionQueryPlan {
+	root:Node;
+	argument:Node;
+	steps:ReflectionQueryStep[];
+}
+
+function reflectionStringLiteral(emitter:Emitter, node:Node):string {
+	if (!node || node.kind !== NodeKind.LITERAL) return null;
+	const raw = emitter.sourceBetween(node.start, node.end).trim();
+	if (raw.length < 2 || (raw.charAt(0) !== '"' && raw.charAt(0) !== "'")
+		|| raw.charAt(raw.length - 1) !== raw.charAt(0)) return null;
+	if (raw.charAt(0) === '"') {
+		try { return JSON.parse(raw); } catch (_) { return null; }
+	}
+	// The admitted query corpus uses literal attribute values. Decode only the
+	// AS3 escapes needed for those literals; reject everything else instead of
+	// silently changing a predicate.
+	let value = raw.substring(1, raw.length - 1);
+	if (/\\(?![\\'"nrtbfu0-9x])/.test(value)) return null;
+	return value.replace(/\\([\\'"nrt])/g, (_match, escaped) => {
+		return escaped === 'n' ? '\n' : escaped === 'r' ? '\r' : escaped === 't' ? '\t' : escaped === 'b' ? '\b' : escaped;
+	});
+}
+
+function reflectionFilterStep(emitter:Emitter, node:Node):ReflectionQueryStep {
+	if (!node || node.kind !== NodeKind.EQUALITY || node.children.length !== 3) return null;
+	const attribute = node.children[0];
+	const operator = node.children[1];
+	const value = reflectionStringLiteral(emitter, node.children[2]);
+	if (!attribute || attribute.kind !== NodeKind.IDENTIFIER || !attribute.text
+		|| attribute.text.charAt(0) !== '@' || !operator || operator.kind !== NodeKind.OP
+		|| operator.text !== '==' || value === null) return null;
+	return {kind:'filter', attribute:attribute.text.substring(1), value};
+}
+
+function reflectionQueryPlan(emitter:Emitter, node:Node):ReflectionQueryPlan {
+	if (!node || node.kind !== NodeKind.CALL || node.children.length < 2) return null;
+	const finalCallee = node.children[0];
+	const finalArgs = node.findChild(NodeKind.ARGUMENTS);
+	if (!finalCallee || finalCallee.kind !== NodeKind.DOT || !finalArgs || finalArgs.children.length)
+		return null;
+	const finalName = finalCallee.children[1];
+	if (!finalName || finalName.kind !== NodeKind.LITERAL || finalName.text !== 'length') return null;
+
+	const steps:ReflectionQueryStep[] = [];
+	function consume(current:Node):Node {
+		if (!current) return null;
+		if (current.kind === NodeKind.DOT) {
+			if (current.children.length !== 2 || !current.children[1]
+				|| current.children[1].kind !== NodeKind.LITERAL
+				|| !current.children[1].text || current.children[1].text === 'length') return null;
+			const root = consume(current.children[0]);
+			if (!root) return null;
+			steps.push({kind:'child', name:current.children[1].text});
+			return root;
+		}
+		if (current.kind === NodeKind.E4X_FILTER) {
+			if (current.children.length !== 2) return null;
+			const root = consume(current.children[0]);
+			const filter = reflectionFilterStep(emitter, current.children[1]);
+			if (!root || !filter) return null;
+			steps.push(filter);
+			return root;
+		}
+		if (current.kind === NodeKind.CALL && current.children.length >= 2
+			&& current.children[0].kind === NodeKind.IDENTIFIER
+			&& current.children[0].text === 'describeType') {
+			const args = current.findChild(NodeKind.ARGUMENTS);
+			if (!args || args.children.length !== 1) return null;
+			return current;
+		}
+		return null;
+	}
+	const root = consume(finalCallee.children[0]);
+	if (!root) return null;
+	const rootArgs = root.findChild(NodeKind.ARGUMENTS);
+	return {root, argument:rootArgs && rootArgs.children[0], steps};
+}
+
+function reflectionImportedDescribeType(emitter:Emitter):boolean {
+	const declaration = emitter.findDefInScope('describeType');
+	return !!declaration && declaration.sourceImport === 'flash.utils.describeType';
+}
+
+function hasReflectionFilter(node:Node):boolean {
+	if (!node) return false;
+	if (node.kind === NodeKind.E4X_FILTER) return true;
+	return !!node.children && node.children.some(hasReflectionFilter);
+}
+
+function emitReflectionQuery(emitter:Emitter, node:Node):boolean {
+	if (emitter.options.nativeReflectionQueryModule === undefined) return false;
+	const plan = reflectionQueryPlan(emitter, node);
+	if (!plan) {
+		if (hasReflectionFilter(node) && reflectionImportedDescribeType(emitter))
+			throw new Error('AS3_REFLECTION_QUERY_UNSUPPORTED: filter requires a qualified describeType child/count query');
+		return false;
+	}
+	if (!reflectionImportedDescribeType(emitter)) return false;
+	if (!plan.argument) throw new Error('AS3_REFLECTION_QUERY_UNSUPPORTED: describeType query receiver is missing');
+	const module = emitter.options.nativeReflectionQueryModule;
+	if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+		throw new Error('AS3_REFLECTION_QUERY_UNSUPPORTED: explicit common reflection query module required');
+	let helper = '__as3_describeTypeQueryLength';
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier('as3DescribeTypeQueryLength as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '(');
+	emitter.skipTo(plan.argument.start);
+	visitNode(emitter, plan.argument);
+	emitter.catchup(plan.argument.end);
+	emitter.insert(', ' + JSON.stringify(plan.steps) + ')');
+	emitter.skipTo(node.end);
+	return true;
+}
+
 function emitCall(emitter:Emitter, node:Node):void {
+	if (emitReflectionQuery(emitter, node)) return;
     const callee = node.children[0];
     if (callee.kind === NodeKind.IDENTIFIER && callee.text === 'super') {
         let owner = node.parent;
