@@ -510,7 +510,9 @@ function parseDot(parser:AS3Parser, node:Node):Node {
     }
     if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
         nextToken(parser);
-        let result:Node = createNode(NodeKind.E4X_FILTER, {start: parser.tok.index});
+        // The filter expression owns its receiver. Starting at the predicate
+        // drops the source range needed by a qualified native E4X lowering.
+        let result:Node = createNode(NodeKind.E4X_FILTER, {start: node.start});
         result.children.push(node);
         result.children.push(parseExpression(parser));
         result.end = consume(parser, Operators.RIGHT_PARENTHESIS).end;
