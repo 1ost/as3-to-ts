@@ -294,4 +294,38 @@ assert.throws(() => generate(objectCreationSource, {
     nativeObjectCreationModule: './other',
 }), /AS3_OBJECT_CREATION_UNSUPPORTED/);
 
+const dictionaryOptions = {
+    ...options,
+    importModules: {
+        'flash.utils.Dictionary': './Dictionary',
+        'compiler.AS3Property': './AS3Property',
+    },
+    nativeReflectionQueryModule: undefined,
+    nativeDictionaryPropertyModule: './AS3Property',
+};
+const dictionarySource = `package probe {
+ import flash.utils.Dictionary;
+ public class DictionaryProperties {
+  public function write(values:Dictionary, key:Object, value:Object):Object {
+   values[key] = value; values.name(value); return values[key];
+  }
+  public function remove(values:Dictionary, key:Object):Boolean { return delete values[key]; }
+  public function shadow(Dictionary:Function, values:Object):Object { return values.name; }
+ }
+}`;
+const dictionaryOutput = generate(dictionarySource, dictionaryOptions);
+assert.match(dictionaryOutput, /as3SetProperty as __as3_as3SetProperty/);
+assert.match(dictionaryOutput, /__as3_as3SetProperty\(values, key, value\)/);
+assert.match(dictionaryOutput, /as3CallProperty as __as3_as3CallProperty/);
+assert.match(dictionaryOutput, /__as3_as3CallProperty\(values, "name", \(\) => \[value\]\)/);
+assert.match(dictionaryOutput, /as3GetProperty as __as3_as3GetProperty/);
+assert.match(dictionaryOutput, /__as3_as3GetProperty\(values, key\)/);
+assert.match(dictionaryOutput, /as3DeleteProperty as __as3_as3DeleteProperty/);
+assert.match(dictionaryOutput, /return __as3_as3DeleteProperty\(values, key\)/);
+assert.match(dictionaryOutput, /return values\.name/);
+assert.throws(() => generate(dictionarySource, {
+    ...dictionaryOptions,
+    nativeDictionaryPropertyModule: './other',
+}), /AS3_DICTIONARY_PROPERTY_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');
