@@ -123,6 +123,8 @@ export interface EmitterOptions {
 	nativeArrayCreationModule?: string;
 	/** Common reflection query module for literal describeType E4X counts. */
 	nativeReflectionQueryModule?: string;
+	/** Common XML reflection module for authenticated describeType XML access. */
+	nativeReflectionXMLModule?: string;
 }
 
 
@@ -161,6 +163,7 @@ const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.OR]: emitOr,
 	[NodeKind.IDENTIFIER]: emitIdent,
 	[NodeKind.XML_LITERAL]: emitXMLLiteral,
+	[NodeKind.E4X_DESCENDANT]: emitUnsupportedE4X,
 	[NodeKind.CONST_LIST]: emitConstList,
 	[NodeKind.NAME_TYPE_INIT]: emitNameTypeInit,
 	[NodeKind.VALUE]: emitObjectValue,
@@ -310,6 +313,11 @@ export default class Emitter {
 			const module = this.options.nativeReflectionQueryModule;
 			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
 				throw new Error('AS3_REFLECTION_QUERY_UNSUPPORTED: explicit common reflection query module required');
+		}
+		if (this.options.nativeReflectionXMLModule !== undefined) {
+			const module = this.options.nativeReflectionXMLModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_REFLECTION_XML_UNSUPPORTED: explicit common reflection XML module required');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2219,8 +2227,119 @@ function emitReflectionQuery(emitter:Emitter, node:Node):boolean {
 	return true;
 }
 
+function reflectionXMLRoot(node:Node):Node {
+	if (!node || node.kind !== NodeKind.CALL || node.children.length < 2
+		|| node.children[0].kind !== NodeKind.IDENTIFIER
+		|| node.children[0].text !== 'describeType') return null;
+	const args = node.findChild(NodeKind.ARGUMENTS);
+	return args && args.children.length === 1 ? node : null;
+}
+
+function reflectionXMLArgument(node:Node):Node {
+	const root = reflectionXMLRoot(node);
+	return root && root.findChild(NodeKind.ARGUMENTS).children[0];
+}
+
+function emitReflectionXMLRoot(emitter:Emitter, node:Node, helper:string):void {
+	const argument = reflectionXMLArgument(node);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '(');
+	emitter.skipTo(argument.start);
+	visitNode(emitter, argument);
+	emitter.catchup(argument.end);
+	emitter.insert(')');
+	emitter.skipTo(node.end);
+}
+
+function emitReflectionXML(emitter:Emitter, node:Node):boolean {
+	if (emitter.options.nativeReflectionXMLModule === undefined) return false;
+	if (!reflectionImportedDescribeType(emitter)) return false;
+	const module = emitter.options.nativeReflectionXMLModule;
+	if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+		throw new Error('AS3_REFLECTION_XML_UNSUPPORTED: explicit common reflection XML module required');
+
+	// A literal attribute followed by toString() is the scalar form used by
+	// the maintained JSON encoder. Missing attributes stringify to the empty
+	// string in Flash; the provider's nominal reader returns undefined.
+	if (node.kind === NodeKind.CALL && node.children.length >= 2
+		&& node.children[0].kind === NodeKind.DOT) {
+		const toStringName = node.children[0].children[1];
+		const attributeDot = node.children[0].children[0];
+		const attribute = attributeDot && attributeDot.kind === NodeKind.DOT
+			? attributeDot.children[1] : null;
+		const root = attributeDot && attributeDot.children[0];
+		const args = node.findChild(NodeKind.ARGUMENTS);
+		if (toStringName && toStringName.kind === NodeKind.LITERAL && toStringName.text === 'toString'
+			&& args && args.children.length === 0 && attribute && attribute.kind === NodeKind.LITERAL
+			&& /^@[A-Za-z_$][A-Za-z0-9_$]*$/.test(attribute.text) && reflectionXMLRoot(root)) {
+			let xmlHelper = '__as3_describeTypeXML';
+			while (emitter.source.indexOf(xmlHelper) >= 0) xmlHelper += '_';
+			emitter.ensureImportIdentifier('as3DescribeTypeXML as ' + xmlHelper, module, false);
+			emitter.nativeSourceHelpers.add(xmlHelper);
+			let attributeHelper = '__as3_xmlAttributeValue';
+			while (emitter.source.indexOf(attributeHelper) >= 0) attributeHelper += '_';
+			emitter.ensureImportIdentifier('as3XMLAttributeValue as ' + attributeHelper, module, false);
+			emitter.nativeSourceHelpers.add(attributeHelper);
+			emitter.catchup(node.start);
+			emitter.insert('(' + attributeHelper + '(' + xmlHelper + '(');
+			const argument = reflectionXMLArgument(root);
+			emitter.skipTo(argument.start);
+			visitNode(emitter, argument);
+			emitter.catchup(argument.end);
+			emitter.insert('), ' + JSON.stringify(attribute.text.substring(1)) + ') || "")');
+			emitter.skipTo(node.end);
+			return true;
+		}
+
+		// A named descendant list exposes a property in XMLList, whereas AS3's
+		// source spelling invokes length(). Preserve that distinction explicitly.
+		const lengthName = node.children[0].children[1];
+		const descendant = node.children[0].children[0];
+		const descendantName = descendant && descendant.kind === NodeKind.E4X_DESCENDANT
+			? descendant.children[1] : null;
+		const descendantRoot = descendant && descendant.kind === NodeKind.E4X_DESCENDANT
+			? descendant.children[0] : null;
+		if (lengthName && lengthName.kind === NodeKind.LITERAL && lengthName.text === 'length'
+			&& args && args.children.length === 0 && descendantName && descendantName.kind === NodeKind.LITERAL
+			&& descendantName.text !== '*' && reflectionXMLRoot(descendantRoot)) {
+			let xmlHelper = '__as3_describeTypeXML';
+			while (emitter.source.indexOf(xmlHelper) >= 0) xmlHelper += '_';
+			emitter.ensureImportIdentifier('as3DescribeTypeXML as ' + xmlHelper, module, false);
+			emitter.nativeSourceHelpers.add(xmlHelper);
+			let descendantsHelper = '__as3_xmlDescendantsByName';
+			while (emitter.source.indexOf(descendantsHelper) >= 0) descendantsHelper += '_';
+			emitter.ensureImportIdentifier('as3XMLDescendantsByName as ' + descendantsHelper, module, false);
+			emitter.nativeSourceHelpers.add(descendantsHelper);
+			const argument = reflectionXMLArgument(descendantRoot);
+			emitter.catchup(node.start);
+			emitter.insert(descendantsHelper + '(' + xmlHelper + '(');
+			emitter.skipTo(argument.start);
+			visitNode(emitter, argument);
+			emitter.catchup(argument.end);
+			emitter.insert('), ' + JSON.stringify(descendantName.text) + ').length');
+			emitter.skipTo(node.end);
+			return true;
+		}
+	}
+
+	// A bare describeType call is a complete source XML request. Other E4X
+	// shapes remain explicit failures until their source semantics are admitted.
+	if (reflectionXMLRoot(node)) {
+		let helper = '__as3_describeTypeXML';
+		while (emitter.source.indexOf(helper) >= 0) helper += '_';
+		emitter.ensureImportIdentifier('as3DescribeTypeXML as ' + helper, module, false);
+		emitter.nativeSourceHelpers.add(helper);
+		emitReflectionXMLRoot(emitter, node, helper);
+		return true;
+	}
+	if (hasReflectionFilter(node) || node.kind === NodeKind.E4X_DESCENDANT)
+		throw new Error('AS3_REFLECTION_XML_UNSUPPORTED: only literal XML attributes and named descendant counts are admitted');
+	return false;
+}
+
 function emitCall(emitter:Emitter, node:Node):void {
 	if (emitReflectionQuery(emitter, node)) return;
+	if (emitReflectionXML(emitter, node)) return;
     const callee = node.children[0];
     if (callee.kind === NodeKind.IDENTIFIER && callee.text === 'super') {
         let owner = node.parent;
@@ -3195,6 +3314,10 @@ function emitXMLLiteral(emitter:Emitter, node:Node):void {
 	emitter.catchup(node.start);
 	emitter.insert(JSON.stringify(node.text));
 	emitter.skipTo(node.end);
+}
+
+function emitUnsupportedE4X(emitter:Emitter, node:Node):void {
+	throw new Error('AS3_E4X_UNSUPPORTED: descendant selectors require an authenticated native XML lowering');
 }
 
 function emitLiteral(emitter:Emitter, node:Node):void {

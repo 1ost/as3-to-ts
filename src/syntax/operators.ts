@@ -11,6 +11,8 @@ export let COMMA = ',';
 export let DECREMENT = '--';
 export let DIVIDED_EQUAL = '/=';
 export let DOT = '.';
+/** E4X descendant selector (for example `value..method`). */
+export let DOUBLE_DOT = '..';
 export let DOUBLE_COLUMN = '::';
 export let DOUBLE_EQUAL = '==';
 export let DOUBLE_EQUAL_AS2 = 'eq';

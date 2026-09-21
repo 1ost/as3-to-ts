@@ -8,7 +8,7 @@ const options = {
     useNamespaces: false,
     customVisitors: [],
     definitionsByNamespace: {},
-    importModules: { 'flash.utils.describeType': './AS3ReflectionQuery' },
+    importModules: { 'flash.utils.describeType': './describeType' },
     nativeReflectionQueryModule: './AS3ReflectionQuery',
 };
 
@@ -61,5 +61,31 @@ assert.doesNotMatch(shadowedOutput, /as3DescribeTypeQueryLength/);
 
 const unsupported = source.replace('@name == "optional"', '@kind == getName()');
 assert.throws(() => generate(unsupported), /AS3_REFLECTION_QUERY_UNSUPPORTED/);
+
+const xmlOptions = {
+    ...options,
+    nativeReflectionQueryModule: undefined,
+    nativeReflectionXMLModule: './AS3ReflectionQuery',
+};
+const xmlSource = `package probe {
+ import flash.utils.describeType;
+ public class ReflectionQuery {
+  public function read(value:Object):String {
+   var xml:XML = describeType(value);
+   return describeType(value).@name.toString();
+  }
+  public function descendants(value:Object):int {
+   return describeType(value)..method.length();
+  }
+ }
+}`;
+const xmlOutput = generate(xmlSource, xmlOptions);
+assert.match(xmlOutput, /as3DescribeTypeXML as __as3_describeTypeXML/);
+assert.match(xmlOutput, /as3XMLAttributeValue as __as3_xmlAttributeValue/);
+assert.match(xmlOutput, /as3XMLDescendantsByName as __as3_xmlDescendantsByName/);
+assert.match(xmlOutput, /__as3_xmlDescendantsByName\(__as3_describeTypeXML\(value\), "method"\)\.length/);
+
+const wildcardXML = xmlSource.replace('..method.length()', '..*.(name() == "method").length()');
+assert.throws(() => generate(wildcardXML, xmlOptions), /AS3_REFLECTION_XML_UNSUPPORTED/);
 
 console.log('Native reflection query lowering passed');

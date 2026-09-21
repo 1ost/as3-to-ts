@@ -103,7 +103,9 @@ enum NodeKind {
     EMBED,
     NAMESPACE_DECLARATION,
     NAMESPACE_ACCESS,
-    CLASS_INITIALIZER
+    CLASS_INITIALIZER,
+    /** E4X descendant selector; appended to preserve existing node numbers. */
+    E4X_DESCENDANT
 }
 
 // Can't do 'export default enum Foo {...}' for some reason?

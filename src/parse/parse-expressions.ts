@@ -455,7 +455,7 @@ function parseAccessExpression(parser:AS3Parser):Node {
         if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
             node = parseFunctionCall(parser, node);
         }
-        if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_COLUMN)) {
+        if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_DOT) || tokIs(parser, Operators.DOUBLE_COLUMN)) {
             node = parseDot(parser, node);
         } else if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
             node = parseArrayAccessor(parser, node);
@@ -497,6 +497,7 @@ function parseArgumentList(parser:AS3Parser):Node {
 
 
 function parseDot(parser:AS3Parser, node:Node):Node {
+	const descendantAccess = tokIs(parser, Operators.DOUBLE_DOT);
     let namespaceAccess = tokIs(parser, Operators.DOUBLE_COLUMN)
         && !(node.kind === NodeKind.IDENTIFIER && node.text === 'CONFIG');
     nextToken(parser);
@@ -508,6 +509,18 @@ function parseDot(parser:AS3Parser, node:Node):Node {
         nextToken(parser, true);
         return createNode(NodeKind.NAMESPACE_ACCESS, {start: node.start, end: member.end}, node, member);
     }
+	if (descendantAccess) {
+		if (tokIs(parser, Operators.TIMES)) {
+			const wildcard = createNode(NodeKind.LITERAL, {tok: parser.tok});
+			nextToken(parser, true);
+			return createNode(NodeKind.E4X_DESCENDANT, {start: node.start, end: wildcard.end}, node, wildcard);
+		}
+		if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text))
+			throw new Error('AS3_E4X_UNSUPPORTED: descendant selector requires a literal name or wildcard');
+		const member = createNode(NodeKind.LITERAL, {tok: parser.tok});
+		nextToken(parser, true);
+		return createNode(NodeKind.E4X_DESCENDANT, {start: node.start, end: member.end}, node, member);
+	}
     if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
         nextToken(parser);
         // The filter expression owns its receiver. Starting at the predicate
