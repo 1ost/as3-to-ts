@@ -146,6 +146,8 @@ export interface EmitterOptions {
 	nativeDictionaryPropertyModule?:string;
 	/** Authenticated common AS3Property module for typed dynamic indexed writes. */
 	nativeDynamicPropertyWritesModule?:string;
+	/** Authenticated common AS3ArraySort module for source Array.sortOn calls. */
+	nativeArraySortModule?:string;
 }
 
 
@@ -415,6 +417,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['compiler.AS3Property']
 				&& this.options.importModules['compiler.AS3Property'] !== module)
 				throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: AS3Property import binding disagrees with nativeDynamicPropertyWritesModule');
+		}
+		if (this.options.nativeArraySortModule !== undefined) {
+			const module = this.options.nativeArraySortModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_ARRAY_SORT_UNSUPPORTED: explicit common AS3ArraySort module required');
+			if (this.options.importModules && this.options.importModules['flash.utils.AS3ArraySort']
+				&& this.options.importModules['flash.utils.AS3ArraySort'] !== module)
+				throw new Error('AS3_ARRAY_SORT_UNSUPPORTED: AS3ArraySort import binding disagrees with nativeArraySortModule');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2610,6 +2620,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitDirectToString(emitter, node)) return;
 	if (emitBuiltinStringCoercion(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
+	if (emitArraySortOn(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
     const callee = node.children[0];
     if (!emitter.isNew && callee.kind === NodeKind.IDENTIFIER && emitter.nativeGlobals.resolve(callee))
@@ -2898,6 +2909,36 @@ function emitDelete(emitter:Emitter, node:Node):void {
 	}
 	emitter.catchup(node.start);
 	visitNodes(emitter, node.children);
+}
+
+function emitArraySortOn(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeArraySortModule;
+	if (module === undefined || !node || node.kind !== NodeKind.CALL || node.children.length < 2) return false;
+	const callee = node.children[0], args = node.findChild(NodeKind.ARGUMENTS);
+	if (!callee || callee.kind !== NodeKind.DOT || callee.children.length !== 2 || !args) return false;
+	const receiver = callee.children[0], name = callee.children[1];
+	if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || !name || name.kind !== NodeKind.LITERAL
+		|| name.text !== 'sortOn') return false;
+	const definition = emitter.findDefInScope(receiver.text);
+	if (!definition || definition.as3Type !== 'Array') return false;
+	let helper = '__as3_as3ArraySortOn';
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier('as3ArraySortOn as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '(');
+	visitNode(emitter, receiver);
+	emitter.catchup(receiver.end);
+	if (args.children.length) {
+		emitter.insert(', ');
+		emitter.skipTo(args.children[0].start);
+		visitNodes(emitter, args.children);
+		const close = args.end > args.start && emitter.source.charAt(args.end - 1) === ')' ? args.end - 1 : args.end;
+		emitter.catchup(close);
+	}
+	emitter.insert(')');
+	emitter.skipTo(node.end);
+	return true;
 }
 
 function emitDirectToString(emitter:Emitter, node:Node):boolean {
@@ -3805,6 +3846,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 }
 
 function emitDot(emitter:Emitter, node:Node) {
+	if (emitArraySortConstant(emitter, node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
 	emitter.namespaces.checkDot(node);
 	let dotSibling = node.nextSibling;
@@ -3835,6 +3877,25 @@ function emitDot(emitter:Emitter, node:Node) {
 	}
 
 	visitNodes(emitter, node.children);
+}
+
+function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeArraySortModule;
+	if (module === undefined || !node || node.kind !== NodeKind.DOT || node.children.length !== 2)
+		return false;
+	const receiver = node.children[0], name = node.children[1];
+	const constants = ['CASEINSENSITIVE', 'DESCENDING', 'UNIQUESORT', 'RETURNINDEXEDARRAY', 'NUMERIC'];
+	if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || receiver.text !== 'Array'
+		|| emitter.findDefInScope('Array') || !name || name.kind !== NodeKind.LITERAL || constants.indexOf(name.text) < 0)
+		return false;
+	let helper = '__as3_AS3ArraySortOptions';
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier('AS3ArraySortOptions as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '.' + name.text);
+	emitter.skipTo(node.end);
+	return true;
 }
 
 function emitArrayAccessor(emitter:Emitter, node:Node):void {

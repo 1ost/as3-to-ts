@@ -355,4 +355,27 @@ assert.throws(() => generate(dynamicWriteSource, {
     nativeDynamicPropertyWritesModule: './other',
 }), /AS3_DYNAMIC_PROPERTY_UNSUPPORTED/);
 
+const arraySortOptions = {
+    ...options,
+    importModules: { 'flash.utils.AS3ArraySort': './AS3ArraySort' },
+    nativeReflectionQueryModule: undefined,
+    nativeArraySortModule: './AS3ArraySort',
+};
+const arraySortSource = `package probe {
+ public class ArraySorting {
+  public function sort(values:Array, field:String):Array {
+   return values.sortOn(field, Array.NUMERIC | Array.DESCENDING);
+  }
+  public function shadow(Array:Function, values:Array):Array { return values; }
+ }
+}`;
+const arraySortOutput = generate(arraySortSource, arraySortOptions);
+assert.match(arraySortOutput, /as3ArraySortOn as __as3_as3ArraySortOn/);
+assert.match(arraySortOutput, /__as3_as3ArraySortOn\(values, field, __as3_AS3ArraySortOptions\.NUMERIC \| __as3_AS3ArraySortOptions\.DESCENDING\)/);
+assert.match(arraySortOutput, /return values;/);
+assert.throws(() => generate(arraySortSource, {
+    ...arraySortOptions,
+    nativeArraySortModule: './other',
+}), /AS3_ARRAY_SORT_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');
