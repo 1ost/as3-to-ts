@@ -1,0 +1,2 @@
+const nc=load('nativeClass');const rows=[];function rec(id,f){try{rows.push({id,value:f()});}catch(e){rows.push({id,error:{name:e.name,errorID:e.errorID}});}}
+function callbacks(){return nc.readNativeClass(load('probe/Callbacks').Callbacks);}

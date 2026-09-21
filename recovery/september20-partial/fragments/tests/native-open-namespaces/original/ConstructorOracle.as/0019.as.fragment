@@ -1,0 +1,3 @@
+
+ExternalInterface.addCallback("snapshot",function():String{return encodeURIComponent(JSON.stringify({rows:rows}));});
+}}}

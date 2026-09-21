@@ -215,7 +215,6 @@ for (const invalid of [
   'package p { public class C { public function f():void { use namespace n; } } }',
   'package p { import alias.same; public class C { public function f():Object { return same; } } }',
   'package p { public namespace n = "urn:n"; public class C { public function f(n:Object):Object { return n::x; } } }',
-  'package p { public namespace n = "urn:n"; use namespace n; public class C { n var x:Object; public function f():Object { return this.x; } } }',
   'package p { public namespace n = "urn:n"; public class C { public function f(xml:XML):Object { return xml.n::x; } } }',
   'package p { public namespace n = "urn:n"; public class C { n static function f():void { } } }',
   'package p { public namespace n = "urn:n"; public class C extends Base { n var x:Object; } }',

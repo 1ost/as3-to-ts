@@ -121,6 +121,8 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   }
   assert.deepStrictEqual(Array.from(inheritedDefaults.childConstructed),[0,0,null]);
   assert.deepStrictEqual(Array.from(inheritedDefaults.ownRead()),[0,null]);
+  execute(generate('package p {public namespace n="urn:open-inherited"; use namespace n; public class OpenBase {n var x:int=5;} public class OpenChild extends OpenBase {public function read():* {return this.x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
+  assert.equal(new context.exports.OpenChild().read(),5,'opened namespace selects inherited field');
   console.log('inherited namespace native-class execution passed for '+ts.ScriptTarget[target]);
 }
 
@@ -137,7 +139,6 @@ const invalid=[
   'public class Base {n var x:int;} public class Child extends Base {public function f():*{return super.n::x;}}',
   'public class Base {n static var x:int;} public class Child extends Base {public function f():*{return Child.n::x;}}',
   'public class Base {n var x:int;} public class Child extends Base {public function f():*{return x;}}',
-  'use namespace n; public class Base {n var x:int;} public class Child extends Base {public function f():*{return this.x;}}',
   'public class Base {n var x:int;} public class Child extends Base {public function f():*{return get().n::x;} public function get():Child{return this;}}',
   'public class Base {n var x:int;} public class Child extends Base {public function f(other:Object):*{return other.n::x;}}',
   'public class Base {n var x:int;} public class Child extends Base {public function f():void{this.n::x++;}}',

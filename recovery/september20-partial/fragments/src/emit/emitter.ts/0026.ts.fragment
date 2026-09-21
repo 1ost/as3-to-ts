@@ -1,0 +1,5 @@
+    emitter.catchup(node.start);
+    visitNode(emitter, left);
+    emitter.catchup(left.end);
+
+    if (operator.text === '=') {

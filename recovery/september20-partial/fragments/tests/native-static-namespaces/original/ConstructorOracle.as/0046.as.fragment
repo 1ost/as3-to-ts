@@ -1,0 +1,4 @@
+package { import flash.display.Sprite; import flash.external.ExternalInterface; import probe.StaticMethods; import probe.inside;
+ public class ConstructorOracle extends Sprite {public function ConstructorOracle(){
+ var rows:Array=[];var method:Function=StaticMethods.take();var clear:Function=StaticMethods.inside::clear;var rest:Function=StaticMethods.inside::items;var strings:Function=StaticMethods.inside::stringify;
+ function rec(id:String,f:Function):void {try{rows.push({id:id,value:f()});}catch(e:Error){rows.push({id:id,error:{name:e.name,errorID:e.errorID}});}}

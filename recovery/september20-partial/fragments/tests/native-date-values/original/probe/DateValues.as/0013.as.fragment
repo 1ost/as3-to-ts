@@ -1,0 +1,3 @@
+ public static function calendar(stamp:Number):Object {var date:Date=new Date(0);date.setTime(stamp);return {year:date.fullYearUTC,month:date.monthUTC,day:date.dateUTC,weekday:date.dayUTC,hours:date.hoursUTC,minutes:date.minutesUTC,seconds:date.secondsUTC,localYear:date.getFullYear(),localMonth:date.getMonth(),localDay:date.getDate(),localWeekday:date.getDay(),localHours:date.getHours(),localMinutes:date.getMinutes(),localSeconds:date.getSeconds()};}
+ public static function rewrite(stamp:Number,value:*):Object {var date:Date=new Date(stamp);var result:*=date.fullYearUTC=value;return {result:result,time:date.getTime()};}
+ public static function time(

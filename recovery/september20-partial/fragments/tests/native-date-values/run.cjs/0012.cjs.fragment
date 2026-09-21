@@ -1,0 +1,7 @@
+// Builtin type authority cannot be replaced by a foreign Date spelling.
+assert.throws(()=>api.createNativeDeclarationDomain({...input,nativeReferences:{'foreign.Date':{module:'ForeignDate',exportName:'Date'}}}),/distinct qualified/);guards.push('foreign-date-provider');
+const shadowSource=sources['probe.DateValues'].replace('package probe {','package probe {import foreign.Date;');
+const shadowClasses=JSON.parse(JSON.stringify(metadata.classes));shadowClasses['probe.DateValues'].sourceSha256=crypto.createHash('sha256').update(shadowSource).digest('hex');
+assert.throws(()=>api.createNativeDeclarationDomain({...input,sources:{'probe.DateValues':shadowSource},metadata:{...input.metadata,classes:shadowClasses}}),/builtin-name annotation remains held/);guards.push('imported-date-shadow');
+assert.throws(()=>emit(parse('DateValues.as',sources['probe.DateValues']),sources['probe.DateValues'],{...options(),nativeCallableReferenceModule:undefined}),/coercion requires explicit common provider|parameters require the common/);guards.push('missing-reference-provider');
+

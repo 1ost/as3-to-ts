@@ -1,0 +1,2 @@
+  execute(generate('package p {public namespace n="urn:open-inherited"; use namespace n; public class OpenBase {n var x:int=5;} public class OpenChild extends OpenBase {public function read():* {return this.x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
+  assert.equal(new context.exports.OpenChild().read(),5,'opened namespace selects inherited field');

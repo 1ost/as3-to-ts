@@ -1,0 +1,13 @@
+        const owner = method && method.parent && method.parent.parent;
+        const constructor = method && method.kind === NodeKind.FUNCTION && owner && owner.kind === NodeKind.CLASS
+            && method.findChild(NodeKind.NAME).text === owner.findChild(NodeKind.NAME).text;
+        if (constructor) {
+            // Uninitialized var declarations hoist. Keeping them after the source
+            // body avoids making them precede super(), which changes old TS's
+            // placement of derived instance field initializers.
+            emitter.catchup(node.end - 1);
+            emitter.insert('\nvar ' + temporaries.join(', ') + ';\n');
+        } else {
+            emitter.output = emitter.output.slice(0, insertion) + '\nvar ' + temporaries.join(', ') + ';\n'
+                + emitter.output.slice(insertion);
+        }
