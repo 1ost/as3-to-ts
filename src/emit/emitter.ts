@@ -857,6 +857,8 @@ function referencedWildcardDefinitions(node:Node, namespace:string, definitions:
 			if (!(parent && parent.kind === NodeKind.DOT && parent.children[1] === current))
 				references.add(current.text);
 		}
+		if ((current.kind === NodeKind.EXTENDS || current.kind === NodeKind.IMPLEMENTS)
+			&& candidates.has(current.text)) references.add(current.text);
 		if (current.children) current.children.forEach(child => walk(child, current));
 	};
 	walk(node.parent);
@@ -886,7 +888,7 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 		let ns = node.text.substring(0, node.text.length - 2);
 		let definitions = emitter.options.definitionsByNamespace[ns];
 
-		let skipTo = node.end;
+		let skipTo = node.end + Keywords.IMPORT.length + 2;
 
 		if (definitions && definitions.length > 0) {
 			if (emitter.options.nativeReferencedWildcardImports)
@@ -904,10 +906,6 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 			}
 
 		} else {
-			emitter.catchup(node.start);
-			node.end += node.text.length - ns.length + 6;
-			emitter.commentNode(node, true);
-			skipTo = node.end;
 			if (WARNINGS >= 1) {
 				console.log(`emitter.ts: *** MINOR WARNING *** emitImport() => : nothing found to import on namespace ${ ns }. (import ${ node.text })`)
 			}
