@@ -104,6 +104,8 @@ export interface EmitterOptions {
 	/** Authenticated AS3 QName -> generated module path bindings for bulk emission. */
 	importModules?:{[qname:string]:string};
 	definitionsByNamespace?:{[ns:string]:string[]};
+	/** Expand SDK wildcard imports only for names referenced by this source file. */
+	nativeReferencedWildcardImports?: boolean;
 	/** Exact imported AS3 namespace QName -> URI identities, supplied by source discovery. */
 	namespaceUris?:{[qname:string]:string};
 	nativeClassInitialization?: NativeClassInitializationOptions;
@@ -827,6 +829,40 @@ function emitEmbed(emitter:Emitter, node:Node):void {
 	emitter.commentNode(node, false);
 }
 
+/**
+ * Resolve a wildcard import against the authenticated platform catalog without
+ * importing the entire SDK namespace.  The source graph has already decided
+ * that the wildcard is legal; this pass only applies lexical precedence and
+ * keeps the generated module surface to names actually used by the file.
+ */
+function referencedWildcardDefinitions(node:Node, namespace:string, definitions:string[]):string[] {
+	if (!node.parent || !definitions || definitions.length === 0) return [];
+	const candidates = new Set<string>(definitions);
+	const references = new Set<string>();
+	const shadowed = new Set<string>();
+	const walk = (current:Node, parent:Node = null):void => {
+		if (!current) return;
+		if (current !== node && current.kind === NodeKind.IMPORT) {
+			const imported = current.text.split('.').pop();
+			if (imported && imported !== '*') shadowed.add(imported);
+			return;
+		}
+		if (current.kind === NodeKind.NAME && parent
+			&& parent.kind !== NodeKind.PACKAGE && parent.kind !== NodeKind.IMPORT) {
+			shadowed.add(current.text);
+		}
+		if ((current.kind === NodeKind.IDENTIFIER || current.kind === NodeKind.TYPE)
+			&& candidates.has(current.text)) {
+			// A DOT's right-hand literal is a member name, not a lexical binding.
+			if (!(parent && parent.kind === NodeKind.DOT && parent.children[1] === current))
+				references.add(current.text);
+		}
+		if (current.children) current.children.forEach(child => walk(child, current));
+	};
+	walk(node.parent);
+	return definitions.filter(definition => references.has(definition) && !shadowed.has(definition));
+}
+
 function emitImport(emitter:Emitter, node:Node):void {
 	// A same-file source Class owns its name ahead of an imported declaration.
 	// AS3 imports are lexical declarations, not eager JavaScript module effects.
@@ -853,6 +889,9 @@ function emitImport(emitter:Emitter, node:Node):void {
 		let skipTo = node.end;
 
 		if (definitions && definitions.length > 0) {
+			if (emitter.options.nativeReferencedWildcardImports)
+				definitions = referencedWildcardDefinitions(node, ns, definitions);
+			if (definitions.length > 0) {
 			definitions.forEach(definition => {
 				let importNode = createNode(node.kind, node);
 				importNode.text = `${ ns }.${ definition }`;
@@ -862,6 +901,7 @@ function emitImport(emitter:Emitter, node:Node):void {
 			})
 
 			skipTo = node.end + Keywords.IMPORT.length + 2;
+			}
 
 		} else {
 			emitter.catchup(node.start);
