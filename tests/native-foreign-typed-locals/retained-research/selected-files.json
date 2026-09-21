@@ -1,0 +1,237 @@
+[
+  {
+    "path": "capture-checks.json",
+    "bytes": 1181,
+    "sha256": "58a2df27f3ee78b9e044c9de81e6e5550891442f1392f40b824df14cb5c431c7"
+  },
+  {
+    "path": "capture-g/commands.json",
+    "bytes": 8920,
+    "sha256": "c1e8ba58ae707430819bef2af4062f5a984a89a8a476bca509a8842bb8f18945"
+  },
+  {
+    "path": "capture-g/flash.json",
+    "bytes": 19252,
+    "sha256": "9ba66276a1bc89fbc9f6182c8d14edf23f7f4501d6b0a0f9fab4fa903e0a511d"
+  },
+  {
+    "path": "capture-g/oracle.swf",
+    "bytes": 4547,
+    "sha256": "a62947d8422a88cb61275d86dcc30d7f45585078d33a8e044124836125ba6375"
+  },
+  {
+    "path": "capture-g/provenance.json",
+    "bytes": 3455,
+    "sha256": "138be8ac54ec5472a2adc0552b98ef56e0e4abc73e1eba073737abb1af174c8b"
+  },
+  {
+    "path": "capture-g/sources/capture.cjs",
+    "bytes": 1785,
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "capture-g/sources/capture.py",
+    "bytes": 2178,
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "capture-g/sources/original/ConstructorOracle.as",
+    "bytes": 7116,
+    "sha256": "ddf9d50e64b00bc1752acd9dd86e3982815fdeb82beefe5be2564b0703b35a23"
+  },
+  {
+    "path": "capture-g/sources/original/cycle/A.as",
+    "bytes": 197,
+    "sha256": "94859057351e146cb1e16e1a961c0c7174d2a75cb8d460ad55253f51e47dbfec"
+  },
+  {
+    "path": "capture-g/sources/original/cycle/B.as",
+    "bytes": 197,
+    "sha256": "b0c857cb9ca01aa7b9230db76c6867b04afd1d9ea909bfe7b417ba28cfd96a64"
+  },
+  {
+    "path": "capture-g/sources/original/foreign/Child.as",
+    "bytes": 92,
+    "sha256": "11a88acafec8a2daad59385f7dd76187b6681670cbb336a20037f3718c0744b4"
+  },
+  {
+    "path": "capture-g/sources/original/foreign/Peer.as",
+    "bytes": 69,
+    "sha256": "e36cd528e7582072f2a8fcb1be1094da62271501dc5be0c16b8046e3f9abdbe2"
+  },
+  {
+    "path": "capture-g/sources/original/init/DeferredHolder.as",
+    "bytes": 252,
+    "sha256": "1f103735ef7d4eecd7ad23f2e05737bf837631c2f681dd77809d51cd1361e30d"
+  },
+  {
+    "path": "capture-g/sources/original/init/DeferredPeer.as",
+    "bytes": 224,
+    "sha256": "212fd4d5c8937439aec42f1dbbb3663184ec9e67f520928339844e3e002ab934"
+  },
+  {
+    "path": "capture-g/sources/original/init/State.as",
+    "bytes": 103,
+    "sha256": "75ffc5f5a99dd07d4957c3d9ac5d09de7ab376b0c5cd78c40d502353540c440c"
+  },
+  {
+    "path": "capture-g/sources/original/other/Peer.as",
+    "bytes": 67,
+    "sha256": "d8338bbba09d041a817528eb318702d86de6855894e77b986db4e9cf844c7f50"
+  },
+  {
+    "path": "capture-g/sources/original/probe/Companion.as",
+    "bytes": 77,
+    "sha256": "e5f8b3c7e54634dd257156aa01275acf902ca2e48ed1745ef19acca399d1ecdb"
+  },
+  {
+    "path": "capture-g/sources/original/probe/ForeignLocals.as",
+    "bytes": 1158,
+    "sha256": "ad9824f425d6f46ef14fbd699e21b4a361e0b5ac15bc2bdfd97193ee3e940a2d"
+  },
+  {
+    "path": "capture-g/sources/original/probe/QualifiedLocals.as",
+    "bytes": 288,
+    "sha256": "4b2c170233f25949362d2a83b9674e11a73f78a531cfed6b4f6071eea8f5ab0c"
+  },
+  {
+    "path": "capture-g/sources/original/probe/SamePackage.as",
+    "bytes": 156,
+    "sha256": "46c84f14e0a7ef273b6ea7e3f58fe24be731e23d43e71871f2c1b9287baa28e2"
+  },
+  {
+    "path": "capture-h/commands.json",
+    "bytes": 8920,
+    "sha256": "3f27926ed26998a59d7c39d0b1978f25edee599d0242f61e025e77c346304a06"
+  },
+  {
+    "path": "capture-h/flash.json",
+    "bytes": 19252,
+    "sha256": "b38a0ce178f82a4d22b02a6dd4510c3a74169ac95104690eb727ad0d72e2140c"
+  },
+  {
+    "path": "capture-h/oracle.swf",
+    "bytes": 4549,
+    "sha256": "d7648b614b0238a59e2625b03e3c3b2bc75c0f5d987270a5ba5412588c6f659b"
+  },
+  {
+    "path": "capture-h/provenance.json",
+    "bytes": 3455,
+    "sha256": "1c1c79ec148692181b95281c49f6bdfdf516daf97f4ae8a077f32f5f39b8dbba"
+  },
+  {
+    "path": "capture-h/sources/capture.cjs",
+    "bytes": 1785,
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "capture-h/sources/capture.py",
+    "bytes": 2178,
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "capture-h/sources/original/ConstructorOracle.as",
+    "bytes": 7116,
+    "sha256": "ddf9d50e64b00bc1752acd9dd86e3982815fdeb82beefe5be2564b0703b35a23"
+  },
+  {
+    "path": "capture-h/sources/original/cycle/A.as",
+    "bytes": 197,
+    "sha256": "94859057351e146cb1e16e1a961c0c7174d2a75cb8d460ad55253f51e47dbfec"
+  },
+  {
+    "path": "capture-h/sources/original/cycle/B.as",
+    "bytes": 197,
+    "sha256": "b0c857cb9ca01aa7b9230db76c6867b04afd1d9ea909bfe7b417ba28cfd96a64"
+  },
+  {
+    "path": "capture-h/sources/original/foreign/Child.as",
+    "bytes": 92,
+    "sha256": "11a88acafec8a2daad59385f7dd76187b6681670cbb336a20037f3718c0744b4"
+  },
+  {
+    "path": "capture-h/sources/original/foreign/Peer.as",
+    "bytes": 69,
+    "sha256": "e36cd528e7582072f2a8fcb1be1094da62271501dc5be0c16b8046e3f9abdbe2"
+  },
+  {
+    "path": "capture-h/sources/original/init/DeferredHolder.as",
+    "bytes": 252,
+    "sha256": "1f103735ef7d4eecd7ad23f2e05737bf837631c2f681dd77809d51cd1361e30d"
+  },
+  {
+    "path": "capture-h/sources/original/init/DeferredPeer.as",
+    "bytes": 224,
+    "sha256": "212fd4d5c8937439aec42f1dbbb3663184ec9e67f520928339844e3e002ab934"
+  },
+  {
+    "path": "capture-h/sources/original/init/State.as",
+    "bytes": 103,
+    "sha256": "75ffc5f5a99dd07d4957c3d9ac5d09de7ab376b0c5cd78c40d502353540c440c"
+  },
+  {
+    "path": "capture-h/sources/original/other/Peer.as",
+    "bytes": 67,
+    "sha256": "d8338bbba09d041a817528eb318702d86de6855894e77b986db4e9cf844c7f50"
+  },
+  {
+    "path": "capture-h/sources/original/probe/Companion.as",
+    "bytes": 77,
+    "sha256": "e5f8b3c7e54634dd257156aa01275acf902ca2e48ed1745ef19acca399d1ecdb"
+  },
+  {
+    "path": "capture-h/sources/original/probe/ForeignLocals.as",
+    "bytes": 1158,
+    "sha256": "ad9824f425d6f46ef14fbd699e21b4a361e0b5ac15bc2bdfd97193ee3e940a2d"
+  },
+  {
+    "path": "capture-h/sources/original/probe/QualifiedLocals.as",
+    "bytes": 288,
+    "sha256": "4b2c170233f25949362d2a83b9674e11a73f78a531cfed6b4f6071eea8f5ab0c"
+  },
+  {
+    "path": "capture-h/sources/original/probe/SamePackage.as",
+    "bytes": 156,
+    "sha256": "46c84f14e0a7ef273b6ea7e3f58fe24be731e23d43e71871f2c1b9287baa28e2"
+  },
+  {
+    "path": "HANDOFF.md",
+    "bytes": 9774,
+    "sha256": "c1428d320cb9aa4f8327740432d75654abd78774bb5b28cfa8cf595e9fef8a9a"
+  },
+  {
+    "path": "invalid-import-results.json",
+    "bytes": 303,
+    "sha256": "64fb182f7721cf0af9d223eed8bfac7b4700253756523bf17edf16dc01d8cb3c"
+  },
+  {
+    "path": "maintained-metadata.json",
+    "bytes": 41698,
+    "sha256": "226eb42893a1b78b237f69ed74ce3af08a80e5e0aacb987671c779885f98abda"
+  },
+  {
+    "path": "maintained-sources/com.greensock.core.PropTween.as",
+    "bytes": 975,
+    "sha256": "e71959076819c4dbcd840bda7fbcfdc14b46d61eb1ca46f749c7280892a394b8"
+  },
+  {
+    "path": "maintained-sources/com.greensock.core.SimpleTimeline.as",
+    "bytes": 3230,
+    "sha256": "f4fa50eb42f3133efbbbb09a6615239904228f8bc81034766d80011b6c2d68df"
+  },
+  {
+    "path": "maintained-sources/com.greensock.core.TweenCore.as",
+    "bytes": 9490,
+    "sha256": "3f883b6e1ac8183c1d8a371bc46395daa5b8f1ee4e2e44452ab0418bff620c12"
+  },
+  {
+    "path": "maintained-sources/com.greensock.plugins.TweenPlugin.as",
+    "bytes": 4989,
+    "sha256": "e7e4b26c38d45e1faf5adda4d5808caeee8d83abe10e1e7fc1ea8dfb6cedf786"
+  },
+  {
+    "path": "maintained-sources/com.greensock.TweenLite.as",
+    "bytes": 17103,
+    "sha256": "92cc8f2fb203d1d60c101ab5c1757cd04f86962d09ac9dddfef3b46e549ba766"
+  }
+]

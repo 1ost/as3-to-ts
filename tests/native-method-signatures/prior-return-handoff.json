@@ -1,0 +1,54 @@
+{
+  "status": "frozen-audit-evidence-only",
+  "files": 66,
+  "manifestSHA256": "0cffd71d234cdcff32d226d6350e23e36a5e42a765124d254d03db1ede66b93e",
+  "auditSHA256": "770923e3ca1c807b5fdab80c8530f60cab4be5bbc073272e21da26a35e5ca7d1",
+  "verificationSHA256": "36e0c273dbeff67419729a4934c8a88cb1a0c973260796c15e7cd8e05dc12665",
+  "sourceInspectionEngine": "2a62da82fb838e34286bcb8cbb66ebf59cc2503a",
+  "sourceInspectionCompiler": "0cfb72e7754daa5914eda91109f6830063c64871",
+  "nextImplementationEngineBaseReportedByRoot": "9fd3c0ab0480e09907da5974c484a1db3875570e",
+  "lexicalFreeze": "76b69ac8d92234e62b08e21d273f138ea4b1550c6135140fc8c1243c59abecb7",
+  "originalRows": 22,
+  "successfulCaptures": 3,
+  "heldOriginalRows": 11,
+  "report": {
+    "status": "pass",
+    "captures": [
+      {
+        "directory": "flash-final-a",
+        "receiptSHA256": "f2f145ef0c573265b2a2db35fb1c262d8f450667c44299358d256313c955d335",
+        "flashSHA256": "80f439a8a63540e13b31004d4dcd2e1ed91703c87ef37467a7ad87230eabadc4",
+        "swfSHA256": "64f728c37b1d00f3af8b0a954f0090d0d47b64998cbb767163bb9fc4e03db513",
+        "optimizerDiagnostic": true,
+        "rows": 22
+      },
+      {
+        "directory": "flash-final-b",
+        "receiptSHA256": "8d6209254b7685b3852ed6177a33ce3bf7e437b61017fc1914ad6fcbf562accd",
+        "flashSHA256": "80f439a8a63540e13b31004d4dcd2e1ed91703c87ef37467a7ad87230eabadc4",
+        "swfSHA256": "09fc8f0dd5ea20084bf44fdd7a3cf3b4d8301d77bd1c0e40ac1df1035769cae8",
+        "optimizerDiagnostic": true,
+        "rows": 22
+      },
+      {
+        "directory": "flash-no-opt",
+        "receiptSHA256": "562680cfed383b6c299a34b6900c32de4e4f498aba8cc85ac482ee71226358df",
+        "flashSHA256": "0b2ecfcd07ad2a8d2e4307f6f161fdb60babea4602881b6e7c6dfb41aa7c57fc",
+        "swfSHA256": "3ef854af6b5d1c3cb73daf56e31c8cb8d133f9c32601c30edf9e7d8acd198a7e",
+        "optimizerDiagnostic": false,
+        "rows": 22
+      }
+    ],
+    "equalRows": 22,
+    "reflectionEqual": false,
+    "reflectionTraitsEqualIgnoringFactoryMemberOrder": true,
+    "heldRows": 11,
+    "maintainedSources": 5,
+    "committedSnapshots": 11,
+    "lexicalFreezeUnchanged": 56,
+    "nativeImplementation": false,
+    "moduleAdmission": false
+  },
+  "scope": "Accessor/signature prerequisite audit and original return-boundary evidence only. No native implementation or module admission.",
+  "nextWork": "Root owns mixed/default ordinary method signature captures; no duplicate capture in this package."
+}

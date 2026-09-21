@@ -282,6 +282,14 @@ export class NativeCallableClasses {
         };
         const provider = unique('provider'), declaration = unique('declaration'), generation = unique('generation');
         const localCoercion = unique('localCoercion'), localString = unique('localString'), localAddition = unique('localAddition');
+        const planned = this.declarationDomain && this.declarationDomain.bindings.find(binding => binding.qname === this.own.qname);
+        if (this.declarationDomain && !planned) this.fail('current source declaration is absent from its compiler domain');
+        const domainImport = planned ? unique('declarationDomain') : '';
+        const referenceToken = planned ? (qname:string):string => {
+            const binding=this.declarationDomain.bindings.find(value=>value.qname===qname);
+            if(!binding)this.fail('foreign local declaration is absent from its compiler domain');
+            return domainImport+'.'+binding.tokenExport;
+        } : undefined;
         const text = (node: any): string => node.getText(file);
         const params = (member: any, signature: boolean): string => member.parameters.map((p: any) => {
             if (!signature) return text(p);
@@ -371,7 +379,7 @@ export class NativeCallableClasses {
             });
             result = this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
             if (this.lexical && this.lexical.typedLocals) result = this.lexical.typedLocals.lower(result, constructor ? this.own.name : member.name.text,
-                !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), provider, localCoercion, localString, localAddition, intrinsic + '.array', unique);
+                !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), provider, localCoercion, localString, localAddition, intrinsic + '.array', unique, referenceToken);
             return result;
         };
         const accessorTypes = new Set<string>();
@@ -504,11 +512,34 @@ export class NativeCallableClasses {
             }
         }
         replacements.sort((a,b) => b.start - a.start).forEach(edit => source = source.slice(0,edit.start) + edit.value + source.slice(edit.end));
+        // Local declaration annotations have become token references. AS3 imports
+        // do not execute Class initialization; erase only now-unused named source
+        // declaration imports, so two qualified namesakes cannot leave duplicate
+        // TypeScript bindings. Any surviving value/type identifier keeps its import.
+        if (this.declarationDomain) {
+            const output=ts.createSourceFile('DomainImports.ts',source,ts.ScriptTarget.Latest,true);
+            if(output.parseDiagnostics.length)this.fail('domain import intermediate syntax');
+            const used=new Set<string>(),imports:any[]=[];
+            const collect=(node:any):void=>{
+                if(node.kind===S.ImportDeclaration){imports.push(node);return;}
+                if(node.kind===S.Identifier)used.add(node.text);
+                ts.forEachChild(node,collect);
+            };
+            collect(output);
+            const sourceNames=new Set(this.declarationDomain.bindings.map(binding=>binding.qname.split('.').pop()));
+            const erased=imports.filter(node=>node.importClause&&!node.importClause.name
+                &&node.importClause.namedBindings&&node.importClause.namedBindings.kind===S.NamedImports
+                &&node.importClause.namedBindings.elements.length===1
+                &&sourceNames.has(node.importClause.namedBindings.elements[0].name.text)
+                &&!node.importClause.namedBindings.elements[0].propertyName
+                &&node.moduleSpecifier.text.split('/').pop()===node.importClause.namedBindings.elements[0].name.text
+                &&!used.has(node.importClause.namedBindings.elements[0].name.text));
+            erased.sort((a,b)=>b.getStart(output)-a.getStart(output)).forEach(node=>{
+                source=source.slice(0,node.getStart(output))+source.slice(node.end);
+            });
+        }
         const boundImport = file.statements.find((node: any) => node.kind === S.ImportDeclaration && /(?:^|\/)bound$/.test(node.moduleSpecifier.text));
         const helperPath = boundImport ? boundImport.moduleSpecifier.text : './bound';
-        const planned = this.declarationDomain && this.declarationDomain.bindings.find(binding => binding.qname === this.own.qname);
-        if (this.declarationDomain && !planned) this.fail('current source declaration is absent from its compiler domain');
-        const domainImport = planned ? unique('declarationDomain') : '';
         return (this.lexical ? 'import * as ' + this.lexical.provider + ' from ' + JSON.stringify(this.lexical.module) + ';\n' : '')
             + (this.lexical && this.lexical.typedLocals ? 'import * as ' + localCoercion + ' from ' + JSON.stringify(this.coercionModule) + ';\n'
                 + 'import * as ' + localString + ' from ' + JSON.stringify(this.stringModule) + ';\n'

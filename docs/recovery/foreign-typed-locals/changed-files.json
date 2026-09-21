@@ -1,0 +1,932 @@
+[
+  {
+    "path": ".gitattributes",
+    "sha256": "df1eeb7c424eff36705a23ab2d6bd54c9b85c6ac6f6b9190e07ae5a9b7751615",
+    "bytes": 2535,
+    "production": false
+  },
+  {
+    "path": "src/emit/native-callable-classes.ts",
+    "sha256": "d3916b332a8cc51a05491701cf58483b1d2dbb268103ce07f39347e657c6025d",
+    "bytes": 45947,
+    "production": true
+  },
+  {
+    "path": "src/emit/native-declaration-plan.ts",
+    "sha256": "f860f33834abf629b2e94992b71e0996751a305aa2a7d6f31aa9504c0f31fd02",
+    "bytes": 12011,
+    "production": true
+  },
+  {
+    "path": "src/emit/native-lexical-members.ts",
+    "sha256": "7966d52827fa6a0dfad06ddbe5466576cf7984e944a89643b87d2ae49d66a9eb",
+    "bytes": 12598,
+    "production": true
+  },
+  {
+    "path": "src/emit/native-typed-locals.ts",
+    "sha256": "cb9e3f2e698882186cbbb3cb396ab1750b6446add762fb1bc841e43cec4af057",
+    "bytes": 13963,
+    "production": true
+  },
+  {
+    "path": "tests/native-declaration-domain/README.md",
+    "sha256": "26a3078593cfad1727368e12660466fd07bf304f5d79670e2a41bdd5c636d137",
+    "bytes": 5176,
+    "production": false
+  },
+  {
+    "path": "tests/native-declaration-domain/holds.cjs",
+    "sha256": "212aa98628e79f6df1687e60ff2f63e55fae9b73ebb0ce2eb761cd3ef068ebc6",
+    "bytes": 1986,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/README.md",
+    "sha256": "481b3f7187785848af341cda75650a8e2c7f450c55f908d1b5fe0c373a30e5b3",
+    "bytes": 6441,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/commands.json",
+    "sha256": "d1b067acfb22ee89d310bcec61e1a013f3f76566029dcca3b70df47dfe8afc60",
+    "bytes": 8507,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/flash.json",
+    "sha256": "3088cbf74a1ee7c7ec92c8247d9dc54329b38099dd1f64385dbf1553c98e2d44",
+    "bytes": 19715,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/oracle.swf",
+    "sha256": "61c98c636ecc9d9ff746eaa5089328c8a399535539696cd050fa29e381a95a30",
+    "bytes": 4260,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/provenance.json",
+    "sha256": "0e33c11402f0dcd0c6df7e3e31491a12d6c99ddab6dd3e83320d79cf25fa9c27",
+    "bytes": 3312,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+    "bytes": 2178,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/ConstructorOracle.as",
+    "sha256": "e071ce128a007742250c59593392a4d4b1aae0894e28b71c9777e7460555a874",
+    "bytes": 6007,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/elsewhere/Peer.as",
+    "sha256": "b369049de74234168a9d023071d2df6458a7d7bba56e8a0943a884fe049fd76c",
+    "bytes": 71,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/Companion.as",
+    "sha256": "03fe9d2a44b4330c58fddd08eef9afed7b4a1886d474d683df696d5ba3042949",
+    "bytes": 76,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/DeferredHolder.as",
+    "sha256": "3dfabb4eb4b067dfddbe3a8c3d0958cd9e32819521fbef39e5d026a979b46cea",
+    "bytes": 242,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/DeferredPeer.as",
+    "sha256": "9c8d84e442ed99bad1d268367a03b6216f008546ca43adfce3f6eae420cd3958",
+    "bytes": 216,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/Entry.as",
+    "sha256": "c1c4c93f4f68bae6ea4f0a362fca02cf6c5d06b6d74e738c026bfeae58f85fba",
+    "bytes": 1375,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/Peer.as",
+    "sha256": "5cd3a927e97f07b2c75b4ee80fe81e14f9839a55380ad541dd8d76f3284abb57",
+    "bytes": 66,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/Qualified.as",
+    "sha256": "44df23d8427eb6ca77ff8c57a3a1ca759468161af640c98ccfeca4ebb349c4b5",
+    "bytes": 359,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/SamePackage.as",
+    "sha256": "d9e9638b85c7f6f6614eba72b28e55330af018cd795a15c8dc2866c450cdab8a",
+    "bytes": 148,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/State.as",
+    "sha256": "9353c7c69612819a55645975a72cc5137198877a941dd422a0b9bb909a50324d",
+    "bytes": 97,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/cycle/Left.as",
+    "sha256": "9d6379a7ed27919c19d99f1cae335835efa5e86f9595c921cc22dbcea45ce85a",
+    "bytes": 213,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-a/sources/original/refs/cycle/Right.as",
+    "sha256": "67608f99877c33c4434bd6f96c26ec49043dd4549ebfef4a56cfbfe87f6abee5",
+    "bytes": 212,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/commands.json",
+    "sha256": "73f0311b9dbe3c30dd0677f896475e169eec3bd0bfb35de775ef5ae966fbe0aa",
+    "bytes": 8507,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/flash.json",
+    "sha256": "3088cbf74a1ee7c7ec92c8247d9dc54329b38099dd1f64385dbf1553c98e2d44",
+    "bytes": 19715,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/oracle.swf",
+    "sha256": "2267a2e858098b6218e1b1feeaa60cc4a79e75699b96b123b9a0a861a26cb5c4",
+    "bytes": 4259,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/provenance.json",
+    "sha256": "074763857b1216b2a4994780eb0abc2fc50ec38d519bcb83103d9343ce852bc7",
+    "bytes": 3312,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+    "bytes": 2178,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/ConstructorOracle.as",
+    "sha256": "e071ce128a007742250c59593392a4d4b1aae0894e28b71c9777e7460555a874",
+    "bytes": 6007,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/elsewhere/Peer.as",
+    "sha256": "b369049de74234168a9d023071d2df6458a7d7bba56e8a0943a884fe049fd76c",
+    "bytes": 71,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/Companion.as",
+    "sha256": "03fe9d2a44b4330c58fddd08eef9afed7b4a1886d474d683df696d5ba3042949",
+    "bytes": 76,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/DeferredHolder.as",
+    "sha256": "3dfabb4eb4b067dfddbe3a8c3d0958cd9e32819521fbef39e5d026a979b46cea",
+    "bytes": 242,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/DeferredPeer.as",
+    "sha256": "9c8d84e442ed99bad1d268367a03b6216f008546ca43adfce3f6eae420cd3958",
+    "bytes": 216,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/Entry.as",
+    "sha256": "c1c4c93f4f68bae6ea4f0a362fca02cf6c5d06b6d74e738c026bfeae58f85fba",
+    "bytes": 1375,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/Peer.as",
+    "sha256": "5cd3a927e97f07b2c75b4ee80fe81e14f9839a55380ad541dd8d76f3284abb57",
+    "bytes": 66,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/Qualified.as",
+    "sha256": "44df23d8427eb6ca77ff8c57a3a1ca759468161af640c98ccfeca4ebb349c4b5",
+    "bytes": 359,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/SamePackage.as",
+    "sha256": "d9e9638b85c7f6f6614eba72b28e55330af018cd795a15c8dc2866c450cdab8a",
+    "bytes": 148,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/State.as",
+    "sha256": "9353c7c69612819a55645975a72cc5137198877a941dd422a0b9bb909a50324d",
+    "bytes": 97,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/cycle/Left.as",
+    "sha256": "9d6379a7ed27919c19d99f1cae335835efa5e86f9595c921cc22dbcea45ce85a",
+    "bytes": 213,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-b/sources/original/refs/cycle/Right.as",
+    "sha256": "67608f99877c33c4434bd6f96c26ec49043dd4549ebfef4a56cfbfe87f6abee5",
+    "bytes": 212,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/commands.json",
+    "sha256": "d060201ffcb87350affb068ebce80ffc02c3faaa60eba9d0bcd21d9c19030c0e",
+    "bytes": 8723,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/flash.json",
+    "sha256": "17bf5d09e956a29e8c1e7f6f068eacaa14bcfc5be01bb7a39687ead409d88755",
+    "bytes": 21053,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/oracle.swf",
+    "sha256": "855b38dd3f8bc8e730bc86f79fed2fe340087701ebd458fb2e8d3a5f62d30e8c",
+    "bytes": 4429,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/provenance.json",
+    "sha256": "2622095357b7567020c6dfc7b34fc42ec9c72d2509859b04cee310d6354b10ae",
+    "bytes": 3460,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+    "bytes": 2178,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/ConstructorOracle.as",
+    "sha256": "405542675f6145c2139c8123a28b4e9b2991e030b2b8dabeae23f81cfdd9dae7",
+    "bytes": 6363,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/elsewhere/Peer.as",
+    "sha256": "b369049de74234168a9d023071d2df6458a7d7bba56e8a0943a884fe049fd76c",
+    "bytes": 71,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/Companion.as",
+    "sha256": "03fe9d2a44b4330c58fddd08eef9afed7b4a1886d474d683df696d5ba3042949",
+    "bytes": 76,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/Constructed.as",
+    "sha256": "da7c7ee11e7fcfa55ff51a7e08f3e4d34bf016220d8b7d833ad796aca2095fb1",
+    "bytes": 183,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/DeferredHolder.as",
+    "sha256": "3dfabb4eb4b067dfddbe3a8c3d0958cd9e32819521fbef39e5d026a979b46cea",
+    "bytes": 242,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/DeferredPeer.as",
+    "sha256": "9c8d84e442ed99bad1d268367a03b6216f008546ca43adfce3f6eae420cd3958",
+    "bytes": 216,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/Entry.as",
+    "sha256": "c1c4c93f4f68bae6ea4f0a362fca02cf6c5d06b6d74e738c026bfeae58f85fba",
+    "bytes": 1375,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/Peer.as",
+    "sha256": "5cd3a927e97f07b2c75b4ee80fe81e14f9839a55380ad541dd8d76f3284abb57",
+    "bytes": 66,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/Qualified.as",
+    "sha256": "44df23d8427eb6ca77ff8c57a3a1ca759468161af640c98ccfeca4ebb349c4b5",
+    "bytes": 359,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/SamePackage.as",
+    "sha256": "d9e9638b85c7f6f6614eba72b28e55330af018cd795a15c8dc2866c450cdab8a",
+    "bytes": 148,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/State.as",
+    "sha256": "9353c7c69612819a55645975a72cc5137198877a941dd422a0b9bb909a50324d",
+    "bytes": 97,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/cycle/Left.as",
+    "sha256": "9d6379a7ed27919c19d99f1cae335835efa5e86f9595c921cc22dbcea45ce85a",
+    "bytes": 213,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-c/sources/original/refs/cycle/Right.as",
+    "sha256": "67608f99877c33c4434bd6f96c26ec49043dd4549ebfef4a56cfbfe87f6abee5",
+    "bytes": 212,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/commands.json",
+    "sha256": "af788478affd9ae64073b4fe38c409979eb187c329ee53a27cc7c8fd0fe24358",
+    "bytes": 8723,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/flash.json",
+    "sha256": "1b622b7756f4a5c93737e590811d4c09af61595f9b0002b3a13ff0f3743f4d0f",
+    "bytes": 21053,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/oracle.swf",
+    "sha256": "655e4d426a497ffe91c6e9a5481eb70fff8731a5524075cfedb75fe0b409caec",
+    "bytes": 4430,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/provenance.json",
+    "sha256": "8e4fecff2f578888e4df604972bde224639d29768b689125ab52008f8a36665b",
+    "bytes": 3460,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+    "bytes": 2178,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/ConstructorOracle.as",
+    "sha256": "405542675f6145c2139c8123a28b4e9b2991e030b2b8dabeae23f81cfdd9dae7",
+    "bytes": 6363,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/elsewhere/Peer.as",
+    "sha256": "b369049de74234168a9d023071d2df6458a7d7bba56e8a0943a884fe049fd76c",
+    "bytes": 71,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/Companion.as",
+    "sha256": "03fe9d2a44b4330c58fddd08eef9afed7b4a1886d474d683df696d5ba3042949",
+    "bytes": 76,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/Constructed.as",
+    "sha256": "da7c7ee11e7fcfa55ff51a7e08f3e4d34bf016220d8b7d833ad796aca2095fb1",
+    "bytes": 183,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/DeferredHolder.as",
+    "sha256": "3dfabb4eb4b067dfddbe3a8c3d0958cd9e32819521fbef39e5d026a979b46cea",
+    "bytes": 242,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/DeferredPeer.as",
+    "sha256": "9c8d84e442ed99bad1d268367a03b6216f008546ca43adfce3f6eae420cd3958",
+    "bytes": 216,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/Entry.as",
+    "sha256": "c1c4c93f4f68bae6ea4f0a362fca02cf6c5d06b6d74e738c026bfeae58f85fba",
+    "bytes": 1375,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/Peer.as",
+    "sha256": "5cd3a927e97f07b2c75b4ee80fe81e14f9839a55380ad541dd8d76f3284abb57",
+    "bytes": 66,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/Qualified.as",
+    "sha256": "44df23d8427eb6ca77ff8c57a3a1ca759468161af640c98ccfeca4ebb349c4b5",
+    "bytes": 359,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/SamePackage.as",
+    "sha256": "d9e9638b85c7f6f6614eba72b28e55330af018cd795a15c8dc2866c450cdab8a",
+    "bytes": 148,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/State.as",
+    "sha256": "9353c7c69612819a55645975a72cc5137198877a941dd422a0b9bb909a50324d",
+    "bytes": 97,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/cycle/Left.as",
+    "sha256": "9d6379a7ed27919c19d99f1cae335835efa5e86f9595c921cc22dbcea45ce85a",
+    "bytes": 213,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture-d/sources/original/refs/cycle/Right.as",
+    "sha256": "67608f99877c33c4434bd6f96c26ec49043dd4549ebfef4a56cfbfe87f6abee5",
+    "bytes": 212,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+    "bytes": 2178,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/emit-domain.cjs",
+    "sha256": "9657d86149ae93003d361f8ad1c416010bde4236b6b6a174703433a8580855fe",
+    "bytes": 2191,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/evidence-files.json",
+    "sha256": "1c7053cfbbcb927bc18e81d2cc7ee7882d366d1d9dfcb823188cc259b7ba1371",
+    "bytes": 20790,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/extract-metadata.py",
+    "sha256": "7bf04e8671b384fa2f9b7d9784092ec140166961342c15849c1fe1e96f204625",
+    "bytes": 2124,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/guards.cjs",
+    "sha256": "3c0813ac4ec4867b9bf7af4ea8557bb0afba2eadca5b3ab0322c228911de2ba7",
+    "bytes": 5562,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/holds.cjs",
+    "sha256": "7954858f8e88e8848a6e21f0ea8fdc374c9552a0c1893602c31f5262495d1e62",
+    "bytes": 2258,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/ConstructorOracle.as",
+    "sha256": "405542675f6145c2139c8123a28b4e9b2991e030b2b8dabeae23f81cfdd9dae7",
+    "bytes": 6363,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/elsewhere/Peer.as",
+    "sha256": "b369049de74234168a9d023071d2df6458a7d7bba56e8a0943a884fe049fd76c",
+    "bytes": 71,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/Companion.as",
+    "sha256": "03fe9d2a44b4330c58fddd08eef9afed7b4a1886d474d683df696d5ba3042949",
+    "bytes": 76,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/Constructed.as",
+    "sha256": "da7c7ee11e7fcfa55ff51a7e08f3e4d34bf016220d8b7d833ad796aca2095fb1",
+    "bytes": 183,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/DeferredHolder.as",
+    "sha256": "3dfabb4eb4b067dfddbe3a8c3d0958cd9e32819521fbef39e5d026a979b46cea",
+    "bytes": 242,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/DeferredPeer.as",
+    "sha256": "9c8d84e442ed99bad1d268367a03b6216f008546ca43adfce3f6eae420cd3958",
+    "bytes": 216,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/Entry.as",
+    "sha256": "c1c4c93f4f68bae6ea4f0a362fca02cf6c5d06b6d74e738c026bfeae58f85fba",
+    "bytes": 1375,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/Peer.as",
+    "sha256": "5cd3a927e97f07b2c75b4ee80fe81e14f9839a55380ad541dd8d76f3284abb57",
+    "bytes": 66,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/Qualified.as",
+    "sha256": "44df23d8427eb6ca77ff8c57a3a1ca759468161af640c98ccfeca4ebb349c4b5",
+    "bytes": 359,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/SamePackage.as",
+    "sha256": "d9e9638b85c7f6f6614eba72b28e55330af018cd795a15c8dc2866c450cdab8a",
+    "bytes": 148,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/State.as",
+    "sha256": "9353c7c69612819a55645975a72cc5137198877a941dd422a0b9bb909a50324d",
+    "bytes": 97,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/cycle/Left.as",
+    "sha256": "9d6379a7ed27919c19d99f1cae335835efa5e86f9595c921cc22dbcea45ce85a",
+    "bytes": 213,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/original/refs/cycle/Right.as",
+    "sha256": "67608f99877c33c4434bd6f96c26ec49043dd4549ebfef4a56cfbfe87f6abee5",
+    "bytes": 212,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/HANDOFF.md",
+    "sha256": "c1428d320cb9aa4f8327740432d75654abd78774bb5b28cfa8cf595e9fef8a9a",
+    "bytes": 9774,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-checks.json",
+    "sha256": "58a2df27f3ee78b9e044c9de81e6e5550891442f1392f40b824df14cb5c431c7",
+    "bytes": 1181,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/commands.json",
+    "sha256": "c1e8ba58ae707430819bef2af4062f5a984a89a8a476bca509a8842bb8f18945",
+    "bytes": 8920,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/flash.json",
+    "sha256": "9ba66276a1bc89fbc9f6182c8d14edf23f7f4501d6b0a0f9fab4fa903e0a511d",
+    "bytes": 19252,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/oracle.swf",
+    "sha256": "a62947d8422a88cb61275d86dcc30d7f45585078d33a8e044124836125ba6375",
+    "bytes": 4547,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/provenance.json",
+    "sha256": "138be8ac54ec5472a2adc0552b98ef56e0e4abc73e1eba073737abb1af174c8b",
+    "bytes": 3455,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+    "bytes": 2178,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/ConstructorOracle.as",
+    "sha256": "ddf9d50e64b00bc1752acd9dd86e3982815fdeb82beefe5be2564b0703b35a23",
+    "bytes": 7116,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/cycle/A.as",
+    "sha256": "94859057351e146cb1e16e1a961c0c7174d2a75cb8d460ad55253f51e47dbfec",
+    "bytes": 197,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/cycle/B.as",
+    "sha256": "b0c857cb9ca01aa7b9230db76c6867b04afd1d9ea909bfe7b417ba28cfd96a64",
+    "bytes": 197,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/foreign/Child.as",
+    "sha256": "11a88acafec8a2daad59385f7dd76187b6681670cbb336a20037f3718c0744b4",
+    "bytes": 92,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/foreign/Peer.as",
+    "sha256": "e36cd528e7582072f2a8fcb1be1094da62271501dc5be0c16b8046e3f9abdbe2",
+    "bytes": 69,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/init/DeferredHolder.as",
+    "sha256": "1f103735ef7d4eecd7ad23f2e05737bf837631c2f681dd77809d51cd1361e30d",
+    "bytes": 252,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/init/DeferredPeer.as",
+    "sha256": "212fd4d5c8937439aec42f1dbbb3663184ec9e67f520928339844e3e002ab934",
+    "bytes": 224,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/init/State.as",
+    "sha256": "75ffc5f5a99dd07d4957c3d9ac5d09de7ab376b0c5cd78c40d502353540c440c",
+    "bytes": 103,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/other/Peer.as",
+    "sha256": "d8338bbba09d041a817528eb318702d86de6855894e77b986db4e9cf844c7f50",
+    "bytes": 67,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/probe/Companion.as",
+    "sha256": "e5f8b3c7e54634dd257156aa01275acf902ca2e48ed1745ef19acca399d1ecdb",
+    "bytes": 77,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/probe/ForeignLocals.as",
+    "sha256": "ad9824f425d6f46ef14fbd699e21b4a361e0b5ac15bc2bdfd97193ee3e940a2d",
+    "bytes": 1158,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/probe/QualifiedLocals.as",
+    "sha256": "4b2c170233f25949362d2a83b9674e11a73f78a531cfed6b4f6071eea8f5ab0c",
+    "bytes": 288,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-g/sources/original/probe/SamePackage.as",
+    "sha256": "46c84f14e0a7ef273b6ea7e3f58fe24be731e23d43e71871f2c1b9287baa28e2",
+    "bytes": 156,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/commands.json",
+    "sha256": "3f27926ed26998a59d7c39d0b1978f25edee599d0242f61e025e77c346304a06",
+    "bytes": 8920,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/flash.json",
+    "sha256": "b38a0ce178f82a4d22b02a6dd4510c3a74169ac95104690eb727ad0d72e2140c",
+    "bytes": 19252,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/oracle.swf",
+    "sha256": "d7648b614b0238a59e2625b03e3c3b2bc75c0f5d987270a5ba5412588c6f659b",
+    "bytes": 4549,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/provenance.json",
+    "sha256": "1c1c79ec148692181b95281c49f6bdfdf516daf97f4ae8a077f32f5f39b8dbba",
+    "bytes": 3455,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440",
+    "bytes": 2178,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/ConstructorOracle.as",
+    "sha256": "ddf9d50e64b00bc1752acd9dd86e3982815fdeb82beefe5be2564b0703b35a23",
+    "bytes": 7116,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/cycle/A.as",
+    "sha256": "94859057351e146cb1e16e1a961c0c7174d2a75cb8d460ad55253f51e47dbfec",
+    "bytes": 197,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/cycle/B.as",
+    "sha256": "b0c857cb9ca01aa7b9230db76c6867b04afd1d9ea909bfe7b417ba28cfd96a64",
+    "bytes": 197,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/foreign/Child.as",
+    "sha256": "11a88acafec8a2daad59385f7dd76187b6681670cbb336a20037f3718c0744b4",
+    "bytes": 92,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/foreign/Peer.as",
+    "sha256": "e36cd528e7582072f2a8fcb1be1094da62271501dc5be0c16b8046e3f9abdbe2",
+    "bytes": 69,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/init/DeferredHolder.as",
+    "sha256": "1f103735ef7d4eecd7ad23f2e05737bf837631c2f681dd77809d51cd1361e30d",
+    "bytes": 252,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/init/DeferredPeer.as",
+    "sha256": "212fd4d5c8937439aec42f1dbbb3663184ec9e67f520928339844e3e002ab934",
+    "bytes": 224,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/init/State.as",
+    "sha256": "75ffc5f5a99dd07d4957c3d9ac5d09de7ab376b0c5cd78c40d502353540c440c",
+    "bytes": 103,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/other/Peer.as",
+    "sha256": "d8338bbba09d041a817528eb318702d86de6855894e77b986db4e9cf844c7f50",
+    "bytes": 67,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/probe/Companion.as",
+    "sha256": "e5f8b3c7e54634dd257156aa01275acf902ca2e48ed1745ef19acca399d1ecdb",
+    "bytes": 77,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/probe/ForeignLocals.as",
+    "sha256": "ad9824f425d6f46ef14fbd699e21b4a361e0b5ac15bc2bdfd97193ee3e940a2d",
+    "bytes": 1158,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/probe/QualifiedLocals.as",
+    "sha256": "4b2c170233f25949362d2a83b9674e11a73f78a531cfed6b4f6071eea8f5ab0c",
+    "bytes": 288,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/capture-h/sources/original/probe/SamePackage.as",
+    "sha256": "46c84f14e0a7ef273b6ea7e3f58fe24be731e23d43e71871f2c1b9287baa28e2",
+    "bytes": 156,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/handoff.json",
+    "sha256": "5a5da5e3e5e26709dd2b9a0b4f93e930bf3f26f529a4d5dc5642eb41bbb7deff",
+    "bytes": 1795,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/invalid-import-results.json",
+    "sha256": "64fb182f7721cf0af9d223eed8bfac7b4700253756523bf17edf16dc01d8cb3c",
+    "bytes": 303,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/maintained-metadata.json",
+    "sha256": "226eb42893a1b78b237f69ed74ce3af08a80e5e0aacb987671c779885f98abda",
+    "bytes": 41698,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/maintained-sources/com.greensock.TweenLite.as",
+    "sha256": "92cc8f2fb203d1d60c101ab5c1757cd04f86962d09ac9dddfef3b46e549ba766",
+    "bytes": 17103,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/maintained-sources/com.greensock.core.PropTween.as",
+    "sha256": "e71959076819c4dbcd840bda7fbcfdc14b46d61eb1ca46f749c7280892a394b8",
+    "bytes": 975,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/maintained-sources/com.greensock.core.SimpleTimeline.as",
+    "sha256": "f4fa50eb42f3133efbbbb09a6615239904228f8bc81034766d80011b6c2d68df",
+    "bytes": 3230,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/maintained-sources/com.greensock.core.TweenCore.as",
+    "sha256": "3f883b6e1ac8183c1d8a371bc46395daa5b8f1ee4e2e44452ab0418bff620c12",
+    "bytes": 9490,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/maintained-sources/com.greensock.plugins.TweenPlugin.as",
+    "sha256": "e7e4b26c38d45e1faf5adda4d5808caeee8d83abe10e1e7fc1ea8dfb6cedf786",
+    "bytes": 4989,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/retained-research/selected-files.json",
+    "sha256": "43d98a10892fce9e030febd81279062511e3220a17bf69cb1742f2836afb07ee",
+    "bytes": 7860,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/run.cjs",
+    "sha256": "a4ed0146e63fa024743b25bdbc036c849c8a6956a1b0b7170f3e766f59876c6c",
+    "bytes": 8633,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/runtime-driver.js",
+    "sha256": "8124361c6091915f826892e1f54aa4b7034807d0d29e0978d102eb472898946b",
+    "bytes": 7670,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/verify-evidence.cjs",
+    "sha256": "6a6031c0171c31240a95cbbd1226d4d3b9df8f53a381e04d79eafa9213379f07",
+    "bytes": 459,
+    "production": false
+  },
+  {
+    "path": "tests/native-foreign-typed-locals/verify-evidence.py",
+    "sha256": "f50223cd923c702ca3e4646ca7515adff9a11d1f675e9f2e14d65a19d5d78e5a",
+    "bytes": 2063,
+    "production": false
+  }
+]

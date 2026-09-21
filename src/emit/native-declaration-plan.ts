@@ -90,13 +90,13 @@ export function createNativeDeclarationDomain(input: NativeDeclarationDomainInpu
         return fail('exact complete source/metadata domain required');
     const references: NativeDeclarationReference[] = [];
     const bindings = names.map((qname,index) => Object.freeze({qname, tokenExport:'type' + index, publishExport:'publish' + index}));
+    const roots = new Map<string, Node>();
     names.forEach(qname => {
         if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/.test(qname)) return fail('qualified source declaration required');
         const source = copied.sources[qname];
         if (typeof source !== 'string') return fail('exact source text required');
         const root = parse(qname + '.as', source); normalize(root);
-        const lexical = lexicalModule ? new NativeLexicalMembers(source,root,lexicalModule,copied.metadata,!!copied.typedLocals) : undefined;
-        validateNativeClassMetadata(qname,source,copied.metadata,lexical);
+        roots.set(qname,root);
         const pkg = root.findChild(K.PACKAGE), namespace = qname.slice(0,qname.lastIndexOf('.'));
         const imports = pkg.findChild(K.CONTENT).findChildren(K.IMPORT).map(node => node.text);
         const own = qname.slice(qname.lastIndexOf('.') + 1);
@@ -135,6 +135,18 @@ export function createNativeDeclarationDomain(input: NativeDeclarationDomainInpu
         };
         walk(root);
     });
+    // Resolve complete annotation ownership before validating local storage.
+    // This provisional resolver never escapes: all source/metadata validation
+    // must succeed before the exact compiler capability is published below.
+    names.forEach(qname => {
+        const source=copied.sources[qname],root=roots.get(qname);
+        const referenceFor=(node:Node):string => {
+            const found=node && references.find(r=>r.owner===qname&&r.start===node.start&&r.end===node.end&&r.kind==='declaration');
+            return found ? found.identity : undefined;
+        };
+        const lexical=lexicalModule ? new NativeLexicalMembers(source,root,lexicalModule,copied.metadata,!!copied.typedLocals,referenceFor) : undefined;
+        validateNativeClassMetadata(qname,source,copied.metadata,lexical);
+    });
     const metadata: NativeClassMetadataOptions = Object.freeze(Object.assign(Object.create(null),copied.metadata,
         {[marker]:Object.freeze({version:1,module})}));
     const lines = ['// Compiler-only declaration domain. Never bind this module as a source Class.',
@@ -165,4 +177,13 @@ export function nativeDeclarationDomainFor(metadata: NativeClassMetadataOptions,
     if (!sources || JSON.stringify(Object.keys(sources).sort()) !== JSON.stringify(names)
         || names.some(name => sources[name] !== domain.sources[name])) return fail('complete planned source bytes changed');
     return domain;
+}
+
+/** Exact source annotation lookup; a copied metadata marker is not authority. */
+export function nativeDeclarationReferenceFor(metadata: NativeClassMetadataOptions, owner: string, source: string, node: Node): string {
+    const record=metadata && contexts.get(metadata);
+    if(!record||!node)return undefined;
+    if(record.domain.sources[owner]!==source)return fail('reference source bytes changed');
+    const found=record.domain.references.find(r=>r.owner===owner&&r.start===node.start&&r.end===node.end&&r.kind==='declaration');
+    return found ? found.identity : undefined;
 }

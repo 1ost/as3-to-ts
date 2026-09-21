@@ -1,0 +1,54 @@
+{
+  "status": "research-complete-production-not-implemented",
+  "compilerBase": "1ebbed38900ed88c5c0bfa4723de61f408a86b9a",
+  "engineBase": "6aba63414d3e63db6ebe120af9c396741759e5cc",
+  "fileCount": 192,
+  "filesSHA256": "8771b9d355436055ef2296e1f009506ee2bd587114b063c9479701965d50f30c",
+  "archiveSHA256": "8e5d640c40a09a92fafecd043819031bc1c0f81c19065f026a4bf13d1f776ff5",
+  "finalCaptures": [
+    "capture-g",
+    "capture-h"
+  ],
+  "originalRows": {
+    "nominal": 33,
+    "initialization": 7,
+    "error": 14
+  },
+  "completeSourceClassDocuments": 12,
+  "capturedSourcesUnpruned": true,
+  "providerProtocolChecks": {
+    "rows": 16,
+    "node": true,
+    "chromium": true,
+    "actualTypes": 186,
+    "diagnostics": 0
+  },
+  "compilerForeignMethods": "guarded; no generated runtime comparison claimed",
+  "productionEdits": 0,
+  "nextSteps": [
+    "Separate source Error allocator extension for genuine declaration-backed mismatches",
+    "Authenticated compiler domain declaration-token allocation/linking independent of lazy Class reads"
+  ],
+  "artifacts": [
+    {
+      "path": "HANDOFF.md",
+      "sha256": "c1428d320cb9aa4f8327740432d75654abd78774bb5b28cfa8cf595e9fef8a9a"
+    },
+    {
+      "path": "capture-checks.json",
+      "sha256": "58a2df27f3ee78b9e044c9de81e6e5550891442f1392f40b824df14cb5c431c7"
+    },
+    {
+      "path": "compiler-results.json",
+      "sha256": "21e950ba4d9e74001501b9d25ac2e1ad77e9791cc8d18f8ef4019f23403fe622"
+    },
+    {
+      "path": "provider-results.json",
+      "sha256": "5751416da6b08061c80417704326588442cf0e5b59a168148079499908c778c7"
+    },
+    {
+      "path": "invalid-import-results.json",
+      "sha256": "64fb182f7721cf0af9d223eed8bfac7b4700253756523bf17edf16dc01d8cb3c"
+    }
+  ]
+}

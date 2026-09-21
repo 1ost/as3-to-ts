@@ -1,0 +1,58 @@
+{
+  "files": [
+    {
+      "path": "original\\ConstructorOracle.as",
+      "sha256": "bc1290a8e8fdc230cf2aed14e3cff8e126fd4a47b89f40909ebc54361ea5239e"
+    },
+    {
+      "path": "original\\probe\\Journal.as",
+      "sha256": "f76bbe41c68a729200302fbe067333facdc5af063bd52da3807eb3bdb77a0f5f"
+    },
+    {
+      "path": "original\\probe\\ReturnChild.as",
+      "sha256": "0f3d4645fdde862d7a66ddef1d3e45bc50e049d9a7a410fe8a8ad8510a4859e7"
+    },
+    {
+      "path": "original\\probe\\ReturnSubject.as",
+      "sha256": "da28c8d5cad1d07afed3f6ce9df9d0ed26d0e4fc9ee24fbd26f562caa568b3f1"
+    },
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "capture.py",
+      "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "09fc8f0dd5ea20084bf44fdd7a3cf3b4d8301d77bd1c0e40ac1df1035769cae8"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "80f439a8a63540e13b31004d4dcd2e1ed91703c87ef37467a7ad87230eabadc4"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "8ec40a2977478b710c236eba5b473edaea2f1b728e07e12533836fe19117d3c6"
+    }
+  ],
+  "tools": [
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ]
+}

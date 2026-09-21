@@ -1,0 +1,1 @@
+package probe { import foreign.Peer; import other.Peer; public class QualifiedLocals { public function QualifiedLocals() {} public function qualified(value:*):* {var item:other.Peer=value; return item;} public function imported(value:*):* {var item:foreign.Peer=value; return item;} } }

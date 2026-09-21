@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\flash-a\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original\\ConstructorOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\flash-a",
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\flash-a\\oracle.swf (3561 bytes)\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original\\probe\\EntrySubject.as(8): col: 57 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public function pick(n:*):* {if(n=='protected')return protectedEntry;if(n=='private')return privateEntry;return publicEntry;}\n                                                        ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original\\probe\\EntrySubject.as(8): col: 95 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public function pick(n:*):* {if(n=='protected')return protectedEntry;if(n=='private')return privateEntry;return publicEntry;}\n                                                                                              ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original\\probe\\EntrySubject.as(8): col: 115 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public function pick(n:*):* {if(n=='protected')return protectedEntry;if(n=='private')return privateEntry;return publicEntry;}\n                                                                                                                  ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original\\probe\\ReturnSubject.as(12): col: 55 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public function pick(n:*):* {if(n=='boolean')return boolean;if(n=='void')return finish;return number;}\n                                                      ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original\\probe\\ReturnSubject.as(12): col: 83 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public function pick(n:*):* {if(n=='boolean')return boolean;if(n=='void')return finish;return number;}\n                                                                                  ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original\\probe\\ReturnSubject.as(12): col: 97 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public function pick(n:*):* {if(n=='boolean')return boolean;if(n=='void')return finish;return number;}\n                                                                                                ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\original\\probe\\OverrideBase.as(5): col: 35 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n public function pick():* {return enabled;}\n                                  ^\n\n"
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\flash-a\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\flash-a\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-method-signature-prerequisites\\flash-a",
+    "exitCode": 0,
+    "stdout": "\n",
+    "stderr": ""
+  }
+]

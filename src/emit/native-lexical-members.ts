@@ -2,6 +2,7 @@ import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {nativeSourceTypeIdentity} from './native-source-type';
 import {NativeTypedLocals} from './native-typed-locals';
+import {nativeDeclarationReferenceFor} from './native-declaration-plan';
 
 export interface NativeLexicalTrait {
     name: string; visibility: 'private' | 'protected'; static: boolean;
@@ -17,7 +18,7 @@ export class NativeLexicalMembers {
     readonly provider: string;
     private owner: Node;
     readonly typedLocals: NativeTypedLocals;
-    constructor(readonly source: string, root: Node, readonly module: string, metadata: any, typedLocals: boolean = false) {
+    constructor(readonly source: string, root: Node, readonly module: string, metadata: any, typedLocals: boolean = false, plannedReference?: (node: Node) => string) {
         if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
             this.fail('explicit common lexical provider module required');
         const classes: Node[] = [];
@@ -42,7 +43,8 @@ export class NativeLexicalMembers {
         if (!record || require('crypto').createHash('sha256').update(source).digest('hex') !== record.sourceSha256)
             this.fail('exact authenticated source bytes required');
         if (this.owner.findChild(K.EXTENDS) || this.owner.findChild(K.IMPLEMENTS_LIST)) this.fail('Object-root declaration required');
-        if (typedLocals) this.typedLocals = new NativeTypedLocals(this.owner, this.qname, imports);
+        if (typedLocals) this.typedLocals = new NativeTypedLocals(this.owner, this.qname, imports,
+            plannedReference || (node => nativeDeclarationReferenceFor(metadata,this.qname,source,node)));
         this.scope = this.unique('scope'); this.provider = this.unique('provider');
         this.owner.findChild(K.CONTENT).children.forEach(member => {
             if ([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind) < 0) return;

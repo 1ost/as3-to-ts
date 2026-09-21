@@ -1,0 +1,118 @@
+{
+  "reflection": [
+    "<type name=\"probe::PlainSubject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::PlainSubject\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <variable name=\"journal\" type=\"*\"/>\n    <method name=\"renderTime\" declaredBy=\"probe::PlainSubject\" returnType=\"void\">\n      <parameter index=\"1\" type=\"Number\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n      <parameter index=\"3\" type=\"Boolean\" optional=\"true\"/>\n    </method>\n    <method name=\"numberReturn\" declaredBy=\"probe::PlainSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"pick\" declaredBy=\"probe::PlainSubject\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"setEnabled\" declaredBy=\"probe::PlainSubject\" returnType=\"Boolean\">\n      <parameter index=\"1\" type=\"Boolean\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n    </method>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "events": [
+        [
+          3,
+          false,
+          false
+        ]
+      ],
+      "value": "undefined",
+      "id": "render-defaults"
+    },
+    {
+      "events": [
+        [
+          "NaN",
+          false,
+          false
+        ]
+      ],
+      "value": "undefined",
+      "id": "render-undefined"
+    },
+    {
+      "events": [
+        [
+          0,
+          false,
+          false
+        ]
+      ],
+      "value": "undefined",
+      "id": "render-null"
+    },
+    {
+      "events": [
+        "valueOf",
+        [
+          7,
+          true,
+          true
+        ]
+      ],
+      "value": "undefined",
+      "id": "render-object"
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "events": [],
+      "id": "render-excess"
+    },
+    {
+      "events": [],
+      "value": 0.75,
+      "id": "ease-reassigned-number"
+    },
+    {
+      "events": [
+        [
+          "enabled",
+          false
+        ]
+      ],
+      "value": true,
+      "id": "enabled-omitted"
+    },
+    {
+      "events": [
+        [
+          "enabled",
+          true
+        ]
+      ],
+      "value": true,
+      "id": "enabled-object"
+    },
+    {
+      "events": [
+        "finish"
+      ],
+      "value": "undefined",
+      "id": "private-void-early"
+    },
+    {
+      "events": [
+        "finish",
+        "fallthrough"
+      ],
+      "value": "undefined",
+      "id": "private-void-fallthrough"
+    },
+    {
+      "events": [
+        "number",
+        "valueOf"
+      ],
+      "value": 7,
+      "id": "number-return-hook"
+    },
+    {
+      "events": [
+        "number"
+      ],
+      "value": "NaN",
+      "id": "number-return-undefined"
+    }
+  ],
+  "instances": [
+    "<type name=\"probe::PlainSubject\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <variable name=\"journal\" type=\"*\"/>\n  <method name=\"renderTime\" declaredBy=\"probe::PlainSubject\" returnType=\"void\">\n    <parameter index=\"1\" type=\"Number\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n    <parameter index=\"3\" type=\"Boolean\" optional=\"true\"/>\n  </method>\n  <method name=\"numberReturn\" declaredBy=\"probe::PlainSubject\" returnType=\"Number\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"pick\" declaredBy=\"probe::PlainSubject\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"setEnabled\" declaredBy=\"probe::PlainSubject\" returnType=\"Boolean\">\n    <parameter index=\"1\" type=\"Boolean\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n  </method>\n</type>"
+  ]
+}

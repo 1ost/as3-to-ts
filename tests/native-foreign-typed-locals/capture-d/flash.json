@@ -1,0 +1,530 @@
+{
+  "rows": [
+    {
+      "value": {
+        "kind": "null"
+      },
+      "id": "default",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "peer"
+      },
+      "id": "init-peer",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "null"
+      },
+      "id": "init-null",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "null"
+      },
+      "id": "init-undefined",
+      "events": []
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "init-other",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "init-plain",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "init-number",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "init-string",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "init-Class",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "value": [
+        {
+          "kind": "peer"
+        },
+        {
+          "kind": "peer"
+        }
+      ],
+      "id": "store-peer",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "undefined"
+        },
+        {
+          "kind": "null"
+        }
+      ],
+      "id": "store-undefined",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "null"
+        },
+        {
+          "kind": "null"
+        }
+      ],
+      "id": "store-null",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "undefined"
+        },
+        {
+          "kind": "null"
+        },
+        {
+          "kind": "null"
+        }
+      ],
+      "id": "chain-undefined",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "peer"
+        },
+        {
+          "kind": "peer"
+        },
+        {
+          "kind": "peer"
+        }
+      ],
+      "id": "chain-peer",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "peer"
+        },
+        [
+          "TypeError",
+          1034
+        ]
+      ],
+      "id": "failed-write",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "null"
+        },
+        [
+          "TypeError",
+          1034
+        ]
+      ],
+      "id": "failed-init",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "peer"
+        },
+        [
+          "TypeError",
+          1034
+        ]
+      ],
+      "id": "no-hooks",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "peer"
+      },
+      "id": "rhs-once",
+      "events": [
+        "rhs"
+      ]
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "rhs-invalid",
+      "events": [
+        "rhs"
+      ],
+      "sameThrow": false
+    },
+    {
+      "error": [
+        null,
+        null
+      ],
+      "id": "rhs-throw",
+      "events": [
+        "rhs-throw"
+      ],
+      "sameThrow": true
+    },
+    {
+      "value": {
+        "kind": "self"
+      },
+      "id": "self",
+      "events": []
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "self-invalid",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "value": {
+        "kind": "peer"
+      },
+      "id": "qualified-own",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "other"
+      },
+      "id": "qualified-other",
+      "events": []
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "qualified-own-invalid",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "qualified-other-invalid",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "value": [
+        {
+          "kind": "peer"
+        },
+        {
+          "kind": "other"
+        }
+      ],
+      "id": "qualified-split",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "companion"
+      },
+      "id": "same-package",
+      "events": []
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "same-package-invalid",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "value": {
+        "kind": "null"
+      },
+      "id": "left-default",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "null"
+      },
+      "id": "right-default",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "right"
+      },
+      "id": "left-right",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "left"
+      },
+      "id": "right-left",
+      "events": []
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "left-invalid",
+      "events": [],
+      "sameThrow": false
+    },
+    {
+      "value": {
+        "kind": "null"
+      },
+      "id": "skipped-default",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "null"
+      },
+      "id": "entered-default",
+      "events": []
+    },
+    {
+      "value": {
+        "kind": "peer"
+      },
+      "id": "repeated-preserves-value",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "null"
+        },
+        {
+          "kind": "null"
+        }
+      ],
+      "id": "before-declaration-default",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "null"
+        },
+        {
+          "kind": "peer"
+        }
+      ],
+      "id": "constructor-local-peer",
+      "events": []
+    },
+    {
+      "value": [
+        {
+          "kind": "null"
+        },
+        {
+          "kind": "null"
+        }
+      ],
+      "id": "constructor-local-null",
+      "events": []
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "constructor-local-invalid",
+      "events": [],
+      "sameThrow": false
+    }
+  ],
+  "reflection": [
+    "<type name=\"refs::Constructed\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::Constructed\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <variable name=\"stored\" type=\"*\"/>\n  </factory>\n</type>",
+    "<type name=\"refs::Entry\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::Entry\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"readBeforeDeclaration\" declaredBy=\"refs::Entry\" returnType=\"*\"/>\n    <method name=\"self\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"initialize\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"catchRethrow\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"skipped\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"failedInit\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"empty\" declaredBy=\"refs::Entry\" returnType=\"*\"/>\n    <method name=\"failure\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"3\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"repeated\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"expression\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"chain\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"store\" declaredBy=\"refs::Entry\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"refs::Peer\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::Peer\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"elsewhere::Peer\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"elsewhere::Peer\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"refs::Companion\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::Companion\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"refs::Qualified\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::Qualified\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"own\" declaredBy=\"refs::Qualified\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"other\" declaredBy=\"refs::Qualified\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"split\" declaredBy=\"refs::Qualified\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"refs::SamePackage\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::SamePackage\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"accept\" declaredBy=\"refs::SamePackage\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"refs.cycle::Left\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs.cycle::Left\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"empty\" declaredBy=\"refs.cycle::Left\" returnType=\"*\"/>\n    <method name=\"accept\" declaredBy=\"refs.cycle::Left\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"refs.cycle::Right\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs.cycle::Right\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"empty\" declaredBy=\"refs.cycle::Right\" returnType=\"*\"/>\n    <method name=\"accept\" declaredBy=\"refs.cycle::Right\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"refs::State\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"events\" type=\"Array\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::State\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"refs::DeferredPeer\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"stamp\" type=\"*\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::DeferredPeer\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"refs::DeferredHolder\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"refs::DeferredHolder\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"empty\" declaredBy=\"refs::DeferredHolder\" returnType=\"*\"/>\n    <method name=\"accept\" declaredBy=\"refs::DeferredHolder\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>"
+  ],
+  "initializationRows": [
+    {
+      "id": "entry",
+      "events": []
+    },
+    {
+      "id": "holder",
+      "events": []
+    },
+    {
+      "id": "default",
+      "events": [],
+      "isNull": true
+    },
+    {
+      "id": "undefined",
+      "events": [],
+      "isNull": true
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "id": "invalid",
+      "events": []
+    },
+    {
+      "id": "construction",
+      "events": [
+        "Peer.cinit",
+        "Peer.ctor"
+      ]
+    },
+    {
+      "id": "genuine",
+      "events": [
+        "Peer.cinit",
+        "Peer.ctor"
+      ],
+      "same": true
+    }
+  ],
+  "instances": [
+    "<type name=\"refs::Constructed\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <variable name=\"stored\" type=\"*\"/>\n</type>",
+    "<type name=\"refs::Entry\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"readBeforeDeclaration\" declaredBy=\"refs::Entry\" returnType=\"*\"/>\n  <method name=\"self\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"initialize\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"catchRethrow\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"skipped\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"failedInit\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"empty\" declaredBy=\"refs::Entry\" returnType=\"*\"/>\n  <method name=\"failure\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"3\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"repeated\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"expression\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"chain\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"store\" declaredBy=\"refs::Entry\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"refs::Peer\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"elsewhere::Peer\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"refs::Companion\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"refs::Qualified\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"own\" declaredBy=\"refs::Qualified\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"other\" declaredBy=\"refs::Qualified\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"split\" declaredBy=\"refs::Qualified\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"refs::SamePackage\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"accept\" declaredBy=\"refs::SamePackage\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"refs.cycle::Left\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"empty\" declaredBy=\"refs.cycle::Left\" returnType=\"*\"/>\n  <method name=\"accept\" declaredBy=\"refs.cycle::Left\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"refs.cycle::Right\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"empty\" declaredBy=\"refs.cycle::Right\" returnType=\"*\"/>\n  <method name=\"accept\" declaredBy=\"refs.cycle::Right\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"refs::State\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"refs::DeferredPeer\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"refs::DeferredHolder\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"empty\" declaredBy=\"refs::DeferredHolder\" returnType=\"*\"/>\n  <method name=\"accept\" declaredBy=\"refs::DeferredHolder\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>"
+  ],
+  "errorRows": [
+    {
+      "value": [
+        "TypeError",
+        "Error #1034",
+        1034
+      ],
+      "id": "fields"
+    },
+    {
+      "value": true,
+      "id": "fresh"
+    },
+    {
+      "value": [
+        17,
+        null,
+        1034
+      ],
+      "id": "wildcard"
+    },
+    {
+      "value": [
+        false,
+        false,
+        false
+      ],
+      "id": "delete-fixed"
+    },
+    {
+      "value": [
+        "ReferenceError",
+        "Error #1074",
+        1074
+      ],
+      "id": "readonly"
+    },
+    {
+      "value": 1034,
+      "id": "id-retained"
+    },
+    {
+      "value": [
+        "slot",
+        true,
+        true
+      ],
+      "id": "dynamic"
+    },
+    {
+      "value": [
+        "TypeError",
+        "Error #1034",
+        1034
+      ],
+      "id": "rethrow",
+      "same": true
+    },
+    {
+      "value": [
+        "Changed",
+        "Error #1034",
+        1034
+      ],
+      "id": "snapshot"
+    }
+  ]
+}

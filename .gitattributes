@@ -43,3 +43,6 @@ tests/native-relational/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eo
 
 # Preserve complete declaration-domain captures and receipts.
 tests/native-declaration-domain/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve complete foreign typed-local originals and receipts.
+tests/native-foreign-typed-locals/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof

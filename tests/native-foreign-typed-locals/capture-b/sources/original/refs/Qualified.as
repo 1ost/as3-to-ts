@@ -1,0 +1,1 @@
+package refs { import refs.Peer;import elsewhere.Peer;public class Qualified {public function Qualified(){} public function own(value:*):*{var item:refs.Peer=value;return item;}public function other(value:*):*{var item:elsewhere.Peer=value;return item;}public function split(left:*,right:*):*{var a:refs.Peer=left;var b:elsewhere.Peer=right;return [a,b];}}}

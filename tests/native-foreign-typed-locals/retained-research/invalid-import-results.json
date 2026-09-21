@@ -1,0 +1,12 @@
+[
+  {
+    "variant": "capture-a",
+    "receiptSHA256": "6e23b4f059cf801c8715e95a01061643bbaa7dbb5bfac7130b33ee6045c2382b",
+    "exitCode": 1
+  },
+  {
+    "variant": "capture-b",
+    "receiptSHA256": "9e8a1469321a2fd680ebb631dcd883d933f1137904d2f449b97e75b4a2d3231a",
+    "exitCode": 4
+  }
+]

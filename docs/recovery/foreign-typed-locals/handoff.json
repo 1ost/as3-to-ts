@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "status": "frozen-review-ready-generic-candidate",
+  "integration": "Parent to assess independent need under user-approved modern GSAP direction; no legacy timing expansion",
+  "compilerBase": "2a5a57a9d558df4846ccc96fbb53e5a59f1f6b1f",
+  "engineCommit": "cc1baecaa0c2b4dd701516bc9a5d5c86188004fd",
+  "sourceRoot": "compiler",
+  "productionFiles": [
+    "src/emit/native-callable-classes.ts",
+    "src/emit/native-declaration-plan.ts",
+    "src/emit/native-lexical-members.ts",
+    "src/emit/native-typed-locals.ts"
+  ],
+  "changedFiles": 155,
+  "changedFilesSHA256": "9dc900c55740fc12685a2113f87240eb5bed8a35749f25f4ebfae006b9b0df13",
+  "patchSHA256": "8f42855541e712ed675e62bc16c9a2e891cdfeff84393db81f78f65c390d4dfb",
+  "archiveSHA256": "f36382e8733c442cccc69fc33fad6ba2da105cae7ab97945daae7c0fd7dc8b11",
+  "verificationFiles": 692,
+  "verificationFilesSHA256": "220e6354e8d13fa2287816601225c22c5c0027d0849e0869452552311ab489c0",
+  "verificationArchiveSHA256": "b67092ae61db8e320b85b703cf21e076a68e4c1f6c918959a33d13e974a5057f",
+  "handoffDocumentSHA256": "648c20b5c4f73ddd8455c36bba424845dc71bfe67438d8ccd648c04d39c61961",
+  "finalCaptures": [
+    "capture-c",
+    "capture-d"
+  ],
+  "completeNewSourceClasses": 12,
+  "newOriginalRows": {
+    "nominalStorage": 41,
+    "initialization": 7,
+    "sourceError": 9
+  },
+  "initialNewCapturesRetained": [
+    "capture-a",
+    "capture-b"
+  ],
+  "priorOriginalDomain": {
+    "handoffSHA256": "5a5da5e3e5e26709dd2b9a0b4f93e930bf3f26f529a4d5dc5642eb41bbb7deff",
+    "completeClasses": 12,
+    "originalRows": [
+      33,
+      7,
+      14
+    ],
+    "nativeDomainRowsAdmitted": 0,
+    "hold": "Object-root declaration required"
+  },
+  "maintainedTiming": {
+    "completeSources": 5,
+    "ready": false,
+    "hold": "unresolved or ambiguous source annotation: com.greensock.TweenLite.Dictionary"
+  },
+  "compilerGuards": 28,
+  "runtimeControls": 10,
+  "comparisonNegatives": 4,
+  "actualProviderTypeFiles": 754,
+  "node": true,
+  "chromium": true,
+  "consumerTargets": [
+    "ES5",
+    "ES2015"
+  ],
+  "typeDiagnostics": 0,
+  "regressions": [
+    {
+      "id": "domain",
+      "args": [
+        "tests/native-declaration-domain/run.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 10308
+    },
+    {
+      "id": "self",
+      "args": [
+        "tests/native-self-constructors/run.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 12279
+    },
+    {
+      "id": "typed",
+      "args": [
+        "tests/native-typed-locals/run.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 13875
+    },
+    {
+      "id": "lexical",
+      "args": [
+        "tests/native-lexical-map/run.cjs",
+        "--typed-locals"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 11198
+    },
+    {
+      "id": "array",
+      "args": [
+        "tests/native-array-type-precedence/run.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 3918
+    },
+    {
+      "id": "typed-guards",
+      "args": [
+        "tests/native-typed-locals/guards.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 490
+    },
+    {
+      "id": "lexical-order",
+      "args": [
+        "tests/native-lexical-members/declaration-order-guards.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 599
+    },
+    {
+      "id": "domain-guards",
+      "args": [
+        "tests/native-declaration-domain/guards.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 387
+    },
+    {
+      "id": "domain-holds",
+      "args": [
+        "tests/native-declaration-domain/holds.cjs"
+      ],
+      "exitCode": 0,
+      "elapsedMs": 192
+    }
+  ],
+  "strictPatchReplay": {
+    "base": "2a5a57a9d558df4846ccc96fbb53e5a59f1f6b1f",
+    "files": 155,
+    "allHashesMatch": true,
+    "patchSHA256": "8f42855541e712ed675e62bc16c9a2e891cdfeff84393db81f78f65c390d4dfb",
+    "archiveSHA256": "f36382e8733c442cccc69fc33fad6ba2da105cae7ab97945daae7c0fd7dc8b11"
+  },
+  "replayBuildExitCode": 0,
+  "runtimeReportSHA256": "156991d4723bea160055b51b674bfd5411ab960cf88f6217158c5da5990a39a6",
+  "emitterChanged": false,
+  "engineEdits": 0,
+  "mainEdits": 0,
+  "pinEdits": 0,
+  "scope": "Generic domain-backed foreign typed locals and existing self-reference identity; no derived classes, method signatures or legacy timing admission"
+}

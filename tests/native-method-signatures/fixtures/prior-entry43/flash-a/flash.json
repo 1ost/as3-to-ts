@@ -1,0 +1,540 @@
+{
+  "reflection": [
+    "<type name=\"probe::SignatureSubject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::SignatureSubject\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"String\" optional=\"false\"/>\n    </constructor>\n    <variable name=\"label\" type=\"String\"/>\n    <method name=\"pick\" declaredBy=\"probe::SignatureSubject\" returnType=\"Function\">\n      <parameter index=\"1\" type=\"String\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"probe::Peer\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::Peer\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::PeerChild\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::PeerChild\">\n    <extendsClass type=\"probe::Peer\"/>\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "events": [
+        "body:addTween:original"
+      ],
+      "payload": [
+        "object",
+        false,
+        true,
+        "x",
+        "2",
+        "object",
+        false,
+        true,
+        null
+      ],
+      "value": "undefined",
+      "id": "add-omitted-default"
+    },
+    {
+      "events": [
+        "body:addTween:original"
+      ],
+      "payload": [
+        "object",
+        false,
+        true,
+        "x",
+        "2",
+        "object",
+        false,
+        true,
+        null
+      ],
+      "value": "undefined",
+      "id": "add-explicit-undefined-default"
+    },
+    {
+      "events": [
+        "body:addTween:original"
+      ],
+      "payload": [
+        "object",
+        false,
+        true,
+        "x",
+        "2",
+        "object",
+        false,
+        true,
+        null
+      ],
+      "value": "undefined",
+      "id": "add-explicit-null-default"
+    },
+    {
+      "events": [
+        "body:addTween:original"
+      ],
+      "payload": [
+        "object",
+        false,
+        true,
+        "x",
+        "2",
+        "object",
+        false,
+        true,
+        "label"
+      ],
+      "value": "undefined",
+      "id": "add-explicit-name"
+    },
+    {
+      "events": [
+        "body:addTween:original"
+      ],
+      "payload": [
+        "object",
+        true,
+        false,
+        null,
+        "3",
+        "undefined",
+        true,
+        false,
+        null
+      ],
+      "value": "undefined",
+      "id": "add-null-object-and-string"
+    },
+    {
+      "events": [
+        "body:addTween:original"
+      ],
+      "payload": [
+        "object",
+        true,
+        false,
+        null,
+        "NaN",
+        "object",
+        false,
+        true,
+        null
+      ],
+      "value": "undefined",
+      "id": "add-undefined-object-string-number"
+    },
+    {
+      "events": [
+        "body:addTween:original"
+      ],
+      "payload": [
+        "number",
+        false,
+        false,
+        "x",
+        "0",
+        "boolean",
+        false,
+        false,
+        null
+      ],
+      "value": "undefined",
+      "id": "add-scalar-object"
+    },
+    {
+      "events": [],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "add-too-few"
+    },
+    {
+      "events": [],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "add-too-many"
+    },
+    {
+      "events": [
+        "property:toString",
+        "start:valueOf",
+        "name:toString",
+        "body:addTween:original"
+      ],
+      "payload": [
+        "object",
+        false,
+        true,
+        "text",
+        "7",
+        "object",
+        false,
+        false,
+        "text"
+      ],
+      "value": "undefined",
+      "id": "add-ordered-hooks"
+    },
+    {
+      "events": [
+        "property:toString"
+      ],
+      "error": {
+        "name": "Error",
+        "errorID": 7102
+      },
+      "payload": "no-body",
+      "id": "add-string-throw-stops-later-coercion"
+    },
+    {
+      "events": [
+        "property:toString",
+        "start:valueOf"
+      ],
+      "error": {
+        "name": "Error",
+        "errorID": 7101
+      },
+      "payload": "no-body",
+      "id": "add-number-throw-stops-later-coercion"
+    },
+    {
+      "events": [
+        "property:toString",
+        "start:valueOf",
+        "name:toString"
+      ],
+      "error": {
+        "name": "Error",
+        "errorID": 7102
+      },
+      "payload": "no-body",
+      "id": "add-last-string-throw"
+    },
+    {
+      "events": [
+        "arg:target",
+        "arg:property",
+        "arg:start",
+        "arg:star",
+        "arg:name",
+        "property:toString",
+        "start:valueOf",
+        "name:toString",
+        "body:addTween:original"
+      ],
+      "payload": [
+        "object",
+        false,
+        true,
+        "text",
+        "7",
+        "object",
+        false,
+        true,
+        "text"
+      ],
+      "value": "undefined",
+      "id": "add-arguments-before-coercion"
+    },
+    {
+      "events": [
+        "arg:target",
+        "arg:property",
+        "arg:start"
+      ],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "add-arguments-before-short-arity"
+    },
+    {
+      "events": [
+        "arg:target",
+        "arg:property",
+        "arg:start",
+        "arg:star",
+        "arg:name",
+        "arg:extra"
+      ],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "add-arguments-before-long-arity"
+    },
+    {
+      "events": [
+        "body:setTotalTime:original"
+      ],
+      "payload": [
+        "3",
+        false
+      ],
+      "value": "undefined",
+      "id": "total-omitted-default"
+    },
+    {
+      "events": [
+        "body:setTotalTime:original"
+      ],
+      "payload": [
+        "3",
+        false
+      ],
+      "value": "undefined",
+      "id": "total-explicit-undefined-default"
+    },
+    {
+      "events": [
+        "body:setTotalTime:original"
+      ],
+      "payload": [
+        "3",
+        false
+      ],
+      "value": "undefined",
+      "id": "total-explicit-null-default"
+    },
+    {
+      "events": [
+        "body:setTotalTime:original"
+      ],
+      "payload": [
+        "3",
+        true
+      ],
+      "value": "undefined",
+      "id": "total-boolean-object-no-hooks"
+    },
+    {
+      "events": [
+        "time:valueOf",
+        "body:setTotalTime:original"
+      ],
+      "payload": [
+        "7",
+        true
+      ],
+      "value": "undefined",
+      "id": "total-number-hook-before-body"
+    },
+    {
+      "events": [],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "total-too-few"
+    },
+    {
+      "events": [],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "total-too-many"
+    },
+    {
+      "events": [
+        "body:setDirtyCache:original"
+      ],
+      "payload": true,
+      "value": "undefined",
+      "id": "dirty-omitted-default"
+    },
+    {
+      "events": [
+        "body:setDirtyCache:original"
+      ],
+      "payload": false,
+      "value": "undefined",
+      "id": "dirty-explicit-undefined"
+    },
+    {
+      "events": [
+        "body:setDirtyCache:original"
+      ],
+      "payload": false,
+      "value": "undefined",
+      "id": "dirty-explicit-null"
+    },
+    {
+      "events": [
+        "body:setDirtyCache:original"
+      ],
+      "payload": false,
+      "value": "undefined",
+      "id": "dirty-explicit-zero"
+    },
+    {
+      "events": [
+        "body:setDirtyCache:original"
+      ],
+      "payload": true,
+      "value": "undefined",
+      "id": "dirty-explicit-object"
+    },
+    {
+      "events": [],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "dirty-too-many"
+    },
+    {
+      "events": [
+        "body:event"
+      ],
+      "payload": [
+        "start",
+        false,
+        false
+      ],
+      "value": true,
+      "id": "event-genuine-reference"
+    },
+    {
+      "events": [
+        "body:event"
+      ],
+      "payload": [
+        "start",
+        false,
+        true
+      ],
+      "value": true,
+      "id": "event-derived-reference"
+    },
+    {
+      "events": [
+        "body:event"
+      ],
+      "payload": [
+        "start",
+        true,
+        false
+      ],
+      "value": true,
+      "id": "event-null-reference"
+    },
+    {
+      "events": [
+        "body:event"
+      ],
+      "payload": [
+        "start",
+        true,
+        false
+      ],
+      "value": true,
+      "id": "event-undefined-reference"
+    },
+    {
+      "events": [
+        "type:toString"
+      ],
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "payload": "no-body",
+      "id": "event-wrong-reference-after-string-hook"
+    },
+    {
+      "events": [
+        "type:toString"
+      ],
+      "error": {
+        "name": "Error",
+        "errorID": 7102
+      },
+      "payload": "no-body",
+      "id": "event-string-failure-before-reference-check"
+    },
+    {
+      "events": [],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "event-too-few"
+    },
+    {
+      "events": [],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "event-too-many"
+    },
+    {
+      "events": [
+        "body:empty:original"
+      ],
+      "payload": "empty",
+      "value": "undefined",
+      "id": "empty-zero-args"
+    },
+    {
+      "events": [],
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "payload": "no-body",
+      "id": "empty-extra-arg"
+    },
+    {
+      "events": [
+        "body:setTotalTime:original"
+      ],
+      "payload": [
+        "8",
+        true
+      ],
+      "value": "undefined",
+      "id": "closure-call-keeps-original-receiver"
+    },
+    {
+      "events": [
+        "body:setDirtyCache:original"
+      ],
+      "payload": true,
+      "value": "undefined",
+      "id": "closure-apply-defaults"
+    },
+    {
+      "events": [],
+      "payload": "no-body",
+      "value": [
+        5,
+        2,
+        1,
+        2,
+        0,
+        true,
+        false
+      ],
+      "id": "closure-formal-counts-and-identity"
+    },
+    {
+      "events": [
+        "outer:valueOf",
+        "body:setDirtyCache:original",
+        "outer:after-inner",
+        "body:setTotalTime:original"
+      ],
+      "payload": [
+        "11",
+        true
+      ],
+      "value": "undefined",
+      "id": "number-coercion-reentrant-call"
+    }
+  ]
+}
