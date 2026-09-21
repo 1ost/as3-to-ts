@@ -1538,7 +1538,12 @@ function emitNumericParameterDeclaration(emitter:Emitter, node:Node):boolean {
 	emitter.insert(name.text + (init ? '?:' : ':'));
 	emitter.skipTo(type.start);
 	visitNode(emitter, type);
-	if (init) emitter.skipTo(value.end);
+	// The parser represents a unary default such as `=-1` with an empty INIT
+	// span and keeps the sign/literal in its children.  Using value.end here
+	// would therefore leave the `-1` source text behind after the rewritten
+	// declaration (`value?:number-1`).  Consume the full effective subtree
+	// extent so both ordinary and unary numeric defaults are removed.
+	if (init) emitter.skipTo(getEffectiveNodeEnd(value));
 	else emitter.skipTo(type.end);
 	return true;
 }
