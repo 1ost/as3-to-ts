@@ -221,4 +221,30 @@ assert.throws(() => generate(computedTypeSource, {
     nativeComputedTypeTestModule: './other',
 }), /AS3_COMPUTED_TYPE_TEST_UNSUPPORTED/);
 
+const directStringOptions = {
+    ...options,
+    importModules: { 'compiler.AS3String': './AS3String' },
+    nativeReflectionQueryModule: undefined,
+    nativeDirectToStringModule: './AS3String',
+};
+const directStringSource = `package probe {
+ public class DirectString {
+  public function direct(value:Object):Object { return value.toString(); }
+  public function argument(value:Object):Object { return value.toString(1); }
+  public function receiver():Object { return getValue().toString(); }
+  private function getValue():Object { return this; }
+ }
+}`;
+const directStringOutput = generate(directStringSource, directStringOptions);
+assert.match(directStringOutput, /as3InvokeToString as __as3_as3InvokeToString/);
+assert.match(directStringOutput, /__as3_as3InvokeToString\(value\)/);
+assert.match(directStringOutput, /__as3_as3InvokeToString\(this\.getValue\(\)\)/);
+assert.match(directStringOutput, /value\.toString\(1\)/);
+assert.strictEqual((directStringOutput.match(/this\.getValue\(\)/g) || []).length, 1,
+    'direct toString receiver must be evaluated once');
+assert.throws(() => generate(directStringSource, {
+    ...directStringOptions,
+    nativeDirectToStringModule: './other',
+}), /AS3_DIRECT_TOSTRING_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');

@@ -136,6 +136,8 @@ export interface EmitterOptions {
 	nativeNumericMethodParametersModule?:string;
 	/** Authenticated common AS3Type module for expression-valued `is` targets. */
 	nativeComputedTypeTestModule?:string;
+	/** Authenticated common AS3String module for direct no-argument toString calls. */
+	nativeDirectToStringModule?:string;
 }
 
 
@@ -363,6 +365,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['flash.utils.AS3Type']
 				&& this.options.importModules['flash.utils.AS3Type'] !== module)
 				throw new Error('AS3_COMPUTED_TYPE_TEST_UNSUPPORTED: AS3Type import binding disagrees with nativeComputedTypeTestModule');
+		}
+		if (this.options.nativeDirectToStringModule !== undefined) {
+			const module = this.options.nativeDirectToStringModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_DIRECT_TOSTRING_UNSUPPORTED: explicit common AS3String module required');
+			if (this.options.importModules && this.options.importModules['compiler.AS3String']
+				&& this.options.importModules['compiler.AS3String'] !== module)
+				throw new Error('AS3_DIRECT_TOSTRING_UNSUPPORTED: AS3String import binding disagrees with nativeDirectToStringModule');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2554,6 +2564,7 @@ function emitReflectionXML(emitter:Emitter, node:Node):boolean {
 function emitCall(emitter:Emitter, node:Node):void {
 	if (emitReflectionQuery(emitter, node)) return;
 	if (emitReflectionXML(emitter, node)) return;
+	if (emitDirectToString(emitter, node)) return;
     const callee = node.children[0];
     if (!emitter.isNew && callee.kind === NodeKind.IDENTIFIER && emitter.nativeGlobals.resolve(callee))
         throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: callable builtin conversion requires native lowering: ' + callee.text);
@@ -2670,6 +2681,28 @@ function emitCall(emitter:Emitter, node:Node):void {
 
  	if (isRETURNINDEXEDARRAY == false)visitNodes(emitter, node.children);
 
+}
+
+function emitDirectToString(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeDirectToStringModule;
+	if (module === undefined || !node || node.kind !== NodeKind.CALL || node.children.length < 2)
+		return false;
+	const callee = node.children[0], args = node.findChild(NodeKind.ARGUMENTS);
+	if (!callee || callee.kind !== NodeKind.DOT || !args || args.children.length
+		|| callee.children.length !== 2) return false;
+	const receiver = callee.children[0], name = callee.children[1];
+	if (!receiver || !name || name.kind !== NodeKind.LITERAL || name.text !== 'toString') return false;
+	let helper = '__as3_as3InvokeToString';
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier('as3InvokeToString as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '(');
+	visitNode(emitter, receiver);
+	emitter.catchup(receiver.end);
+	emitter.insert(')');
+	emitter.skipTo(node.end);
+	return true;
 }
 
 function isCast(emitter:Emitter, node:Node):boolean {
