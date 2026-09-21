@@ -188,4 +188,37 @@ assert.match(generate(numericSource.replace('= 2', '= -2'), numericOptions),
 assert.throws(() => generate(numericSource.replace('= 2', '= getDefault()'), numericOptions),
     /AS3_NUMERIC_PARAMETERS_UNSUPPORTED/);
 
+const computedTypeOptions = {
+    ...options,
+    importModules: { 'flash.utils.AS3Type': './AS3Type' },
+    nativeReflectionQueryModule: undefined,
+    nativeComputedTypeTestModule: './AS3Type',
+};
+const computedTypeSource = `package probe {
+ public class ComputedType {
+  private var targets:Array;
+  public function member(value:Object, index:int):Boolean {
+   return value is this.targets[index];
+  }
+  public function call(value:Object):Boolean {
+   return value is getTarget();
+  }
+  public function primitive(value:Object):Boolean {
+   return value is Object;
+  }
+  private function getTarget():Class { return Object; }
+ }
+}`;
+const computedTypeOutput = generate(computedTypeSource, computedTypeOptions);
+assert.match(computedTypeOutput, /as3Is as __as3_source_is/);
+assert.match(computedTypeOutput, /__as3_source_is\(value,\s*this\.targets\[index\]\)/);
+assert.match(computedTypeOutput, /__as3_source_is\(value,\s*this\.getTarget\(\)\)/);
+assert.match(computedTypeOutput, /value instanceof Object/);
+assert.strictEqual((computedTypeOutput.match(/this\.targets\[index\]/g) || []).length, 1,
+    'computed type target must be evaluated once');
+assert.throws(() => generate(computedTypeSource, {
+    ...computedTypeOptions,
+    nativeComputedTypeTestModule: './other',
+}), /AS3_COMPUTED_TYPE_TEST_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');

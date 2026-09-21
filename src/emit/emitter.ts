@@ -134,6 +134,8 @@ export interface EmitterOptions {
 	nativeSourceErrorModule?:string;
 	/** Authenticated common numeric parameter coercion module. */
 	nativeNumericMethodParametersModule?:string;
+	/** Authenticated common AS3Type module for expression-valued `is` targets. */
+	nativeComputedTypeTestModule?:string;
 }
 
 
@@ -353,6 +355,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['flash.utils.AS3Coercion']
 				&& this.options.importModules['flash.utils.AS3Coercion'] !== module)
 				throw new Error('AS3_NUMERIC_PARAMETERS_UNSUPPORTED: numeric coercion import binding disagrees with nativeNumericMethodParametersModule');
+		}
+		if (this.options.nativeComputedTypeTestModule !== undefined) {
+			const module = this.options.nativeComputedTypeTestModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_COMPUTED_TYPE_TEST_UNSUPPORTED: explicit common AS3Type module required');
+			if (this.options.importModules && this.options.importModules['flash.utils.AS3Type']
+				&& this.options.importModules['flash.utils.AS3Type'] !== module)
+				throw new Error('AS3_COMPUTED_TYPE_TEST_UNSUPPORTED: AS3Type import binding disagrees with nativeComputedTypeTestModule');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2730,6 +2740,7 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+	if (emitComputedTypeTest(emitter, node)) return;
 
     if (emitter.options.nativeRelationalModule !== undefined) {
         const symbolic = ['<', '<=', '>', '>='];
@@ -2967,6 +2978,31 @@ function emitRelation(emitter:Emitter, node:Node):void {
 	}
 
 	visitNodes(emitter, node.children);
+}
+
+function emitComputedTypeTest(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeComputedTypeTestModule;
+	if (module === undefined || !node || !containsIsKeyword(node) || node.children.length !== 3)
+		return false;
+	const left = node.children[0], operator = node.children[1], target = node.children[2];
+	if (!left || !operator || operator.kind !== NodeKind.OP || operator.text !== 'is'
+		|| !target || target.kind === NodeKind.IDENTIFIER)
+		return false;
+	let helper = '__as3_source_is';
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	emitter.ensureImportIdentifier('as3Is as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '(');
+	visitNode(emitter, left);
+	emitter.catchup(left.end);
+	emitter.insert(',');
+	emitter.skipTo(target.start);
+	visitNode(emitter, target);
+	emitter.catchup(target.end);
+	emitter.insert(')');
+	emitter.skipTo(node.end);
+	return true;
 }
 
 function containsIsKeyword(node:Node) {
