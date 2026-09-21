@@ -140,6 +140,8 @@ export interface EmitterOptions {
 	nativeDirectToStringModule?:string;
 	/** Authenticated common AS3String module for explicit builtin String(value). */
 	nativeStringCoercionModule?:string;
+	/** Authenticated common AS3Class module for builtin Object calls/construction. */
+	nativeObjectCreationModule?:string;
 }
 
 
@@ -383,6 +385,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['compiler.AS3String']
 				&& this.options.importModules['compiler.AS3String'] !== module)
 				throw new Error('AS3_STRING_COERCION_UNSUPPORTED: AS3String import binding disagrees with nativeStringCoercionModule');
+		}
+		if (this.options.nativeObjectCreationModule !== undefined) {
+			const module = this.options.nativeObjectCreationModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_OBJECT_CREATION_UNSUPPORTED: explicit common AS3Class module required');
+			if (this.options.importModules && this.options.importModules['compiler.AS3Class']
+				&& this.options.importModules['compiler.AS3Class'] !== module)
+				throw new Error('AS3_OBJECT_CREATION_UNSUPPORTED: AS3Class import binding disagrees with nativeObjectCreationModule');
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -2289,6 +2299,7 @@ function emitShortVector(emitter:Emitter, node:Node):void {
 
 function emitNew(emitter:Emitter, node:Node):void {
 	if (emitSourceErrorConstruction(emitter, node)) return;
+	if (emitBuiltinObjectCreation(emitter, node)) return;
 	emitter.catchup(node.start);
 	emitter.isNew = true;
 	emitter.emitThisForNextIdent = false;
@@ -2576,6 +2587,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitReflectionXML(emitter, node)) return;
 	if (emitDirectToString(emitter, node)) return;
 	if (emitBuiltinStringCoercion(emitter, node)) return;
+	if (emitBuiltinObjectCreation(emitter, node)) return;
     const callee = node.children[0];
     if (!emitter.isNew && callee.kind === NodeKind.IDENTIFIER && emitter.nativeGlobals.resolve(callee))
         throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: callable builtin conversion requires native lowering: ' + callee.text);
@@ -2692,6 +2704,39 @@ function emitCall(emitter:Emitter, node:Node):void {
 
  	if (isRETURNINDEXEDARRAY == false)visitNodes(emitter, node.children);
 
+}
+
+function emitBuiltinObjectCreation(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeObjectCreationModule;
+	if (module === undefined || !node) return false;
+	let call:Node = node;
+	let construct = false;
+	if (node.kind === NodeKind.NEW) {
+		if (node.children.length !== 1 || !node.children[0] || node.children[0].kind !== NodeKind.CALL) return false;
+		call = node.children[0];
+		construct = true;
+	} else if (node.kind !== NodeKind.CALL) return false;
+	const callee = call.children[0], args = call.findChild(NodeKind.ARGUMENTS);
+	if (!callee || callee.kind !== NodeKind.IDENTIFIER || callee.text !== 'Object'
+		|| emitter.findDefInScope('Object') || !args) return false;
+	let helper = construct ? '__as3_as3ConstructClass' : '__as3_as3CallClass';
+	while (emitter.source.indexOf(helper) >= 0) helper += '_';
+	const exported = construct ? 'as3ConstructClass' : 'as3CallClass';
+	emitter.ensureImportIdentifier(exported + ' as ' + helper, module, false);
+	emitter.nativeSourceHelpers.add(helper);
+	emitter.catchup(node.start);
+	emitter.insert(helper + '(Object, [');
+	if (args.children.length) {
+		emitter.skipTo(args.children[0].start);
+		visitNodes(emitter, args.children);
+		const close = args.end > args.start && emitter.source.charAt(args.end - 1) === ')' ? args.end - 1 : args.end;
+		emitter.catchup(close);
+	} else {
+		emitter.skipTo(args.end);
+	}
+	emitter.insert('])');
+	emitter.skipTo(node.end);
+	return true;
 }
 
 function emitDirectToString(emitter:Emitter, node:Node):boolean {

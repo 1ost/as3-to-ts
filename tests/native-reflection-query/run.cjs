@@ -270,4 +270,28 @@ assert.throws(() => generate(stringCoercionSource, {
     nativeStringCoercionModule: './other',
 }), /AS3_STRING_COERCION_UNSUPPORTED/);
 
+const objectCreationOptions = {
+    ...options,
+    importModules: { 'compiler.AS3Class': './AS3Class' },
+    nativeReflectionQueryModule: undefined,
+    nativeObjectCreationModule: './AS3Class',
+};
+const objectCreationSource = `package probe {
+ public class ObjectCreation {
+  public function construct(value:Object):Object { return new Object(value); }
+  public function call(value:Object):Object { return Object(value); }
+  public function shadow(Object:Function, value:Object):Object { return Object(value); }
+ }
+}`;
+const objectCreationOutput = generate(objectCreationSource, objectCreationOptions);
+assert.match(objectCreationOutput, /as3ConstructClass as __as3_as3ConstructClass/);
+assert.match(objectCreationOutput, /__as3_as3ConstructClass\(Object, \[value\]\)/);
+assert.match(objectCreationOutput, /as3CallClass as __as3_as3CallClass/);
+assert.match(objectCreationOutput, /__as3_as3CallClass\(Object, \[value\]\)/);
+assert.match(objectCreationOutput, /return Object\(value\)/);
+assert.throws(() => generate(objectCreationSource, {
+    ...objectCreationOptions,
+    nativeObjectCreationModule: './other',
+}), /AS3_OBJECT_CREATION_UNSUPPORTED/);
+
 console.log('Native reflection query lowering passed');
