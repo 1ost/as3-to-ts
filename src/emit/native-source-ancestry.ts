@@ -82,9 +82,11 @@ function literalUri(node: Node): string {
 }
 
 function resolveNamespace(root: Node, name: string, declarations: {[qname: string]: {root: Node; node: Node}}, configured: {[qname: string]: string}, active: string[] = []): string {
-    const matches = candidates(root, name).filter(qname => declarations[qname] || configured[qname]);
+    const matches = candidates(root, name).filter(qname => declarations[qname] || configured[qname]
+        || qname === 'flash.utils.flash_proxy');
     if (matches.length !== 1) return fail('unresolved or ambiguous namespace: ' + name);
     const qname = matches[0], record = declarations[qname];
+    if (qname === 'flash.utils.flash_proxy') return 'http://www.adobe.com/2006/actionscript/flash/proxy';
     if (!record) return configured[qname];
     if (active.indexOf(qname) >= 0) return fail('cyclic namespace alias: ' + qname);
     const literal = literalUri(record.node);
