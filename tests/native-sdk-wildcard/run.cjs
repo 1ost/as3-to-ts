@@ -43,5 +43,6 @@ const output = generate();
 assert.match(output, /import \{ ByteArray \} from "\.\/ByteArray"/);
 assert.match(output, /import \{ describeType \} from "\.\/describeType"/);
 assert.doesNotMatch(output, /Dictionary/);
+assert.doesNotMatch(output, /flash\.utils\.\*|utils\.\*|e\.utils\./);
 assert.match(output, /as3DescribeTypeQueryLength/);
 console.log('Native SDK wildcard lowering passed');

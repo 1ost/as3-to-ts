@@ -863,7 +863,7 @@ function referencedWildcardDefinitions(node:Node, namespace:string, definitions:
 	return definitions.filter(definition => references.has(definition) && !shadowed.has(definition));
 }
 
-function emitImport(emitter:Emitter, node:Node):void {
+function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 	// A same-file source Class owns its name ahead of an imported declaration.
 	// AS3 imports are lexical declarations, not eager JavaScript module effects.
 	const importedName = node.text.split('.').pop();
@@ -896,7 +896,7 @@ function emitImport(emitter:Emitter, node:Node):void {
 				let importNode = createNode(node.kind, node);
 				importNode.text = `${ ns }.${ definition }`;
 				importNode.parent = node.parent;
-				emitImport(emitter, importNode);
+				emitImport(emitter, importNode, true);
 				emitter.insert(";\n");
 			})
 
@@ -941,7 +941,7 @@ function emitImport(emitter:Emitter, node:Node):void {
 	// }
 
 	if (emitter.options.useNamespaces) {
-		emitter.catchup(node.start);
+		if (!inline) emitter.catchup(node.start);
 		emitter.insert(statement);
 
 		let split = node.text.split('.');
@@ -956,14 +956,14 @@ function emitImport(emitter:Emitter, node:Node):void {
 			emitter.skip(text.length + diff + statement.length);
 
 		} else {
-			emitter.catchup(node.end + statement.length);
+			if (!inline) emitter.catchup(node.end + statement.length);
 		}
 
 		emitter.declareInScope({name, sourceImport: node.text});
 
 	} else {
 
-		emitter.catchup(node.start);
+		if (!inline) emitter.catchup(node.start);
 		emitter.insert(Keywords.IMPORT + " ");
 
 		let split = text.split(".");
@@ -972,7 +972,7 @@ function emitImport(emitter:Emitter, node:Node):void {
 			if (typeof mappedModule !== 'string' || !mappedModule.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(mappedModule))
 				throw new Error('AS3_IMPORT_MODULE_UNSUPPORTED: invalid authenticated module for ' + node.text);
 			emitter.insert(`{ ${ name } } from "${ mappedModule }"`);
-			emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+			if (!inline) emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
 			emitter.declareInScope({name, sourceImport: node.text});
 			return;
 		}
@@ -990,7 +990,7 @@ function emitImport(emitter:Emitter, node:Node):void {
 
 		text = `{ ${ name } } from "${ getRelativePath(currentModule.split("."), text.split(".")) }"`;
 		emitter.insert(text);
-		emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+		if (!inline) emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
 		emitter.declareInScope({name, sourceImport: node.text});
 	}
 }
