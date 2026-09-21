@@ -65,13 +65,12 @@ export class NativeNamespaces {
                 this.fail('namespace member outside a class');
             if (node.kind === NodeKind.GET || node.kind === NodeKind.SET)
                 this.fail('namespace accessors require separate lowering');
-            if (node.kind === NodeKind.CONST_LIST) this.fail('namespace const requires write protection');
             this.hierarchy(owner);
             if (mods.children.some(mod => mod.text === 'override'))
                 this.fail('namespace member overrides require separate lowering');
             if (node.kind === NodeKind.FUNCTION && mods.children.some(mod => mod.text === 'static'))
                 this.fail('static namespace method closures require separate lowering');
-            const names = node.kind === NodeKind.VAR_LIST
+            const names = [NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(node.kind) >= 0
                 ? node.findChildren(NodeKind.NAME_TYPE_INIT).map(value => value.findChild(NodeKind.NAME))
                 : [node.findChild(NodeKind.NAME)];
             if (names.length !== 1) this.fail('multiple namespace fields in one declaration');

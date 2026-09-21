@@ -156,6 +156,19 @@ const { Subject: IntegerSubject } = executeClass(`package example {
 assert.deepStrictEqual(Array.from(new IntegerSubject().set(-1.75)), [-1, 1]);
 assert.strictEqual(new IntegerSubject().setOther(new IntegerSubject(), -1.75), 1);
 
+const { Subject: NamespaceConstants, output: namespaceConstantsOutput } = executeClass(`package example {
+ import alias.same;
+ public class NamespaceConstants {
+  same const value:int = 4;
+  same static const label:String = "alpha";
+  public function read():Array {
+   return [this.same::value, NamespaceConstants.same::label];
+  }
+ }
+}`, 'NamespaceConstants');
+assert.match(namespaceConstantsOutput, /readonly\s+\[__as3_namespace_member_/);
+assert.deepStrictEqual(Array.from(new NamespaceConstants().read()), [4, 'alpha']);
+
 // Parentheses retain references, including mutation policy and destination type.
 for (const depth of [0, 1, 3]) {
   const group = value => '('.repeat(depth) + value + ')'.repeat(depth);
@@ -203,7 +216,7 @@ for (const invalid of [
   'package p { public namespace a = b; public namespace b = a; }',
   'package p { public class C { missing var value:Object; } }',
   'package p { public namespace n = "urn:n"; public class C { n var x:Object, y:Object; } }',
-  'package p { public namespace n = "urn:n"; public class C { n const x:int = 1; } }',
+  'package p { public namespace n = "urn:n"; public class C { n const x:int = 1; public function f():void { this.n::x = 2; } } }',
   'package p { public namespace n = "urn:n"; public class C { n function get x():Object { return null; } } }',
   'package p { public namespace n = "urn:n"; public class C { n var x:Object; public function f():Object { return x; } } }',
   'package p { public namespace n = "urn:n"; public class C { public function f():Object { return n; } } }',

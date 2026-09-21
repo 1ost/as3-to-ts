@@ -810,6 +810,9 @@ function emitNamespaceAccess(emitter:Emitter, node:Node):void {
     const target = emitter.namespaces.accessMember(node, receiverDefinition && receiverDefinition.type);
     const reference = outerEncapsulatedExpression(node);
     if (reference.parent && reference.parent.kind === NodeKind.ASSIGN && reference.parent.children[0] === reference
+        && target && target.declaration.kind === NodeKind.CONST_LIST)
+        emitter.namespaces.fail('namespace const writes require write protection');
+    if (reference.parent && reference.parent.kind === NodeKind.ASSIGN && reference.parent.children[0] === reference
         && target && target.declaration.kind === NodeKind.FUNCTION)
         emitter.namespaces.fail('namespace method writes require separate lowering');
     emitter.catchup(node.start);
@@ -2294,7 +2297,7 @@ function emitPropertyDecl(emitter:Emitter, node:Node, isConst = false):void {
 		let mods = node.findChild(NodeKind.MOD_LIST);
 		let start = node.start;
 		names.forEach((nameTypeInit, i) => {
-			emitClassField(emitter, node);
+			emitClassField(emitter, node, isConst);
 			emitter.consume(isConst ? Keywords.CONST : Keywords.VAR, nameTypeInit.start);
 			//visitNode(emitter, name);
 
@@ -2327,7 +2330,7 @@ function emitPropertyDecl(emitter:Emitter, node:Node, isConst = false):void {
 	}
 	else
 	{
-		emitClassField(emitter, node);
+		emitClassField(emitter, node, isConst);
 		names.forEach((nameTypeInit, i) => {
 			if (i === 0) {
 				emitter.consume(isConst ? Keywords.CONST : Keywords.VAR, nameTypeInit.start);
@@ -2340,7 +2343,7 @@ function emitPropertyDecl(emitter:Emitter, node:Node, isConst = false):void {
 }
 
 
-function emitClassField(emitter:Emitter, node:Node):void {
+function emitClassField(emitter:Emitter, node:Node, isConst = false):void {
 	let mods = node.findChild(NodeKind.MOD_LIST);
 	if (mods) {
 		emitter.catchup(mods.start);
@@ -2359,8 +2362,10 @@ function emitClassField(emitter:Emitter, node:Node):void {
 			}
 			emitter.catchup(node.end);
 		});
-		const name = node.findChild(NodeKind.NAME);
+		const name = node.findChild(NodeKind.NAME)
+			|| (node.findChild(NodeKind.NAME_TYPE_INIT) && node.findChild(NodeKind.NAME_TYPE_INIT).findChild(NodeKind.NAME));
 		const member = name && emitter.namespaces.member(name);
+		if (isConst && member) emitter.insert(' readonly ');
 		if (member && emitter.options.nativeProxyModule !== undefined
 			&& member.uri === 'http://www.adobe.com/2006/actionscript/flash/proxy'
 			&& node.kind === NodeKind.FUNCTION)
