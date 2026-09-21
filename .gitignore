@@ -15,3 +15,5 @@ npm-debug.log
 # Tests
 /tests/simple/js-generated
 /tests/compound/js-generated
+# Generated compiler test output
+.cache/
