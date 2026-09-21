@@ -181,6 +181,22 @@ const { Subject: StaticNamespaceMethods } = executeClass(`package example {
 }`, 'StaticNamespaceMethods');
 assert.deepStrictEqual(Array.from(new StaticNamespaceMethods().read()), [7, 8, true]);
 
+const { Subject: NamespaceAccessors } = executeClass(`package example {
+ import alias.same;
+ public class NamespaceAccessors {
+  private var stored:int = 3;
+  private var writes:int = 0;
+  same function get value():int { return stored; }
+  same function set value(input:int):void { writes++; stored = input + 1; }
+  public function read():Array {
+   const initial:int = this.same::value;
+   this.same::value = 10;
+   return [initial, this.same::value, writes];
+  }
+ }
+}`, 'NamespaceAccessors');
+assert.deepStrictEqual(Array.from(new NamespaceAccessors().read()), [3, 11, 1]);
+
 // Parentheses retain references, including mutation policy and destination type.
 for (const depth of [0, 1, 3]) {
   const group = value => '('.repeat(depth) + value + ')'.repeat(depth);
@@ -229,7 +245,6 @@ for (const invalid of [
   'package p { public class C { missing var value:Object; } }',
   'package p { public namespace n = "urn:n"; public class C { n var x:Object, y:Object; } }',
   'package p { public namespace n = "urn:n"; public class C { n const x:int = 1; public function f():void { this.n::x = 2; } } }',
-  'package p { public namespace n = "urn:n"; public class C { n function get x():Object { return null; } } }',
   'package p { public namespace n = "urn:n"; public class C { n var x:Object; public function f():Object { return x; } } }',
   'package p { public namespace n = "urn:n"; public class C { public function f():Object { return n; } } }',
   'package p { public namespace n = "urn:n"; public class C { public function f():Object { return n::missing; } } }',

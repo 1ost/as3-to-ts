@@ -63,8 +63,6 @@ export class NativeNamespaces {
             const owner = this.ancestor(node, NodeKind.CLASS);
             if (!owner || !node.parent || node.parent.kind !== NodeKind.CONTENT)
                 this.fail('namespace member outside a class');
-            if (node.kind === NodeKind.GET || node.kind === NodeKind.SET)
-                this.fail('namespace accessors require separate lowering');
             this.hierarchy(owner);
             if (mods.children.some(mod => mod.text === 'override'))
                 this.fail('namespace member overrides require separate lowering');
@@ -76,7 +74,12 @@ export class NativeNamespaces {
                 owner, static: mods.children.some(mod => mod.text === 'static'), declaration: node };
             this.members.forEach(previous => {
                 if (previous.owner === owner && previous.uri === member.uri && previous.name === member.name
-                    && previous.static === member.static) this.fail('duplicate namespace member: ' + member.name);
+                    && previous.static === member.static) {
+                    const accessorPair = [NodeKind.GET, NodeKind.SET].indexOf(previous.declaration.kind) >= 0
+                        && [NodeKind.GET, NodeKind.SET].indexOf(member.declaration.kind) >= 0
+                        && previous.declaration.kind !== member.declaration.kind;
+                    if (!accessorPair) this.fail('duplicate namespace member: ' + member.name);
+                }
             });
             this.members.set(names[0], member);
         });

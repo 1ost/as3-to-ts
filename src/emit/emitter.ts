@@ -2004,6 +2004,7 @@ function emitSet(emitter:Emitter, node:Node):void {
 
 	let name = node.findChild(NodeKind.NAME);
 	emitter.consume('function', name.start);
+	if (emitter.namespaces.member(name)) emitName(emitter, name);
 
 	let params = node.findChild(NodeKind.PARAMETER_LIST);
 	visitNode(emitter, params);
@@ -2218,7 +2219,8 @@ function emitGet(emitter:Emitter, node:Node):void {
 	if (node.kind !== NodeKind.FUNCTION || name.text !== emitter.currentClassName) {
 		emitClassField(emitter, node);
 		emitter.consume('function', name.start);
-		emitter.catchup(name.end);
+		if (emitter.namespaces.member(name)) emitName(emitter, name);
+		else emitter.catchup(name.end);
 	} else {
 		let mods = node.findChild(NodeKind.MOD_LIST);
 		if (mods) {
