@@ -34,7 +34,8 @@
     "test:native-sdk-wildcard": "node tests/native-sdk-wildcard/run.cjs",
     "test:native-numeric-parameters": "node tests/native-numeric-parameters/run.cjs",
     "test:native-labelled-control": "node tests/native-labelled-control/run.cjs",
-    "test:native-chained-construction": "node tests/native-chained-construction/run.cjs"
+    "test:native-chained-construction": "node tests/native-chained-construction/run.cjs",
+    "test:native-source-ancestry": "node tests/native-source-ancestry/run.cjs"
   },
   "keywords": [
     "actionscript",

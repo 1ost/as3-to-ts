@@ -15,6 +15,7 @@ import {NativeClassInitializers, NativeClassInitializationOptions} from './nativ
 import {NativeCallableClasses, NativeCallableClassOptions} from './native-callable-classes';
 import {NativeLexicalMembers} from './native-lexical-members';
 import {NativeGlobalModules} from './native-global-modules';
+import {NativeSourceAncestryPlan} from './native-source-ancestry';
 
 const util = require('util');
 
@@ -156,6 +157,8 @@ export interface EmitterOptions {
 	nativeTweenModule?:string;
 	/** Source-authenticated tween call spans for migration-specific plans. */
 	nativeTweenSourcePlans?:{source:string; calls:ReadonlyArray<{start:number; end:number; callSha256?:string}>};
+	/** Complete source-backed class ancestry for scoped multi-file emission. */
+	nativeSourceAncestry?: NativeSourceAncestryPlan;
 }
 
 
@@ -487,7 +490,7 @@ export default class Emitter {
             this.lexical = new NativeLexicalMembers(this.source, filtered, this.options.nativeLexicalMembersModule, this.options.nativeCallableMetadata, this.options.nativeTypedLocals === true);
         }
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris,
-			this.options.nativeProxyModule !== undefined);
+			this.options.nativeProxyModule !== undefined, this.options.nativeSourceAncestry);
 		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization);
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;

@@ -1,5 +1,6 @@
-import Node, {outerEncapsulatedExpression} from '../syntax/node';
+import Node, {createNode, outerEncapsulatedExpression} from '../syntax/node';
 import NodeKind from '../syntax/nodeKind';
+import {NativeSourceAncestryPlan} from './native-source-ancestry';
 
 export interface NamespaceMember {
     uri: string;
@@ -26,7 +27,8 @@ export class NativeNamespaces {
     private openedAccesses = new Map<Node, NamespaceAccess>();
     private configured: {[qname: string]: string};
 
-    constructor(private root: Node, private source: string, namespaceUris?: {[qname: string]: string}, private proxyEnabled = false) {
+    constructor(private root: Node, private source: string, namespaceUris?: {[qname: string]: string}, private proxyEnabled = false,
+        private ancestry?: NativeSourceAncestryPlan) {
         if (namespaceUris !== undefined && (!namespaceUris || typeof namespaceUris !== 'object' || Array.isArray(namespaceUris)))
             this.fail('namespaceUris must be a QName-to-URI object');
         this.configured = namespaceUris || {};
@@ -35,6 +37,7 @@ export class NativeNamespaces {
             const qname = this.packageName(node) + node.findChild(NodeKind.NAME).text;
             this.classes.set(qname, (this.classes.get(qname) || []).concat(node));
         });
+        this.installAncestry();
         Object.keys(this.configured).forEach(qname => {
             if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(qname)
                 || typeof this.configured[qname] !== 'string' || !this.configured[qname])
@@ -114,6 +117,31 @@ export class NativeNamespaces {
         });
     }
 
+    private installAncestry(): void {
+        if (!this.ancestry || !this.ancestry.classes) return;
+        Object.keys(this.ancestry.classes).sort().forEach(qname => {
+            if (this.classes.has(qname)) return;
+            const metadata = this.ancestry.classes[qname], name = qname.split('.').pop();
+            const modifiers = metadata.dynamic
+                ? createNode(NodeKind.MOD_LIST, {}, createNode(NodeKind.MODIFIER, {text:'dynamic'}))
+                : createNode(NodeKind.MOD_LIST, {});
+            const children: Node[] = [createNode(NodeKind.NAME, {text:name}), modifiers];
+            if (metadata.base) children.push(createNode(NodeKind.EXTENDS, {text:metadata.base}));
+            children.push(createNode(NodeKind.CONTENT, {}));
+            const owner = createNode(NodeKind.CLASS, {qualifiedName:qname}, ...children);
+            this.classes.set(qname, [owner]);
+            metadata.members.forEach(member => {
+                const modifiers: Node[] = [createNode(NodeKind.MODIFIER, {text:member.uri})];
+                if (member.static) modifiers.push(createNode(NodeKind.MODIFIER, {text:'static'}));
+                if (member.override) modifiers.push(createNode(NodeKind.MODIFIER, {text:'override'}));
+                const declaration = createNode(member.kind, {}, createNode(NodeKind.MOD_LIST, {}, ...modifiers),
+                    createNode(NodeKind.NAME, {text:member.name}));
+                this.members.set(declaration.findChild(NodeKind.NAME), {uri:member.uri, name:member.name,
+                    owner, static:member.static, declaration});
+            });
+        });
+    }
+
     fail(message: string): never { throw new Error('AS3_NAMESPACE_UNSUPPORTED: ' + message); }
 
     private walk(node: Node, visit: (node: Node) => void): void {
@@ -128,6 +156,11 @@ export class NativeNamespaces {
     }
 
     private packageName(node: Node): string {
+        if (node.qualifiedName) {
+            const split = node.qualifiedName.split('.');
+            split.pop();
+            return split.length ? split.join('.') + '.' : '';
+        }
         const owner = this.ancestor(node, NodeKind.PACKAGE);
         const name = owner && owner.findChild(NodeKind.NAME).text;
         return name ? name + '.' : '';
