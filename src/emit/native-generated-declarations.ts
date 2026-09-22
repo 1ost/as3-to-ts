@@ -5,6 +5,8 @@ import parse = require('../parse');
 export interface NativeGeneratedDeclarationInput {
     scope: string;
     providerModule: string;
+    /** Explicit common AS3Type provider; required for source interface tokens. */
+    interfaceProviderModule?: string;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
     providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event'}};
 }
@@ -14,19 +16,26 @@ export interface NativeGeneratedDeclarationBinding {
     readonly tokenExport: string;
     readonly publishExport: string;
     readonly lexicalExport: string;
+    readonly interfaces: ReadonlyArray<string>;
+}
+export interface NativeGeneratedInterfaceBinding {
+    readonly qname: string;
+    readonly bases: ReadonlyArray<string>;
+    readonly tokenExport: string;
 }
 export interface NativeGeneratedReference {
     readonly owner: string;
     readonly start: number;
     readonly end: number;
     readonly sourceName: string;
-    readonly kind: 'intrinsic' | 'declaration' | 'native' | 'unresolved';
+    readonly kind: 'intrinsic' | 'declaration' | 'interface' | 'native' | 'unresolved';
     readonly identity: string;
 }
 export interface NativeGeneratedDeclarationPlan {
     readonly scope: string;
     readonly moduleSource: string;
     readonly bindings: ReadonlyArray<NativeGeneratedDeclarationBinding>;
+    readonly interfaces: ReadonlyArray<NativeGeneratedInterfaceBinding>;
     readonly references: ReadonlyArray<NativeGeneratedReference>;
     readonly sourceHashes: {[qname: string]: string};
     readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly eventBaseExport?: string; readonly declarationExport?: string}>;
@@ -74,8 +83,9 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'sources', 'providers']);
     moduleName(data.providerModule);
+    if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
     if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
     if (data.providers !== undefined && !table(data.providers)) fail('provider table required');
     const providers = data.providers || {}, names = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
@@ -101,8 +111,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if (record.referenceOnly !== undefined && typeof record.referenceOnly !== 'boolean') fail('referenceOnly must be boolean');
         const root = parse(name + '.as', record.source); normalize(root);
         const pkg = root.findChild(K.PACKAGE), content = pkg && pkg.findChild(K.CONTENT);
-        const list = content && content.findChildren(K.CLASS);
-        if (!pkg || !list || list.length !== 1) fail('exactly one package class: ' + name);
+        const list = content && content.children.filter(node => node.kind === K.CLASS || node.kind === K.INTERFACE);
+        if (!pkg || !list || list.length !== 1) fail('exactly one package class or interface: ' + name);
         const prefix = pkg.findChild(K.NAME).text, cls = list[0];
         if ((prefix ? prefix + '.' : '') + cls.findChild(K.NAME).text !== name) fail('source QName mismatch: ' + name);
         // Do not silently omit a second file-local class or interface from identity planning.
@@ -115,24 +125,47 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     const resolve = (owner: string, spelling: string): string => sourceResolver(roots.get(owner), owner,
         name => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0)(spelling);
     const bindings: NativeGeneratedDeclarationBinding[] = [], references: NativeGeneratedReference[] = [];
+    const interfaces: NativeGeneratedInterfaceBinding[] = [];
+    names.forEach(owner => {
+        const node = classes.get(owner);
+        if (node.kind !== K.INTERFACE) return;
+        if (!data.interfaceProviderModule) fail('explicit source interface provider required: ' + owner);
+        if (data.sources[owner].referenceOnly) fail('interface cannot be reference-only: ' + owner);
+        const bases = node.findChildren(K.EXTENDS).map(base => resolve(owner, base.qualifiedName || base.text));
+        if (new Set(bases).size !== bases.length) fail('duplicate interface base: ' + owner);
+        bases.forEach(base => {
+            if (!classes.has(base) || classes.get(base).kind !== K.INTERFACE || data.sources[base].referenceOnly)
+                fail('interface base requires exact source interface: ' + owner + ':' + base);
+        });
+        interfaces.push(Object.freeze({qname: owner, bases: Object.freeze(bases), tokenExport: 'interface' + interfaces.length}));
+    });
     names.forEach(owner => {
         const cls = classes.get(owner);
+        if (cls.kind === K.INTERFACE) return;
         if (!data.sources[owner].referenceOnly) {
-            if (cls.findChild(K.IMPLEMENTS_LIST) && cls.findChild(K.IMPLEMENTS_LIST).children.length)
-                fail('interface declaration authority required: ' + owner);
+            const implemented = cls.findChild(K.IMPLEMENTS_LIST);
+            const declaredInterfaces = implemented ? implemented.children.map(node => resolve(owner,node.qualifiedName || node.text)) : [];
+            if (new Set(declaredInterfaces).size !== declaredInterfaces.length) fail('duplicate implements declaration: ' + owner);
+            declaredInterfaces.forEach(name => {
+                if (!interfaces.some(binding => binding.qname === name)) fail('interface declaration authority required: ' + owner + ':' + name);
+            });
             const baseNode = cls.findChild(K.EXTENDS), base = baseNode ? resolve(owner, baseNode.qualifiedName || baseNode.text) : 'Object';
-            if (base !== 'Object' && (!data.sources[base] || data.sources[base].referenceOnly) && !(providers[base] && providers[base].nativeBase === 'Event'))
+            if (base !== 'Object' && (!data.sources[base] || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && providers[base].nativeBase === 'Event'))
                 fail('base requires a planned source declaration: ' + owner + ':' + base);
             bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
-                tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length}));
+                tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length,
+                interfaces: Object.freeze(declaredInterfaces)}));
         }
     });
     names.forEach(owner => {
         const walk = (node: Node): void => {
-            if (node.kind === K.TYPE) {
+            // Legacy interface method signatures have a TYPE-kind wrapper named
+            // 'function'; only its actual return/parameter children are types.
+            if (node.kind === K.TYPE && node.text !== 'function') {
                 const spelling = node.qualifiedName || node.text || '*', identity = resolve(owner, spelling);
                 const kind: NativeGeneratedReference['kind'] = builtins.indexOf(identity) >= 0 ? 'intrinsic' : bindings.some(binding => binding.qname === identity)
-                    ? 'declaration' : nativeNames.indexOf(identity) >= 0 ? 'native' : 'unresolved';
+                    ? 'declaration' : interfaces.some(binding => binding.qname === identity) ? 'interface'
+                    : nativeNames.indexOf(identity) >= 0 ? 'native' : 'unresolved';
                 references.push(Object.freeze({owner, start: node.start, end: node.end, sourceName: spelling, kind, identity}));
             }
             node.children.forEach(walk);
@@ -141,6 +174,19 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     });
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
+    if (interfaces.length) lines.push('import {defineAS3Interface} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
+    const emittedInterfaces = new Set<string>(), activeInterfaces = new Set<string>();
+    const addInterface = (binding: NativeGeneratedInterfaceBinding): void => {
+        if (emittedInterfaces.has(binding.qname)) return;
+        if (activeInterfaces.has(binding.qname)) fail('cyclic source interface inheritance: ' + binding.qname);
+        activeInterfaces.add(binding.qname);
+        const parents = binding.bases.map(name => interfaces.find(value => value.qname === name));
+        parents.forEach(addInterface);
+        lines.push('export const ' + binding.tokenExport + '=defineAS3Interface<unknown>('
+            + JSON.stringify(binding.qname.replace(/\.([^.]*)$/, '::$1')) + ',[' + parents.map(value => value.tokenExport).join(',') + ']);');
+        activeInterfaces.delete(binding.qname); emittedInterfaces.add(binding.qname);
+    };
+    interfaces.forEach(addInterface);
     const nativeBindings: Array<NativeGeneratedDeclarationPlan['nativeBindings'][number]> = nativeNames.map((name, index) => {
         const provider = providers[name], referenceExport = 'native' + index;
         lines.push('export {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';');
@@ -174,7 +220,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     };
     bindings.forEach(add);
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
-        sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), references: Object.freeze(references),
+        sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),
         nativeBindings: Object.freeze(nativeBindings)});
     contexts.set(plan, {input: data, plan});
     return plan;

@@ -6,7 +6,7 @@ import * as Operators from "./syntax/operators";
 
 export {Parser, Scanner, Emitter, KeyWords, Operators};
 export {createNativeGeneratedDeclarationPlan, NativeGeneratedDeclarationInput, NativeGeneratedDeclarationPlan,
-    NativeGeneratedDeclarationBinding, NativeGeneratedReference} from './emit/native-generated-declarations';
+    NativeGeneratedDeclarationBinding, NativeGeneratedInterfaceBinding, NativeGeneratedReference} from './emit/native-generated-declarations';
 export {createNativeDeclarationDomain, NativeDeclarationDomain, NativeDeclarationDomainInput,
     NativeDeclarationBinding, NativeDeclarationReference} from './emit/native-declaration-plan';
 export {createNativeSourceAncestryPlan, NativeSourceAncestryInput, NativeSourceAncestryPlan,

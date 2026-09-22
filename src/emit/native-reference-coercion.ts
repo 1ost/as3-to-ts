@@ -171,6 +171,8 @@ export class NativeReferenceCoercion {
     type(name: string): string {
         if (!name) return null;
         const identity = this.resolve(name), plan = this.options.plan;
+        if (plan.interfaces.some(binding => binding.qname === identity))
+            fail('source interface coercion lowering requires separate emission qualification');
         const source = plan.bindings.find(binding => binding.qname === identity);
         const native = plan.nativeBindings.find(binding => binding.qname === identity);
         return source ? source.tokenExport : native ? native.referenceExport : null;
