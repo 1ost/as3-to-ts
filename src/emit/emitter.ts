@@ -4866,7 +4866,13 @@ function emitLiteral(emitter:Emitter, node:Node):void {
 		? node.text.replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
 		: node.text;
 	emitter.insert(text);
-	emitter.skipTo(node.end);
+	// The legacy parser's RegExp span ends at the closing slash, while its
+	// literal text already includes flags. Consume the authenticated token
+	// completely so the following catchup does not append the flags twice.
+	const tokenEnd = quote === '/' && typeof node.text === 'string'
+		&& emitter.source.slice(node.start,node.start + node.text.length) === node.text
+		? Math.max(node.end,node.start + node.text.length) : node.end;
+	emitter.skipTo(tokenEnd);
 }
 
 function emitArray(emitter:Emitter, node:Node):void {
