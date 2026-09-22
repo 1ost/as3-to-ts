@@ -168,7 +168,7 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
     const classes: {[qname: string]: NativeSourceAncestryClass} = {};
     Object.keys(roots).sort().forEach(qname => {
         const root = roots[qname], content = packageNode(root).findChild(K.CONTENT);
-        content.findChildren(K.CLASS).forEach(owner => {
+        content.children.filter(owner => owner && [K.CLASS, K.INTERFACE].indexOf(owner.kind) >= 0).forEach(owner => {
             const identity = classQName(root, owner), extension = owner.findChild(K.EXTENDS);
             if (classes[identity]) return fail('duplicate source class: ' + identity);
             const mods = owner.findChild(K.MOD_LIST);

@@ -33,7 +33,7 @@ export class NativeNamespaces {
             this.fail('namespaceUris must be a QName-to-URI object');
         this.configured = namespaceUris || {};
         this.walk(root, node => {
-            if (node.kind !== NodeKind.CLASS) return;
+            if ([NodeKind.CLASS, NodeKind.INTERFACE].indexOf(node.kind) < 0) return;
             const qname = this.packageName(node) + node.findChild(NodeKind.NAME).text;
             this.classes.set(qname, (this.classes.get(qname) || []).concat(node));
         });

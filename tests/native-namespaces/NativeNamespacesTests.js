@@ -93,8 +93,8 @@ assert.match(generate(topLevelCompilationUnit), /__as3_namespace_member_/);
 const ordinaryReceiverSource = `package example {
   import alias.same;
   use namespace same;
-  public class OrdinaryHolder {
-    public function updateLengths():void {}
+  public interface OrdinaryHolder {
+    function updateLengths():void;
   }
   public class OrdinaryReceiver {
     same function updateLengths():void {}
