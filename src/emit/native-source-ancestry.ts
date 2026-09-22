@@ -203,13 +203,7 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
                     ['public','private','protected','internal','static','override','final','native','dynamic'].indexOf(mod.text) < 0);
                 const isStatic = !!memberMods && memberMods.children.some(mod => mod.text === 'static');
                 const importsForType = imports(root).map(value => value.text);
-                if ([K.VAR_LIST, K.CONST_LIST].indexOf(member.kind) >= 0) {
-                    member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
-                        const name = field.findChild(K.NAME), type = field.findChild(K.TYPE);
-                        if (name && type) metadata.types.push({name:name.text,
-                            type:nativeSourceTypeIdentity(type, identity, importsForType), static:isStatic});
-                    });
-                } else if ([K.GET, K.SET].indexOf(member.kind) >= 0) {
+                if ([K.GET, K.SET].indexOf(member.kind) >= 0) {
                     const name = member.findChild(K.NAME), type = member.findChild(K.TYPE);
                     if (name && type) metadata.types.push({name:name.text,
                         type:nativeSourceTypeIdentity(type, identity, importsForType), static:isStatic});
