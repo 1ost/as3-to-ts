@@ -2,20 +2,21 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),parse=require('../../lib/parse'),emit=require('../../lib/emit'),ts=require('typescript');
 const engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
-const evidence=path.join(engine,'tests/nativeFlashOracle/source-interface-declarations');
+const evidence=path.join(engine,'tests/nativeFlashOracle/interface-reference-entry');
 const expected=require(path.join(evidence,'verify.cjs'));
 const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
-const root=path.resolve('.cache/native-generated-interface-emission');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
+const root=path.resolve('.cache/native-interface-reference-entry');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
 const modulePath=file=>{let relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return relative.startsWith('.')?relative:'./'+relative;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
-const sources={};for(const file of fs.readdirSync(path.join(evidence,'source/contracts'))){const source=fs.readFileSync(path.join(evidence,'source/contracts',file),'utf8');sources['contracts.'+file.slice(0,-3)]={source,sourceSha256:hash(source)};}
-const plan=api.createNativeGeneratedDeclarationPlan({scope:'source-interface-declarations',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources});
+const sources={};for(const file of fs.readdirSync(path.join(evidence,'source/cases'))){const source=fs.readFileSync(path.join(evidence,'source/cases',file),'utf8');sources['cases.'+file.slice(0,-3)]={source,sourceSha256:hash(source)};}
+const plan=api.createNativeGeneratedDeclarationPlan({scope:'interface-reference-entry',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
-const options={customVisitors:[],importModules:Object.fromEntries(Object.keys(sources).map(name=>[name,'./'+name.split('.').pop()])),definitionsByNamespace:{contracts:Object.keys(sources).map(n=>n.split('.').pop())},
+const options={customVisitors:[],importModules:Object.fromEntries(Object.keys(sources).map(name=>[name,'./'+name.split('.').pop()])),definitionsByNamespace:{cases:Object.keys(sources).map(n=>n.split('.').pop())},
  decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
  nativeGeneratedDeclarations:{plan,module:'./domain'},nativeClassTraitsModule:provider('AS3GeneratedClass'),
  nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
  nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
+ nativeDictionaryPropertyModule:provider('AS3Property'),nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},
  nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition')};
 const combined=process.argv.includes('--combined');
 if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./domain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
@@ -25,28 +26,28 @@ for(const body of [
  'protected static function call():void {}',
  'private static function get value():int {return 0;}',
  'private static function call(...values):void {}',
- 'private static function call(v:int=0):void {}',
- 'public function call():void {var v:IRoot;}'
+ 'private static function call(v:int=0):void {}'
 ]){
- const source='package contracts {public class Guard {'+body+'}}';
- const p=api.createNativeGeneratedDeclarationPlan({scope:'interface-emission-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources:{...sources,'contracts.Guard':{source,sourceSha256:hash(source)}}});
+ const source='package cases {public class Guard {'+body+'}}';
+ const p=api.createNativeGeneratedDeclarationPlan({scope:'interface-emission-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources:{...sources,'cases.Guard':{source,sourceSha256:hash(source)}}});
  assert.throws(()=>emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},...(combined?{nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}}:{})}),/AS3_[A-Z_]+UNSUPPORTED/);guards++;
 }
-const wanted=expected.filter(row=>!row.id.startsWith('reflection-'));assert.equal(wanted.length,28);
-for(const mutate of [rows=>rows.pop(),rows=>rows.reverse(),rows=>rows.find(r=>r.id==='after-interface-only').value.push('implementation-init'),rows=>rows.find(r=>r.id==='field-rejection-preserves').value[2]=false,rows=>rows.find(r=>r.id==='interface-dispatch-inherited').value[1]=7]){
+const wanted=expected.filter(row=>row.id.startsWith('required-')||row.id.startsWith('forward-'));assert.equal(wanted.length,12);
+for(const mutate of [rows=>rows.pop(),rows=>rows.reverse(),rows=>rows.find(r=>r.id==='forward-rejected').value[3][0]=10,rows=>rows.find(r=>r.id==='required-undefined').value[2][1]=false,rows=>rows.find(r=>r.id==='required-lookalike').value[1].push('base-body')]){
  const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));
 }
 fs.writeFileSync(path.join(run,'domain.ts'),plan.moduleSource);
 const emitted=[];
 for(const binding of plan.bindings) {
   const source=sources[binding.qname].source;
+  if(binding.qname==='cases.Locals'){assert.throws(()=>emit(parse(binding.qname+'.as',source),source,options),/typed local source reference lowering required/);guards++;continue;}
   const output=emit(parse(binding.qname+'.as',source),source,options);
   const file=path.join(run,binding.qname.split('.').pop()+'.ts');fs.writeFileSync(file,output);emitted.push({file,sourceSha256:hash(source),generatedSha256:hash(output)});
 }
 for(const binding of plan.interfaces){const source=sources[binding.qname].source;
  const output=emit(parse(binding.qname+'.as',source),source,{customVisitors:[],importModules:options.importModules,definitionsByNamespace:options.definitionsByNamespace,decoratorModules:options.decoratorModules});
  const file=path.join(run,binding.qname.split('.').pop()+'.ts');fs.writeFileSync(file,output);emitted.push({file,sourceSha256:hash(source),generatedSha256:hash(output)});}
-const driver=fs.readFileSync(path.join(__dirname,'emission-driver.txt'),'utf8').replaceAll('@NATIVE_CLASS@',helpers.nativeClass).replaceAll('@TYPE@',provider('AS3Type')).replace('@INTERFACES@',JSON.stringify(Object.fromEntries(plan.interfaces.map(b=>[b.qname,b.tokenExport]))));
+const driver=fs.readFileSync(path.join(__dirname,'reference-entry-driver.txt'),'utf8').replaceAll('@NATIVE_CLASS@',helpers.nativeClass).replaceAll('@TYPE@',provider('AS3Type')).replace('@INTERFACES@',JSON.stringify(Object.fromEntries(plan.interfaces.map(b=>[b.qname,b.tokenExport]))));
 fs.writeFileSync(path.join(run,'driver.ts'),driver);
 const files=fs.readdirSync(run).filter(f=>f.endsWith('.ts')).map(f=>path.join(run,f));
 const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
@@ -70,7 +71,7 @@ async function main(){
    assert.deepEqual(actual,wanted);assert.deepEqual(browserRows,wanted);
    results.push({target,node:actual,browser:browserRows,inputs:Object.keys(bundle.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:5,held:['Three interface-reflection AIR rows','Interface reference locals','Ordinary consumer interface coercion','Static lexical variables, accessors and protected methods','Optional/rest methods and constructors, typed exception-return regions']},null,2));
- console.log('Generated interface emission: '+guards+' guards, 28 AIR rows in Node/Chromium, ES5/ES2015; exact 5 AIR classes and 4 interfaces. '+run);
+ fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:5,held:['20 AIR local observations: full Locals source requires nested callable lowering','Ordinary consumer interface coercion','Static lexical variables, accessors and protected methods','Optional/rest methods and constructors, typed exception-return regions']},null,2));
+ console.log('Generated interface emission: '+guards+' guards, 12 AIR rows in Node/Chromium, ES5/ES2015; exact 6 AIR classes and 1 interface; full Locals source explicitly held. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

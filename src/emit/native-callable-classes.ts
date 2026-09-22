@@ -141,8 +141,9 @@ export class NativeCallableClasses {
                     const value = parameter.findChild(K.NAME_TYPE_INIT), type = value.findChild(K.TYPE);
                     if(value.findChild(K.VECTOR))this.fail('vector constructor parameter coercion requires authority');
                     const sourceReference=generated&&type&&generated.options.plan.references.find(ref=>ref.owner===qname&&ref.start===type.start&&ref.end===type.end);
-                    const sourceDeclaration=sourceReference&&sourceReference.kind==='declaration'
-                        &&generated.options.plan.bindings.find(binding=>binding.qname===sourceReference.identity);
+                    const sourceDeclaration=sourceReference&&(sourceReference.kind==='declaration'
+                        ?generated.options.plan.bindings.find(binding=>binding.qname===sourceReference.identity)
+                        :sourceReference.kind==='interface'&&generated.options.plan.interfaces.find(binding=>binding.qname===sourceReference.identity));
                     const reference=sourceDeclaration?{identity:sourceDeclaration.qname,exported:sourceDeclaration.tokenExport}:undefined;
                     const sourceType = reference ? reference.identity : nativeSourceTypeIdentity(type, qname, imports);
                     const selfReference = !!metadata && sourceType === qname;

@@ -1,0 +1,23 @@
+import {Value as ValueBinding} from './Value';
+import {Child as ChildBinding} from './Child';
+import {Lookalike as LookalikeBinding} from './Lookalike';
+import {Trace as TraceBinding} from './Trace';
+import {Required as RequiredBinding} from './Required';
+import {Forward as ForwardBinding} from './Forward';
+import {readNativeClass} from '@NATIVE_CLASS@';
+export function run(){
+ const Value=readNativeClass(ValueBinding),Child=readNativeClass(ChildBinding),Lookalike=readNativeClass(LookalikeBinding),Trace=readNativeClass(TraceBinding),Required=readNativeClass(RequiredBinding),Forward=readNativeClass(ForwardBinding);
+ const rows:any[]=[];function row(id:string,value:any){rows.push({id,value});}
+ function ctor(id:string,C:any,args:any[]){
+  Trace.rows=[];Trace.captured=null;let result:any=null;let failure:any[]=[];
+  try{if(args.length===0)result=new C();else result=new C(args[0]);}catch(e){failure=[(e as any).name,(e as any).errorID];}
+  const captured=Trace.captured;
+  row(id,[failure,Trace.rows,result===null?null:[result.item===args[0],result.item===null,result.marker],captured===null?null:[captured.marker,C===Forward?captured.childMarker:null]]);
+ }
+
+   const exact=new Value();const child=new Child();const fake=new Lookalike();
+   ctor("required-exact",Required,[exact]);ctor("required-child",Required,[child]);ctor("required-null",Required,[null]);ctor("required-undefined",Required,[undefined]);
+   ctor("required-lookalike",Required,[fake]);ctor("required-object",Required,[{}]);ctor("required-class",Required,[Value]);ctor("required-missing",Required,[]);
+   ctor("forward-exact",Forward,[exact]);ctor("forward-child",Forward,[child]);ctor("forward-undefined",Forward,[undefined]);ctor("forward-rejected",Forward,[fake]);
+return rows;
+}

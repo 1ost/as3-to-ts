@@ -53,7 +53,7 @@ the separate emission test below executes unchanged original source bodies.
 Run `node tests/native-generated-interfaces/emission.cjs`, also with `--combined`,
 to emit all five unchanged AIR classes and four unchanged interfaces. Both modes
 match 28 of the 31 AIR observations on ES5/ES2015 in Node/Chromium, with zero strict
-type diagnostics, seven rejection guards and five comparison negative controls.
+type diagnostics, six rejection guards and five comparison negative controls.
 The three interface-reflection rows remain explicitly held. No subject source is
 trimmed, rewritten or replaced by fixture classes.
 
@@ -68,6 +68,19 @@ and translate required parameter types. An implements clause never supplies a
 native superclass.
 
 Static lexical variables/accessors and protected static methods, interface
-constructor parameters/reference locals, optional/rest callables and complete
+reference locals, optional/rest callables and complete
 interface Class reflection remain held. The actual Signal chain still needs
 these prerequisites before it is runnable.
+
+Run reference-entry.cjs, also with --combined, for required interface constructor
+parameters. Six unchanged source classes and one interface match 12 of the 32
+interface-reference-entry AIR observations on ES5/ES2015 in Node/Chromium, with
+zero strict type diagnostics, six guards and five comparison negative controls.
+The domain authenticates interface parameter identity; common property coercion
+applies before body entry, including when a wildcard derived constructor forwards
+an invalid value to its base. Missing arguments reject and undefined becomes null.
+
+The complete Locals source is retained in the plan and explicitly rejected. Its
+20 AIR observations are not claimed: generated interface local references and
+nested functions require further lowering. No subject body is trimmed to bypass
+these gates. This does not qualify optional interface defaults or Signal runtime.
