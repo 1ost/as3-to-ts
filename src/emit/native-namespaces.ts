@@ -316,7 +316,7 @@ export class NativeNamespaces {
 
     access(node: Node): NamespaceAccess {
         const reference = outerEncapsulatedExpression(node);
-        if (reference.parent && [NodeKind.DELETE, NodeKind.PRE_INC, NodeKind.POST_INC, NodeKind.PRE_DEC, NodeKind.POST_DEC].indexOf(reference.parent.kind) >= 0)
+        if (reference.parent && reference.parent.kind === NodeKind.DELETE)
             this.fail('namespace delete/update requires separate lowering');
         const opened = this.openedAccesses.get(node);
         if (opened) return opened;
@@ -511,6 +511,34 @@ export class NativeNamespaces {
         return receiverClass && this.findMember(receiverClass, access.uri, access.name, staticReceiver);
     }
 
+    /** Bounded by native namespace-update evidence, separate from typed locals. */
+    integerUpdateType(node: Node, member: NamespaceMember): string {
+        if (!member || member.static || member.owner !== this.ancestor(node, NodeKind.CLASS))
+            this.fail('namespace update requires an own instance integer member');
+        const declaration = member.declaration;
+        let type: Node;
+        if (declaration.kind === NodeKind.VAR_LIST) {
+            type = declaration.findChild(NodeKind.NAME_TYPE_INIT).findChild(NodeKind.TYPE);
+        } else if (declaration.kind === NodeKind.GET || declaration.kind === NodeKind.SET) {
+            const pair = Array.from(this.members.values()).filter(candidate => candidate.owner === member.owner
+                && candidate.uri === member.uri && candidate.name === member.name && !candidate.static);
+            const getter = pair.find(candidate => candidate.declaration.kind === NodeKind.GET);
+            const setter = pair.find(candidate => candidate.declaration.kind === NodeKind.SET);
+            if (!getter || !setter) this.fail('namespace update requires both accessor halves');
+            type = getter.declaration.findChild(NodeKind.TYPE);
+            const parameters = setter.declaration.findChild(NodeKind.PARAMETER_LIST);
+            const parameter = parameters && parameters.children.length === 1 && parameters.children[0];
+            const binding = parameter && parameter.findChild(NodeKind.NAME_TYPE_INIT);
+            const input = binding && binding.findChild(NodeKind.TYPE);
+            if (!type || !input || type.text !== input.text || type.qualifiedName !== input.qualifiedName)
+                this.fail('namespace update requires matching integer accessor types');
+        } else this.fail('namespace update requires a mutable integer member');
+        if (!type || type.qualifiedName || ['int', 'uint'].indexOf(type.text) < 0
+            || this.classType(node, type.text))
+            this.fail('namespace update requires an unshadowed int or uint type');
+        return type.text;
+    }
+
     /** Infer a source-backed receiver type for a field or class identifier. */
     receiverType(node: Node, namespaceChain = false): string {
         // Carry the selector's context through its receiver AST. Source text
@@ -548,6 +576,24 @@ export class NativeNamespaces {
             // explicit `value as Target` form.
             const target = this.classType(node, receiver.children[0].text);
             if (target) return receiver.children[0].text;
+            const name = receiver.children[0].text;
+            if (namespaceChain && this.localVariableType(node, name) === null) {
+                // A direct own instance method is also source type authority.
+                // Parameters/local functions/variables and namespace members
+                // must not borrow an ordinary method's return annotation.
+                const methods = owner.findChild(NodeKind.CONTENT).children.filter(value =>
+                    value.kind === NodeKind.FUNCTION && !this.memberDeclaration(value)
+                    && value.findChild(NodeKind.NAME).text === name
+                    && !value.findChild(NodeKind.MOD_LIST).children.some(mod => mod.text === 'static'));
+                if (methods.length === 1) {
+                    const type = methods[0].findChild(NodeKind.TYPE);
+                    const result = type && (type.qualifiedName || type.text);
+                    const returnedClass = result && this.classType(node, result);
+                    const access = node.kind === NodeKind.NAMESPACE_ACCESS && this.access(node);
+                    if (returnedClass === owner && access
+                        && this.findMember(returnedClass, access.uri, access.name, false, true)) return result;
+                }
+            }
             return null;
         } else if (receiver.kind === NodeKind.CALL && receiver.children.length >= 2
             && receiver.children[0].kind === NodeKind.DOT
@@ -619,8 +665,9 @@ export class NativeNamespaces {
                 if (value !== scope && functions.indexOf(value.kind) >= 0) {
                     // A nested function name is a local binding, but its body
                     // and parameters cannot provide types to the outer scope.
-                    if (value.kind === NodeKind.FUNCTION && value.findChild(NodeKind.NAME)
-                        && value.findChild(NodeKind.NAME).text === name) result = '*';
+                    const declarationName = value.findChild(NodeKind.NAME);
+                    if (value.kind === NodeKind.FUNCTION
+                        && (declarationName ? declarationName.text : value.text) === name) result = '*';
                     return;
                 }
                 if (value.kind === NodeKind.NAME_TYPE_INIT || value.kind === NodeKind.PARAMETER) {

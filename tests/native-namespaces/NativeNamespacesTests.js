@@ -359,8 +359,6 @@ for (const depth of [0, 1, 3]) {
   assert.deepStrictEqual(Array.from(new Grouped().set(new Grouped(), 4294967295)), [-1, 1, 1, 1, 4, -1]);
   for (const expression of [
     `delete ${group('this.same::unsigned')}`,
-    `${group('this.same::unsigned')}++`, `${group('this.same::unsigned')}--`,
-    `++${group('this.same::unsigned')}`, `--${group('this.same::unsigned')}`,
     `${group('this.same::method')} = null`, `${group('this.same::method')} += null`
   ]) {
     assert.throws(() => generate(`package example {
@@ -396,7 +394,7 @@ for (const invalid of [
   'package p { public namespace n = "urn:n"; public class C extends Base { n var x:Object; } }',
   'package p { public namespace n = "urn:n"; public class C { n var x:Object = <value/>; } }',
   'package p { public namespace n = "urn:n"; public class C { n var x:Object; public function f():void { delete this.n::x; } } }',
-  'package p { public namespace n = "urn:n"; public class C { n var x:uint; public function f():void { this.n::x++; } } }',
+  'package p { public namespace n = "urn:n"; public class C { n var x:Object; public function f():void { this.n::x++; } } }',
   'package p { public namespace n = "urn:n"; public class C { n function f():void {} public function g():void { this.n::f = null; } } }'
 ]) assert.throws(() => generate(invalid), /AS3_NAMESPACE_UNSUPPORTED/, invalid);
 assert.throws(() => generate('package p { public namespace n = "urn:source"; }', {

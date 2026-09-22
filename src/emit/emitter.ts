@@ -194,6 +194,10 @@ const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.NEW]: emitNew,
 	[NodeKind.RELATION]: emitRelation,
 	[NodeKind.ASSIGN]: emitAssign,
+	[NodeKind.PRE_INC]: emitNamespaceUpdate,
+	[NodeKind.POST_INC]: emitNamespaceUpdate,
+	[NodeKind.PRE_DEC]: emitNamespaceUpdate,
+	[NodeKind.POST_DEC]: emitNamespaceUpdate,
 	[NodeKind.DELETE]: emitDelete,
     [NodeKind.ADD]: emitAdd,
 	[NodeKind.INIT]: emitInit,
@@ -802,7 +806,7 @@ function emitName(emitter:Emitter, node:Node):void {
     emitter.skipTo(node.end);
 }
 
-function emitNamespaceAccess(emitter:Emitter, node:Node):void {
+function resolveNamespaceAccess(emitter:Emitter, node:Node) {
     const access = emitter.namespaces.access(node);
     if (hasFunctionLocal(emitter, access.qualifier))
         emitter.namespaces.fail('runtime namespace qualifier shadows a declaration: ' + access.qualifier);
@@ -813,6 +817,11 @@ function emitNamespaceAccess(emitter:Emitter, node:Node):void {
         || emitter.namespaces.receiverType(node);
     emitter.namespaces.checkReceiver(node, receiverType);
     const target = emitter.namespaces.accessMember(node, receiverType);
+    return {access, target};
+}
+
+function emitNamespaceAccess(emitter:Emitter, node:Node):void {
+    const {access, target} = resolveNamespaceAccess(emitter, node);
     const reference = outerEncapsulatedExpression(node);
     if (reference.parent && reference.parent.kind === NodeKind.ASSIGN && reference.parent.children[0] === reference
         && target && target.declaration.kind === NodeKind.CONST_LIST)
@@ -835,6 +844,44 @@ function emitNamespaceAccess(emitter:Emitter, node:Node):void {
     }
     emitter.insert('[' + emitter.namespaces.key(access.uri, access.name) + ']');
     emitter.skipTo(node.end);
+}
+
+function emitNamespaceUpdate(emitter:Emitter, node:Node):void {
+    const operand = node.children.length === 1 && unwrapEncapsulatedExpression(node.children[0]);
+    if (operand && operand.kind === NodeKind.DOT)
+        emitter.namespaces.lowerOpenedAccess(operand, emitter.namespaces.receiverType(operand));
+    if (!operand || operand.kind !== NodeKind.NAMESPACE_ACCESS) {
+        // Do not silently emit uncoerced updates for open namespace identifiers.
+        if (operand && operand.kind === NodeKind.IDENTIFIER
+            && emitter.namespaces.openedIdentifier(operand, hasFunctionLocal(emitter, operand.text)))
+            emitter.namespaces.fail('implicit open namespace update requires separate lowering');
+        emitter.catchup(node.start);
+        visitNodes(emitter, node.children);
+        return;
+    }
+    const {access, target} = resolveNamespaceAccess(emitter, operand);
+    const type = emitter.namespaces.integerUpdateType(operand, target);
+    if (!access.receiver || access.receiver.text === 'super')
+        emitter.namespaces.fail('implicit/super namespace update requires separate lowering');
+    let temporary = '__as3_namespace_update';
+    while (emitter.source.indexOf(temporary) >= 0) temporary += '_';
+    const receiver = temporary + '_receiver', old = temporary + '_old', next = temporary + '_next';
+    const key = emitter.namespaces.key(access.uri, access.name);
+    const increment = node.kind === NodeKind.PRE_INC || node.kind === NodeKind.POST_INC;
+    const prefix = node.kind === NodeKind.PRE_INC || node.kind === NodeKind.PRE_DEC;
+    // The argument evaluates before entering the generated scope. Capture each
+    // receiver/getter once; preserve the raw expression result while coercing
+    // only the stored value (unlike AS3 int-local prefix increment_i).
+    emitter.catchup(node.start);
+    emitter.insert('((' + receiver + ') => { const ' + old + ' = ' + receiver + '[' + key + ']; '
+        + 'const ' + next + ' = ' + old + (increment ? ' + 1; ' : ' - 1; ')
+        + receiver + '[' + key + '] = (' + next + (type === 'uint' ? ' >>> 0); ' : ' | 0); ')
+        + 'return ' + (prefix ? next : old) + '; })(');
+    emitter.skipTo(access.receiver.start);
+    visitNode(emitter, access.receiver);
+    emitter.catchup(getEffectiveNodeEnd(access.receiver));
+    emitter.insert(')');
+    emitter.skipTo(getEffectiveNodeEnd(node));
 }
 
 function emitEmbed(emitter:Emitter, node:Node):void {

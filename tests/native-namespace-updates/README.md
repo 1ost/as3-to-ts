@@ -29,6 +29,20 @@ current shared host template does not import packaged entries. It only invokes
 the subject's complete `snapshot`; it does not replace its update operations.
 The receipt identifies the exact runner and SDK inputs used for this capture.
 
-This evidence alone does not qualify compiler emission, generic dynamic updates,
-inheritance, static slots, setter-only/getter-only properties, exceptions, or
-full OP2 behavior. AIR is the native reference here, not Pepper Flash or Ruffle.
+`npm run test:native-namespace-updates` compiles the complete captured subject
+through the normal two-pass emitter, loads the distributed method decorators,
+and compares all 96 observations on ES5 and ES2015. A supplementary punctuation
+variant checks parenthesized update references against the same values; it is
+not an additional Flash capture. Thirteen negative controls retain unsupported
+boundaries, including local/parameter/function shadowing of receiver methods.
+
+The lowering covers own instance int/uint namespace fields and matching
+getter/setter pairs with explicit source-resolved receivers. It captures the
+receiver and old value once, coerces the store, and preserves prefix/postfix
+expression results. Prefix AST ranges now include the operator so source
+catch-up cannot emit a second update outside the generated expression.
+
+Generic dynamic updates, inheritance, static slots, implicit receivers,
+setter-only/getter-only properties, exceptions, general getter/return coercion
+and full OP2 behavior remain outside this checkpoint. AIR is the native
+reference here, not Pepper Flash or Ruffle.
