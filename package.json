@@ -55,7 +55,8 @@
     "test:native-string-enumeration": "node tests/native-string-enumeration/run.cjs",
     "test:native-generated-constants": "node tests/native-generated-constants/run.cjs",
     "test:native-generated-event": "node tests/native-generated-event/run.cjs && node tests/native-generated-event/run.cjs --reference-coercion",
-    "test:native-reference-construction": "node tests/native-reference-construction/run.cjs"
+    "test:native-reference-construction": "node tests/native-reference-construction/run.cjs",
+    "test:native-consumer-constants": "node tests/native-consumer-constants/run.cjs"
   },
   "keywords": [
     "actionscript",

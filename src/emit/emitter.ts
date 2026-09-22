@@ -4498,7 +4498,25 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 
 }
 
+function emitConsumerLiteralConstant(emitter:Emitter,node:Node):boolean {
+    if(!emitter.references||emitter.classInitializers.enabled)return false;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),member=node.children[1];
+    if(!receiver||receiver.kind!==NodeKind.IDENTIFIER||!member||member.kind!==NodeKind.LITERAL)return false;
+    const def=emitter.findDefInScope(receiver.text);
+    if(def&&(def.bound||Object.prototype.hasOwnProperty.call(def,'as3Type')))return false;
+    const constant=emitter.references.literalStaticConstant(receiver.text,member.text);
+    if(!constant)return false;
+    const expression=outerEncapsulatedExpression(node),operation=expression.parent;
+    if(operation&&operation.children[0]===expression&&[NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE].indexOf(operation.kind)>=0)
+        throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: consumer constant mutation');
+    const module=emitter.options.nativeSignaturePropertyModule;generatedModule(module);
+    const coerce=propertyHelper(emitter,'coerceAS3PropertyValue',module);
+    emitter.catchup(node.start);emitter.insert('(<any>'+coerce+'('+constant.literal+','+JSON.stringify(constant.type)+'))');emitter.skipTo(node.end);
+    return true;
+}
+
 function emitDot(emitter:Emitter, node:Node) {
+    if (emitConsumerLiteralConstant(emitter,node)) return;
 	if (emitArraySortConstant(emitter, node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
 	const receiver = node.children[0];

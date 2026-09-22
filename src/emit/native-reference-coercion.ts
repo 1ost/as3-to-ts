@@ -1,6 +1,6 @@
 import Node, {outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
-import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
 import {generatedModule} from './native-generated-emission';
 
 export interface NativeReferenceCoercionOptions {
@@ -173,6 +173,28 @@ export class NativeReferenceCoercion {
         const source = plan.bindings.find(binding => binding.qname === identity);
         const native = plan.nativeBindings.find(binding => binding.qname === identity);
         return source ? source.tokenExport : native ? native.referenceExport : null;
+    }
+    literalStaticConstant(name:string, member:string): {type:string; literal:string} {
+        const identity=this.resolve(name),plan=this.options.plan;
+        if(!plan.bindings.some(binding=>binding.qname===identity))return null;
+        const input=nativeGeneratedDeclarationInputs(plan,plan.scope),source=input.sources[identity].source;
+        const declaration=nativeGeneratedConsumerResolver(plan,source).root.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS);
+        for(const group of declaration.findChild(K.CONTENT).children){
+            if(group.kind!==K.CONST_LIST)continue;
+            const mods=group.findChild(K.MOD_LIST),flags=mods?mods.children.map(mod=>mod.text):[];
+            if(flags.indexOf('public')<0||flags.indexOf('static')<0||flags.some(flag=>['public','static'].indexOf(flag)<0))continue;
+            const value=group.findChildren(K.NAME_TYPE_INIT).find(field=>field.findChild(K.NAME).text===member);
+            if(!value)continue;
+            const type=value.findChild(K.TYPE),init=value.findChild(K.INIT);
+            if(!type||!init||value.findChild(K.VECTOR)||['String','Number','int','uint','Boolean'].indexOf(type.text)<0)
+                fail('consumer constant requires a primitive literal declaration');
+            const end=(node:Node):number=>node.children.reduce((last,child)=>Math.max(last,end(child)),Math.max(node.start,node.end));
+            const literal=source.slice(init.start,end(init)).trim();
+            if(!/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal))
+                fail('computed consumer constant requires initialization authority');
+            return {type:type.text,literal:literal.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029')};
+        }
+        return null;
     }
     sourceClass(name: string): boolean {
         const identity = this.resolve(name);
