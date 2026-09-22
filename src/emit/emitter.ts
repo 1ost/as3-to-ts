@@ -126,6 +126,8 @@ export interface EmitterOptions {
     nativeClassTraitsModule?: string;
     nativeGeneratedDeclarations?: NativeGeneratedEmissionOptions;
     nativeReferenceCoercion?: NativeReferenceCoercionOptions;
+    /** Common AS3Property scalar coercion for mixed reference method signatures. */
+    nativeSignaturePropertyModule?: string;
     /** Explicit distributed helper modules for generated lazy native classes. */
     nativeClassHelperModules?: NativeClassHelperModules;
     /** Common AS3Property coercion for generated method signatures. */
@@ -432,6 +434,11 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['flash.errors.AS3SourceError']
 				&& this.options.importModules['flash.errors.AS3SourceError'] !== module)
 				throw new Error('AS3_SOURCE_ERROR_UNSUPPORTED: source Error import binding disagrees with nativeSourceErrorModule');
+		}
+		if (this.options.nativeSignaturePropertyModule !== undefined) {
+			const module = this.options.nativeSignaturePropertyModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: explicit common signature property module required');
 		}
 		if (this.options.nativeNumericMethodParametersModule !== undefined) {
 			const module = this.options.nativeNumericMethodParametersModule;
@@ -2194,6 +2201,7 @@ function emitObjectValue(emitter:Emitter, node:Node):void {
 }
 
 function emitNameTypeInit(emitter:Emitter, node:Node):void {
+	if (emitReferenceStringParameter(emitter, node)) return;
 	if (emitNumericParameterDeclaration(emitter, node)) return;
 	const namespaceMember = emitter.namespaces.member(node.findChild(NodeKind.NAME));
 	if (!namespaceMember) emitter.declareInScope({
@@ -3913,6 +3921,11 @@ function emitReferenceMethodEntry(emitter:Emitter, block:Node):boolean {
         if (p.exported) {
             const parts = referenceCoercionParts(emitter,p);
             converted = parts[0] + p.name + parts[1];
+        } else if (p.type === 'String') {
+            const parts = signatureBuiltinCoercionParts(emitter,p.type);
+            converted = parts[0] + p.name + parts[1];
+            if (p.optional) converted = 'arguments.length <= ' + index + ' ? ' + parts[0] +
+                referenceStringDefault(emitter,p.node) + parts[1] + ' : ' + converted;
         } else if (p.type !== '*') {
             if (!emitter.options.nativeNumericMethodParametersModule)
                 throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: mixed numeric parameters require common coercion module');
@@ -3933,13 +3946,44 @@ function emitReferenceMethodEntry(emitter:Emitter, block:Node):boolean {
 function emitReferenceReturn(emitter:Emitter, node:Node):void {
     const signature = emitter.references && emitter.references.signature(node);
     emitter.catchup(node.start);
-    if (!signature || !signature.returned) {visitNodes(emitter,node.children); return;}
-    const expression = node.children[0], parts = referenceCoercionParts(emitter,{exported:signature.returned});
+    if (!signature || !signature.returned && !signature.builtinReturn) {visitNodes(emitter,node.children); return;}
+    const expression = node.children[0], parts = signature.returned
+        ? referenceCoercionParts(emitter,{exported:signature.returned}) : signatureBuiltinCoercionParts(emitter,signature.builtinReturn);
     emitter.catchup(getExpressionStart(expression));
     emitter.insert(parts[0]);
     visitNode(emitter,expression);
     emitter.catchup(getEffectiveNodeEnd(expression));
     emitter.insert(parts[1]);
+}
+
+function signatureBuiltinCoercionParts(emitter:Emitter, type:string):string[] {
+    if (type === 'Array') {
+        const helper = propertyHelper(emitter,'as3CoerceArray',emitter.references.options.coercionModule);
+        return ['(<any>' + helper + '(', '))'];
+    }
+    if (!emitter.options.nativeSignaturePropertyModule)
+        throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: scalar signature requires common property coercion module');
+    const helper = propertyHelper(emitter,'coerceAS3PropertyValue',emitter.options.nativeSignaturePropertyModule);
+    return ['(<any>' + helper + '(', ',' + JSON.stringify(type) + '))'];
+}
+
+function referenceStringDefault(emitter:Emitter, node:Node):string {
+    const init = node.findChild(NodeKind.INIT), text = emitter.sourceBetween(init.start,init.end).trim();
+    const value = init.children[0];
+    if (text !== 'null' && (!value || value.kind !== NodeKind.LITERAL || !/^(["'])[\s\S]*\1$/.test(text)))
+        throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: String parameter default must be a literal string or null');
+    return text.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
+}
+
+function emitReferenceStringParameter(emitter:Emitter, node:Node):boolean {
+    const signature = emitter.references && emitter.references.signature(node);
+    const parameter = signature && signature.parameters.find(p => p.node.start === node.start);
+    if (!parameter || parameter.type !== 'String' || !parameter.optional) return false;
+    referenceStringDefault(emitter,node);
+    const type = node.findChild(NodeKind.TYPE), name = node.findChild(NodeKind.NAME);
+    emitter.catchup(node.start); emitter.insert(name.text + '?:'); emitter.skipTo(type.start);
+    visitNode(emitter,type); emitter.skipTo(getEffectiveNodeEnd(node));
+    return true;
 }
 
 function emitInit(emitter: Emitter, node: Node): void {

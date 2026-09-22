@@ -10,7 +10,7 @@ export interface NativeReferenceCoercionOptions {
 }
 export interface ReferenceLocal {node: Node; name: string; exported: string; header: boolean; parameter: boolean;}
 export interface ReferenceSignature {
-    node: Node; returned: string;
+    node: Node; returned: string; builtinReturn: string;
     parameters: {node: Node; name: string; type: string; exported: string; optional: boolean}[];
     argumentsUsed: boolean;
 }
@@ -41,7 +41,7 @@ export class NativeReferenceCoercion {
                     const parameters = list ? list.children.map(parameter => {
                         const value = parameter.findChild(K.NAME_TYPE_INIT), t = value && value.findChild(K.TYPE);
                         const name = value && value.findChild(K.NAME);
-                        return {node:value, name:name && name.text, type:t ? t.qualifiedName || t.text : '*',
+                        return {node:value, name:name && name.text, type:t ? this.resolve(t.qualifiedName || t.text) : '*',
                             exported:t && this.type(t.qualifiedName || t.text), optional:!!(value && value.findChild(K.INIT))};
                     }) : [];
                     if (returned || parameters.some(p => !!p.exported)) {
@@ -49,13 +49,15 @@ export class NativeReferenceCoercion {
                             fail('reference constructor/accessor signatures require separate qualification');
                         if (returned && this.resolve(type.qualifiedName || type.text) === 'Date' && !nativeDate)
                             fail('Date reference requires its explicit native global binding');
-                        if (type && !returned && ['void','*'].indexOf(type.text) < 0)
+                        const resultType = type && this.resolve(type.qualifiedName || type.text);
+                        const builtinReturn = !returned && ['Number','int','uint','Boolean','String','Object','Array'].indexOf(resultType) >= 0 ? resultType : null;
+                        if (type && !returned && !builtinReturn && ['void','*'].indexOf(resultType) < 0)
                             fail('non-reference return conversion in reference signatures requires qualification');
                         let optional = false;
                         parameters.forEach(p => {
                             if (!p.node) fail('reference signatures with rest parameters require qualification');
                             if (p.name === 'arguments') fail('shadowed arguments in reference signatures');
-                            if (!p.exported && ['*','Number','int','uint'].indexOf(p.type) < 0)
+                            if (!p.exported && ['*','Number','int','uint','String'].indexOf(p.type) < 0)
                                 fail('unqualified mixed reference parameter: ' + p.type);
                             if (optional && !p.optional) fail('required parameter follows optional parameter');
                             optional = optional || p.optional;
@@ -65,7 +67,7 @@ export class NativeReferenceCoercion {
                                     fail('reference parameter default must be literal null');
                             }
                         });
-                        this.signatures.set(node.start,{node,returned,parameters,argumentsUsed:false});
+                        this.signatures.set(node.start,{node,returned,builtinReturn,parameters,argumentsUsed:false});
                     }
                 }
             }
@@ -98,7 +100,7 @@ export class NativeReferenceCoercion {
                 fail('shadowed arguments in reference signatures');
             if (signature && node.kind === K.CATCH && node.children.some(child => child.kind === K.NAME && child.text === 'arguments'))
                 fail('shadowed arguments in reference signatures');
-            if (signature && node.kind === K.RETURN && signature.returned && !node.children.length)
+            if (signature && node.kind === K.RETURN && (signature.returned || signature.builtinReturn) && !node.children.length)
                 fail('bare reference return requires source authority');
             if (signature && node.kind === K.IDENTIFIER && node.text === 'arguments') {
                 const parent = node.parent;

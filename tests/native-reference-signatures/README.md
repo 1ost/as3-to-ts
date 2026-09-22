@@ -25,7 +25,10 @@ writes that could grow its length remain held: host arguments is not a general
 replacement for the source Array. Modules are checked on both output targets.
 
 Constructors, accessors, rest parameters, nested functions, unqualified mixed
-parameter types, primitive return conversion in reference signatures, arbitrary
+parameter types, arbitrary
 defaults and bare reference returns remain held. Generated class signature
 lowering remains independently owned by the generated-class path. This fixture
 does not qualify a complete application class or real game flow.
+
+Mixed scalar/Array returns and String parameters are separately qualified in
+`../native-mixed-reference-signatures` with an explicit common property provider.

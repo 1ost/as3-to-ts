@@ -47,7 +47,8 @@
     "test:native-forin-bodies": "node tests/native-forin-bodies/run.cjs",
     "test:native-reference-coercion": "node tests/native-reference-coercion/run.cjs",
     "test:native-date-binding": "node tests/native-date-binding/run.cjs",
-    "test:native-reference-signatures": "node tests/native-reference-signatures/run.cjs"
+    "test:native-reference-signatures": "node tests/native-reference-signatures/run.cjs",
+    "test:native-mixed-reference-signatures": "node tests/native-mixed-reference-signatures/run.cjs"
   },
   "keywords": [
     "actionscript",
