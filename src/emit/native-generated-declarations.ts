@@ -13,6 +13,7 @@ export interface NativeGeneratedDeclarationBinding {
     readonly base: string | null;
     readonly tokenExport: string;
     readonly publishExport: string;
+    readonly lexicalExport: string;
 }
 export interface NativeGeneratedReference {
     readonly owner: string;
@@ -142,7 +143,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             if (base !== 'Object' && (!data.sources[base] || data.sources[base].referenceOnly))
                 fail('base requires a planned source declaration: ' + owner + ':' + base);
             bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
-                tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length}));
+                tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length}));
         }
     });
     names.forEach(owner => {
@@ -177,6 +178,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             + (parent ? ',' + parent.tokenExport : '') + ');');
         lines.push('export const ' + binding.tokenExport + '=' + authority + '.type;');
         lines.push('export const ' + binding.publishExport + '=' + authority + '.publishGeneration;');
+        // Opaque common-engine scopes indexed by exact native generation. These
+        // compiler exports never become properties of the source Class value.
+        lines.push('export const ' + binding.lexicalExport + '=new WeakMap<Function,any>();');
         active.delete(binding.qname); emitted.add(binding.qname);
     };
     bindings.forEach(add);

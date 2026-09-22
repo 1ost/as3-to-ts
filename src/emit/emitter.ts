@@ -16,6 +16,7 @@ import {NativeCallableClasses, NativeCallableClassOptions} from './native-callab
 import {NativeLexicalMembers} from './native-lexical-members';
 import {NativeGlobalModules} from './native-global-modules';
 import {NativeSourceAncestryPlan} from './native-source-ancestry';
+import {NativeGeneratedEmission, NativeGeneratedEmissionOptions, NativeClassHelperModules, generatedModule} from './native-generated-emission';
 
 const util = require('util');
 
@@ -120,6 +121,13 @@ export interface EmitterOptions {
 	/** Common Laya AS3String module; required for callable String constructor parameters. */
 	nativeCallableStringModule?: string;
 	nativeCallableMetadata?: NativeClassMetadataOptions;
+    /** Common source-generated registrar; paired with an exact declaration plan. */
+    nativeClassTraitsModule?: string;
+    nativeGeneratedDeclarations?: NativeGeneratedEmissionOptions;
+    /** Explicit distributed helper modules for generated lazy native classes. */
+    nativeClassHelperModules?: NativeClassHelperModules;
+    /** Common AS3Property coercion for generated method signatures. */
+    nativeGeneratedPropertyModule?: string;
     nativeLexicalMembersModule?: string;
     nativeTypedLocals?: boolean;
     nativeTypedLocalAdditionModule?: string;
@@ -243,6 +251,7 @@ export function visitNode(emitter:Emitter, node:Node):void {
 	}
 
 	if (emitter.lexical && emitter.lexical.emit(emitter, node, visitNode)) return;
+    if (emitter.generated && emitter.generated.lexical.emit(emitter,node,visitNode)) return;
 
 	let visitor = VISITORS[node.kind] || function (emitter:Emitter, node:Node):void {
 			emitter.catchup(node.start);
@@ -278,6 +287,7 @@ function filterAST(node:Node):Node {
 
 
 export default class Emitter {
+    generated: NativeGeneratedEmission;
     nativeGlobals:NativeGlobalModules;
     lexical: NativeLexicalMembers;
     /** Exact compiler-created callable imports; authored imports grant no exemption. */
@@ -345,6 +355,21 @@ export default class Emitter {
 	}
 
 	emit(ast:Node):string {
+
+        if (this.options.nativeGeneratedDeclarations !== undefined || this.options.nativeClassTraitsModule !== undefined) {
+            if (this.options.useNamespaces || this.options.customVisitors.length || this.options.nativeCallableMetadata
+                || this.options.nativeTypedLocals
+                || this.options.nativeCallableClasses || this.options.nativeClassInitialization)
+                throw new Error('AS3_GENERATED_EMISSION_UNSUPPORTED: generated declarations own the exact callable/initialization plan');
+            this.generated = new NativeGeneratedEmission(this.source,this.options.nativeGeneratedDeclarations,
+                this.options.nativeClassTraitsModule,this.options.nativeClassHelperModules,
+                this.options.nativeLexicalMembersModule,this.options.nativeGeneratedPropertyModule);
+            generatedModule(this.options.nativeCallableMethodBindingModule);
+            this.options.nativeCallableClasses = this.generated.sources;
+            this.options.nativeClassInitialization = {classes:this.generated.classes};
+            // A caller-supplied/mutated AST must not override the authenticated bytes.
+            ast = require('../parse')(this.generated.projection.binding.qname + '.as',this.source);
+        }
 
 		if (this.options.decoratorModules !== undefined) {
 			const modules = this.options.decoratorModules;
@@ -499,7 +524,7 @@ export default class Emitter {
         if (this.options.nativeTypedLocals && [this.options.nativeCallableCoercionModule,this.options.nativeCallableStringModule,this.options.nativeTypedLocalAdditionModule]
             .some(module => typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module)))
             throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: explicit common coercion, String and addition modules required');
-        if (this.options.nativeLexicalMembersModule !== undefined) {
+        if (this.options.nativeLexicalMembersModule !== undefined && !this.generated) {
             if (!this.options.nativeCallableClasses || !this.options.nativeClassInitialization || this.options.useNamespaces)
                 throw new Error('AS3_LEXICAL_COMPILER_UNSUPPORTED: authenticated lazy callable source required');
             this.lexical = new NativeLexicalMembers(this.source, filtered, this.options.nativeLexicalMembersModule, this.options.nativeCallableMetadata, this.options.nativeTypedLocals === true);
@@ -517,7 +542,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -1767,6 +1792,11 @@ function getClassDeclarations(emitter:Emitter, className:string, contentsNode:No
 
 	})
 	resultDeclarations = resultDeclarations.filter(el => !!el);
+    if (emitter.generated) emitter.generated.projection.instanceTraits.forEach(trait => {
+        if (found[trait.name]) return;
+        const sourceType = typeof trait.type === 'string' ? trait.type : trait.type ? trait.type.name.replace('::','.') : '*';
+        resultDeclarations.push({name:trait.name,as3Type:sourceType,type:TYPE_REMAP[sourceType] || sourceType,bound:'this'});
+    });
 	return resultDeclarations;
 }
 /*
@@ -1818,7 +1848,7 @@ function emitClass(emitter:Emitter, node:Node):void {
 	if (lazy) {
 		const value = emitter.classInitializers.ownNames.get(node);
 		emitter.classFactory = {node, value, fields: [], statements: []};
-		const helperPath = (ClassList.getLastPathToRoot() || './') + 'nativeClass';
+		const helperPath = emitter.generated ? emitter.generated.helpers.nativeClass : (ClassList.getLastPathToRoot() || './') + 'nativeClass';
 		emitter.ensureImportIdentifier('declareNativeClass as ' + emitter.classInitializers.declareName, helperPath, false);
 		emitter.ensureImportIdentifier('readNativeClass as ' + emitter.classInitializers.readName, helperPath, false);
 		emitter.insert('export const ' + sourceName + ' = ' + emitter.classInitializers.declareName
@@ -3730,7 +3760,8 @@ function emitIntegerCoercionStart(emitter: Emitter): void {
     if (emitter.options.nativeCallableClasses) {
         let alias = '__as3_callable_integerIntrinsics';
         while (emitter.source.indexOf(alias) >= 0) alias += '_';
-        emitter.ensureImportIdentifier('callableClassIntrinsics as ' + alias, (ClassList.getLastPathToRoot() || './') + 'callableClass', false);
+        emitter.ensureImportIdentifier('callableClassIntrinsics as ' + alias, emitter.generated
+            ? emitter.generated.helpers.callableClass : (ClassList.getLastPathToRoot() || './') + 'callableClass', false);
         emitter.insert('(' + alias + '.number(');
     } else emitter.insert('(Number(');
 }

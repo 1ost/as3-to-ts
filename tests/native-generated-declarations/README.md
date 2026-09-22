@@ -3,7 +3,8 @@
 `npm run tsc` followed by `npm run test:native-generated-declarations` exercises
 the restored `createNativeGeneratedDeclarationPlan` API with the real common
 engine declaration/type/ByteArray providers (`LAYA_ENGINE_REPOSITORY`, default
-`../LayaAir-op2`). This does not enable generated class emission.
+`../LayaAir-op2`). The emission check also needs Playwright (`PLAYWRIGHT_MODULE`
+or `LAYA_BROWSER_TOOLS`; otherwise the sibling OP2 client installation).
 
 Inputs contain a source scope, exact source bytes and SHA-256 hashes, a common
 declaration provider module, and optional exact native module/export mappings.
@@ -51,10 +52,46 @@ ordering, the Event subclass and complete reflection are not claimed by this tes
 Importing ByteArray alone is explicitly rejected as source Class authority.
 `.cache/native-generated-traits/run-*` retains the projection, generated code,
 source hashes, actual provider graph hashes and per-target comparisons.
-The three missing bulk emitter options remain missing; this helper does not
-bypass their preflight or establish the application/ZIP runtime path.
+The projection alone does not bypass preflight or establish the application/ZIP
+runtime path.
 
 The shared AIR evidence for subsequent class-storage restoration is
 `LayaAir-op2/tests/nativeFlashOracle/generated-declaration-storage`. All its
-observations, especially initialized derived fields visible inside a base
-constructor, still need comparison against the eventual generated class output.
+observations are the authority for the emitter test below.
+
+## Generated source emission
+
+`emission.cjs` passes the five original declaration subjects (BaseRecord,
+DerivedRecord, Storage, TimingBase and TimingDerived) through the actual emitter,
+without rewriting their AS3 or generated method bodies. It checks 13 retained AIR
+observations in Node and Chromium with ES5 and ES2015 compiler output, including
+private reference defaults/coercion, paired accessor entry, protected virtual
+dispatch, and derived explicit initializers visible during the base constructor.
+The Event-specific constant/reflection rows remain held for native ancestry and
+complete reflection authority. The host driver performs the oracle probe actions;
+it does not replace the subject implementations.
+
+The emitter accepts `nativeGeneratedDeclarations: {plan, module}` paired with
+`nativeClassTraitsModule` (AS3GeneratedClass). It derives callable/lazy source
+maps from the live plan and reparses authenticated bytes. Mixing legacy callable
+metadata/initialization options or AST visitors is rejected. Supply explicit
+`nativeClassHelperModules: {nativeClass, callableClass}` paths to distributed
+compiler helpers, `nativeLexicalMembersModule` (AS3LexicalMembers),
+`nativeGeneratedPropertyModule` (AS3Property), and the existing callable method
+binding/coercion/String modules. Lexical generation scopes stay in compiler-only
+domain WeakMaps; they are not exposed as source Class properties. All storage,
+coercion and protected dispatch use the existing common engine providers.
+
+35 guards cover plan/source/helper authority and remaining boundaries. Static
+constants, static lexical members, internal namespaces, lexical accessors/updates,
+typed locals and method returns, optional/rest method signatures, nested source
+functions, dynamic classes, and general reference-only consumers remain explicit holds. Fixed
+method arguments use common coercion. This is not full invocation/Class identity,
+dynamic property routing, complete reflection, or OP2 cohort/ZIP acceptance.
+`nativeReferenceCoercion` remains absent, and bulk must also wire these explicit
+helper/provider modules before running the unchanged required cohort.
+
+The actual generated/provider graph is type-checked without ambient replacement
+bridges. `.cache/native-generated-emission/run-*` retains all generated subjects,
+source/generated hashes, target code, actual browser bundles and dependency
+hashes, type diagnostics, guards and both runtime comparison results.

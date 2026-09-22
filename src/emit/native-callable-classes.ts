@@ -7,6 +7,7 @@ import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {nativeSourceTypeIdentity} from './native-source-type';
 import {NativeDeclarationDomain, nativeDeclarationDomainFor} from './native-declaration-plan';
+import {NativeGeneratedEmission} from './native-generated-emission';
 
 export interface NativeCallableClassOptions { [qname: string]: string; }
 interface SourceClass {
@@ -24,7 +25,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -282,9 +283,10 @@ export class NativeCallableClasses {
         };
         const provider = unique('provider'), declaration = unique('declaration'), generation = unique('generation');
         const localCoercion = unique('localCoercion'), localString = unique('localString'), localAddition = unique('localAddition');
+        const generatedProperty = unique('generatedProperty');
         const planned = this.declarationDomain && this.declarationDomain.bindings.find(binding => binding.qname === this.own.qname);
         if (this.declarationDomain && !planned) this.fail('current source declaration is absent from its compiler domain');
-        const domainImport = planned ? unique('declarationDomain') : '';
+        const domainImport = planned || this.generated ? unique('declarationDomain') : '';
         const referenceToken = planned ? (qname:string):string => {
             const binding=this.declarationDomain.bindings.find(value=>value.qname===qname);
             if(!binding)this.fail('foreign local declaration is absent from its compiler domain');
@@ -388,27 +390,48 @@ export class NativeCallableClasses {
             const destination = isStatic ? name : name + '.prototype';
             if (member.kind === S.Constructor) { ctor = member; return; }
             if (!member.name || member.name.kind !== S.Identifier) this.fail('computed member identity');
-            const key = member.name.text, lexicalMember = this.lexical && this.lexical.trait(key, !!isStatic);
+            const key = member.name.text, lexicalMember = this.lexical && this.lexical.trait(key, !!isStatic)
+                || this.generated && this.generated.lexical.trait(key,!!isStatic);
             const encoded = lexicalMember ? lexicalMember.key : JSON.stringify(key);
             if (key === 'constructor') this.fail('reserved constructor member');
             if (isStatic && ['prototype', 'call', 'apply', 'bind'].indexOf(key) >= 0)
                 this.fail('reserved static callable constructor identity');
             if (member.kind === S.PropertyDeclaration) {
                 if (lexicalMember) {
-                    if (!isStatic && member.initializer) initializers.push('this[' + lexicalMember.key + '] = ' + text(member.initializer) + ';');
+                    if (!isStatic && member.initializer) initializers.push(this.generated
+                        ? this.generated.lexical.provider + '.as3SetLexicalMember(this,' + lexicalMember.access + ',' + text(member.initializer) + ');'
+                        : 'this[' + lexicalMember.key + '] = ' + text(member.initializer) + ';');
                     return;
                 }
                 (isStatic ? staticTypes : instanceTypes).push(key + ': ' + type(member) + ';');
-                if (isStatic) definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
+                if (isStatic && !this.generated) definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
                     + ', {value: ' + (member.initializer ? text(member.initializer) : 'void 0') + ', writable:true, enumerable:true, configurable:false});');
-                else if (member.initializer) initializers.push('this[' + encoded + '] = ' + text(member.initializer) + ';');
+                else if (!isStatic && member.initializer) initializers.push('this[' + encoded + '] = ' + text(member.initializer) + ';');
                 return;
             }
             const receiver = isStatic ? constructorType : name;
+            let signature = '';
+            if (this.generated && member.kind === S.MethodDeclaration) {
+                const sourceMethod = this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node => {
+                    const mods=node.findChild(K.MOD_LIST),sourceStatic=!!mods&&mods.children.some(mod=>mod.text==='static');
+                    return node.kind === K.FUNCTION && node.findChild(K.NAME).text === key && sourceStatic === !!isStatic;
+                });
+                const parameters = sourceMethod.findChild(K.PARAMETER_LIST).children;
+                if (parameters.some(p => !!p.findChild(K.REST) || !!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)))
+                    this.fail('generated optional/rest method signature lowering required');
+                signature = 'if(arguments.length !== ' + parameters.length + ')throw ' + intrinsic + '.arityError();\n'
+                    + parameters.map(p => {
+                        const value=p.findChild(K.NAME_TYPE_INIT),name=value.findChild(K.NAME).text;
+                        if(value.findChild(K.VECTOR))this.fail('generated vector method signature');
+                        return name+'=<any>'+generatedProperty+'.coerceAS3PropertyValue('+name+','+this.generated.lexical.typeExpression(value.findChild(K.TYPE),this.own.qname,domainImport,intrinsic+'.array')+');';
+                    }).join('\n');
+                const returns=sourceMethod.findChild(K.TYPE);
+                if(returns && returns.text !== 'void' && returns.text !== '*')this.fail('generated typed method return lowering required');
+            }
             const functionValue = 'function(this: ' + receiver + (member.parameters.length ? ', ' : '') + params(member, false)
                 + ')' + (member.type ? ': ' + text(member.type) : '') + ' {'
                 + (this.lexical ? provider + '.as3CheckArgumentCount(arguments.length,' + member.parameters.length + ',' + member.parameters.length + ');' : '')
-                + body(member, false) + '}';
+                + signature + body(member, false) + '}';
             if (member.kind === S.MethodDeclaration) {
                 if (!lexicalMember) (isStatic ? staticTypes : instanceTypes).push(key + '(' + params(member, true) + '): ' + type(member) + ';');
                 definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
@@ -431,6 +454,7 @@ export class NativeCallableClasses {
         const memberNames = new Set<string>(), instanceMethods: string[] = [];
         for (let current = this.own; current; current = this.classes.get(current.base)) {
             current.instanceMembers.forEach(member => {
+                if(this.generated && !this.generated.projection.instanceTraits.some(t=>t.name===member.name&&t.kind==='method'))return;
                 if (!memberNames.has(member.name)) {
                     memberNames.add(member.name);
                     if (member.method) instanceMethods.push(member.name);
@@ -438,8 +462,10 @@ export class NativeCallableClasses {
             });
         }
         const bindInstance = instanceMethods.map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
-        const defaults = (this.metadata ? generation + '.enterInstance(this);\n' : '')
-            + (this.lexical ? this.lexical.provider + '.initializeAS3LexicalInstance(' + this.lexical.scope + ',this);\n' : '') + chainFields.map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
+        const defaults = (this.metadata || this.generated ? generation + '.enterInstance(this);\n' : '')
+            + (this.generated ? this.generated.lexical.provider+'.initializeAS3LexicalInstance('+this.generated.lexical.scope+',this);\n' : '')
+            + (this.lexical ? this.lexical.provider + '.initializeAS3LexicalInstance(' + this.lexical.scope + ',this);\n' : '')
+            + (this.generated ? [] : chainFields).map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
             + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
         const ancestry = cls.heritageClauses && cls.heritageClauses[0];
         const base = ancestry ? 'const ' + baseName + ' = ' + text(ancestry.types[0].expression) + ';\n' : '';
@@ -467,7 +493,8 @@ export class NativeCallableClasses {
             return value + ' = ' + (parameter.optional ? 'arguments.length <= ' + index + ' ? ' + defaultValue + ' : ' : '') + conversion + ';\n'
                 + 'if (arguments.length > ' + index + ') arguments[' + index + '] = ' + value + ';';
         }).join('\n');
-        const replacement = (this.lexical ? this.lexical.traits.map(t=>'const ' + t.key + '=' + intrinsic + '.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
+        const replacement = (this.lexical ? this.lexical.traits.map(t=>'const ' + t.key + '=' + intrinsic + '.symbol();').join('\n')+'\n' : '')
+            + (this.generated ? this.generated.lexical.own.filter(t=>t.kind==='method').map(t=>'const '+t.key+'='+intrinsic+'.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
             + (ctor && ctor.parameters.length ? ', ' + params(ctor, true) : '') + ') {\n'
             + 'const ' + fresh + ' = ' + intrinsic + '.enter(this, ' + identity + ');\nlet ' + succeeded + ' = false;\ntry {\n'
             + arity + coercions
@@ -490,7 +517,11 @@ export class NativeCallableClasses {
                     + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].staticTraits, declaration, intrinsic) + ');\n'
                 + (this.lexical ? this.lexicalPublication(name, intrinsic) : '')
                 + provider + '.registerAS3Constructor(' + name + ', {minimum:' + required + ', maximum:'
-                    + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '');
+                    + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '')
+            + (this.generated ? '\n' + intrinsic + '.defineProperty(' + name + ', "prototype", {writable:false});\n'
+                + 'const ' + generation + ' = ' + provider + '.registerAS3GeneratedClass(' + name + ','
+                + this.generated.projection.emitDefinition(domainImport,intrinsic + '.array') + ');\n'
+                + this.generated.lexical.publication(name,baseName,domainImport,intrinsic) + '\n' : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
             + ' {\n' + instanceTypes.join('\n') + '\n}\ninterface ' + constructorType
             + ' extends ' + functionType + ' {new(' + (ctor ? params(ctor, true) : '') + '): ' + name + '; prototype: ' + name + ';\n'
@@ -541,6 +572,10 @@ export class NativeCallableClasses {
         const boundImport = file.statements.find((node: any) => node.kind === S.ImportDeclaration && /(?:^|\/)bound$/.test(node.moduleSpecifier.text));
         const helperPath = boundImport ? boundImport.moduleSpecifier.text : './bound';
         return (this.lexical ? 'import * as ' + this.lexical.provider + ' from ' + JSON.stringify(this.lexical.module) + ';\n' : '')
+            + (this.generated ? 'import * as ' + provider + ' from ' + JSON.stringify(this.generated.registrar) + ';\n'
+                + 'import * as '+this.generated.lexical.provider+' from '+JSON.stringify(this.generated.lexicalModule)+';\n'
+                + 'import * as '+generatedProperty+' from '+JSON.stringify(this.generated.propertyModule)+';\n'
+                + 'import * as ' + domainImport + ' from ' + JSON.stringify(this.generated.options.module) + ';\n' : '')
             + (this.lexical && this.lexical.typedLocals ? 'import * as ' + localCoercion + ' from ' + JSON.stringify(this.coercionModule) + ';\n'
                 + 'import * as ' + localString + ' from ' + JSON.stringify(this.stringModule) + ';\n'
                 + 'import * as ' + localAddition + ' from ' + JSON.stringify(this.localAdditionModule) + ';\n' : '')
@@ -550,7 +585,7 @@ export class NativeCallableClasses {
                 + ' as ' + provider + '.AS3DeclarationType<' + name + '>,publishGeneration:' + domainImport + '.' + planned.publishExport + '};\n'
                 : 'const ' + declaration + ' = ' + provider + '.declareAS3ReferenceType<' + name + '>(' + JSON.stringify(this.metadata.classes[this.own.qname].metadata.name) + ');\n') : '')
             + 'import {callableClassIntrinsics as ' + intrinsic + ', NativeCallableFunction as ' + functionType + '} from '
-            + JSON.stringify(helperPath.replace(/bound$/, 'callableClass')) + ';\n'
+            + JSON.stringify(this.generated ? this.generated.helpers.callableClass : helperPath.replace(/bound$/, 'callableClass')) + ';\n'
             + 'import {bindAS3Method as ' + bindName + '} from '
             + JSON.stringify(this.methodBindingModule) + ';\n'
             + (this.own.parameters.some(parameter => ['Number', 'int', 'uint'].indexOf(parameter.type) >= 0)
