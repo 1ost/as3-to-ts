@@ -128,6 +128,8 @@ export interface EmitterOptions {
     nativeReferenceCoercion?: NativeReferenceCoercionOptions;
     /** Common AS3Property scalar coercion for mixed reference method signatures. */
     nativeSignaturePropertyModule?: string;
+    /** Common String intrinsic provider for source-bound local String calls. */
+    nativeStringIntrinsicsModule?: string;
     /** Explicit distributed helper modules for generated lazy native classes. */
     nativeClassHelperModules?: NativeClassHelperModules;
     /** Common AS3Property coercion for generated method signatures. */
@@ -2972,6 +2974,7 @@ function emitReflectionXML(emitter:Emitter, node:Node):boolean {
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
+	if (emitStringReplace(emitter, node)) return;
 	if (emitReflectionQuery(emitter, node)) return;
 	if (emitReflectionXML(emitter, node)) return;
 	if (emitDirectToString(emitter, node)) return;
@@ -3139,6 +3142,39 @@ function emitBuiltinObjectCreation(emitter:Emitter, node:Node):boolean {
 	emitter.insert('])');
 	emitter.skipTo(node.end);
 	return true;
+}
+
+function emitStringReplace(emitter:Emitter, node:Node):boolean {
+    const module = emitter.options.nativeStringIntrinsicsModule;
+    if (module === undefined || emitter.isNew) return false;
+    const callee = node.children[0];
+    if (!callee || callee.kind !== NodeKind.DOT || callee.children[1].text !== 'replace') return false;
+    const receiver = unwrapEncapsulatedExpression(callee.children[0]);
+    if (receiver.kind !== NodeKind.IDENTIFIER) return false;
+    const binding = emitter.findDefInScope(receiver.text);
+    if (!binding || binding.bound || binding.as3Type !== 'String') return false;
+    if (!emitter.references || emitter.references.resolve('String') !== 'String')
+        throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
+    generatedModule(module);
+    const args = node.findChild(NodeKind.ARGUMENTS);
+    if (!args || args.children.length !== 2)
+        throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace requires exactly two authored arguments');
+    // The legacy regex token end excludes flags; its exact text includes them.
+    const pattern = args.children[0], raw = pattern.text;
+    if (typeof raw !== 'string' || emitter.source.slice(pattern.start,pattern.start + raw.length) !== raw)
+        throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact source regex token required');
+    const match = pattern.kind === NodeKind.LITERAL && /^\/([\s\S]+)\/([a-z]*)$/.exec(raw);
+    if (!match) throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace pattern requires a qualified literal');
+    const replace = propertyHelper(emitter,'sourceStringReplace',module);
+    const compile = propertyHelper(emitter,'compileSourceStringPattern',module);
+    emitter.catchup(node.start); emitter.insert(replace + '(');
+    emitter.skipTo(callee.children[0].start); visitNode(emitter,callee.children[0]);
+    emitter.catchup(getEffectiveNodeEnd(callee.children[0]));
+    emitter.insert(',' + compile + '(' + JSON.stringify(match[1]) + ',' + JSON.stringify(match[2]) + '),');
+    emitter.skipTo(getExpressionStart(args.children[1])); visitNode(emitter,args.children[1]);
+    emitter.catchup(getEffectiveNodeEnd(args.children[1])); emitter.insert(')');
+    emitter.skipTo(getEffectiveNodeEnd(node));
+    return true;
 }
 
 interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; }
