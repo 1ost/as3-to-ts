@@ -1594,7 +1594,8 @@ function numericDefaultSource(emitter:Emitter, plan:NumericParameterPlan):string
 		if (literal && literal.kind === NodeKind.LITERAL)
 			value = (unary.kind === NodeKind.MINUS ? '-' : '+') + emitter.sourceBetween(literal.start, literal.end).trim();
 	}
-	if (!/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(value)
+	const as3NumberNaN = plan.type === 'Number' && value === 'NaN';
+	if (!as3NumberNaN && !/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(value)
 		|| /^[+-]?0[0-9]/.test(value))
 		throw new Error('AS3_NUMERIC_PARAMETERS_UNSUPPORTED: default must be an exact numeric literal: ' + plan.name);
 	return value;
