@@ -3310,16 +3310,37 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace requires exactly two authored arguments');
     // The legacy regex token end excludes flags; its exact text includes them.
     const pattern = args.children[0], raw = pattern.text;
-    if (typeof raw !== 'string' || emitter.source.slice(pattern.start,pattern.start + raw.length) !== raw)
-        throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact source regex token required');
-    const match = pattern.kind === NodeKind.LITERAL && /^\/([\s\S]+)\/([a-z]*)$/.exec(raw);
-    if (!match) throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace pattern requires a qualified literal');
+    let construction:Node = null, match:RegExpExecArray = null;
+    if (pattern.kind === NodeKind.NEW) {
+        const call=pattern.children[0], target=call&&call.children[0];
+        const shadow=target&&emitter.findDefInScope(target.text);
+        if (!call || call.kind!==NodeKind.CALL || !target || target.kind!==NodeKind.IDENTIFIER
+            || target.text!=='RegExp' || emitter.references.resolve('RegExp')!=='RegExp'
+            || shadow&&(shadow.bound||Object.prototype.hasOwnProperty.call(shadow,'as3Type')||shadow.sourceImport))
+            throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin RegExp construction required');
+        construction=call.findChild(NodeKind.ARGUMENTS);
+        if (!construction || construction.children.length!==2)
+            throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: pattern construction requires two authored arguments');
+    } else {
+        if (typeof raw !== 'string' || emitter.source.slice(pattern.start,pattern.start + raw.length) !== raw)
+            throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact source regex token required');
+        match = pattern.kind === NodeKind.LITERAL && /^\/([\s\S]+)\/([a-z]*)$/.exec(raw);
+        if (!match) throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace pattern requires a qualified literal');
+    }
     const replace = propertyHelper(emitter,'sourceStringReplace',module);
-    const compile = propertyHelper(emitter,'compileSourceStringPattern',module);
+    const compile = propertyHelper(emitter,construction?'constructSourceStringReplacePattern':'compileSourceStringPattern',module);
     emitter.catchup(node.start); emitter.insert(replace + '(');
     emitter.skipTo(callee.children[0].start); visitNode(emitter,callee.children[0]);
     emitter.catchup(getEffectiveNodeEnd(callee.children[0]));
-    emitter.insert(',' + compile + '(' + JSON.stringify(match[1]) + ',' + JSON.stringify(match[2]) + '),');
+    emitter.insert(',' + compile + '(');
+    if (construction) {
+        construction.children.forEach((argument,index)=>{
+            if(index)emitter.insert(',');
+            emitter.skipTo(getExpressionStart(argument));visitNode(emitter,argument);
+            emitter.catchup(getEffectiveNodeEnd(argument));
+        });
+    } else emitter.insert(JSON.stringify(match[1]) + ',' + JSON.stringify(match[2]));
+    emitter.insert('),');
     emitter.skipTo(getExpressionStart(args.children[1])); visitNode(emitter,args.children[1]);
     emitter.catchup(getEffectiveNodeEnd(args.children[1])); emitter.insert(')');
     emitter.skipTo(getEffectiveNodeEnd(node));
