@@ -371,14 +371,27 @@ function scanDecimal(scanner: AS3Scanner, currentCharacter: string): Token {
             buffer += currentChar;
             currentChar = scanner.peekChar(peekPos++);
         }
+    }
 
-        if (currentChar === 'E') {
-            buffer += currentChar;
+    // AS3 accepts decimal literals with an exponent (for example `2e-10`).
+    // Keep the exponent in the numeric token so relational expressions do not
+    // leave the `e` suffix to be parsed as an identifier.
+    if (currentChar === 'e' || currentChar === 'E') {
+        let exponent = currentChar;
+        currentChar = scanner.peekChar(peekPos++);
+        if (currentChar === '+' || currentChar === '-') {
+            exponent += currentChar;
             currentChar = scanner.peekChar(peekPos++);
-            while (/\d/.test(currentChar)) {
-                buffer += currentChar;
-                currentChar = scanner.peekChar(peekPos++);
-            }
+        }
+        const digitsStart = peekPos;
+        while (/\d/.test(currentChar)) {
+            exponent += currentChar;
+            currentChar = scanner.peekChar(peekPos++);
+        }
+        // Only consume an exponent when it has at least one digit. This keeps
+        // malformed input diagnostics anchored at the original suffix.
+        if (peekPos > digitsStart) {
+            buffer += exponent;
         }
     }
 
