@@ -3742,7 +3742,7 @@ function emitLogicalAssignment(emitter: Emitter, node: Node): void {
         reference = emitter.output.slice(start);
     } else if (left.kind === NodeKind.DOT && left.children[1].kind === NodeKind.LITERAL
         && left.children[0].text !== 'super') {
-        emitter.namespaces.checkDot(left);
+        emitter.namespaces.checkDot(left, emitter.namespaces.receiverType(left));
         const temporary = logicalAssignmentTemporary(emitter, node);
         emitter.insert(temporary + ' = ');
         visitNode(emitter, left.children[0]);
@@ -4089,7 +4089,7 @@ function emitDot(emitter:Emitter, node:Node) {
 		emitNamespaceAccess(emitter, node);
 		return;
 	}
-	emitter.namespaces.checkDot(node);
+	emitter.namespaces.checkDot(node, receiverType);
 	let dotSibling = node.nextSibling;
 	let isConditionalCompilation = (dotSibling && dotSibling.kind === NodeKind.BLOCK);
 	let template = "if ($1)";

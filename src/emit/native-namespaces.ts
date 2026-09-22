@@ -479,12 +479,23 @@ export class NativeNamespaces {
     receiverType(node: Node): string {
         const receiver = node && node.kind === NodeKind.DOT ? node.children[0]
             : node && node.kind === NodeKind.NAMESPACE_ACCESS ? this.access(node).receiver : null;
-        if (!receiver || receiver.kind !== NodeKind.IDENTIFIER) return null;
+        if (!receiver) return null;
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (!owner) return null;
         const ownerName = owner.findChild(NodeKind.NAME).text;
-        if (receiver.text === 'this' || receiver.text === ownerName) return ownerName;
-        if (this.classType(node, receiver.text)) return receiver.text;
+        let fieldName: string = null;
+        if (receiver.kind === NodeKind.IDENTIFIER) {
+            if (receiver.text === 'this' || receiver.text === ownerName) return ownerName;
+            if (this.classType(node, receiver.text)) return receiver.text;
+            fieldName = receiver.text;
+        } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
+            && receiver.children[0].kind === NodeKind.IDENTIFIER
+            && (receiver.children[0].text === 'this' || receiver.children[0].text === ownerName)
+            && receiver.children[1].kind === NodeKind.LITERAL) {
+            // Resolve one source-backed field hop for ordinary receiver dots
+            // such as this._flowComposer.updateLengths().
+            fieldName = receiver.children[1].text;
+        } else return null;
         let classes: Node[];
         try { classes = this.hierarchy(owner); } catch (_) { return null; }
         for (const cls of classes) {
@@ -494,7 +505,7 @@ export class NativeNamespaces {
                 if ([NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(declaration.kind) < 0) continue;
                 for (const field of declaration.findChildren(NodeKind.NAME_TYPE_INIT)) {
                     const name = field.findChild(NodeKind.NAME), type = field.findChild(NodeKind.TYPE);
-                    if (name && type && name.text === receiver.text) return type.qualifiedName || type.text;
+                    if (name && type && name.text === fieldName) return type.qualifiedName || type.text;
                 }
             }
         }
@@ -531,19 +542,32 @@ export class NativeNamespaces {
             this.fail('namespace receiver type is not a proven ordinary class: ' + receiver.text);
     }
 
-    checkDot(node: Node): void {
+    checkDot(node: Node, receiverType?: string): void {
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (!owner) return;
         const name = node.children[1].text;
         if (!Array.from(this.members.values()).some(member => member.name === name)) return;
+        const receiverClass = receiverType && this.classType(node, receiverType);
+        const staticReceiver = receiverClass && this.isClassReceiver(node, receiverClass);
         const owners = this.hierarchy(owner);
         this.members.forEach(member => {
             if (owners.indexOf(member.owner) < 0 || member.name !== name) return;
             const pkg = this.ancestor(node, NodeKind.PACKAGE);
             const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
                 .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
-            if (opened.some(directive => this.resolve(directive, directive.text) === member.uri))
+            if (opened.some(directive => this.resolve(directive, directive.text) === member.uri)) {
+                // A typed ordinary receiver can legally have the same public
+                // spelling. Only reject the dot when that receiver itself has
+                // a matching namespace member; dynamic receivers remain
+                // fail-closed.
+                if (receiverClass) {
+                    let receiverMember: NamespaceMember = null;
+                    try { receiverMember = this.findMember(receiverClass, member.uri, name, staticReceiver); }
+                    catch (_) { receiverMember = null; }
+                    if (!receiverMember) return;
+                }
                 this.fail('open namespace member requires explicit selector: ' + name);
+            }
         });
     }
 

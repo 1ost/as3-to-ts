@@ -87,6 +87,23 @@ class TopLevelHelper {
 }`;
 assert.match(generate(topLevelCompilationUnit), /__as3_namespace_member_/);
 
+// A typed ordinary receiver may share a spelling with an opened namespace
+// member on the enclosing class. The dot remains an ordinary call when the
+// receiver class has no member under that namespace identity.
+const ordinaryReceiverSource = `package example {
+  import alias.same;
+  use namespace same;
+  public class OrdinaryHolder {
+    public function updateLengths():void {}
+  }
+  public class OrdinaryReceiver {
+    same function updateLengths():void {}
+    private var holder:OrdinaryHolder;
+    public function read():void { holder.updateLengths(); }
+  }
+}`;
+assert.doesNotThrow(() => generate(ordinaryReceiverSource));
+
 const ast = parse('NamespaceFixture.as', source);
 let namespaceNodes = 0;
 (function walk(node) {
