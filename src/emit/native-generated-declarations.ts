@@ -110,29 +110,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if (count !== 1) fail('additional source declarations: ' + name);
         roots.set(name, root); classes.set(name, cls); sourceHashes[name] = record.sourceSha256;
     });
-    const resolve = (owner: string, spelling: string): string => {
-        if (spelling.indexOf('.') >= 0) return spelling;
-        const root = roots.get(owner), pkg = root.findChild(K.PACKAGE), namespace = pkg.findChild(K.NAME).text;
-        const imports = pkg.findChild(K.CONTENT).findChildren(K.IMPORT).map(node => node.text);
-        const ownName = owner.split('.').pop(), same = (namespace ? namespace + '.' : '') + spelling;
-        const known = (name: string): boolean => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0;
-        const explicit = imports.filter(name => !/\.\*$/.test(name) && name.split('.').pop() === spelling)
-            .filter((name, index, all) => all.indexOf(name) === index);
-        if (explicit.length > 1) fail('ambiguous explicit type: ' + owner + ':' + spelling);
-        if (builtins.indexOf(spelling) >= 0) {
-            if (ownName === spelling || known(same) || explicit.length
-                || imports.some(name => /\.\*$/.test(name) && known(name.slice(0, -1) + spelling)))
-                fail('ambiguous builtin type: ' + owner + ':' + spelling);
-            return spelling;
-        }
-        if (ownName === spelling) return owner;
-        if (explicit.length) return explicit[0];
-        if (known(same)) return same;
-        const wildcard = imports.filter(name => /\.\*$/.test(name)).map(name => name.slice(0, -1) + spelling)
-            .filter(known).filter((name, index, all) => all.indexOf(name) === index);
-        if (wildcard.length > 1) fail('ambiguous wildcard type: ' + owner + ':' + spelling);
-        return wildcard[0] || spelling;
-    };
+    const resolve = (owner: string, spelling: string): string => sourceResolver(roots.get(owner), owner,
+        name => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0)(spelling);
     const bindings: NativeGeneratedDeclarationBinding[] = [], references: NativeGeneratedReference[] = [];
     names.forEach(owner => {
         const cls = classes.get(owner);
@@ -204,4 +183,48 @@ export function nativeGeneratedDeclarationInputs(plan: NativeGeneratedDeclaratio
     const context = plan && contexts.get(plan);
     if (!context || context.input.scope !== scope) fail('exact planned scope capability required');
     return context.input;
+}
+
+function sourceResolver(root: Node, owner: string, known: (name: string) => boolean): (spelling: string) => string {
+    return (spelling: string): string => {
+        if (spelling.indexOf('.') >= 0) return spelling;
+        const pkg = root.findChild(K.PACKAGE), namespace = pkg.findChild(K.NAME).text;
+        const imports = pkg.findChild(K.CONTENT).findChildren(K.IMPORT).map(node => node.text);
+        const ownName = owner.split('.').pop(), same = (namespace ? namespace + '.' : '') + spelling;
+        const explicit = imports.filter(name => !/\.\*$/.test(name) && name.split('.').pop() === spelling)
+            .filter((name, index, all) => all.indexOf(name) === index);
+        if (explicit.length > 1) fail('ambiguous explicit type: ' + owner + ':' + spelling);
+        if (builtins.indexOf(spelling) >= 0) {
+            if (ownName === spelling || known(same) || explicit.length
+                || imports.some(name => /\.\*$/.test(name) && known(name.slice(0, -1) + spelling)))
+                fail('ambiguous builtin type: ' + owner + ':' + spelling);
+            return spelling;
+        }
+        if (ownName === spelling) return owner;
+        if (explicit.length) return explicit[0];
+        if (known(same)) return same;
+        const wildcard = imports.filter(name => /\.\*$/.test(name)).map(name => name.slice(0, -1) + spelling)
+            .filter(known).filter((name, index, all) => all.indexOf(name) === index);
+        if (wildcard.length > 1) fail('ambiguous wildcard type: ' + owner + ':' + spelling);
+        return wildcard[0] || spelling;
+    };
+}
+
+/** A consumer resolves existing identities; it never adds tokens or publishers. */
+export function nativeGeneratedConsumerResolver(plan: NativeGeneratedDeclarationPlan, source: string):
+    {root: Node; owner: string; resolve: (name: string) => string} {
+    const input = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
+    const root = parse('ReferenceConsumer.as', source); normalize(root);
+    const pkg = root.findChild(K.PACKAGE), content = pkg && pkg.findChild(K.CONTENT);
+    const classes = content && content.findChildren(K.CLASS);
+    if (!classes || classes.length !== 1) fail('one reference consumer class required');
+    let count = 0;
+    const walk = (node: Node): void => {if (node.kind === K.CLASS || node.kind === K.INTERFACE) count++; node.children.forEach(walk);};
+    walk(root);
+    if (count !== 1) fail('additional consumer declarations require source authority');
+    const namespace = pkg.findChild(K.NAME).text;
+    const owner = (namespace ? namespace + '.' : '') + classes[0].findChild(K.NAME).text;
+    if (input.sources[owner]) nativeGeneratedDeclarationSource(plan, input.scope, owner, source);
+    const known = Object.keys(input.sources).concat(Object.keys(input.providers || {}));
+    return {root, owner, resolve: sourceResolver(root, owner, name => known.indexOf(name) >= 0)};
 }

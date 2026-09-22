@@ -17,6 +17,7 @@ import {NativeLexicalMembers} from './native-lexical-members';
 import {NativeGlobalModules} from './native-global-modules';
 import {NativeSourceAncestryPlan} from './native-source-ancestry';
 import {NativeGeneratedEmission, NativeGeneratedEmissionOptions, NativeClassHelperModules, generatedModule} from './native-generated-emission';
+import {NativeReferenceCoercion, NativeReferenceCoercionOptions, ReferenceLocal} from './native-reference-coercion';
 
 const util = require('util');
 
@@ -124,6 +125,7 @@ export interface EmitterOptions {
     /** Common source-generated registrar; paired with an exact declaration plan. */
     nativeClassTraitsModule?: string;
     nativeGeneratedDeclarations?: NativeGeneratedEmissionOptions;
+    nativeReferenceCoercion?: NativeReferenceCoercionOptions;
     /** Explicit distributed helper modules for generated lazy native classes. */
     nativeClassHelperModules?: NativeClassHelperModules;
     /** Common AS3Property coercion for generated method signatures. */
@@ -288,6 +290,7 @@ function filterAST(node:Node):Node {
 
 export default class Emitter {
     generated: NativeGeneratedEmission;
+    references: NativeReferenceCoercion;
     nativeGlobals:NativeGlobalModules;
     lexical: NativeLexicalMembers;
     /** Exact compiler-created callable imports; authored imports grant no exemption. */
@@ -371,6 +374,16 @@ export default class Emitter {
             ast = require('../parse')(this.generated.projection.binding.qname + '.as',this.source);
         }
 
+        if (this.options.nativeReferenceCoercion !== undefined) {
+            if (this.options.useNamespaces || this.options.customVisitors.length || this.options.nativeTypedLocals)
+                throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: exact source without conflicting transforms required');
+            if (this.generated && (this.options.nativeReferenceCoercion.plan !== this.generated.options.plan
+                || this.options.nativeReferenceCoercion.module !== this.generated.options.module))
+                throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: generated and consumer domain must agree');
+            this.references = new NativeReferenceCoercion(this.source,this.options.nativeReferenceCoercion,!!this.generated);
+            generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
+            ast = this.references.root;
+        }
 		if (this.options.decoratorModules !== undefined) {
 			const modules = this.options.decoratorModules;
 			if (!modules || typeof modules !== 'object' || Array.isArray(modules)
@@ -1352,6 +1365,13 @@ function emitForIn(emitter:Emitter, node:Node):void {
 	let blockNode = node.children[2];
 	const dictionaryReceiver = nativeDictionaryEnumerationReceiver(emitter, inNode && inNode.children[0]);
 	let nameTypeInitNode = varNode.findChild(NodeKind.NAME_TYPE_INIT);
+    const reference = emitter.references && (nameTypeInitNode ? emitter.references.declaration(nameTypeInitNode)
+        : varNode.kind === NodeKind.IDENTIFIER && emitter.references.local(varNode,varNode.text));
+    let referenceKey: string;
+    if (reference) {
+        referenceKey = '__as3_reference_key_' + (++emitter.loopObjectCounter);
+        while (emitter.source.indexOf(referenceKey) >= 0) referenceKey += '_';
+    }
 	let typeStr = "";
 	if (nameTypeInitNode) {
 		// emit variable type on for..of statements, but outside of the loop header.
@@ -1380,7 +1400,7 @@ function emitForIn(emitter:Emitter, node:Node):void {
 		}
 		emitter.catchup(node.start + Keywords.FOR.length + 1);
 		emitter.catchup(varNode.start);
-		emitter.insert(`${ nameNode.text }`);
+		emitter.insert(reference ? 'var ' + referenceKey : nameNode.text);
 		emitter.skipTo(varNode.end);
 	} else {
 		if (emitter.pendingStatementLabel) {
@@ -1388,15 +1408,15 @@ function emitForIn(emitter:Emitter, node:Node):void {
 			emitter.pendingStatementLabel = null;
 		}
 		emitter.catchup(node.start + Keywords.FOR.length + 1);
-		visitNode(emitter, initNode);
+		if (reference) {emitter.insert('var ' + referenceKey); emitter.skipTo(varNode.end);}
+        else visitNode(emitter, initNode);
 	}
 
 	if (dictionaryReceiver) {
 		emitter.skipTo(inNode.start);
 		emitter.insert(' of ');
 		emitDictionaryEnumerationKeys(emitter, inNode.children[0]);
-		emitDictionaryEnumerationBlock(emitter, blockNode);
-		finishEnumerationBody(emitter, blockNode, false);
+		emitReferenceForInBody(emitter,blockNode,reference,referenceKey);
 		emitter.insert('}');
 		return;
 	}
@@ -1406,9 +1426,19 @@ function emitForIn(emitter:Emitter, node:Node):void {
 	 emitter.insert('of ');*/
 
 	visitNodes(emitter, inNode.children);
-	visitNode(emitter, blockNode);
-	finishEnumerationBody(emitter, blockNode, false);
+	emitReferenceForInBody(emitter,blockNode,reference,referenceKey);
 	emitter.insert('}');
+}
+
+function emitReferenceForInBody(emitter:Emitter, body:Node, reference:ReferenceLocal, key:string):void {
+    if (reference) {
+        emitter.catchup(body.start + (body.kind === NodeKind.BLOCK ? 1 : 0));
+        if (body.kind !== NodeKind.BLOCK) emitter.insert('{');
+        const parts = referenceCoercionParts(emitter,reference);
+        emitter.insert(reference.name + ' = ' + parts[0] + key + parts[1] + ';');
+    }
+    visitNode(emitter,body);
+    finishEnumerationBody(emitter,body,!!reference && body.kind !== NodeKind.BLOCK);
 }
 
 function emitForEach(emitter:Emitter, node:Node):void {
@@ -1480,7 +1510,7 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	else emitter.insert('(' + receiverName + ' = ');
 	visitNodes(emitter, inNode.children);
 	emitter.catchup(objNode.end);
-	if (dictionaryReceiver) emitter.insert('))');
+	if (dictionaryReceiver) emitter.insert(')');
 	else emitter.insert(')');
 	const hasBlock = blockNode.kind === NodeKind.BLOCK;
 	emitter.catchup(blockNode.start + (hasBlock ? 1 : 0));
@@ -1512,10 +1542,12 @@ function emitForEach(emitter:Emitter, node:Node):void {
 		}
 	}
 
-	if (dictionaryReceiver) {
-		const get = dictionaryEnumerationHelper(emitter, 'as3GetProperty');
-		emitter.insert(`\n\t\t\t${declarationWord}${nameNode.text}${typeStr} = ${castStr}${get}(${receiverName}, ${keyName});\n`);
-	} else emitter.insert(`\n\t\t\t${declarationWord}${nameNode.text}${typeStr} = ${castStr}${receiverName}[${keyName}];\n`);
+	const reference = emitter.references && (nameTypeInitNode ? emitter.references.declaration(nameTypeInitNode)
+        : emitter.references.local(node,nameNode.text));
+    const value = dictionaryReceiver ? dictionaryEnumerationHelper(emitter,'as3GetProperty') + '(' + receiverName + ', ' + keyName + ')'
+        : receiverName + '[' + keyName + ']';
+    const parts = reference ? referenceCoercionParts(emitter,reference) : [castStr,''];
+    emitter.insert('\n' + declarationWord + nameNode.text + typeStr + ' = ' + parts[0] + value + parts[1] + ';\n');
 	visitNode(emitter, blockNode);
 	finishEnumerationBody(emitter, blockNode, !hasBlock);
 	emitter.insert('}');
@@ -1601,6 +1633,11 @@ function emitBlock(emitter:Emitter, node:Node):void {
 	// variables. Do not introduce an IIFE: that would change lexical arguments.
 	emitter.catchup(node.start + 1);
 	emitNumericMethodParameterCoercion(emitter, node);
+	if (emitter.references) emitter.references.defaults(node).forEach(local => {
+		const type = getDeclarationType(emitter,local.node);
+		emitter.ensureImportIdentifier(type);
+		emitter.insert('\nvar ' + local.name + ':' + type + ' = null;\n');
+	});
 	const insertion = emitter.output.length;
 	visitNodes(emitter, node.children);
 	const temporaries = emitter.logicalAssignmentTemps.get(node);
@@ -3381,6 +3418,24 @@ function isCast(emitter:Emitter, node:Node):boolean {
 
 function emitCatch(emitter:Emitter, node:Node):void {
 	const name = node.findChild(NodeKind.NAME), type = node.findChild(NodeKind.TYPE);
+    if (emitter.references && type && type.text !== '*') {
+        if (type.text !== 'Error' || emitter.references.resolve('Error') !== 'Error' || emitter.findDefInScope('Error')
+            || emitter.references.owner === 'Error'
+            || node.previousSibling && node.previousSibling.kind === NodeKind.CATCH
+            || node.nextSibling && node.nextSibling.kind === NodeKind.CATCH)
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: only a single builtin Error catch is qualified');
+        generatedModule(emitter.options.nativeSourceErrorModule);
+        let helper = '__as3_reference_catchError';
+        while (emitter.source.indexOf(helper) >= 0) helper += '_';
+        emitter.ensureImportIdentifier('as3IsSourceErrorInstance as ' + helper,emitter.options.nativeSourceErrorModule,false);
+        const scope = emitter.enterScope([{name:name.text,as3Type:'*'}]);
+        emitter.catchup(name.end); emitter.skipTo(type.end);
+        const body = node.findChild(NodeKind.BLOCK);
+        emitter.catchup(body.start + 1);
+        emitter.insert('if (!' + helper + '(' + name.text + ')) throw ' + name.text + ';');
+        visitNode(emitter,body); emitter.catchup(body.end); emitter.exitScope(scope);
+        return;
+    }
 	if (emitter.options.nativeCallableClasses) {
 		if (type && type.text !== '*')
 			throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: typed catch requires AS3 exception dispatch');
@@ -3388,7 +3443,7 @@ function emitCatch(emitter:Emitter, node:Node):void {
 			|| node.nextSibling && node.nextSibling.kind === NodeKind.CATCH)
 			throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: multiple catch clauses require AS3 exception dispatch');
 	}
-	const catchScope = emitter.lexical && emitter.enterScope([]);
+	const catchScope = (emitter.lexical || emitter.references) && emitter.enterScope([]);
     emitter.declareInScope({name: name.text, as3Type: '*'})
 	emitter.catchup(node.start);
 	if (type && type.text === '*') {
@@ -3816,6 +3871,16 @@ function emitIntegerCoercedNode(emitter: Emitter, node: Node, as3Type: string): 
     emitIntegerCoercionEnd(emitter, as3Type);
 }
 
+function referenceCoercionParts(emitter:Emitter, reference:ReferenceLocal):string[] {
+    let helper = '__as3_reference_coerce', token = '__as3_reference_' + reference.exported;
+    while (emitter.source.indexOf(helper) >= 0) helper += '_';
+    while (emitter.source.indexOf(token) >= 0) token += '_';
+    emitter.ensureImportIdentifier('as3CoerceReference as ' + helper,emitter.references.options.coercionModule,false);
+    emitter.ensureImportIdentifier(reference.exported + ' as ' + token,emitter.references.options.module,false);
+    emitter.nativeSourceHelpers.add(helper); emitter.nativeSourceHelpers.add(token);
+    return ['(<any>' + helper + '(',',' + token + '))'];
+}
+
 function emitInit(emitter: Emitter, node: Node): void {
     let declarationNode = node.parent;
     let as3Type = declarationNode && declarationNode.kind === NodeKind.NAME_TYPE_INIT
@@ -3823,6 +3888,13 @@ function emitInit(emitter: Emitter, node: Node): void {
         : null;
 
     emitter.catchup(node.start);
+    const reference = emitter.references && emitter.references.declaration(declarationNode);
+    if (reference) {
+        const parts = referenceCoercionParts(emitter,reference);
+        emitter.insert(parts[0]); visitNodes(emitter,node.children);
+        emitter.catchup(getEffectiveNodeEnd(node)); emitter.insert(parts[1]);
+        return;
+    }
     if (!isIntegerAS3Type(as3Type) || emitter.lexical && emitter.lexical.typedLocals && emitter.lexical.typedLocals.owns(declarationNode, emitter)) {
         visitNodes(emitter, node.children);
         return;
@@ -3906,6 +3978,15 @@ function emitAssign(emitter: Emitter, node: Node): void {
     let left = node.children[0];
     let operator = node.children[1];
     let right = node.children[2];
+    const referenceTarget = unwrapEncapsulatedExpression(left);
+    const reference = emitter.references && referenceTarget.kind === NodeKind.IDENTIFIER && emitter.references.local(referenceTarget,referenceTarget.text);
+    if (reference) {
+        if (operator.text !== '=') throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: compound reference write');
+        emitter.catchup(node.start); visitNode(emitter,left); emitter.catchup(operator.end);
+        const parts = referenceCoercionParts(emitter,reference);
+        emitter.insert(parts[0]); visitNode(emitter,right); emitter.catchup(getEffectiveNodeEnd(right));
+        emitter.insert(parts[1]); return;
+    }
     if (operator.text === '=' && emitDictionaryPropertyAssignment(emitter, left, right)) return;
     if (operator.text === '=' && emitDynamicPropertyAssignment(emitter, left, right)) return;
     if ((operator.text === '+=' || operator.text === '=') && emitter.lexical && emitter.lexical.typedLocals) {
@@ -4107,13 +4188,26 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 		}
 	}
 
-	if (Keywords.isKeyWord(node.text)) {
+	if (Keywords.isKeyWord(node.text) && !emitter.findDefInScope(node.text)) {
 		emitter.insert(node.text);
 		emitter.skipTo(node.end);
 		return;
 	}
 
 	let def = emitter.findDefInScope(node.text);
+    if (emitter.references && !emitter.classInitializers.enabled
+        && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def,'as3Type'))
+        && emitter.references.sourceClass(node.text)) {
+        const expression = outerEncapsulatedExpression(node), parent = expression.parent;
+        if (!parent || parent.kind !== NodeKind.CALL || !parent.parent || parent.parent.kind !== NodeKind.NEW)
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: consumer class value currently requires direct construction');
+        let read = '__as3_reference_readClass';
+        while (emitter.source.indexOf(read) >= 0) read += '_';
+        emitter.ensureImportIdentifier(node.text);
+        emitter.ensureImportIdentifier('readNativeClass as ' + read,emitter.options.nativeClassHelperModules.nativeClass,false);
+        emitter.insert('(' + read + '(' + node.text + ',"unsupported"))');
+        emitter.skipTo(node.end); return;
+    }
 	if (emitter.classInitializers.enabled && def && (def.bound || Object.prototype.hasOwnProperty.call(def, 'as3Type')))
 		staticRef = null; // An own source binding shadows an inherited static name.
 	if (emitter.classInitializers.enabled && !staticRef && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def, 'as3Type'))) {
@@ -4198,7 +4292,9 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 
 	// emitter.ensureImportIdentifier(node.text);
 
-	node.text = preservedTypeOfName || emitter.getIdentifierRemap(node.text) || node.text;
+	const canonicalDictionary = node.text === 'Dictionary' && def && def.sourceImport === 'flash.utils.Dictionary'
+        && emitter.options.importModules && emitter.options.importModules['flash.utils.Dictionary'];
+    node.text = preservedTypeOfName || (canonicalDictionary ? node.text : emitter.getIdentifierRemap(node.text)) || node.text;
 
 	emitter.insert(node.text);
 	emitter.skipTo(node.end);
