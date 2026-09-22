@@ -27,6 +27,8 @@ export interface NativeSourceAncestryMember {
 export interface NativeSourceAncestryClass {
     base?: string;
     dynamic: boolean;
+    /** Provider-only proof that the retained namespace member surface is complete. */
+    namespaceComplete?: boolean;
     members: NativeSourceAncestryMember[];
     /** Fully qualified namespace declarations opened by the source class's unit. */
     uses?: string[];
@@ -139,6 +141,8 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
             fail('invalid provider base QName: ' + qname);
         if (typeof metadata.dynamic !== 'boolean' || !Array.isArray(metadata.members))
             fail('complete provider class metadata required: ' + qname);
+        if (metadata.namespaceComplete !== undefined && typeof metadata.namespaceComplete !== 'boolean')
+            fail('provider namespace completeness must be boolean: ' + qname);
     });
     const roots: {[qname: string]: Node} = {}, sourceHashes: {[qname: string]: string} = {}, parseErrors: {[qname: string]: string} = {};
     const declarations: {[qname: string]: {root: Node; node: Node}} = {};
@@ -214,6 +218,7 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
             base: providerClasses[qname].base,
             dynamic: providerClasses[qname].dynamic,
             members: providerClasses[qname].members.slice(),
+            ...(providerClasses[qname].namespaceComplete ? {namespaceComplete: true} : {}),
             ...(providerClasses[qname].uses ? {uses: providerClasses[qname].uses.slice()} : {})
         };
     });

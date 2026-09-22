@@ -24,6 +24,7 @@ export class NativeNamespaces {
     private keys = new Map<string, string>();
     private declarations = new Map<string, Node>();
     private classes = new Map<string, Node[]>();
+    private completeDynamicClasses = new Set<Node>();
     private openedAccesses = new Map<Node, NamespaceAccess>();
     private configured: {[qname: string]: string};
 
@@ -131,6 +132,7 @@ export class NativeNamespaces {
             children.push(createNode(NodeKind.CONTENT, {}, ...uses));
             const owner = createNode(NodeKind.CLASS, {qualifiedName:qname}, ...children);
             this.classes.set(qname, [owner]);
+            if (metadata.namespaceComplete) this.completeDynamicClasses.add(owner);
             metadata.members.forEach(member => {
                 const modifiers: Node[] = [createNode(NodeKind.MODIFIER, {text:member.uri})];
                 if (member.static) modifiers.push(createNode(NodeKind.MODIFIER, {text:'static'}));
@@ -184,7 +186,7 @@ export class NativeNamespaces {
         if (!owner) return [];
         if (active.indexOf(owner) >= 0) this.fail('cyclic namespace class inheritance');
         const mods = owner.findChild(NodeKind.MOD_LIST);
-        if (mods && mods.children.some(mod => mod.text === 'dynamic'))
+        if (mods && mods.children.some(mod => mod.text === 'dynamic') && !this.completeDynamicClasses.has(owner))
             this.fail('dynamic namespace receiver classes require separate lowering');
         const extension = owner.findChild(NodeKind.EXTENDS);
         if (!extension) return [owner];

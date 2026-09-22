@@ -76,6 +76,12 @@ const provider = createNativeSourceAncestryPlan({
     'flash.events.EventDispatcher': { dynamic: false, members: [] },
     'flash.display.DisplayObject': {
       base: 'flash.events.EventDispatcher', dynamic: false, members: []
+    },
+    'flash.display.MovieClip': {
+      base: 'flash.display.Sprite', dynamic: true, members: [], namespaceComplete: true
+    },
+    'flash.display.Sprite': {
+      base: 'flash.display.DisplayObject', dynamic: false, members: []
     }
   }
 });
@@ -96,6 +102,31 @@ const providerOutput = emit(parse('owners.ProviderChild.as', providerChild), pro
 });
 assert.match(providerOutput, /__as3_namespace_member_/);
 assert.doesNotMatch(providerOutput, /proven ordinary base/);
+const dynamicProviderChild = `package owners {
+ import fixture.shared;
+ import flash.display.MovieClip;
+ public class DynamicProviderChild extends MovieClip {
+  shared var value:int = 4;
+  public function read():int { return this.shared::value; }
+ }
+}`;
+const dynamicProviderPlan = createNativeSourceAncestryPlan({
+  sources: { 'fixture.shared': { source: shared }, 'owners.DynamicProviderChild': { source: dynamicProviderChild } },
+  providerClasses: provider.classes
+});
+const dynamicProviderOutput = emit(parse('owners.DynamicProviderChild.as', dynamicProviderChild), dynamicProviderChild, {
+  lineSeparator: '\n', customVisitors: [], namespaceUris: dynamicProviderPlan.namespaceUris,
+  nativeSourceAncestry: dynamicProviderPlan
+});
+assert.match(dynamicProviderOutput, /__as3_namespace_member_/);
+assert.doesNotMatch(dynamicProviderOutput, /dynamic namespace receiver classes require/);
+assert.throws(() => emit(parse('owners.DynamicProviderChild.as', dynamicProviderChild), dynamicProviderChild, {
+  lineSeparator: '\n', customVisitors: [], namespaceUris: dynamicProviderPlan.namespaceUris,
+  nativeSourceAncestry: createNativeSourceAncestryPlan({
+    sources: { 'fixture.shared': { source: shared }, 'owners.DynamicProviderChild': { source: dynamicProviderChild } },
+    providerClasses: {...provider.classes, 'flash.display.MovieClip': {base: 'flash.display.Sprite', dynamic: true, members: []}}
+  })
+}), /dynamic namespace receiver classes require/);
 
 const incomplete = createNativeSourceAncestryPlan({ sources: {
   'fixture.shared': { source: shared }, 'owners.Child': { source: child }
