@@ -1,3 +1,4 @@
+import {nativeNumericProductConstant} from './native-numeric-product-constant';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
 import {NativeGeneratedClassTraits} from './native-generated-traits';
 import {NativeGeneratedLexical} from './native-generated-lexical';
@@ -84,9 +85,9 @@ export class NativeGeneratedEmission {
                 this.deferredConstants[trait.name]=name;
                 return;
             }
-            // Primitive literals are early storage. Computed primitive constants
-            // still require their own source initialization authority.
-            if (!literal || !/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal))
+            // Literals and AIR-qualified numeric products are early storage.
+            // Other computed primitive constants still require source authority.
+            if (!literal || !/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal) && !nativeNumericProductConstant(literal,trait.type))
                 fail('computed static constant initialization requires source authority');
         });
         options.plan.bindings.forEach(binding => {
