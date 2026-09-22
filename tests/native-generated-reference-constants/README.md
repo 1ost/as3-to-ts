@@ -33,3 +33,21 @@ It does not qualify dispatch, typed argument validation, IllegalOperationError
 behavior or full game integration. Mixed class-body statements, computed
 primitive constants, interface/vector/native reference constants and source
 script globals with failed static initialization remain explicit boundaries.
+
+## Signal dispatch comparison
+
+`npm run test:native-signal-dispatch` separately uses the engine's pinned
+`signal-dispatch` packet and emits only the seven unchanged Signal sources.
+Its 44 rows compare registration order, zero through four arguments, once and
+disabled listeners, params identity, replacements, mutation during dispatch,
+thrown identity, mixed-registration error name/ID, typed argument validation,
+valueClasses identity and direct Slot execution methods. All rows pass in Node
+and Chromium for ES5/ES2015, baseline and combined compiler passes, with zero
+strict type errors. Five altered comparisons detect missing/reordered callbacks
+and incorrect once/removal timing. Observer callbacks use registered source
+Function authority; subject methods are not replaced.
+
+This additional evidence qualifies those dispatched paths, including the common
+IllegalOperationError name/ID on mixed add/addOnce attempts. Full messages,
+builtin catch brands, recursive dispatch, custom Class argument families and
+integration into the running application remain separate requirements.
