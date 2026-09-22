@@ -54,6 +54,14 @@ export class NativeGeneratedClassTraits {
         if (!this.binding) fail('reference-only source cannot publish a class: ' + owner);
         const lexical: LexicalMember[] = [];
         const surfaces = new Map<string, {instance: Member[]; statics: Member[]; dynamic: boolean; final: boolean}>();
+        if(plan.nativeBindings.some(binding=>!!binding.eventBaseExport)) {
+            const declaredBy='flash.events::Event';
+            const instance: Member[] = [['type','String'],['bubbles','Boolean'],['cancelable','Boolean'],['eventPhase','uint'],['target','Object'],['currentTarget','Object']]
+                .map(([name,type])=>({name,type,kind:'accessor',access:'readonly',declaredBy} as Member));
+            ['clone','toString','formatToString','stopImmediatePropagation','preventDefault','isDefaultPrevented','stopPropagation']
+                .forEach(name=>instance.push({name,kind:'method',parameterCount:name==='formatToString'?1:0,declaredBy}));
+            surfaces.set('flash.events.Event',{instance,statics:[],dynamic:false,final:false});
+        }
         const type = (qname: string, node: Node): TraitType => {
             if (!node) return '*';
             const reference = plan.references.find(item => item.owner === qname && item.start === node.start && item.end === node.end);
@@ -72,7 +80,7 @@ export class NativeGeneratedClassTraits {
             if (surfaces.has(binding.qname)) return;
             const parent = binding.base && plan.bindings.find(item => item.qname === binding.base);
             if (parent) build(parent);
-            const inherited = parent && surfaces.get(parent.qname);
+            const inherited = binding.base && surfaces.get(binding.base);
             if (inherited && inherited.final) fail('source extends final class: ' + binding.qname);
             const root = parse(binding.qname + '.as', input.sources[binding.qname].source);
             const clean = (node: Node): void => {node.children = node.children.filter(Boolean); node.children.forEach(clean);};
@@ -139,6 +147,8 @@ export class NativeGeneratedClassTraits {
             own.instance.forEach(member => {
                 const index = instance.findIndex(item => item.name === member.name), previous = instance[index];
                 if (previous) {
+                    if(previous.declaredBy==='flash.events::Event' && ['clone','toString','formatToString'].indexOf(member.name)<0)
+                        fail('native Event override requires separate source authority: '+member.name);
                     if (!member.override || previous.final || previous.kind !== member.kind || member.kind === 'variable' || member.kind === 'constant'
                         || member.kind === 'accessor' && (previous.access !== member.access || JSON.stringify(previous.type) !== JSON.stringify(member.type))
                         || member.kind === 'method' && previous.parameterCount !== member.parameterCount)

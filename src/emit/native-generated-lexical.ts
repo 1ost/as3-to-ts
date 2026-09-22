@@ -63,7 +63,7 @@ export class NativeGeneratedLexical {
                 });
             });
             const binding=plan.bindings.find(b=>b.qname===name);
-            if(binding.base)collect(binding.base,true);
+            if(binding.base&&input.sources[binding.base])collect(binding.base,true);
         };
         collect(owner,false);
         this.own.forEach(trait=>{if(modifiers(trait.node).indexOf('override')>=0&&!overridden.has(trait))fail('protected override has no source ancestor');});
@@ -104,9 +104,10 @@ export class NativeGeneratedLexical {
     }
     publication(name:string,base:string,domain:string,intrinsic:string):string {
         const own=this.plan.bindings.find(b=>b.qname===this.owner),parent=own.base&&this.plan.bindings.find(b=>b.qname===own.base);
+        const native=own.base&&this.plan.nativeBindings.find(b=>b.qname===own.base&&!!b.eventBaseExport);
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(t.kind==='variable'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array'):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
-        return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?domain+'.'+parent.lexicalExport+'.get('+base+')':'null')+',['+traits.join(',')+']);\n'
+        return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?domain+'.'+parent.lexicalExport+'.get('+base+')':native?domain+'.'+native.eventBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
             +this.traits.map(t=>'const '+t.access+'='+this.provider+'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(t.name)+','+JSON.stringify(t.visibility)+','+t.static+');').join('\n');
     }

@@ -22,6 +22,7 @@ export function generatedModule(value: string): string {
 export class NativeGeneratedEmission {
     readonly projection: NativeGeneratedClassTraits;
     readonly lexical: NativeGeneratedLexical;
+    readonly eventBase: {qname:string; referenceExport:string; eventBaseExport?:string};
     readonly sources: {[qname: string]: string} = Object.create(null);
     readonly classes: {[qname: string]: 'lazy' | 'ready'} = Object.create(null);
     constructor(source: string, readonly options: NativeGeneratedEmissionOptions,
@@ -37,6 +38,12 @@ export class NativeGeneratedEmission {
         const owners = Object.keys(input.sources).filter(name => input.sources[name].source === source);
         if (owners.length !== 1) fail('exact current source bytes required');
         this.projection = new NativeGeneratedClassTraits(options.plan,input.scope,owners[0],source);
+        let ancestor=this.projection.binding;
+        while(ancestor.base) {
+            const native=options.plan.nativeBindings.find(binding=>binding.qname===ancestor.base&&!!binding.eventBaseExport);
+            if(native){this.eventBase=native;break;}
+            ancestor=options.plan.bindings.find(binding=>binding.qname===ancestor.base);
+        }
         if (this.projection.metadata.isDynamic) fail('dynamic source property routing required');
         this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source);
         if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => p.name === t.name)))

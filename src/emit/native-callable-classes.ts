@@ -87,7 +87,7 @@ export class NativeCallableClasses {
             };
             if (!metadata) callScan(cls);
             if (cls.findChild(K.IMPLEMENTS_LIST)) this.fail('interface construction identity requires separate authority');
-            let base = null;
+            let base: string = null;
             const ext = cls.findChild(K.EXTENDS);
             if (ext) {
                 if (ext.text.indexOf('.') >= 0) this.fail('qualified base syntax');
@@ -96,7 +96,8 @@ export class NativeCallableClasses {
                 if (Object.prototype.hasOwnProperty.call(options, local)) candidates.push(local);
                 pkg.findChild(K.CONTENT).findChildren(K.IMPORT).forEach(imp => {
                     const candidate = imp.text.endsWith('.*') ? imp.text.slice(0, -1) + ext.text : imp.text;
-                    if (candidate.split('.').pop() === ext.text && Object.prototype.hasOwnProperty.call(options, candidate)
+                    if (candidate.split('.').pop() === ext.text && (Object.prototype.hasOwnProperty.call(options, candidate)
+                        || generated && generated.options.plan.nativeBindings.some(binding=>binding.qname===candidate&&!!binding.eventBaseExport))
                         && candidates.indexOf(candidate) < 0) candidates.push(candidate);
                 });
                 if (candidates.length !== 1) this.fail('mixed/unknown/ambiguous base chain: ' + qname + ' extends ' + ext.text);
@@ -107,7 +108,8 @@ export class NativeCallableClasses {
             cls.findChild(K.CONTENT).children.forEach(member => {
                 const mods = member.findChild(K.MOD_LIST);
                 const isStatic = mods && mods.children.some(mod => mod.text === 'static');
-                const lexicalMember = classLexical && classLexical.proves(member);
+                const lexicalMember = classLexical && classLexical.proves(member)
+                    || generated && mods && mods.children.some(mod=>mod.text==='private'||mod.text==='protected');
                 if (!isStatic && !lexicalMember && [K.FUNCTION, K.GET, K.SET].indexOf(member.kind) >= 0) {
                     const memberName = member.findChild(K.NAME).text;
                     if (memberName !== name) instanceMembers.push({name: memberName, method: member.kind === K.FUNCTION});
@@ -125,6 +127,12 @@ export class NativeCallableClasses {
                 });
             });
             const constructor = cls.findChild(K.CONTENT).children.find(member => member.kind === K.FUNCTION && member.findChild(K.NAME).text === name);
+            if(generated && generated.options.plan.nativeBindings.some(binding=>binding.qname===base&&!!binding.eventBaseExport)) {
+                let calls=0;
+                const scan=(node:Node):void=>{if(node.kind===K.CALL&&node.children[0]&&node.children[0].text==='super')calls++;node.children.forEach(scan);};
+                if(constructor)scan(constructor.findChild(K.BLOCK));
+                if(calls!==1)this.fail('native Event requires one explicit source base call');
+            }
             const parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string}[] = [];
             let usesArguments = false;
             if (constructor) {
@@ -287,6 +295,9 @@ export class NativeCallableClasses {
         const planned = this.declarationDomain && this.declarationDomain.bindings.find(binding => binding.qname === this.own.qname);
         if (this.declarationDomain && !planned) this.fail('current source declaration is absent from its compiler domain');
         const domainImport = planned || this.generated ? unique('declarationDomain') : '';
+        const eventBase=this.generated&&this.generated.eventBase;
+        const eventClass=eventBase&&domainImport+'.'+eventBase.referenceExport;
+        const directEventBase=eventBase&&this.own.base===eventBase.qname;
         const referenceToken = planned ? (qname:string):string => {
             const binding=this.declarationDomain.bindings.find(value=>value.qname===qname);
             if(!binding)this.fail('foreign local declaration is absent from its compiler domain');
@@ -363,8 +374,9 @@ export class NativeCallableClasses {
                     if (++superCount > 1) this.fail('repeated super construction');
                     edits.push({start: node.getStart(file), end: node.end,
                         value: '{const ' + superArguments + ': any[] = [' + node.arguments.map(argumentExpression).join(', ') + ']; '
-                            + intrinsic + '.expectBase(this, ' + identity + ', ' + baseName + '); '
-                            + intrinsic + '.apply(' + baseName + ', this, ' + superArguments + '); }'});
+                            + (directEventBase ? intrinsic+'.callNativeBase(this,'+identity+','+baseName+','+superArguments+'); }'
+                                : intrinsic + '.expectBase(this, ' + identity + ', ' + baseName + '); '
+                                    + intrinsic + '.apply(' + baseName + ', this, ' + superArguments + '); }')});
                     node.arguments.forEach((argument: any) => walk(argument, true, nestedFunction)); return;
                 }
                 const childFunction = nestedFunction || node.kind === S.FunctionExpression
@@ -467,15 +479,17 @@ export class NativeCallableClasses {
                 }
             });
         }
-        const bindInstance = instanceMethods.map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
+        const bindInstance = instanceMethods.filter(key=>!eventBase||['clone','toString','formatToString','stopImmediatePropagation','preventDefault','isDefaultPrevented','stopPropagation'].indexOf(key)<0)
+            .map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
         const defaults = (this.metadata || this.generated ? generation + '.enterInstance(this);\n' : '')
+            + (eventBase ? intrinsic+'.prepareNativeBase(this,'+eventClass+');\n' : '')
             + (this.generated ? this.generated.lexical.provider+'.initializeAS3LexicalInstance('+this.generated.lexical.scope+',this);\n' : '')
             + (this.lexical ? this.lexical.provider + '.initializeAS3LexicalInstance(' + this.lexical.scope + ',this);\n' : '')
             + (this.generated ? [] : chainFields).map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
             + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
         const ancestry = cls.heritageClauses && cls.heritageClauses[0];
         const base = ancestry ? 'const ' + baseName + ' = ' + text(ancestry.types[0].expression) + ';\n' : '';
-        const sourceBaseName = this.own.base && this.classes.get(this.own.base).name;
+        const sourceBaseName = this.own.base && (directEventBase ? this.own.base.split('.').pop() : this.classes.get(this.own.base).name);
         const constructorBody = ctor ? body(ctor, true) : '';
         const tail = ctor && ctor.body.statements[ctor.body.statements.length - 1];
         const completion = !constructorReturns && tail && tail.kind === S.ThrowStatement ? '' : succeeded + ' = true;';
@@ -512,6 +526,7 @@ export class NativeCallableClasses {
             + (this.own.base ? intrinsic + '.setPrototypeOf(' + name + ', ' + baseName + ');\n'
                 + name + '.prototype = ' + intrinsic + '.create(' + baseName + '.prototype);\n' : '')
             + intrinsic + '.defineProperty(' + name + '.prototype, "constructor", {value:' + name + ', writable:false, configurable:true});\n'
+            + (eventBase ? intrinsic+'.registerNativeBase('+eventClass+','+domainImport+'.'+eventBase.eventBaseExport+');\n' : '')
             + intrinsic + '.register(' + identity + ', ' + (this.own.base ? baseName : 'null') + ');\n'
             + definitions.join('\n') + '\n'
             + staticMethods.map(key => bindName + '(' + name + ', ' + JSON.stringify(key) + ');').join('\n')

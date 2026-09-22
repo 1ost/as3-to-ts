@@ -1,6 +1,8 @@
 /** Captured outside every authored module/scope. No constructor body lives here. */
 export interface NativeCallableFunction extends Function {}
 const constructors = new WeakMap<Function, Function>();
+interface NativeBaseEntry {constructor:Function;prepareInstance:(receiver:object)=>void;initializeInstance:(receiver:object,args:readonly unknown[])=>void;}
+const nativeBases = new WeakMap<Function,NativeBaseEntry>();
 interface ConstructionEntry {
     status: 'active' | 'completed' | 'failed';
     stack: Function[];
@@ -26,6 +28,26 @@ export const callableClassIntrinsics = Object.freeze({
     arraySlice: Array.prototype.slice,
     apply: Reflect.apply,
     arityError: (): Error => failure(1063, 'ArgumentError'),
+    registerNativeBase(ctor:Function,adapter:NativeBaseEntry):void {
+        if(!adapter||!Object.isFrozen(adapter)||['constructor','prepareInstance','initializeInstance'].some(key=>{
+            const field=Object.getOwnPropertyDescriptor(adapter,key);return !field||!('value' in field)||typeof field.value!=='function';
+        })||adapter.constructor!==ctor||nativeBases.has(ctor)&&nativeBases.get(ctor)!==adapter
+            ||constructors.has(ctor)&&!nativeBases.has(ctor))throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: native base entry authority');
+        nativeBases.set(ctor,adapter);constructors.set(ctor,null);
+    },
+    prepareNativeBase(receiver:object,base:Function):void {
+        const entry=entries.get(receiver),adapter=nativeBases.get(base);
+        if(!entry||entry.status!=='active'||entry.stack.length!==1||!adapter)throw failure(1006,'TypeError');
+        let parent=entry.stack[0];while(parent&&parent!==base)parent=constructors.get(parent);
+        if(parent!==base)throw failure(1006,'TypeError');
+        adapter.prepareInstance(receiver);
+    },
+    callNativeBase(receiver:object,owner:Function,base:Function,args:readonly unknown[]):void {
+        const entry=entries.get(receiver),adapter=nativeBases.get(base);
+        if(!entry||entry.status!=='active'||entry.expected||entry.stack[entry.stack.length-1]!==owner
+            ||constructors.get(owner)!==base||!adapter)throw failure(1006,'TypeError');
+        adapter.initializeInstance(receiver,args);
+    },
     register(ctor: Function, base: Function): void {
         if (constructors.has(ctor) || base && !constructors.has(base))
             throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: unregistered/mixed constructor chain');

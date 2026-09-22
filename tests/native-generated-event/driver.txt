@@ -1,0 +1,35 @@
+import {EntryEvent as EntryBinding} from './EntryEvent';
+import {ShadowEvent as ShadowBinding} from './ShadowEvent';
+import {BaseEvent as BaseBinding} from './BaseEvent';
+import {LeafEvent as LeafBinding} from './LeafEvent';
+import {as3Is} from '@TYPE@';
+import {Event} from '@EVENT@';
+import {readNativeClass} from '@NATIVE_CLASS@';
+import {as3HasOwnProperty} from '@PROPERTY@';
+import {describeRegisteredFlashType} from '@METADATA@';
+function state(event:Event):unknown[]{return [event.type,event.bubbles,event.cancelable,event.eventPhase,event.target,event.currentTarget,event.isDefaultPrevented()];}
+export function run(){
+ const Entry=readNativeClass(EntryBinding),Shadow=readNativeClass(ShadowBinding);
+ Entry.log=[];const converted={toString(){Entry.log.push(['coerce']);return 'converted';}};
+ const child=new Entry(converted,1,1);
+ const rows:any[]=[{id:'entry-order',value:Entry.log},
+ {id:'receiver',value:[child===Entry.captured,child.marker,state(child),child._type,Entry.earlyMethod===child.preventDefault]}];
+ Entry.log=[];let failure:any[]=[];
+ try{new Entry(null,true,true);}catch(e){failure=[(e as any).name,(e as any).errorID];}
+ rows.push({id:'failed-entry',value:[failure,Entry.log,state(Entry.captured),Entry.captured.marker]});
+ const method=child.preventDefault;method.call(new Event('other',false,true));
+ rows.push({id:'bound-method',value:[child.isDefaultPrevented(),method===child.preventDefault]});
+ Entry.log=[];const marker={};let same=false;
+ try{new Entry({toString(){throw marker;}});}catch(e){same=e===marker;}
+ rows.push({id:'coercion-failure',value:[same,Entry.log,state(Entry.captured)]});
+ rows.push({id:'private-storage',value:[Object.prototype.hasOwnProperty.call(new Event('plain'),'_type'),as3HasOwnProperty(child,'_type'),child._type]});
+ rows.push({id:'static-shadow',value:[Event.CHANGE,Shadow.CHANGE,new Shadow().type,as3HasOwnProperty(Shadow,'CHANGE'),Object.prototype.hasOwnProperty.call(Event,'CHANGE')]});
+ rows.push({id:'shadow-reflection-constants',value:describeRegisteredFlashType(Shadow)!.constants!.map(c=>[c.name,c.type])});
+ const Base=readNativeClass(BaseBinding),Leaf=readNativeClass(LeafBinding);Base.log=[];
+ const leaf=new Leaf();
+ rows.push({id:'chain-order',value:Base.log});
+ rows.push({id:'chain-fields',value:[leaf.baseField,leaf.leafField,leaf.baseSecret(),leaf.leafSecret(),leaf.type]});
+ rows.push({id:'chain-membership',value:[as3Is(leaf,Leaf),as3Is(leaf,Base),as3Is(leaf,Event)]});
+ rows.push({id:'chain-closure',value:[leaf.baseSecret.call({})===7,leaf.leafSecret.call({})===9,leaf.record===leaf.record]});
+ return rows;
+}

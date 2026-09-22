@@ -53,7 +53,8 @@
     "test:native-string-locals": "node tests/native-string-locals/run.cjs",
     "test:native-string-addition": "node tests/native-string-addition/run.cjs",
     "test:native-string-enumeration": "node tests/native-string-enumeration/run.cjs",
-    "test:native-generated-constants": "node tests/native-generated-constants/run.cjs"
+    "test:native-generated-constants": "node tests/native-generated-constants/run.cjs",
+    "test:native-generated-event": "node tests/native-generated-event/run.cjs"
   },
   "keywords": [
     "actionscript",

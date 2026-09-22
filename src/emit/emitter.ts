@@ -3524,10 +3524,13 @@ function emitCatch(emitter:Emitter, node:Node):void {
 function emitRelation(emitter:Emitter, node:Node):void {
     if (containsIsKeyword(node) && node.children.length === 3) {
         const target = node.lastChild, global = emitter.nativeGlobals.resolve(target);
-        if (global && global.name === 'AS3Date') {
+        const targetBinding=target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
+        const nativeEvent=emitter.generated&&emitter.generated.eventBase&&targetBinding
+            &&targetBinding.sourceImport==='flash.events.Event';
+        if (global && global.name === 'AS3Date' || nativeEvent) {
             const module = emitter.options.nativeComputedTypeTestModule;
             generatedModule(module);
-            let helper = '__as3_date_is';
+            let helper = nativeEvent ? '__as3_event_is' : '__as3_date_is';
             while (emitter.source.indexOf(helper) >= 0) helper += '_';
             emitter.ensureImportIdentifier('as3Is as ' + helper,module,false);
             emitter.catchup(node.start); emitter.insert(helper + '(');
