@@ -2513,12 +2513,30 @@ function emitShortVector(emitter:Emitter, node:Node):void {
 function emitNew(emitter:Emitter, node:Node):void {
 	if (emitSourceErrorConstruction(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
+	if (emitBuiltinEmptyStringConstruction(emitter, node)) return;
 	emitter.catchup(node.start);
 	emitter.isNew = true;
 	emitter.emitThisForNextIdent = false;
 	visitNodes(emitter, node.children);
 	emitter.isNew = false;
 	emitter.emitThisForNextIdent = true;
+}
+
+function emitBuiltinEmptyStringConstruction(emitter:Emitter, node:Node):boolean {
+	const module = emitter.options.nativeStringCoercionModule;
+	if (module === undefined || !node || node.kind !== NodeKind.NEW || node.children.length !== 1)
+		return false;
+	const call = node.children[0];
+	if (!call || call.kind !== NodeKind.CALL || call.children.length < 2)
+		return false;
+	const callee = call.children[0], args = call.findChild(NodeKind.ARGUMENTS);
+	if (!callee || callee.kind !== NodeKind.IDENTIFIER || callee.text !== 'String'
+		|| emitter.findDefInScope('String') || !args || args.children.length !== 0)
+		return false;
+	emitter.catchup(node.start);
+	emitter.skipTo(node.end);
+	emitter.insert('""');
+	return true;
 }
 
 function emitSourceErrorConstruction(emitter:Emitter, node:Node):boolean {

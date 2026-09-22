@@ -35,6 +35,7 @@
     "test:native-numeric-parameters": "node tests/native-numeric-parameters/run.cjs",
     "test:native-inherited-static-namespace": "node tests/native-inherited-static-namespace/run.cjs",
     "test:native-scientific-literals": "node tests/native-scientific-literals/run.cjs",
+    "test:native-empty-string-construction": "node tests/native-empty-string-construction/run.cjs",
     "test:native-labelled-control": "node tests/native-labelled-control/run.cjs",
     "test:native-chained-construction": "node tests/native-chained-construction/run.cjs",
     "test:native-source-ancestry": "node tests/native-source-ancestry/run.cjs"
