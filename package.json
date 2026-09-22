@@ -45,7 +45,8 @@
     "test:reflection-namespace-isolation": "node tests/native-reflection-query/namespace-isolation.cjs",
     "test:native-generated-declarations": "node tests/native-generated-declarations/run.cjs && node tests/native-generated-declarations/traits.cjs && node tests/native-generated-declarations/emission.cjs",
     "test:native-forin-bodies": "node tests/native-forin-bodies/run.cjs",
-    "test:native-reference-coercion": "node tests/native-reference-coercion/run.cjs"
+    "test:native-reference-coercion": "node tests/native-reference-coercion/run.cjs",
+    "test:native-date-binding": "node tests/native-date-binding/run.cjs"
   },
   "keywords": [
     "actionscript",
@@ -63,7 +64,7 @@
   "bugs": {
     "url": "https://github.com/as3web/as3-to-ts/issues"
   },
-  "author": "Fran\u00e7ois de Campredon <francois.de.campredon@gmail.com>",
+  "author": "François de Campredon <francois.de.campredon@gmail.com>",
   "contributors": [
     {
       "name": "Endel Dreyer"

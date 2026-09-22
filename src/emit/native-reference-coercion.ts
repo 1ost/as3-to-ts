@@ -19,7 +19,7 @@ export class NativeReferenceCoercion {
     readonly resolve: (name: string) => string;
     private declarations = new Map<number, ReferenceLocal>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -34,6 +34,8 @@ export class NativeReferenceCoercion {
             if (node.kind === K.NAME_TYPE_INIT) {
                 const name = node.findChild(K.NAME).text, type = node.findChild(K.TYPE);
                 const exported = type && this.type(type.qualifiedName || type.text);
+                if (exported && this.resolve(type.qualifiedName || type.text) === 'Date' && !nativeDate)
+                    fail('Date reference requires its explicit native global binding');
                 if (exported && !generated && node.parent.kind === K.PARAMETER) fail('reference parameter entry requires separate lowering');
                 if (exported && !fn && !generated) fail('reference field storage requires generated class registration');
                 if (fn) {
@@ -63,8 +65,11 @@ export class NativeReferenceCoercion {
             if ([K.AS,K.RELATION].indexOf(node.kind) >= 0 && node.children.some(child =>
                 child.kind === K.TYPE && !!this.type(child.qualifiedName || child.text)))
                 fail('reference type operation requires class-evaluation authority');
+            const nativeDateTest = nativeDate && node.kind === K.RELATION && node.children.some(child => child.text === 'is')
+                && this.resolve(node.lastChild.qualifiedName || node.lastChild.text) === 'Date'
+                && options.plan.nativeBindings.some(binding => binding.qname === 'Date');
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
-                && this.type(node.lastChild.qualifiedName || node.lastChild.text))
+                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest)
                 fail('reference type operation requires class-evaluation authority');
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text

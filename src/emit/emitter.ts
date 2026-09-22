@@ -380,7 +380,8 @@ export default class Emitter {
             if (this.generated && (this.options.nativeReferenceCoercion.plan !== this.generated.options.plan
                 || this.options.nativeReferenceCoercion.module !== this.generated.options.module))
                 throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: generated and consumer domain must agree');
-            this.references = new NativeReferenceCoercion(this.source,this.options.nativeReferenceCoercion,!!this.generated);
+            this.references = new NativeReferenceCoercion(this.source,this.options.nativeReferenceCoercion,!!this.generated,
+                !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date));
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -1634,8 +1635,10 @@ function emitBlock(emitter:Emitter, node:Node):void {
 	emitter.catchup(node.start + 1);
 	emitNumericMethodParameterCoercion(emitter, node);
 	if (emitter.references) emitter.references.defaults(node).forEach(local => {
-		const type = getDeclarationType(emitter,local.node);
-		emitter.ensureImportIdentifier(type);
+		const global = emitter.nativeGlobals.resolve(local.node.findChild(NodeKind.TYPE),true);
+		const type = global ? global.alias : getDeclarationType(emitter,local.node);
+		if (global) emitter.ensureImportIdentifier(global.name + ' as ' + global.alias,global.module,false);
+		else emitter.ensureImportIdentifier(type);
 		emitter.insert('\nvar ' + local.name + ':' + type + ' = null;\n');
 	});
 	const insertion = emitter.output.length;
@@ -3460,6 +3463,20 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if (containsIsKeyword(node) && node.children.length === 3) {
+        const target = node.lastChild, global = emitter.nativeGlobals.resolve(target);
+        if (global && global.name === 'AS3Date') {
+            const module = emitter.options.nativeComputedTypeTestModule;
+            generatedModule(module);
+            let helper = '__as3_date_is';
+            while (emitter.source.indexOf(helper) >= 0) helper += '_';
+            emitter.ensureImportIdentifier('as3Is as ' + helper,module,false);
+            emitter.catchup(node.start); emitter.insert(helper + '(');
+            visitNode(emitter,node.children[0]); emitter.catchup(node.children[0].end);
+            emitter.insert(','); emitter.skipTo(target.start); visitNode(emitter,target);
+            emitter.catchup(target.end); emitter.insert(')'); emitter.skipTo(node.end); return;
+        }
+    }
 	if (emitComputedTypeTest(emitter, node)) return;
 
     if (emitter.options.nativeRelationalModule !== undefined) {
@@ -3511,6 +3528,9 @@ function emitRelation(emitter:Emitter, node:Node):void {
 	// Check for 'as' in relation.
 	let as = node.findChild(NodeKind.AS);
 	if (as) {
+        const global = emitter.nativeGlobals.resolve(node.lastChild);
+        if (global && global.name === 'AS3Date')
+            throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: Date as conversion requires native lowering');
         if (emitter.options.nativeCallableMetadata) {
             let helper = node.lastChild.text === 'Class' ? '__as3_source_asClass' : '__as3_source_asType';
             while (emitter.source.indexOf(helper) >= 0) helper += '_';

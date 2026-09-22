@@ -15,7 +15,7 @@ export class NativeGlobalModules {
             throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: module emission required');
         Object.keys(this.modules).forEach(name => {
             const module = this.modules[name];
-            if (['QName','XML','XMLList','Namespace'].indexOf(name) < 0
+            if (['QName','XML','XMLList','Namespace','Date'].indexOf(name) < 0
                 || typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
                 throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: invalid builtin module binding: ' + name);
         });
@@ -52,6 +52,6 @@ export class NativeGlobalModules {
             while (this.source.indexOf(alias) >= 0) alias += '_';
             this.aliases[name] = alias;
         }
-        return {name, alias, module:this.modules[name]};
+        return {name:name === 'Date' ? 'AS3Date' : name, alias, module:this.modules[name]};
     }
 }
