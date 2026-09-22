@@ -1,6 +1,7 @@
 import Node, {createNode} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
+import {nativeSourceTypeIdentity} from './native-source-type';
 
 export interface NativeSourceAncestrySource {
     source: string;
@@ -24,12 +25,20 @@ export interface NativeSourceAncestryMember {
     override: boolean;
 }
 
+export interface NativeSourceAncestryType {
+    name: string;
+    type: string;
+    static: boolean;
+}
+
 export interface NativeSourceAncestryClass {
     base?: string;
     dynamic: boolean;
     /** Provider-only proof that the retained namespace member surface is complete. */
     namespaceComplete?: boolean;
     members: NativeSourceAncestryMember[];
+    /** Typed ordinary fields/accessors retained for cross-file receiver inference. */
+    types?: NativeSourceAncestryType[];
     /** Fully qualified namespace declarations opened by the source class's unit. */
     uses?: string[];
 }
@@ -177,7 +186,7 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
             if (classes[identity]) return fail('duplicate source class: ' + identity);
             const mods = owner.findChild(K.MOD_LIST);
             const metadata: NativeSourceAncestryClass = {
-                dynamic: !!mods && mods.children.some(mod => mod.text === 'dynamic'), members: [], uses: []
+                dynamic: !!mods && mods.children.some(mod => mod.text === 'dynamic'), members: [], types: [], uses: []
             };
             if (extension) {
                 const base = candidates(root, extension.text).filter(value => Object.keys(roots).indexOf(value) >= 0
@@ -192,6 +201,19 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
                 if ([K.FUNCTION, K.GET, K.SET, K.VAR_LIST, K.CONST_LIST].indexOf(member.kind) < 0) return;
                 const memberMods = member.findChild(K.MOD_LIST), qualifier = memberMods && memberMods.children.filter(mod =>
                     ['public','private','protected','internal','static','override','final','native','dynamic'].indexOf(mod.text) < 0);
+                const isStatic = !!memberMods && memberMods.children.some(mod => mod.text === 'static');
+                const importsForType = imports(root).map(value => value.text);
+                if ([K.VAR_LIST, K.CONST_LIST].indexOf(member.kind) >= 0) {
+                    member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
+                        const name = field.findChild(K.NAME), type = field.findChild(K.TYPE);
+                        if (name && type) metadata.types.push({name:name.text,
+                            type:nativeSourceTypeIdentity(type, identity, importsForType), static:isStatic});
+                    });
+                } else if ([K.GET, K.SET].indexOf(member.kind) >= 0) {
+                    const name = member.findChild(K.NAME), type = member.findChild(K.TYPE);
+                    if (name && type) metadata.types.push({name:name.text,
+                        type:nativeSourceTypeIdentity(type, identity, importsForType), static:isStatic});
+                }
                 if (!qualifier || !qualifier.length) return;
                 if (qualifier.length !== 1) return fail('multiple namespace modifiers: ' + identity);
                 const uri = resolveNamespace(root, qualifier[0].text, declarations, configured);
@@ -218,6 +240,7 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
             base: providerClasses[qname].base,
             dynamic: providerClasses[qname].dynamic,
             members: providerClasses[qname].members.slice(),
+            ...(providerClasses[qname].types ? {types: providerClasses[qname].types.slice()} : {}),
             ...(providerClasses[qname].namespaceComplete ? {namespaceComplete: true} : {}),
             ...(providerClasses[qname].uses ? {uses: providerClasses[qname].uses.slice()} : {})
         };

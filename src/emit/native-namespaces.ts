@@ -135,6 +135,18 @@ export class NativeNamespaces {
             const owner = createNode(NodeKind.CLASS, {qualifiedName:qname}, ...children);
             this.classes.set(qname, [owner]);
             if (metadata.namespaceComplete) this.completeDynamicClasses.add(owner);
+            (metadata.types || []).forEach(type => {
+                if (!type || !type.name || !type.type) return;
+                const modifiers: Node[] = [];
+                if (type.static) modifiers.push(createNode(NodeKind.MODIFIER, {text:'static'}));
+                const declaration = createNode(NodeKind.VAR_LIST, {},
+                    createNode(NodeKind.MOD_LIST, {}, ...modifiers),
+                    createNode(NodeKind.NAME_TYPE_INIT, {},
+                        createNode(NodeKind.NAME, {text:type.name}),
+                        createNode(NodeKind.TYPE, {text:type.type})));
+                owner.findChild(NodeKind.CONTENT).children.push(declaration);
+                declaration.parent = owner.findChild(NodeKind.CONTENT);
+            });
             metadata.members.forEach(member => {
                 const modifiers: Node[] = [createNode(NodeKind.MODIFIER, {text:member.uri})];
                 if (member.static) modifiers.push(createNode(NodeKind.MODIFIER, {text:'static'}));

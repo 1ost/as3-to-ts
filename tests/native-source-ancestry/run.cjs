@@ -61,6 +61,33 @@ const openOutput = emit(parse('owners.OpenChild.as', openChild), openChild, {
 assert.match(openOutput, /__as3_namespace_member_/);
 assert.doesNotMatch(openOutput, /implicit namespace member requires an explicit selector/);
 
+const typedBase = `package owners {
+ import fixture.shared;
+ use namespace shared;
+ public class TypedBase {
+  shared function read():int { return 9; }
+  public function get target():TypedBase { return this; }
+ }
+}`;
+const typedChild = `package owners {
+ import fixture.shared;
+ import owners.TypedBase;
+ public class TypedChild extends TypedBase {
+  public function readThroughGetter():int { return target.read(); }
+ }
+}`;
+const typedPlan = createNativeSourceAncestryPlan({sources: {
+  'fixture.shared': {source: shared}, 'owners.TypedBase': {source: typedBase},
+  'owners.TypedChild': {source: typedChild}
+}});
+assert.strictEqual(typedPlan.classes['owners.TypedBase'].types.find(value => value.name === 'target').type,
+  'owners.TypedBase');
+const typedOutput = emit(parse('owners.TypedChild.as', typedChild), typedChild, {
+  lineSeparator: '\n', customVisitors: [], namespaceUris: typedPlan.namespaceUris,
+  nativeSourceAncestry: typedPlan
+});
+assert.match(typedOutput, /__as3_namespace_member_/);
+
 // The base can be the parsed source while a derived source is installed as a
 // synthetic ancestry node. That cross-file relation has no in-file ordering.
 const baseOutput = emit(parse('owners.Base.as', base), base, {
