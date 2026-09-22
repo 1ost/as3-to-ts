@@ -3590,9 +3590,11 @@ function emitCatch(emitter:Emitter, node:Node):void {
     emitter.declareInScope({name: name.text, as3Type: '*'})
 	emitter.catchup(node.start);
 	if (type && type.text === '*') {
-		// JavaScript already catches every thrown value; TypeScript forbids a catch annotation.
+		// Preserve AS3 wildcard typing in modern strict TS. Legacy non-generated
+        // output keeps its historical unannotated catch for old TS consumers.
 		emitter.catchup(name.end);
 		emitter.skipTo(type.end);
+        if(emitter.generated)emitter.insert(': any');
 		visitNodes(emitter, node.children.slice(node.children.indexOf(type) + 1));
         if (catchScope) emitter.exitScope(catchScope);
 		return;
