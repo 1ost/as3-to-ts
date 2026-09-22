@@ -4148,12 +4148,20 @@ function emitAssign(emitter: Emitter, node: Node): void {
     const referenceTarget = unwrapEncapsulatedExpression(left);
     const reference = emitter.references && referenceTarget.kind === NodeKind.IDENTIFIER && emitter.references.local(referenceTarget,referenceTarget.text);
     if (reference) {
-        if (operator.text !== '=') throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: compound reference write');
+        const addition = reference.stringLocal && operator.text === '+=';
+        if (operator.text !== '=' && !addition) throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: compound reference write');
+        if (addition && !emitter.options.nativeTypedLocalAdditionModule)
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: String compound addition requires common addition module');
+        if (addition) generatedModule(emitter.options.nativeTypedLocalAdditionModule);
         const temporary = logicalAssignmentTemporary(emitter,node);
         const parts = referenceCoercionParts(emitter,reference);
         emitter.catchup(node.start); emitter.insert('(' + temporary + ' = ');
+        // Call arguments capture the old local before evaluating the RHS.
+        // Coercion of the addition result happens only after both expressions.
+        if (addition) emitter.insert(sourceAdditionHelper(emitter) + '(' + reference.name + ',(');
         emitter.skipTo(getExpressionStart(right));
         visitNode(emitter,right); emitter.catchup(getEffectiveNodeEnd(right));
+        if (addition) emitter.insert('))');
         emitter.insert(', ' + reference.name + ' = ' + parts[0] + temporary + parts[1] + ', ' + temporary + ')');
         return;
     }
