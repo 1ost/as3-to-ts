@@ -193,6 +193,9 @@ interface NodeVisitor {
 
 
 const VISITORS:{[kind:number]:NodeVisitor} = {
+    [NodeKind.REST]: (emitter,node)=>{
+        emitter.catchup(node.start);emitter.insert('...'+node.text+': any[]');emitter.skipTo(node.end);
+    },
 	[NodeKind.RETURN]: emitReferenceReturn,
     [NodeKind.TYPEOF]: emitLocalTypeOf,
 	[NodeKind.PACKAGE]: emitPackage,
@@ -3297,7 +3300,8 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
     const module = emitter.options.nativeStringIntrinsicsModule;
     if (module === undefined || emitter.isNew) return false;
     const callee = node.children[0];
-    if (!callee || callee.kind !== NodeKind.DOT || callee.children[1].text !== 'replace') return false;
+    if (!callee || callee.kind !== NodeKind.DOT || ['replace','match'].indexOf(callee.children[1].text)<0) return false;
+    const method=callee.children[1].text, replacing=method==='replace';
     const receiver = unwrapEncapsulatedExpression(callee.children[0]);
     if (receiver.kind !== NodeKind.IDENTIFIER) return false;
     const binding = emitter.findDefInScope(receiver.text);
@@ -3306,12 +3310,13 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
     generatedModule(module);
     const args = node.findChild(NodeKind.ARGUMENTS);
-    if (!args || args.children.length !== 2)
-        throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace requires exactly two authored arguments');
+    if (!args || args.children.length !== (replacing?2:1))
+        throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: '+method+' requires exactly '+(replacing?'two':'one')+' authored arguments');
     // The legacy regex token end excludes flags; its exact text includes them.
     const pattern = args.children[0], raw = pattern.text;
     let construction:Node = null, match:RegExpExecArray = null;
     if (pattern.kind === NodeKind.NEW) {
+        if(!replacing)throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: match requires a qualified literal');
         const call=pattern.children[0], target=call&&call.children[0];
         const shadow=target&&emitter.findDefInScope(target.text);
         if (!call || call.kind!==NodeKind.CALL || !target || target.kind!==NodeKind.IDENTIFIER
@@ -3327,7 +3332,7 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
         match = pattern.kind === NodeKind.LITERAL && /^\/([\s\S]+)\/([a-z]*)$/.exec(raw);
         if (!match) throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace pattern requires a qualified literal');
     }
-    const replace = propertyHelper(emitter,'sourceStringReplace',module);
+    const replace = propertyHelper(emitter,replacing?'sourceStringReplace':'sourceStringMatch',module);
     const compile = propertyHelper(emitter,construction?'constructSourceStringReplacePattern':'compileSourceStringPattern',module);
     emitter.catchup(node.start); emitter.insert(replace + '(');
     emitter.skipTo(callee.children[0].start); visitNode(emitter,callee.children[0]);
@@ -3340,9 +3345,13 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
             emitter.catchup(getEffectiveNodeEnd(argument));
         });
     } else emitter.insert(JSON.stringify(match[1]) + ',' + JSON.stringify(match[2]));
-    emitter.insert('),');
-    emitter.skipTo(getExpressionStart(args.children[1])); visitNode(emitter,args.children[1]);
-    emitter.catchup(getEffectiveNodeEnd(args.children[1])); emitter.insert(')');
+    emitter.insert(')');
+    if(replacing) {
+        emitter.insert(',');
+        emitter.skipTo(getExpressionStart(args.children[1])); visitNode(emitter,args.children[1]);
+        emitter.catchup(getEffectiveNodeEnd(args.children[1]));
+    }
+    emitter.insert(')');
     emitter.skipTo(getEffectiveNodeEnd(node));
     return true;
 }
@@ -4035,8 +4044,10 @@ function emitRelation(emitter:Emitter, node:Node):void {
 			}
 
 			emitter.skipTo(node.end);
-			let pathToRoot = ClassList.getLastPathToRoot();
-			emitter.ensureImportIdentifier(AS3_UTIL, `${pathToRoot}${AS3_UTIL}`);
+			if(isInterface) {
+				let pathToRoot = ClassList.getLastPathToRoot();
+				emitter.ensureImportIdentifier(AS3_UTIL, `${pathToRoot}${AS3_UTIL}`);
+			}
 			return
 		}
 	}
