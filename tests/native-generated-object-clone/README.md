@@ -2,8 +2,9 @@
 
 Run node tests/native-generated-object-clone/run.cjs. This retains both complete
 Base/Record sources from the engine native-object-clone AIR packet. It currently
-exits nonzero at instance constant initialization authority. Dynamic source routing
-is a further explicit prerequisite in NativeGeneratedEmission. Do not remove the
+emits Base unchanged and exits nonzero at Record dynamic source routing in
+NativeGeneratedEmission. Public instance primitive literal constants are now
+qualified by the separate native-generated-instance-constants AIR fixture. Do not remove the
 constant, dynamic modifier, private fields or accessors to get a passing fixture.
 
 Once prerequisites are established, the observer compares all 12 AIR observations
