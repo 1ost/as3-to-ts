@@ -423,7 +423,8 @@ export class NativeCallableClasses {
             });
             result = this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
             if (typedLocals) result = typedLocals.lower(result, constructor ? this.own.name : member.name.text,
-                !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), this.generated ? localReference : provider, localCoercion, localString, localAddition, intrinsic + '.array', unique, referenceToken);
+                !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), this.generated ? localReference : provider, localCoercion, localString, localAddition, intrinsic + '.array', unique, referenceToken,
+                member.kind===S.GetAccessor?K.GET:member.kind===S.SetAccessor?K.SET:K.FUNCTION);
             return result;
         };
         const accessorTypes = new Set<string>();
@@ -459,13 +460,16 @@ export class NativeCallableClasses {
             }
             const receiver = isStatic ? constructorType : name;
             let signature = '', returnType: string;
-            if (this.generated && member.kind === S.MethodDeclaration) {
+            if (this.generated && [S.MethodDeclaration,S.GetAccessor,S.SetAccessor].indexOf(member.kind)>=0) {
+                const sourceKind=member.kind===S.GetAccessor?K.GET:member.kind===S.SetAccessor?K.SET:K.FUNCTION;
                 const sourceMethod = this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node => {
                     const mods=node.findChild(K.MOD_LIST),sourceStatic=!!mods&&mods.children.some(mod=>mod.text==='static');
-                    return node.kind === K.FUNCTION && node.findChild(K.NAME).text === key && sourceStatic === !!isStatic;
+                    return node.kind === sourceKind && node.findChild(K.NAME).text === key && sourceStatic === !!isStatic;
                 });
                 const parameters = sourceMethod.findChild(K.PARAMETER_LIST).children;
                 const fixed=parameters.filter(p=>!p.findChild(K.REST)),spread=parameters.find(p=>!!p.findChild(K.REST));
+                if(sourceKind!==K.FUNCTION&&(spread||fixed.length!==(sourceKind===K.GET?0:1)||fixed.some(p=>!!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT))))
+                    this.fail('generated accessor requires exact fixed signature');
                 if(spread&&parameters[parameters.length-1]!==spread)this.fail('rest method must be last');
                 if(spread&&!typedLocals)this.fail('rest method requires typed local storage');
                 const minimum=fixed.filter(p=>!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)).length;

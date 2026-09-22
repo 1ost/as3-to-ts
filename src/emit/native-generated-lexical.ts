@@ -114,7 +114,7 @@ export class NativeGeneratedLexical {
             if([K.VAR_LIST,K.CONST_LIST].indexOf(node.kind)>=0&&node.parent!==content)node.findChildren(K.NAME_TYPE_INIT).forEach(value=>{
                 const type=value.findChild(K.TYPE);
                 let member=node;while(member.parent&&member.parent!==content)member=member.parent;
-                if(value.findChild(K.VECTOR)||type&&type.text!=='*'&&(!typedLocals||member.kind!==K.FUNCTION))fail('typed local initialization/coercion lowering required');
+                if(value.findChild(K.VECTOR)||type&&type.text!=='*'&&(!typedLocals||[K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0))fail('typed local initialization/coercion lowering required');
                 if(typedLocals&&type&&type.text!=='*'){
                     const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
                     if(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'))fail('typed local source reference lowering required');

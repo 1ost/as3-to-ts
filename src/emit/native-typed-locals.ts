@@ -16,7 +16,7 @@ export class NativeTypedLocals {
                 member.findChildren(K.NAME_TYPE_INIT).forEach(d=>this.memberNames.push(d.findChild(K.NAME).text));
             else if([K.FUNCTION,K.GET,K.SET].indexOf(member.kind)>=0)this.memberNames.push(member.findChild(K.NAME).text);
         });
-        owner.findChild(K.CONTENT).findChildren(K.FUNCTION).forEach(node => {
+        owner.findChild(K.CONTENT).children.filter(node=>node.kind===K.FUNCTION||this.matchSourceSpans&&[K.GET,K.SET].indexOf(node.kind)>=0).forEach(node => {
             const locals: Local[] = [], declared: Local[] = [], wildcards: string[] = [], parameters = node.findChild(K.PARAMETER_LIST).children.map(p => {
                 const value=p.findChild(K.NAME_TYPE_INIT);return value ? value.findChild(K.NAME).text : p.findChild(K.REST)&&p.findChild(K.REST).text;
             });
@@ -95,7 +95,7 @@ export class NativeTypedLocals {
     wildcardReference(node: Node, emitter: any): {reference: string; read?: string; write?: string} {
         node=unwrapEncapsulatedExpression(node);
         if(node.kind!==K.IDENTIFIER)return null;
-        let method: Node=node;while(method&&method.kind!==K.FUNCTION)method=method.parent;
+        let method: Node=node;while(method&&[K.FUNCTION,K.GET,K.SET].indexOf(method.kind)<0)method=method.parent;
         const plan=this.methods.find(m=>m.node===method || this.matchSourceSpans && !!method && m.node.start===method.start && m.node.end===method.end);if(!plan)return null;
         const binding=emitter.findDefInScope(node.text);
         if(!binding||binding.bound||(binding.as3Type!=null&&binding.as3Type!=='*'))return null;
@@ -126,7 +126,7 @@ export class NativeTypedLocals {
     /** Prevent the older integer assignment pass from pre-coercing local RHS values. */
     owns(node: Node, emitter: any): boolean {
         node=unwrapEncapsulatedExpression(node);
-        let method: Node=node;while(method&&(method.kind!==K.FUNCTION||this.nested.some(fn=>fn.start===method.start&&fn.end===method.end)))method=method.parent;
+        let method: Node=node;while(method&&([K.FUNCTION,K.GET,K.SET].indexOf(method.kind)<0||this.nested.some(fn=>fn.start===method.start&&fn.end===method.end)))method=method.parent;
         const plan=this.methods.find(m=>m.node===method || this.matchSourceSpans && !!method && m.node.start===method.start && m.node.end===method.end);if(!plan)return false;
         const name=node.kind===K.NAME_TYPE_INIT?node.findChild(K.NAME).text:node.kind===K.IDENTIFIER?node.text:null;
         const local=plan.locals.find(l=>l.name===name);if(!local)return false;
@@ -134,8 +134,8 @@ export class NativeTypedLocals {
         const binding=emitter.findDefInScope(name);
         return !!binding&&!binding.bound&&binding.as3Type!=='*';
     }
-    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string): string {
-        const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic);
+    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION): string {
+        const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic&&m.node.kind===kind);
         if(!method||!method.locals.length&&!method.outerCaptures.length&&!this.nested.some(fn=>fn.methodStart===method.node.start&&!!fn.returned))return source;
         const ts=require('typescript'),S=ts.SyntaxKind,file=ts.createSourceFile('TypedLocals.ts',source,ts.ScriptTarget.Latest,true);
         if(file.parseDiagnostics.length)this.fail('intermediate local syntax');

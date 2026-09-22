@@ -1738,7 +1738,7 @@ interface NumericParameterPlan {
 }
 
 function generatedCallableOwnsParameters(emitter:Emitter, member:Node):boolean {
-    return !!emitter.generated && !!member && member.kind === NodeKind.FUNCTION
+    return !!emitter.generated && !!member && [NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(member.kind)>=0
         && !!member.findChild(NodeKind.NAME)
         && !!member.parent && member.parent.kind === NodeKind.CONTENT;
 }
