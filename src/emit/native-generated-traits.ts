@@ -13,6 +13,7 @@ interface Trait {
 }
 interface Member extends Trait {
     declaredBy: string;
+    constantLiteral?: string;
     access?: 'readonly' | 'writeonly' | 'readwrite';
     parameterCount?: number;
     override?: boolean;
@@ -28,6 +29,9 @@ function flags(node: Node): string[] {const mods = node.findChild(K.MOD_LIST); r
 function storageType(node: Node): Node {
     if (node.findChild(K.VECTOR) || node.findChild(K.SHORT_VECTOR)) fail('vector storage requires separate initialization authority');
     return node.findChild(K.TYPE);
+}
+function initializerEnd(node: Node): number {
+    return node.children.reduce((end, child) => Math.max(end, initializerEnd(child)), Math.max(node.start, node.end));
 }
 function frozen<T>(value: T): T {
     if (value && typeof value === 'object') Object.keys(value).forEach(key => frozen((value as any)[key]));
@@ -45,6 +49,7 @@ export class NativeGeneratedClassTraits {
     public readonly metadata: any;
     public readonly instanceTraits: ReadonlyArray<Trait>;
     public readonly staticTraits: ReadonlyArray<Trait>;
+    public readonly instanceConstants: ReadonlyArray<{name: string; literal: string}>;
     public readonly lexicalMembers: ReadonlyArray<LexicalMember>;
 
     constructor(plan: NativeGeneratedDeclarationPlan, scope: string, owner: string, source: string) {
@@ -120,10 +125,22 @@ export class NativeGeneratedClassTraits {
                 if (isStatic && common.override) fail('static override authority');
                 if (member.kind === K.VAR_LIST || member.kind === K.CONST_LIST) {
                     if (common.override || common.final) fail('storage override/final modifier');
-                    if (member.kind === K.CONST_LIST && !isStatic) fail('instance constant initialization authority');
-                    member.findChildren(K.NAME_TYPE_INIT).forEach(field => add(Object.assign({}, common, {
-                        name:field.findChild(K.NAME).text,kind:member.kind === K.VAR_LIST ? 'variable' : 'constant',
-                        type:type(binding.qname,storageType(field))}) as Member));
+                    member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
+                        const fieldType = type(binding.qname,storageType(field));
+                        let constantLiteral: string;
+                        if (member.kind === K.CONST_LIST && !isStatic) {
+                            const init = field.findChild(K.INIT);
+                            constantLiteral = init && input.sources[binding.qname].source.slice(init.start,initializerEnd(init)).trim();
+                            const numeric = constantLiteral && /^[+-]?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/.test(constantLiteral)
+                                && isFinite(Number(constantLiteral));
+                            if (!(typeof fieldType === 'string' && (['int','uint','Number'].indexOf(fieldType)>=0 && numeric
+                                || fieldType==='Boolean' && /^(true|false)$/.test(constantLiteral || '')
+                                || fieldType==='String' && /^(null|"[^"\\\r\n\u2028\u2029]*"|'[^'\\\r\n\u2028\u2029]*')$/.test(constantLiteral || ''))))
+                                fail('instance constant requires qualified primitive literal');
+                        }
+                        add(Object.assign({},common,{name:field.findChild(K.NAME).text,
+                            kind:member.kind===K.VAR_LIST?'variable':'constant',type:fieldType,constantLiteral}) as Member);
+                    });
                     return;
                 }
                 const name = member.findChild(K.NAME).text, params = member.findChild(K.PARAMETER_LIST).children;
@@ -178,6 +195,7 @@ export class NativeGeneratedClassTraits {
         const traits = (items: Member[]): Trait[] => items.map(item => Object.assign({name:item.name,kind:item.kind},item.type === undefined ? {} : {type:item.type}));
         this.metadata = frozen({name:reflected(owner),base:this.binding.base ? reflected(this.binding.base) : 'Object',
             isDynamic:surface.dynamic,isFinal:surface.final,instance:members(surface.instance),statics:members(surface.statics)});
+        this.instanceConstants = frozen(surface.instance.filter(item=>item.kind==='constant').map(item=>({name:item.name,literal:item.constantLiteral})));
         this.instanceTraits = frozen(traits(surface.instance));
         this.staticTraits = frozen(traits(surface.statics));
         this.lexicalMembers = frozen(lexical);
@@ -195,6 +213,7 @@ export class NativeGeneratedClassTraits {
             return '{' + fields + ',type:' + type + '}';
         }).join(',') + ']';
         return '{metadata:' + JSON.stringify(this.metadata) + ',instanceTraits:' + emit(this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
+            + ',instanceConstants:[' + this.instanceConstants.map(item=>'{name:'+JSON.stringify(item.name)+',value:'+item.literal+'}').join(',') + ']'
             + ',declaration:{type:' + domain + '.' + this.binding.tokenExport + ',publishGeneration:' + domain + '.' + this.binding.publishExport + '}}';
     }
 }

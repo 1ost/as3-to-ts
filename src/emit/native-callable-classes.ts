@@ -117,7 +117,7 @@ export class NativeCallableClasses {
                     if (memberName !== name) instanceMembers.push({name: memberName, method: member.kind === K.FUNCTION});
                 }
                 if (member.kind !== K.VAR_LIST && member.kind !== K.CONST_LIST) return;
-                if (member.kind === K.CONST_LIST && !isStatic) this.fail('instance const descriptors need separate authority');
+                if (member.kind === K.CONST_LIST && !isStatic && !generated) this.fail('instance const descriptors need separate authority');
                 if (isStatic || lexicalMember) return;
                 member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
                     const fieldName = field.findChild(K.NAME).text, typeNode = field.findChild(K.TYPE);
@@ -505,8 +505,9 @@ export class NativeCallableClasses {
                         : 'this[' + lexicalMember.key + '] = ' + text(member.initializer) + ';');
                     return;
                 }
-                const constant = isStatic && this.generated && this.generated.projection.staticTraits.find(t => t.name === key && t.kind === 'constant');
+                const constant = this.generated && this.generated.projection[isStatic?'staticTraits':'instanceTraits'].find(t => t.name === key && t.kind === 'constant');
                 (isStatic ? staticTypes : instanceTypes).push((constant ? 'readonly ' : '') + key + ': ' + type(member) + ';');
+                if (constant && !isStatic) return; // Literal storage is installed before all source effects.
                 if (constant) {
                     if (!member.initializer) this.fail('generated static constant literal missing');
                     const deferred=this.generated.deferredConstants[key];
