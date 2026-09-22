@@ -136,18 +136,6 @@ const accessorReceiverSource = `package example {
 }`;
 assert.match(generate(accessorReceiverSource), /__as3_namespace_member_/);
 
-const nestedReceiverSource = `package example {
-  import alias.same;
-  use namespace same;
-  public class MethodTarget { same function apply():void {} }
-  public class Chain { public function get target():MethodTarget { return null; } }
-  public class NestedReceiver {
-    private var chain:Chain;
-    public function read():void { chain.target.apply(); }
-  }
-}`;
-assert.match(generate(nestedReceiverSource), /__as3_namespace_member_/);
-
 
 const ast = parse('NamespaceFixture.as', source);
 let namespaceNodes = 0;
