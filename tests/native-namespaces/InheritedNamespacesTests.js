@@ -151,6 +151,8 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   assert.deepStrictEqual(Array.from(inheritedDefaults.ownRead()),[0,null]);
   execute(generate('package p {public namespace n="urn:open-inherited"; use namespace n; public class OpenBase {n var x:int=5;} public class OpenChild extends OpenBase {public function read():* {return this.x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
   assert.equal(new context.exports.OpenChild().read(),5,'opened namespace selects inherited field');
+  execute(generate('package p {public namespace n="urn:open-static-inherited"; use namespace n; public class OpenBase {n static const x:int=6;} public class OpenChild extends OpenBase {public function read():* {return x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
+  assert.equal(new context.exports.OpenChild().read(),6,'opened namespace selects inherited static member');
   execute(generate('package p {public namespace n="urn:super-field"; public class FieldBase {n var x:int=5;} public class FieldChild extends FieldBase {public function read():* {return super.n::x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
   const fieldChild=new context.exports.FieldChild();
   assert.equal(fieldChild.read(),5,'super namespace field reads the inherited instance slot');

@@ -204,8 +204,9 @@ export class NativeNamespaces {
         return [owner].concat(this.hierarchy(base, active.concat(owner)));
     }
 
-    private findMember(owner: Node, uri: string, name: string, isStatic: boolean, ownOnly = false): NamespaceMember {
-        const owners = ownOnly || isStatic ? [owner] : this.hierarchy(owner);
+    private findMember(owner: Node, uri: string, name: string, isStatic: boolean, ownOnly = false,
+        inheritStatic = false): NamespaceMember {
+        const owners = ownOnly || isStatic && !inheritStatic ? [owner] : this.hierarchy(owner);
         for (const candidate of owners) {
             let found: NamespaceMember = null;
             this.members.forEach(member => {
@@ -409,7 +410,7 @@ export class NativeNamespaces {
         opened.forEach(directive => {
             const uri = this.resolve(directive, directive.text);
             const instance = this.findMember(owner, uri, node.text, false);
-            const staticMember = this.findMember(owner, uri, node.text, true);
+            const staticMember = this.findMember(owner, uri, node.text, true, false, true);
             [instance, staticMember].forEach(member => {
                 if (member && candidates.indexOf(member) < 0) candidates.push(member);
             });
