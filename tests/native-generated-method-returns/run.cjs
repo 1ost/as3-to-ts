@@ -21,13 +21,13 @@ const combined=process.argv.includes('--combined');
 if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./domain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
 let guards=0;
 for(const method of [
- 'public function probe():String {try{return "x";}finally{}}',
- 'public function probe():String {try{return "x";}catch(e:*){return "y";}return "z";}',
+ 'public function probe(flag:*):String {try{if(flag)return "x";}finally{}}',
+ 'public function probe():String {try{return "x";}catch(e:*){}}',
  'public function probe(flag:*):String {if(flag)return "x";}',
  'public function probe():String {return;}',
  'public function probe():Missing {return null;}',
  'public function probe():Vector.<int> {return null;}',
- 'public function probe(value:*=null):String {return value;}',
+ 'public function probe(value:*=[]):String {return value;}',
  'public function probe(...values):String {trace(arguments);return "x";}'
 ]){
  const source='package returns {public class Guard {'+method+'}}';

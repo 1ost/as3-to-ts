@@ -22,7 +22,7 @@ let rejectionGuards=0;
 const original=sources['accessors.AccessorLocals'].source;
 assert.throws(()=>emit(parse('AccessorLocals.as',original),original,{...options,nativeTypedLocals:false}),/AS3_[A-Z_]+UNSUPPORTED/);rejectionGuards++;
 for(const body of [
- 'public function get value():uint{var n:uint=0;try{return n;}catch(e:*){return 1;}}',
+ 'public function get value():uint{var n:uint=0;try{return n;}catch(e:*){}}',
  'public function get value():uint{var n:uint=0;}',
  'public function get value():uint{var n:uint=0;return;}',
  'public function set value(v:uint=0):void{}',

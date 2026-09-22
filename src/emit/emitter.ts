@@ -1701,6 +1701,9 @@ function getNodeNameRecursive(objNode:Node):string{
 }
 
 function emitBlock(emitter:Emitter, node:Node):void {
+ const marker=emitter.generated&&emitter.generated.lexical.finallyMarkers.find(m=>m.start===node.start&&m.end===node.end);
+ if(marker){emitter.catchup(node.start+1);emitter.insert('/*'+marker.name+'*/');}
+
 	// Logical assignments capture effectful receivers in ordinary function-local
 	// variables. Do not introduce an IIFE: that would change lexical arguments.
 	emitter.catchup(node.start + 1);

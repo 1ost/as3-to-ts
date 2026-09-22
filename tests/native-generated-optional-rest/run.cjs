@@ -30,7 +30,7 @@ for(const body of [
  'public function f(v:uint=4294967296):void{}',
  'public function f(v:int=1.5):void{}',
  'public function f(v:Array=[]):void{}',
- 'public function f(v:*=null):void{}',
+ 'public function f(v:*=[]):void{}',
  'public function f(v:Boolean=1):void{}',
  'public function f(v:int=1,w:int):void{}',
  'public function f(...rest):void{rest+=1;}',

@@ -22,6 +22,7 @@ export class NativeGeneratedLexical {
     readonly ownClass: Node;
     readonly typedLocals: NativeTypedLocals;
     readonly nestedFunctions: NestedLocalFunction[] = [];
+    readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
     readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [];
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
@@ -96,6 +97,7 @@ export class NativeGeneratedLexical {
         };
         const check=(node:Node):void=>{
             forInTarget(node);
+            if(node.kind===K.FINALLY){const block=node.findChild(K.BLOCK);this.finallyMarkers.push({start:block.start,end:block.end,name:fresh("sourceFinally")});}
             if(node.kind===K.LAMBDA){
                 let method=node.parent;while(method&&method.parent!==content)method=method.parent;
                 if(!typedLocals||!method||method.kind!==K.FUNCTION||!plan.bindings.find(b=>b.qname===owner).scriptGlobalExport)

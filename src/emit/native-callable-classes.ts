@@ -1,3 +1,4 @@
+import {generatedMethodCompletes} from './native-generated-completions';
 import {NativeLexicalMembers} from './native-lexical-members';
 import {lowerNativeSourceOperations} from './native-source-operations';
 import {validateNativeTypeOf} from './native-typeof';
@@ -360,6 +361,38 @@ export class NativeCallableClasses {
             if (!member.body) this.fail('bodyless member');
             const edits: {start: number; end: number; value: string}[] = [];
             let superCount = 0;
+            const deferred=new Map<any,{label:string;value:string;pending:string}>();
+            const resetCatches=new Set<string>();
+            const deferredReturn=(node:any):{label:string;value:string;pending:string}|undefined=>{
+                let outer:any,child=node;
+                for(let scope=node.parent;scope&&scope!==member.body;child=scope,scope=scope.parent){
+                    if(scope.kind!==S.TryStatement||!scope.finallyBlock||child===scope.finallyBlock)continue;
+                    const blockText=text(scope.finallyBlock);
+                    if(this.generated.lexical.finallyMarkers.some(m=>blockText.indexOf('{/*'+m.name+'*/')===0))outer=scope;
+                }
+                if(!outer)return undefined;
+                let entry=deferred.get(outer);
+                if(!entry){
+                    const id=deferred.size;entry={label:unique('returnRegion'+id),value:unique('returnValue'+id),pending:unique('returnPending'+id)};deferred.set(outer,entry);
+                    edits.push({start:outer.getStart(file),end:outer.getStart(file),value:'{let '+entry.value+':any;let '+entry.pending+'=false;'+entry.label+':'});
+                    edits.push({start:outer.end,end:outer.end,value:';if('+entry.pending+')return <any>'+generatedProperty+'.coerceAS3PropertyValue('+entry.value+','+returnType+');}'});
+                }
+                // A finalizer may throw and an enclosing catch may resume normally.
+                // Such a catch cancels this pending return. Catches inside the
+                // finalizer itself do not enclose the return and must not clear it.
+                child=node;
+                for(let scope=node.parent;scope&&scope!==member.body;child=scope,scope=scope.parent){
+                    if(scope.kind===S.TryStatement&&scope.catchClause&&child===scope.tryBlock){
+                        const block=scope.catchClause.block,key=entry.pending+':'+block.pos;
+                        if(!resetCatches.has(key)){
+                            resetCatches.add(key);
+                            edits.push({start:block.getStart(file)+1,end:block.getStart(file)+1,value:entry.pending+'=false;'});
+                        }
+                    }
+                    if(scope===outer)break;
+                }
+                return entry;
+            };
             const isSourceArguments = (node: any): boolean => {
                 if (!constructor || node.kind !== S.Identifier || node.text !== 'arguments') return false;
                 if ((node.parent.kind === S.PropertyAccessExpression || node.parent.kind === S.PropertyAssignment)
@@ -404,6 +437,12 @@ export class NativeCallableClasses {
                 if (node.kind === S.SuperKeyword) this.fail('super property access requires separate receiver authority');
                 if (node.kind === S.ReturnStatement && returnType && !nestedFunction) {
                     if (!node.expression) this.fail('generated typed bare return');
+                    const delayed=deferredReturn(node);
+                    if(delayed){
+                        edits.push({start:node.getStart(file),end:node.expression.getStart(file),value:'{'+delayed.value+'='});
+                        edits.push({start:node.expression.end,end:node.end,value:';'+delayed.pending+'=true;break '+delayed.label+';}'});
+                        ts.forEachChild(node,(child:any)=>walk(child,insideSuperArguments,nestedFunction));return;
+                    }
                     // Insert around the original return expression. Walk its children
                     // normally, retaining nested compiler-helper return ownership.
                     edits.push({start:node.expression.getStart(file),end:node.expression.getStart(file),value:'<any>'+generatedProperty+'.coerceAS3PropertyValue('});
@@ -510,9 +549,10 @@ export class NativeCallableClasses {
                             if(['int','uint'].indexOf(identity)>=0&&(!numeric||/^[+-]?0[0-9]/.test(raw)||Math.floor(Number(raw))!==Number(raw)
                                 ||Number(raw)<(identity==='int'?-2147483648:0)||Number(raw)>(identity==='int'?2147483647:4294967295)))
                                 this.fail('generated optional integer default requires in-range literal');
-                            if(!(identity==='Boolean'&&/^(true|false)$/.test(raw)
+                            if(!(identity==='*'&&(raw==='null'||raw==='undefined'||raw==='true'||raw==='false'||numeric||/^("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(raw))
+                                ||identity==='Boolean'&&/^(true|false)$/.test(raw)
                                 ||['Number','int','uint'].indexOf(identity)>=0&&numeric
-                                ||identity==='String'&&(raw==='null'||/^("[\s\S]*"|'[\s\S]*')$/.test(raw))
+                                ||identity==='String'&&(raw==='null'||/^("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(raw))
                                 ||raw==='null'&&['Number','int','uint','Boolean','*'].indexOf(identity)<0))
                                 this.fail('generated optional parameter requires qualified literal default');
                             fallback='arguments.length <= '+index+' ? '+text(member.parameters[index].initializer)+' : ';
@@ -525,18 +565,17 @@ export class NativeCallableClasses {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
                     if(reference&&reference.kind==='native')this.fail('generated native return type requires separate qualification');
                     const sourceBody=sourceMethod.findChild(K.BLOCK);
-                    const inspect=(node:Node,protectedRegion=false):void=>{
+                    const inspect=(node:Node,inFinally=false):void=>{
                         if(node.kind===K.FUNCTION||node.kind===K.LAMBDA)return;
-                        protectedRegion=protectedRegion||[K.TRY,K.CATCH,K.FINALLY].indexOf(node.kind)>=0;
-                        if(node.kind===K.RETURN&&protectedRegion)
-                            this.fail('generated typed exception-return regions require separate qualification');
+                        inFinally=inFinally||node.kind===K.FINALLY;
+                        if(inFinally&&(node.kind===K.BREAK||node.kind===K.CONTINUE))
+                            this.fail('generated typed finalizer jumps require separate qualification');
                         if(node.kind===K.RETURN && !node.children.length)
                             this.fail('generated typed bare return');
-                        node.children.forEach(child=>inspect(child,protectedRegion));
+                        node.children.forEach(child=>inspect(child,inFinally));
                     };
                     inspect(sourceBody);
-                    const statements=sourceBody.children.filter(node=>[K.STMT_EMPTY,K.MULTI_LINE_COMMENT,K.AS_DOC].indexOf(node.kind)<0);
-                    if(!statements.length||statements[statements.length-1].kind!==K.RETURN)
+                    if(!generatedMethodCompletes(sourceBody))
                         this.fail('generated typed fallthrough completion requires separate qualification');
                     returnType=this.generated.lexical.typeExpression(returns,this.own.qname,domainImport,intrinsic+'.array');
                 }
