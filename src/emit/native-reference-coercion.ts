@@ -151,8 +151,10 @@ export class NativeReferenceCoercion {
             const nativeEventTest = nativeEvent && generated && node.kind === K.RELATION && node.children.some(child => child.text === 'is')
                 && node.lastChild.kind === K.IDENTIFIER && this.resolve(node.lastChild.text) === 'flash.events.Event'
                 && options.plan.nativeBindings.some(binding => binding.qname === 'flash.events.Event' && !!binding.eventBaseExport);
+            const sourceAs = generated && node.kind===K.RELATION && node.children.length===3
+                && node.children[1].kind===K.AS && node.lastChild.kind===K.IDENTIFIER && this.sourceClass(node.lastChild.text);
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
-                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest)
+                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !sourceAs)
                 fail('reference type operation requires class-evaluation authority');
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text

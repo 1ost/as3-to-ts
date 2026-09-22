@@ -3741,6 +3741,26 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if (emitter.generated && node.children.length===3 && node.children[1].kind===NodeKind.AS
+        && node.lastChild.kind===NodeKind.IDENTIFIER
+        && (emitter.classInitializers.resolve(node,node.lastChild.text)==='lazy'
+            || node.lastChild.text===emitter.currentClassName)) {
+        const target=node.lastChild,definition=emitter.findDefInScope(target.text);
+        if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: shadowed source as target requires Class operand authority');
+        let method=node.parent;
+        while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
+        if(!method)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: source as during class initialization requires separate authority');
+        const module=generatedModule(emitter.options.nativeComputedTypeTestModule);
+        let helper='__as3_source_as';while(emitter.source.indexOf(helper)>=0)helper+='_';
+        emitter.ensureImportIdentifier('as3As as '+helper,module,false);
+        emitter.nativeSourceHelpers.add(helper);
+        emitter.catchup(node.start);emitter.insert(helper+'(');
+        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+        emitter.insert(',');emitter.skipTo(target.start);visitNode(emitter,target);
+        emitter.catchup(target.end);emitter.insert(')');emitter.skipTo(node.end);return;
+    }
+
     if (containsIsKeyword(node) && node.children.length === 3) {
         const target = node.lastChild, global = emitter.nativeGlobals.resolve(target);
         const targetBinding=target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
