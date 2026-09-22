@@ -54,7 +54,6 @@ for(const body of [
  'public function Guard(){if(true)super("g");}',
  'public function Guard(){super("g");} public var type:String;',
  'public function Guard(){super("g");} override public function stopPropagation():void{}',
- 'public function Guard(){super("g");} override public function clone():Event{return this;}',
  'public function Guard(){super("g");} public function inspect():*{return super.toString();}'
 ])reject('package {import flash.events.Event;public class Guard extends Event {'+body+'}}');
 if(withReferences){
@@ -102,7 +101,7 @@ async function main(){
    assert.deepEqual(actual,wanted);assert.deepEqual(browserRows,wanted);
    results.push({target,node:actual,browser:browserRows,inputs:Object.keys(bundle.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({withReferences,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},held:['typed generated returns, native super methods, broad native base admission']},null,2));
+ fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({withReferences,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},held:['other native generated returns, native super methods, broad native base admission']},null,2));
  console.log('Generated Event subclasses (references='+withReferences+'): '+guards+' guards; 12 AIR rows in Node/Chromium, ES5/ES2015; exact 4 source classes. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
