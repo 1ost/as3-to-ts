@@ -1,7 +1,7 @@
 import * as domain from './domain';
 import * as other from './other';
 import {registerFlashTypeMetadata,FlashTypeMetadata} from '@METADATA@';
-import {registerAS3Class,as3Is,as3As} from '@TYPE@';
+import {as3Is,as3As} from '@TYPE@';
 const names:any=@NAMES@;
 const bindings:any=@BINDINGS@;
 // Only class-generation scaffolding. Source bodies are deliberately not replaced
@@ -15,8 +15,7 @@ export function run(){
   Object.defineProperty(constructor,'prototype',{writable:false});
   const members:FlashTypeMetadata['instance']={variables:[],accessors:[],methods:[],constants:[]};
   registerFlashTypeMetadata(constructor,{name:name.replace(/\.([^.]*)$/,'::$1'),base,isDynamic:false,isFinal:false,instance:members,statics:members});
-  const binding=bindings[name];const entry=first[binding.publishExport](constructor);
-  registerAS3Class(constructor,binding.interfaces.map((name:string)=>first[names[name]]));return entry;
+  return first[bindings[name].publishExport](constructor);
  }
  let baseEntry:any,childEntry:any,fakeEntry:any;
  class Implementation{constructor(){baseEntry.enterInstance(this);}}

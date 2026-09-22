@@ -1,6 +1,7 @@
 import Node from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
+import {NativeGeneratedInterfaceContracts,projectNativeGeneratedInterfaceContracts} from './native-generated-interface-contracts';
 
 export interface NativeGeneratedDeclarationInput {
     scope: string;
@@ -36,6 +37,7 @@ export interface NativeGeneratedDeclarationPlan {
     readonly moduleSource: string;
     readonly bindings: ReadonlyArray<NativeGeneratedDeclarationBinding>;
     readonly interfaces: ReadonlyArray<NativeGeneratedInterfaceBinding>;
+    readonly interfaceContracts: NativeGeneratedInterfaceContracts;
     readonly references: ReadonlyArray<NativeGeneratedReference>;
     readonly sourceHashes: {[qname: string]: string};
     readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly eventBaseExport?: string; readonly declarationExport?: string}>;
@@ -174,7 +176,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     });
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
-    if (interfaces.length) lines.push('import {defineAS3Interface} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
+    if (interfaces.length) lines.push('import {defineAS3Interface,registerAS3Class} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     const emittedInterfaces = new Set<string>(), activeInterfaces = new Set<string>();
     const addInterface = (binding: NativeGeneratedInterfaceBinding): void => {
         if (emittedInterfaces.has(binding.qname)) return;
@@ -212,16 +214,22 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         lines.push('const ' + authority + '=declareAS3ReferenceType<unknown>(' + JSON.stringify(name)
             + (parent ? ',' + parent.tokenExport : nativeParent ? ',' + nativeParent.declarationExport : '') + ');');
         lines.push('export const ' + binding.tokenExport + '=' + authority + '.type;');
-        lines.push('export const ' + binding.publishExport + '=' + authority + '.publishGeneration;');
+        if(binding.interfaces.length) {
+            const tokens=binding.interfaces.map(name=>interfaces.find(value=>value.qname===name).tokenExport);
+            lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{const generation='+authority+'.publishGeneration(constructor);'
+                +'registerAS3Class(constructor,['+tokens.join(',')+']);return generation;};');
+        } else lines.push('export const ' + binding.publishExport + '=' + authority + '.publishGeneration;');
         // Opaque common-engine scopes indexed by exact native generation. These
         // compiler exports never become properties of the source Class value.
         lines.push('export const ' + binding.lexicalExport + '=new WeakMap<Function,any>();');
         active.delete(binding.qname); emitted.add(binding.qname);
     };
     bindings.forEach(add);
+    const interfaceContracts=projectNativeGeneratedInterfaceContracts(classes,bindings,interfaces,resolve,
+        name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0);
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
         sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),
-        nativeBindings: Object.freeze(nativeBindings)});
+        nativeBindings: Object.freeze(nativeBindings),interfaceContracts});
     contexts.set(plan, {input: data, plan});
     return plan;
 }
