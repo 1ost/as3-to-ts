@@ -16,6 +16,7 @@ import {NativeCallableClasses, NativeCallableClassOptions} from './native-callab
 import {NativeLexicalMembers} from './native-lexical-members';
 import {NativeGlobalModules} from './native-global-modules';
 import {NativeSourceAncestryPlan} from './native-source-ancestry';
+import {NativeGeneratedClassTraits} from './native-generated-traits';
 import {NativeGeneratedEmission, NativeGeneratedEmissionOptions, NativeClassHelperModules, generatedModule} from './native-generated-emission';
 import {NativeReferenceCoercion, NativeReferenceCoercionOptions, ReferenceLocal} from './native-reference-coercion';
 
@@ -304,6 +305,7 @@ function filterAST(node:Node):Node {
 
 export default class Emitter {
     generated: NativeGeneratedEmission;
+    generatedReceiverTraits = new Map<string,NativeGeneratedClassTraits>();
     references: NativeReferenceCoercion;
     nativeGlobals:NativeGlobalModules;
     lexical: NativeLexicalMembers;
@@ -381,6 +383,10 @@ export default class Emitter {
             this.generated = new NativeGeneratedEmission(this.source,this.options.nativeGeneratedDeclarations,
                 this.options.nativeClassTraitsModule,this.options.nativeClassHelperModules,
                 this.options.nativeLexicalMembersModule,this.options.nativeGeneratedPropertyModule,this.options.nativeTypedLocals === true);
+            if(this.generated.projection.metadata.isDynamic) {
+                generatedModule(this.options.nativeDynamicPropertyReadsModule);
+                generatedModule(this.options.nativeDynamicPropertyWritesModule);
+            }
             if(this.options.nativeTypedLocals)generatedModule(this.options.nativeTypedLocalReferenceModule);
             generatedModule(this.options.nativeCallableMethodBindingModule);
             this.options.nativeCallableClasses = this.generated.sources;
@@ -3320,7 +3326,7 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
     return true;
 }
 
-interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; }
+interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; lexical?:boolean; }
 
 function isDictionaryReceiver(emitter:Emitter, node:Node):boolean {
 	if (!node || node.kind !== NodeKind.IDENTIFIER) return false;
@@ -3398,38 +3404,79 @@ function emitDictionaryPropertyAssignment(emitter:Emitter, target:Node, value:No
 	return true;
 }
 
-function dynamicWriteAccess(emitter:Emitter, node:Node):DictionaryAccess {
-	const module = emitter.options.nativeDynamicPropertyWritesModule;
-	if (module === undefined || !node || node.kind !== NodeKind.ARRAY_ACCESSOR || node.children.length !== 2)
-		return null;
-	const receiver = node.children[0], key = node.children[1];
-	if (!receiver || !key || receiver.kind !== NodeKind.IDENTIFIER) return null;
-	const definition = emitter.findDefInScope(receiver.text);
-	if (!definition || definition.as3Type !== 'Object' && definition.as3Type !== '*') return null;
-	return {receiver, key};
+function generatedReceiver(emitter:Emitter,receiver:Node):NativeGeneratedClassTraits {
+    if(!emitter.generated||receiver.kind!==NodeKind.IDENTIFIER)return null;
+    if(receiver.text==='this')return emitter.generated.projection;
+    const definition=emitter.findDefInScope(receiver.text);
+    const token=definition&&emitter.references&&emitter.references.type(definition.as3Type);
+    const plan=emitter.generated.options.plan,binding=token&&plan.bindings.find(b=>b.tokenExport===token);
+    if(!binding)return null;
+    let projection=emitter.generatedReceiverTraits.get(binding.qname);
+    if(!projection){projection=new NativeGeneratedClassTraits(plan,plan.scope,binding.qname,emitter.generated.sources[binding.qname]);emitter.generatedReceiverTraits.set(binding.qname,projection);}
+    return projection;
 }
-
+function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    if(!node||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.kind)<0||node.children.length!==2)return null;
+    const receiver=node.children[0],key=node.children[1];
+    if(!receiver||!key)return null;
+    if(receiver.kind!==NodeKind.IDENTIFIER){
+        if(emitter.generated&&emitter.generated.projection.metadata.isDynamic)
+            throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: computed receiver in dynamic class held');
+        return null;
+    }
+    const generated=generatedReceiver(emitter,receiver),definition=emitter.findDefInScope(receiver.text);
+    if(!generated&&(!definition||['Object','*'].indexOf(definition.as3Type)<0))return null;
+    const lexical=!!generated&&receiver.text==='this';
+    if(lexical){
+        let member=node;while(member.parent&&member.parent.kind!==NodeKind.CONTENT)member=member.parent;
+        const mods=member.findChild(NodeKind.MOD_LIST);
+        if(mods&&mods.children.some(mod=>mod.text==='static'))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: static this dispatch held');
+    }
+    if(node.kind===NodeKind.DOT){
+        if(!generated||!generated.metadata.isDynamic||key.kind!==NodeKind.LITERAL
+            ||generated.instanceTraits.some(t=>t.name===key.text))return null;
+        return {receiver,key,literalKey:key.text,lexical};
+    }
+    return {receiver,key,lexical};
+}
+function dynamicWriteAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    const access=dynamicAccess(emitter,node);
+    if(access&&emitter.options.nativeDynamicPropertyWritesModule===undefined){
+        if(generatedReceiver(emitter,access.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property writes require provider');
+        return null;
+    }
+    return access;
+}
+function dynamicHelper(emitter:Emitter,access:DictionaryAccess,operation:string,module:string):string {
+    return propertyHelper(emitter,'as3'+operation+(access.lexical?'LexicalProperty':'Property'),
+        access.lexical?emitter.generated.lexicalModule:module);
+}
+function emitDynamicKey(emitter:Emitter,access:DictionaryAccess):void {
+    if(access.lexical)emitter.insert(emitter.generated.lexical.scope+', ');
+    emitPropertyKey(emitter,access);
+}
 function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     const module=emitter.options.nativeDynamicPropertyReadsModule;
-    if(module===undefined||node.kind!==NodeKind.ARRAY_ACCESSOR||node.children.length!==2)return false;
-    const receiver=node.children[0],key=node.children[1];
-    if(receiver.kind!==NodeKind.IDENTIFIER)return false;
-    const definition=emitter.findDefInScope(receiver.text);
-    if(!definition||['Object','*'].indexOf(definition.as3Type)<0)return false;
+    const found=dynamicAccess(emitter,node);if(!found)return false;
+    if(module===undefined){
+        if(generatedReceiver(emitter,found.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property reads require provider');
+        return false;
+    }
     let access=node,parent=node.parent;
     while(parent&&parent.kind===NodeKind.ENCAPSULATED){access=parent;parent=parent.parent;}
     if(parent&&((parent.kind===NodeKind.ASSIGN||parent.kind===NodeKind.CALL)&&parent.children[0]===access
         ||[NodeKind.DELETE,NodeKind.PRE_INC,NodeKind.POST_INC,NodeKind.PRE_DEC,NodeKind.POST_DEC].indexOf(parent.kind)>=0))
         throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: indexed read cannot substitute call, write, update or delete dispatch');
-    const helper=propertyHelper(emitter,'as3GetProperty',module);
+    const helper=dynamicHelper(emitter,found,'Get',module);
     emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
-    emitPropertyKey(emitter,{receiver,key});emitter.insert('))');emitter.skipTo(node.end);
+    emitDynamicKey(emitter,found);emitter.insert('))');emitter.skipTo(node.end);
     return true;
 }
 
 function emitDynamicPropertyAddition(emitter:Emitter, target:Node, value:Node):boolean {
     const access=dynamicWriteAccess(emitter,target);
     if(!access)return false;
+    if(access.lexical||access.literalKey!==undefined)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: lexical/dot compound assignment held');
     const helper=propertyHelper(emitter,'as3AddAssignProperty',emitter.options.nativeDynamicPropertyWritesModule);
     emitter.catchup(target.parent.start);emitter.insert('(<any>'+helper+'(');
     const start=emitter.output.length;
@@ -3446,10 +3493,10 @@ function emitDynamicPropertyAddition(emitter:Emitter, target:Node, value:Node):b
 function emitDynamicPropertyAssignment(emitter:Emitter, target:Node, value:Node):boolean {
 	const access = dynamicWriteAccess(emitter, target);
 	if (!access) return false;
-	const helper = propertyHelper(emitter, 'as3SetProperty', emitter.options.nativeDynamicPropertyWritesModule);
+	const helper = dynamicHelper(emitter,access,'Set',emitter.options.nativeDynamicPropertyWritesModule);
 	emitter.catchup(target.parent.start);
 	emitter.insert(helper + '(');
-	emitPropertyKey(emitter, access);
+	emitDynamicKey(emitter, access);
 	emitter.insert(', ');
 	emitter.skipTo(value.start);
 	visitNode(emitter, value);
@@ -3485,9 +3532,9 @@ function emitDictionaryPropertyCall(emitter:Emitter, node:Node):boolean {
 function emitDelete(emitter:Emitter, node:Node):void {
     const dynamic=node.children.length===1 && dynamicWriteAccess(emitter,node.children[0]);
     if(dynamic){
-        const helper=propertyHelper(emitter,'as3DeleteProperty',emitter.options.nativeDynamicPropertyWritesModule);
+        const helper=dynamicHelper(emitter,dynamic,'Delete',emitter.options.nativeDynamicPropertyWritesModule);
         emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(dynamic.receiver.start);
-        emitPropertyKey(emitter,dynamic);emitter.insert(')');emitter.skipTo(node.end);return;
+        emitDynamicKey(emitter,dynamic);emitter.insert(')');emitter.skipTo(node.end);return;
     }
 
 	if (node.children.length === 1) {
@@ -4635,6 +4682,8 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 			TYPE_REMAP[node.text] === undefined &&
 			node.text !== emitter.currentClassName
 		) {
+            if(emitter.generated&&emitter.generated.projection.metadata.isDynamic)
+                throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: unqualified dynamic member lookup held');
 			if (node.text.match(/^[A-Z]/)) {
 				// Import missing identifier from this namespace
 				if (!emitter.options.useNamespaces) {
@@ -4646,7 +4695,8 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 				}
 
 			} else if (emitter.emitThisForNextIdent) {
-				// Identifier belongs to `this.` scope.
+				// Unknown dynamic names need lexical resolution, never a raw JS property.
+                // Identifier belongs to `this.` scope.
 				emitter.insert('this.');
 			}
 		}
@@ -4685,6 +4735,7 @@ function emitConsumerLiteralConstant(emitter:Emitter,node:Node):boolean {
 }
 
 function emitDot(emitter:Emitter, node:Node) {
+    if (emitDynamicPropertyRead(emitter,node)) return;
     if (emitConsumerLiteralConstant(emitter,node)) return;
 	if (emitArraySortConstant(emitter, node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;

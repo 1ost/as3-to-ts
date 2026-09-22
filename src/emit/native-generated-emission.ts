@@ -45,7 +45,6 @@ export class NativeGeneratedEmission {
             if(native){this.eventBase=native;break;}
             ancestor=options.plan.bindings.find(binding=>binding.qname===ancestor.base);
         }
-        if (this.projection.metadata.isDynamic) fail('dynamic source property routing required');
         this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source,typedLocals);
         if(this.projection.binding.scriptGlobalExport) {
             // Publishing a class into a script unit consumes that unit identity.
