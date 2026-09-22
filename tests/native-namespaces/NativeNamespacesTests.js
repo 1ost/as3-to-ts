@@ -197,6 +197,21 @@ const { Subject: NamespaceAccessors } = executeClass(`package example {
 }`, 'NamespaceAccessors');
 assert.deepStrictEqual(Array.from(new NamespaceAccessors().read()), [3, 11, 1]);
 
+const { Subject: ImplicitNamespace } = executeClass(`package example {
+ import alias.same;
+ use namespace same;
+ public class ImplicitNamespace {
+  same var value:int = 3;
+  same function add(delta:int):int { value += delta; return value; }
+  same static var count:int = 5;
+  same static function bump(delta:int):int { count += delta; return count; }
+  public function read():Array { return [value, add(4), value]; }
+  public static function staticRead():Array { return [count, bump(2), count]; }
+ }
+}`, 'ImplicitNamespace');
+assert.deepStrictEqual(Array.from(new ImplicitNamespace().read()), [3, 7, 7]);
+assert.deepStrictEqual(Array.from(ImplicitNamespace.staticRead()), [5, 7, 7]);
+
 // Parentheses retain references, including mutation policy and destination type.
 for (const depth of [0, 1, 3]) {
   const group = value => '('.repeat(depth) + value + ')'.repeat(depth);

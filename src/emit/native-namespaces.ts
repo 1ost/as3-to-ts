@@ -360,6 +360,50 @@ export class NativeNamespaces {
         return this.findMember(owner, access.uri, access.name, receiver !== 'this');
     }
 
+    /** Resolve an unqualified identifier opened by a package/class use directive. */
+    openedIdentifier(node: Node, isLocal: boolean): NamespaceMember {
+        if (isLocal || !node || node.kind !== NodeKind.IDENTIFIER) return null;
+        if (node.parent && node.parent.kind === NodeKind.DOT && node.parent.children[1] === node) return null;
+        const owner = this.ancestor(node, NodeKind.CLASS);
+        if (!owner) return null;
+        const pkg = this.ancestor(node, NodeKind.PACKAGE);
+        const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
+            .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+        for (let scope = node.parent; scope && scope !== owner; scope = scope.parent) {
+            if (scope.findChildren(NodeKind.USE).length)
+                this.fail('function-local open namespaces require separate resolution');
+        }
+        const candidates: NamespaceMember[] = [];
+        opened.forEach(directive => {
+            const uri = this.resolve(directive, directive.text);
+            const instance = this.findMember(owner, uri, node.text, false);
+            const staticMember = this.findMember(owner, uri, node.text, true);
+            [instance, staticMember].forEach(member => {
+                if (member && candidates.indexOf(member) < 0) candidates.push(member);
+            });
+        });
+        if (candidates.length > 1) this.fail('ambiguous open namespace member: ' + node.text);
+        const member = candidates[0];
+        if (!member) return null;
+        for (let scope = node.parent; scope && scope !== owner; scope = scope.parent) {
+            if ([NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET, NodeKind.LAMBDA].indexOf(scope.kind) >= 0) {
+                const mods = scope.findChild(NodeKind.MOD_LIST);
+                if (!member.static && mods && mods.children.some(mod => mod.text === 'static'))
+                    this.fail('open namespace implicit member requires an instance member receiver');
+            }
+        }
+        for (const cls of this.hierarchy(owner)) {
+            for (const declaration of cls.findChild(NodeKind.CONTENT).children) {
+                if (this.memberDeclaration(declaration)) continue;
+                const names = [NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(declaration.kind) >= 0
+                    ? declaration.findChildren(NodeKind.NAME_TYPE_INIT).map(value => value.findChild(NodeKind.NAME))
+                    : [declaration.findChild(NodeKind.NAME)];
+                if (names.some(value => value && value.text === node.text)) return null;
+            }
+        }
+        return member;
+    }
+
     accessMember(node: Node, receiverType: string): NamespaceMember {
         const own = this.ownAccessMember(node);
         if (own) return own;

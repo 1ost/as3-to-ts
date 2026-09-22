@@ -3928,6 +3928,15 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 		// Preserve source spelling when an authored declaration shadows int/uint.
 		if ((name === 'int' || name === 'uint') && binding !== 'builtin') node.text = preservedTypeOfName = name;
 	}
+	const openedNamespaceMember = emitter.namespaces.openedIdentifier(node, hasFunctionLocal(emitter, node.text));
+	if (openedNamespaceMember) {
+		emitter.catchup(node.start);
+		const receiver = openedNamespaceMember.static ? emitter.currentClassName : 'this';
+		emitter.insert(receiver + '[' + emitter.namespaces.key(openedNamespaceMember.uri, openedNamespaceMember.name) + ']');
+		emitter.skipTo(node.end);
+		emitter.emitThisForNextIdent = true;
+		return;
+	}
 	emitter.namespaces.checkIdentifier(node, hasFunctionLocal(emitter, node.text));
 	if (node.text == "getDefinitionByName") {
 		let pathToRoot = ClassList.getLastPathToRoot();
