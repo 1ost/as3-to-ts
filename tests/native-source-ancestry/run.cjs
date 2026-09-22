@@ -36,6 +36,31 @@ const output = emit(parse('owners.Child.as', child), child, {
 assert.match(output, /__as3_namespace_member_/);
 assert.doesNotMatch(output, /namespace inheritance requires/);
 
+// A namespace opened by a base compilation unit remains available to an
+// inherited class. The source-backed plan records that unit directive on the
+// synthetic base used during the child's emission.
+const openBase = `package owners {
+ import fixture.shared;
+ use namespace shared;
+ public class OpenBase { shared function clear():int { return 4; } }
+}`;
+const openChild = `package owners {
+ import owners.OpenBase;
+ public class OpenChild extends OpenBase {
+  public function read():int { return clear(); }
+ }
+}`;
+const openPlan = createNativeSourceAncestryPlan({sources: {
+  'fixture.shared': {source: shared}, 'owners.OpenBase': {source: openBase},
+  'owners.OpenChild': {source: openChild}
+}});
+const openOutput = emit(parse('owners.OpenChild.as', openChild), openChild, {
+  lineSeparator: '\n', customVisitors: [], namespaceUris: openPlan.namespaceUris,
+  nativeSourceAncestry: openPlan
+});
+assert.match(openOutput, /__as3_namespace_member_/);
+assert.doesNotMatch(openOutput, /implicit namespace member requires an explicit selector/);
+
 // The base can be the parsed source while a derived source is installed as a
 // synthetic ancestry node. That cross-file relation has no in-file ordering.
 const baseOutput = emit(parse('owners.Base.as', base), base, {

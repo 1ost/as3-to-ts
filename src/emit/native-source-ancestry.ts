@@ -28,6 +28,8 @@ export interface NativeSourceAncestryClass {
     base?: string;
     dynamic: boolean;
     members: NativeSourceAncestryMember[];
+    /** Fully qualified namespace declarations opened by the source class's unit. */
+    uses?: string[];
 }
 
 export interface NativeSourceAncestryPlan {
@@ -98,6 +100,14 @@ function resolveNamespace(root: Node, name: string, declarations: {[qname: strin
     return resolveNamespace(record.root, value.text, declarations, configured, active.concat(qname));
 }
 
+function namespaceQName(root: Node, name: string, declarations: {[qname: string]: {root: Node; node: Node}},
+    configured: {[qname: string]: string}): string {
+    const matches = candidates(root, name).filter(qname => declarations[qname] || configured[qname]
+        || qname === 'flash.utils.flash_proxy');
+    if (matches.length !== 1) return fail('unresolved or ambiguous namespace: ' + name);
+    return matches[0];
+}
+
 function classQName(root: Node, node: Node): string {
     return packageName(root) + node.findChild(K.NAME).text;
 }
@@ -163,7 +173,7 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
             if (classes[identity]) return fail('duplicate source class: ' + identity);
             const mods = owner.findChild(K.MOD_LIST);
             const metadata: NativeSourceAncestryClass = {
-                dynamic: !!mods && mods.children.some(mod => mod.text === 'dynamic'), members: []
+                dynamic: !!mods && mods.children.some(mod => mod.text === 'dynamic'), members: [], uses: []
             };
             if (extension) {
                 const base = candidates(root, extension.text).filter(value => Object.keys(roots).indexOf(value) >= 0
@@ -186,6 +196,12 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
                 metadata.members.push({name:names[0].text, uri, static:!!memberMods.children.some(mod => mod.text === 'static'),
                     kind:member.kind, override:!!memberMods.children.some(mod => mod.text === 'override')});
             });
+            const unitContent = packageNode(root).findChild(K.CONTENT);
+            const opened = unitContent.findChildren(K.USE).concat(owner.findChild(K.CONTENT).findChildren(K.USE));
+            opened.forEach(use => {
+                const qname = namespaceQName(root, use.text, declarations, configured);
+                if (metadata.uses.indexOf(qname) < 0) metadata.uses.push(qname);
+            });
             classes[identity] = metadata;
         });
     });
@@ -197,7 +213,8 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
         classes[qname] = {
             base: providerClasses[qname].base,
             dynamic: providerClasses[qname].dynamic,
-            members: providerClasses[qname].members.slice()
+            members: providerClasses[qname].members.slice(),
+            ...(providerClasses[qname].uses ? {uses: providerClasses[qname].uses.slice()} : {})
         };
     });
     return {version:1, classes, namespaceUris, sourceHashes, parseErrors};

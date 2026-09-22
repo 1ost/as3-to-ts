@@ -125,9 +125,10 @@ export class NativeNamespaces {
             const modifiers = metadata.dynamic
                 ? createNode(NodeKind.MOD_LIST, {}, createNode(NodeKind.MODIFIER, {text:'dynamic'}))
                 : createNode(NodeKind.MOD_LIST, {});
+            const uses = (metadata.uses || []).map(qname => createNode(NodeKind.USE, {text:qname}));
             const children: Node[] = [createNode(NodeKind.NAME, {text:name}), modifiers];
             if (metadata.base) children.push(createNode(NodeKind.EXTENDS, {text:metadata.base}));
-            children.push(createNode(NodeKind.CONTENT, {}));
+            children.push(createNode(NodeKind.CONTENT, {}, ...uses));
             const owner = createNode(NodeKind.CLASS, {qualifiedName:qname}, ...children);
             this.classes.set(qname, [owner]);
             metadata.members.forEach(member => {
@@ -385,6 +386,10 @@ export class NativeNamespaces {
         const pkg = this.ancestor(node, NodeKind.PACKAGE);
         const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
             .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+        this.hierarchy(owner).slice(1).forEach(base => {
+            const content = base.findChild(NodeKind.CONTENT);
+            if (content) opened.push(...content.findChildren(NodeKind.USE));
+        });
         const candidates: {member: NamespaceMember; qualifier: string}[] = [];
         opened.forEach(directive => {
             const uri = this.resolve(directive, directive.text);
@@ -410,6 +415,10 @@ export class NativeNamespaces {
         const pkg = this.ancestor(node, NodeKind.PACKAGE);
         const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
             .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+        this.hierarchy(owner).slice(1).forEach(base => {
+            const content = base.findChild(NodeKind.CONTENT);
+            if (content) opened.push(...content.findChildren(NodeKind.USE));
+        });
         for (let scope = node.parent; scope && scope !== owner; scope = scope.parent) {
             if (scope.findChildren(NodeKind.USE).length)
                 this.fail('function-local open namespaces require separate resolution');
