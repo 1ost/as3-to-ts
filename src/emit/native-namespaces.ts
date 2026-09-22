@@ -221,7 +221,15 @@ export class NativeNamespaces {
     private candidates(node: Node, name: string): string[] {
         if (name.indexOf('.') >= 0) return [name];
         const owner = this.ancestor(node, NodeKind.PACKAGE);
-        const imports = owner ? owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.IMPORT) : [];
+        // A compilation unit may contain a second top-level class after the
+        // package block.  Its imports live on the root CONTENT node rather
+        // than under a PACKAGE, but they still govern that class's namespace
+        // resolution (for example TLF's HostFormatHelper).  Keep package
+        // imports preferred and use the enclosing CONTENT imports only for
+        // declarations outside a package.
+        const content = owner ? owner.findChild(NodeKind.CONTENT)
+            : this.root.findChildren(NodeKind.CONTENT)[0];
+        const imports = content ? content.findChildren(NodeKind.IMPORT) : [];
         const explicit = imports.filter(value => value.text.split('.').pop() === name).map(value => value.text);
         if (explicit.length > 1 && explicit.some(value => value !== explicit[0])) this.fail('ambiguous namespace import: ' + name);
         if (explicit.length) return explicit;

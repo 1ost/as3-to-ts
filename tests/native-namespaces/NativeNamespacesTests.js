@@ -73,6 +73,20 @@ const source = `package example {
     public function qualified(otherBox:NamespaceFixture):Number { return otherBox.same::value; }
   }
 }`;
+
+// Imports after a package block belong to a second top-level compilation-unit
+// declaration.  They still resolve namespace selectors for that declaration;
+// this is the shape used by TLF's HostFormatHelper source.
+const topLevelCompilationUnit = `package example {
+  public class PackageOwner {}
+}
+import flashx.textLayout.tlf_internal;
+class TopLevelHelper {
+  tlf_internal var value:int = 4;
+  public function read():int { return this.tlf_internal::value; }
+}`;
+assert.match(generate(topLevelCompilationUnit), /__as3_namespace_member_/);
+
 const ast = parse('NamespaceFixture.as', source);
 let namespaceNodes = 0;
 (function walk(node) {
