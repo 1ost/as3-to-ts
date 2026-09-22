@@ -98,7 +98,7 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
 
   const superSource=`package supercalls {
     public namespace n="urn:supercalls";
-    public class SuperBase { n function value():int { return 3; } }
+    public class SuperBase { n var stored:int=3; n function value():int { return n::stored; } }
     public class SuperChild extends SuperBase {
       override n function value():int { return super.n::value() + 4; }
     }
@@ -153,7 +153,7 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   assert.equal(new context.exports.OpenChild().read(),5,'opened namespace selects inherited field');
   execute(generate('package p {public namespace n="urn:super-field"; public class FieldBase {n var x:int=5;} public class FieldChild extends FieldBase {public function read():* {return super.n::x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
   const fieldChild=new context.exports.FieldChild();
-  assert.equal(fieldChild[Symbol.for('as3.namespace.member@1:'+JSON.stringify(['urn:super-field','x']))],5,'super namespace field selects base slot');
+  assert.equal(fieldChild.read(),5,'super namespace field reads the inherited instance slot');
   console.log('inherited namespace native-class execution passed for '+ts.ScriptTarget[target]);
 }
 

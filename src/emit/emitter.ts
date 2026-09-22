@@ -819,7 +819,12 @@ function emitNamespaceAccess(emitter:Emitter, node:Node):void {
         && target && target.declaration.kind === NodeKind.FUNCTION)
         emitter.namespaces.fail('namespace method writes require separate lowering');
     emitter.catchup(node.start);
-    if (access.receiver) {
+    if (access.receiver && access.receiver.text === 'super' && target
+        && (target.declaration.kind === NodeKind.VAR_LIST || target.declaration.kind === NodeKind.CONST_LIST)) {
+        // AS3 super slots live on the instance, not the JavaScript prototype.
+        emitter.insert('this');
+        emitter.skipTo(getEffectiveNodeEnd(access.receiver));
+    } else if (access.receiver) {
         visitNode(emitter, access.receiver);
         emitter.catchup(getEffectiveNodeEnd(access.receiver));
     } else {
@@ -3610,7 +3615,7 @@ function getTypedAssignmentTarget(emitter: Emitter, node: Node): TypedAssignment
         if (member && member.declaration.kind === NodeKind.VAR_LIST) {
             const field = member.declaration.findChild(NodeKind.NAME_TYPE_INIT);
             declaration = { name: member.name, as3Type: getAS3DeclarationType(field) };
-            const receiverText = access.receiver
+            const receiverText = access.receiver && access.receiver.text === 'super' ? 'this' : access.receiver
                 ? (receiver && receiver.bound ? receiver.bound + '.' : '') + access.receiver.text
                 : member.static ? member.owner.findChild(NodeKind.NAME).text : 'this';
             repeatText = receiverText
