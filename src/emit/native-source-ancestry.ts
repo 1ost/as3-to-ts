@@ -12,6 +12,8 @@ export interface NativeSourceAncestryInput {
     sources: {[qname: string]: NativeSourceAncestrySource};
     definitionsByNamespace?: {[namespace: string]: string[]};
     namespaceUris?: {[qname: string]: string};
+    /** Authenticated provider declarations that are available without AS3 source text. */
+    providerClasses?: {[qname: string]: NativeSourceAncestryClass};
 }
 
 export interface NativeSourceAncestryMember {
@@ -114,6 +116,20 @@ function memberNames(node: Node): Node[] {
 export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput): NativeSourceAncestryPlan {
     if (!input || !input.sources || typeof input.sources !== 'object' || Array.isArray(input.sources))
         return fail('complete source table required');
+    const providerClasses = input.providerClasses || {};
+    if (typeof providerClasses !== 'object' || Array.isArray(providerClasses))
+        return fail('provider class table must be an object');
+    Object.keys(providerClasses).forEach(qname => {
+        if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(qname))
+            fail('invalid provider class QName: ' + qname);
+        const metadata = providerClasses[qname];
+        if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata))
+            fail('provider class metadata required: ' + qname);
+        if (metadata.base !== undefined && !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(metadata.base))
+            fail('invalid provider base QName: ' + qname);
+        if (typeof metadata.dynamic !== 'boolean' || !Array.isArray(metadata.members))
+            fail('complete provider class metadata required: ' + qname);
+    });
     const roots: {[qname: string]: Node} = {}, sourceHashes: {[qname: string]: string} = {}, parseErrors: {[qname: string]: string} = {};
     const declarations: {[qname: string]: {root: Node; node: Node}} = {};
     const configured = input.namespaceUris || {};
@@ -150,7 +166,8 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
                 dynamic: !!mods && mods.children.some(mod => mod.text === 'dynamic'), members: []
             };
             if (extension) {
-                const base = candidates(root, extension.text).filter(value => Object.keys(roots).indexOf(value) >= 0);
+                const base = candidates(root, extension.text).filter(value => Object.keys(roots).indexOf(value) >= 0
+                    || Object.prototype.hasOwnProperty.call(providerClasses, value));
                 if (base.length > 1) return fail('ambiguous source base: ' + identity + ' extends ' + extension.text);
                 // A base outside the authenticated source table remains
                 // unresolved. NativeNamespaces will keep its existing
@@ -175,5 +192,13 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
     const namespaceUris: {[qname: string]: string} = {};
     Object.keys(declarations).sort().forEach(qname => { namespaceUris[qname] = resolveNamespace(declarations[qname].root, qname, declarations, configured); });
     Object.keys(configured).forEach(qname => { if (namespaceUris[qname] === undefined) namespaceUris[qname] = configured[qname]; });
+    Object.keys(providerClasses).sort().forEach(qname => {
+        if (classes[qname]) return fail('provider class collides with source class: ' + qname);
+        classes[qname] = {
+            base: providerClasses[qname].base,
+            dynamic: providerClasses[qname].dynamic,
+            members: providerClasses[qname].members.slice()
+        };
+    });
     return {version:1, classes, namespaceUris, sourceHashes, parseErrors};
 }

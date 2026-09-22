@@ -45,6 +45,33 @@ const baseOutput = emit(parse('owners.Base.as', base), base, {
 assert.match(baseOutput, /__as3_namespace_member_/);
 assert.doesNotMatch(baseOutput, /forward namespace base declaration/);
 
+const provider = createNativeSourceAncestryPlan({
+  sources: { 'fixture.shared': { source: shared } },
+  providerClasses: {
+    'flash.events.EventDispatcher': { dynamic: false, members: [] },
+    'flash.display.DisplayObject': {
+      base: 'flash.events.EventDispatcher', dynamic: false, members: []
+    }
+  }
+});
+const providerChild = `package owners {
+ import fixture.shared;
+ import flash.display.DisplayObject;
+ public class ProviderChild extends DisplayObject {
+  shared var value:int = 4;
+  public function read():int { return this.shared::value; }
+ }
+}`;
+const providerOutput = emit(parse('owners.ProviderChild.as', providerChild), providerChild, {
+  lineSeparator: '\n', customVisitors: [], namespaceUris: provider.namespaceUris,
+  nativeSourceAncestry: createNativeSourceAncestryPlan({
+    sources: { 'fixture.shared': { source: shared }, 'owners.ProviderChild': { source: providerChild } },
+    providerClasses: provider.classes
+  })
+});
+assert.match(providerOutput, /__as3_namespace_member_/);
+assert.doesNotMatch(providerOutput, /proven ordinary base/);
+
 const incomplete = createNativeSourceAncestryPlan({ sources: {
   'fixture.shared': { source: shared }, 'owners.Child': { source: child }
 } });
