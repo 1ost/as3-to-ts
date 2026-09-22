@@ -321,7 +321,7 @@ export class NativeCallableClasses {
         const instanceTypes: string[] = [], staticTypes: string[] = [], definitions: string[] = [], initializers: string[] = [];
         const staticMethods: string[] = [];
         let ctor: any, constructorReturns = 0;
-        const body = (member: any, constructor: boolean): string => {
+        const body = (member: any, constructor: boolean, returnType?: string): string => {
             if (!member.body) this.fail('bodyless member');
             const edits: {start: number; end: number; value: string}[] = [];
             let superCount = 0;
@@ -367,6 +367,13 @@ export class NativeCallableClasses {
                     node.arguments.forEach((argument: any) => walk(argument,false,nestedFunction)); return;
                 }
                 if (node.kind === S.SuperKeyword) this.fail('super property access requires separate receiver authority');
+                if (node.kind === S.ReturnStatement && returnType && !nestedFunction) {
+                    if (!node.expression) this.fail('generated typed bare return');
+                    // Insert around the original return expression. Walk its children
+                    // normally, retaining nested compiler-helper return ownership.
+                    edits.push({start:node.expression.getStart(file),end:node.expression.getStart(file),value:'<any>'+generatedProperty+'.coerceAS3PropertyValue('});
+                    edits.push({start:node.expression.end,end:node.expression.end,value:','+returnType+')'});
+                }
                 if (node.kind === S.ReturnStatement && constructor && !nestedFunction) {
                     if (node.expression) this.fail('constructor return value');
                     constructorReturns++;
@@ -436,7 +443,7 @@ export class NativeCallableClasses {
                 return;
             }
             const receiver = isStatic ? constructorType : name;
-            let signature = '';
+            let signature = '', returnType: string;
             if (this.generated && member.kind === S.MethodDeclaration) {
                 const sourceMethod = this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node => {
                     const mods=node.findChild(K.MOD_LIST),sourceStatic=!!mods&&mods.children.some(mod=>mod.text==='static');
@@ -452,12 +459,28 @@ export class NativeCallableClasses {
                         return name+'=<any>'+generatedProperty+'.coerceAS3PropertyValue('+name+','+this.generated.lexical.typeExpression(value.findChild(K.TYPE),this.own.qname,domainImport,intrinsic+'.array')+');';
                     }).join('\n');
                 const returns=sourceMethod.findChild(K.TYPE);
-                if(returns && returns.text !== 'void' && returns.text !== '*')this.fail('generated typed method return lowering required');
+                if(returns && returns.text !== 'void' && returns.text !== '*') {
+                    const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
+                    if(reference&&reference.kind==='native')this.fail('generated native return type requires separate qualification');
+                    const sourceBody=sourceMethod.findChild(K.BLOCK);
+                    const inspect=(node:Node):void=>{
+                        if([K.TRY,K.CATCH,K.FINALLY].indexOf(node.kind)>=0)
+                            this.fail('generated typed exception-return regions require separate qualification');
+                        if(node.kind===K.RETURN && !node.children.length)
+                            this.fail('generated typed bare return');
+                        node.children.forEach(inspect);
+                    };
+                    inspect(sourceBody);
+                    const statements=sourceBody.children.filter(node=>[K.STMT_EMPTY,K.MULTI_LINE_COMMENT,K.AS_DOC].indexOf(node.kind)<0);
+                    if(!statements.length||statements[statements.length-1].kind!==K.RETURN)
+                        this.fail('generated typed fallthrough completion requires separate qualification');
+                    returnType=this.generated.lexical.typeExpression(returns,this.own.qname,domainImport,intrinsic+'.array');
+                }
             }
             const functionValue = 'function(this: ' + receiver + (member.parameters.length ? ', ' : '') + params(member, false)
                 + ')' + (member.type ? ': ' + text(member.type) : '') + ' {'
                 + (this.lexical ? provider + '.as3CheckArgumentCount(arguments.length,' + member.parameters.length + ',' + member.parameters.length + ');' : '')
-                + signature + body(member, false) + '}';
+                + signature + body(member, false, returnType) + '}';
             if (member.kind === S.MethodDeclaration) {
                 if (!lexicalMember) (isStatic ? staticTypes : instanceTypes).push(key + '(' + params(member, true) + '): ' + type(member) + ';');
                 definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
