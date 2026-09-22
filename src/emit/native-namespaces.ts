@@ -386,10 +386,16 @@ export class NativeNamespaces {
         const pkg = this.ancestor(node, NodeKind.PACKAGE);
         const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
             .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
-        this.hierarchy(owner).slice(1).forEach(base => {
-            const content = base.findChild(NodeKind.CONTENT);
-            if (content) opened.push(...content.findChildren(NodeKind.USE));
-        });
+        try {
+            this.hierarchy(owner).slice(1).forEach(base => {
+                const content = base.findChild(NodeKind.CONTENT);
+                if (content) opened.push(...content.findChildren(NodeKind.USE));
+            });
+        } catch (_) {
+            // Keep the existing fail-closed ancestry diagnostic when an
+            // actual namespace member needs the base; an unrelated identifier
+            // must not make ordinary provider inheritance fail earlier.
+        }
         const candidates: {member: NamespaceMember; qualifier: string}[] = [];
         opened.forEach(directive => {
             const uri = this.resolve(directive, directive.text);
@@ -415,10 +421,15 @@ export class NativeNamespaces {
         const pkg = this.ancestor(node, NodeKind.PACKAGE);
         const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
             .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
-        this.hierarchy(owner).slice(1).forEach(base => {
-            const content = base.findChild(NodeKind.CONTENT);
-            if (content) opened.push(...content.findChildren(NodeKind.USE));
-        });
+        try {
+            this.hierarchy(owner).slice(1).forEach(base => {
+                const content = base.findChild(NodeKind.CONTENT);
+                if (content) opened.push(...content.findChildren(NodeKind.USE));
+            });
+        } catch (_) {
+            // See openedIdentifier: do not turn unrelated typed dots into an
+            // ancestry error before a namespace member is proven.
+        }
         for (let scope = node.parent; scope && scope !== owner; scope = scope.parent) {
             if (scope.findChildren(NodeKind.USE).length)
                 this.fail('function-local open namespaces require separate resolution');
