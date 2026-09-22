@@ -40,7 +40,8 @@
     "test:native-chained-construction": "node tests/native-chained-construction/run.cjs",
     "test:native-source-ancestry": "node tests/native-source-ancestry/run.cjs",
     "test:native-expression-comments": "node tests/native-expression-comments/run.cjs",
-    "test:native-namespace-updates": "node tests/native-namespace-updates/run.cjs"
+    "test:native-namespace-updates": "node tests/native-namespace-updates/run.cjs",
+    "test:decorator-modules": "node tests/decorator-modules/run.cjs"
   },
   "keywords": [
     "actionscript",

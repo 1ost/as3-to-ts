@@ -104,6 +104,8 @@ export interface EmitterOptions {
 	customVisitors:CustomVisitor[];
 	/** Authenticated AS3 QName -> generated module path bindings for bulk emission. */
 	importModules?:{[qname:string]:string};
+	/** Explicit generated helper modules, independent of the legacy CLI scan table. */
+	decoratorModules?: {bound: string; classBound: string};
 	definitionsByNamespace?:{[ns:string]:string[]};
 	/** Expand SDK wildcard imports only for names referenced by this source file. */
 	nativeReferencedWildcardImports?: boolean;
@@ -343,6 +345,15 @@ export default class Emitter {
 	}
 
 	emit(ast:Node):string {
+
+		if (this.options.decoratorModules !== undefined) {
+			const modules = this.options.decoratorModules;
+			if (!modules || typeof modules !== 'object' || Array.isArray(modules)
+				|| Object.keys(modules).some(name => name !== 'bound' && name !== 'classBound')
+				|| [modules.bound, modules.classBound].some(value => typeof value !== 'string'
+					|| !value.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(value)))
+				throw new Error('AS3_DECORATOR_MODULES: explicit bound and classBound module paths required');
+		}
 
 		//if(VERBOSE >= 1) {
 		if ((VERBOSE_MASK & ReportFlags.KEY_POINTS) == ReportFlags.KEY_POINTS) {
@@ -1924,7 +1935,8 @@ function emitClass(emitter:Emitter, node:Node):void {
 		});
 
 		let pathToRoot = ClassList.getLastPathToRoot();
-		emitter.ensureImportIdentifier("classBound", `${lazy ? pathToRoot || './' : pathToRoot}classBound`);
+		emitter.ensureImportIdentifier("classBound", emitter.options.decoratorModules
+			? emitter.options.decoratorModules.classBound : `${lazy ? pathToRoot || './' : pathToRoot}classBound`);
 	});
 	emitter.proxyClass = previousProxyClass;
 
@@ -2143,7 +2155,8 @@ function emitMethod(emitter:Emitter, node:Node):void {
 	let name = node.findChild(NodeKind.NAME);
 	if (node.kind !== NodeKind.FUNCTION || name.text !== emitter.currentClassName) {
 		let pathToRoot = ClassList.getLastPathToRoot();
-		emitter.ensureImportIdentifier("bound", `${emitter.classInitializers.enabled ? pathToRoot || './' : pathToRoot}bound`);
+		emitter.ensureImportIdentifier("bound", emitter.options.decoratorModules
+			? emitter.options.decoratorModules.bound : `${emitter.classInitializers.enabled ? pathToRoot || './' : pathToRoot}bound`);
 		let mods = node.findChild(NodeKind.MOD_LIST);
 		if (mods)
 			emitter.catchup(mods.start);
