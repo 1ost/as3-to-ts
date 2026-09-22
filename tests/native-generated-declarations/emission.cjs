@@ -41,7 +41,7 @@ for(const mutate of [
 reject(baseSource+' ',options,'source-byte mismatch');
 reject(sources['declcases.StorageProbe'].source,options,'reference-only publication');
 for(const body of [
- 'public static const value:int=1;',
+ 'public static const value:int=make();public static function make():*{return 1;}',
  'private static var value:int;',
  'internal var value:int;',
  'private function get value():int { return 0; }',

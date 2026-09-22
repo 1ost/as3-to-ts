@@ -2224,6 +2224,12 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 	const mods = declaration && declaration.findChild(NodeKind.MOD_LIST);
 	if (emitter.classFactory && declaration && declaration.parent === emitter.classFactory.node.findChild(NodeKind.CONTENT)
 		&& mods && mods.children.some(mod => mod.text === 'static')) {
+        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST) {
+            // Literal constants are installed before publication by the common
+            // generated-class provider, not rewritten as later mutable stores.
+            visitNodes(emitter,node.children);
+            return;
+        }
 		const init = node.findChild(NodeKind.INIT);
 		visitNodes(emitter, node.children.filter(child => child && child !== init));
 		const type = getAS3DeclarationType(node);

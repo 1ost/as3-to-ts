@@ -403,7 +403,13 @@ export class NativeCallableClasses {
                         : 'this[' + lexicalMember.key + '] = ' + text(member.initializer) + ';');
                     return;
                 }
-                (isStatic ? staticTypes : instanceTypes).push(key + ': ' + type(member) + ';');
+                const constant = isStatic && this.generated && this.generated.projection.staticTraits.find(t => t.name === key && t.kind === 'constant');
+                (isStatic ? staticTypes : instanceTypes).push((constant ? 'readonly ' : '') + key + ': ' + type(member) + ';');
+                if (constant) {
+                    if (!member.initializer) this.fail('generated static constant literal missing');
+                    definitions.push(provider + '.defineAS3GeneratedStaticConstant(' + destination + ',' + encoded + ','
+                        + JSON.stringify(constant.type) + ',' + text(member.initializer) + ');');
+                }
                 if (isStatic && !this.generated) definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
                     + ', {value: ' + (member.initializer ? text(member.initializer) : 'void 0') + ', writable:true, enumerable:true, configurable:false});');
                 else if (!isStatic && member.initializer) initializers.push('this[' + encoded + '] = ' + text(member.initializer) + ';');

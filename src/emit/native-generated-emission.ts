@@ -1,6 +1,14 @@
 import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
 import {NativeGeneratedClassTraits} from './native-generated-traits';
 import {NativeGeneratedLexical} from './native-generated-lexical';
+import K from '../syntax/nodeKind';
+import Node from '../syntax/node';
+
+// Unary initializers can have a zero-width INIT span in the legacy parser.
+// Keep its prefix start, but include the complete operand subtree.
+function initializerEnd(node: Node): number {
+    return node.children.reduce((end, child) => Math.max(end, initializerEnd(child)), Math.max(node.start, node.end));
+}
 
 export interface NativeGeneratedEmissionOptions {plan: NativeGeneratedDeclarationPlan; module: string;}
 export interface NativeClassHelperModules {nativeClass: string; callableClass: string;}
@@ -33,7 +41,25 @@ export class NativeGeneratedEmission {
         this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source);
         if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => p.name === t.name)))
             fail('public/lexical same-name lookup requires namespace authority');
-        if (this.projection.staticTraits.some(trait => trait.kind === 'constant')) fail('source static constant initialization lowering required: ' + owners[0]);
+        this.projection.staticTraits.filter(trait => trait.kind === 'constant').forEach(trait => {
+            if (['int','uint','Number','Boolean','String'].indexOf(trait.type as string) < 0)
+                fail('static constant type requires initialization authority');
+            const members = this.lexical.ownClass.findChild(K.CONTENT).children;
+            let literal: string;
+            members.filter(member => member.kind === K.CONST_LIST).forEach(member => {
+                const mods = member.findChild(K.MOD_LIST);
+                if (!mods || !mods.children.some(mod => mod.text === 'static')) return;
+                member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
+                    if (field.findChild(K.NAME).text !== trait.name) return;
+                    const init = field.findChild(K.INIT);
+                    if (init) literal = source.slice(init.start,initializerEnd(init)).trim();
+                });
+            });
+            // Only source literals are early storage: computed constants need
+            // their own initialization/reentrancy evidence and remain held.
+            if (!literal || !/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal))
+                fail('computed static constant initialization requires source authority');
+        });
         options.plan.bindings.forEach(binding => {
             this.sources[binding.qname] = input.sources[binding.qname].source;
             this.classes[binding.qname] = 'lazy';

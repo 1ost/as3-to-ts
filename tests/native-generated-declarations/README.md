@@ -82,7 +82,7 @@ binding/coercion/String modules. Lexical generation scopes stay in compiler-only
 domain WeakMaps; they are not exposed as source Class properties. All storage,
 coercion and protected dispatch use the existing common engine providers.
 
-35 guards cover plan/source/helper authority and remaining boundaries. Static
+35 guards cover plan/source/helper authority and remaining boundaries. Computed static
 constants, static lexical members, internal namespaces, lexical accessors/updates,
 typed locals and method returns, optional/rest method signatures, nested source
 functions, dynamic classes, and general reference-only consumers remain explicit holds. Fixed
@@ -90,6 +90,10 @@ method arguments use common coercion. This is not full invocation/Class identity
 dynamic property routing, complete reflection, or OP2 cohort/ZIP acceptance.
 `nativeReferenceCoercion` remains absent, and bulk must also wire these explicit
 helper/provider modules before running the unchanged required cohort.
+
+Public static primitive literal constants are now separately qualified by
+`test:native-generated-constants`; they use common constant storage before
+registration and static variable initialization. This does not admit native bases.
 
 The actual generated/provider graph is type-checked without ambient replacement
 bridges. `.cache/native-generated-emission/run-*` retains all generated subjects,
