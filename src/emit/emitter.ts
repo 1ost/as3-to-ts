@@ -169,6 +169,8 @@ export interface EmitterOptions {
 	nativeDictionaryPropertyModule?:string;
 	/** Authenticated common AS3Property module for typed dynamic indexed writes. */
 	nativeDynamicPropertyWritesModule?:string;
+    /** Common AS3Property module for source Object/wildcard indexed reads. */
+    nativeDynamicPropertyReadsModule?:string;
 	/** Authenticated common AS3ArraySort module for source Array.sortOn calls. */
 	nativeArraySortModule?:string;
 	/** Authenticated source enumeration providers; currently Dictionary-only. */
@@ -508,6 +510,14 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['compiler.AS3Property']
 				&& this.options.importModules['compiler.AS3Property'] !== module)
 				throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: AS3Property import binding disagrees with nativeDynamicPropertyWritesModule');
+		}
+		if (this.options.nativeDynamicPropertyReadsModule !== undefined) {
+			const module = this.options.nativeDynamicPropertyReadsModule;
+			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
+				throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: explicit common AS3Property module required');
+			if (this.options.importModules && this.options.importModules['compiler.AS3Property']
+				&& this.options.importModules['compiler.AS3Property'] !== module)
+				throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: AS3Property import binding disagrees with nativeDynamicPropertyReadsModule');
 		}
 		if (this.options.nativeArraySortModule !== undefined) {
 			const module = this.options.nativeArraySortModule;
@@ -3361,6 +3371,24 @@ function dynamicWriteAccess(emitter:Emitter, node:Node):DictionaryAccess {
 	return {receiver, key};
 }
 
+function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
+    const module=emitter.options.nativeDynamicPropertyReadsModule;
+    if(module===undefined||node.kind!==NodeKind.ARRAY_ACCESSOR||node.children.length!==2)return false;
+    const receiver=node.children[0],key=node.children[1];
+    if(receiver.kind!==NodeKind.IDENTIFIER)return false;
+    const definition=emitter.findDefInScope(receiver.text);
+    if(!definition||['Object','*'].indexOf(definition.as3Type)<0)return false;
+    let access=node,parent=node.parent;
+    while(parent&&parent.kind===NodeKind.ENCAPSULATED){access=parent;parent=parent.parent;}
+    if(parent&&((parent.kind===NodeKind.ASSIGN||parent.kind===NodeKind.CALL)&&parent.children[0]===access
+        ||[NodeKind.DELETE,NodeKind.PRE_INC,NodeKind.POST_INC,NodeKind.PRE_DEC,NodeKind.POST_DEC].indexOf(parent.kind)>=0))
+        throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: indexed read cannot substitute call, write, update or delete dispatch');
+    const helper=propertyHelper(emitter,'as3GetProperty',module);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+    emitPropertyKey(emitter,{receiver,key});emitter.insert('))');emitter.skipTo(node.end);
+    return true;
+}
+
 function emitDynamicPropertyAssignment(emitter:Emitter, target:Node, value:Node):boolean {
 	const access = dynamicWriteAccess(emitter, target);
 	if (!access) return false;
@@ -4659,6 +4687,7 @@ function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
 
 function emitArrayAccessor(emitter:Emitter, node:Node):void {
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
+    if (emitDynamicPropertyRead(emitter,node)) return;
 	emitter.catchup(node.start);
 	visitNodes(emitter, node.children);
 }
