@@ -163,6 +163,11 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   assert.equal(new context.exports.Holder().call(),11,'source-backed field type resolves an opened namespace member');
   execute(generate('package p {public namespace n="urn:static-open"; use namespace n; public class Base {n static function read():int{return 13;}} public class Child {public function call():int{return Base.read();}}}').replace(/^\s*import [^\r\n]+/gm,''));
   assert.equal(new context.exports.Child().call(),13,'class receiver resolves an opened static namespace member');
+  const proxySource='import flash.utils.Proxy; public class ProxyChild extends Proxy { override flash_proxy function getProperty(name:*):* { return null; } }';
+  const proxyOutput=emit(parse('InheritedNamespaces.as',proxySource),proxySource,
+    {...options,nativeProxyModule:'./Proxy'});
+  assert.doesNotMatch(proxyOutput,/namespace override requires a matching inherited member/);
+  assert.match(proxyOutput,/getProperty/);
   console.log('inherited namespace native-class execution passed for '+ts.ScriptTarget[target]);
 }
 

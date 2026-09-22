@@ -39,6 +39,7 @@ export class NativeNamespaces {
             this.classes.set(qname, (this.classes.get(qname) || []).concat(node));
         });
         this.installAncestry();
+        if (this.proxyEnabled) this.installProxyClass();
         Object.keys(this.configured).forEach(qname => {
             if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(qname)
                 || typeof this.configured[qname] !== 'string' || !this.configured[qname])
@@ -145,6 +146,26 @@ export class NativeNamespaces {
         });
     }
 
+    /** The common Proxy provider exposes the built-in flash_proxy hooks as namespace members. */
+    private installProxyClass(): void {
+        const qname = 'flash.utils.Proxy';
+        if (this.classes.has(qname)) return;
+        const owner = createNode(NodeKind.CLASS, {qualifiedName:qname},
+            createNode(NodeKind.NAME, {text:'Proxy'}),
+            createNode(NodeKind.MOD_LIST, {}, createNode(NodeKind.MODIFIER, {text:'dynamic'})),
+            createNode(NodeKind.CONTENT, {}));
+        this.classes.set(qname, [owner]);
+        this.completeDynamicClasses.add(owner);
+        const uri = 'http://www.adobe.com/2006/actionscript/flash/proxy';
+        ['callProperty', 'deleteProperty', 'getProperty', 'hasProperty', 'nextName', 'nextNameIndex',
+            'nextValue', 'setProperty'].forEach(name => {
+            const declaration = createNode(NodeKind.FUNCTION, {},
+                createNode(NodeKind.MOD_LIST, {}, createNode(NodeKind.MODIFIER, {text:uri})),
+                createNode(NodeKind.NAME, {text:name}));
+            this.members.set(declaration.findChild(NodeKind.NAME), {uri, name, owner, static:false, declaration});
+        });
+    }
+
     fail(message: string): never { throw new Error('AS3_NAMESPACE_UNSUPPORTED: ' + message); }
 
     private walk(node: Node, visit: (node: Node) => void): void {
@@ -241,6 +262,7 @@ export class NativeNamespaces {
     }
 
     private lookup(node: Node, name: string): string {
+        if (this.proxyEnabled && name === 'flash_proxy') return 'flash.utils.flash_proxy';
         const matches = this.candidates(node, name).filter(qname => this.declarations.has(qname)
             || Object.prototype.hasOwnProperty.call(this.configured, qname)
             || this.proxyEnabled && qname === 'flash.utils.flash_proxy');
