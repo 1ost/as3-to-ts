@@ -53,7 +53,7 @@ the separate emission test below executes unchanged original source bodies.
 Run `node tests/native-generated-interfaces/emission.cjs`, also with `--combined`,
 to emit all five unchanged AIR classes and four unchanged interfaces. Both modes
 match 28 of the 31 AIR observations on ES5/ES2015 in Node/Chromium, with zero strict
-type diagnostics, six rejection guards and five comparison negative controls.
+type diagnostics, five rejection guards and five comparison negative controls.
 The three interface-reflection rows remain explicitly held. No subject source is
 trimmed, rewritten or replaced by fixture classes.
 
@@ -67,20 +67,31 @@ validated domain publisher. TypeScript interface declarations import every base
 and translate required parameter types. An implements clause never supplies a
 native superclass.
 
-Static lexical variables/accessors and protected static methods, interface
-reference locals, optional/rest callables and complete
+Static lexical variables/accessors and protected static methods,
+optional/rest callables and complete
 interface Class reflection remain held. The actual Signal chain still needs
 these prerequisites before it is runnable.
 
 Run reference-entry.cjs, also with --combined, for required interface constructor
-parameters. Six unchanged source classes and one interface match 12 of the 32
-interface-reference-entry AIR observations on ES5/ES2015 in Node/Chromium, with
-zero strict type diagnostics, six guards and five comparison negative controls.
-The domain authenticates interface parameter identity; common property coercion
-applies before body entry, including when a wildcard derived constructor forwards
-an invalid value to its base. Missing arguments reject and undefined becomes null.
+parameters and locals. Seven unchanged source classes and one interface match all
+32 interface-reference-entry AIR observations on ES5/ES2015 in Node/Chromium,
+with zero strict type diagnostics, 23 guards and eight comparison negative
+controls. Both modes use reference coercion and the common source Error provider;
+combined mode additionally composes numeric signature lowering.
 
-The complete Locals source is retained in the plan and explicitly rejected. Its
-20 AIR observations are not claimed: generated interface local references and
-nested functions require further lowering. No subject body is trimmed to bypass
-these gates. This does not qualify optional interface defaults or Signal runtime.
+Generated locals use authenticated interface tokens for initialization and writes.
+The assignment expression retains its raw RHS while storage normalizes undefined
+to null; failed writes leave the prior value. Named direct-call nested functions
+capture that storage, preserve parameter shadowing, and coerce interface returns.
+A for-each assignment to an existing interface local rejects before entering the
+body. Common source TypeErrors participate in the original typed catch. The full
+Locals source is emitted without trimming or substitution.
+
+Nested function support is bounded to direct exact-arity calls, fixed wildcard
+parameters, no local declarations/context access, and normal wildcard/void or
+interface returns. Escaping/anonymous functions, construction, nested typed
+parameters, nested exception regions and receiver/context references remain held.
+For-in and typed for-each header declarations remain held. Typed outer methods
+may contain try/catch with returns after the protected region; returns inside
+try/catch/finally still reject. Optional interface defaults, Signal optional/rest
+callables, SlotList.NIL and whole-game runtime remain unqualified.

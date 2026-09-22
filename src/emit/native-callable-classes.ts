@@ -313,8 +313,9 @@ export class NativeCallableClasses {
         const eventBase=this.generated&&this.generated.eventBase;
         const eventClass=eventBase&&domainImport+'.'+eventBase.referenceExport;
         const directEventBase=eventBase&&this.own.base===eventBase.qname;
-        const referenceToken = planned ? (qname:string):string => {
-            const binding=this.declarationDomain.bindings.find(value=>value.qname===qname);
+        const referenceToken = planned || this.generated ? (qname:string):string => {
+            const binding=this.declarationDomain&&this.declarationDomain.bindings.find(value=>value.qname===qname)
+                ||this.generated&&this.generated.options.plan.interfaces.find(value=>value.qname===qname);
             if(!binding)this.fail('foreign local declaration is absent from its compiler domain');
             return domainImport+'.'+binding.tokenExport;
         } : undefined;
@@ -470,12 +471,14 @@ export class NativeCallableClasses {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
                     if(reference&&reference.kind==='native')this.fail('generated native return type requires separate qualification');
                     const sourceBody=sourceMethod.findChild(K.BLOCK);
-                    const inspect=(node:Node):void=>{
-                        if([K.TRY,K.CATCH,K.FINALLY].indexOf(node.kind)>=0)
+                    const inspect=(node:Node,protectedRegion=false):void=>{
+                        if(node.kind===K.FUNCTION||node.kind===K.LAMBDA)return;
+                        protectedRegion=protectedRegion||[K.TRY,K.CATCH,K.FINALLY].indexOf(node.kind)>=0;
+                        if(node.kind===K.RETURN&&protectedRegion)
                             this.fail('generated typed exception-return regions require separate qualification');
                         if(node.kind===K.RETURN && !node.children.length)
                             this.fail('generated typed bare return');
-                        node.children.forEach(inspect);
+                        node.children.forEach(child=>inspect(child,protectedRegion));
                     };
                     inspect(sourceBody);
                     const statements=sourceBody.children.filter(node=>[K.STMT_EMPTY,K.MULTI_LINE_COMMENT,K.AS_DOC].indexOf(node.kind)<0);

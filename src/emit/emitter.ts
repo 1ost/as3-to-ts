@@ -1306,6 +1306,8 @@ function getFunctionDeclarations(emitter:Emitter, node:Node):Declaration[] {
 	if (block) {
 		function traverse(node:Node):Declaration[] {
 			let result:Declaration[] = [];
+			const nested=emitter.generated&&emitter.generated.lexical.nestedFunctions.find(fn=>fn.start===node.start&&fn.end===node.end);
+			if(nested)return [{name:nested.name,type:'Function',as3Type:'Function'}];
 			if (node.kind === NodeKind.VAR_LIST || node.kind === NodeKind.CONST_LIST ||
 				node.kind === NodeKind.VAR || node.kind === NodeKind.CONST) {
 				result = result.concat(
@@ -1331,6 +1333,16 @@ function getFunctionDeclarations(emitter:Emitter, node:Node):Declaration[] {
 
 
 function emitFunction(emitter:Emitter, node:Node):void {
+	const nested=emitter.generated&&emitter.generated.lexical.nestedFunctions.find(fn=>fn.start===node.start&&fn.end===node.end);
+	if(nested){
+		emitter.catchup(node.start);
+		emitter.withScope(getFunctionDeclarations(emitter,node),()=>{
+			visitNode(emitter,node.findChild(NodeKind.PARAMETER_LIST));
+			visitNode(emitter,node.findChild(NodeKind.TYPE));
+			visitNode(emitter,node.findChild(NodeKind.BLOCK));
+			emitter.catchup(node.end);
+		});return;
+	}
 	emitDeclaration(emitter, node);
 	emitter.withScope(getFunctionDeclarations(emitter, node), () => {
 		let rest = node.getChildFrom(NodeKind.MOD_LIST);

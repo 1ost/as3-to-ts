@@ -11,13 +11,14 @@ const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+
 const sources={};for(const file of fs.readdirSync(path.join(evidence,'source/cases'))){const source=fs.readFileSync(path.join(evidence,'source/cases',file),'utf8');sources['cases.'+file.slice(0,-3)]={source,sourceSha256:hash(source)};}
 const plan=api.createNativeGeneratedDeclarationPlan({scope:'interface-reference-entry',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
-const options={customVisitors:[],importModules:Object.fromEntries(Object.keys(sources).map(name=>[name,'./'+name.split('.').pop()])),definitionsByNamespace:{cases:Object.keys(sources).map(n=>n.split('.').pop())},
+const options={customVisitors:[],nativeSourceErrorModule:modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts')), importModules:Object.fromEntries(Object.keys(sources).map(name=>[name,'./'+name.split('.').pop()])),definitionsByNamespace:{cases:Object.keys(sources).map(n=>n.split('.').pop())},
  decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
  nativeGeneratedDeclarations:{plan,module:'./domain'},nativeClassTraitsModule:provider('AS3GeneratedClass'),
  nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
  nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
  nativeDictionaryPropertyModule:provider('AS3Property'),nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},
  nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition')};
+options.nativeReferenceCoercion={plan,module:'./domain',coercionModule:provider('AS3Type')};
 const combined=process.argv.includes('--combined');
 if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./domain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
 let guards=0;
@@ -26,21 +27,38 @@ for(const body of [
  'protected static function call():void {}',
  'private static function get value():int {return 0;}',
  'private static function call(...values):void {}',
- 'private static function call(v:int=0):void {}'
+ 'private static function call(v:int=0):void {}',
+ 'public function call():void {var x:IValue;function f(v:IValue):void{x=v;}f(null);}',
+ 'public function call():void {var x:IValue;function f(v:*=null):void{x=v;}f(null);}',
+ 'public function call():void {var x:IValue;function f(...v):void{x=v;}f();}',
+ 'public function call():void {function f():*{return this;}f();}',
+ 'public var member:*;public function call():void {function f():*{return member;}f();}',
+ 'public function call():void {function f():*{return arguments;}f();}',
+ 'public function call():void {function f():*{var local:*;return local;}f();}',
+ 'public function call():void {function f():IValue{}f();}',
+ 'public function call():void {function f():IValue{return;}f();}',
+ 'public function call():void {function f():void{}var escaped:*=f;}',
+ 'public function call():void {function f(v:*):void{}f();}',
+ 'public function call():void {function f():void{}new f();}',
+ 'public function call():void {var f:*;function f():void{}f();}',
+ 'public function call():void {var x:IValue;for(x in {}){}}',
+ 'public function call():void {for each(var x:IValue in []){}}',
+ 'public function call():Array {try{return [];}catch(e:*){}return [];}',
+ 'public function call():Array {try{}catch(e:*){return [];}return [];}',
+ 'public function call():Array {try{}finally{return [];}return [];}'
 ]){
  const source='package cases {public class Guard {'+body+'}}';
  const p=api.createNativeGeneratedDeclarationPlan({scope:'interface-emission-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources:{...sources,'cases.Guard':{source,sourceSha256:hash(source)}}});
- assert.throws(()=>emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},...(combined?{nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}}:{})}),/AS3_[A-Z_]+UNSUPPORTED/);guards++;
+ assert.throws(()=>emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}}),/AS3_[A-Z_]+UNSUPPORTED/,body);guards++;
 }
-const wanted=expected.filter(row=>row.id.startsWith('required-')||row.id.startsWith('forward-'));assert.equal(wanted.length,12);
-for(const mutate of [rows=>rows.pop(),rows=>rows.reverse(),rows=>rows.find(r=>r.id==='forward-rejected').value[3][0]=10,rows=>rows.find(r=>r.id==='required-undefined').value[2][1]=false,rows=>rows.find(r=>r.id==='required-lookalike').value[1].push('base-body')]){
+const wanted=expected;assert.equal(wanted.length,32);
+for(const mutate of [rows=>rows.pop(),rows=>rows.reverse(),rows=>rows.find(r=>r.id==='forward-rejected').value[3][0]=10,rows=>rows.find(r=>r.id==='required-undefined').value[2][1]=false,rows=>rows.find(r=>r.id==='required-lookalike').value[1].push('base-body'),rows=>rows.find(r=>r.id==='assignment-undefined').value[1][4]=false,rows=>rows.find(r=>r.id==='closure-rejected').value[1][1]=false,rows=>rows.find(r=>r.id==='enumeration-rejected').value[1][1].push(9)]){
  const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));
 }
 fs.writeFileSync(path.join(run,'domain.ts'),plan.moduleSource);
 const emitted=[];
 for(const binding of plan.bindings) {
   const source=sources[binding.qname].source;
-  if(binding.qname==='cases.Locals'){assert.throws(()=>emit(parse(binding.qname+'.as',source),source,options),/typed local source reference lowering required/);guards++;continue;}
   const output=emit(parse(binding.qname+'.as',source),source,options);
   const file=path.join(run,binding.qname.split('.').pop()+'.ts');fs.writeFileSync(file,output);emitted.push({file,sourceSha256:hash(source),generatedSha256:hash(output)});
 }
@@ -71,7 +89,7 @@ async function main(){
    assert.deepEqual(actual,wanted);assert.deepEqual(browserRows,wanted);
    results.push({target,node:actual,browser:browserRows,inputs:Object.keys(bundle.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:5,held:['20 AIR local observations: full Locals source requires nested callable lowering','Ordinary consumer interface coercion','Static lexical variables, accessors and protected methods','Optional/rest methods and constructors, typed exception-return regions']},null,2));
- console.log('Generated interface emission: '+guards+' guards, 12 AIR rows in Node/Chromium, ES5/ES2015; exact 6 AIR classes and 1 interface; full Locals source explicitly held. '+run);
+ fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:8,held:['Anonymous/escaping/nested-context callables and nested typed parameters/local declarations','for-in and for-each header declarations','Ordinary consumer interface coercion','Static lexical variables, accessors and protected methods','Optional/rest methods and constructors, typed exception-return regions']},null,2));
+ console.log('Generated interface emission: '+guards+' guards, 32 AIR rows in Node/Chromium, ES5/ES2015; exact 7 AIR classes and 1 interface. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

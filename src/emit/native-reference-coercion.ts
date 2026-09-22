@@ -33,7 +33,7 @@ export class NativeReferenceCoercion {
         this.root = consumer.root; this.owner = consumer.owner; this.resolve = consumer.resolve;
         const walk = (node: Node, fn: Node): void => {
             if (functions.indexOf(node.kind) >= 0) {
-                if (fn) fail('nested consumer functions require lexical scope qualification');
+                if (fn&&!generated) fail('nested consumer functions require lexical scope qualification');
                 fn = node; this.scopes.set(fn.start,new Map<string, ReferenceLocal>());
                 const type = node.findChild(K.TYPE);
                 if (!generated) {
@@ -93,7 +93,8 @@ export class NativeReferenceCoercion {
                         const parent = value.parent;
                         if (parent && [K.FORIN,K.FOREACH].indexOf(parent.kind) >= 0 && parent.children[0] === value) header = true;
                     }
-                    const local = exported || stringLocal ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER, stringLocal} : null;
+                    // Generated method storage is lowered once by NativeTypedLocals.
+                    const local = (exported || stringLocal)&&(!generated||node.parent.kind===K.PARAMETER) ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER, stringLocal} : null;
                     scope.set(name,local);
                     if (local) this.declarations.set(node.start,local);
                 }

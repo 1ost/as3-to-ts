@@ -5,11 +5,12 @@ import {nativeSourceTypeIdentity} from './native-source-type';
 interface Local {name: string; type: string; reference?: string;}
 interface OuterCapture {name: string; reference: string; read: string; write: string;}
 interface Method {node: Node; name: string; static: boolean; locals: Local[]; wildcards: string[]; outerCaptures: OuterCapture[];}
+export interface NestedLocalFunction {start:number;end:number;name:string;methodStart:number;parameters:string[];returned?:string;}
 /** Bounded local storage plan, resolved against original AS3 declarations. */
 export class NativeTypedLocals {
     private methods: Method[] = [];
     private memberNames: string[] = [];
-    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false) {
+    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false, private nested: NestedLocalFunction[] = []) {
         owner.findChild(K.CONTENT).children.forEach(member=>{
             if([K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0)
                 member.findChildren(K.NAME_TYPE_INIT).forEach(d=>this.memberNames.push(d.findChild(K.NAME).text));
@@ -25,7 +26,13 @@ export class NativeTypedLocals {
                     wildcards.push(value.findChild(K.NAME).text);
             });
             const collect=(value: Node): void => {
-                if (value.kind===K.FORIN||value.kind===K.FOREACH)this.fail('source enumeration targets held');
+                if(value.kind===K.FUNCTION&&this.nested.some(fn=>fn.start===value.start&&fn.end===value.end))return;
+                if (value.kind===K.FORIN||value.kind===K.FOREACH){
+                    const target=value.children[0];
+                    if(!this.matchSourceSpans||value.kind!==K.FOREACH||target.kind!==K.NAME)
+                        this.fail('source enumeration targets held');
+                    // Validate after collecting all function-scoped declarations.
+                }
                 if (value.kind===K.ASSIGN&&[K.ARRAY,K.OBJECT].indexOf(unwrapEncapsulatedExpression(value.children[0]).kind)>=0)
                     this.fail('source destructuring targets held');
                 if ([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(value.kind)>=0) value.findChildren(K.NAME_TYPE_INIT).forEach(decl=>{
@@ -52,6 +59,11 @@ export class NativeTypedLocals {
                 value.children.forEach(collect);
             };
             const body=node.findChild(K.BLOCK);if(body)collect(body);
+            const enumeration=(value:Node):void=>{
+                if(value.kind===K.FOREACH&&!locals.some(local=>local.name===value.children[0].text&&!!local.reference))
+                    this.fail('source enumeration requires a declared reference local');
+                value.children.forEach(enumeration);
+            };if(body)enumeration(body);
             const catchWrites=(value:Node):void=>{
                 if([K.ASSIGN,K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC].indexOf(value.kind)>=0){
                     const target=unwrapEncapsulatedExpression(value.children[0]);
@@ -112,7 +124,7 @@ export class NativeTypedLocals {
     /** Prevent the older integer assignment pass from pre-coercing local RHS values. */
     owns(node: Node, emitter: any): boolean {
         node=unwrapEncapsulatedExpression(node);
-        let method: Node=node;while(method&&method.kind!==K.FUNCTION)method=method.parent;
+        let method: Node=node;while(method&&(method.kind!==K.FUNCTION||this.nested.some(fn=>fn.start===method.start&&fn.end===method.end)))method=method.parent;
         const plan=this.methods.find(m=>m.node===method || this.matchSourceSpans && !!method && m.node.start===method.start && m.node.end===method.end);if(!plan)return false;
         const name=node.kind===K.NAME_TYPE_INIT?node.findChild(K.NAME).text:node.kind===K.IDENTIFIER?node.text:null;
         const local=plan.locals.find(l=>l.name===name);if(!local)return false;
@@ -122,14 +134,17 @@ export class NativeTypedLocals {
     }
     lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string): string {
         const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic);
-        if(!method||!method.locals.length&&!method.outerCaptures.length)return source;
+        if(!method||!method.locals.length&&!method.outerCaptures.length&&!this.nested.some(fn=>fn.methodStart===method.node.start&&!!fn.returned))return source;
         const ts=require('typescript'),S=ts.SyntaxKind,file=ts.createSourceFile('TypedLocals.ts',source,ts.ScriptTarget.Latest,true);
         if(file.parseDiagnostics.length)this.fail('intermediate local syntax');
         const raw=(node:any):string=>source.slice(node.getStart(file),node.end);
         const unwrap=(node:any):any=>node.kind===S.ParenthesizedExpression?unwrap(node.expression):node;
         const resolve=(node:any):Local=>{
             node=unwrap(node);if(node.kind!==S.Identifier)return null;
-            for(let p=node.parent;p;p=p.parent)if(p.kind===S.CatchClause&&p.variableDeclaration&&p.variableDeclaration.name.text===node.text)return null;
+            for(let p=node.parent;p;p=p.parent){
+                if(p.kind===S.CatchClause&&p.variableDeclaration&&p.variableDeclaration.name.text===node.text)return null;
+                if(p.kind===S.FunctionDeclaration&&p.parameters.some((v:any)=>v.name.text===node.text))return null;
+            }
             return method.locals.find(l=>l.name===node.text);
         };
         const reference=(local:Local):string=>{
@@ -141,6 +156,14 @@ export class NativeTypedLocals {
             :coercionProvider+'.as3Coerce'+(local.type==='int'?'Int':local.type==='uint'?'Uint':local.type)+'('+value+')';
         const write=(local:Local,value:string):string=>{const rhs=unique('typedRaw');return '(()=>{const '+rhs+': any='+value+';'+local.name+'='+coerce(local,rhs)+';return '+rhs+';})()';};
         const render=(node:any):string=>{
+            if(node.kind===S.ReturnStatement){
+                let fn=node.parent;while(fn&&fn.kind!==S.FunctionDeclaration)fn=fn.parent;
+                const signature=fn&&this.nested.find(n=>n.methodStart===method.node.start&&fn.name&&n.name===fn.name.text);
+                if(signature&&signature.returned){
+                    if(!node.expression)this.fail('nested typed bare return');
+                    return 'return <any>'+provider+'.as3CoerceReference('+render(node.expression)+','+referenceToken(signature.returned)+');';
+                }
+            }
             if(node.kind===S.VariableDeclaration&&node.parent.kind!==S.CatchClause&&node.name.kind===S.Identifier){const local=method.locals.find(l=>l.name===node.name.text);if(local)return local.name+': any'+(node.initializer?' = '+coerce(local,render(node.initializer)):'');}
             if(node.kind===S.BinaryExpression){const local=resolve(node.left),op=node.operatorToken.kind;
                 if(local&&op===S.EqualsToken)return write(local,render(node.right));

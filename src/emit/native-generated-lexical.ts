@@ -1,4 +1,4 @@
-import {NativeTypedLocals} from './native-typed-locals';
+import {NativeTypedLocals, NestedLocalFunction} from './native-typed-locals';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
@@ -20,6 +20,7 @@ export class NativeGeneratedLexical {
     readonly scope: string;
     readonly ownClass: Node;
     readonly typedLocals: NativeTypedLocals;
+    readonly nestedFunctions: NestedLocalFunction[] = [];
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
         let serial=0;
@@ -70,8 +71,41 @@ export class NativeGeneratedLexical {
         collect(owner,false);
         this.own.forEach(trait=>{if(modifiers(trait.node).indexOf('override')>=0&&!overridden.has(trait))fail('protected override has no source ancestor');});
         const content=this.ownClass.findChild(K.CONTENT);
+        const memberNames:string[]=[];
+        content.children.forEach(member=>{
+            if([K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0)member.findChildren(K.NAME_TYPE_INIT).forEach(v=>memberNames.push(v.findChild(K.NAME).text));
+            else if(member.findChild(K.NAME))memberNames.push(member.findChild(K.NAME).text);
+        });
         const check=(node:Node):void=>{
-            if(node.kind===K.LAMBDA || node.kind===K.FUNCTION&&node.parent!==content)fail('nested source callable context lowering required');
+            if(node.kind===K.LAMBDA)fail('anonymous source callable context lowering required');
+            if(node.kind===K.FUNCTION&&node.parent!==content){
+                const method=node.parent&&node.parent.parent;
+                const header=source.slice(node.start,node.findChild(K.PARAMETER_LIST).start);
+                const name=/^function\s+([A-Za-z_$][\w$]*)\s*$/.exec(header);
+                if(!typedLocals||!method||method.kind!==K.FUNCTION||method.parent!==content||!name)
+                    fail('nested source callable context lowering required');
+                const parameters=node.findChild(K.PARAMETER_LIST).children.map(p=>{
+                    const value=p.findChild(K.NAME_TYPE_INIT),type=value&&value.findChild(K.TYPE);
+                    if(!value||value.findChild(K.INIT)||value.findChild(K.VECTOR)||type&&type.text!=='*')
+                        fail('nested callable requires fixed wildcard parameters');
+                    return value.findChild(K.NAME).text;
+                });
+                const returned=node.findChild(K.TYPE),ref=returned&&plan.references.find(r=>r.owner===owner&&r.start===returned.start&&r.end===returned.end);
+                if(returned&&['*','void'].indexOf(returned.text)<0&&(!ref||ref.kind!=='interface'))
+                    fail('nested callable return conversion requires authority');
+                const bodyCheck=(value:Node):void=>{
+                    if([K.FUNCTION,K.LAMBDA,K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST,K.TRY].indexOf(value.kind)>=0)
+                        fail('nested callable declarations or exception regions held');
+                    if(value.kind===K.IDENTIFIER&&(['this','super','arguments'].indexOf(value.text)>=0||memberNames.indexOf(value.text)>=0||this.traits.some(t=>t.name===value.text)))
+                        fail('nested callable receiver/context access held');
+                    value.children.forEach(bodyCheck);
+                };bodyCheck(node.findChild(K.BLOCK));
+                if(ref&&ref.kind==='interface'){
+                    const body=node.findChild(K.BLOCK),last=body.children.filter(n=>[K.STMT_EMPTY,K.MULTI_LINE_COMMENT,K.AS_DOC].indexOf(n.kind)<0).pop();
+                    if(!last||last.kind!==K.RETURN)fail('nested typed fallthrough completion held');
+                }
+                this.nestedFunctions.push({start:node.start,end:node.end,name:name[1],methodStart:method.start,parameters,returned:ref&&ref.kind==='interface'?ref.identity:undefined});
+            }
             if(node.kind===K.FUNCTION&&node.findChild(K.VECTOR)
                 || node.kind===K.PARAMETER&&node.findChild(K.NAME_TYPE_INIT)&&node.findChild(K.NAME_TYPE_INIT).findChild(K.VECTOR))
                 fail('vector callable signature lowering required');
@@ -81,7 +115,7 @@ export class NativeGeneratedLexical {
                 if(value.findChild(K.VECTOR)||type&&type.text!=='*'&&(!typedLocals||member.kind!==K.FUNCTION))fail('typed local initialization/coercion lowering required');
                 if(typedLocals&&type&&type.text!=='*'){
                     const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
-                    if(!ref||ref.kind!=='intrinsic')fail('typed local source reference lowering required');
+                    if(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'))fail('typed local source reference lowering required');
                 }
                 if(this.traits.some(t=>t.name===value.findChild(K.NAME).text))fail('local/lexical declaration-order lookup required');
             });
@@ -93,9 +127,26 @@ export class NativeGeneratedLexical {
             node.children.forEach(check);
         };
         check(content);
+        this.nestedFunctions.forEach(fn=>{
+            const method=content.findChildren(K.FUNCTION).find(m=>m.start===fn.methodStart);
+            const duplicates=this.nestedFunctions.filter(f=>f.methodStart===fn.methodStart&&f.name===fn.name);
+            if(duplicates.length!==1||fn.parameters.indexOf(fn.name)>=0)fail('nested callable name ownership');
+            const uses=(node:Node):void=>{
+                if(node.kind===K.NAME&&node.text===fn.name)fail('nested callable name shadows a declaration');
+                if(node.kind===K.IDENTIFIER&&node.text===fn.name){
+                    const parent=node.parent;
+                    if(parent.kind!==K.CALL||parent.children[0]!==node||parent.parent&&parent.parent.kind===K.NEW||parent.children[1].children.length!==fn.parameters.length)
+                        fail('nested callable requires direct exact-arity calls');
+                }
+                node.children.forEach(uses);
+            };uses(method);
+        });
         // This independently parsed tree is authenticated against the exact source.
         // Method spans join it to the emitter tree without weakening legacy identity.
-        if(typedLocals)this.typedLocals=new NativeTypedLocals(this.ownClass,owner,[],undefined,true);
+        if(typedLocals)this.typedLocals=new NativeTypedLocals(this.ownClass,owner,[],node=>{
+            const ref=node&&plan.references.find(r=>r.owner===owner&&r.start===node.start&&r.end===node.end);
+            return ref&&ref.kind==='interface'?ref.identity:undefined;
+        },true,this.nestedFunctions);
     }
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}
     typeExpression(node:Node,owner:string,domain:string,array:string):string {

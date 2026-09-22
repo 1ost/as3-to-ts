@@ -25,8 +25,7 @@ for(const body of [
  'protected static function call():void {}',
  'private static function get value():int {return 0;}',
  'private static function call(...values):void {}',
- 'private static function call(v:int=0):void {}',
- 'public function call():void {var v:IRoot;}'
+ 'private static function call(v:int=0):void {}'
 ]){
  const source='package contracts {public class Guard {'+body+'}}';
  const p=api.createNativeGeneratedDeclarationPlan({scope:'interface-emission-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources:{...sources,'contracts.Guard':{source,sourceSha256:hash(source)}}});
@@ -70,7 +69,7 @@ async function main(){
    assert.deepEqual(actual,wanted);assert.deepEqual(browserRows,wanted);
    results.push({target,node:actual,browser:browserRows,inputs:Object.keys(bundle.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:5,held:['Three interface-reflection AIR rows','Interface reference locals','Ordinary consumer interface coercion','Static lexical variables, accessors and protected methods','Optional/rest methods and constructors, typed exception-return regions']},null,2));
+ fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:5,held:['Three interface-reflection AIR rows','Ordinary consumer interface coercion','Static lexical variables, accessors and protected methods','Optional/rest methods and constructors, typed exception-return regions']},null,2));
  console.log('Generated interface emission: '+guards+' guards, 28 AIR rows in Node/Chromium, ES5/ES2015; exact 5 AIR classes and 4 interfaces. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
