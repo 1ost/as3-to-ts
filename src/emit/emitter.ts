@@ -138,6 +138,8 @@ export interface EmitterOptions {
     nativeGeneratedPropertyModule?: string;
     nativeLexicalMembersModule?: string;
     nativeTypedLocals?: boolean;
+    /** Explicit common AS3Type provider for generated typed Array locals. */
+    nativeTypedLocalReferenceModule?: string;
     nativeTypedLocalAdditionModule?: string;
     /** Explicit common AS3Relational module for authenticated source comparisons. */
     nativeRelationalModule?: string;
@@ -301,6 +303,7 @@ export default class Emitter {
     references: NativeReferenceCoercion;
     nativeGlobals:NativeGlobalModules;
     lexical: NativeLexicalMembers;
+    get typedLocalPlan() {return this.generated ? this.generated.lexical.typedLocals : this.lexical && this.lexical.typedLocals;}
     /** Exact compiler-created callable imports; authored imports grant no exemption. */
     public nativeSourceHelpers = new Set<string>();
 	public isNew:boolean = false;
@@ -369,12 +372,12 @@ export default class Emitter {
 
         if (this.options.nativeGeneratedDeclarations !== undefined || this.options.nativeClassTraitsModule !== undefined) {
             if (this.options.useNamespaces || this.options.customVisitors.length || this.options.nativeCallableMetadata
-                || this.options.nativeTypedLocals
                 || this.options.nativeCallableClasses || this.options.nativeClassInitialization)
                 throw new Error('AS3_GENERATED_EMISSION_UNSUPPORTED: generated declarations own the exact callable/initialization plan');
             this.generated = new NativeGeneratedEmission(this.source,this.options.nativeGeneratedDeclarations,
                 this.options.nativeClassTraitsModule,this.options.nativeClassHelperModules,
-                this.options.nativeLexicalMembersModule,this.options.nativeGeneratedPropertyModule);
+                this.options.nativeLexicalMembersModule,this.options.nativeGeneratedPropertyModule,this.options.nativeTypedLocals === true);
+            if(this.options.nativeTypedLocals)generatedModule(this.options.nativeTypedLocalReferenceModule);
             generatedModule(this.options.nativeCallableMethodBindingModule);
             this.options.nativeCallableClasses = this.generated.sources;
             this.options.nativeClassInitialization = {classes:this.generated.classes};
@@ -383,7 +386,7 @@ export default class Emitter {
         }
 
         if (this.options.nativeReferenceCoercion !== undefined) {
-            if (this.options.useNamespaces || this.options.customVisitors.length || this.options.nativeTypedLocals)
+            if (this.options.useNamespaces || this.options.customVisitors.length || this.options.nativeTypedLocals && !this.generated)
                 throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: exact source without conflicting transforms required');
             if (this.generated && (this.options.nativeReferenceCoercion.plan !== this.generated.options.plan
                 || this.options.nativeReferenceCoercion.module !== this.generated.options.module))
@@ -574,7 +577,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -3879,7 +3882,7 @@ function findBoundDeclaration(emitter: Emitter, name: string, bound: string): De
  * them for compound assignment could change evaluation order or side effects.
  */
 function getTypedAssignmentTarget(emitter: Emitter, node: Node): TypedAssignmentTarget {
-    if (emitter.lexical && emitter.lexical.typedLocals && emitter.lexical.typedLocals.owns(node, emitter)) return null;
+    if (emitter.typedLocalPlan && emitter.typedLocalPlan.owns(node, emitter)) return null;
     node = unwrapEncapsulatedExpression(node);
     let declaration: Declaration = null;
     let repeatText: string = null;
@@ -4080,7 +4083,7 @@ function emitInit(emitter: Emitter, node: Node): void {
         emitter.catchup(getEffectiveNodeEnd(node)); emitter.insert(parts[1]);
         return;
     }
-    if (!isIntegerAS3Type(as3Type) || emitter.lexical && emitter.lexical.typedLocals && emitter.lexical.typedLocals.owns(declarationNode, emitter)) {
+    if (!isIntegerAS3Type(as3Type) || emitter.typedLocalPlan && emitter.typedLocalPlan.owns(declarationNode, emitter)) {
         visitNodes(emitter, node.children);
         return;
     }
@@ -4185,8 +4188,8 @@ function emitAssign(emitter: Emitter, node: Node): void {
     }
     if (operator.text === '=' && emitDictionaryPropertyAssignment(emitter, left, right)) return;
     if (operator.text === '=' && emitDynamicPropertyAssignment(emitter, left, right)) return;
-    if ((operator.text === '+=' || operator.text === '=') && emitter.lexical && emitter.lexical.typedLocals) {
-        const target = emitter.lexical.typedLocals.wildcardReference(left, emitter);
+    if ((operator.text === '+=' || operator.text === '=') && emitter.typedLocalPlan) {
+        const target = emitter.typedLocalPlan.wildcardReference(left, emitter);
         if (target && (operator.text === '+=' || target.write)) {
             emitter.catchup(node.start);
             emitter.insert(target.write ? target.write + '(' : '(' + target.reference + '=');
@@ -4203,7 +4206,7 @@ function emitAssign(emitter: Emitter, node: Node): void {
         }
     }
     if (operator.text === '||=' || operator.text === '&&=') {
-        if (emitter.lexical && emitter.lexical.typedLocals && emitter.lexical.typedLocals.owns(left, emitter))
+        if (emitter.typedLocalPlan && emitter.typedLocalPlan.owns(left, emitter))
             throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: typed logical assignment held');
         emitLogicalAssignment(emitter, node);
         return;
@@ -4250,7 +4253,7 @@ function sourceAdditionHelper(emitter: Emitter): string {
 
 /** Mark original source addition before any generated callable/local scaffolding. */
 function emitAdd(emitter: Emitter, node: Node): void {
-    if (!emitter.lexical || !emitter.lexical.typedLocals
+    if (!emitter.typedLocalPlan
         || !node.children.some(child => child.kind === NodeKind.OP && child.text === '+')) {
         emitter.catchup(node.start);
         visitNodes(emitter, node.children);

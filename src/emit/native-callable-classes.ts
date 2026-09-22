@@ -25,7 +25,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -298,7 +298,8 @@ export class NativeCallableClasses {
         };
         const provider = unique('provider'), declaration = unique('declaration'), generation = unique('generation');
         const localCoercion = unique('localCoercion'), localString = unique('localString'), localAddition = unique('localAddition');
-        const generatedProperty = unique('generatedProperty');
+        const generatedProperty = unique('generatedProperty'), localReference = unique('localReference');
+        const typedLocals = this.generated ? this.generated.lexical.typedLocals : this.lexical && this.lexical.typedLocals;
         const planned = this.declarationDomain && this.declarationDomain.bindings.find(binding => binding.qname === this.own.qname);
         if (this.declarationDomain && !planned) this.fail('current source declaration is absent from its compiler domain');
         const domainImport = planned || this.generated ? unique('declarationDomain') : '';
@@ -399,8 +400,8 @@ export class NativeCallableClasses {
                 result = result.slice(0, edit.start - offset) + edit.value + result.slice(edit.end - offset);
             });
             result = this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
-            if (this.lexical && this.lexical.typedLocals) result = this.lexical.typedLocals.lower(result, constructor ? this.own.name : member.name.text,
-                !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), provider, localCoercion, localString, localAddition, intrinsic + '.array', unique, referenceToken);
+            if (typedLocals) result = typedLocals.lower(result, constructor ? this.own.name : member.name.text,
+                !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), this.generated ? localReference : provider, localCoercion, localString, localAddition, intrinsic + '.array', unique, referenceToken);
             return result;
         };
         const accessorTypes = new Set<string>();
@@ -606,9 +607,10 @@ export class NativeCallableClasses {
                 + 'import * as '+this.generated.lexical.provider+' from '+JSON.stringify(this.generated.lexicalModule)+';\n'
                 + 'import * as '+generatedProperty+' from '+JSON.stringify(this.generated.propertyModule)+';\n'
                 + 'import * as ' + domainImport + ' from ' + JSON.stringify(this.generated.options.module) + ';\n' : '')
-            + (this.lexical && this.lexical.typedLocals ? 'import * as ' + localCoercion + ' from ' + JSON.stringify(this.coercionModule) + ';\n'
+            + (typedLocals ? 'import * as ' + localCoercion + ' from ' + JSON.stringify(this.coercionModule) + ';\n'
                 + 'import * as ' + localString + ' from ' + JSON.stringify(this.stringModule) + ';\n'
-                + 'import * as ' + localAddition + ' from ' + JSON.stringify(this.localAdditionModule) + ';\n' : '')
+                + 'import * as ' + localAddition + ' from ' + JSON.stringify(this.localAdditionModule) + ';\n'
+                + (this.generated ? 'import * as ' + localReference + ' from ' + JSON.stringify(this.localReferenceModule) + ';\n' : '') : '')
             + (this.metadata ? 'import * as ' + provider + ' from ' + JSON.stringify(this.metadata.module) + ';\n'
             + (planned ? 'import * as ' + domainImport + ' from ' + JSON.stringify(this.declarationDomain.module) + ';\n'
                 + 'const ' + declaration + ' = {type:' + domainImport + '.' + planned.tokenExport

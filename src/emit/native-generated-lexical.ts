@@ -1,3 +1,4 @@
+import {NativeTypedLocals} from './native-typed-locals';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
@@ -18,7 +19,8 @@ export class NativeGeneratedLexical {
     readonly provider: string;
     readonly scope: string;
     readonly ownClass: Node;
-    constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string) {
+    readonly typedLocals: NativeTypedLocals;
+    constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
         let serial=0;
         const fresh=(label:string):string=>{let value:string;do{value='__as3_generated_'+label+'_'+serial++;}while(source.indexOf(value)>=0);return value;};
@@ -75,7 +77,12 @@ export class NativeGeneratedLexical {
                 fail('vector callable signature lowering required');
             if([K.VAR_LIST,K.CONST_LIST].indexOf(node.kind)>=0&&node.parent!==content)node.findChildren(K.NAME_TYPE_INIT).forEach(value=>{
                 const type=value.findChild(K.TYPE);
-                if(type&&type.text!=='*'||value.findChild(K.VECTOR))fail('typed local initialization/coercion lowering required');
+                let member=node;while(member.parent&&member.parent!==content)member=member.parent;
+                if(value.findChild(K.VECTOR)||type&&type.text!=='*'&&(!typedLocals||member.kind!==K.FUNCTION))fail('typed local initialization/coercion lowering required');
+                if(typedLocals&&type&&type.text!=='*'){
+                    const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
+                    if(!ref||ref.kind!=='intrinsic')fail('typed local source reference lowering required');
+                }
                 if(this.traits.some(t=>t.name===value.findChild(K.NAME).text))fail('local/lexical declaration-order lookup required');
             });
             if(node.kind===K.IDENTIFIER&&node.text==='arguments'){
@@ -86,6 +93,9 @@ export class NativeGeneratedLexical {
             node.children.forEach(check);
         };
         check(content);
+        // This independently parsed tree is authenticated against the exact source.
+        // Method spans join it to the emitter tree without weakening legacy identity.
+        if(typedLocals)this.typedLocals=new NativeTypedLocals(this.ownClass,owner,[],undefined,true);
     }
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}
     typeExpression(node:Node,owner:string,domain:string,array:string):string {
@@ -126,6 +136,9 @@ export class NativeGeneratedLexical {
             let isStatic=false;
             if(receiver) {
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
+                // Object-typed locals address the public property, even when the
+                // current class has a private member with the same spelling.
+                if(receiver.text!=='this'&&binding&&!binding.bound&&binding.as3Type==='Object')return null;
                 if(receiver.text===this.owner.split('.').pop()&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type')))isStatic=true;
                 else if(receiver.text!=='this'&&(!binding||[this.owner,this.owner.split('.').pop()].indexOf(binding.as3Type)<0))fail('lexical receiver requires exact source type');
             } else isStatic=staticContext;

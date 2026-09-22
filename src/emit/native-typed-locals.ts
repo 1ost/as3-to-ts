@@ -9,7 +9,7 @@ interface Method {node: Node; name: string; static: boolean; locals: Local[]; wi
 export class NativeTypedLocals {
     private methods: Method[] = [];
     private memberNames: string[] = [];
-    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string) {
+    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false) {
         owner.findChild(K.CONTENT).children.forEach(member=>{
             if([K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0)
                 member.findChildren(K.NAME_TYPE_INIT).forEach(d=>this.memberNames.push(d.findChild(K.NAME).text));
@@ -82,7 +82,7 @@ export class NativeTypedLocals {
         node=unwrapEncapsulatedExpression(node);
         if(node.kind!==K.IDENTIFIER)return null;
         let method: Node=node;while(method&&method.kind!==K.FUNCTION)method=method.parent;
-        const plan=this.methods.find(m=>m.node===method);if(!plan)return null;
+        const plan=this.methods.find(m=>m.node===method || this.matchSourceSpans && !!method && m.node.start===method.start && m.node.end===method.end);if(!plan)return null;
         const binding=emitter.findDefInScope(node.text);
         if(!binding||binding.bound||(binding.as3Type!=null&&binding.as3Type!=='*'))return null;
         const reference=emitter.getIdentifierRemap(node.text)||node.text;
@@ -113,7 +113,7 @@ export class NativeTypedLocals {
     owns(node: Node, emitter: any): boolean {
         node=unwrapEncapsulatedExpression(node);
         let method: Node=node;while(method&&method.kind!==K.FUNCTION)method=method.parent;
-        const plan=this.methods.find(m=>m.node===method);if(!plan)return false;
+        const plan=this.methods.find(m=>m.node===method || this.matchSourceSpans && !!method && m.node.start===method.start && m.node.end===method.end);if(!plan)return false;
         const name=node.kind===K.NAME_TYPE_INIT?node.findChild(K.NAME).text:node.kind===K.IDENTIFIER?node.text:null;
         const local=plan.locals.find(l=>l.name===name);if(!local)return false;
         if(node.kind===K.NAME_TYPE_INIT)return true;

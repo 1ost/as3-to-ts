@@ -27,7 +27,7 @@ export class NativeGeneratedEmission {
     readonly classes: {[qname: string]: 'lazy' | 'ready'} = Object.create(null);
     constructor(source: string, readonly options: NativeGeneratedEmissionOptions,
         readonly registrar: string, readonly helpers: NativeClassHelperModules,
-        readonly lexicalModule: string, readonly propertyModule: string) {
+        readonly lexicalModule: string, readonly propertyModule: string, typedLocals = false) {
         const fail = (reason: string): never => {throw new Error('AS3_GENERATED_EMISSION_UNSUPPORTED: ' + reason);};
         if (!options || Object.keys(options).some(key => key !== 'plan' && key !== 'module')) fail('exact plan/module configuration required');
         generatedModule(options.module); generatedModule(registrar);
@@ -45,7 +45,7 @@ export class NativeGeneratedEmission {
             ancestor=options.plan.bindings.find(binding=>binding.qname===ancestor.base);
         }
         if (this.projection.metadata.isDynamic) fail('dynamic source property routing required');
-        this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source);
+        this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source,typedLocals);
         if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => p.name === t.name)))
             fail('public/lexical same-name lookup requires namespace authority');
         this.projection.staticTraits.filter(trait => trait.kind === 'constant').forEach(trait => {
