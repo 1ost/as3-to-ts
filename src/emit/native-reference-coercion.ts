@@ -26,7 +26,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -171,8 +171,11 @@ export class NativeReferenceCoercion {
     type(name: string): string {
         if (!name) return null;
         const identity = this.resolve(name), plan = this.options.plan;
-        if (plan.interfaces.some(binding => binding.qname === identity))
-            fail('source interface coercion lowering requires separate emission qualification');
+        const contract = plan.interfaces.find(binding => binding.qname === identity);
+        if (contract) {
+            if (!this.generated) fail('source interface coercion lowering requires separate emission qualification');
+            return contract.tokenExport;
+        }
         const source = plan.bindings.find(binding => binding.qname === identity);
         const native = plan.nativeBindings.find(binding => binding.qname === identity);
         return source ? source.tokenExport : native ? native.referenceExport : null;

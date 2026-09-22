@@ -1,0 +1,34 @@
+import {Implementation as ImplementationBinding} from './Implementation';
+import {Child as ChildBinding} from './Child';
+import {Lookalike as LookalikeBinding} from './Lookalike';
+import {Holder as HolderBinding} from './Holder';
+import {Trace as TraceBinding} from './Trace';
+import {readNativeClass} from '@NATIVE_CLASS@';
+import {as3Is,as3As} from '@TYPE@';
+import * as domain from './domain';
+const contracts:any=domain,names:any=@INTERFACES@;
+export function run(){
+ const IRoot=contracts[names['contracts.IRoot']],ILeft=contracts[names['contracts.ILeft']],IRight=contracts[names['contracts.IRight']],ILeaf=contracts[names['contracts.ILeaf']];
+ const Holder=readNativeClass(HolderBinding),Trace=readNativeClass(TraceBinding),holder=new Holder(),rows:any[]=[];
+ function row(id:string,value:any){rows.push({id,value});}
+ function nominal(id:string,v:any){row(id,[as3Is(v,IRoot),as3Is(v,ILeft),as3Is(v,IRight),as3Is(v,ILeaf),as3As(v,IRoot)===v,as3As(v,ILeaf)===v]);}
+ function call(id:string,method:string,v:any){const before=holder.entries;
+  try{const result=(holder as any)[method](v);row(id,[result===v,result===null,holder.entries-before]);}
+  catch(e){row(id,[(e as any).name,(e as any).errorID,holder.entries-before]);}}
+ function store(id:string,v:any,previous:any){try{holder.store(v);row(id,[holder.slot===v,holder.slot===null]);}
+  catch(e){row(id,[(e as any).name,(e as any).errorID,holder.slot===previous]);}}
+ row('before-implementer',Trace.events.concat());row('field-default',holder.slot===null);
+ call('entry-null','accept',null);call('entry-undefined','accept',undefined);
+ const Lookalike=readNativeClass(LookalikeBinding),fake=new Lookalike();nominal('lookalike',fake);call('entry-lookalike','accept',fake);
+ row('after-interface-only',Trace.events.concat());
+ const Implementation=readNativeClass(ImplementationBinding),base=new Implementation();row('after-first-construction',Trace.events.concat());
+ const Child=readNativeClass(ChildBinding),child=new Child();row('after-child-construction',Trace.events.concat());
+ nominal('exact',base);nominal('inherited',child);
+ row('null-is-as',[as3Is(null,IRoot),as3As(null,IRoot)===null]);row('undefined-is-as',[as3Is(undefined,IRoot),as3As(undefined,IRoot)===null]);
+ nominal('plain-object',{value:3,ping:(v:number)=>v+3,right:()=> 'right'});nominal('class-object',Implementation);
+ call('entry-exact','accept',base);call('entry-inherited','accept',child);call('return-exact','result',base);call('return-inherited','result',child);
+ call('return-null','result',null);call('return-undefined','result',undefined);call('return-lookalike','result',fake);
+ store('field-exact',base,null);store('field-rejection-preserves',fake,base);store('field-inherited',child,base);store('field-undefined',undefined,child);
+ row('interface-dispatch-exact',holder.invoke(base));row('interface-dispatch-inherited',holder.invoke(child));
+ return rows;
+}

@@ -26,11 +26,9 @@ frozen tokens. Seventeen planner/emitter guards cover malformed relationships,
 hashes, ambiguous names, cycles and remaining emission holds. Three altered result
 arrays verify comparison sensitivity. Strict actual-provider type checking passes.
 
-Implementing-class emission remains rejected by NativeCallableClasses. Ordinary
-reference coercion also explicitly rejects planned interface types until its
-source emission is qualified; planning cannot silently erase runtime coercion.
-Contract projection and explicit implements publication are now implemented as
-described below; next compare unchanged source bodies with the complete AIR packet.
+Implementing-class emission requires the authenticated generated declaration
+path. Legacy callable emission and ordinary consumer reference coercion still
+reject interface types; planning cannot silently erase runtime coercion.
 Source interface Class values/reflection, optional/rest signatures and computed
 SlotList.NIL initialization remain separate prerequisites for Signal.
 
@@ -49,5 +47,27 @@ For a validated class, the generated publisher calls common `registerAS3Class`
 with its exact interface tokens after nominal generation publication and before
 authored initialization. No new runtime registry is added. The seven AIR nominal
 comparisons now exercise this emitted registration, without manual implements
-registration in the test driver. Its native class bodies remain scaffolding;
-whole original-source callable emission and complete reflection are still held.
+registration in the planning driver. That driver uses native class scaffolding;
+the separate emission test below executes unchanged original source bodies.
+
+Run `node tests/native-generated-interfaces/emission.cjs`, also with `--combined`,
+to emit all five unchanged AIR classes and four unchanged interfaces. Both modes
+match 28 of the 31 AIR observations on ES5/ES2015 in Node/Chromium, with zero strict
+type diagnostics, seven rejection guards and five comparison negative controls.
+The three interface-reflection rows remain explicitly held. No subject source is
+trimmed, rewritten or replaced by fixture classes.
+
+This qualifies generated interface storage and fixed method entry/normal return
+coercion, direct/inherited nominal implementation, virtual accessor/method dispatch,
+and the original static initializer timing. The private static initializer method
+uses the existing common lexical registry and symbol identity. Public typed super
+calls delegate coercion to their captured generated base method. Generated classes
+omit legacy string-name interface metadata; their interface authority is the
+validated domain publisher. TypeScript interface declarations import every base
+and translate required parameter types. An implements clause never supplies a
+native superclass.
+
+Static lexical variables/accessors and protected static methods, interface
+constructor parameters/reference locals, optional/rest callables and complete
+interface Class reflection remain held. The actual Signal chain still needs
+these prerequisites before it is runnable.

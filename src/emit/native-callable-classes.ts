@@ -86,7 +86,7 @@ export class NativeCallableClasses {
                 node.children.forEach(callScan);
             };
             if (!metadata) callScan(cls);
-            if (cls.findChild(K.IMPLEMENTS_LIST)) this.fail('interface construction identity requires separate authority');
+            if (cls.findChild(K.IMPLEMENTS_LIST) && !generated) this.fail('interface construction identity requires separate authority');
             let base: string = null;
             const ext = cls.findChild(K.EXTENDS);
             if (ext) {
@@ -274,6 +274,12 @@ export class NativeCallableClasses {
             parameters.forEach(parameter => {
                 if (parameter.findChild(K.REST)) this.fail('super rest method signature');
                 const declaration = parameter.findChild(K.NAME_TYPE_INIT), type = declaration.findChild(K.TYPE);
+                if(this.generated) {
+                    const ref=type&&this.generated.options.plan.references.find(r=>r.owner===owner.qname&&r.start===type.start&&r.end===type.end);
+                    if(!ref||ref.kind!=='intrinsic'||['*','int','uint','Number','Boolean','String','Object'].indexOf(ref.identity)<0
+                        ||declaration.findChild(K.INIT))this.fail('generated super signature requires fixed qualified scalar parameters');
+                    minimum++;return;
+                }
                 if (!type || type.text !== 'Boolean') this.fail('super parameter coercion requires separately proved signature');
                 const init = declaration.findChild(K.INIT);
                 if (!init) minimum++;
@@ -293,7 +299,7 @@ export class NativeCallableClasses {
             }
             const args = unique('superCallArguments');
             return '((...' + args + ': any[]) => {'
-                + parameters.slice(0, supplied).map((_,index) => args + '[' + index + '] = !!' + args + '[' + index + '];').join('')
+                + (this.generated?'':parameters.slice(0, supplied).map((_,index) => args + '[' + index + '] = !!' + args + '[' + index + '];').join(''))
                 + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
         };
         const provider = unique('provider'), declaration = unique('declaration'), generation = unique('generation');
@@ -518,7 +524,7 @@ export class NativeCallableClasses {
             + (this.lexical ? this.lexical.provider + '.initializeAS3LexicalInstance(' + this.lexical.scope + ',this);\n' : '')
             + (this.generated ? [] : chainFields).map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
             + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
-        const ancestry = cls.heritageClauses && cls.heritageClauses[0];
+        const ancestry = cls.heritageClauses && cls.heritageClauses.find((clause:any)=>clause.token===S.ExtendsKeyword);
         const base = ancestry ? 'const ' + baseName + ' = ' + text(ancestry.types[0].expression) + ';\n' : '';
         const sourceBaseName = this.own.base && (directEventBase ? this.own.base.split('.').pop() : this.classes.get(this.own.base).name);
         const constructorBody = ctor ? body(ctor, true) : '';

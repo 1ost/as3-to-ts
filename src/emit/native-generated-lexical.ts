@@ -42,7 +42,7 @@ export class NativeGeneratedLexical {
                 if(visibility==='public'||inherited&&visibility==='private')return;
                 if(visibility==='internal')fail('internal namespace storage authority');
                 const isStatic=mods.indexOf('static')>=0;
-                if(isStatic)fail('static lexical initialization lowering required');
+                if(isStatic && (visibility!=='private'||member.kind!==K.FUNCTION))fail('static lexical initialization lowering required');
                 if(inherited&&isStatic)fail('inherited static lexical ownership');
                 if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION)fail('lexical constant/accessor lowering required');
                 const declarations=member.kind===K.VAR_LIST?member.findChildren(K.NAME_TYPE_INIT):[member];
@@ -108,9 +108,10 @@ export class NativeGeneratedLexical {
             return JSON.stringify(ref.identity);
         }
         const binding=ref.kind==='declaration'&&this.plan.bindings.find(b=>b.qname===ref.identity);
+        const contract=ref.kind==='interface'&&this.plan.interfaces.find(b=>b.qname===ref.identity);
         const native=ref.kind==='native'&&this.plan.nativeBindings.find(b=>b.qname===ref.identity);
-        if(!binding&&!native)fail('unresolved lexical reference '+ref.sourceName);
-        return '{name:'+JSON.stringify(ref.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domain+'.'+(binding?binding.tokenExport:native.referenceExport)+'}';
+        if(!binding&&!contract&&!native)fail('unresolved lexical reference '+ref.sourceName);
+        return '{name:'+JSON.stringify(ref.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domain+'.'+(binding?binding.tokenExport:contract?contract.tokenExport:native.referenceExport)+'}';
     }
     publication(name:string,base:string,domain:string,intrinsic:string):string {
         const own=this.plan.bindings.find(b=>b.qname===this.owner),parent=own.base&&this.plan.bindings.find(b=>b.qname===own.base);

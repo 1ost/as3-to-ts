@@ -1165,10 +1165,7 @@ function emitInterface(emitter:Emitter, node:Node):void {
 	});
 
 	// ensure extends identifier is being imported
-	let extendsNode = node.findChild(NodeKind.EXTENDS);
-	if (extendsNode) {
-		emitter.ensureImportIdentifier(extendsNode.text);
-	}
+	node.findChildren(NodeKind.EXTENDS).forEach(base => emitter.ensureImportIdentifier(base.text));
 
 	let content = node.findChild(NodeKind.CONTENT);
 	let contentsNode = content && content.children;
@@ -1233,6 +1230,7 @@ function emitInterface(emitter:Emitter, node:Node):void {
 								else
 								{
 									visitNode(emitter, nameNode);
+									if (typeParamNode) visitNode(emitter, typeParamNode);
 									//emitter.catchup(nameTypeInitNode.end);
 								}
 
@@ -2018,7 +2016,7 @@ function emitClass(emitter:Emitter, node:Node):void {
 			emitter.catchup(node.start);
 			if (isInterfaceLinkPrinted == false) {
 				//if (implementsNode) emitter.insert(`static ${INTERFACE_INF};\n`);
-				if (implementsNode) {
+				if (implementsNode && !emitter.generated) {
 					let classesList = ""
 					implementsNode.children.forEach((node) => {
 

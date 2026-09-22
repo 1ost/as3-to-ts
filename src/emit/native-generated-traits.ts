@@ -72,9 +72,10 @@ export class NativeGeneratedClassTraits {
                 return reference.identity;
             }
             const binding = reference.kind === 'declaration' && plan.bindings.find(item => item.qname === reference.identity);
+            const contract = reference.kind === 'interface' && plan.interfaces.find(item => item.qname === reference.identity);
             const native = reference.kind === 'native' && plan.nativeBindings.find(item => item.qname === reference.identity);
-            if (!binding && !native) fail('unresolved source storage type: ' + qname + ':' + reference.sourceName);
-            return {name: reflected(reference.identity), referenceExport: binding ? binding.tokenExport : native.referenceExport};
+            if (!binding && !contract && !native) fail('unresolved source storage type: ' + qname + ':' + reference.sourceName);
+            return {name: reflected(reference.identity), referenceExport: binding ? binding.tokenExport : contract ? contract.tokenExport : native.referenceExport};
         };
         const build = (binding: NativeGeneratedDeclarationBinding): void => {
             if (surfaces.has(binding.qname)) return;
