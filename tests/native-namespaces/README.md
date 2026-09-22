@@ -97,3 +97,17 @@ Passing it is isolated compiler/provider evidence, not whole-TLF/game admission.
 Other tests cover URI aliases across independently emitted modules, public-name
 collisions, qualified reads/writes/calls, static field identity, detached method
 receivers, per-instance storage, typed writes, and explicit failures.
+
+Explicit namespace receivers now propagate type context through the parsed
+field/getter/call chain, including nested argument calls. No lookahead regex
+over source text authorizes receiver types. Local and parameter declarations
+are resolved from the enclosing lexical scopes; nested function declarations
+cannot lend their local types to the caller, and wildcard shadows remain held.
+The executable chain fixture checks the actual Symbol call and once-only getter,
+method and argument evaluation for ES5 and ES2015. This is compiler regression
+evidence, not a new Flash capture or full TLF runtime qualification.
+
+Separate parser defects remain: a block comment between a call and the next
+dot loses the namespace receiver; a block comment inside a nested call argument
+can stall parsing. These were observed during chain validation and are not
+claimed fixed by receiver type inference.

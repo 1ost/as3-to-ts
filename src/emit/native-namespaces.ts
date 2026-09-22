@@ -512,7 +512,11 @@ export class NativeNamespaces {
     }
 
     /** Infer a source-backed receiver type for a field or class identifier. */
-    receiverType(node: Node): string {
+    receiverType(node: Node, namespaceChain = false): string {
+        // Carry the selector's context through its receiver AST. Source text
+        // after a node is not type authority (arguments can contain calls,
+        // comments, and strings with punctuation).
+        namespaceChain = namespaceChain || !!node && node.kind === NodeKind.NAMESPACE_ACCESS;
         const receiver = node && node.kind === NodeKind.DOT ? node.children[0]
             : node && node.kind === NodeKind.NAMESPACE_ACCESS ? this.access(node).receiver : null;
         if (!receiver) return null;
@@ -522,6 +526,10 @@ export class NativeNamespaces {
         let fieldName: string = null;
         if (receiver.kind === NodeKind.IDENTIFIER) {
             if (receiver.text === 'this' || receiver.text === ownerName) return ownerName;
+            if (namespaceChain) {
+                const local = this.localVariableType(node, receiver.text);
+                if (local !== null) return local;
+            }
             if (this.classType(node, receiver.text)) return receiver.text;
             fieldName = receiver.text;
         } else if (receiver.kind === NodeKind.ENCAPSULATED && receiver.children.length === 1
@@ -547,26 +555,14 @@ export class NativeNamespaces {
             // A typed method call can itself be the receiver of a namespace
             // access, for example `getChildAt(i).tlf_internal::...`.
             const method = receiver.children[0].children[1];
-            const baseType = this.receiverType(receiver.children[0]);
+            const baseType = this.receiverType(receiver.children[0], namespaceChain);
             const base = this.classType(node, baseType);
             if (method && base) return this.methodReturnType(base, method.text);
             return null;
         } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
-            && receiver.children[0].kind === NodeKind.DOT
             && receiver.children[1].kind === NodeKind.LITERAL
-            && /^(?:\s*\([^)]*\)\s*\.\s*[A-Za-z_$][\w$]*\s*::|\s*\.\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\.\s*[A-Za-z_$][\w$]*\s*::)/.test(this.source.slice(node.end))) {
-            // A namespace selector can follow a typed call reached through a
-            // field chain, such as `flow.flowComposer.getControllerAt(i).ns::member`.
-            // Keep this inference restricted to that AST position so ordinary
-            // nested dots remain fail-closed until their own type contract is
-            // proven.
-            const first = receiver.children[0];
-            const baseType = first.kind === NodeKind.DOT && first.children.length === 2
-                && first.children[0].kind === NodeKind.IDENTIFIER
-                && (first.children[0].text === 'this' || first.children[0].text === ownerName)
-                && first.children[1].kind === NodeKind.LITERAL
-                ? this.memberReturnType(owner, first.children[1].text)
-                : this.receiverType(first);
+            && namespaceChain) {
+            const baseType = this.receiverType(receiver, true);
             const base = this.classType(node, baseType);
             if (base) return this.memberReturnType(base, receiver.children[1].text);
             return null;
@@ -578,10 +574,6 @@ export class NativeNamespaces {
             // such as this._flowComposer.updateLengths().
             fieldName = receiver.children[1].text;
         } else return null;
-        if (fieldName && /^(?:\s*\([^)]*\)\s*\.\s*[A-Za-z_$][\w$]*\s*::|\s*\.\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\.\s*[A-Za-z_$][\w$]*\s*::)/.test(this.source.slice(node.end))) {
-            const local = this.localVariableType(node, fieldName);
-            if (local) return local;
-        }
         let classes: Node[];
         try { classes = this.hierarchy(owner); } catch (_) { return null; }
         for (const cls of classes) {
@@ -610,24 +602,37 @@ export class NativeNamespaces {
     }
 
     private localVariableType(node: Node, name: string): string {
-        let fn: Node = null;
-        for (const kind of [NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET]) {
-            fn = this.ancestor(node, kind);
-            if (fn) break;
-        }
-        if (!fn) return null;
-        let result: string = null;
-        this.walk(fn, value => {
-            if (result || [NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(value.kind) < 0) return;
-            for (const field of value.findChildren(NodeKind.NAME_TYPE_INIT)) {
-                const declarationName = field.findChild(NodeKind.NAME), type = field.findChild(NodeKind.TYPE);
-                if (declarationName && type && declarationName.text === name) {
-                    result = type.qualifiedName || type.text;
+        const functions = [NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET, NodeKind.LAMBDA];
+        const declaredType = (value: Node): string => {
+            const declarationName = value.findChild(NodeKind.NAME), type = value.findChild(NodeKind.TYPE);
+            return declarationName && declarationName.text === name ? type && (type.qualifiedName || type.text) || '*' : null;
+        };
+        for (let scope = node.parent; scope && scope.kind !== NodeKind.CLASS; scope = scope.parent) {
+            if (scope.kind === NodeKind.CATCH) {
+                const type = declaredType(scope);
+                if (type !== null) return type;
+            }
+            if (functions.indexOf(scope.kind) < 0) continue;
+            let result: string = null;
+            const visit = (value: Node): void => {
+                if (result !== null) return;
+                if (value !== scope && functions.indexOf(value.kind) >= 0) {
+                    // A nested function name is a local binding, but its body
+                    // and parameters cannot provide types to the outer scope.
+                    if (value.kind === NodeKind.FUNCTION && value.findChild(NodeKind.NAME)
+                        && value.findChild(NodeKind.NAME).text === name) result = '*';
                     return;
                 }
-            }
-        });
-        return result;
+                if (value.kind === NodeKind.NAME_TYPE_INIT || value.kind === NodeKind.PARAMETER) {
+                    result = declaredType(value);
+                    if (result !== null) return;
+                }
+                value.children.forEach(visit);
+            };
+            visit(scope);
+            if (result !== null) return result;
+        }
+        return null;
     }
 
     private methodReturnType(owner: Node, name: string): string {

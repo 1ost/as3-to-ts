@@ -138,20 +138,60 @@ assert.match(generate(accessorReceiverSource), /__as3_namespace_member_/);
 
 const nestedMethodReceiverSource = `package example {
   import alias.same;
-  use namespace same;
-  public interface ControllerSource {
-    function getControllerAt(index:int):ControllerTarget;
+  public class ChainTarget {
+    same function apply(value:int):int { return value; }
   }
-  public class Holder {
-    public var source:ControllerSource;
+  public class ChainProvider {
+    public var target:ChainTarget;
+    public var calls:int = 0;
+    public function getControllerAt(index:int):ChainTarget { calls++; return target; }
   }
-  public class ControllerTarget { same function apply():void {} }
-  public class NestedMethodReceiver {
-    private var holder:Holder;
-    public function read(index:int):void { holder.source.getControllerAt(index).apply(); }
+  public class ChainHolder {
+    public var stored:ChainProvider;
+    public var reads:int = 0;
+    public function get provider():ChainProvider { reads++; return stored; }
+  }
+  public class ChainConsumer {
+    public var holder:ChainHolder;
+    public var indexes:int = 0;
+    public function index(value:int):int { indexes++; return value; }
+    public function read():int {
+      return this.holder.provider.getControllerAt(this.index(1)).same::apply(7);
+    }
+    public function localRead():int {
+      var provider:ChainProvider = this.holder.provider;
+      return provider.getControllerAt(this.index(2)).same::apply(8);
+    }
+    public function parameterRead(provider:ChainProvider):int {
+      return provider.getControllerAt(this.index(3)).same::apply(9);
+    }
   }
 }`;
-assert.match(generate(nestedMethodReceiverSource), /__as3_namespace_member_/);
+const {Subject: ChainConsumer, output: chainOutput} = executeClass(nestedMethodReceiverSource, 'ChainConsumer');
+assert.match(chainOutput, /getControllerAt\(this.index\(1\)\)[\s\S]*?\[__as3_namespace_member_\d+\]\(7\)/);
+assert.doesNotMatch(chainOutput, /\.apply\(7\)|same::/);
+const chain = new ChainConsumer(), holder = new context.exports.ChainHolder();
+const provider = new context.exports.ChainProvider();
+provider.target = new context.exports.ChainTarget(); holder.stored = provider; chain.holder = holder;
+assert.strictEqual(chain.read(), 7);
+assert.strictEqual(chain.localRead(), 8);
+assert.strictEqual(chain.parameterRead(provider), 9);
+assert.deepStrictEqual([holder.reads, provider.calls, chain.indexes], [2, 3, 3],
+  'receiver getters and nested arguments must execute once');
+
+// A matching declaration in a nested function, or a same-name field, must
+// never authenticate a wildcard local/parameter used by the selector.
+for (const body of [
+  'var provider:* = null; return provider.getControllerAt(0).same::apply(1);',
+  'var provider:* = null; var f:Function = function():void { var provider:ChainProvider; }; return provider.getControllerAt(0).same::apply(1);',
+  'var f:Function = function(provider:*):int { return provider.getControllerAt(0).same::apply(1); }; return 0;',
+  'try { throw null; } catch (provider:*) { return provider.getControllerAt(0).same::apply(1); }'
+]) {
+  const negative = nestedMethodReceiverSource.replace('public var holder:ChainHolder;',
+    'public var holder:ChainHolder; public var provider:ChainProvider;')
+    .replace('var provider:ChainProvider = this.holder.provider;\n      return provider.getControllerAt(this.index(2)).same::apply(8);', body);
+  assert.throws(() => generate(negative), /AS3_NAMESPACE_UNSUPPORTED/, body);
+}
 
 
 const ast = parse('NamespaceFixture.as', source);
