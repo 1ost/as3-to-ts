@@ -36,6 +36,15 @@ const output = emit(parse('owners.Child.as', child), child, {
 assert.match(output, /__as3_namespace_member_/);
 assert.doesNotMatch(output, /namespace inheritance requires/);
 
+// The base can be the parsed source while a derived source is installed as a
+// synthetic ancestry node. That cross-file relation has no in-file ordering.
+const baseOutput = emit(parse('owners.Base.as', base), base, {
+  lineSeparator: '\n', customVisitors: [], namespaceUris: plan.namespaceUris,
+  nativeSourceAncestry: plan
+});
+assert.match(baseOutput, /__as3_namespace_member_/);
+assert.doesNotMatch(baseOutput, /forward namespace base declaration/);
+
 const incomplete = createNativeSourceAncestryPlan({ sources: {
   'fixture.shared': { source: shared }, 'owners.Child': { source: child }
 } });

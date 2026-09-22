@@ -196,7 +196,10 @@ export class NativeNamespaces {
             if (this.proxyEnabled && importedProxy) return [owner];
             this.fail('namespace inheritance requires a proven same-file ordinary base: ' + baseName);
         }
-        if (base.start > owner.start)
+        // Source-backed ancestry installs related classes as synthetic nodes in
+        // a single-file emission. Their source positions are intentionally -1;
+        // only two parsed nodes can establish an in-file declaration order.
+        if (base.start >= 0 && owner.start >= 0 && base.start > owner.start)
             this.fail('forward namespace base declaration requires class scheduling: ' + baseName);
         return [owner].concat(this.hierarchy(base, active.concat(owner)));
     }
