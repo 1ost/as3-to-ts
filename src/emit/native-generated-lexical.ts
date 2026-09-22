@@ -22,6 +22,7 @@ export class NativeGeneratedLexical {
     readonly ownClass: Node;
     readonly typedLocals: NativeTypedLocals;
     readonly nestedFunctions: NestedLocalFunction[] = [];
+    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [];
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
         let serial=0;
@@ -79,7 +80,32 @@ export class NativeGeneratedLexical {
             else if(member.findChild(K.NAME))memberNames.push(member.findChild(K.NAME).text);
         });
         const check=(node:Node):void=>{
-            if(node.kind===K.LAMBDA)fail('anonymous source callable context lowering required');
+            if(node.kind===K.LAMBDA){
+                let method=node.parent;while(method&&method.parent!==content)method=method.parent;
+                if(!typedLocals||!method||method.kind!==K.FUNCTION||!plan.bindings.find(b=>b.qname===owner).scriptGlobalExport)
+                    fail('anonymous source callable requires source script global');
+                for(let p=node.parent;p&&p!==method;p=p.parent)if([K.LAMBDA,K.FUNCTION,K.CATCH].indexOf(p.kind)>=0)fail('nested anonymous callable scope held');
+                const parameters=node.findChild(K.PARAMETER_LIST).children.map(p=>{
+                    const value=p.findChild(K.NAME_TYPE_INIT),type=value&&value.findChild(K.TYPE);
+                    if(!value||value.findChild(K.INIT)||value.findChild(K.VECTOR)||type&&type.text!=='*')fail('anonymous callable requires wildcard parameters');
+                    return value.findChild(K.NAME).text;
+                });
+                const returned=node.findChild(K.TYPE);if(returned&&['*','void'].indexOf(returned.text)<0)fail('anonymous typed return held');
+                const outerNames:string[]=[];
+                const outer=(n:Node):void=>{if(n.kind===K.LAMBDA||n.kind===K.FUNCTION&&n!==method)return;if(n.kind===K.NAME_TYPE_INIT)outerNames.push(n.findChild(K.NAME).text);n.children.forEach(outer);};outer(method);
+                const inspect=(n:Node):void=>{
+                    if(n.kind===K.DOT&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='this')fail('anonymous receiver property access held');
+                    if([K.LAMBDA,K.FUNCTION,K.TRY].indexOf(n.kind)>=0)fail('nested anonymous callable body held');
+                    if(n.kind===K.IDENTIFIER&&['super','arguments'].concat(memberNames).indexOf(n.text)>=0)fail('anonymous callable receiver/member lookup held');
+                    if([K.VAR_LIST,K.CONST_LIST].indexOf(n.kind)>=0)n.findChildren(K.NAME_TYPE_INIT).forEach(v=>{
+                        if(outerNames.indexOf(v.findChild(K.NAME).text)>=0)fail('anonymous local shadows outer storage');
+                        const t=v.findChild(K.TYPE);if(n.kind===K.CONST_LIST||v.findChild(K.VECTOR)||t&&t.text!=='*')fail('anonymous typed local held');
+                    });
+                    n.children.forEach(inspect);
+                };inspect(node.findChild(K.BLOCK));
+                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:method.start,name:fresh('anonymous'),parameters});
+                return;
+            }
             if(node.kind===K.FUNCTION&&node.parent!==content){
                 const method=node.parent&&node.parent.parent;
                 const header=source.slice(node.start,node.findChild(K.PARAMETER_LIST).start);
@@ -148,7 +174,7 @@ export class NativeGeneratedLexical {
         if(typedLocals)this.typedLocals=new NativeTypedLocals(this.ownClass,owner,[],node=>{
             const ref=node&&plan.references.find(r=>r.owner===owner&&r.start===node.start&&r.end===node.end);
             return ref&&(ref.kind==='interface'||ref.kind==='declaration'||ref.kind==='native')?ref.identity:undefined;
-        },true,this.nestedFunctions);
+        },true,this.nestedFunctions,this.anonymousFunctions);
     }
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}
     typeExpression(node:Node,owner:string,domain:string,array:string):string {

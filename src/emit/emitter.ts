@@ -163,7 +163,7 @@ export interface EmitterOptions {
 	nativeDirectToStringModule?:string;
 	/** Authenticated common AS3String module for explicit builtin String(value). */
 	nativeStringCoercionModule?:string;
-	/** Authenticated common AS3Class module for builtin Object calls/construction. */
+	/** Authenticated common AS3Class module for Object creation and generated Class storage/construction. */
 	nativeObjectCreationModule?:string;
 	/** Authenticated common AS3Property module for SDK Dictionary property access. */
 	nativeDictionaryPropertyModule?:string;
@@ -577,7 +577,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -1313,6 +1313,7 @@ function getFunctionDeclarations(emitter:Emitter, node:Node):Declaration[] {
 			let result:Declaration[] = [];
 			const nested=emitter.generated&&emitter.generated.lexical.nestedFunctions.find(fn=>fn.start===node.start&&fn.end===node.end);
 			if(nested)return [{name:nested.name,type:'Function',as3Type:'Function'}];
+			if(emitter.generated&&node.kind===NodeKind.LAMBDA)return [];
 			if (node.kind === NodeKind.VAR_LIST || node.kind === NodeKind.CONST_LIST ||
 				node.kind === NodeKind.VAR || node.kind === NodeKind.CONST) {
 				result = result.concat(
@@ -1338,6 +1339,20 @@ function getFunctionDeclarations(emitter:Emitter, node:Node):Declaration[] {
 
 
 function emitFunction(emitter:Emitter, node:Node):void {
+ const anonymous=emitter.generated&&emitter.generated.lexical.anonymousFunctions.find(fn=>fn.start===node.start&&fn.end===node.end);
+ if(anonymous){
+  const module=generatedModule(emitter.options.importModules&&emitter.options.importModules['compiler.AS3Invocation']);
+  let helper='__as3_registerAnonymous';while(emitter.source.indexOf(helper)>=0)helper+='_';
+  emitter.ensureImportIdentifier('registerAS3Function as '+helper,module,false);emitter.nativeSourceHelpers.add(helper);
+  emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(function '+anonymous.name+'(this:any'+(anonymous.parameters.length?',':''));
+  const parameters=node.findChild(NodeKind.PARAMETER_LIST),body=node.findChild(NodeKind.BLOCK);
+  emitter.withScope(getFunctionDeclarations(emitter,node),()=>{
+   parameters.children.forEach((p,index)=>{if(index)emitter.insert(',');emitter.skipTo(p.start);visitNode(emitter,p);emitter.catchup(p.end);});
+   emitter.insert('):any ');emitter.skipTo(body.start);visitNode(emitter,body);emitter.catchup(body.end);
+  });
+  emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');emitter.skipTo(node.end);return;
+ }
+
 	const nested=emitter.generated&&emitter.generated.lexical.nestedFunctions.find(fn=>fn.start===node.start&&fn.end===node.end);
 	if(nested){
 		emitter.catchup(node.start);
@@ -2715,6 +2730,19 @@ function emitShortVector(emitter:Emitter, node:Node):void {
 
 
 function emitNew(emitter:Emitter, node:Node):void {
+ if(emitter.generated&&node.children.length===1&&node.children[0].kind===NodeKind.CALL){
+  const call=node.children[0],callee=call.children[0],args=call.findChild(NodeKind.ARGUMENTS);
+  const binding=callee&&callee.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(callee.text);
+  if(binding&&!binding.bound&&binding.as3Type==='Class'&&args){
+   const module=generatedModule(emitter.options.nativeObjectCreationModule);
+   let helper='__as3_constructCapturedClass';while(emitter.source.indexOf(helper)>=0)helper+='_';
+   emitter.ensureImportIdentifier('as3ConstructClass as '+helper,module,false);emitter.nativeSourceHelpers.add(helper);
+   emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitter.skipTo(callee.start);visitNode(emitter,callee);emitter.catchup(callee.end);
+   emitter.insert(',[');args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
+   emitter.insert(']))');emitter.skipTo(node.end);return;
+  }
+ }
+
 	if (emitSourceErrorConstruction(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
 	if (emitBuiltinEmptyStringConstruction(emitter, node)) return;
