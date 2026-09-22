@@ -92,7 +92,6 @@ export class NativeReferenceCoercion {
                         const parent = value.parent;
                         if (parent && [K.FORIN,K.FOREACH].indexOf(parent.kind) >= 0 && parent.children[0] === value) header = true;
                     }
-                    if (stringLocal && header) fail('String enumeration local requires separate qualification');
                     const local = exported || stringLocal ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER, stringLocal} : null;
                     scope.set(name,local);
                     if (local) this.declarations.set(node.start,local);
@@ -102,11 +101,6 @@ export class NativeReferenceCoercion {
         };
         walk(this.root,null);
         const guard = (node: Node): void => {
-            if ([K.FORIN,K.FOREACH].indexOf(node.kind) >= 0) {
-                const target = unwrapEncapsulatedExpression(node.children[0]);
-                const local = target && [K.IDENTIFIER,K.NAME].indexOf(target.kind) >= 0 && this.local(target,target.text);
-                if (local && local.stringLocal) fail('String enumeration local requires separate qualification');
-            }
             const signature = this.signature(node);
             if (signature && node.kind === K.NAME_TYPE_INIT && node.findChild(K.NAME).text === 'arguments')
                 fail('shadowed arguments in reference signatures');

@@ -20,8 +20,8 @@ compare 21 observations in Node and Chromium for ES5 and ES2015 with zero strict
 type diagnostics. They cover default-before-declaration, null/undefined/numbers,
 conversion hooks/order/failures, Date assignment rejection, chains, side effects,
 arguments, catch shadowing, name collisions and consumed assignment typeof.
-Eleven guards retain compounds without an addition provider, update/delete, const, duplicate local,
-parameter redeclaration, enumeration, catch declaration and nested-function forms.
+Nine guards retain compounds without an addition provider, update/delete, const, duplicate local,
+parameter redeclaration, catch declaration and nested-function forms.
 
 The source plan resolves builtin identity before selecting String locals. String
 parameters/fields, generated typed locals, other compound writes and source atom identity
@@ -30,3 +30,5 @@ do not establish complete game behavior.
 
 The sibling native-string-addition fixture separately qualifies String `+=`
 when the common addition provider is explicitly supplied.
+The native-string-enumeration fixture qualifies per-item String storage and
+header-variable defaults through the existing reference-loop emitter.

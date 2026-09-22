@@ -51,7 +51,8 @@
     "test:native-mixed-reference-signatures": "node tests/native-mixed-reference-signatures/run.cjs",
     "test:native-string-replace": "node tests/native-string-replace/run.cjs",
     "test:native-string-locals": "node tests/native-string-locals/run.cjs",
-    "test:native-string-addition": "node tests/native-string-addition/run.cjs"
+    "test:native-string-addition": "node tests/native-string-addition/run.cjs",
+    "test:native-string-enumeration": "node tests/native-string-enumeration/run.cjs"
   },
   "keywords": [
     "actionscript",
