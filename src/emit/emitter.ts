@@ -3389,6 +3389,22 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     return true;
 }
 
+function emitDynamicPropertyAddition(emitter:Emitter, target:Node, value:Node):boolean {
+    const access=dynamicWriteAccess(emitter,target);
+    if(!access)return false;
+    const helper=propertyHelper(emitter,'as3AddAssignProperty',emitter.options.nativeDynamicPropertyWritesModule);
+    emitter.catchup(target.parent.start);emitter.insert('(<any>'+helper+'(');
+    const start=emitter.output.length;
+    visitNode(emitter,access.receiver);emitter.catchup(access.receiver.end);
+    const receiver=emitter.output.slice(start);
+    emitter.insert(', ');emitter.skipTo(access.key.start);
+    visitNode(emitter,access.key);emitter.catchup(access.key.end);
+    emitter.insert(', () => (');emitter.skipTo(getExpressionStart(value));
+    visitNode(emitter,value);emitter.catchup(getEffectiveNodeEnd(value));
+    emitter.insert('), () => '+receiver+'))');emitter.skipTo(getEffectiveNodeEnd(target.parent));
+    return true;
+}
+
 function emitDynamicPropertyAssignment(emitter:Emitter, target:Node, value:Node):boolean {
 	const access = dynamicWriteAccess(emitter, target);
 	if (!access) return false;
@@ -3429,6 +3445,13 @@ function emitDictionaryPropertyCall(emitter:Emitter, node:Node):boolean {
 }
 
 function emitDelete(emitter:Emitter, node:Node):void {
+    const dynamic=node.children.length===1 && dynamicWriteAccess(emitter,node.children[0]);
+    if(dynamic){
+        const helper=propertyHelper(emitter,'as3DeleteProperty',emitter.options.nativeDynamicPropertyWritesModule);
+        emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(dynamic.receiver.start);
+        emitPropertyKey(emitter,dynamic);emitter.insert(')');emitter.skipTo(node.end);return;
+    }
+
 	if (node.children.length === 1) {
 		const access = dictionaryAccess(emitter, node.children[0]);
 		if (access) {
@@ -4289,6 +4312,7 @@ function emitAssign(emitter: Emitter, node: Node): void {
     }
     if (operator.text === '=' && emitDictionaryPropertyAssignment(emitter, left, right)) return;
     if (operator.text === '=' && emitDynamicPropertyAssignment(emitter, left, right)) return;
+    if (operator.text === '+=' && emitDynamicPropertyAddition(emitter, left, right)) return;
     if ((operator.text === '+=' || operator.text === '=') && emitter.typedLocalPlan) {
         const target = emitter.typedLocalPlan.wildcardReference(left, emitter);
         if (target && (operator.text === '+=' || target.write)) {
