@@ -96,6 +96,18 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   const overrideKey=Symbol.for('as3.namespace.member@1:'+JSON.stringify(['urn:override','value']));
   assert.equal(overridden[overrideKey](), 'child');
 
+  const superSource=`package supercalls {
+    public namespace n="urn:supercalls";
+    public class SuperBase { n function value():int { return 3; } }
+    public class SuperChild extends SuperBase {
+      override n function value():int { return super.n::value() + 4; }
+    }
+  }`;
+  execute(generate(superSource).replace(/^\s*import [^\r\n]+/gm,''));
+  const superChild=new context.exports.SuperChild();
+  const superKey=Symbol.for('as3.namespace.member@1:'+JSON.stringify(['urn:supercalls','value']));
+  assert.equal(superChild[superKey](),7);
+
   const defaultsSource=`package defaults {
     public namespace n="urn:defaults";
     public class SlotReference {}
@@ -139,6 +151,9 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   assert.deepStrictEqual(Array.from(inheritedDefaults.ownRead()),[0,null]);
   execute(generate('package p {public namespace n="urn:open-inherited"; use namespace n; public class OpenBase {n var x:int=5;} public class OpenChild extends OpenBase {public function read():* {return this.x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
   assert.equal(new context.exports.OpenChild().read(),5,'opened namespace selects inherited field');
+  execute(generate('package p {public namespace n="urn:super-field"; public class FieldBase {n var x:int=5;} public class FieldChild extends FieldBase {public function read():* {return super.n::x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
+  const fieldChild=new context.exports.FieldChild();
+  assert.equal(fieldChild[Symbol.for('as3.namespace.member@1:'+JSON.stringify(['urn:super-field','x']))],5,'super namespace field selects base slot');
   console.log('inherited namespace native-class execution passed for '+ts.ScriptTarget[target]);
 }
 
@@ -152,7 +167,6 @@ const invalid=[
   'public class Base extends Child {} public class Child extends Base { n var x:int; }',
   'public class Base {n var x:int;} public class Child extends Base { n var x:int; }',
   'public class Base {n function f():void{}} public class Child extends Base { override n var f:int; }',
-  'public class Base {n var x:int;} public class Child extends Base {public function f():*{return super.n::x;}}',
   'public class Base {n static var x:int;} public class Child extends Base {public function f():*{return Child.n::x;}}',
   'public class Base {n var x:int;} public class Child extends Base {public function f():*{return x;}}',
   'public class Base {n var x:int;} public class Child extends Base {public function f():*{return get().n::x;} public function get():Child{return this;}}',

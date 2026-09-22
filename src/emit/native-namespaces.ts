@@ -411,8 +411,17 @@ export class NativeNamespaces {
         const own = this.ownAccessMember(node);
         if (own) return own;
         const access = this.access(node);
-        const receiverClass = this.classType(node, receiverType);
+        const receiverClass = this.receiverClass(node, receiverType);
         return receiverClass && this.findMember(receiverClass, access.uri, access.name, false);
+    }
+
+    private receiverClass(node: Node, receiverType: string): Node {
+        const access = this.access(node), receiver = access.receiver;
+        if (receiver && receiver.kind === NodeKind.IDENTIFIER && receiver.text === 'super') {
+            const owner = this.ancestor(node, NodeKind.CLASS);
+            return owner && this.hierarchy(owner)[1] || null;
+        }
+        return this.classType(node, receiverType);
     }
 
     checkReceiver(node: Node, receiverType: string): void {
@@ -423,7 +432,7 @@ export class NativeNamespaces {
             this.fail('complex namespace receiver requires type-directed lowering');
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (owner && (receiver.text === 'this' || receiver.text === owner.findChild(NodeKind.NAME).text)) return;
-        const receiverClass = this.classType(node, receiverType);
+        const receiverClass = this.receiverClass(node, receiverType);
         if (!receiverClass || !this.findMember(receiverClass, access.uri, access.name, false))
             this.fail('namespace receiver type is not a proven ordinary class: ' + receiver.text);
     }
