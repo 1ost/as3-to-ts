@@ -6,13 +6,16 @@ const capture=JSON.parse(fs.readFileSync(path.join(evidence,'native-air.json')))
 const pins=JSON.parse(fs.readFileSync(path.join(engine,'tests/nativeDate/evidence-pin.json')));
 assert.equal(hash(fs.readFileSync(path.join(evidence,'native-air.json'))),pins['date-construction']);
 for(const packet of Object.values(capture.captures)){assert.equal(packet.receipt.status,'passed');assert.equal(packet.receipt.capture.identical,true);assert.equal(packet.receipt.capture.runs,2);}
-const expected={construction:capture.captures.construction.capture.state.observations,epoch:capture.captures.epoch.capture.state.observations.slice(0,9)};
+const utcPacket=path.join(engine,'tests/nativeFlashOracle/date-utc-mutation');
+const expected={construction:capture.captures.construction.capture.state.observations,epoch:capture.captures.epoch.capture.state.observations.slice(0,9),utc:require(path.join(utcPacket,'verify.cjs'))};
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const base=path.resolve('.cache/native-date-binding');fs.mkdirSync(base,{recursive:true});const run=fs.mkdtempSync(path.join(base,'run-'));
 const modulePath=file=>{const relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return relative.startsWith('.')?relative:'./'+relative;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
 const sources=Object.fromEntries(Object.entries(capture.sourceFiles).map(([file,sourceSha256])=>{const source=fs.readFileSync(path.join(evidence,file),'utf8');assert.equal(hash(source),sourceSha256);return [file.slice(0,-3),{source,sourceSha256,referenceOnly:true}];}));
+const utcSource=fs.readFileSync(path.join(utcPacket,'source/DateUtcMutationProbe.as'),'utf8');
+sources.DateUtcMutationProbe={source:utcSource,sourceSha256:hash(utcSource),referenceOnly:true};
 const plan=api.createNativeGeneratedDeclarationPlan({scope:'date',providerModule:provider('AS3GeneratedClass'),sources,providers:{Date:{module:provider('AS3Date'),exportName:'AS3Date'}}});
 const options={customVisitors:[],definitionsByNamespace:{'':Object.keys(sources)},decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},nativeGlobalModules:{Date:provider('AS3Date')},nativeComputedTypeTestModule:provider('AS3Type'),nativeReferenceCoercion:{plan,module:'./domain',coercionModule:provider('AS3Type')}};
 fs.writeFileSync(path.join(run,'domain.ts'),plan.moduleSource);
@@ -36,6 +39,7 @@ fs.writeFileSync(path.join(run,'DateIdentityProbe.ts'),emit(parse('DateIdentityP
 const driver=`import {DateConstructionProbe} from './DateConstructionProbe';
 import {DateEpochControlsProbe} from './DateEpochControlsProbe';
 import {DateIdentityProbe} from './DateIdentityProbe';
+import {DateUtcMutationProbe} from './DateUtcMutationProbe';
 import {as3IsSourceErrorInstance} from ${JSON.stringify(modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts')))};
 import {AS3Date} from ${JSON.stringify(provider('AS3Date'))};
 export function run(){
@@ -44,7 +48,7 @@ if(!identity.computed(date,{type:AS3Date})||!identity.computed(2,{type:Number}))
 if(!identity.match(AS3Date.prototype)||!identity.match(date)||identity.match(new Date())||identity.match(Object.create(AS3Date.prototype)))throw Error('Generated Date nominal test failed');
 if(identity.coerce(undefined)!==null||identity.coerce(date)!==date||!identity.empty())throw Error('Generated Date coercion/default failed');
 let rejected=false;try{identity.coerce(new Date());}catch(e){rejected=as3IsSourceErrorInstance(e)&&e.errorID===1034;}if(!rejected)throw Error('Host Date was adopted');
-const c=new DateConstructionProbe();c.exercise();const e=new DateEpochControlsProbe();return {construction:[{id:'allocation-and-stable-time-relations',result:c.result}],epoch:Array.from({length:9},(_,i)=>{e.exercise(i);return {id:String(i),result:e.result};})};}`;
+const c=new DateConstructionProbe();c.exercise();const e=new DateEpochControlsProbe();return {construction:[{id:'allocation-and-stable-time-relations',result:c.result}],epoch:Array.from({length:9},(_,i)=>{e.exercise(i);return {id:String(i),result:e.result};}),utc:JSON.parse(JSON.stringify(new DateUtcMutationProbe().snapshot().observations))};}`;
 fs.writeFileSync(path.join(run,'driver.ts'),driver);
 const files=fs.readdirSync(run).filter(name=>name.endsWith('.ts')).map(name=>path.join(run,name));
 const program=modern.createProgram(files,{module:modern.ModuleKind.CommonJS,target:modern.ScriptTarget.ES2020,strict:true,strictNullChecks:false,
@@ -70,6 +74,6 @@ async function main(){
   assert.deepEqual(browserRows,expected);results.push({target,node,browser:browserRows,inputs:Object.keys(bundled.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
  fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({guards,emitted,typecheck:{files:program.getSourceFiles().length,diagnostics},results},null,2));
- console.log('Date binding: '+guards+' guards, 10 AIR observations from 2 unchanged sources, Node/Chromium ES5/ES2015. '+run);
+ console.log('Date binding: '+guards+' guards, 25 AIR observations from 3 unchanged sources, Node/Chromium ES5/ES2015. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
