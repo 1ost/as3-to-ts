@@ -66,6 +66,7 @@ export class NativeReferenceCoercion {
                 child.kind === K.TYPE && !!this.type(child.qualifiedName || child.text)))
                 fail('reference type operation requires class-evaluation authority');
             const nativeDateTest = nativeDate && node.kind === K.RELATION && node.children.some(child => child.text === 'is')
+                && node.lastChild.kind === K.IDENTIFIER
                 && this.resolve(node.lastChild.qualifiedName || node.lastChild.text) === 'Date'
                 && options.plan.nativeBindings.some(binding => binding.qname === 'Date');
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')

@@ -31,7 +31,7 @@ for(const source of [
 ]){const result=emit(parse('Shadow.as',source),source,{...options,nativeReferenceCoercion:undefined});assert.ok(!result.includes('__as3_global_Date'));guards++;}
 const typeShadow='package {public class Shadow {public function f(Date:*):* {var d:Date=null;return d;}}}';
 assert.match(emit(parse('Shadow.as',typeShadow),typeShadow,options),/AS3Date as __as3_global_Date/);guards++;
-const identity='package {public class DateIdentityProbe {public function match(value:*):Boolean {return value is Date;} public function coerce(value:*):* {var result:Date=value;return result;} public function empty():Boolean {return result===null;var result:Date;}}}';
+const identity='package {public class DateIdentityProbe {public function computed(value:*,target:*):Boolean {return value is target.type;} public function match(value:*):Boolean {return value is Date;} public function coerce(value:*):* {var result:Date=value;return result;} public function empty():Boolean {return result===null;var result:Date;}}}';
 fs.writeFileSync(path.join(run,'DateIdentityProbe.ts'),emit(parse('DateIdentityProbe.as',identity),identity,options));
 const driver=`import {DateConstructionProbe} from './DateConstructionProbe';
 import {DateEpochControlsProbe} from './DateEpochControlsProbe';
@@ -40,6 +40,7 @@ import {as3IsSourceErrorInstance} from ${JSON.stringify(modulePath(path.join(eng
 import {AS3Date} from ${JSON.stringify(provider('AS3Date'))};
 export function run(){
 const identity=new DateIdentityProbe(),date=new AS3Date(0);
+if(!identity.computed(date,{type:AS3Date})||!identity.computed(2,{type:Number}))throw Error('Computed type test failed');
 if(!identity.match(AS3Date.prototype)||!identity.match(date)||identity.match(new Date())||identity.match(Object.create(AS3Date.prototype)))throw Error('Generated Date nominal test failed');
 if(identity.coerce(undefined)!==null||identity.coerce(date)!==date||!identity.empty())throw Error('Generated Date coercion/default failed');
 let rejected=false;try{identity.coerce(new Date());}catch(e){rejected=as3IsSourceErrorInstance(e)&&e.errorID===1034;}if(!rejected)throw Error('Host Date was adopted');
