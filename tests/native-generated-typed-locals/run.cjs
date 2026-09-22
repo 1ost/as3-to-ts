@@ -29,7 +29,7 @@ for(const key of ['nativeTypedLocalReferenceModule','nativeTypedLocalAdditionMod
 assert.throws(()=>emit(parse('TypedLocals.as',source),source,{...options,nativeTypedLocals:false}),/typed local initialization/);guards++;
 for(const member of [
  'public function get value():* {var x:int;return x;}',
- 'public function f():* {var x:Guard;return x;}',
+ 'public function f():* {const x:Guard=null;return x;}',
  'public function f():* {var x:Vector.<int>;return x;}',
  'public function f():* {const x:int=1;return x;}',
  'public function f():* {for each(var x:int in []){}return x;}',

@@ -86,7 +86,10 @@ export class NativeReferenceCoercion {
                             fail('String declaration shadows catch storage');
                     }
                     const scope = this.scopes.get(fn.start);
-                    if (scope.has(name) && (exported || stringLocal || scope.get(name))) fail('duplicate local declaration requires default-order authority: ' + name);
+                    // Generated locals (including repeated declarations) belong to
+                    // NativeTypedLocals; keep parameter storage conflicts here.
+                    if (scope.has(name) && (scope.get(name) || (exported || stringLocal) && (!generated || node.parent.kind === K.PARAMETER)))
+                        fail('duplicate local declaration requires default-order authority: ' + name);
                     if ((exported || stringLocal) && [K.CONST,K.CONST_LIST].indexOf(node.parent.kind) >= 0) fail('reference local constant lowering required');
                     let header = false;
                     for (let value = node; value && value !== fn; value = value.parent) {

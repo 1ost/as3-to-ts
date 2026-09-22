@@ -60,7 +60,8 @@
     "test:native-reference-construction": "node tests/native-reference-construction/run.cjs",
     "test:native-consumer-constants": "node tests/native-consumer-constants/run.cjs && node tests/native-consumer-constants/run.cjs --generated-consumer",
     "test:native-generated-typed-locals": "node tests/native-generated-typed-locals/run.cjs && node tests/native-generated-typed-locals/run.cjs --combined",
-    "test:native-generated-method-returns": "node tests/native-generated-method-returns/run.cjs && node tests/native-generated-method-returns/run.cjs --combined"
+    "test:native-generated-method-returns": "node tests/native-generated-method-returns/run.cjs && node tests/native-generated-method-returns/run.cjs --combined",
+    "test:native-generated-class-locals": "node tests/native-generated-class-locals/run.cjs && node tests/native-generated-class-locals/run.cjs --combined"
   },
   "keywords": [
     "actionscript",

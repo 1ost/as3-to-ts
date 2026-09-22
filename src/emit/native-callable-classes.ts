@@ -315,7 +315,7 @@ export class NativeCallableClasses {
         const directEventBase=eventBase&&this.own.base===eventBase.qname;
         const referenceToken = planned || this.generated ? (qname:string):string => {
             const binding=this.declarationDomain&&this.declarationDomain.bindings.find(value=>value.qname===qname)
-                ||this.generated&&this.generated.options.plan.interfaces.find(value=>value.qname===qname);
+                ||this.generated&&[...this.generated.options.plan.interfaces,...this.generated.options.plan.bindings].find(value=>value.qname===qname);
             if(!binding)this.fail('foreign local declaration is absent from its compiler domain');
             return domainImport+'.'+binding.tokenExport;
         } : undefined;
@@ -611,7 +611,7 @@ export class NativeCallableClasses {
         // do not execute Class initialization; erase only now-unused named source
         // declaration imports, so two qualified namesakes cannot leave duplicate
         // TypeScript bindings. Any surviving value/type identifier keeps its import.
-        if (this.declarationDomain) {
+        if (this.declarationDomain || this.generated) {
             const output=ts.createSourceFile('DomainImports.ts',source,ts.ScriptTarget.Latest,true);
             if(output.parseDiagnostics.length)this.fail('domain import intermediate syntax');
             const used=new Set<string>(),imports:any[]=[];
@@ -621,7 +621,7 @@ export class NativeCallableClasses {
                 ts.forEachChild(node,collect);
             };
             collect(output);
-            const sourceNames=new Set(this.declarationDomain.bindings.map(binding=>binding.qname.split('.').pop()));
+            const sourceNames=new Set((this.declarationDomain?this.declarationDomain.bindings:this.generated.options.plan.bindings).map(binding=>binding.qname.split('.').pop()));
             const erased=imports.filter(node=>node.importClause&&!node.importClause.name
                 &&node.importClause.namedBindings&&node.importClause.namedBindings.kind===S.NamedImports
                 &&node.importClause.namedBindings.elements.length===1

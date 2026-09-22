@@ -53,3 +53,7 @@ recovery/september20-partial/** -text -whitespace
 # Preserve native AIR namespace-update source, binary and receipt bytes.
 tests/native-namespace-updates/source/** -text whitespace=cr-at-eol
 tests/native-namespace-updates/evidence/** -text whitespace=cr-at-eol
+
+# Preserve original class-local sources and repeated native AIR capture artifacts.
+tests/native-generated-class-locals/source/** -text -whitespace
+tests/native-generated-class-locals/evidence/** -text -whitespace
