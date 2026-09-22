@@ -23,7 +23,7 @@ for(const row of expected){
 let guards=0;
 function reject(sources){assert.throws(()=>api.createNativeGeneratedDeclarationPlan(input(Object.fromEntries(Object.entries(sources).map(([name,text])=>[name,source(text)])))),/AS3_GENERATED_INTERFACE_CONTRACT_UNSUPPORTED/);guards++;}
 reject({I:'package {public interface I {function f(v:Missing):void;}}'});
-reject({I:'package {public interface I {function f(v:Vector.<int>):void;}}'});
+reject({I:'package {public interface I {function f(v:Vector.<Missing>):void;}}'});
 reject({I:'package {public interface I {function get x():int;function set x(v:String):void;}}'});
 reject({I:'package {public interface I {function f():void;function f():void;}}'});
 reject({I:'package {public interface I {function f():int;}}',J:'package {public interface J {function f():String;}}',K:'package {public interface K extends I,J {}}'});

@@ -34,12 +34,24 @@ export function projectNativeGeneratedInterfaceContracts(
     interfaces:ReadonlyArray<NativeGeneratedInterfaceBinding>, resolve:(owner:string,name:string)=>string,
     knownType:(name:string)=>boolean):NativeGeneratedInterfaceContracts {
     const members:NativeGeneratedInterfaceMember[]=[],implementations:NativeGeneratedInterfaceImplementation[]=[];
-    const type=(owner:string,node:Node):string=>{
-        if(node&&node.findChild(K.VECTOR))fail('vector interface signatures require separate qualification');
-        const typeNode=node&&node.findChild(K.TYPE),name=resolve(owner,typeNode&&(typeNode.qualifiedName||typeNode.text)||'*');
+    const annotation=(owner:string,node:Node):string=>{
+        if(node&&node.kind===K.VECTOR){
+            const children=node.children.filter(Boolean);
+            if(children.length!==1||[K.TYPE,K.VECTOR].indexOf(children[0].kind)<0)
+                fail('malformed vector interface signature: '+owner);
+            const element=annotation(owner,children[0]);
+            if(element==='void')fail('void vector interface element: '+owner);
+            // A declaration contract compares the complete specialization,
+            // including its resolved element identity. AIR's runtime Vector
+            // covariance does not permit a different implements signature.
+            // This creates no Vector token or callable/storage admission.
+            return 'Vector.<'+element+'>';
+        }
+        const name=resolve(owner,node&&(node.qualifiedName||node.text)||'*');
         if(!knownType(name))fail('unresolved interface signature type: '+owner+':'+name);
         return name;
     };
+    const type=(owner:string,node:Node):string=>annotation(owner,node&&(node.findChild(K.VECTOR)||node.findChild(K.TYPE)));
     const member=(owner:string,node:Node):NativeGeneratedInterfaceMember=>{
         const kind=memberKind(node),name=node.findChild(K.NAME).text;
         const params=node.findChild(K.PARAMETER_LIST).children.map(parameter=>{

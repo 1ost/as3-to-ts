@@ -45,6 +45,7 @@
     "test:decorator-modules": "node tests/decorator-modules/run.cjs",
     "test:reflection-namespace-isolation": "node tests/native-reflection-query/namespace-isolation.cjs",
     "test:native-generated-interfaces": "node tests/native-generated-interfaces/run.cjs && node tests/native-generated-interfaces/contracts.cjs && node tests/native-generated-interfaces/emission.cjs && node tests/native-generated-interfaces/emission.cjs --combined && node tests/native-generated-interfaces/reference-entry.cjs && node tests/native-generated-interfaces/reference-entry.cjs --combined",
+    "test:native-generated-vector-contracts": "node tests/native-generated-vector-contracts/run.cjs",
     "test:native-generated-declarations": "node tests/native-generated-declarations/run.cjs && node tests/native-generated-declarations/traits.cjs && node tests/native-generated-declarations/emission.cjs",
     "test:native-forin-bodies": "node tests/native-forin-bodies/run.cjs",
     "test:native-reference-coercion": "node tests/native-reference-coercion/run.cjs",
