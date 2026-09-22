@@ -153,7 +153,7 @@ export class NativeCallableClasses {
                     const reference=sourceDeclaration?{identity:sourceDeclaration.qname,exported:sourceDeclaration.tokenExport}:undefined;
                     const sourceType = reference ? reference.identity : nativeSourceTypeIdentity(type, qname, imports);
                     const selfReference = !!metadata && sourceType === qname;
-                    if (!selfReference && !reference && !(generated&&sourceType==='Function') && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
+                    if (!selfReference && !reference && !(generated&&['Function','Array'].indexOf(sourceType)>=0) && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
                         this.fail('constructor parameter coercion needs common provider authority: ' + (type && type.text || '*') + ' (' + sourceType + ')');
                     if (sourceType === 'String' && (typeof stringModule !== 'string' || !stringModule.trim()
                         || /[\r\n\u0000]/.test(stringModule)))
@@ -163,8 +163,8 @@ export class NativeCallableClasses {
                             || /[\r\n\u0000]/.test(coercionModule)))
                         this.fail('numeric constructor parameters require the common AS3Coercion module');
                     const init = value.findChild(K.INIT);
-                    if(generated&&sourceType==='Function'&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
-                        this.fail('Function constructor default requires literal null');
+                    if(generated&&['Function','Array'].indexOf(sourceType)>=0&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
+                        this.fail(sourceType+' constructor default requires literal null');
                     if(reference&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
                         this.fail('source reference constructor default requires literal null');
                     if (selfReference && (!init || init.children[0].kind !== K.IDENTIFIER || init.children[0].text !== 'null'))
@@ -636,6 +636,7 @@ export class NativeCallableClasses {
             const value = parameter.name;
             const conversion = parameter.reference
                 ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(parameter.reference.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domainImport+'.'+parameter.reference.exported+'})'
+                : this.generated && parameter.type==='Array' ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:"Array",reference:'+intrinsic+'.array})'
                 : this.generated && parameter.type==='Function' ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',"Function")'
                 : parameter.type === 'Number' ? numberCoercion + '(' + value + ')'
                 : parameter.type === 'int' ? intCoercion + '(' + value + ')' : parameter.type === 'uint' ? uintCoercion + '(' + value + ')'
