@@ -198,12 +198,14 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
                 if (base.length === 1) metadata.base = base[0];
             }
             owner.findChild(K.CONTENT).children.forEach(member => {
-                if ([K.FUNCTION, K.GET, K.SET, K.VAR_LIST, K.CONST_LIST].indexOf(member.kind) < 0) return;
+                if ([K.FUNCTION, K.GET, K.SET, K.VAR_LIST, K.CONST_LIST].indexOf(member.kind) < 0
+                    && !(member.kind === K.TYPE && member.text === 'function')) return;
                 const memberMods = member.findChild(K.MOD_LIST), qualifier = memberMods && memberMods.children.filter(mod =>
                     ['public','private','protected','internal','static','override','final','native','dynamic'].indexOf(mod.text) < 0);
                 const isStatic = !!memberMods && memberMods.children.some(mod => mod.text === 'static');
                 const importsForType = imports(root).map(value => value.text);
-                if ([K.GET, K.SET, K.FUNCTION].indexOf(member.kind) >= 0) {
+                if ([K.GET, K.SET, K.FUNCTION].indexOf(member.kind) >= 0
+                    || member.kind === K.TYPE && member.text === 'function') {
                     const name = member.findChild(K.NAME), type = member.findChild(K.TYPE);
                     if (name && type) metadata.types.push({name:name.text,
                         type:nativeSourceTypeIdentity(type, identity, importsForType), static:isStatic});
