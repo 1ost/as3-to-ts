@@ -128,6 +128,8 @@ export interface EmitterOptions {
     nativeReferenceCoercion?: NativeReferenceCoercionOptions;
     /** Common AS3Property scalar coercion for mixed reference method signatures. */
     nativeSignaturePropertyModule?: string;
+    /** Common AS3String typed local storage; requires an exact reference consumer plan. */
+    nativeStringLocalCoercionModule?: string;
     /** Common String intrinsic provider for source-bound local String calls. */
     nativeStringIntrinsicsModule?: string;
     /** Explicit distributed helper modules for generated lazy native classes. */
@@ -185,6 +187,7 @@ interface NodeVisitor {
 
 const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.RETURN]: emitReferenceReturn,
+    [NodeKind.TYPEOF]: emitLocalTypeOf,
 	[NodeKind.PACKAGE]: emitPackage,
 	[NodeKind.META]: emitMeta,
 	[NodeKind.IMPORT]: emitImport,
@@ -386,7 +389,8 @@ export default class Emitter {
                 || this.options.nativeReferenceCoercion.module !== this.generated.options.module))
                 throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: generated and consumer domain must agree');
             this.references = new NativeReferenceCoercion(this.source,this.options.nativeReferenceCoercion,!!this.generated,
-                !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date));
+                !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
+                this.options.nativeStringLocalCoercionModule !== undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -437,6 +441,10 @@ export default class Emitter {
 				&& this.options.importModules['flash.errors.AS3SourceError'] !== module)
 				throw new Error('AS3_SOURCE_ERROR_UNSUPPORTED: source Error import binding disagrees with nativeSourceErrorModule');
 		}
+        if (this.options.nativeStringLocalCoercionModule !== undefined) {
+            generatedModule(this.options.nativeStringLocalCoercionModule);
+            if (!this.references) throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: String locals require exact reference consumer plan');
+        }
 		if (this.options.nativeSignaturePropertyModule !== undefined) {
 			const module = this.options.nativeSignaturePropertyModule;
 			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
@@ -3936,7 +3944,11 @@ function emitIntegerCoercedNode(emitter: Emitter, node: Node, as3Type: string): 
     emitIntegerCoercionEnd(emitter, as3Type);
 }
 
-function referenceCoercionParts(emitter:Emitter, reference:{exported:string}):string[] {
+function referenceCoercionParts(emitter:Emitter, reference:{exported:string; stringLocal?:boolean}):string[] {
+    if (reference.stringLocal) {
+        const helper = propertyHelper(emitter,'as3CoerceString',emitter.options.nativeStringLocalCoercionModule);
+        return [helper + '(', ')'];
+    }
     let helper = '__as3_reference_coerce', token = '__as3_reference_' + reference.exported;
     while (emitter.source.indexOf(helper) >= 0) helper += '_';
     while (emitter.source.indexOf(token) >= 0) token += '_';
@@ -3977,6 +3989,17 @@ function emitReferenceMethodEntry(emitter:Emitter, block:Node):boolean {
     });
     emitter.insert('\n' + lines.join('\n') + '\n');
     return true;
+}
+
+function emitLocalTypeOf(emitter:Emitter, node:Node):void {
+    const operand = node.children.length === 1 && unwrapEncapsulatedExpression(node.children[0]);
+    const local = operand && operand.kind === NodeKind.IDENTIFIER && emitter.references
+        && emitter.references.local(operand,operand.text);
+    if (!local || !local.stringLocal) {visitNodes(emitter,node.children); return;}
+    // Qualified String storage includes the source null String atom. The read
+    // has no side effects; never fold property/call/assignment operands here.
+    emitter.catchup(node.start); emitter.insert('("string")');
+    emitter.skipTo(getEffectiveNodeEnd(node));
 }
 
 function emitReferenceReturn(emitter:Emitter, node:Node):void {
@@ -4126,10 +4149,13 @@ function emitAssign(emitter: Emitter, node: Node): void {
     const reference = emitter.references && referenceTarget.kind === NodeKind.IDENTIFIER && emitter.references.local(referenceTarget,referenceTarget.text);
     if (reference) {
         if (operator.text !== '=') throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: compound reference write');
-        emitter.catchup(node.start); visitNode(emitter,left); emitter.catchup(operator.end);
+        const temporary = logicalAssignmentTemporary(emitter,node);
         const parts = referenceCoercionParts(emitter,reference);
-        emitter.insert(parts[0]); visitNode(emitter,right); emitter.catchup(getEffectiveNodeEnd(right));
-        emitter.insert(parts[1]); return;
+        emitter.catchup(node.start); emitter.insert('(' + temporary + ' = ');
+        emitter.skipTo(getExpressionStart(right));
+        visitNode(emitter,right); emitter.catchup(getEffectiveNodeEnd(right));
+        emitter.insert(', ' + reference.name + ' = ' + parts[0] + temporary + parts[1] + ', ' + temporary + ')');
+        return;
     }
     if (operator.text === '=' && emitDictionaryPropertyAssignment(emitter, left, right)) return;
     if (operator.text === '=' && emitDynamicPropertyAssignment(emitter, left, right)) return;

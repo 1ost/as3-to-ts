@@ -49,7 +49,8 @@
     "test:native-date-binding": "node tests/native-date-binding/run.cjs",
     "test:native-reference-signatures": "node tests/native-reference-signatures/run.cjs",
     "test:native-mixed-reference-signatures": "node tests/native-mixed-reference-signatures/run.cjs",
-    "test:native-string-replace": "node tests/native-string-replace/run.cjs"
+    "test:native-string-replace": "node tests/native-string-replace/run.cjs",
+    "test:native-string-locals": "node tests/native-string-locals/run.cjs"
   },
   "keywords": [
     "actionscript",

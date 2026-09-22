@@ -8,7 +8,7 @@ export interface NativeReferenceCoercionOptions {
     module: string;
     coercionModule: string;
 }
-export interface ReferenceLocal {node: Node; name: string; exported: string; header: boolean; parameter: boolean;}
+export interface ReferenceLocal {node: Node; name: string; exported: string; header: boolean; parameter: boolean; stringLocal?: boolean;}
 export interface ReferenceSignature {
     node: Node; returned: string; builtinReturn: string;
     parameters: {node: Node; name: string; type: string; exported: string; optional: boolean}[];
@@ -25,7 +25,7 @@ export class NativeReferenceCoercion {
     private declarations = new Map<number, ReferenceLocal>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false, stringLocals = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -78,15 +78,22 @@ export class NativeReferenceCoercion {
                     fail('Date reference requires its explicit native global binding');
                 if (exported && !fn && !generated) fail('reference field storage requires generated class registration');
                 if (fn) {
+                    const stringLocal = stringLocals && !generated && node.parent.kind !== K.PARAMETER
+                        && type && this.resolve(type.qualifiedName || type.text) === 'String';
+                    if (stringLocal) for (let parent = node.parent; parent && parent !== fn; parent = parent.parent) {
+                        if (parent.kind === K.CATCH && parent.children.some(child => child.kind === K.NAME && child.text === name))
+                            fail('String declaration shadows catch storage');
+                    }
                     const scope = this.scopes.get(fn.start);
-                    if (scope.has(name) && (exported || scope.get(name))) fail('duplicate local declaration requires default-order authority: ' + name);
-                    if (exported && [K.CONST,K.CONST_LIST].indexOf(node.parent.kind) >= 0) fail('reference local constant lowering required');
+                    if (scope.has(name) && (exported || stringLocal || scope.get(name))) fail('duplicate local declaration requires default-order authority: ' + name);
+                    if ((exported || stringLocal) && [K.CONST,K.CONST_LIST].indexOf(node.parent.kind) >= 0) fail('reference local constant lowering required');
                     let header = false;
                     for (let value = node; value && value !== fn; value = value.parent) {
                         const parent = value.parent;
                         if (parent && [K.FORIN,K.FOREACH].indexOf(parent.kind) >= 0 && parent.children[0] === value) header = true;
                     }
-                    const local = exported ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER} : null;
+                    if (stringLocal && header) fail('String enumeration local requires separate qualification');
+                    const local = exported || stringLocal ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER, stringLocal} : null;
                     scope.set(name,local);
                     if (local) this.declarations.set(node.start,local);
                 }
@@ -95,6 +102,11 @@ export class NativeReferenceCoercion {
         };
         walk(this.root,null);
         const guard = (node: Node): void => {
+            if ([K.FORIN,K.FOREACH].indexOf(node.kind) >= 0) {
+                const target = unwrapEncapsulatedExpression(node.children[0]);
+                const local = target && [K.IDENTIFIER,K.NAME].indexOf(target.kind) >= 0 && this.local(target,target.text);
+                if (local && local.stringLocal) fail('String enumeration local requires separate qualification');
+            }
             const signature = this.signature(node);
             if (signature && node.kind === K.NAME_TYPE_INIT && node.findChild(K.NAME).text === 'arguments')
                 fail('shadowed arguments in reference signatures');
