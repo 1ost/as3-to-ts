@@ -4502,7 +4502,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 }
 
 function emitConsumerLiteralConstant(emitter:Emitter,node:Node):boolean {
-    if(!emitter.references||emitter.classInitializers.enabled)return false;
+    if(!emitter.references||emitter.classInitializers.enabled&&!emitter.generated)return false;
     const receiver=unwrapEncapsulatedExpression(node.children[0]),member=node.children[1];
     if(!receiver||receiver.kind!==NodeKind.IDENTIFIER||!member||member.kind!==NodeKind.LITERAL)return false;
     const def=emitter.findDefInScope(receiver.text);

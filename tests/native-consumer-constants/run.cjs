@@ -8,8 +8,9 @@ const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
 const root=path.resolve('.cache/native-consumer-constants');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
 const modulePath=file=>{let relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return relative.startsWith('.')?relative:'./'+relative;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
+const generatedConsumer=process.argv.includes('--generated-consumer');
 const sources={};for(const file of fs.readdirSync(path.join(evidence,'source/consumerconstants'))){const source=fs.readFileSync(path.join(evidence,'source/consumerconstants',file),'utf8');sources['consumerconstants.'+file.slice(0,-3)]={source,sourceSha256:hash(source)};}
-const consumerSource=fs.readFileSync(path.join(evidence,'source/ConstantReads.as'),'utf8');sources.ConstantReads={source:consumerSource,sourceSha256:hash(consumerSource),referenceOnly:true};
+const consumerSource=fs.readFileSync(path.join(evidence,'source/ConstantReads.as'),'utf8');sources.ConstantReads={source:consumerSource,sourceSha256:hash(consumerSource),referenceOnly:!generatedConsumer};
 const eventModule=provider('AS3CanonicalEventConstruction');
 const plan=api.createNativeGeneratedDeclarationPlan({scope:'consumer-constants',providerModule:provider('AS3GeneratedClass'),sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
@@ -30,14 +31,20 @@ for(const declaration of ['public static const CHANGE:String=make();public stati
  const p=api.createNativeGeneratedDeclarationPlan({scope:'guard',providerModule:provider('AS3GeneratedClass'),sources:changed});
  assert.throws(()=>emit(parse('ConstantReads.as',consumerSource),consumerSource,{...consumer,nativeReferenceCoercion:{...consumer.nativeReferenceCoercion,plan:p}}),/AS3_[A-Z_]+UNSUPPORTED/);guards++;
 }
+if(generatedConsumer)for(const body of ['Child.CHANGE="bad";','Child.CHANGE++;','++Child.CHANGE;','Child.CHANGE += "x";','delete Child.CHANGE;']){
+ const source='package {import consumerconstants.Child;public class Guard {public function probe():*{'+body+'}}}';
+ const p=api.createNativeGeneratedDeclarationPlan({scope:'generated-mutation',providerModule:provider('AS3GeneratedClass'),sources:{...sources,Guard:{source,sourceSha256:hash(source)}}});
+ assert.throws(()=>emit(parse('Guard.as',source),source,{...options,...consumer,nativeGeneratedDeclarations:{plan:p,module:'./guard'},nativeReferenceCoercion:{...consumer.nativeReferenceCoercion,plan:p,module:'./guard'}}),/consumer constant mutation/);guards++;
+}
 fs.writeFileSync(path.join(run,'domain.ts'),plan.moduleSource);
 const emitted=[];
-for(const binding of [...plan.bindings,{qname:'ConstantReads',referenceOnly:true}]) {
+for(const binding of [...plan.bindings,...(generatedConsumer?[]:[{qname:'ConstantReads',referenceOnly:true}])]) {
   const source=sources[binding.qname].source;
-  const output=emit(parse(binding.qname+'.as',source),source,binding.referenceOnly?consumer:options);
+  const output=emit(parse(binding.qname+'.as',source),source,binding.qname==='ConstantReads'?{...(generatedConsumer?options:{}),...consumer}:options);
   const file=path.join(run,binding.qname.split('.').pop()+'.ts');fs.writeFileSync(file,output);emitted.push({file,sourceSha256:hash(source),generatedSha256:hash(output)});
 }
-const driver=fs.readFileSync(path.join(__dirname,'driver.txt'),'utf8').replaceAll('@NATIVE_CLASS@',helpers.nativeClass).replaceAll('@EVENT@',eventModule).replaceAll('@PROPERTY@',provider('AS3Property')).replaceAll('@METADATA@',provider('FlashTypeMetadata')).replaceAll('@TYPE@',provider('AS3Type'));
+let driver=fs.readFileSync(path.join(__dirname,'driver.txt'),'utf8').replaceAll('@NATIVE_CLASS@',helpers.nativeClass).replaceAll('@EVENT@',eventModule).replaceAll('@PROPERTY@',provider('AS3Property')).replaceAll('@METADATA@',provider('FlashTypeMetadata')).replaceAll('@TYPE@',provider('AS3Type'));
+if(generatedConsumer)driver=driver.replace('new ConstantReads()','new (readNativeClass(ConstantReads))()');
 fs.writeFileSync(path.join(run,'driver.ts'),driver);
 const files=fs.readdirSync(run).filter(f=>f.endsWith('.ts')).map(f=>path.join(run,f));
 const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
@@ -62,7 +69,7 @@ async function main(){
    assert.deepEqual(actual,wanted);assert.deepEqual(browserRows,wanted);
    results.push({target,node:actual,browser:browserRows,inputs:Object.keys(bundle.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},held:['computed constants, mutable statics, indexed access, Class value escape']},null,2));
- console.log('Consumer constants: '+guards+' guards; 6 AIR rows in Node/Chromium, ES5/ES2015; exact 4 source classes. '+run);
+ fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({generatedConsumer,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},held:['computed constants, mutable statics, indexed access, Class value escape']},null,2));
+ console.log('Consumer constants (generated='+generatedConsumer+'): '+guards+' guards; 6 AIR rows in Node/Chromium, ES5/ES2015; exact 4 source classes. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
