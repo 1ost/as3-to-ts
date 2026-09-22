@@ -2,10 +2,18 @@
 
 Build the compiler, then run `npm run test:native-mixed-reference-signatures`.
 The runner authenticates and emits the complete unchanged AIR mixed-signature
-and DateZip probes. All 48 observations match in Node/Chromium on ES5/ES2015,
-with zero strict TypeScript diagnostics and 26 configuration/emission guards.
+and DateZip probes, plus the typed-return throw probe. All 51 observations match
+in Node/Chromium on ES5/ES2015, with 26 configuration/emission guards.
 Supplemental emitted checks cover Array value-name shadowing and a U+2028 String
 default, including explicit undefined versus omission.
+
+The mixed-signature/DateZip sources remain type-clean. The unchanged throw probe
+has exactly one asserted TS2739: the common as3CreateError helper advertises an
+object return, while the emitted source local retains its Error annotation.
+This separate Error type-binding boundary remains unresolved; no source rewrite
+or fake Error declaration is used. The three runtime throw observations compare
+Error identity, name, errorID and catch/finally effects. The legacy parser shares
+RETURN nodes between throw and return, so lowering also checks the source keyword.
 
 `nativeSignaturePropertyModule` names the common AS3Property module for String,
 Number, int, uint, Boolean and Object returns in methods with planned reference

@@ -3946,6 +3946,9 @@ function emitReferenceMethodEntry(emitter:Emitter, block:Node):boolean {
 function emitReferenceReturn(emitter:Emitter, node:Node):void {
     const signature = emitter.references && emitter.references.signature(node);
     emitter.catchup(node.start);
+    // The legacy parser also represents `throw expression` as RETURN.
+    // A thrown value never passes through the method's return type coercion.
+    if (emitter.source.slice(node.start,node.start + 6) !== 'return') {visitNodes(emitter,node.children); return;}
     if (!signature || !signature.returned && !signature.builtinReturn) {visitNodes(emitter,node.children); return;}
     const expression = node.children[0], parts = signature.returned
         ? referenceCoercionParts(emitter,{exported:signature.returned}) : signatureBuiltinCoercionParts(emitter,signature.builtinReturn);
