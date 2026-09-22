@@ -1,4 +1,4 @@
-import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
+import Node, {outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver} from './native-generated-declarations';
 import {generatedModule} from './native-generated-emission';
@@ -9,6 +9,11 @@ export interface NativeReferenceCoercionOptions {
     coercionModule: string;
 }
 export interface ReferenceLocal {node: Node; name: string; exported: string; header: boolean; parameter: boolean;}
+export interface ReferenceSignature {
+    node: Node; returned: string;
+    parameters: {node: Node; name: string; type: string; exported: string; optional: boolean}[];
+    argumentsUsed: boolean;
+}
 const functions = [K.FUNCTION,K.LAMBDA,K.GET,K.SET];
 function fail(reason: string): never {throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: ' + reason);}
 
@@ -19,6 +24,7 @@ export class NativeReferenceCoercion {
     readonly resolve: (name: string) => string;
     private declarations = new Map<number, ReferenceLocal>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
+    private signatures = new Map<number, ReferenceSignature>();
     constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
@@ -29,14 +35,45 @@ export class NativeReferenceCoercion {
                 if (fn) fail('nested consumer functions require lexical scope qualification');
                 fn = node; this.scopes.set(fn.start,new Map<string, ReferenceLocal>());
                 const type = node.findChild(K.TYPE);
-                if (!generated && type && this.type(type.qualifiedName || type.text)) fail('reference return coercion requires separate lowering');
+                if (!generated) {
+                    const returned = type && this.type(type.qualifiedName || type.text);
+                    const list = node.findChild(K.PARAMETER_LIST);
+                    const parameters = list ? list.children.map(parameter => {
+                        const value = parameter.findChild(K.NAME_TYPE_INIT), t = value && value.findChild(K.TYPE);
+                        const name = value && value.findChild(K.NAME);
+                        return {node:value, name:name && name.text, type:t ? t.qualifiedName || t.text : '*',
+                            exported:t && this.type(t.qualifiedName || t.text), optional:!!(value && value.findChild(K.INIT))};
+                    }) : [];
+                    if (returned || parameters.some(p => !!p.exported)) {
+                        if (node.kind !== K.FUNCTION || node.findChild(K.NAME).text === this.owner.split('.').pop())
+                            fail('reference constructor/accessor signatures require separate qualification');
+                        if (returned && this.resolve(type.qualifiedName || type.text) === 'Date' && !nativeDate)
+                            fail('Date reference requires its explicit native global binding');
+                        if (type && !returned && ['void','*'].indexOf(type.text) < 0)
+                            fail('non-reference return conversion in reference signatures requires qualification');
+                        let optional = false;
+                        parameters.forEach(p => {
+                            if (!p.node) fail('reference signatures with rest parameters require qualification');
+                            if (p.name === 'arguments') fail('shadowed arguments in reference signatures');
+                            if (!p.exported && ['*','Number','int','uint'].indexOf(p.type) < 0)
+                                fail('unqualified mixed reference parameter: ' + p.type);
+                            if (optional && !p.optional) fail('required parameter follows optional parameter');
+                            optional = optional || p.optional;
+                            if (p.optional && (p.exported || p.type === '*')) {
+                                const init = p.node.findChild(K.INIT);
+                                if (!p.exported || source.slice(init.start,init.end).trim() !== 'null')
+                                    fail('reference parameter default must be literal null');
+                            }
+                        });
+                        this.signatures.set(node.start,{node,returned,parameters,argumentsUsed:false});
+                    }
+                }
             }
             if (node.kind === K.NAME_TYPE_INIT) {
                 const name = node.findChild(K.NAME).text, type = node.findChild(K.TYPE);
                 const exported = type && this.type(type.qualifiedName || type.text);
                 if (exported && this.resolve(type.qualifiedName || type.text) === 'Date' && !nativeDate)
                     fail('Date reference requires its explicit native global binding');
-                if (exported && !generated && node.parent.kind === K.PARAMETER) fail('reference parameter entry requires separate lowering');
                 if (exported && !fn && !generated) fail('reference field storage requires generated class registration');
                 if (fn) {
                     const scope = this.scopes.get(fn.start);
@@ -56,6 +93,35 @@ export class NativeReferenceCoercion {
         };
         walk(this.root,null);
         const guard = (node: Node): void => {
+            const signature = this.signature(node);
+            if (signature && node.kind === K.NAME_TYPE_INIT && node.findChild(K.NAME).text === 'arguments')
+                fail('shadowed arguments in reference signatures');
+            if (signature && node.kind === K.CATCH && node.children.some(child => child.kind === K.NAME && child.text === 'arguments'))
+                fail('shadowed arguments in reference signatures');
+            if (signature && node.kind === K.RETURN && signature.returned && !node.children.length)
+                fail('bare reference return requires source authority');
+            if (signature && node.kind === K.IDENTIFIER && node.text === 'arguments') {
+                const parent = node.parent;
+                const index = parent && parent.kind === K.ARRAY_ACCESSOR && parent.children[0] === node;
+                const length = parent && parent.kind === K.DOT && parent.children[0] === node && parent.children[1].text === 'length';
+                if (!index && !length) fail('escaping or method-valued arguments requires source Array qualification');
+                const target = outerEncapsulatedExpression(parent), operation = target && target.parent;
+                if (length && operation && operation.children[0] === target && [K.ASSIGN,K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC,K.DELETE].indexOf(operation.kind) >= 0)
+                    fail('arguments length mutation requires source Array qualification');
+                if (index) {
+                    const key = parent.children[1];
+                    const literal = key && source.slice(key.start,key.end).trim();
+                    if (!literal || !/^(0|[1-9][0-9]*)$/.test(literal))
+                        fail('arguments indexing requires an exact nonnegative integer literal');
+                    if (operation && operation.children[0] === target &&
+                        [K.ASSIGN,K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC,K.DELETE].indexOf(operation.kind) >= 0) {
+                        const count = signature.parameters.filter(p => !p.optional).length;
+                        if (operation.kind !== K.ASSIGN || operation.children[1].text !== '=' || Number(literal) >= count)
+                            fail('arguments mutation requires an existing required entry and simple assignment');
+                    }
+                }
+                signature.argumentsUsed = true;
+            }
             if ([K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC,K.DELETE].indexOf(node.kind) >= 0) {
                 const target = unwrapEncapsulatedExpression(node.children[0]);
                 if (target && target.kind === K.IDENTIFIER && this.local(target,target.text)) fail('reference update/delete requires separate lowering');
@@ -83,6 +149,12 @@ export class NativeReferenceCoercion {
             node.children.forEach(guard);
         };
         guard(this.root);
+    }
+    signature(node: Node): ReferenceSignature {
+        for (let value = node; value; value = value.parent) {
+            if (functions.indexOf(value.kind) >= 0) return this.signatures.get(value.start);
+        }
+        return null;
     }
     type(name: string): string {
         if (!name) return null;

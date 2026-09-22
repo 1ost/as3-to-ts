@@ -34,8 +34,8 @@ reject(sample,{...consumer,customVisitors:[{visit(){throw Error('must not run');
 reject(sample,{...consumer,useNamespaces:true});
 for(const body of [
  'public var item:EnumValue;',
- 'public function f(item:EnumValue):void {}',
- 'public function f():EnumValue {return null;}',
+
+
  'public function f():void {var item:EnumValue; item++;}',
  'public function f():void {var item:EnumValue; (item)++;}',
  'public function f():void {var item:EnumValue; item+=1;}',

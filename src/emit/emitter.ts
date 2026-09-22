@@ -180,6 +180,7 @@ interface NodeVisitor {
 
 
 const VISITORS:{[kind:number]:NodeVisitor} = {
+	[NodeKind.RETURN]: emitReferenceReturn,
 	[NodeKind.PACKAGE]: emitPackage,
 	[NodeKind.META]: emitMeta,
 	[NodeKind.IMPORT]: emitImport,
@@ -1633,7 +1634,7 @@ function emitBlock(emitter:Emitter, node:Node):void {
 	// Logical assignments capture effectful receivers in ordinary function-local
 	// variables. Do not introduce an IIFE: that would change lexical arguments.
 	emitter.catchup(node.start + 1);
-	emitNumericMethodParameterCoercion(emitter, node);
+	if (!emitReferenceMethodEntry(emitter, node)) emitNumericMethodParameterCoercion(emitter, node);
 	if (emitter.references) emitter.references.defaults(node).forEach(local => {
 		const global = emitter.nativeGlobals.resolve(local.node.findChild(NodeKind.TYPE),true);
 		const type = global ? global.alias : getDeclarationType(emitter,local.node);
@@ -3891,7 +3892,7 @@ function emitIntegerCoercedNode(emitter: Emitter, node: Node, as3Type: string): 
     emitIntegerCoercionEnd(emitter, as3Type);
 }
 
-function referenceCoercionParts(emitter:Emitter, reference:ReferenceLocal):string[] {
+function referenceCoercionParts(emitter:Emitter, reference:{exported:string}):string[] {
     let helper = '__as3_reference_coerce', token = '__as3_reference_' + reference.exported;
     while (emitter.source.indexOf(helper) >= 0) helper += '_';
     while (emitter.source.indexOf(token) >= 0) token += '_';
@@ -3899,6 +3900,46 @@ function referenceCoercionParts(emitter:Emitter, reference:ReferenceLocal):strin
     emitter.ensureImportIdentifier(reference.exported + ' as ' + token,emitter.references.options.module,false);
     emitter.nativeSourceHelpers.add(helper); emitter.nativeSourceHelpers.add(token);
     return ['(<any>' + helper + '(',',' + token + '))'];
+}
+
+function emitReferenceMethodEntry(emitter:Emitter, block:Node):boolean {
+    const signature = emitter.references && emitter.references.signature(block);
+    if (!signature || !block.parent || signature.node.start !== block.parent.start) return false;
+    const count = propertyHelper(emitter,'as3CheckArgumentCount',emitter.references.options.coercionModule);
+    const required = signature.parameters.filter(p => !p.optional).length;
+    const lines = [count + '(arguments.length,' + required + (signature.argumentsUsed ? '' : ',' + signature.parameters.length) + ');'];
+    signature.parameters.forEach((p,index) => {
+        let converted:string;
+        if (p.exported) {
+            const parts = referenceCoercionParts(emitter,p);
+            converted = parts[0] + p.name + parts[1];
+        } else if (p.type !== '*') {
+            if (!emitter.options.nativeNumericMethodParametersModule)
+                throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: mixed numeric parameters require common coercion module');
+            const helper = propertyHelper(emitter,numericCoercionExport(p.type),emitter.options.nativeNumericMethodParametersModule);
+            converted = helper + '(' + p.name + ')';
+            if (p.optional) converted = 'arguments.length <= ' + index + ' ? ' + helper + '(' +
+                numericDefaultSource(emitter,{name:p.name,type:p.type,index,init:p.node.findChild(NodeKind.INIT)}) + ') : ' + converted;
+        }
+        if (converted) lines.push(p.name + ' = ' + converted + ';');
+        // Emitted modules run in strict mode on both supported targets. Update
+        // only supplied entries, after coercion, without aliasing later writes.
+        if (signature.argumentsUsed) lines.push('if (arguments.length > ' + index + ') arguments[' + index + '] = ' + p.name + ';');
+    });
+    emitter.insert('\n' + lines.join('\n') + '\n');
+    return true;
+}
+
+function emitReferenceReturn(emitter:Emitter, node:Node):void {
+    const signature = emitter.references && emitter.references.signature(node);
+    emitter.catchup(node.start);
+    if (!signature || !signature.returned) {visitNodes(emitter,node.children); return;}
+    const expression = node.children[0], parts = referenceCoercionParts(emitter,{exported:signature.returned});
+    emitter.catchup(getExpressionStart(expression));
+    emitter.insert(parts[0]);
+    visitNode(emitter,expression);
+    emitter.catchup(getEffectiveNodeEnd(expression));
+    emitter.insert(parts[1]);
 }
 
 function emitInit(emitter: Emitter, node: Node): void {
