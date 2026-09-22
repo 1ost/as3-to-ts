@@ -809,8 +809,10 @@ function emitNamespaceAccess(emitter:Emitter, node:Node):void {
     if (access.receiver && access.receiver.text === emitter.currentClassName && hasFunctionLocal(emitter, access.receiver.text))
         emitter.namespaces.fail('local receiver shadows its class name');
     const receiverDefinition = access.receiver && emitter.findDefInScope(access.receiver.text);
-    emitter.namespaces.checkReceiver(node, receiverDefinition && receiverDefinition.type);
-    const target = emitter.namespaces.accessMember(node, receiverDefinition && receiverDefinition.type);
+    const receiverType = receiverDefinition && receiverDefinition.type
+        || emitter.namespaces.receiverType(node);
+    emitter.namespaces.checkReceiver(node, receiverType);
+    const target = emitter.namespaces.accessMember(node, receiverType);
     const reference = outerEncapsulatedExpression(node);
     if (reference.parent && reference.parent.kind === NodeKind.ASSIGN && reference.parent.children[0] === reference
         && target && target.declaration.kind === NodeKind.CONST_LIST)
@@ -4079,9 +4081,11 @@ function emitDot(emitter:Emitter, node:Node) {
 	if (emitArraySortConstant(emitter, node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
 	const receiver = node.children[0];
-	const receiverDefinition = receiver && receiver.kind === NodeKind.IDENTIFIER
-		? emitter.findDefInScope(receiver.text) : null;
-	if (emitter.namespaces.lowerOpenedAccess(node, receiverDefinition && receiverDefinition.type)) {
+    const receiverDefinition = receiver && receiver.kind === NodeKind.IDENTIFIER
+        ? emitter.findDefInScope(receiver.text) : null;
+    const receiverType = receiverDefinition && receiverDefinition.type
+        || emitter.namespaces.receiverType(node);
+    if (emitter.namespaces.lowerOpenedAccess(node, receiverType)) {
 		emitNamespaceAccess(emitter, node);
 		return;
 	}

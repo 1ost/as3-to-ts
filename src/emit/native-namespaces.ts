@@ -366,18 +366,20 @@ export class NativeNamespaces {
     /** Lower a dot access whose typed receiver resolves an opened namespace member. */
     lowerOpenedAccess(node: Node, receiverType: string): boolean {
         if (!node || node.kind !== NodeKind.DOT || node.children.length !== 2
-            || node.children[0].kind !== NodeKind.IDENTIFIER || !receiverType) return false;
+            || node.children[0].kind !== NodeKind.IDENTIFIER) return false;
         const owner = this.ancestor(node, NodeKind.CLASS);
+        receiverType = receiverType || this.receiverType(node);
         const receiverClass = this.classType(node, receiverType);
         if (!owner || !receiverClass) return false;
         const name = node.children[1].text;
+        const staticReceiver = this.isClassReceiver(node, receiverClass);
         const pkg = this.ancestor(node, NodeKind.PACKAGE);
         const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
             .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
         const candidates: {member: NamespaceMember; qualifier: string}[] = [];
         opened.forEach(directive => {
             const uri = this.resolve(directive, directive.text);
-            const member = this.findMember(receiverClass, uri, name, false);
+            const member = this.findMember(receiverClass, uri, name, staticReceiver);
             if (member && !candidates.some(value => value.member === member))
                 candidates.push({member, qualifier:directive.text});
         });
@@ -438,8 +440,42 @@ export class NativeNamespaces {
         const own = this.ownAccessMember(node);
         if (own) return own;
         const access = this.access(node);
+        receiverType = receiverType || this.receiverType(node);
         const receiverClass = this.receiverClass(node, receiverType);
-        return receiverClass && this.findMember(receiverClass, access.uri, access.name, false);
+        const staticReceiver = receiverClass && this.isClassReceiver(node, receiverClass);
+        return receiverClass && this.findMember(receiverClass, access.uri, access.name, staticReceiver);
+    }
+
+    /** Infer a source-backed receiver type for a field or class identifier. */
+    receiverType(node: Node): string {
+        const receiver = node && node.kind === NodeKind.DOT ? node.children[0]
+            : node && node.kind === NodeKind.NAMESPACE_ACCESS ? this.access(node).receiver : null;
+        if (!receiver || receiver.kind !== NodeKind.IDENTIFIER) return null;
+        const owner = this.ancestor(node, NodeKind.CLASS);
+        if (!owner) return null;
+        const ownerName = owner.findChild(NodeKind.NAME).text;
+        if (receiver.text === 'this' || receiver.text === ownerName) return ownerName;
+        if (this.classType(node, receiver.text)) return receiver.text;
+        let classes: Node[];
+        try { classes = this.hierarchy(owner); } catch (_) { return null; }
+        for (const cls of classes) {
+            const content = cls.findChild(NodeKind.CONTENT);
+            if (!content) continue;
+            for (const declaration of content.children) {
+                if ([NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(declaration.kind) < 0) continue;
+                for (const field of declaration.findChildren(NodeKind.NAME_TYPE_INIT)) {
+                    const name = field.findChild(NodeKind.NAME), type = field.findChild(NodeKind.TYPE);
+                    if (name && type && name.text === receiver.text) return type.qualifiedName || type.text;
+                }
+            }
+        }
+        return null;
+    }
+
+    private isClassReceiver(node: Node, receiverClass: Node): boolean {
+        const receiver = node.kind === NodeKind.DOT ? node.children[0] : this.access(node).receiver;
+        if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || !receiverClass) return false;
+        return receiver.text === receiverClass.findChild(NodeKind.NAME).text;
     }
 
     private receiverClass(node: Node, receiverType: string): Node {
@@ -459,8 +495,10 @@ export class NativeNamespaces {
             this.fail('complex namespace receiver requires type-directed lowering');
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (owner && (receiver.text === 'this' || receiver.text === owner.findChild(NodeKind.NAME).text)) return;
+        receiverType = receiverType || this.receiverType(node);
         const receiverClass = this.receiverClass(node, receiverType);
-        if (!receiverClass || !this.findMember(receiverClass, access.uri, access.name, false))
+        const staticReceiver = receiverClass && this.isClassReceiver(node, receiverClass);
+        if (!receiverClass || !this.findMember(receiverClass, access.uri, access.name, staticReceiver))
             this.fail('namespace receiver type is not a proven ordinary class: ' + receiver.text);
     }
 

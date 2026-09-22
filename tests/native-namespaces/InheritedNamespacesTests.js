@@ -157,6 +157,10 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   execute(generate('package p {public namespace n="urn:typed-open"; use namespace n; public class Base {n function read():int{return 8;}} public class Child {public function call(value:Base):int{return value.read();}}}').replace(/^\s*import [^\r\n]+/gm,''));
   const typedOpen=new context.exports.Child();
   assert.equal(typedOpen.call(new context.exports.Base()),8,'typed receiver resolves an opened namespace member');
+  execute(generate('package p {public namespace n="urn:field-open"; use namespace n; public class Base {n function read():int{return 11;}} public class Holder {public var value:Base; public function Holder(){this.value=new Base();} public function call():int{return value.read();}}}').replace(/^\s*import [^\r\n]+/gm,''));
+  assert.equal(new context.exports.Holder().call(),11,'source-backed field type resolves an opened namespace member');
+  execute(generate('package p {public namespace n="urn:static-open"; use namespace n; public class Base {n static function read():int{return 13;}} public class Child {public function call():int{return Base.read();}}}').replace(/^\s*import [^\r\n]+/gm,''));
+  assert.equal(new context.exports.Child().call(),13,'class receiver resolves an opened static namespace member');
   console.log('inherited namespace native-class execution passed for '+ts.ScriptTarget[target]);
 }
 
