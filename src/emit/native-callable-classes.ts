@@ -611,7 +611,8 @@ export class NativeCallableClasses {
             + (this.generated ? '\n' + intrinsic + '.defineProperty(' + name + ', "prototype", {writable:false});\n'
                 + 'const ' + generation + ' = ' + provider + '.registerAS3GeneratedClass(' + name + ','
                 + this.generated.projection.emitDefinition(domainImport,intrinsic + '.array') + ');\n'
-                + this.generated.lexical.publication(name,baseName,domainImport,intrinsic) + '\n' : '');
+                + this.generated.lexical.publication(name,baseName,domainImport,intrinsic) + '\n'
+                + (this.generated.projection.binding.scriptGlobalExport ? 'const '+this.generated.lexical.scriptGlobal+'='+domainImport+'.'+this.generated.projection.binding.scriptGlobalExport+'('+name+');\n' : '') : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
             + ' {\n' + instanceTypes.join('\n') + '\n}\ninterface ' + constructorType
             + ' extends ' + functionType + ' {new(' + (ctor ? params(ctor, true) : '') + '): ' + name + '; prototype: ' + name + ';\n'

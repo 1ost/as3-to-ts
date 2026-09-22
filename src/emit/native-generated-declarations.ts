@@ -8,6 +8,10 @@ export interface NativeGeneratedDeclarationInput {
     providerModule: string;
     /** Explicit common AS3Type provider; required for source interface tokens. */
     interfaceProviderModule?: string;
+    /** Optional explicit script-global provider for generated lexical calls. */
+    scriptGlobalProviderModule?: string;
+    /** Explicit class subset; omission selects all planned source classes. */
+    scriptGlobalSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
     providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event'}};
 }
@@ -17,6 +21,7 @@ export interface NativeGeneratedDeclarationBinding {
     readonly tokenExport: string;
     readonly publishExport: string;
     readonly lexicalExport: string;
+    readonly scriptGlobalExport?: string;
     readonly interfaces: ReadonlyArray<string>;
 }
 export interface NativeGeneratedInterfaceBinding {
@@ -85,9 +90,12 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'sources', 'providers']);
     moduleName(data.providerModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
+    if (data.scriptGlobalProviderModule !== undefined) moduleName(data.scriptGlobalProviderModule);
+    if(data.scriptGlobalSources!==undefined&&(!data.scriptGlobalProviderModule||!Array.isArray(data.scriptGlobalSources)
+        ||new Set(data.scriptGlobalSources).size!==data.scriptGlobalSources.length))fail('script global source selection requires unique names and provider');
     if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
     if (data.providers !== undefined && !table(data.providers)) fail('provider table required');
     const providers = data.providers || {}, names = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
@@ -156,6 +164,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 fail('base requires a planned source declaration: ' + owner + ':' + base);
             bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
                 tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length,
+                ...(data.scriptGlobalProviderModule&&(!data.scriptGlobalSources||data.scriptGlobalSources.indexOf(owner)>=0) ? {scriptGlobalExport:'publishScript'+bindings.length} : {}),
                 interfaces: Object.freeze(declaredInterfaces)}));
         }
     });
@@ -174,8 +183,12 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         };
         walk(roots.get(owner));
     });
+    if(data.scriptGlobalSources&&data.scriptGlobalSources.some(name=>!bindings.some(binding=>binding.qname===name)))
+        fail('script global source must be a planned class');
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
+    if(data.scriptGlobalProviderModule)lines.push('import {createAS3ScriptDomain,instantiateAS3ScriptUnit} from '+JSON.stringify(data.scriptGlobalProviderModule)+';',
+        'const __scriptDomain=createAS3ScriptDomain();');
     if (interfaces.length) lines.push('import {defineAS3Interface,registerAS3Class} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     const emittedInterfaces = new Set<string>(), activeInterfaces = new Set<string>();
     const addInterface = (binding: NativeGeneratedInterfaceBinding): void => {
@@ -222,6 +235,12 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         // Opaque common-engine scopes indexed by exact native generation. These
         // compiler exports never become properties of the source Class value.
         lines.push('export const ' + binding.lexicalExport + '=new WeakMap<Function,any>();');
+        if(binding.scriptGlobalExport) {
+            const split=binding.qname.lastIndexOf('.'),local=binding.qname.slice(split+1),uri=split<0?'':binding.qname.slice(0,split);
+            const declaration={sourceId:binding.qname,sourceSha256:sourceHashes[binding.qname],bindings:[{name:local,uri,kind:'constant',type:name}]};
+            lines.push('export const '+binding.scriptGlobalExport+'=(value:Function)=>instantiateAS3ScriptUnit(__scriptDomain,'+JSON.stringify(declaration)
+                +',()=>[{name:'+JSON.stringify(local)+',uri:'+JSON.stringify(uri)+',value}]).global;');
+        }
         active.delete(binding.qname); emitted.add(binding.qname);
     };
     bindings.forEach(add);

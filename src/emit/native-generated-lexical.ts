@@ -18,6 +18,7 @@ export class NativeGeneratedLexical {
     readonly own: Trait[] = [];
     readonly provider: string;
     readonly scope: string;
+    readonly scriptGlobal: string;
     readonly ownClass: Node;
     readonly typedLocals: NativeTypedLocals;
     readonly nestedFunctions: NestedLocalFunction[] = [];
@@ -26,6 +27,7 @@ export class NativeGeneratedLexical {
         let serial=0;
         const fresh=(label:string):string=>{let value:string;do{value='__as3_generated_'+label+'_'+serial++;}while(source.indexOf(value)>=0);return value;};
         this.provider=fresh('lexicalProvider');this.scope=fresh('lexicalScope');
+        this.scriptGlobal=fresh('scriptGlobal');
         const overridden = new Set<Trait>();
         const signature=(trait:Trait):string=>JSON.stringify(trait.node.findChild(K.PARAMETER_LIST).children.map(p=>{
             const value=p.findChild(K.NAME_TYPE_INIT),type=value&&value.findChild(K.TYPE);
@@ -204,18 +206,42 @@ export class NativeGeneratedLexical {
         else if(node.kind===K.CALL){target=node.children[0];operation='call';args=node.children[1];}
         else if([K.DELETE,K.PRE_INC,K.POST_INC,K.PRE_DEC,K.POST_DEC].indexOf(node.kind)>=0){if(resolve(node.children[0]))fail('lexical update/delete lowering required');return false;}
         if(node.kind===K.IDENTIFIER&&node.parent&&node.parent.kind===K.DOT&&node.parent.children[1]===node)return false;
+        if(target.kind===K.DOT&&target.children[1]&&['call','apply'].indexOf(target.children[1].text)>=0) {
+            const inner=target.children[0],slot=resolve(inner);
+            if(slot&&slot.trait.kind==='variable') {
+                const ref=slot.trait.type&&this.plan.references.find(r=>r.owner===slot.trait.owner&&r.start===slot.trait.type.start&&r.end===slot.trait.type.end);
+                if(operation!=='call'||!ref||ref.kind!=='intrinsic'||ref.identity!=='Function'||slot.trait.static)
+                    fail('lexical Function intrinsic requires direct instance call');
+                let helper='__as3_generated_callProperty';while(emitter.source.indexOf(helper)>=0)helper+='_';
+                emitter.ensureImportIdentifier('as3CallProperty as '+helper,emitter.generated.propertyModule,false);
+                emitter.nativeSourceHelpers.add(helper);
+                // Read the Function first, then evaluate all source arguments,
+                // then resolve/invoke its intrinsic (including a null error).
+                emitter.catchup(node.start);
+                emitter.insert('(<any>(function(fn:any,values:any[]){return '+helper+'(fn,'+JSON.stringify(target.children[1].text)+',()=>values);})(');
+                emitter.skipTo(inner.start);visit(emitter,inner);emitter.catchup(inner.end);
+                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                emitter.insert(']))');emitter.skipTo(node.end);return true;
+            }
+        }
         const found=resolve(target);if(!found)return false;
         if(operation==='set'&&(node.children[1].text!=='='||found.trait.kind!=='variable'))fail('lexical assignment kind');
-        if(operation==='call'&&found.trait.kind!=='method')fail('lexical value invocation authority');
+        const fieldCall=operation==='call'&&found.trait.kind==='variable';
+        if(fieldCall) {
+            const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
+            if(!ref||ref.kind!=='intrinsic'||ref.identity!=='Function'||found.trait.static)fail('lexical value invocation authority');
+            if(!found.receiver&&!this.plan.bindings.find(b=>b.qname===this.owner).scriptGlobalExport)fail('lexical Function call requires caller script global authority');
+        }
         emitter.catchup(node.start);
         if(operation!=='set')emitter.insert('(<any>');
-        emitter.insert(this.provider+'.'+(operation==='get'?'as3GetLexicalMember':operation==='set'?'as3SetLexicalMember':'as3CallLexicalMember')+'(');
+        emitter.insert(this.provider+'.'+(operation==='get'?'as3GetLexicalMember':operation==='set'?'as3SetLexicalMember':fieldCall?'as3CallLexicalFunction':'as3CallLexicalMember')+'(');
         if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
         else emitter.insert(found.trait.static?emitter.classFactory.value:'this');
         emitter.insert(','+found.trait.access);
         if(operation==='set'){emitter.insert(',');emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);}
         if(operation==='call'){
             emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');
+            if(fieldCall&&!found.receiver)emitter.insert(','+this.scriptGlobal);
         }
         emitter.insert(operation==='set'?')':'))');emitter.skipTo(node.end);return true;
     }

@@ -46,6 +46,16 @@ export class NativeGeneratedEmission {
         }
         if (this.projection.metadata.isDynamic) fail('dynamic source property routing required');
         this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source,typedLocals);
+        if(this.projection.binding.scriptGlobalExport) {
+            // Publishing a class into a script unit consumes that unit identity.
+            // Retry/global identity after a source static initializer fails needs
+            // independent evidence; never silently allocate a replacement global.
+            const members=this.lexical.ownClass.findChild(K.CONTENT).children;
+            if(members.some(member=>[K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0
+                &&member.findChild(K.MOD_LIST)&&member.findChild(K.MOD_LIST).children.some(mod=>mod.text==='static')
+                &&member.findChildren(K.NAME_TYPE_INIT).some(value=>!!value.findChild(K.INIT))))
+                fail('script global with static initializer requires retry identity authority');
+        }
         if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => p.name === t.name)))
             fail('public/lexical same-name lookup requires namespace authority');
         this.projection.staticTraits.filter(trait => trait.kind === 'constant').forEach(trait => {
