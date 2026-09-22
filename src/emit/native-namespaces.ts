@@ -529,6 +529,16 @@ export class NativeNamespaces {
             // An explicit AS3 cast is authenticated type authority for a
             // namespace-bearing member on the cast target.
             return receiver.children[0].children[2].text;
+        } else if (receiver.kind === NodeKind.CALL && receiver.children.length >= 2
+            && receiver.children[0].kind === NodeKind.IDENTIFIER
+            && receiver.findChild(NodeKind.ARGUMENTS)) {
+            // The parser represents the constructor-style AS3 cast
+            // `Target(value)` as a CALL node. Preserve its target type for
+            // namespace checks on the following dot access, just as for the
+            // explicit `value as Target` form.
+            const target = this.classType(node, receiver.children[0].text);
+            if (target) return receiver.children[0].text;
+            return null;
         } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
             && receiver.children[0].kind === NodeKind.IDENTIFIER
             && (receiver.children[0].text === 'this' || receiver.children[0].text === ownerName)

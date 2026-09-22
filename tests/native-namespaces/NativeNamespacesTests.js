@@ -114,6 +114,16 @@ const castReceiverSource = `package example {
 }`;
 assert.match(generate(castReceiverSource), /__as3_namespace_member_/);
 
+const constructorCastReceiverSource = `package example {
+  import alias.same;
+  use namespace same;
+  public class CastTarget { same function apply():void {} }
+  public class CastReceiver {
+    public function read(value:Object):void { CastTarget(value).apply(); }
+  }
+}`;
+assert.match(generate(constructorCastReceiverSource), /__as3_namespace_member_/);
+
 const ast = parse('NamespaceFixture.as', source);
 let namespaceNodes = 0;
 (function walk(node) {
