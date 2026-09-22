@@ -61,6 +61,7 @@ export class NativeNamespaces {
         this.walk(root, node => {
             if ([NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET, NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(node.kind) < 0) return;
             const mods = node.findChild(NodeKind.MOD_LIST);
+            if (!mods) return;
             const qualifier = mods && mods.children.filter(mod =>
                 ['public', 'private', 'protected', 'internal', 'static', 'override', 'final', 'native', 'dynamic'].indexOf(mod.text) < 0);
             if (!qualifier || !qualifier.length) return;
@@ -253,7 +254,14 @@ export class NativeNamespaces {
         // declarations outside a package.
         const content = owner ? owner.findChild(NodeKind.CONTENT)
             : this.root.findChildren(NodeKind.CONTENT)[0];
-        const imports = content ? content.findChildren(NodeKind.IMPORT) : [];
+        // Top-level declarations after a package block share the compilation
+        // unit's imports in AS3. Keep their local imports too, while avoiding
+        // duplicate entries when a unit has both forms.
+        const packageNode = this.root.findChild(NodeKind.PACKAGE);
+        const packageContent = packageNode ? packageNode.findChild(NodeKind.CONTENT) : null;
+        const imports = (packageContent ? packageContent.findChildren(NodeKind.IMPORT) : [])
+            .concat(content ? content.findChildren(NodeKind.IMPORT) : [])
+            .filter((value, index, all) => all.findIndex(other => other.text === value.text) === index);
         const explicit = imports.filter(value => value.text.split('.').pop() === name).map(value => value.text);
         if (explicit.length > 1 && explicit.some(value => value !== explicit[0])) this.fail('ambiguous namespace import: ' + name);
         if (explicit.length) return explicit;
@@ -324,7 +332,9 @@ export class NativeNamespaces {
         if (!receiver) {
             const owner = this.ancestor(node, NodeKind.CLASS);
             const instanceMember = this.findMember(owner, uri, name, false);
-            const staticMember = this.findMember(owner, uri, name, true);
+            // Static namespace members remain addressable through an
+            // inherited class, just like ordinary AS3 static members.
+            const staticMember = this.findMember(owner, uri, name, true, false, true);
             if (instanceMember && staticMember) this.fail('ambiguous implicit namespace receiver');
             implicitMember = instanceMember || staticMember;
             if (!implicitMember) this.fail('implicit namespace receiver requires a proven member: ' + name);
@@ -585,6 +595,7 @@ export class NativeNamespaces {
         const name = node.children[1].text;
         if (!Array.from(this.members.values()).some(member => member.name === name)) return;
         const receiverClass = receiverType && this.classType(node, receiverType);
+        if (!receiverClass && receiverType) return;
         const staticReceiver = receiverClass && this.isClassReceiver(node, receiverClass);
         const owners = this.hierarchy(owner);
         this.members.forEach(member => {
