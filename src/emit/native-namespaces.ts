@@ -552,6 +552,25 @@ export class NativeNamespaces {
             if (method && base) return this.methodReturnType(base, method.text);
             return null;
         } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
+            && receiver.children[0].kind === NodeKind.DOT
+            && receiver.children[1].kind === NodeKind.LITERAL
+            && /^(?:\s*\([^)]*\)\s*\.\s*[A-Za-z_$][\w$]*\s*::|\s*\.\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\.\s*[A-Za-z_$][\w$]*\s*::)/.test(this.source.slice(node.end))) {
+            // A namespace selector can follow a typed call reached through a
+            // field chain, such as `flow.flowComposer.getControllerAt(i).ns::member`.
+            // Keep this inference restricted to that AST position so ordinary
+            // nested dots remain fail-closed until their own type contract is
+            // proven.
+            const first = receiver.children[0];
+            const baseType = first.kind === NodeKind.DOT && first.children.length === 2
+                && first.children[0].kind === NodeKind.IDENTIFIER
+                && (first.children[0].text === 'this' || first.children[0].text === ownerName)
+                && first.children[1].kind === NodeKind.LITERAL
+                ? this.memberReturnType(owner, first.children[1].text)
+                : this.receiverType(first);
+            const base = this.classType(node, baseType);
+            if (base) return this.memberReturnType(base, receiver.children[1].text);
+            return null;
+        } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
             && receiver.children[0].kind === NodeKind.IDENTIFIER
             && (receiver.children[0].text === 'this' || receiver.children[0].text === ownerName)
             && receiver.children[1].kind === NodeKind.LITERAL) {
@@ -559,6 +578,10 @@ export class NativeNamespaces {
             // such as this._flowComposer.updateLengths().
             fieldName = receiver.children[1].text;
         } else return null;
+        if (fieldName && /^(?:\s*\([^)]*\)\s*\.\s*[A-Za-z_$][\w$]*\s*::|\s*\.\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\.\s*[A-Za-z_$][\w$]*\s*::)/.test(this.source.slice(node.end))) {
+            const local = this.localVariableType(node, fieldName);
+            if (local) return local;
+        }
         let classes: Node[];
         try { classes = this.hierarchy(owner); } catch (_) { return null; }
         for (const cls of classes) {
@@ -586,6 +609,27 @@ export class NativeNamespaces {
         return null;
     }
 
+    private localVariableType(node: Node, name: string): string {
+        let fn: Node = null;
+        for (const kind of [NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET]) {
+            fn = this.ancestor(node, kind);
+            if (fn) break;
+        }
+        if (!fn) return null;
+        let result: string = null;
+        this.walk(fn, value => {
+            if (result || [NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(value.kind) < 0) return;
+            for (const field of value.findChildren(NodeKind.NAME_TYPE_INIT)) {
+                const declarationName = field.findChild(NodeKind.NAME), type = field.findChild(NodeKind.TYPE);
+                if (declarationName && type && declarationName.text === name) {
+                    result = type.qualifiedName || type.text;
+                    return;
+                }
+            }
+        });
+        return result;
+    }
+
     private methodReturnType(owner: Node, name: string): string {
         for (const cls of this.hierarchy(owner)) {
             const content = cls.findChild(NodeKind.CONTENT);
@@ -593,6 +637,29 @@ export class NativeNamespaces {
                 if (declaration.kind !== NodeKind.FUNCTION) continue;
                 const declarationName = declaration.findChild(NodeKind.NAME), type = declaration.findChild(NodeKind.TYPE);
                 if (declarationName && type && declarationName.text === name) return type.qualifiedName || type.text;
+            }
+            const typed = (this.typedMembers.get(cls) || []).find(value => value && value.name === name);
+            if (typed) return typed.type;
+        }
+        return null;
+    }
+
+    private memberReturnType(owner: Node, name: string): string {
+        for (const cls of this.hierarchy(owner)) {
+            const content = cls.findChild(NodeKind.CONTENT);
+            if (content) for (const declaration of content.children) {
+                if ([NodeKind.GET, NodeKind.SET].indexOf(declaration.kind) >= 0) {
+                    const declarationName = declaration.findChild(NodeKind.NAME), type = declaration.findChild(NodeKind.TYPE);
+                    if (declarationName && type && declarationName.text === name)
+                        return type.qualifiedName || type.text;
+                }
+                if ([NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(declaration.kind) >= 0) {
+                    for (const field of declaration.findChildren(NodeKind.NAME_TYPE_INIT)) {
+                        const declarationName = field.findChild(NodeKind.NAME), type = field.findChild(NodeKind.TYPE);
+                        if (declarationName && type && declarationName.text === name)
+                            return type.qualifiedName || type.text;
+                    }
+                }
             }
             const typed = (this.typedMembers.get(cls) || []).find(value => value && value.name === name);
             if (typed) return typed.type;

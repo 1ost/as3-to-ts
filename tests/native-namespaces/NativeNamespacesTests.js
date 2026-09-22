@@ -136,6 +136,23 @@ const accessorReceiverSource = `package example {
 }`;
 assert.match(generate(accessorReceiverSource), /__as3_namespace_member_/);
 
+const nestedMethodReceiverSource = `package example {
+  import alias.same;
+  use namespace same;
+  public interface ControllerSource {
+    function getControllerAt(index:int):ControllerTarget;
+  }
+  public class Holder {
+    public var source:ControllerSource;
+  }
+  public class ControllerTarget { same function apply():void {} }
+  public class NestedMethodReceiver {
+    private var holder:Holder;
+    public function read(index:int):void { holder.source.getControllerAt(index).apply(); }
+  }
+}`;
+assert.match(generate(nestedMethodReceiverSource), /__as3_namespace_member_/);
+
 
 const ast = parse('NamespaceFixture.as', source);
 let namespaceNodes = 0;
