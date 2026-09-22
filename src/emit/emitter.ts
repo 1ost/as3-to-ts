@@ -4078,6 +4078,13 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 function emitDot(emitter:Emitter, node:Node) {
 	if (emitArraySortConstant(emitter, node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
+	const receiver = node.children[0];
+	const receiverDefinition = receiver && receiver.kind === NodeKind.IDENTIFIER
+		? emitter.findDefInScope(receiver.text) : null;
+	if (emitter.namespaces.lowerOpenedAccess(node, receiverDefinition && receiverDefinition.type)) {
+		emitNamespaceAccess(emitter, node);
+		return;
+	}
 	emitter.namespaces.checkDot(node);
 	let dotSibling = node.nextSibling;
 	let isConditionalCompilation = (dotSibling && dotSibling.kind === NodeKind.BLOCK);

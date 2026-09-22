@@ -154,6 +154,9 @@ for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
   execute(generate('package p {public namespace n="urn:super-field"; public class FieldBase {n var x:int=5;} public class FieldChild extends FieldBase {public function read():* {return super.n::x;}}}').replace(/^\s*import [^\r\n]+/gm,''));
   const fieldChild=new context.exports.FieldChild();
   assert.equal(fieldChild.read(),5,'super namespace field reads the inherited instance slot');
+  execute(generate('package p {public namespace n="urn:typed-open"; use namespace n; public class Base {n function read():int{return 8;}} public class Child {public function call(value:Base):int{return value.read();}}}').replace(/^\s*import [^\r\n]+/gm,''));
+  const typedOpen=new context.exports.Child();
+  assert.equal(typedOpen.call(new context.exports.Base()),8,'typed receiver resolves an opened namespace member');
   console.log('inherited namespace native-class execution passed for '+ts.ScriptTarget[target]);
 }
 

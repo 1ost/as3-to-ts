@@ -363,6 +363,33 @@ export class NativeNamespaces {
         return this.findMember(owner, access.uri, access.name, receiver !== 'this');
     }
 
+    /** Lower a dot access whose typed receiver resolves an opened namespace member. */
+    lowerOpenedAccess(node: Node, receiverType: string): boolean {
+        if (!node || node.kind !== NodeKind.DOT || node.children.length !== 2
+            || node.children[0].kind !== NodeKind.IDENTIFIER || !receiverType) return false;
+        const owner = this.ancestor(node, NodeKind.CLASS);
+        const receiverClass = this.classType(node, receiverType);
+        if (!owner || !receiverClass) return false;
+        const name = node.children[1].text;
+        const pkg = this.ancestor(node, NodeKind.PACKAGE);
+        const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
+            .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+        const candidates: {member: NamespaceMember; qualifier: string}[] = [];
+        opened.forEach(directive => {
+            const uri = this.resolve(directive, directive.text);
+            const member = this.findMember(receiverClass, uri, name, false);
+            if (member && !candidates.some(value => value.member === member))
+                candidates.push({member, qualifier:directive.text});
+        });
+        if (!candidates.length) return false;
+        if (candidates.length !== 1) this.fail('ambiguous open namespace member: ' + name);
+        const selected = candidates[0];
+        this.openedAccesses.set(node, {uri:selected.member.uri, name,
+            receiver:node.children[0], implicitMember:null, qualifier:selected.qualifier});
+        node.kind = NodeKind.NAMESPACE_ACCESS;
+        return true;
+    }
+
     /** Resolve an unqualified identifier opened by a package/class use directive. */
     openedIdentifier(node: Node, isLocal: boolean): NamespaceMember {
         if (isLocal || !node || node.kind !== NodeKind.IDENTIFIER) return null;
