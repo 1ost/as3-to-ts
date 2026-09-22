@@ -4158,7 +4158,14 @@ function emitUnsupportedE4X(emitter:Emitter, node:Node):void {
 
 function emitLiteral(emitter:Emitter, node:Node):void {
 	emitter.catchup(node.start);
-	emitter.insert(node.text);
+	// ECMAScript treats raw U+2028/U+2029 as source line terminators even
+	// inside legacy string literals. AS3 permits those characters in strings,
+	// so preserve the value while making the generated TypeScript parseable.
+	const quote = node.text && node.text.charAt(0);
+	const text = (quote === '"' || quote === "'") && node.text.charAt(node.text.length - 1) === quote
+		? node.text.replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
+		: node.text;
+	emitter.insert(text);
 	emitter.skipTo(node.end);
 }
 
