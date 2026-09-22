@@ -200,8 +200,15 @@ export class NativeReferenceCoercion {
             const value=group.findChildren(K.NAME_TYPE_INIT).find(field=>field.findChild(K.NAME).text===member);
             if(!value)continue;
             const type=value.findChild(K.TYPE),init=value.findChild(K.INIT);
-            if(!type||!init||value.findChild(K.VECTOR)||['String','Number','int','uint','Boolean'].indexOf(type.text)<0)
+            if(!type||!init||value.findChild(K.VECTOR))
                 fail('consumer constant requires a primitive literal declaration');
+            if(['String','Number','int','uint','Boolean'].indexOf(type.text)<0) {
+                const reference=plan.references.find(item=>item.owner===identity&&item.start===type.start&&item.end===type.end);
+                if(!this.generated||!reference||reference.kind!=='declaration'
+                    &&!(reference.kind==='intrinsic'&&['Object','Array'].indexOf(reference.identity)>=0))
+                    fail('consumer constant requires a primitive literal declaration');
+                return {type:type.text,literal:null};
+            }
             const end=(node:Node):number=>node.children.reduce((last,child)=>Math.max(last,end(child)),Math.max(node.start,node.end));
             const literal=source.slice(init.start,end(init)).trim();
             if(!/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal))

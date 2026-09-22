@@ -25,7 +25,7 @@ for(const body of ['Child.CHANGE="bad";','Child.CHANGE++;','++Child.CHANGE;','Ch
  const source='package {import consumerconstants.Child;public class Guard {public function probe():*{'+body+'}}}';
  assert.throws(()=>emit(parse('Guard.as',source),source,consumer),/AS3_[A-Z_]+UNSUPPORTED/);guards++;
 }
-for(const declaration of ['public static const CHANGE:String=make();public static function make():*{return "x";}','private static const CHANGE:String="x";','public static const CHANGE:Array=[];']){
+for(const declaration of ['public static const CHANGE:String=make();public static function make():*{return "x";}','private static const CHANGE:String="x";','public static const CHANGE:Function=null;']){
  const source='package consumerconstants {public class Child {'+declaration+'}}';
  const changed={...sources,'consumerconstants.Child':{source,sourceSha256:hash(source)}};
  const p=api.createNativeGeneratedDeclarationPlan({scope:'guard',providerModule:provider('AS3GeneratedClass'),sources:changed});

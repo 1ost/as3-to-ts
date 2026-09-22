@@ -23,7 +23,7 @@ const options={customVisitors:[],importModules,definitionsByNamespace:{constants
   nativeCallableStringModule:provider('AS3String')};
 let guards=0;
 const reject=(member)=>{const source='package constants {public class Guard {'+member+'}}';const plan=api.createNativeGeneratedDeclarationPlan({scope:'guard',providerModule:provider('AS3GeneratedClass'),sources:{'constants.Guard':{source,sourceSha256:hash(source)}}});assert.throws(()=>emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan,module:'./guard-domain'}}),/AS3_[A-Z_]+UNSUPPORTED/,member);guards++;};
-for(const member of ['public static const value:int=make();public static function make():*{return 7;}', 'public static const value:Array=[];', 'public const value:int=7;', 'private static const value:int=7;', 'public static const value:int;', 'public static const value:Number=NaN;'])reject(member);
+for(const member of ['public static const value:int=make();public static function make():*{return 7;}', 'public static const value:Function=null;', 'public const value:int=7;', 'private static const value:int=7;', 'public static const value:int;', 'public static const value:Number=NaN;'])reject(member);
 fs.writeFileSync(path.join(run,'domain.ts'),plan.moduleSource);
 const emitted=[];
 for(const binding of plan.bindings) {

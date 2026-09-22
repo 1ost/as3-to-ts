@@ -1184,9 +1184,14 @@ function emitInterface(emitter:Emitter, node:Node):void {
 					let params = parametersListNode.children;
 					for (var i = 0; i < params.length; i++) {
 						let parameterNode = params[i];
-						if (parameterNode.kind == NodeKind.PARAMETER)
-						{
-							let nameTypeInitNode = parameterNode.findChild(NodeKind.NAME_TYPE_INIT);
+                        if (parameterNode.kind == NodeKind.PARAMETER)
+                        {
+                            const rest=parameterNode.findChild(NodeKind.REST);
+                            if(rest) {
+                                emitter.catchup(rest.start);emitter.insert('...'+rest.text+': any[]');emitter.skipTo(rest.end);
+                                continue;
+                            }
+                            let nameTypeInitNode = parameterNode.findChild(NodeKind.NAME_TYPE_INIT);
 							if (nameTypeInitNode)
 							{
 								let nameNode = nameTypeInitNode.findChild(NodeKind.NAME);
@@ -2246,7 +2251,9 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 	const mods = declaration && declaration.findChild(NodeKind.MOD_LIST);
 	if (emitter.classFactory && declaration && declaration.parent === emitter.classFactory.node.findChild(NodeKind.CONTENT)
 		&& mods && mods.children.some(mod => mod.text === 'static')) {
-        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST) {
+        const deferred=emitter.generated && declaration.kind===NodeKind.CONST_LIST
+            && emitter.generated.deferredConstants[node.findChild(NodeKind.NAME).text];
+        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred) {
             // Literal constants are installed before publication by the common
             // generated-class provider, not rewritten as later mutable stores.
             visitNodes(emitter,node.children);
@@ -2263,8 +2270,9 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 			visitNode(emitter, init);
 			emitter.catchup(getEffectiveNodeEnd(init));
 			const lexical = emitter.lexical && emitter.lexical.trait(node.findChild(NodeKind.NAME).text, true);
-            emitter.classFactory.fields.push(emitter.classFactory.value + '[' + (lexical ? lexical.key : JSON.stringify(node.findChild(NodeKind.NAME).text))
-				+ '] = ' + emitter.output.slice(start) + ';');
+            emitter.classFactory.fields.push(deferred ? deferred+'('+emitter.output.slice(start)+');'
+                : emitter.classFactory.value + '[' + (lexical ? lexical.key : JSON.stringify(node.findChild(NodeKind.NAME).text))
+                    + '] = ' + emitter.output.slice(start) + ';');
 			emitter.output = emitter.output.slice(0, start);
 		}
 		const initial = type === 'int' || type === 'uint' ? '0' : type === 'Number' ? '(0 / 0)'
@@ -4524,6 +4532,9 @@ function emitConsumerLiteralConstant(emitter:Emitter,node:Node):boolean {
     const expression=outerEncapsulatedExpression(node),operation=expression.parent;
     if(operation&&operation.children[0]===expression&&[NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE].indexOf(operation.kind)>=0)
         throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: consumer constant mutation');
+    // Reference constants require actual class initialization and storage reads.
+    // The generated lazy-class path also preserves same-class cinit identity.
+    if(constant.literal===null)return false;
     const module=emitter.options.nativeSignaturePropertyModule;generatedModule(module);
     const coerce=propertyHelper(emitter,'coerceAS3PropertyValue',module);
     emitter.catchup(node.start);emitter.insert('(<any>'+coerce+'('+constant.literal+','+JSON.stringify(constant.type)+'))');emitter.skipTo(node.end);

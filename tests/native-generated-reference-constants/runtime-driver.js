@@ -1,0 +1,47 @@
+const p=load('AS3Property'),nc=load('nativeClass'),errors=load('AS3SourceError');
+const get=name=>nc.readNativeClass(load(name)[name],'value');
+const rows=[],row=(id,value)=>rows.push({id,value}),Trace=get('InitTrace');
+function failure(fn){try{fn();return [];}catch(e){return e===Trace.sentinel?['sentinel']:errors.isAS3SourceError(e)?[p.as3GetProperty(e,'name'),p.as3GetProperty(e,'errorID')]:[e.name,e.errorID];}}
+row('before-reference-read',Trace.events.concat());
+const Consumer=get('Consumer'),nil=Consumer.read();
+row('consumer-triggers-initialization',Trace.events.concat());
+const SelfNode=get('SelfNode');
+row('self-constructor-defaults',nil.initial.concat());
+row('self-nil-fields',[nil.empty,nil.tail===null]);
+row('stable-identity',[nil===SelfNode.NIL,nil===SelfNode.ALIAS,nil===SelfNode.read(),nil===Consumer.read()]);
+row('consumer-field-identity',new Consumer().node===nil);
+row('null-reference-constant',SelfNode.ABSENT===null);
+row('array-identity',SelfNode.ITEMS[0]===nil);
+SelfNode.ITEMS.push('mutable');row('array-contents-mutable',[SelfNode.ITEMS.length,SelfNode.ITEMS[1]]);
+const next=new SelfNode(nil);
+row('ordinary-instance',[next.tail===nil,next.empty,next.initial]);
+row('duplicate-empty-rejected',failure(()=>new SelfNode()));
+row('constant-write',failure(()=>p.as3SetProperty(SelfNode,'NIL',Trace.mark('write-rhs',next))));
+row('constant-write-null',failure(()=>p.as3SetProperty(SelfNode,'NIL',null)));
+row('constant-delete',p.as3DeleteProperty(SelfNode,'NIL'));
+row('constant-still-original',SelfNode.NIL===nil);
+row('constant-write-order',Trace.events.concat());Trace.events=[];
+row('retry-before',[Trace.attempts,Trace.instances.length]);
+row('retry-first-error',failure(()=>get('RetryNode').NIL));
+row('retry-first-effects',[Trace.events.concat(),Trace.instances.length,Trace.instances[0].sawNull]);
+const RetryNode=get('RetryNode'),retried=RetryNode.NIL;
+row('retry-second-effects',[Trace.events.concat(),Trace.instances.length,retried.sawNull]);
+row('retry-fresh-identity',[retried!==Trace.instances[0],retried===Trace.instances[1],retried===get('RetryNode').NIL]);
+row('retry-completed',[RetryNode.RESULT.ok,Trace.attempts]);
+if(specs.has('SlotList')) {
+ const SlotList=get('SlotList'),original=SlotList.NIL;
+ row('slotlist-nil',[original===SlotList.NIL,original.head===null,original.tail===null,original.nonEmpty,original.length]);
+ row('slotlist-duplicate-empty',failure(()=>new SlotList(null,null)));
+ row('slotlist-null-head',failure(()=>new SlotList(null,original)));
+ const Signal=get('Signal'),Slot=get('Slot'),signal=new Signal();
+ const listener=load('AS3Invocation').registerAS3Function(function(){},load('AS3ScriptGlobal').getAS3BuiltinScriptGlobal(),0);
+ const slot=new Slot(listener,signal),list=new SlotList(slot);
+ row('slotlist-default-tail',[list.head===slot,list.tail===original,list.nonEmpty,list.length]);
+ row('slotlist-prepend',[list.prepend(slot).tail===list,list.prepend(slot).length]);
+ row('slotlist-empty-append',[original.append(null)===original,original.append(slot).tail===original]);
+ row('slotlist-filter-to-nil',list.filterNot(listener)===original);
+ row('signal-initial-list',signal.numListeners);
+ const added=signal.add(listener);
+ row('signal-add-remove',[signal.numListeners,signal.remove(listener)===added,signal.numListeners]);
+}
+globalThis.result=rows;

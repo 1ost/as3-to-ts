@@ -25,6 +25,7 @@ export class NativeGeneratedEmission {
     readonly eventBase: {qname:string; referenceExport:string; eventBaseExport?:string};
     readonly sources: {[qname: string]: string} = Object.create(null);
     readonly classes: {[qname: string]: 'lazy' | 'ready'} = Object.create(null);
+    readonly deferredConstants: {[name: string]: string} = Object.create(null);
     constructor(source: string, readonly options: NativeGeneratedEmissionOptions,
         readonly registrar: string, readonly helpers: NativeClassHelperModules,
         readonly lexicalModule: string, readonly propertyModule: string, typedLocals = false) {
@@ -59,7 +60,10 @@ export class NativeGeneratedEmission {
         if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => p.name === t.name)))
             fail('public/lexical same-name lookup requires namespace authority');
         this.projection.staticTraits.filter(trait => trait.kind === 'constant').forEach(trait => {
-            if (['int','uint','Number','Boolean','String'].indexOf(trait.type as string) < 0)
+            const deferred = ['int','uint','Number','Boolean','String'].indexOf(trait.type as string) < 0;
+            const referenceExport=typeof trait.type==='string'?null:trait.type.referenceExport;
+            if (deferred && trait.type !== 'Array' && trait.type !== 'Object'
+                && (!referenceExport || !options.plan.bindings.some(binding=>binding.tokenExport===referenceExport)))
                 fail('static constant type requires initialization authority');
             const members = this.lexical.ownClass.findChild(K.CONTENT).children;
             let literal: string;
@@ -72,8 +76,17 @@ export class NativeGeneratedEmission {
                     if (init) literal = source.slice(init.start,initializerEnd(init)).trim();
                 });
             });
-            // Only source literals are early storage: computed constants need
-            // their own initialization/reentrancy evidence and remain held.
+            if (deferred) {
+                if (!literal) fail('reference static constant requires explicit initializer');
+                if (members.some(member=>member.kind===K.CLASS_INITIALIZER))
+                    fail('reference constants with class-body statements require interleaving authority');
+                let name='__as3_initializeStaticConstant_'+Object.keys(this.deferredConstants).length;
+                while(source.indexOf(name)>=0)name+='_';
+                this.deferredConstants[trait.name]=name;
+                return;
+            }
+            // Primitive literals are early storage. Computed primitive constants
+            // still require their own source initialization authority.
             if (!literal || !/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal))
                 fail('computed static constant initialization requires source authority');
         });
@@ -82,6 +95,6 @@ export class NativeGeneratedEmission {
             this.classes[binding.qname] = 'lazy';
         });
         options.plan.nativeBindings.forEach(binding => this.classes[binding.qname] = 'ready');
-        Object.freeze(this.sources); Object.freeze(this.classes); Object.freeze(this);
+        Object.freeze(this.sources); Object.freeze(this.classes); Object.freeze(this.deferredConstants); Object.freeze(this);
     }
 }

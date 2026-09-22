@@ -450,8 +450,13 @@ export class NativeCallableClasses {
                 (isStatic ? staticTypes : instanceTypes).push((constant ? 'readonly ' : '') + key + ': ' + type(member) + ';');
                 if (constant) {
                     if (!member.initializer) this.fail('generated static constant literal missing');
-                    definitions.push(provider + '.defineAS3GeneratedStaticConstant(' + destination + ',' + encoded + ','
-                        + JSON.stringify(constant.type) + ',' + text(member.initializer) + ');');
+                    const deferred=this.generated.deferredConstants[key];
+                    const constantType=constant.type==='Array'?'{name:"Array",reference:'+intrinsic+'.array}'
+                        : typeof constant.type==='string'?JSON.stringify(constant.type)
+                        : '{name:'+JSON.stringify(constant.type.name)+',reference:'+domainImport+'.'+constant.type.referenceExport+'}';
+                    definitions.push(deferred ? 'const '+deferred+'='+provider+'.declareAS3GeneratedStaticConstant('+destination+','+encoded+','+constantType+');'
+                        : provider + '.defineAS3GeneratedStaticConstant(' + destination + ',' + encoded + ','
+                            + constantType + ',' + text(member.initializer) + ');');
                 }
                 if (isStatic && !this.generated) definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
                     + ', {value: ' + (member.initializer ? text(member.initializer) : 'void 0') + ', writable:true, enumerable:true, configurable:false});');
