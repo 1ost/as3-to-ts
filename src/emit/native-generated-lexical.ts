@@ -79,7 +79,23 @@ export class NativeGeneratedLexical {
             if([K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0)member.findChildren(K.NAME_TYPE_INIT).forEach(v=>memberNames.push(v.findChild(K.NAME).text));
             else if(member.findChild(K.NAME))memberNames.push(member.findChild(K.NAME).text);
         });
+        const forInTarget=(node:Node):void=>{
+            if(node.kind!==K.FORIN)return;
+            const target=node.children[0].children[0];
+            if(!target||target.kind!==K.IDENTIFIER)fail('for-in requires an existing wildcard slot');
+            for(let scope=node.parent;scope;scope=scope.parent){
+                if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===target.text)fail('catch-shadow for-in target held');
+                if(scope.kind!==K.FUNCTION&&scope.kind!==K.LAMBDA)continue;
+                const declarations:Node[]=[];
+                scope.findChild(K.PARAMETER_LIST).children.forEach(p=>{const d=p.findChild(K.NAME_TYPE_INIT);if(d)declarations.push(d);});
+                const collect=(n:Node):void=>{if(n.kind===K.FUNCTION||n.kind===K.LAMBDA)return;if([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(n.kind)>=0)declarations.push(...n.findChildren(K.NAME_TYPE_INIT));n.children.forEach(collect);};collect(scope.findChild(K.BLOCK));
+                const slot=declarations.find(d=>d.findChild(K.NAME).text===target.text);
+                if(slot){if(slot.findChild(K.TYPE)&&slot.findChild(K.TYPE).text!=='*')fail('typed for-in target held');return;}
+            }
+            fail('for-in target has no source local ownership');
+        };
         const check=(node:Node):void=>{
+            forInTarget(node);
             if(node.kind===K.LAMBDA){
                 let method=node.parent;while(method&&method.parent!==content)method=method.parent;
                 if(!typedLocals||!method||method.kind!==K.FUNCTION||!plan.bindings.find(b=>b.qname===owner).scriptGlobalExport)
@@ -94,6 +110,7 @@ export class NativeGeneratedLexical {
                 const outerNames:string[]=[];
                 const outer=(n:Node):void=>{if(n.kind===K.LAMBDA||n.kind===K.FUNCTION&&n!==method)return;if(n.kind===K.NAME_TYPE_INIT)outerNames.push(n.findChild(K.NAME).text);n.children.forEach(outer);};outer(method);
                 const inspect=(n:Node):void=>{
+                    forInTarget(n);
                     if(n.kind===K.DOT&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='this')fail('anonymous receiver property access held');
                     if([K.LAMBDA,K.FUNCTION,K.TRY].indexOf(n.kind)>=0)fail('nested anonymous callable body held');
                     if(n.kind===K.IDENTIFIER&&['super','arguments'].concat(memberNames).indexOf(n.text)>=0)fail('anonymous callable receiver/member lookup held');

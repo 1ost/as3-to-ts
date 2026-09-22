@@ -32,7 +32,8 @@ export class NativeTypedLocals {
                 if(value.kind===K.FUNCTION&&this.nested.some(fn=>fn.start===value.start&&fn.end===value.end))return;
                 if (value.kind===K.FORIN||value.kind===K.FOREACH){
                     const target=value.children[0];
-                    if(!this.matchSourceSpans||value.kind!==K.FOREACH||target.kind!==K.NAME)
+                    const wildcardForIn=value.kind===K.FORIN&&target.children.length===1&&target.children[0].kind===K.IDENTIFIER;
+                    if(!this.matchSourceSpans||!wildcardForIn&&(value.kind!==K.FOREACH||target.kind!==K.NAME))
                         this.fail('source enumeration targets held');
                     // Validate after collecting all function-scoped declarations.
                 }
