@@ -553,9 +553,17 @@ export class NativeNamespaces {
             const content = cls.findChild(NodeKind.CONTENT);
             if (!content) continue;
             for (const declaration of content.children) {
-                if ([NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(declaration.kind) < 0) continue;
-                for (const field of declaration.findChildren(NodeKind.NAME_TYPE_INIT)) {
-                    const name = field.findChild(NodeKind.NAME), type = field.findChild(NodeKind.TYPE);
+                if ([NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(declaration.kind) >= 0) {
+                    for (const field of declaration.findChildren(NodeKind.NAME_TYPE_INIT)) {
+                        const name = field.findChild(NodeKind.NAME), type = field.findChild(NodeKind.TYPE);
+                        if (name && type && name.text === fieldName) return type.qualifiedName || type.text;
+                    }
+                } else if ([NodeKind.GET, NodeKind.SET].indexOf(declaration.kind) >= 0) {
+                    // Accessors are typed receiver sources too. In
+                    // particular, TLF's inherited `parent` getter exposes a
+                    // FlowGroupElement whose namespace method must remain an
+                    // explicit Symbol access on the typed result.
+                    const name = declaration.findChild(NodeKind.NAME), type = declaration.findChild(NodeKind.TYPE);
                     if (name && type && name.text === fieldName) return type.qualifiedName || type.text;
                 }
             }
