@@ -154,6 +154,9 @@ function parseForIn(parser:AS3Parser, result:Node):Node {
     result.children.push(createNode(NodeKind.IN, {start: index, end: expr.end}, expr));
     result.kind = NodeKind.FORIN;
     consume(parser, Operators.RIGHT_PARENTHESIS);
+    const statement = parseStatement(parser);
+    result.children.push(statement);
+    result.end = statement.end;
     return result;
 }
 

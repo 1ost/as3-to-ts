@@ -1344,6 +1344,8 @@ function emitParametersList(emitter:Emitter, node:Node):void {
 }
 
 function emitForIn(emitter:Emitter, node:Node):void {
+	emitter.catchup(node.start);
+	emitter.insert('{ ');
 	let initNode = node.children[0];
 	let varNode = initNode.children[0];
 	let inNode = node.children[1];
@@ -1362,7 +1364,6 @@ function emitForIn(emitter:Emitter, node:Node):void {
 
 			let typeRemapped = emitter.getTypeRemap(typeNode.text) || typeNode.text;
 			typeStr = typeRemapped == undefined ? '' : ':' + typeRemapped;
-			emitter.insert(`var ${ nameNode.text }${ typeStr };\n`);
 		}
 		else {
 			let vecNode = nameTypeInitNode.findChild(NodeKind.VECTOR);
@@ -1372,11 +1373,20 @@ function emitForIn(emitter:Emitter, node:Node):void {
 				}
 			}
 		}
+		emitter.insert(`var ${ nameNode.text }${ typeStr };\n`);
+		if (emitter.pendingStatementLabel) {
+			emitter.insert(emitter.pendingStatementLabel + ': ');
+			emitter.pendingStatementLabel = null;
+		}
 		emitter.catchup(node.start + Keywords.FOR.length + 1);
 		emitter.catchup(varNode.start);
 		emitter.insert(`${ nameNode.text }`);
 		emitter.skipTo(varNode.end);
 	} else {
+		if (emitter.pendingStatementLabel) {
+			emitter.insert(emitter.pendingStatementLabel + ': ');
+			emitter.pendingStatementLabel = null;
+		}
 		emitter.catchup(node.start + Keywords.FOR.length + 1);
 		visitNode(emitter, initNode);
 	}
@@ -1386,6 +1396,8 @@ function emitForIn(emitter:Emitter, node:Node):void {
 		emitter.insert(' of ');
 		emitDictionaryEnumerationKeys(emitter, inNode.children[0]);
 		emitDictionaryEnumerationBlock(emitter, blockNode);
+		finishEnumerationBody(emitter, blockNode, false);
+		emitter.insert('}');
 		return;
 	}
 	emitter.catchup(inNode.start);
@@ -1395,6 +1407,8 @@ function emitForIn(emitter:Emitter, node:Node):void {
 
 	visitNodes(emitter, inNode.children);
 	visitNode(emitter, blockNode);
+	finishEnumerationBody(emitter, blockNode, false);
+	emitter.insert('}');
 }
 
 function emitForEach(emitter:Emitter, node:Node):void {
@@ -1503,13 +1517,19 @@ function emitForEach(emitter:Emitter, node:Node):void {
 		emitter.insert(`\n\t\t\t${declarationWord}${nameNode.text}${typeStr} = ${castStr}${get}(${receiverName}, ${keyName});\n`);
 	} else emitter.insert(`\n\t\t\t${declarationWord}${nameNode.text}${typeStr} = ${castStr}${receiverName}[${keyName}];\n`);
 	visitNode(emitter, blockNode);
+	finishEnumerationBody(emitter, blockNode, !hasBlock);
+	emitter.insert('}');
+}
+
+/** Keep the authored statement terminator inside an enclosing generated block. */
+function finishEnumerationBody(emitter:Emitter, blockNode:Node, closeBody:boolean):void {
 	// Legacy compound loop nodes can have end=-1; their last child still owns
 	// the complete final expression (including closing call parentheses).
 	const lastSourceEnd = (current:Node):number => current.children.reduce(
 		(end, child) => Math.max(end, lastSourceEnd(child)), current.end);
 	const statementEnd = lastSourceEnd(blockNode);
 	emitter.catchup(statementEnd);
-	if (!hasBlock) {
+	if (blockNode.kind !== NodeKind.BLOCK) {
 		// The AS3 expression node excludes its optional terminator and trivia.
 		// Keep an explicit terminator inside the generated loop/if body so it
 		// cannot become a separate statement between the source if and else.
@@ -1530,8 +1550,7 @@ function emitForEach(emitter:Emitter, node:Node):void {
 		}
 		if (emitter.source.charAt(end) === ';') emitter.catchup(end + 1);
 	}
-	if (!hasBlock) emitter.insert('}');
-	emitter.insert('}');
+	if (closeBody) emitter.insert('}');
 }
 
 function getNodeNameRecursive(objNode:Node):string{
@@ -1597,8 +1616,8 @@ function emitStatementLabel(emitter:Emitter, node:Node):void {
 	const statement = node.children[1];
 	if (!name || !statement) throw new Error('AS3_LABEL_UNSUPPORTED: malformed statement label');
 	emitter.catchup(node.start);
-	if (statement.kind === NodeKind.FOREACH) {
-		// for-each lowering introduces a capture block before the actual loop;
+	if (statement.kind === NodeKind.FOREACH || statement.kind === NodeKind.FORIN) {
+		// Enumeration lowering introduces a block before the actual loop;
 		// hold the label until that loop is emitted so `continue label` remains
 		// legal and targets the AS3 loop rather than the implementation block.
 		emitter.pendingStatementLabel = name.text;
