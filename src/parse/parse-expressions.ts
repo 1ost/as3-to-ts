@@ -187,7 +187,7 @@ function parseConditionalExpression(parser:AS3Parser):Node {
         conditional.children.push(parseExpression(parser));
         nextToken(parser, true); // :
         conditional.children.push(parseExpression(parser));
-        conditional.end = conditional.lastChild.start;
+        conditional.end = conditional.lastChild.end;
         return conditional;
     }
     return result;

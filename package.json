@@ -37,6 +37,7 @@
     "test:native-scientific-literals": "node tests/native-scientific-literals/run.cjs",
     "test:native-empty-string-construction": "node tests/native-empty-string-construction/run.cjs",
     "test:native-labelled-control": "node tests/native-labelled-control/run.cjs",
+    "test:native-conditional-span": "node tests/native-conditional-span/run.cjs",
     "test:native-chained-construction": "node tests/native-chained-construction/run.cjs",
     "test:native-source-ancestry": "node tests/native-source-ancestry/run.cjs",
     "test:native-expression-comments": "node tests/native-expression-comments/run.cjs",
