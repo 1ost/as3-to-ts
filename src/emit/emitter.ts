@@ -171,6 +171,8 @@ export interface EmitterOptions {
 	nativeDynamicPropertyWritesModule?:string;
     /** Common AS3Property module for source Object/wildcard indexed reads. */
     nativeDynamicPropertyReadsModule?:string;
+    /** Common source JSON text parser; JSON Class identity is separate. */
+    nativeJSONModule?:string;
 	/** Authenticated common AS3ArraySort module for source Array.sortOn calls. */
 	nativeArraySortModule?:string;
 	/** Authenticated source enumeration providers; currently Dictionary-only. */
@@ -519,6 +521,12 @@ export default class Emitter {
 				&& this.options.importModules['compiler.AS3Property'] !== module)
 				throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: AS3Property import binding disagrees with nativeDynamicPropertyReadsModule');
 		}
+        if (this.options.nativeJSONModule !== undefined) {
+            generatedModule(this.options.nativeJSONModule);
+            if(this.options.importModules && this.options.importModules['compiler.AS3JSON']
+                && this.options.importModules['compiler.AS3JSON']!==this.options.nativeJSONModule)
+                throw new Error('AS3_JSON_UNSUPPORTED: common JSON provider binding disagrees');
+        }
 		if (this.options.nativeArraySortModule !== undefined) {
 			const module = this.options.nativeArraySortModule;
 			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
@@ -3079,6 +3087,7 @@ function emitReflectionXML(emitter:Emitter, node:Node):boolean {
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
+    if (emitJSONParse(emitter,node)) return;
 	if (emitStringReplace(emitter, node)) return;
 	if (emitReflectionQuery(emitter, node)) return;
 	if (emitReflectionXML(emitter, node)) return;
@@ -3247,6 +3256,35 @@ function emitBuiltinObjectCreation(emitter:Emitter, node:Node):boolean {
 	emitter.insert('])');
 	emitter.skipTo(node.end);
 	return true;
+}
+
+function emitJSONParse(emitter:Emitter,node:Node):boolean {
+    const module=emitter.options.nativeJSONModule,callee=node.children[0];
+    if(module===undefined||emitter.isNew||!callee||callee.kind!==NodeKind.DOT||callee.children.length!==2)return false;
+    const receiver=callee.children[0],method=callee.children[1];
+    if(receiver.kind!==NodeKind.IDENTIFIER||receiver.text!=='JSON'||method.text!=='parse')return false;
+    const classes=Object.keys(emitter.options.definitionsByNamespace||{}).reduce((all,ns)=>all.concat(
+        emitter.options.definitionsByNamespace[ns].map(name=>(ns?ns+'.':'')+name)),[] as string[]);
+    if(emitter.findDefInScope('JSON')||typeOfBinding(receiver,emitter.source,classes))return false;
+    const args=node.findChild(NodeKind.ARGUMENTS);
+    if(!args||args.children.length<1||args.children.length>2)
+        throw new Error('AS3_JSON_UNSUPPORTED: source text parse requires one or two arguments');
+    const text=unwrapEncapsulatedExpression(args.children[0]);
+    const def=text.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(text.text);
+    if(!(def&&def.as3Type==='String')&&!(text.kind===NodeKind.LITERAL&&/^["']/.test(text.text))&&text.text!=='null')
+        throw new Error('AS3_JSON_UNSUPPORTED: text must have source String binding or literal');
+    if(args.children.length===2){
+        const reviver=unwrapEncapsulatedExpression(args.children[1]);
+        const binding=reviver.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(reviver.text);
+        if(reviver.text!=='null'&&!(binding&&binding.as3Type==='Function')
+            &&reviver.kind!==NodeKind.LAMBDA&&reviver.kind!==NodeKind.FUNCTION)
+            throw new Error('AS3_JSON_UNSUPPORTED: reviver must have source Function binding, literal function or null');
+    }
+    const helper=propertyHelper(emitter,'parseSourceJSON',module);
+    emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(getExpressionStart(args.children[0]));
+    visitNodes(emitter,args.children);
+    const close=args.end>args.start&&emitter.source.charAt(args.end-1)===')'?args.end-1:args.end;
+    emitter.catchup(close);emitter.insert(')');emitter.skipTo(node.end);return true;
 }
 
 function emitStringReplace(emitter:Emitter, node:Node):boolean {
