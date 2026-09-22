@@ -1,0 +1,32 @@
+import {readNativeClass} from '@NATIVE_CLASS@';
+import {PayloadData as DataBinding} from './PayloadData';
+import {ChildData as ChildDataBinding} from './ChildData';
+import {PayloadEvent as EventBinding} from './PayloadEvent';
+import {RequiredRecord as RequiredBinding} from './RequiredRecord';
+import {ChildEvent as ChildBinding} from './ChildEvent';
+export function run(){
+ const Data=readNativeClass(DataBinding),ChildData=readNativeClass(ChildDataBinding),Payload:any=readNativeClass(EventBinding),Required:any=readNativeClass(RequiredBinding),Child=readNativeClass(ChildBinding);
+ const rows:any[]=[];
+ function capture(id:string,args:any[]){
+  Payload.log=[];Payload.captured=null;let value:any=null,error:any[]=[];
+  try{value=new Payload(...args);}catch(e){error=[(e as any).name,(e as any).errorID];}
+  rows.push({id,value:[error,Payload.log,value===null?null:[value.data===args[1],value.data===null,value.amount,value.type,value.bubbles,value.cancelable,value.marker],Payload.captured===null]});
+ }
+ const data=new Data(),child=new ChildData();
+ capture('optional-omitted',['x']);capture('optional-null',['x',null]);capture('optional-undefined',['x',undefined]);
+ capture('exact-reference',['x',data,3,true,true]);capture('derived-reference',['x',child]);
+ capture('structural-rejection',['x',{value:7}]);capture('primitive-rejection',['x',7]);
+ capture('conversion-order',[{toString(){Payload.log.push(['string']);return 'converted';}},data,{valueOf(){Payload.log.push(['number']);return 4.9;}},1,0]);
+ capture('failure-order',[{toString(){Payload.log.push(['string']);return 'converted';}},{value:7},{valueOf(){Payload.log.push(['number']);return 4;}},1,0]);
+ capture('too-few',[]);capture('too-many',['x',data,0,false,false,99]);
+ for(let i=0;i<4;i++){
+  Required.log=[];let failure:any[]=[],record:any=null;
+  try{if(i===0)record=new Required();else if(i===1)record=new Required(undefined);else if(i===2)record=new Required(child);else record=new Required({value:7});}
+  catch(e){failure=[(e as any).name,(e as any).errorID];}
+  rows.push({id:'required-'+i,value:[failure,Required.log,record===null?null:[record.data===null,record.data===child,record.marker]]});
+ }
+ Payload.log=[];Payload.captured=null;let failure:any[]=[];
+ try{new Child({value:7});}catch(e){failure=[(e as any).name,(e as any).errorID];}
+ rows.push({id:'base-coercion-failure',value:[failure,Payload.log,Payload.captured.type,Payload.captured.marker,Payload.captured.childMarker]});
+ return JSON.parse(JSON.stringify(rows));
+}
