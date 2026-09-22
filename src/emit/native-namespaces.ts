@@ -541,6 +541,16 @@ export class NativeNamespaces {
             const target = this.classType(node, receiver.children[0].text);
             if (target) return receiver.children[0].text;
             return null;
+        } else if (receiver.kind === NodeKind.CALL && receiver.children.length >= 2
+            && receiver.children[0].kind === NodeKind.DOT
+            && receiver.findChild(NodeKind.ARGUMENTS)) {
+            // A typed method call can itself be the receiver of a namespace
+            // access, for example `getChildAt(i).tlf_internal::...`.
+            const method = receiver.children[0].children[1];
+            const baseType = this.receiverType(receiver.children[0]);
+            const base = this.classType(node, baseType);
+            if (method && base) return this.methodReturnType(base, method.text);
+            return null;
         } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
             && receiver.children[0].kind === NodeKind.IDENTIFIER
             && (receiver.children[0].text === 'this' || receiver.children[0].text === ownerName)
@@ -571,6 +581,20 @@ export class NativeNamespaces {
             }
             const syntheticTypes = this.typedMembers.get(cls) || [];
             const typed = syntheticTypes.find(value => value && value.name === fieldName);
+            if (typed) return typed.type;
+        }
+        return null;
+    }
+
+    private methodReturnType(owner: Node, name: string): string {
+        for (const cls of this.hierarchy(owner)) {
+            const content = cls.findChild(NodeKind.CONTENT);
+            if (content) for (const declaration of content.children) {
+                if (declaration.kind !== NodeKind.FUNCTION) continue;
+                const declarationName = declaration.findChild(NodeKind.NAME), type = declaration.findChild(NodeKind.TYPE);
+                if (declarationName && type && declarationName.text === name) return type.qualifiedName || type.text;
+            }
+            const typed = (this.typedMembers.get(cls) || []).find(value => value && value.name === name);
             if (typed) return typed.type;
         }
         return null;

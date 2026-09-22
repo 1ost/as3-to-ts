@@ -136,6 +136,7 @@ const accessorReceiverSource = `package example {
 }`;
 assert.match(generate(accessorReceiverSource), /__as3_namespace_member_/);
 
+
 const ast = parse('NamespaceFixture.as', source);
 let namespaceNodes = 0;
 (function walk(node) {
