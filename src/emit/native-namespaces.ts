@@ -558,6 +558,11 @@ export class NativeNamespaces {
             // Resolve one source-backed field hop for ordinary receiver dots
             // such as this._flowComposer.updateLengths().
             fieldName = receiver.children[1].text;
+        } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2) {
+            const baseType = this.receiverType(receiver), base = this.classType(node, baseType);
+            const member = receiver.children[1];
+            if (base && member) return this.memberReturnType(base, member.text);
+            return null;
         } else return null;
         let classes: Node[];
         try { classes = this.hierarchy(owner); } catch (_) { return null; }
@@ -593,6 +598,26 @@ export class NativeNamespaces {
                 if (declaration.kind !== NodeKind.FUNCTION) continue;
                 const declarationName = declaration.findChild(NodeKind.NAME), type = declaration.findChild(NodeKind.TYPE);
                 if (declarationName && type && declarationName.text === name) return type.qualifiedName || type.text;
+            }
+            const typed = (this.typedMembers.get(cls) || []).find(value => value && value.name === name);
+            if (typed) return typed.type;
+        }
+        return null;
+    }
+
+    private memberReturnType(owner: Node, name: string): string {
+        for (const cls of this.hierarchy(owner)) {
+            const content = cls.findChild(NodeKind.CONTENT);
+            if (content) for (const declaration of content.children) {
+                if ([NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(declaration.kind) >= 0) {
+                    for (const field of declaration.findChildren(NodeKind.NAME_TYPE_INIT)) {
+                        const fieldName = field.findChild(NodeKind.NAME), type = field.findChild(NodeKind.TYPE);
+                        if (fieldName && type && fieldName.text === name) return type.qualifiedName || type.text;
+                    }
+                } else if ([NodeKind.GET, NodeKind.SET].indexOf(declaration.kind) >= 0) {
+                    const fieldName = declaration.findChild(NodeKind.NAME), type = declaration.findChild(NodeKind.TYPE);
+                    if (fieldName && type && fieldName.text === name) return type.qualifiedName || type.text;
+                }
             }
             const typed = (this.typedMembers.get(cls) || []).find(value => value && value.name === name);
             if (typed) return typed.type;
