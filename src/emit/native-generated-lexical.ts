@@ -61,7 +61,7 @@ export class NativeGeneratedLexical {
                     }
                     if(node.findChild(K.VECTOR))fail('lexical vector storage authority');
                     const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':'method',owner:name,node,
-                        type:node.findChild(K.TYPE),key:fresh('key'),access:fresh('access'),parameterCount:member.kind===K.FUNCTION?node.findChild(K.PARAMETER_LIST).children.length:0};
+                        type:node.findChild(K.TYPE),key:fresh('key'),access:fresh('access'),parameterCount:member.kind===K.FUNCTION?node.findChild(K.PARAMETER_LIST).children.filter(p=>!p.findChild(K.REST)).length:0};
                     this.traits.push(trait);if(!inherited)this.own.push(trait);
                 });
             });

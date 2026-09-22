@@ -1737,15 +1737,15 @@ interface NumericParameterPlan {
 	init:Node;
 }
 
-function generatedConstructorOwnsParameters(emitter:Emitter, member:Node):boolean {
+function generatedCallableOwnsParameters(emitter:Emitter, member:Node):boolean {
     return !!emitter.generated && !!member && member.kind === NodeKind.FUNCTION
         && !!member.findChild(NodeKind.NAME)
-        && member.findChild(NodeKind.NAME).text === emitter.generated.projection.binding.qname.split('.').pop();
+        && !!member.parent && member.parent.kind === NodeKind.CONTENT;
 }
 
 function numericParameterPlans(emitter:Emitter, block:Node):NumericParameterPlan[] {
-    // Generated constructor entry already converts parameters before field effects.
-    if (generatedConstructorOwnsParameters(emitter,block.parent)) return [];
+    // Generated callable entry owns defaults and parameter conversion once.
+    if (generatedCallableOwnsParameters(emitter,block.parent)) return [];
 	if (emitter.options.nativeNumericMethodParametersModule === undefined || !block.parent)
 		return [];
 	if ([NodeKind.FUNCTION, NodeKind.SET].indexOf(block.parent.kind) < 0) return [];
@@ -1808,7 +1808,7 @@ function emitNumericMethodParameterCoercion(emitter:Emitter, block:Node):void {
 }
 
 function emitNumericParameterDeclaration(emitter:Emitter, node:Node):boolean {
-    if (node.parent && node.parent.parent && generatedConstructorOwnsParameters(emitter,node.parent.parent.parent)) return false;
+    if (node.parent && node.parent.parent && generatedCallableOwnsParameters(emitter,node.parent.parent.parent)) return false;
 	if (emitter.options.nativeNumericMethodParametersModule === undefined
 		|| !node.parent || node.parent.kind !== NodeKind.PARAMETER) return false;
 	const value = node, type = value.findChild(NodeKind.TYPE), name = value.findChild(NodeKind.NAME);
@@ -3549,10 +3549,12 @@ function emitRelation(emitter:Emitter, node:Node):void {
         const targetBinding=target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
         const nativeEvent=emitter.generated&&emitter.generated.eventBase&&targetBinding
             &&targetBinding.sourceImport==='flash.events.Event';
-        if (global && global.name === 'AS3Date' || nativeEvent) {
+        const nativeArray=emitter.generated&&target.kind===NodeKind.IDENTIFIER&&target.text==='Array'
+            &&!targetBinding&&emitter.generated.projection.binding.qname.split('.').pop()!=='Array';
+        if (global && global.name === 'AS3Date' || nativeEvent || nativeArray) {
             const module = emitter.options.nativeComputedTypeTestModule;
             generatedModule(module);
-            let helper = nativeEvent ? '__as3_event_is' : '__as3_date_is';
+            let helper = nativeArray ? '__as3_array_is' : nativeEvent ? '__as3_event_is' : '__as3_date_is';
             while (emitter.source.indexOf(helper) >= 0) helper += '_';
             emitter.ensureImportIdentifier('as3Is as ' + helper,module,false);
             emitter.catchup(node.start); emitter.insert(helper + '(');

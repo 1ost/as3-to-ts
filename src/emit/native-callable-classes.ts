@@ -12,7 +12,7 @@ import {NativeGeneratedEmission} from './native-generated-emission';
 export interface NativeCallableClassOptions { [qname: string]: string; }
 interface SourceClass {
     qname: string; name: string; base: string; fields: {name: string; value: string}[];
-    parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}}[]; usesArguments: boolean;
+    parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}}[]; usesArguments: boolean; rest?: string;
     instanceMembers: {name: string; method: boolean}[];
 }
 
@@ -134,10 +134,14 @@ export class NativeCallableClasses {
                 if(calls!==1)this.fail('native Event requires one explicit source base call');
             }
             const parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}}[] = [];
-            let usesArguments = false;
+            let usesArguments = false, rest: string;
             if (constructor) {
-                constructor.findChild(K.PARAMETER_LIST).children.forEach(parameter => {
-                    if (parameter.findChild(K.REST)) this.fail('rest constructor argument authority');
+                constructor.findChild(K.PARAMETER_LIST).children.forEach((parameter,index,list) => {
+                    const spread=parameter.findChild(K.REST);
+                    if(spread){
+                        if(!generated||!generated.lexical.typedLocals||index!==list.length-1||rest)this.fail('rest constructor argument authority');
+                        rest=spread.text;return;
+                    }
                     const value = parameter.findChild(K.NAME_TYPE_INIT), type = value.findChild(K.TYPE);
                     if(value.findChild(K.VECTOR))this.fail('vector constructor parameter coercion requires authority');
                     const sourceReference=generated&&type&&generated.options.plan.references.find(ref=>ref.owner===qname&&ref.start===type.start&&ref.end===type.end);
@@ -147,7 +151,7 @@ export class NativeCallableClasses {
                     const reference=sourceDeclaration?{identity:sourceDeclaration.qname,exported:sourceDeclaration.tokenExport}:undefined;
                     const sourceType = reference ? reference.identity : nativeSourceTypeIdentity(type, qname, imports);
                     const selfReference = !!metadata && sourceType === qname;
-                    if (!selfReference && !reference && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
+                    if (!selfReference && !reference && !(generated&&sourceType==='Function') && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
                         this.fail('constructor parameter coercion needs common provider authority: ' + (type && type.text || '*') + ' (' + sourceType + ')');
                     if (sourceType === 'String' && (typeof stringModule !== 'string' || !stringModule.trim()
                         || /[\r\n\u0000]/.test(stringModule)))
@@ -157,6 +161,8 @@ export class NativeCallableClasses {
                             || /[\r\n\u0000]/.test(coercionModule)))
                         this.fail('numeric constructor parameters require the common AS3Coercion module');
                     const init = value.findChild(K.INIT);
+                    if(generated&&sourceType==='Function'&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
+                        this.fail('Function constructor default requires literal null');
                     if(reference&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
                         this.fail('source reference constructor default requires literal null');
                     if (selfReference && (!init || init.children[0].kind !== K.IDENTIFIER || init.children[0].text !== 'null'))
@@ -196,8 +202,9 @@ export class NativeCallableClasses {
                     node.children.forEach(scanArguments);
                 };
                 scanArguments(constructor.findChild(K.BLOCK));
+                if(rest&&usesArguments)this.fail('combined rest/arguments constructor scope requires qualification');
             }
-            const value = {qname, name, base, fields, parameters, usesArguments, instanceMembers}; this.classes.set(qname, value); roots.set(qname, cls); this.sourceRoots.set(qname, cls);
+            const value = {qname, name, base, fields, parameters, usesArguments, rest, instanceMembers}; this.classes.set(qname, value); roots.set(qname, cls); this.sourceRoots.set(qname, cls);
             if (options[qname] === source) {
                 if (this.own) this.fail('ambiguous current source');
                 this.own = value;
@@ -320,8 +327,8 @@ export class NativeCallableClasses {
             return domainImport+'.'+binding.tokenExport;
         } : undefined;
         const text = (node: any): string => node.getText(file);
-        const params = (member: any, signature: boolean): string => member.parameters.map((p: any) => {
-            if (!signature) return text(p);
+        const params = (member: any, signature: boolean): string => member.parameters.filter((p:any)=>signature||!this.generated||!p.dotDotDotToken).map((p: any) => {
+            if (!signature) return this.generated?text(p.name)+': '+(p.type?text(p.type):'any'):text(p);
             return (p.dotDotDotToken ? '...' : '') + text(p.name) + (p.questionToken || p.initializer ? '?' : '')
                 + ': ' + (p.type ? text(p.type) : 'any');
         }).join(', ');
@@ -458,14 +465,31 @@ export class NativeCallableClasses {
                     return node.kind === K.FUNCTION && node.findChild(K.NAME).text === key && sourceStatic === !!isStatic;
                 });
                 const parameters = sourceMethod.findChild(K.PARAMETER_LIST).children;
-                if (parameters.some(p => !!p.findChild(K.REST) || !!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)))
-                    this.fail('generated optional/rest method signature lowering required');
-                signature = 'if(arguments.length !== ' + parameters.length + ')throw ' + intrinsic + '.arityError();\n'
-                    + parameters.map(p => {
-                        const value=p.findChild(K.NAME_TYPE_INIT),name=value.findChild(K.NAME).text;
+                const fixed=parameters.filter(p=>!p.findChild(K.REST)),spread=parameters.find(p=>!!p.findChild(K.REST));
+                if(spread&&parameters[parameters.length-1]!==spread)this.fail('rest method must be last');
+                if(spread&&!typedLocals)this.fail('rest method requires typed local storage');
+                const minimum=fixed.filter(p=>!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)).length;
+                signature = 'if(arguments.length < ' + minimum + (spread?'':' || arguments.length > '+fixed.length) + ')throw ' + intrinsic + '.arityError();\n'
+                    + fixed.map((p,index) => {
+                        const value=p.findChild(K.NAME_TYPE_INIT),name=value.findChild(K.NAME).text,type=value.findChild(K.TYPE),init=value.findChild(K.INIT);
                         if(value.findChild(K.VECTOR))this.fail('generated vector method signature');
-                        return name+'=<any>'+generatedProperty+'.coerceAS3PropertyValue('+name+','+this.generated.lexical.typeExpression(value.findChild(K.TYPE),this.own.qname,domainImport,intrinsic+'.array')+');';
-                    }).join('\n');
+                        if(!init&&index>=minimum)this.fail('required parameter after optional');
+                        let fallback='';
+                        if(init){
+                            const raw=this.sourceTexts.get(this.own.qname).slice(init.start,init.end).trim(),identity=type&&type.text||'*';
+                            const numeric=/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(raw)&&isFinite(Number(raw));
+                            if(['int','uint'].indexOf(identity)>=0&&(!numeric||/^[+-]?0[0-9]/.test(raw)||Math.floor(Number(raw))!==Number(raw)
+                                ||Number(raw)<(identity==='int'?-2147483648:0)||Number(raw)>(identity==='int'?2147483647:4294967295)))
+                                this.fail('generated optional integer default requires in-range literal');
+                            if(!(identity==='Boolean'&&/^(true|false)$/.test(raw)
+                                ||['Number','int','uint'].indexOf(identity)>=0&&numeric
+                                ||identity==='String'&&(raw==='null'||/^("[\s\S]*"|'[\s\S]*')$/.test(raw))
+                                ||raw==='null'&&['Number','int','uint','Boolean','*'].indexOf(identity)<0))
+                                this.fail('generated optional parameter requires qualified literal default');
+                            fallback='arguments.length <= '+index+' ? '+text(member.parameters[index].initializer)+' : ';
+                        }
+                        return name+'='+fallback+'<any>'+generatedProperty+'.coerceAS3PropertyValue('+name+','+this.generated.lexical.typeExpression(type,this.own.qname,domainImport,intrinsic+'.array')+');';
+                    }).join('\n')+(spread?'\nvar '+spread.findChild(K.REST).text+': any = '+intrinsic+'.apply('+intrinsic+'.arraySlice,arguments,['+fixed.length+']);\n':'');
                 const returns=sourceMethod.findChild(K.TYPE);
                 if(returns && returns.text !== 'void' && returns.text !== '*') {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
@@ -537,12 +561,13 @@ export class NativeCallableClasses {
         const completedBody = constructorReturns ? constructorCompletion + ': {\n' + constructorBody + '\n}' : constructorBody;
         const required = this.own.parameters.filter(parameter => !parameter.optional).length;
         const arity = 'if (arguments.length < ' + required
-            + (this.own.usesArguments ? '' : ' || arguments.length > ' + this.own.parameters.length)
+            + (this.own.usesArguments || this.own.rest ? '' : ' || arguments.length > ' + this.own.parameters.length)
             + ') {throw ' + intrinsic + '.arityError();}\n';
         const coercions = this.own.parameters.map((parameter, index) => {
             const value = parameter.name;
             const conversion = parameter.reference
                 ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(parameter.reference.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domainImport+'.'+parameter.reference.exported+'})'
+                : this.generated && parameter.type==='Function' ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',"Function")'
                 : parameter.type === 'Number' ? numberCoercion + '(' + value + ')'
                 : parameter.type === 'int' ? intCoercion + '(' + value + ')' : parameter.type === 'uint' ? uintCoercion + '(' + value + ')'
                 : parameter.type === 'String' ? stringCoercion + '(' + value + ')'
@@ -558,9 +583,10 @@ export class NativeCallableClasses {
         }).join('\n');
         const replacement = (this.lexical ? this.lexical.traits.map(t=>'const ' + t.key + '=' + intrinsic + '.symbol();').join('\n')+'\n' : '')
             + (this.generated ? this.generated.lexical.own.filter(t=>t.kind==='method').map(t=>'const '+t.key+'='+intrinsic+'.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
-            + (ctor && ctor.parameters.length ? ', ' + params(ctor, true) : '') + ') {\n'
+            + (ctor && this.own.parameters.length ? ', ' + (this.generated?params(ctor,false):params(ctor,true)) : '') + ') {\n'
             + 'const ' + fresh + ' = ' + intrinsic + '.enter(this, ' + identity + ');\nlet ' + succeeded + ' = false;\ntry {\n'
             + arity + coercions
+            + (this.own.rest ? '\nvar '+this.own.rest+': any = '+intrinsic+'.apply('+intrinsic+'.arraySlice,arguments,['+this.own.parameters.length+']);\n' : '')
             + (this.own.usesArguments ? '\nlet ' + sourceArguments + ': any[] = '
                 + intrinsic + '.apply(' + intrinsic + '.arraySlice, arguments, []);\n' : '') + '\nif (' + fresh + ') {\n' + defaults + '\n' + bindInstance + '\n}\n'
             + (this.metadata ? lowerNativeSourceOperations(initializers.join('\n'), provider, compilerHelpers, unique, this.lexical) : initializers.join('\n')) + '\n' + completedBody + '\n' + completion + '\n} finally { '

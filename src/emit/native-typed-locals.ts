@@ -2,7 +2,7 @@ import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {nativeSourceTypeIdentity} from './native-source-type';
 
-interface Local {name: string; type: string; reference?: string;}
+interface Local {name: string; type: string; reference?: string; parameter?: boolean;}
 interface OuterCapture {name: string; reference: string; read: string; write: string;}
 interface Method {node: Node; name: string; static: boolean; locals: Local[]; wildcards: string[]; outerCaptures: OuterCapture[];}
 export interface NestedLocalFunction {start:number;end:number;name:string;methodStart:number;parameters:string[];returned?:string;}
@@ -18,9 +18,11 @@ export class NativeTypedLocals {
         });
         owner.findChild(K.CONTENT).findChildren(K.FUNCTION).forEach(node => {
             const locals: Local[] = [], declared: Local[] = [], wildcards: string[] = [], parameters = node.findChild(K.PARAMETER_LIST).children.map(p => {
-                const value=p.findChild(K.NAME_TYPE_INIT);return value && value.findChild(K.NAME).text;
+                const value=p.findChild(K.NAME_TYPE_INIT);return value ? value.findChild(K.NAME).text : p.findChild(K.REST)&&p.findChild(K.REST).text;
             });
             node.findChild(K.PARAMETER_LIST).children.forEach(p => {
+                const rest=p.findChild(K.REST);
+                if(rest&&this.matchSourceSpans)locals.push({name:rest.text,type:'Array',parameter:true});
                 const value = p.findChild(K.NAME_TYPE_INIT);
                 if (value && nativeSourceTypeIdentity(value.findChild(K.TYPE), qname, imports) === '*')
                     wildcards.push(value.findChild(K.NAME).text);
@@ -168,7 +170,7 @@ export class NativeTypedLocals {
             if(node.kind===S.BinaryExpression){const local=resolve(node.left),op=node.operatorToken.kind;
                 if(local&&op===S.EqualsToken)return write(local,render(node.right));
                 if(local&&op>=S.FirstCompoundAssignment&&op<=S.LastCompoundAssignment){
-                    if(local.reference)this.fail('reference local compound operation held');
+                    if(local.reference||local.parameter)this.fail('reference local compound operation held');
                     const operator=raw(node.operatorToken).slice(0,-1),old=unique('typedOld'),rhs=unique('typedRhs'),value=unique('typedValue');
                     if(operator==='&&'||operator==='||')this.fail('typed logical assignment held');
                     const arithmetic=operator==='+'?additionProvider+'.as3Add('+old+','+rhs+')':coercionProvider+'.as3CoerceNumber('+old+')'+operator+coercionProvider+'.as3CoerceNumber('+rhs+')';
@@ -190,6 +192,6 @@ export class NativeTypedLocals {
         // shadow its spelling. Source reads still resolve to the catch parameter;
         // proven simple writes and += target the original function slot.
         const captures=method.outerCaptures.map(c=>'const '+c.read+'=()=>'+c.reference+';const '+c.write+'=('+c.write+'_value:any)=>('+c.reference+'='+c.write+'_value);').join('\n');
-        return method.locals.map(l=>'var '+l.name+': any = '+(l.type==='Number'?'(0/0)':l.type==='int'||l.type==='uint'?'0':l.type==='Boolean'?'false':'null')+';').join('\n')+'\n'+captures+'\n'+render(file);
+        return method.locals.filter(l=>!l.parameter).map(l=>'var '+l.name+': any = '+(l.type==='Number'?'(0/0)':l.type==='int'||l.type==='uint'?'0':l.type==='Boolean'?'false':'null')+';').join('\n')+'\n'+captures+'\n'+render(file);
     }
 }

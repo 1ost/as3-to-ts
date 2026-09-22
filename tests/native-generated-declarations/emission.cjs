@@ -48,7 +48,7 @@ for(const body of [
  'private var value:int; public function run():void { value++; }',
  'private var value:int; public function run():void { value+=1; }',
  'private var value:int; public function run():void { delete value; }',
- 'public function run(n:int=0):void {}',
+ 'public function run(n:int=NaN):void {}',
  'public function run(...values):void {}',
  'public function run():int { try { return 0; } finally {} }',
  'public function run():Vector.<int> { return null; }',

@@ -28,7 +28,7 @@ for(const method of [
  'public function probe():Missing {return null;}',
  'public function probe():Vector.<int> {return null;}',
  'public function probe(value:*=null):String {return value;}',
- 'public function probe(...values):String {return "x";}'
+ 'public function probe(...values):String {trace(arguments);return "x";}'
 ]){
  const source='package returns {public class Guard {'+method+'}}';
  assert.throws(()=>{const p=api.createNativeGeneratedDeclarationPlan({scope:'guard',providerModule:provider('AS3GeneratedClass'),sources:{...sources,'returns.Guard':{source,sourceSha256:hash(source)}}});

@@ -128,7 +128,7 @@ export class NativeGeneratedClassTraits {
                 }
                 const name = member.findChild(K.NAME).text, params = member.findChild(K.PARAMETER_LIST).children;
                 if (member.kind === K.FUNCTION) {
-                    add(Object.assign({},common,{name,kind:'method',parameterCount:params.length}) as Member);
+                    add(Object.assign({},common,{name,kind:'method',parameterCount:params.filter(p=>!p.findChild(K.REST)).length}) as Member);
                     return;
                 }
                 let valueType: TraitType;
