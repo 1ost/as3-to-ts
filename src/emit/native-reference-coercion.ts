@@ -23,6 +23,7 @@ export class NativeReferenceCoercion {
     readonly owner: string;
     readonly resolve: (name: string) => string;
     private declarations = new Map<number, ReferenceLocal>();
+    private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
     constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false) {
@@ -178,7 +179,11 @@ export class NativeReferenceCoercion {
         const identity=this.resolve(name),plan=this.options.plan;
         if(!plan.bindings.some(binding=>binding.qname===identity))return null;
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope),source=input.sources[identity].source;
-        const declaration=nativeGeneratedConsumerResolver(plan,source).root.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS);
+        let declaration=this.constantDeclarations.get(identity);
+        if(!declaration){
+            declaration=nativeGeneratedConsumerResolver(plan,source).root.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS);
+            this.constantDeclarations.set(identity,declaration);
+        }
         for(const group of declaration.findChild(K.CONTENT).children){
             if(group.kind!==K.CONST_LIST)continue;
             const mods=group.findChild(K.MOD_LIST),flags=mods?mods.children.map(mod=>mod.text):[];
