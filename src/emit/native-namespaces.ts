@@ -109,8 +109,20 @@ export class NativeNamespaces {
             if (node.kind === NodeKind.USE) this.resolve(node, node.text);
             if (node.kind === NodeKind.NAMESPACE_ACCESS) this.access(node);
         });
-        let namespaceSource = this.declarations.size > 0 || this.members.size > 0;
-        this.walk(root, node => { if (node.kind === NodeKind.NAMESPACE_ACCESS) namespaceSource = true; });
+        // Imported ancestry and the optional Proxy provider contribute members
+        // for lookup, but do not make every compilation unit namespace-bearing.
+        // Apply the mixed E4X guard to source declarations/uses and relevant
+        // inherited namespaces, rather than every installed provider member.
+        let namespaceSource = this.declarations.size > 0;
+        this.walk(root, node => {
+            if (node.kind === NodeKind.NAMESPACE_ACCESS || node.kind === NodeKind.USE || this.members.has(node))
+                namespaceSource = true;
+            if (node.kind === NodeKind.CLASS) {
+                let owners: Node[] = [node];
+                try { owners = this.hierarchy(node); } catch (_) { /* Unresolved ancestry remains held at member resolution. */ }
+                if (Array.from(this.members.values()).some(member => owners.indexOf(member.owner) >= 0)) namespaceSource = true;
+            }
+        });
         if (namespaceSource) this.walk(root, node => {
             if ([NodeKind.E4X_ATTR, NodeKind.E4X_FILTER, NodeKind.E4X_STAR, NodeKind.XML_LITERAL].indexOf(node.kind) >= 0
                 || node.kind === NodeKind.IDENTIFIER && ['XML', 'XMLList'].indexOf(node.text) >= 0)
