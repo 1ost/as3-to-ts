@@ -107,7 +107,9 @@ The executable chain fixture checks the actual Symbol call and once-only getter,
 method and argument evaluation for ES5 and ES2015. This is compiler regression
 evidence, not a new Flash capture or full TLF runtime qualification.
 
-Separate parser defects remain: a block comment between a call and the next
-dot loses the namespace receiver; a block comment inside a nested call argument
-can stall parsing. These were observed during chain validation and are not
-claimed fixed by receiver type inference.
+The parser's comment handling is checked separately by
+`node tests/native-expression-comments/run.cjs`: comments between a call and
+the next dot retain the receiver, and comments inside nested arguments are
+skipped as trivia. Each case runs in a child process with a timeout; malformed
+argument lists must throw rather than stall. The executable chain fixture also
+includes both comment positions.

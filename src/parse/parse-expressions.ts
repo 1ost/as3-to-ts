@@ -448,12 +448,18 @@ function parseDecrement(parser:AS3Parser, node:Node):Node {
 }
 
 
+function skipExpressionComments(parser:AS3Parser):void {
+    while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
+}
+
 function parseAccessExpression(parser:AS3Parser):Node {
     let node:Node = parsePrimaryExpression(parser);
 
     while (true) {
+        skipExpressionComments(parser);
         if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
             node = parseFunctionCall(parser, node);
+            skipExpressionComments(parser);
         }
         if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_DOT) || tokIs(parser, Operators.DOUBLE_COLUMN)) {
             node = parseDot(parser, node);
@@ -485,9 +491,15 @@ function parseFunctionCall(parser:AS3Parser, node:Node):Node {
 function parseArgumentList(parser:AS3Parser):Node {
     let tok = consume(parser, Operators.LEFT_PARENTHESIS);
     let result:Node = createNode(NodeKind.ARGUMENTS, {start: tok.index});
+    skipExpressionComments(parser);
     while (!tokIs(parser, Operators.RIGHT_PARENTHESIS)) {
+        const start = parser.tok.index;
         result.children.push(parseExpression(parser));
+        skipExpressionComments(parser);
+        if (parser.tok.index <= start || !tokIs(parser, Operators.COMMA) && !tokIs(parser, Operators.RIGHT_PARENTHESIS))
+            throw new Error('AS3_ARGUMENT_LIST: expected comma or closing parenthesis');
         skip(parser, Operators.COMMA);
+        skipExpressionComments(parser);
     }
     tok = consume(parser, Operators.RIGHT_PARENTHESIS);
     result.end = tok.end;
@@ -500,7 +512,7 @@ function parseDot(parser:AS3Parser, node:Node):Node {
 	const descendantAccess = tokIs(parser, Operators.DOUBLE_DOT);
     let namespaceAccess = tokIs(parser, Operators.DOUBLE_COLUMN)
         && !(node.kind === NodeKind.IDENTIFIER && node.text === 'CONFIG');
-    nextToken(parser);
+    nextToken(parser, true);
     if (namespaceAccess) {
         if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) {
             throw new Error('AS3_NAMESPACE_UNSUPPORTED: computed or wildcard namespace selector');

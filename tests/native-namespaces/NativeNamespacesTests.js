@@ -156,7 +156,8 @@ const nestedMethodReceiverSource = `package example {
     public var indexes:int = 0;
     public function index(value:int):int { indexes++; return value; }
     public function read():int {
-      return this.holder.provider.getControllerAt(this.index(1)).same::apply(7);
+      return this.holder.provider.getControllerAt(this.index(/* argument */ 1))
+        /* receiver */ .same::apply(7);
     }
     public function localRead():int {
       var provider:ChainProvider = this.holder.provider;
@@ -168,7 +169,7 @@ const nestedMethodReceiverSource = `package example {
   }
 }`;
 const {Subject: ChainConsumer, output: chainOutput} = executeClass(nestedMethodReceiverSource, 'ChainConsumer');
-assert.match(chainOutput, /getControllerAt\(this.index\(1\)\)[\s\S]*?\[__as3_namespace_member_\d+\]\(7\)/);
+assert.match(chainOutput, /getControllerAt\(this.index\([\s\S]*?1\)\)[\s\S]*?\[__as3_namespace_member_\d+\]\(7\)/);
 assert.doesNotMatch(chainOutput, /\.apply\(7\)|same::/);
 const chain = new ChainConsumer(), holder = new context.exports.ChainHolder();
 const provider = new context.exports.ChainProvider();
