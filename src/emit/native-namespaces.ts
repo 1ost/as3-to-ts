@@ -375,10 +375,10 @@ export class NativeNamespaces {
 
     /** Lower a dot access whose typed receiver resolves an opened namespace member. */
     lowerOpenedAccess(node: Node, receiverType: string): boolean {
-        if (!node || node.kind !== NodeKind.DOT || node.children.length !== 2
-            || node.children[0].kind !== NodeKind.IDENTIFIER) return false;
+        if (!node || node.kind !== NodeKind.DOT || node.children.length !== 2) return false;
         const owner = this.ancestor(node, NodeKind.CLASS);
         receiverType = receiverType || this.receiverType(node);
+        if (node.children[0].kind !== NodeKind.IDENTIFIER && !receiverType) return false;
         const receiverClass = this.classType(node, receiverType);
         if (!owner || !receiverClass) return false;
         const name = node.children[1].text;
@@ -488,6 +488,13 @@ export class NativeNamespaces {
             if (receiver.text === 'this' || receiver.text === ownerName) return ownerName;
             if (this.classType(node, receiver.text)) return receiver.text;
             fieldName = receiver.text;
+        } else if (receiver.kind === NodeKind.ENCAPSULATED && receiver.children.length === 1
+            && receiver.children[0].kind === NodeKind.RELATION && receiver.children[0].children.length >= 3
+            && receiver.children[0].children[1].kind === NodeKind.AS
+            && receiver.children[0].children[2].kind === NodeKind.IDENTIFIER) {
+            // An explicit AS3 cast is authenticated type authority for a
+            // namespace-bearing member on the cast target.
+            return receiver.children[0].children[2].text;
         } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
             && receiver.children[0].kind === NodeKind.IDENTIFIER
             && (receiver.children[0].text === 'this' || receiver.children[0].text === ownerName)
@@ -531,8 +538,14 @@ export class NativeNamespaces {
         const access = this.access(node);
         if (!access.receiver) return;
         const receiver = access.receiver;
-        if (receiver.kind !== NodeKind.IDENTIFIER)
-            this.fail('complex namespace receiver requires type-directed lowering');
+        if (receiver.kind !== NodeKind.IDENTIFIER) {
+            receiverType = receiverType || this.receiverType(node);
+            const receiverClass = this.receiverClass(node, receiverType);
+            const staticReceiver = receiverClass && this.isClassReceiver(node, receiverClass);
+            if (!receiverClass || !this.findMember(receiverClass, access.uri, access.name, staticReceiver))
+                this.fail('complex namespace receiver requires type-directed lowering');
+            return;
+        }
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (owner && (receiver.text === 'this' || receiver.text === owner.findChild(NodeKind.NAME).text)) return;
         receiverType = receiverType || this.receiverType(node);

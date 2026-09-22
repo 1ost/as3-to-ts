@@ -104,6 +104,16 @@ const ordinaryReceiverSource = `package example {
 }`;
 assert.doesNotThrow(() => generate(ordinaryReceiverSource));
 
+const castReceiverSource = `package example {
+  import alias.same;
+  use namespace same;
+  public class CastTarget { same function apply():void {} }
+  public class CastReceiver {
+    public function read(value:Object):void { (value as CastTarget).apply(); }
+  }
+}`;
+assert.match(generate(castReceiverSource), /__as3_namespace_member_/);
+
 const ast = parse('NamespaceFixture.as', source);
 let namespaceNodes = 0;
 (function walk(node) {
