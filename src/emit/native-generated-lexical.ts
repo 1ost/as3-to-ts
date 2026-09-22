@@ -117,7 +117,7 @@ export class NativeGeneratedLexical {
                 if(value.findChild(K.VECTOR)||type&&type.text!=='*'&&(!typedLocals||[K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0))fail('typed local initialization/coercion lowering required');
                 if(typedLocals&&type&&type.text!=='*'){
                     const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
-                    if(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'))fail('typed local source reference lowering required');
+                    if(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'&&ref.kind!=='native'))fail('typed local source reference lowering required');
                 }
                 if(this.traits.some(t=>t.name===value.findChild(K.NAME).text))fail('local/lexical declaration-order lookup required');
             });
@@ -147,7 +147,7 @@ export class NativeGeneratedLexical {
         // Method spans join it to the emitter tree without weakening legacy identity.
         if(typedLocals)this.typedLocals=new NativeTypedLocals(this.ownClass,owner,[],node=>{
             const ref=node&&plan.references.find(r=>r.owner===owner&&r.start===node.start&&r.end===node.end);
-            return ref&&(ref.kind==='interface'||ref.kind==='declaration')?ref.identity:undefined;
+            return ref&&(ref.kind==='interface'||ref.kind==='declaration'||ref.kind==='native')?ref.identity:undefined;
         },true,this.nestedFunctions);
     }
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}

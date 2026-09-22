@@ -66,7 +66,8 @@
     "test:native-generated-lexical-functions": "node tests/native-generated-lexical-functions/run.cjs && node tests/native-generated-lexical-functions/run.cjs --combined",
     "test:native-generated-accessor-locals": "node tests/native-generated-accessor-locals/run.cjs && node tests/native-generated-accessor-locals/run.cjs --combined",
     "test:native-generated-reference-constants": "node tests/native-generated-reference-constants/run.cjs --signal && node tests/native-generated-reference-constants/run.cjs --combined --signal",
-    "test:native-signal-dispatch": "node tests/native-generated-reference-constants/run.cjs --dispatch && node tests/native-generated-reference-constants/run.cjs --dispatch --combined"
+    "test:native-signal-dispatch": "node tests/native-generated-reference-constants/run.cjs --dispatch && node tests/native-generated-reference-constants/run.cjs --dispatch --combined",
+    "test:native-generated-native-locals": "node tests/native-generated-native-locals/run.cjs && node tests/native-generated-native-locals/run.cjs --combined"
   },
   "keywords": [
     "actionscript",

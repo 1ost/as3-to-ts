@@ -323,8 +323,9 @@ export class NativeCallableClasses {
         const referenceToken = planned || this.generated ? (qname:string):string => {
             const binding=this.declarationDomain&&this.declarationDomain.bindings.find(value=>value.qname===qname)
                 ||this.generated&&[...this.generated.options.plan.interfaces,...this.generated.options.plan.bindings].find(value=>value.qname===qname);
-            if(!binding)this.fail('foreign local declaration is absent from its compiler domain');
-            return domainImport+'.'+binding.tokenExport;
+            const native=this.generated&&this.generated.options.plan.nativeBindings.find(value=>value.qname===qname);
+            if(!binding&&!native)this.fail('foreign local declaration is absent from its compiler domain');
+            return domainImport+'.'+(binding?binding.tokenExport:native.referenceExport);
         } : undefined;
         const text = (node: any): string => node.getText(file);
         const params = (member: any, signature: boolean): string => member.parameters.filter((p:any)=>signature||!this.generated||!p.dotDotDotToken).map((p: any) => {
