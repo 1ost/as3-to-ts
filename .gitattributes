@@ -49,3 +49,7 @@ tests/native-foreign-typed-locals/** -text whitespace=cr-at-eol,-blank-at-eol,-b
 
 # Preserve recovered source literals and their recorded hashes.
 recovery/september20-partial/** -text -whitespace
+
+# Preserve native AIR namespace-update source, binary and receipt bytes.
+tests/native-namespace-updates/source/** -text whitespace=cr-at-eol
+tests/native-namespace-updates/evidence/** -text whitespace=cr-at-eol
