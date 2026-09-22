@@ -34,3 +34,8 @@ remain explicit failures. Reference constructor parameters and typed generated
 method returns require further qualification. Complete generated reflection,
 application cohort admission and gameplay validation are not established here.
 Reports and actual input/output hashes are retained under .cache/native-generated-event.
+
+The command runs both with and without reference-coercion checking, matching
+the combined bulk-worker configuration. Only generated Event ancestry admits
+the qualified native is test; as casts and Event tests without that ancestry
+remain rejected (two additional combined-mode guards).

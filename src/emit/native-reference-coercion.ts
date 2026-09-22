@@ -25,7 +25,7 @@ export class NativeReferenceCoercion {
     private declarations = new Map<number, ReferenceLocal>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false, stringLocals = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -143,8 +143,11 @@ export class NativeReferenceCoercion {
                 && node.lastChild.kind === K.IDENTIFIER
                 && this.resolve(node.lastChild.qualifiedName || node.lastChild.text) === 'Date'
                 && options.plan.nativeBindings.some(binding => binding.qname === 'Date');
+            const nativeEventTest = nativeEvent && generated && node.kind === K.RELATION && node.children.some(child => child.text === 'is')
+                && node.lastChild.kind === K.IDENTIFIER && this.resolve(node.lastChild.text) === 'flash.events.Event'
+                && options.plan.nativeBindings.some(binding => binding.qname === 'flash.events.Event' && !!binding.eventBaseExport);
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
-                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest)
+                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest)
                 fail('reference type operation requires class-evaluation authority');
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text

@@ -12,6 +12,7 @@ const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
 const root=path.resolve('.cache/native-generated-event');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
 const modulePath=file=>{let relative=path.relative(run,file).replace(/\\/g,'/').replace(/\.ts$/,'');return relative.startsWith('.')?relative:'./'+relative;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
+const withReferences=process.argv.includes('--reference-coercion');
 const sources={};
 for(const [qname,file] of [['eventcases.EntryEvent',path.join(evidence,'source/eventcases/EntryEvent.as')],['declcases.ShadowEvent',path.join(storageEvidence,'source/declcases/ShadowEvent.as')]]){
  const source=fs.readFileSync(file,'utf8');sources[qname]={source,sourceSha256:hash(source)};
@@ -34,11 +35,12 @@ const options={customVisitors:[],importModules,definitionsByNamespace:{eventchai
   nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),
   nativeCallableStringModule:provider('AS3String')};
 let guards=0;
+if(withReferences)options.nativeReferenceCoercion={plan,module:'./domain',coercionModule:provider('AS3Type')};
 const reject=(source,bindings=providers)=>{
  assert.throws(()=>{
   const p=api.createNativeGeneratedDeclarationPlan({scope:'guard',providerModule:provider('AS3GeneratedClass'),providers:bindings,
    sources:{'Guard':{source,sourceSha256:hash(source)}}});
-  emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard'}});
+  emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard'},...(withReferences?{nativeReferenceCoercion:{plan:p,module:'./guard',coercionModule:provider('AS3Type')}}:{})});
  },/AS3_[A-Z_]+UNSUPPORTED/,source);guards++;
 };
 const guardSource='package {import flash.events.Event;public class Guard extends Event {public function Guard(){super("g");}}}';
@@ -55,6 +57,10 @@ for(const body of [
  'public function Guard(){super("g");} override public function clone():Event{return this;}',
  'public function Guard(){super("g");} public function inspect():*{return super.toString();}'
 ])reject('package {import flash.events.Event;public class Guard extends Event {'+body+'}}');
+if(withReferences){
+ reject('package {import flash.events.Event;public class Guard extends Event {public function Guard(){super("g");} public function cast():*{return this as Event;}}}');
+ reject('package {import flash.events.Event;public class Guard {public function test(value:*):*{return value is Event;}}}');
+}
 // Verify every admitted inherited trait against the independently pinned AIR tree.
 const projection=new (require('../../lib/emit/native-generated-traits').NativeGeneratedClassTraits)(plan,plan.scope,'declcases.ShadowEvent',sources['declcases.ShadowEvent'].source);
 const nativeTraits=canonical.find(r=>r.id==='instance-reflection').value.children.filter(n=>['method','accessor'].includes(n.tag));
@@ -96,7 +102,7 @@ async function main(){
    assert.deepEqual(actual,wanted);assert.deepEqual(browserRows,wanted);
    results.push({target,node:actual,browser:browserRows,inputs:Object.keys(bundle.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},held:['typed generated returns, native super methods, broad native base admission']},null,2));
- console.log('Generated Event subclasses: '+guards+' guards; 12 AIR rows in Node/Chromium, ES5/ES2015; exact 4 source classes. '+run);
+ fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({withReferences,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},held:['typed generated returns, native super methods, broad native base admission']},null,2));
+ console.log('Generated Event subclasses (references='+withReferences+'): '+guards+' guards; 12 AIR rows in Node/Chromium, ES5/ES2015; exact 4 source classes. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

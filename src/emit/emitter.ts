@@ -390,7 +390,7 @@ export default class Emitter {
                 throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: generated and consumer domain must agree');
             this.references = new NativeReferenceCoercion(this.source,this.options.nativeReferenceCoercion,!!this.generated,
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
-                this.options.nativeStringLocalCoercionModule !== undefined);
+                this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.eventBase));
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
