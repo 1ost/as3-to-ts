@@ -1,16 +1,17 @@
-# Complete source object-clone qualification probe (currently held)
+# Complete source object-clone qualification
 
-Run node tests/native-generated-object-clone/run.cjs. This retains both complete
-Base/Record sources from the engine native-object-clone AIR packet. It currently
-emits Base unchanged and exits nonzero at Record dynamic source routing in
-NativeGeneratedEmission. Public instance primitive literal constants are now
-qualified by the separate native-generated-instance-constants AIR fixture. Do not remove the
-constant, dynamic modifier, private fields or accessors to get a passing fixture.
+Run `node tests/native-generated-object-clone/run.cjs`. Both complete Base/Record
+subjects from the engine native-object-clone AIR packet are emitted unchanged.
+Public constants, private/protected fields, dynamic modifiers, all accessors and
+methods remain present. Their declaration plan allocates no unused script globals;
+these source bodies contain no lexical Function calls. A host observer compares
+12 AIR observations on ES5/ES2015 in Node and Chromium with zero type diagnostics.
 
-Once prerequisites are established, the observer compares all 12 AIR observations
-on ES5/ES2015 in Node/Chromium. It uses the actual common NativeObjectCodec, which
-currently only qualifies the seven Date rows independently. Generated-field
-serialization, registered aliases, complex getter ordering and Date prototype
-behavior remain unfinished. This file is a reproducible investigation checkpoint,
-not a passing test or completed compiler feature. No source implementations are
-replaced by the observer.
+The actual common NativeObjectCodec retains declared public variables, read/write
+accessors and own enumerable dynamic slots, preserving nested aliases and cycles.
+Constants, nonpublic slots, methods and one-sided accessors are omitted; source
+classes decode as plain objects. Five separate host controls reject forged source
+instances and unqualified source aliases, omit host descriptor overlays, preserve
+getter exceptions and verify clone alias isolation. Source Date behavior remains
+covered. Multiple getter ordering/mutation, registered source aliases and external
+serialization are unqualified. This is a native object envelope, not AMF encoding.
