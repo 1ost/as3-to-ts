@@ -194,3 +194,10 @@ export function nativeGeneratedDeclarationSource(plan: NativeGeneratedDeclaratio
     if (!context || scope !== plan.scope || !record || record.source !== source) fail('exact planned scope/source capability required');
     return record;
 }
+
+/** Internal consumers get the frozen source snapshot only through the live plan. */
+export function nativeGeneratedDeclarationInputs(plan: NativeGeneratedDeclarationPlan, scope: string): NativeGeneratedDeclarationInput {
+    const context = plan && contexts.get(plan);
+    if (!context || context.input.scope !== scope) fail('exact planned scope capability required');
+    return context.input;
+}

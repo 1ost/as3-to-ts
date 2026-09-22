@@ -43,7 +43,7 @@
     "test:native-namespace-updates": "node tests/native-namespace-updates/run.cjs",
     "test:decorator-modules": "node tests/decorator-modules/run.cjs",
     "test:reflection-namespace-isolation": "node tests/native-reflection-query/namespace-isolation.cjs",
-    "test:native-generated-declarations": "node tests/native-generated-declarations/run.cjs"
+    "test:native-generated-declarations": "node tests/native-generated-declarations/run.cjs && node tests/native-generated-declarations/traits.cjs"
   },
   "keywords": [
     "actionscript",
