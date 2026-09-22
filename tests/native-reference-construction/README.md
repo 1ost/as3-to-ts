@@ -22,3 +22,10 @@ base entry after child effects. The arguments-using constructor retains surplus
 arguments according to AIR. Native reference parameter types, interfaces, vectors,
 non-null defaults and general generated typed method returns remain separate.
 This is not validation of every OP2 data class or real-game flow.
+
+The fixture also enables ordinary numeric-method conversion alongside generated
+constructor conversion, as bulk emission does. A separate NumericEntry regression
+checks an optional int constructor without source arguments, its default and one
+valueOf evaluation. Generated entry owns these constructor parameters; the numeric
+method pass must not inject a second arguments-dependent conversion into its body.
+This extra regression is not counted among the five unchanged AIR classes/16 rows.

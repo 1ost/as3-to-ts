@@ -1724,7 +1724,15 @@ interface NumericParameterPlan {
 	init:Node;
 }
 
+function generatedConstructorOwnsParameters(emitter:Emitter, member:Node):boolean {
+    return !!emitter.generated && !!member && member.kind === NodeKind.FUNCTION
+        && !!member.findChild(NodeKind.NAME)
+        && member.findChild(NodeKind.NAME).text === emitter.generated.projection.binding.qname.split('.').pop();
+}
+
 function numericParameterPlans(emitter:Emitter, block:Node):NumericParameterPlan[] {
+    // Generated constructor entry already converts parameters before field effects.
+    if (generatedConstructorOwnsParameters(emitter,block.parent)) return [];
 	if (emitter.options.nativeNumericMethodParametersModule === undefined || !block.parent)
 		return [];
 	if ([NodeKind.FUNCTION, NodeKind.SET].indexOf(block.parent.kind) < 0) return [];
@@ -1787,6 +1795,7 @@ function emitNumericMethodParameterCoercion(emitter:Emitter, block:Node):void {
 }
 
 function emitNumericParameterDeclaration(emitter:Emitter, node:Node):boolean {
+    if (node.parent && node.parent.parent && generatedConstructorOwnsParameters(emitter,node.parent.parent.parent)) return false;
 	if (emitter.options.nativeNumericMethodParametersModule === undefined
 		|| !node.parent || node.parent.kind !== NodeKind.PARAMETER) return false;
 	const value = node, type = value.findChild(NodeKind.TYPE), name = value.findChild(NodeKind.NAME);

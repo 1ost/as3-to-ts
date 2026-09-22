@@ -9,12 +9,16 @@ const root=path.resolve('.cache/native-reference-construction');fs.mkdirSync(roo
 const modulePath=file=>{let relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return relative.startsWith('.')?relative:'./'+relative;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
 const sources={};for(const file of fs.readdirSync(path.join(evidence,'source/ctorcases'))){const source=fs.readFileSync(path.join(evidence,'source/ctorcases',file),'utf8');sources['ctorcases.'+file.slice(0,-3)]={source,sourceSha256:hash(source)};}
+// Composition regression: numeric constructor entry without source arguments.
+const numericSubject='package ctorcases {public class NumericEntry {public var value:int;public function NumericEntry(value:int=0){this.value=value;}}}';
+sources['ctorcases.NumericEntry']={source:numericSubject,sourceSha256:hash(numericSubject)};
 const eventModule=provider('AS3CanonicalEventConstruction');
 const providers={'flash.events.Event':{module:eventModule,exportName:'Event',nativeBase:'Event'}};
 const plan=api.createNativeGeneratedDeclarationPlan({scope:'air-reference-construction',providerModule:provider('AS3GeneratedClass'),sources,providers});
 const importModules={...Object.fromEntries(Object.keys(sources).map(name=>[name,'./'+name.split('.').pop()])), 'flash.events.Event':eventModule};
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
 const options={customVisitors:[],importModules,definitionsByNamespace:{ctorcases:Object.keys(sources).map(n=>n.split('.').pop()),'flash.events':['Event']},
+ nativeNumericMethodParametersModule:provider('AS3Coercion'),
  nativeComputedTypeTestModule:provider('AS3Type'),decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},
  nativeGeneratedDeclarations:{plan,module:'./domain'},nativeClassTraitsModule:provider('AS3GeneratedClass'),
  nativeReferenceCoercion:{plan,module:'./domain',coercionModule:provider('AS3Type')},
@@ -60,6 +64,6 @@ async function main(){
    results.push({target,node:actual,browser:browserRows,inputs:Object.keys(bundle.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
  fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},held:['native reference constructor types, non-null reference defaults, interfaces, vectors']},null,2));
- console.log('Reference construction: '+guards+' guards; 16 AIR rows in Node/Chromium, ES5/ES2015; exact 5 source classes. '+run);
+ console.log('Reference construction: '+guards+' guards; 16 AIR rows in Node/Chromium, ES5/ES2015; exact 5 AIR classes plus numeric composition regression. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

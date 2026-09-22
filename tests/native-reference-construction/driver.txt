@@ -1,3 +1,4 @@
+import {NumericEntry as NumericBinding} from './NumericEntry';
 import {readNativeClass} from '@NATIVE_CLASS@';
 import {PayloadData as DataBinding} from './PayloadData';
 import {ChildData as ChildDataBinding} from './ChildData';
@@ -6,6 +7,9 @@ import {RequiredRecord as RequiredBinding} from './RequiredRecord';
 import {ChildEvent as ChildBinding} from './ChildEvent';
 export function run(){
  const Data=readNativeClass(DataBinding),ChildData=readNativeClass(ChildDataBinding),Payload:any=readNativeClass(EventBinding),Required:any=readNativeClass(RequiredBinding),Child=readNativeClass(ChildBinding);
+ const Numeric:any=readNativeClass(NumericBinding);
+ let conversions=0;const n=new Numeric({valueOf(){conversions++;return 4.9;}});
+ if(n.value!==4||conversions!==1||new Numeric().value!==0)throw Error('numeric constructor composition');
  const rows:any[]=[];
  function capture(id:string,args:any[]){
   Payload.log=[];Payload.captured=null;let value:any=null,error:any[]=[];
