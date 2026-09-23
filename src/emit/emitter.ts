@@ -1593,7 +1593,7 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let objNode = inNode.children[0];
 	let blockNode = node.children[2];
     const localTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
-    if(emitter.generated&&localTarget&&!localTarget.bound&&['*','String'].indexOf(localTarget.as3Type)>=0){
+    if(emitter.generated&&localTarget&&!localTarget.bound&&['*','String','Object'].indexOf(localTarget.as3Type)>=0){
         // The legacy parser represents a member target as a NAME plus a malformed
         // IN span. Require the original simple-target separator before lowering.
         const separator=emitter.source.slice(varNode.end,objNode.start).replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'').trim();

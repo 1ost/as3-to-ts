@@ -1,0 +1,20 @@
+// Observer only. Enumeration is the complete unchanged captured source.
+const Enumeration=load('nativeClass').readNativeClass(load('Enumeration').Enumeration);
+const rows=[],row=(id,value)=>rows.push({id,value}),e=new Enumeration();
+const obj=entries=>{const value=api.as3CreateDynamicObject();for(const [key,item] of entries||[])api.as3SetProperty(value,key,item);return value;};
+row('empty',[e.values(null),e.values(undefined),e.values([]),e.values(obj())]);
+row('scalars',[e.values(17),e.values(true),e.values('abc')]);
+row('array',e.values([17,true,false,null,undefined,'x',-0]));
+const sparse=[];sparse[2]='only';row('sparse',e.values(sparse));
+row('object',e.values(obj([['one',42]])));
+const d=new api.Dictionary();api.as3SetProperty(d,obj(),23);row('dictionary',e.values(d));
+row('flow',e.flow(['skip',1,'stop',2]));row('flow-last-skip',e.flow([1,'skip']));
+row('stable',e.stable([1,2,3],[99]));
+const events=[],convert=()=>{events.push('toString');return 'converted';};
+const subject=obj([['toString',convert],['valueOf',()=>{events.push('valueOf');return 3;}]]);
+row('identity',e.identities([subject,obj(),subject,null,undefined],subject));
+row('array-identity',e.identities([events],events));
+row('function-identity',e.identities([convert],convert));
+row('conversion-events',events);
+row('undefined',e.identities([undefined],undefined));
+globalThis.result=rows;
