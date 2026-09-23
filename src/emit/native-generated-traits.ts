@@ -75,6 +75,12 @@ export class NativeGeneratedClassTraits {
                 {name:'getStackTrace',kind:'method',parameterCount:0,declaredBy}];
             surfaces.set('Error',{instance,statics:[],dynamic:true,final:false});
         }
+        if(plan.nativeBindings.some(binding=>binding.qname==='flash.events.EventDispatcher'&&!!binding.nativeBaseExport)) {
+            const declaredBy='flash.events::EventDispatcher';
+            const instance: Member[] = [['willTrigger',1],['removeEventListener',3],['toString',0],['addEventListener',5],['dispatchEvent',1],['hasEventListener',1]]
+                .map(([name,parameterCount])=>({name,parameterCount,kind:'method',declaredBy} as Member));
+            surfaces.set('flash.events.EventDispatcher',{instance,statics:[],dynamic:false,final:false});
+        }
         const type = (qname: string, node: Node): TraitType => {
             if (!node) return '*';
             if(node.kind===K.VECTOR){

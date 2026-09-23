@@ -626,7 +626,7 @@ export class NativeCallableClasses {
                 }
             });
         }
-        const bindInstance = instanceMethods.filter(key=>!nativeBase||(nativeBase.qname==='Error'?['getStackTrace']:['clone','toString','formatToString','stopImmediatePropagation','preventDefault','isDefaultPrevented','stopPropagation']).indexOf(key)<0)
+        const bindInstance = instanceMethods.filter(key=>!nativeBase||(nativeBase.qname==='Error'?['getStackTrace']:nativeBase.qname==='flash.events.EventDispatcher'?['addEventListener','removeEventListener','dispatchEvent','hasEventListener','willTrigger','toString']:['clone','toString','formatToString','stopImmediatePropagation','preventDefault','isDefaultPrevented','stopPropagation']).indexOf(key)<0)
             .map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
         const defaults = (this.metadata || this.generated ? generation + '.enterInstance(this);\n' : '')
             + (nativeBase ? intrinsic+'.prepareNativeBase(this,'+nativeBaseClass+');\n' : '')
