@@ -2,9 +2,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const compiler=path.resolve(__dirname,'../..'),root=path.resolve(compiler,'../op2-html5'),engine=path.resolve(compiler,'../LayaAir-op2');
 const api=require(path.join(compiler,'lib')),parse=require(path.join(compiler,'lib/parse')),emit=require(path.join(compiler,'lib/emit')),ts=require(path.join(compiler,'node_modules/typescript'));
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
-const evidence=path.join(engine,'tests/nativeFlashOracle/generated-source-as'),captured=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(engine,'tests/nativeFlashOracle/generated-source-is'),captured=require(path.join(evidence,'verify.cjs'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const base=path.join(compiler,'.cache/native-generated-source-as');fs.mkdirSync(base,{recursive:true});const run=fs.mkdtempSync(path.join(base,'run-'));
+const base=path.join(compiler,'.cache/native-generated-source-is');fs.mkdirSync(base,{recursive:true});const run=fs.mkdtempSync(path.join(base,'run-'));
 const modulePath=file=>{let r=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
 const sources={};
@@ -13,7 +13,7 @@ for(const q of ["castcases.Tracker","castcases.Target","castcases.NullTarget","c
  if(q.startsWith('cn.'))assert.equal(source,fs.readFileSync(path.join(root,'game-client-flash/src',q.replaceAll('.','/')+'.as'),'utf8'));
 }
 const nativeProviders={};
-const plan=api.createNativeGeneratedDeclarationPlan({scope:'native-generated-source-as',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),sources});
+const plan=api.createNativeGeneratedDeclarationPlan({scope:'native-generated-source-is',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.join(compiler,'utils',name+'.ts'))]));
 const fileFor=q=>q.split('.').pop(),definitionsByNamespace={};
 for(const q of Object.keys(sources)){const i=q.lastIndexOf('.');(definitionsByNamespace[q.slice(0,i)]??=[]).push(q.slice(i+1));}
@@ -25,10 +25,10 @@ const options={customVisitors:[],nativeGlobalModules:{Date:provider("AS3Date")},
 const combined=true;if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./declarationDomain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
 let guards=0;
 for(const [body,missingHelper,reason] of [
- ['public function cast(value:*):*{return value as Target;}',true,/explicit module binding required/],
- ['public static var value:Object=null as Target;',false,/source as during class initialization/],
- ['public function cast(value:*,Target:Class):*{return value as Target;}',false,/shadowed source as target/],
- ['public function test(value:*,Target:Class):Boolean{return value is Target;}',false,/shadowed source is target/]
+ ['public function test(value:*):Boolean{return value is Target;}',true,/explicit module binding required/],
+ ['public static var value:Boolean=null is Target;',false,/source is during class initialization/],
+ ['public function test(value:*,Target:Class):Boolean{return value is Target;}',false,/shadowed source is target/],
+ ['public function test(value:*,Target:*):Boolean{return value is Target;}',false,/shadowed source is target/]
 ]) {
  const source='package castcases {public class Guard {public function Guard(){super();} '+body+'}}';
  const p=api.createNativeGeneratedDeclarationPlan({scope:'guard-source-as',providerModule:provider('AS3GeneratedClass'),sources:{...sources,'castcases.Guard':{source,sourceSha256:hash(source)}},providers:nativeProviders});
@@ -50,8 +50,8 @@ const moduleFor=n=>'src/layaAir/flash/'+(['AS3SourceError','IllegalOperationErro
 const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
 const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
 const driverFile=path.join(__dirname,'runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
-const wanted=captured;assert.equal(wanted.length,11);
-for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='null').value[0]=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
+const wanted=captured;assert.equal(wanted.length,12);
+for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='null').value[0]=true]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.join(root,'game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');specs.push({name:relative,code:out.outputText});}
@@ -68,6 +68,6 @@ const status=diagnostics.length||results.some(r=>r.mismatches.length)?'failed':'
 fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({status,guards,emitted,results,providerGraph,
  declarationDomain:{file:path.join(run,'declarationDomain.ts'),sha256:hash(plan.moduleSource)},
  helpers:['bound','classBound','nativeClass','callableClass'].map(name=>{const file=path.join(compiler,'utils',name+'.ts');return {name,file,sha256:hash(fs.readFileSync(file))};}),
- observer:{file:driverFile,sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:3,scope:'Seven complete subjects and eleven AIR observations for source-class as casts. Native/interface and class-initializer casts remain held.'},null,2));
+ observer:{file:driverFile,sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:3,scope:'Seven complete subjects and twelve AIR observations for source-class is tests. Native/interface and class-initializer tests retain separate boundaries.'},null,2));
 console.log(JSON.stringify({run,status,guards,sources:emitted.length,airRows:wanted.length,typeErrors:diagnostics.length,mismatches:results.map(r=>({target:r.target,ids:r.mismatches.map(m=>m.id)}))}));if(status!=='passed')process.exitCode=1;
 })().catch(e=>{console.error(e);process.exitCode=1;});

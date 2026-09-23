@@ -3926,19 +3926,23 @@ function emitRelation(emitter:Emitter, node:Node):void {
     const interfaceAs = emitter.generated && emitter.references && node.children.length===3
         && node.children[1].kind===NodeKind.AS && node.lastChild.kind===NodeKind.IDENTIFIER
         && emitter.references.sourceInterface(node.lastChild.text);
-    if (emitter.generated && node.children.length===3 && node.children[1].kind===NodeKind.AS
+    const sourceIs = emitter.generated && emitter.references && node.children.length===3
+        && node.children[1].text==='is' && node.lastChild.kind===NodeKind.IDENTIFIER
+        && emitter.references.sourceClass(node.lastChild.text);
+    if (emitter.generated && node.children.length===3 && (node.children[1].kind===NodeKind.AS || sourceIs)
         && node.lastChild.kind===NodeKind.IDENTIFIER
         && (interfaceAs || emitter.classInitializers.resolve(node,node.lastChild.text)==='lazy'
             || node.lastChild.text===emitter.currentClassName)) {
         const target=node.lastChild,definition=emitter.findDefInScope(target.text);
+        const operation=sourceIs?'is':'as';
         if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
-            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: shadowed source as target requires Class operand authority');
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: shadowed source '+operation+' target requires Class operand authority');
         let method=node.parent;
         while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
-        if(!method)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: source as during class initialization requires separate authority');
+        if(!method)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: source '+operation+' during class initialization requires separate authority');
         const module=generatedModule(emitter.options.nativeComputedTypeTestModule);
-        let helper='__as3_source_as';while(emitter.source.indexOf(helper)>=0)helper+='_';
-        emitter.ensureImportIdentifier('as3As as '+helper,module,false);
+        let helper='__as3_source_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
+        emitter.ensureImportIdentifier((sourceIs?'as3Is':'as3As')+' as '+helper,module,false);
         emitter.nativeSourceHelpers.add(helper);
         emitter.catchup(node.start);emitter.insert(helper+'(');
         visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
