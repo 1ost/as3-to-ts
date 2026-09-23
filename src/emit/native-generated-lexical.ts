@@ -340,9 +340,9 @@ export class NativeGeneratedLexical {
         else if(node.kind===K.CALL){target=node.children[0];operation='call';args=node.children[1];}
         else if([K.PRE_INC,K.POST_INC,K.PRE_DEC,K.POST_DEC].indexOf(node.kind)>=0) {
             const found=resolve(node.children[0]);if(!found)return false;
-            if(!found.trait||found.trait.kind!=='variable'||found.trait.static||found.trait.visibility!=='private'
+            if(!found.trait||found.trait.kind!=='variable'||found.trait.static||['private','protected'].indexOf(found.trait.visibility)<0
                 ||!found.trait.type||['int','uint','Number'].indexOf(found.trait.type.text)<0)
-                fail('lexical numeric update requires private instance numeric variable');
+                fail('lexical numeric update requires private or protected instance numeric variable');
             const delta=node.kind===K.PRE_INC||node.kind===K.POST_INC?'+1':'-1';
             const prefix=node.kind===K.PRE_INC||node.kind===K.PRE_DEC;
             // Storage conversion happens in the provider; the prefix expression
