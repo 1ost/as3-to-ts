@@ -30,7 +30,7 @@ for(const [name,bindings] of [
 ]) {
  const type=name.split('.').pop(),source='package {'+(name.includes('.')?'import '+name+';':'')+'public class Guard {public function Guard(){super();} public function echo(value:*):'+type+' {return value;}}}';
  const p=api.createNativeGeneratedDeclarationPlan({scope:'guard-native-return',providerModule:provider('AS3GeneratedClass'),sources:{Guard:{source,sourceSha256:hash(source)}},providers:bindings});
- assert.throws(()=>emit(parse('Guard.as',source),source,{...options,importModules:{...options.importModules,...Object.fromEntries(Object.entries(bindings).map(([q,b])=>[q,b.module]))},nativeGeneratedDeclarations:{plan:p,module:'./guard'},nativeReferenceCoercion:{plan:p,module:'./guard',coercionModule:provider('AS3Type')}}),/generated native return type requires separate qualification/);
+ assert.throws(()=>emit(parse('Guard.as',source),source,{...options,nativeGlobalModules:{},importModules:{...options.importModules,...Object.fromEntries(Object.entries(bindings).map(([q,b])=>[q,b.module]))},nativeGeneratedDeclarations:{plan:p,module:'./guard'},nativeReferenceCoercion:{plan:p,module:'./guard',coercionModule:provider('AS3Type')}}),/generated native return type requires separate qualification/);
  guards++;
 }
 fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];

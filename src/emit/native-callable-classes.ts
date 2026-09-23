@@ -26,7 +26,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -574,7 +574,7 @@ export class NativeCallableClasses {
                 const returns=sourceMethod.findChild(K.VECTOR)||sourceMethod.findChild(K.TYPE);
                 if(returns && returns.text !== 'void' && returns.text !== '*') {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
-                    if(reference&&reference.kind==='native'&&reference.identity!=='flash.utils.Dictionary'&&!(this.displayReference&&reference.identity==='flash.display.DisplayObject')&&!(reference.identity==='flash.events.Event'
+                    if(reference&&reference.kind==='native'&&reference.identity!=='flash.utils.Dictionary'&&!(this.dateReference&&reference.identity==='Date')&&!(this.displayReference&&reference.identity==='flash.display.DisplayObject')&&!(reference.identity==='flash.events.Event'
                         &&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&!!binding.nativeBaseExport)))
                         this.fail('generated native return type requires separate qualification');
                     const sourceBody=sourceMethod.findChild(K.BLOCK);
