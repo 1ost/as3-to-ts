@@ -25,7 +25,7 @@ export class NativeGeneratedLexical {
     readonly nestedFunctions: NestedLocalFunction[] = [];
     readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
     readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [];
-    private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string}>>();
+    private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string;readonly kind:string}>>();
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
         let serial=0;
@@ -289,7 +289,7 @@ export class NativeGeneratedLexical {
             +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
     emit(emitter:any,node:Node,visit:(emitter:any,node:Node)=>void):boolean {
-        const resolve=(value:Node):{trait:Trait;receiver:Node;publicName?:string}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;publicName?:string;publicMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -318,9 +318,10 @@ export class NativeGeneratedLexical {
                     if(!this.foreignPublicMembers.has(identity)) {
                         const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                         this.foreignPublicMembers.set(identity,new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,input.sources[identity].source).instanceTraits
-                            .filter(member=>member.kind==='variable'||member.kind==='accessor'));
+                            .filter(member=>member.kind==='variable'||member.kind==='accessor'||member.kind==='method'));
                     }
-                    if(this.foreignPublicMembers.get(identity).some(member=>member.name===name))return {trait:null,receiver,publicName:name};
+                    const member=this.foreignPublicMembers.get(identity).find(member=>member.name===name);
+                    if(member)return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method'};
                 }
                 if(!lexicalName)return null;
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
@@ -376,7 +377,19 @@ export class NativeGeneratedLexical {
         }
         const found=resolve(target);if(!found)return false;
         if(found.publicName) {
-            if(operation==='call'||operation==='set'&&node.children[1].text!=='=')fail('foreign public lexical collision operation');
+            if(operation==='call'&&found.publicMethod) {
+                let helper='__as3_generated_foreign_call';while(emitter.source.indexOf(helper)>=0)helper+='_';
+                emitter.ensureImportIdentifier('as3CallProperty as '+helper,emitter.generated.propertyModule,false);
+                emitter.nativeSourceHelpers.add(helper);
+                // Statically resolved AS3 method calls evaluate receiver and
+                // arguments before dispatch, even when the receiver is null.
+                emitter.catchup(node.start);
+                emitter.insert('(<any>((target:any,values:any[])=>'+helper+'(target,'+JSON.stringify(found.publicName)+',()=>values))(');
+                emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
+                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                emitter.insert(']))');emitter.skipTo(node.end);return true;
+            }
+            if(operation==='call'||operation==='set'&&(found.publicMethod||node.children[1].text!=='='))fail('foreign public lexical collision operation');
             const member=operation==='set'?'as3SetProperty':'as3GetProperty';
             let helper='__as3_generated_foreign_'+member;while(emitter.source.indexOf(helper)>=0)helper+='_';
             emitter.ensureImportIdentifier(member+' as '+helper,emitter.generated.propertyModule,false);
