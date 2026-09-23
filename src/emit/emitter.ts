@@ -454,7 +454,7 @@ export default class Emitter {
 
 		//if(VERBOSE >= 1) {
 		if ((VERBOSE_MASK & ReportFlags.KEY_POINTS) == ReportFlags.KEY_POINTS) {
-			console.log("emit() ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑");
+			console.log("emit() â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘");
 		}
 
 		if (this.options.nativeArrayCreationModule !== undefined) {
@@ -4899,13 +4899,18 @@ export function emitIdent(emitter:Emitter, node:Node):void {
         && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def,'as3Type'))
         && emitter.references.sourceClass(node.text)) {
         const expression = outerEncapsulatedExpression(node), parent = expression.parent;
-        if (!parent || parent.kind !== NodeKind.CALL || !parent.parent || parent.parent.kind !== NodeKind.NEW)
-            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: consumer class value currently requires direct construction');
+        const member=parent&&parent.kind===NodeKind.DOT&&parent.children[0]===expression&&parent.children[1];
+        const callee=member&&outerEncapsulatedExpression(parent),call=callee&&callee.parent;
+        const staticCall=member&&member.kind===NodeKind.LITERAL&&call&&call.kind===NodeKind.CALL
+            &&call.children[0]===callee&&(!call.parent||call.parent.kind!==NodeKind.NEW)
+            &&emitter.references.publicStaticMethod(node.text,member.text);
+        if (!staticCall&&(!parent || parent.kind !== NodeKind.CALL || !parent.parent || parent.parent.kind !== NodeKind.NEW))
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: consumer class value requires direct construction or an own public static call');
         let read = '__as3_reference_readClass';
         while (emitter.source.indexOf(read) >= 0) read += '_';
         emitter.ensureImportIdentifier(node.text);
         emitter.ensureImportIdentifier('readNativeClass as ' + read,emitter.options.nativeClassHelperModules.nativeClass,false);
-        emitter.insert('(' + read + '(' + node.text + ',"unsupported"))');
+        emitter.insert('(' + read + '(' + node.text + ','+JSON.stringify(staticCall?'read':'unsupported')+'))');
         emitter.skipTo(node.end); return;
     }
 	if (emitter.classInitializers.enabled && def && (def.bound || Object.prototype.hasOwnProperty.call(def, 'as3Type')))

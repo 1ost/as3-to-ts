@@ -230,6 +230,22 @@ export class NativeReferenceCoercion {
         }
         return null;
     }
+    publicStaticMethod(name:string,member:string):boolean {
+        const identity=this.resolve(name),plan=this.options.plan;
+        if(!plan.bindings.some(binding=>binding.qname===identity))return false;
+        const input=nativeGeneratedDeclarationInputs(plan,plan.scope),source=input.sources[identity].source;
+        let declaration=this.constantDeclarations.get(identity);
+        if(!declaration){
+            declaration=nativeGeneratedConsumerResolver(plan,source).root.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS);
+            this.constantDeclarations.set(identity,declaration);
+        }
+        return declaration.findChild(K.CONTENT).children.some(node=>{
+            if(node.kind!==K.FUNCTION||node.findChild(K.NAME).text!==member)return false;
+            const mods=node.findChild(K.MOD_LIST),flags=mods?mods.children.map(mod=>mod.text):[];
+            return flags.indexOf('public')>=0&&flags.indexOf('static')>=0
+                &&flags.every(flag=>['public','static','final'].indexOf(flag)>=0);
+        });
+    }
     sourceClass(name: string): boolean {
         const identity = this.resolve(name);
         return this.options.plan.bindings.some(binding => binding.qname === identity);

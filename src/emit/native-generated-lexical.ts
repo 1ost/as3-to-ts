@@ -234,9 +234,12 @@ export class NativeGeneratedLexical {
         const value=input.sources[trait.owner].source.slice(init.start,end(init)).trim();
         if(value==='null')return 'null';
         if(/^[+-]?\d+$/.test(value)&&trait.type&&trait.type.text==='int'&&Number(value)>=-2147483648&&Number(value)<=2147483647)return value;
+        const expression=unwrapEncapsulatedExpression(init.children[0]);
+        // A call initializer runs in cinit after default storage publication;
+        // unlike an int literal it is not an early trait value.
+        if(trait.visibility==='private'&&trait.type&&trait.type.text==='int'&&expression&&expression.kind===K.CALL)return undefined;
         if(trait.type&&['int','uint','Number','Boolean','String','*'].indexOf(trait.type.text)>=0)
             fail('static lexical primitive initializer requires qualification');
-        const expression=unwrapEncapsulatedExpression(init.children[0]);
         if(!expression||[K.ARRAY,K.CALL,K.NEW,K.DOT,K.IDENTIFIER].indexOf(expression.kind)<0
             ||expression.kind===K.IDENTIFIER&&['true','false','undefined','NaN','Infinity'].indexOf(expression.text)>=0)
             fail('static lexical literal storage requires qualification');
