@@ -1579,6 +1579,25 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let inNode = node.children[1];
 	let objNode = inNode.children[0];
 	let blockNode = node.children[2];
+    const wildcardTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
+    if(emitter.generated&&wildcardTarget&&!wildcardTarget.bound&&wildcardTarget.as3Type==='*'){
+        // The legacy parser represents a member target as a NAME plus a malformed
+        // IN span. Require the original simple-target separator before lowering.
+        const separator=emitter.source.slice(varNode.end,objNode.start).replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'').trim();
+        if(separator!=='in')throw new Error('AS3_ENUMERATION_UNSUPPORTED: wildcard for-each requires a simple local target');
+        if(!emitter.options.nativeEnumeration)throw new Error('AS3_ENUMERATION_UNSUPPORTED: explicit common enumeration providers required');
+        const keys=dictionaryEnumerationHelper(emitter,'as3EnumerableKeys'),get=dictionaryEnumerationHelper(emitter,'as3GetProperty');
+        let receiver:string,cursor:string,step:string;
+        do {emitter.loopObjectCounter++;receiver='__as3_eachReceiver_'+emitter.loopObjectCounter;cursor='__as3_eachKeys_'+emitter.loopObjectCounter;step='__as3_eachStep_'+emitter.loopObjectCounter;}
+        while([receiver,cursor,step].some(name=>emitter.source.indexOf(name)>=0));
+        emitter.catchup(node.start);emitter.insert('{ const '+receiver+'=');
+        emitter.skipTo(objNode.start);visitNode(emitter,objNode);emitter.catchup(objNode.end);
+        emitter.insert(';const '+cursor+'='+keys+'('+receiver+');let '+step+':any;try{');
+        if(emitter.pendingStatementLabel){emitter.insert(emitter.pendingStatementLabel+':');emitter.pendingStatementLabel=null;}
+        emitter.insert('for(;!('+step+'='+cursor+'.next()).done;){'+(emitter.getIdentifierRemap(varNode.text)||varNode.text)+'='+get+'('+receiver+','+step+'.value);');
+        emitter.skipTo(blockNode.start);visitNode(emitter,blockNode);finishEnumerationBody(emitter,blockNode,false);
+        emitter.insert('}}finally{if('+step+'&&!'+step+'.done&&'+cursor+'.return)'+cursor+'.return();}}');return;
+    }
 	const dictionaryReceiver = nativeDictionaryEnumerationReceiver(emitter, objNode);
 	const enumerationKeys = dictionaryReceiver ? dictionaryEnumerationHelper(emitter, 'as3EnumerableKeys') : null;
 

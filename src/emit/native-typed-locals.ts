@@ -70,8 +70,15 @@ export class NativeTypedLocals {
             };
             const body=node.findChild(K.BLOCK);if(body)collect(body);
             const enumeration=(value:Node):void=>{
-                if(value.kind===K.FOREACH&&!locals.some(local=>local.name===value.children[0].text&&!!local.reference))
-                    this.fail('source enumeration requires a declared reference local');
+                if(value.kind===K.FOREACH){
+                    const name=value.children[0].text;
+                    const reference=locals.some(local=>local.name===name&&!!local.reference);
+                    const wildcard=this.matchSourceSpans&&wildcards.indexOf(name)>=0;
+                    if(!reference&&!wildcard)this.fail('source enumeration requires a declared reference or wildcard local');
+                    if(wildcard)for(let scope=value.parent;scope&&scope!==node;scope=scope.parent)
+                        if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===name)
+                            this.fail('wildcard enumeration catch-shadow target held');
+                }
                 value.children.forEach(enumeration);
             };if(body)enumeration(body);
             const classParameters=node.findChild(K.PARAMETER_LIST).children.map(p=>p.findChild(K.NAME_TYPE_INIT)).filter(d=>d&&d.findChild(K.TYPE)&&d.findChild(K.TYPE).text==='Class').map(d=>d.findChild(K.NAME).text);
