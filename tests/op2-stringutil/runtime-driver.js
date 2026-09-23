@@ -1,4 +1,4 @@
-const rows=[],nc=load("nativeClass"),DynamicReplace=nc.readNativeClass(load("DynamicReplace").DynamicReplace),d=new DynamicReplace(),StringUtil=load("StringUtil").StringUtil;
+const rows=[],nc=load("nativeClass"),DynamicReplace=nc.readNativeClass(load("DynamicReplace").DynamicReplace),d=new DynamicReplace(),StringUtil=typeof generatedStringUtil!=='undefined'&&generatedStringUtil?nc.readNativeClass(load("StringUtil").StringUtil):load("StringUtil").StringUtil;
 function record(id,fn){try{rows.push({id,value:fn()});}catch(e){
  const info=(api.isAS3SourceError(e)?{name:api.as3GetProperty(e,'name'),errorID:api.as3GetProperty(e,'errorID')}:null);rows.push({id,value:{name:info?.name||e.name,id:info?.errorID||e.errorID||0}});
 }}

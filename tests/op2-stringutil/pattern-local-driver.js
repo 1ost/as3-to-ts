@@ -1,0 +1,12 @@
+const PatternLocal=nc.readNativeClass(load('PatternLocal').PatternLocal),patternLocal=new PatternLocal();
+record('local-global-repeat',()=>patternLocal.repeat('aa'));
+record('local-fresh-call',()=>patternLocal.repeat('aa'));
+record('local-global-miss',()=>patternLocal.repeat('bbb'));
+record('local-global-astral',()=>patternLocal.repeat('\ud83d\ude00a'));
+record('local-null',()=>patternLocal.convert(null));
+record('local-undefined',()=>patternLocal.convert(undefined));
+record('local-string',()=>patternLocal.convert('undefined'));
+record('local-number',()=>patternLocal.convert(123));
+record('local-unicode',()=>patternLocal.unicode('\u4e2da\u6587'));
+record('local-astral',()=>patternLocal.unicode('\ud83d\ude00a'));
+record('local-lone-surrogate',()=>patternLocal.unicode('\ud800'));

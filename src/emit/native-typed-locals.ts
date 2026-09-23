@@ -10,7 +10,7 @@ export interface NestedLocalFunction {start:number;end:number;name:string;method
 export class NativeTypedLocals {
     private methods: Method[] = [];
     private memberNames: string[] = [];
-    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false, private nested: NestedLocalFunction[] = [], private anonymous: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = []) {
+    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false, private nested: NestedLocalFunction[] = [], private anonymous: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [], private patternLocal?: (type:Node)=>boolean) {
         owner.findChild(K.CONTENT).children.forEach(member=>{
             if([K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0)
                 member.findChildren(K.NAME_TYPE_INIT).forEach(d=>this.memberNames.push(d.findChild(K.NAME).text));
@@ -47,6 +47,7 @@ export class NativeTypedLocals {
                     this.fail('source destructuring targets held');
                 if ([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(value.kind)>=0) value.findChildren(K.NAME_TYPE_INIT).forEach(decl=>{
                     const annotation=decl.findChild(K.VECTOR)||decl.findChild(K.TYPE),reference=referenceFor && referenceFor(annotation);
+                    if(annotation&&this.patternLocal&&this.patternLocal(annotation))return;
                     const type=reference || nativeSourceTypeIdentity(annotation,qname,imports),name=decl.findChild(K.NAME).text;
                     const other=declared.find(local=>local.name===name);
                     if(other&&other.type!==type&&(type!=='*'||other.type!=='*'))this.fail('conflicting local declaration types');

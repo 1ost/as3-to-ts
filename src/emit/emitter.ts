@@ -2390,6 +2390,13 @@ function emitObjectLiteral(emitter:Emitter, node:Node):void {
 }
 
 function emitNameTypeInit(emitter:Emitter, node:Node):void {
+    const pattern=emitter.generated&&emitter.generated.options.plan.patternLocals.find(p=>p.owner===emitter.generated.lexical.owner&&p.declarationStart===node.start);
+    if(pattern){
+        const module=nativePatternModule(emitter),compile=propertyHelper(emitter,'compileSourceStringPattern',module);
+        emitter.declareInScope({name:pattern.name,type:'any',as3Type:'RegExp'});
+        emitter.catchup(node.start);emitter.insert(pattern.name+': any = '+compile+'('+JSON.stringify(pattern.source)+','+JSON.stringify(pattern.flags)+')');
+        emitter.skipTo(Math.max(getEffectiveNodeEnd(node),pattern.declarationEnd));return;
+    }
 	if (emitReferenceStringParameter(emitter, node)) return;
 	if (emitNumericParameterDeclaration(emitter, node)) return;
 	const namespaceMember = emitter.namespaces.member(node.findChild(NodeKind.NAME));
@@ -3282,6 +3289,15 @@ function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
+    const pattern=emitter.generated&&emitter.generated.options.plan.patternLocals.find(p=>p.owner===emitter.generated.lexical.owner&&p.calls.indexOf(node.start)>=0);
+    if(pattern){
+        const helper=propertyHelper(emitter,'sourcePatternTest',nativePatternModule(emitter));
+        emitter.catchup(node.start);emitter.insert(helper+'('+pattern.name);
+        node.findChild(NodeKind.ARGUMENTS).children.forEach(argument=>{
+            emitter.insert(',');emitter.skipTo(getExpressionStart(argument));visitNode(emitter,argument);emitter.catchup(getEffectiveNodeEnd(argument));
+        });
+        emitter.insert(')');emitter.skipTo(getEffectiveNodeEnd(node));return;
+    }
     if (emitInterfaceReceiverCall(emitter,node)) return;
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
@@ -3522,6 +3538,15 @@ function emitJSONParse(emitter:Emitter,node:Node):boolean {
     visitNodes(emitter,args.children);
     const close=args.end>args.start&&emitter.source.charAt(args.end-1)===')'?args.end-1:args.end;
     emitter.catchup(close);emitter.insert(')');emitter.skipTo(node.end);return true;
+}
+
+function nativePatternModule(emitter:Emitter):string {
+    const input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+    const module=emitter.options.nativeStringIntrinsicsModule;
+    if(!module||!input.patternProviderModule||!emitter.options.nativeTypedLocals
+        ||module!==xmlGlobalProviderModule(input.patternProviderModule,emitter.generated.options.module))
+        throw new Error('AS3_PATTERN_LOCAL_UNSUPPORTED: exact generated pattern provider and typed locals required');
+    return generatedModule(module);
 }
 
 function emitStringReplace(emitter:Emitter, node:Node):boolean {
