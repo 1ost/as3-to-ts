@@ -16,7 +16,7 @@ Interface signature annotations use nativeVectorTypes with the same exact plan.
 No Vector Array substitution or authored body rewriting is used.
 
 Nine rejection guards retain Vector construction, static/constant/accessor or
-private storage, optional/constructor parameters, source class element publication and nested
+protected storage, optional/constructor parameters, source class element publication and nested
 specialization publication as separate prerequisites. Three comparison controls
 detect row omission, ordering and loss of raw undefined assignment results.
 
@@ -26,3 +26,14 @@ source Error catch/nominal identity for arity failures remains a separate gap.
 Vector coercion failures in the full authored catch use genuine source TypeErrors.
 General builtin TypeError Class identity, complete Vector reflection and actual
 bulk/application admission are not established by this focused fixture.
+
+Add --private (also with --combined) to emit the complete PrivateVectorSlot from
+the separately authenticated generated-private-vector-queues AIR packet. This
+adds 11 private field observations to the 33 boundary observations, for ten
+complete subjects and 44 rows. It covers null defaults, accepted identity,
+nullish coercion, raw assignment results, failed writes preserving storage,
+authored source Error catches and separate instance slots. The compiler binds
+the exact planned specialization through common AS3LexicalMembers; no new local
+storage implementation is supplied. Source Vector construction, static and
+protected Vector storage remain held. The queue construction observations in
+the AIR packet are not claimed by this private storage fixture.

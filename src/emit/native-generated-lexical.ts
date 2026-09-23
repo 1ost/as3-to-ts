@@ -63,9 +63,12 @@ export class NativeGeneratedLexical {
                         }
                         fail('ambiguous lexical declaration: '+local);
                     }
-                    if(node.findChild(K.VECTOR))fail('lexical vector storage authority');
+                    const vector=node.findChild(K.VECTOR);
+                    if(vector&&(visibility!=='private'||member.kind!==K.VAR_LIST
+                        ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
+                        fail('lexical vector storage authority');
                     const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':'method',owner:name,node,
-                        type:node.findChild(K.TYPE),key:fresh('key'),access:fresh('access'),parameterCount:member.kind===K.FUNCTION?node.findChild(K.PARAMETER_LIST).children.filter(p=>!p.findChild(K.REST)).length:0};
+                        type:vector||node.findChild(K.TYPE),key:fresh('key'),access:fresh('access'),parameterCount:member.kind===K.FUNCTION?node.findChild(K.PARAMETER_LIST).children.filter(p=>!p.findChild(K.REST)).length:0};
                     this.traits.push(trait);if(!inherited)this.own.push(trait);
                 });
             });
