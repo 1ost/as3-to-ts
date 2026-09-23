@@ -2878,9 +2878,9 @@ function emitBuiltinEmptyStringConstruction(emitter:Emitter, node:Node):boolean 
 
 function emitSourceErrorConstruction(emitter:Emitter, node:Node):boolean {
 	const module = emitter.options.nativeSourceErrorModule;
-	if (module === undefined || !node || node.kind !== NodeKind.NEW || node.children.length !== 1)
+	if (module === undefined || !node || node.kind !== NodeKind.NEW && node.kind !== NodeKind.CALL)
 		return false;
-	const call = node.children[0];
+	const call = node.kind === NodeKind.NEW ? node.children[0] : node;
 	if (!call || call.kind !== NodeKind.CALL || call.children.length < 2)
 		return false;
 	const callee = call.children[0];
@@ -2895,6 +2895,8 @@ function emitSourceErrorConstruction(emitter:Emitter, node:Node):boolean {
 	if (!exported) return false;
 	const args = call.findChild(NodeKind.ARGUMENTS);
 	if (!args) return false;
+	if (node.kind === NodeKind.CALL && (callee.text !== 'Error' || args.children.length !== 1))
+		throw new Error('AS3_SOURCE_ERROR_UNSUPPORTED: direct Error call requires one message');
 	let helper = '__as3_' + exported;
 	while (emitter.source.indexOf(helper) >= 0) helper += '_';
 	emitter.ensureImportIdentifier(exported + ' as ' + helper, module, false);
@@ -3151,6 +3153,8 @@ function emitReflectionXML(emitter:Emitter, node:Node):boolean {
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
+    if (emitSourceErrorConstruction(emitter,node)) return;
+    if (emitNativeTrace(emitter,node)) return;
     if (emitJSONParse(emitter,node)) return;
 	if (emitStringReplace(emitter, node)) return;
 	if (emitReflectionQuery(emitter, node)) return;
@@ -3289,6 +3293,33 @@ function emitCall(emitter:Emitter, node:Node):void {
 
 }
 
+/** The qualified trace surface is a direct call with one String expression. */
+function emitNativeTrace(emitter:Emitter, node:Node):boolean {
+    const callee = node.children[0];
+    if (!callee || callee.kind !== NodeKind.IDENTIFIER || callee.text !== 'trace') return false;
+    const binding = emitter.nativeGlobals.resolve(callee);
+    if (!binding) return false;
+    const stringExpression = (value:Node):boolean => {
+        if (value.kind === NodeKind.ENCAPSULATED && value.children.length === 1) return stringExpression(value.children[0]);
+        if (value.kind === NodeKind.LITERAL && /^["']/.test(value.text)) return true;
+        if (value.kind === NodeKind.IDENTIFIER) {
+            const definition = emitter.findDefInScope(value.text);
+            return !!definition && !definition.bound && definition.as3Type === 'String';
+        }
+        return value.kind === NodeKind.ADD && value.children.length >= 3 && value.children.length % 2 === 1
+            && value.children.every((child,index) => index % 2 ? child.text === '+' : stringExpression(child));
+    };
+    const args = node.findChild(NodeKind.ARGUMENTS);
+    if (emitter.isNew || !args || args.children.length !== 1 || !stringExpression(args.children[0]))
+        throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: trace requires a direct single String expression');
+    emitter.ensureImportIdentifier('trace as ' + binding.alias,binding.module,false);
+    emitter.nativeSourceHelpers.add(binding.alias);
+    emitter.catchup(node.start);emitter.insert(binding.alias + '(');
+    const value = args.children[0];emitter.skipTo(value.start);visitNode(emitter,value);emitter.catchup(value.end);
+    emitter.insert(')');emitter.skipTo(node.end);
+    return true;
+}
+
 function emitBuiltinObjectCreation(emitter:Emitter, node:Node):boolean {
 	const module = emitter.options.nativeObjectCreationModule;
 	if (module === undefined || !node) return false;
@@ -3414,6 +3445,17 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
 interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; lexical?:boolean; ownStatic?:boolean; }
 
 function isDictionaryReceiver(emitter:Emitter, node:Node):boolean {
+	// The generated trait projection authenticates the getter's declared type.
+	// Keep arbitrary expression receivers out of this admission; evaluate the
+	// qualified this getter once through the ordinary source property lowering.
+	if (node && node.kind === NodeKind.DOT && emitter.generated
+		&& node.children[0].kind === NodeKind.IDENTIFIER && node.children[0].text === 'this'
+		&& node.children[1].kind === NodeKind.LITERAL) {
+		const trait = emitter.generated.projection.instanceTraits.find(t => t.name === node.children[1].text);
+		const binding = emitter.generated.options.plan.nativeBindings.find(b => b.qname === 'flash.utils.Dictionary');
+		return !!binding && !!trait && trait.kind === 'accessor' && typeof trait.type === 'object'
+			&& trait.type.referenceExport === binding.referenceExport;
+	}
 	if (!node || node.kind !== NodeKind.IDENTIFIER) return false;
 	const definition = emitter.findDefInScope(node.text);
 	const dictionary = emitter.findDefInScope('Dictionary');
@@ -3434,7 +3476,7 @@ function dictionaryAccess(emitter:Emitter, node:Node):DictionaryAccess {
 	if (module === undefined || !node || (node.kind !== NodeKind.DOT && node.kind !== NodeKind.ARRAY_ACCESSOR)
 		|| node.children.length !== 2) return null;
 	const receiver = node.children[0], key = node.children[1];
-	if (!receiver || !key || receiver.kind !== NodeKind.IDENTIFIER) return null;
+	if (!receiver || !key) return null;
 	if (!isDictionaryReceiver(emitter, receiver)) return null;
 	return node.kind === NodeKind.DOT && key.kind === NodeKind.LITERAL
 		? {receiver, key, literalKey:key.text} : {receiver, key};
@@ -3466,9 +3508,9 @@ function emitDictionaryProperty(emitter:Emitter, node:Node, exported:string):boo
 	if (!access) return false;
 	const helper = dictionaryHelper(emitter, exported);
 	emitter.catchup(node.start);
-	emitter.insert(helper + '(');
+	emitter.insert('(<any>' + helper + '(');
 	emitDictionaryKey(emitter, access);
-	emitter.insert(')');
+	emitter.insert('))');
 	emitter.skipTo(node.end);
 	return true;
 }
@@ -3841,6 +3883,14 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if (emitter.options.nativeDictionaryPropertyModule !== undefined && node.children.length === 3
+        && node.children[1].text === 'in' && isDictionaryReceiver(emitter,node.lastChild)) {
+        const helper = dictionaryHelper(emitter,'as3HasProperty');
+        emitter.catchup(node.start);emitter.insert(helper + '(');
+        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+        emitter.insert(',');emitter.skipTo(node.lastChild.start);visitNode(emitter,node.lastChild);
+        emitter.catchup(node.lastChild.end);emitter.insert(')');emitter.skipTo(node.end);return;
+    }
     if (emitter.generated && node.children.length===3 && node.children[1].kind===NodeKind.AS
         && node.lastChild.kind===NodeKind.IDENTIFIER
         && (emitter.classInitializers.resolve(node,node.lastChild.text)==='lazy'

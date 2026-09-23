@@ -570,7 +570,7 @@ export class NativeCallableClasses {
                 const returns=sourceMethod.findChild(K.VECTOR)||sourceMethod.findChild(K.TYPE);
                 if(returns && returns.text !== 'void' && returns.text !== '*') {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
-                    if(reference&&reference.kind==='native'&&!(reference.identity==='flash.events.Event'
+                    if(reference&&reference.kind==='native'&&reference.identity!=='flash.utils.Dictionary'&&!(reference.identity==='flash.events.Event'
                         &&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&!!binding.eventBaseExport)))
                         this.fail('generated native return type requires separate qualification');
                     const sourceBody=sourceMethod.findChild(K.BLOCK);

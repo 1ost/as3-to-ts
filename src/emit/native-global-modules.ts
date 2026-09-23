@@ -15,7 +15,7 @@ export class NativeGlobalModules {
             throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: module emission required');
         Object.keys(this.modules).forEach(name => {
             const module = this.modules[name];
-            if (['QName','XML','XMLList','Namespace','Date'].indexOf(name) < 0
+            if (['QName','XML','XMLList','Namespace','Date','trace'].indexOf(name) < 0
                 || typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
                 throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: invalid builtin module binding: ' + name);
         });
@@ -46,6 +46,9 @@ export class NativeGlobalModules {
             const binding = typeOfBinding(node, this.source, this.sourceClasses);
             if (binding === 'lexical' || binding === 'class') return null;
         }
+        if (name === 'trace' && (typePosition || !node.parent || node.parent.kind !== K.CALL
+            || node.parent.children[0] !== node))
+            throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: trace function identity requires separate qualification');
         let alias = this.aliases[name];
         if (!alias) {
             alias = '__as3_global_' + name;
