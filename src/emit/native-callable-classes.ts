@@ -483,7 +483,12 @@ export class NativeCallableClasses {
             result = this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
             if (typedLocals) result = typedLocals.lower(result, constructor ? this.own.name : member.name.text,
                 !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), this.generated ? localReference : provider, localCoercion, localString, localAddition, intrinsic + '.array', unique, referenceToken,
-                member.kind===S.GetAccessor?K.GET:member.kind===S.SetAccessor?K.SET:K.FUNCTION,this.classValueModule?classValue:undefined);
+                member.kind===S.GetAccessor?K.GET:member.kind===S.SetAccessor?K.SET:K.FUNCTION,this.classValueModule?classValue:undefined,
+                this.generated?(identity,value)=>{
+                    const vector=this.generated.options.plan.vectors.find(v=>v.identity===identity);
+                    if(!vector)this.fail('unplanned Vector local identity');
+                    return generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(vector.name)+',vector:'+domainImport+'.'+vector.specExport+'})';
+                }:undefined);
             return result;
         };
         const accessorTypes = new Set<string>();
@@ -540,8 +545,8 @@ export class NativeCallableClasses {
                 const minimum=fixed.filter(p=>!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)).length;
                 signature = 'if(arguments.length < ' + minimum + (spread?'':' || arguments.length > '+fixed.length) + ')throw ' + intrinsic + '.arityError();\n'
                     + fixed.map((p,index) => {
-                        const value=p.findChild(K.NAME_TYPE_INIT),name=value.findChild(K.NAME).text,type=value.findChild(K.TYPE),init=value.findChild(K.INIT);
-                        if(value.findChild(K.VECTOR))this.fail('generated vector method signature');
+                        const value=p.findChild(K.NAME_TYPE_INIT),name=value.findChild(K.NAME).text,type=value.findChild(K.VECTOR)||value.findChild(K.TYPE),init=value.findChild(K.INIT);
+                        if(type&&type.kind===K.VECTOR&&init)this.fail('optional Vector parameter requires qualification');
                         if(!init&&index>=minimum)this.fail('required parameter after optional');
                         let fallback='';
                         if(init){
@@ -561,7 +566,7 @@ export class NativeCallableClasses {
                         if(type&&type.text==='Class'){if(!this.classValueModule)this.fail('Class parameter requires common class provider');return name+'='+fallback+'<any>'+classValue+'.as3CoerceClass('+name+');';}
                         return name+'='+fallback+'<any>'+generatedProperty+'.coerceAS3PropertyValue('+name+','+this.generated.lexical.typeExpression(type,this.own.qname,domainImport,intrinsic+'.array')+');';
                     }).join('\n')+(spread?'\nvar '+spread.findChild(K.REST).text+': any = '+intrinsic+'.apply('+intrinsic+'.arraySlice,arguments,['+fixed.length+']);\n':'');
-                const returns=sourceMethod.findChild(K.TYPE);
+                const returns=sourceMethod.findChild(K.VECTOR)||sourceMethod.findChild(K.TYPE);
                 if(returns && returns.text !== 'void' && returns.text !== '*') {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
                     if(reference&&reference.kind==='native'&&!(reference.identity==='flash.events.Event'

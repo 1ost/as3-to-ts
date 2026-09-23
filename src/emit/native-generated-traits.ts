@@ -4,7 +4,7 @@ import parse = require('../parse');
 import {NativeGeneratedDeclarationPlan, NativeGeneratedDeclarationBinding,
     nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationSource} from './native-generated-declarations';
 
-interface ReferenceType {readonly name: string; readonly referenceExport: string;}
+interface ReferenceType {readonly name: string; readonly referenceExport?: string; readonly vectorExport?:string;}
 type TraitType = string | ReferenceType;
 interface Trait {
     readonly name: string;
@@ -27,8 +27,8 @@ function fail(reason: string): never {throw new Error('AS3_GENERATED_TRAITS_UNSU
 function reflected(name: string): string {return name.replace(/\.([^.]*)$/, '::$1');}
 function flags(node: Node): string[] {const mods = node.findChild(K.MOD_LIST); return mods ? mods.children.map(mod => mod.text) : [];}
 function storageType(node: Node): Node {
-    if (node.findChild(K.VECTOR) || node.findChild(K.SHORT_VECTOR)) fail('vector storage requires separate initialization authority');
-    return node.findChild(K.TYPE);
+    if (node.findChild(K.SHORT_VECTOR)) fail('vector literal storage requires separate initialization authority');
+    return node.findChild(K.VECTOR)||node.findChild(K.TYPE);
 }
 function initializerEnd(node: Node): number {
     return node.children.reduce((end, child) => Math.max(end, initializerEnd(child)), Math.max(node.start, node.end));
@@ -69,6 +69,11 @@ export class NativeGeneratedClassTraits {
         }
         const type = (qname: string, node: Node): TraitType => {
             if (!node) return '*';
+            if(node.kind===K.VECTOR){
+                const vector=plan.vectors.find(v=>v.owner===qname&&v.start===node.start&&v.end===node.end);
+                if(!vector)fail('vector storage requires separate initialization authority');
+                return {name:vector.name,vectorExport:vector.specExport};
+            }
             const reference = plan.references.find(item => item.owner === qname && item.start === node.start && item.end === node.end);
             if (!reference) fail('exact source type span required: ' + qname);
             if (reference.kind === 'intrinsic') {
@@ -126,6 +131,7 @@ export class NativeGeneratedClassTraits {
                 if (member.kind === K.VAR_LIST || member.kind === K.CONST_LIST) {
                     if (common.override || common.final) fail('storage override/final modifier');
                     member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
+                        if(field.findChild(K.VECTOR)&&(isStatic||member.kind===K.CONST_LIST))fail('Vector static/constant storage requires separate authority');
                         const fieldType = type(binding.qname,storageType(field));
                         let constantLiteral: string;
                         if (member.kind === K.CONST_LIST && !isStatic) {
@@ -158,6 +164,7 @@ export class NativeGeneratedClassTraits {
                     if (value.findChild(K.INIT) || result && result.text !== 'void') fail('setter signature');
                     valueType = type(binding.qname,storageType(value));
                 }
+                if(typeof valueType!=='string'&&valueType.vectorExport)fail('Vector accessor storage requires separate authority');
                 add(Object.assign({},common,{name,kind:'accessor',type:valueType,access:member.kind === K.GET ? 'readonly' : 'writeonly'}) as Member);
             };
             cls.findChild(K.CONTENT).children.forEach(visit);
@@ -209,7 +216,7 @@ export class NativeGeneratedClassTraits {
             const fields = 'name:' + JSON.stringify(trait.name) + ',kind:' + JSON.stringify(trait.kind);
             if (trait.type === undefined) return '{' + fields + '}';
             const type = trait.type === 'Array' ? '{name:"Array",reference:' + array + '}' : typeof trait.type === 'string' ? JSON.stringify(trait.type)
-                : '{name:' + JSON.stringify(trait.type.name) + ',reference:' + domain + '.' + trait.type.referenceExport + '}';
+                : '{name:' + JSON.stringify(trait.type.name) + (trait.type.vectorExport?',vector:':',reference:') + domain + '.' + (trait.type.vectorExport||trait.type.referenceExport) + '}';
             return '{' + fields + ',type:' + type + '}';
         }).join(',') + ']';
         return '{metadata:' + JSON.stringify(this.metadata) + ',instanceTraits:' + emit(this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)

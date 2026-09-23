@@ -8,6 +8,8 @@ export interface NativeGeneratedDeclarationInput {
     providerModule: string;
     /** Explicit common AS3Type provider; required for source interface tokens. */
     interfaceProviderModule?: string;
+    /** Explicit common Vector provider for generated specialization identities. */
+    vectorProviderModule?: string;
     /** Optional explicit script-global provider for generated lexical calls. */
     scriptGlobalProviderModule?: string;
     /** Explicit class subset; omission selects all planned source classes. */
@@ -44,6 +46,7 @@ export interface NativeGeneratedDeclarationPlan {
     readonly interfaces: ReadonlyArray<NativeGeneratedInterfaceBinding>;
     readonly interfaceContracts: NativeGeneratedInterfaceContracts;
     readonly references: ReadonlyArray<NativeGeneratedReference>;
+    readonly vectors: ReadonlyArray<{readonly owner:string;readonly start:number;readonly end:number;readonly identity:string;readonly name:string;readonly specExport:string}>;
     readonly sourceHashes: {[qname: string]: string};
     readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly eventBaseExport?: string; readonly declarationExport?: string}>;
 }
@@ -90,9 +93,10 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'sources', 'providers']);
     moduleName(data.providerModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
+    if (data.vectorProviderModule !== undefined) moduleName(data.vectorProviderModule);
     if (data.scriptGlobalProviderModule !== undefined) moduleName(data.scriptGlobalProviderModule);
     if(data.scriptGlobalSources!==undefined&&(!data.scriptGlobalProviderModule||!Array.isArray(data.scriptGlobalSources)
         ||new Set(data.scriptGlobalSources).size!==data.scriptGlobalSources.length))fail('script global source selection requires unique names and provider');
@@ -202,6 +206,33 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         activeInterfaces.delete(binding.qname); emittedInterfaces.add(binding.qname);
     };
     interfaces.forEach(addInterface);
+    const vectors:Array<NativeGeneratedDeclarationPlan['vectors'][number]>=[];
+    if(data.vectorProviderModule){
+        lines.push('import {as3VectorInterfaceSpec,as3VectorPrimitiveSpec} from '+JSON.stringify(data.vectorProviderModule)+';');
+        const exports=new Map<string,string>();
+        names.forEach(owner=>{
+            const walk=(node:Node):void=>{
+                if(node.kind===K.VECTOR){
+                    if(!node.parent||[K.NAME_TYPE_INIT,K.FUNCTION,K.GET,K.TYPE].indexOf(node.parent.kind)<0)
+                        fail('Vector expression construction/conversion requires separate qualification');
+                    const element=node.findChild(K.TYPE);
+                    if(!element||node.children.length!==1)fail('nested Vector specialization publication requires qualification');
+                    const identity=resolve(owner,element.qualifiedName||element.text);
+                    const contract=interfaces.find(i=>i.qname===identity);
+                    if(!contract&&['*','int','uint','Number','Boolean','String','Object','Function','Class'].indexOf(identity)<0)
+                        fail('Vector element publication requires interface or qualified primitive: '+identity);
+                    let specExport=exports.get(identity);
+                    if(!specExport){
+                        specExport='vector'+exports.size;exports.set(identity,specExport);
+                        lines.push('export const '+specExport+'='+(contract?'as3VectorInterfaceSpec('+contract.tokenExport+')':'as3VectorPrimitiveSpec('+JSON.stringify(identity)+')')+';');
+                    }
+                    vectors.push(Object.freeze({owner,start:node.start,end:node.end,identity:'Vector.<'+identity+'>',
+                        name:'__AS3__.vec::Vector.<'+identity.replace(/\.([^.]*)$/,'::$1')+'>',specExport}));
+                }
+                node.children.forEach(walk);
+            };walk(roots.get(owner));
+        });
+    }
     const nativeBindings: Array<NativeGeneratedDeclarationPlan['nativeBindings'][number]> = nativeNames.map((name, index) => {
         const provider = providers[name], referenceExport = 'native' + index;
         lines.push('export {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';');
@@ -247,7 +278,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     const interfaceContracts=projectNativeGeneratedInterfaceContracts(classes,bindings,interfaces,resolve,
         name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0);
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
-        sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),
+        sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),vectors:Object.freeze(vectors),
         nativeBindings: Object.freeze(nativeBindings),interfaceContracts});
     contexts.set(plan, {input: data, plan});
     return plan;

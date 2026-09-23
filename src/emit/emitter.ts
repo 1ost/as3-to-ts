@@ -1,4 +1,5 @@
 import {NativeClassMetadataOptions} from './native-class-metadata';
+import {nativeGeneratedDeclarationInputs} from './native-generated-declarations';
 import {nativeSourceTypeIdentity} from './native-source-type';
 import {insideTypeOf, sourceIdentifier, typeOfBinding} from './native-typeof';
 import NodeKind, {nodeKindName} from '../syntax/nodeKind';
@@ -126,6 +127,8 @@ export interface EmitterOptions {
     /** Common source-generated registrar; paired with an exact declaration plan. */
     nativeClassTraitsModule?: string;
     nativeGeneratedDeclarations?: NativeGeneratedEmissionOptions;
+    /** Exact declaration plan for native Vector annotations, including interfaces. */
+    nativeVectorTypes?: NativeGeneratedEmissionOptions;
     nativeReferenceCoercion?: NativeReferenceCoercionOptions;
     /** Common AS3Property scalar coercion for mixed reference method signatures. */
     nativeSignaturePropertyModule?: string;
@@ -1222,7 +1225,7 @@ function emitInterface(emitter:Emitter, node:Node):void {
 							if (nameTypeInitNode)
 							{
 								let nameNode = nameTypeInitNode.findChild(NodeKind.NAME);
-							let typeParamNode = nameTypeInitNode.findChild(NodeKind.TYPE);
+							let typeParamNode = nameTypeInitNode.findChild(NodeKind.VECTOR)||nameTypeInitNode.findChild(NodeKind.TYPE);
 							let initNode = nameTypeInitNode.findChild(NodeKind.INIT);
 							// Interface signatures are emitted through this specialized path
 							// instead of the ordinary NAME_TYPE_INIT visitor.  Reuse the
@@ -2734,6 +2737,21 @@ function emitType(emitter:Emitter, node:Node):void {
 
 
 function emitVector(emitter:Emitter, node:Node):void {
+    const options=emitter.options.nativeVectorTypes||emitter.options.nativeGeneratedDeclarations;
+    if(options){
+        const input=nativeGeneratedDeclarationInputs(options.plan,options.plan.scope);
+        if(input.vectorProviderModule){
+            const owners=Object.keys(input.sources).filter(owner=>input.sources[owner].source===emitter.source);
+            const vector=owners.length===1&&options.plan.vectors.find(v=>v.owner===owners[0]&&v.start===node.start&&v.end===node.end);
+            if(!vector)throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: exact source specialization required');
+            if(emitter.isNew)throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: construction requires separate qualification');
+            let alias='__as3_Vector';while(emitter.source.indexOf(alias)>=0)alias+='_';
+            emitter.ensureImportIdentifier('AS3Vector as '+alias,input.vectorProviderModule,false);
+            emitter.catchup(node.start);emitter.insert(alias+'<');
+            const element=node.findChild(NodeKind.TYPE);emitter.skipTo(element.start);emitType(emitter,element);
+            emitter.insert('>');emitter.skipTo(node.end);return;
+        }
+    }
 	if (!emitter.isNew) {
 		emitter.catchup(node.start);
 	}

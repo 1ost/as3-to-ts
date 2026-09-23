@@ -99,6 +99,7 @@ export class NativeGeneratedLexical {
             forInTarget(node);
             if(node.kind===K.FINALLY){const block=node.findChild(K.BLOCK);this.finallyMarkers.push({start:block.start,end:block.end,name:fresh("sourceFinally")});}
             if(node.kind===K.LAMBDA){
+                if(node.findChild(K.VECTOR))fail('anonymous Vector return held');
                 let method=node.parent;while(method&&method.parent!==content)method=method.parent;
                 if(!typedLocals||!method||method.kind!==K.FUNCTION||!plan.bindings.find(b=>b.qname===owner).scriptGlobalExport)
                     fail('anonymous source callable requires source script global');
@@ -154,15 +155,20 @@ export class NativeGeneratedLexical {
                 this.nestedFunctions.push({start:node.start,end:node.end,name:name[1],methodStart:method.start,parameters,returned:ref&&ref.kind==='interface'?ref.identity:undefined});
             }
             if(node.kind===K.FUNCTION&&node.findChild(K.VECTOR)
-                || node.kind===K.PARAMETER&&node.findChild(K.NAME_TYPE_INIT)&&node.findChild(K.NAME_TYPE_INIT).findChild(K.VECTOR))
-                fail('vector callable signature lowering required');
+                || node.kind===K.PARAMETER&&node.findChild(K.NAME_TYPE_INIT)&&node.findChild(K.NAME_TYPE_INIT).findChild(K.VECTOR)){
+                const vector=node.findChild(K.VECTOR)||node.findChild(K.NAME_TYPE_INIT).findChild(K.VECTOR);
+                if(!plan.vectors.some(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end))
+                    fail('vector callable signature lowering required');
+                if(node.kind===K.FUNCTION&&node.parent!==content)fail('nested Vector callable held');
+            }
             if([K.VAR_LIST,K.CONST_LIST].indexOf(node.kind)>=0&&node.parent!==content)node.findChildren(K.NAME_TYPE_INIT).forEach(value=>{
-                const type=value.findChild(K.TYPE);
+                const type=value.findChild(K.VECTOR)||value.findChild(K.TYPE);
                 let member=node;while(member.parent&&member.parent!==content)member=member.parent;
-                if(value.findChild(K.VECTOR)||type&&type.text!=='*'&&(!typedLocals||[K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0))fail('typed local initialization/coercion lowering required');
+                if(type&&type.text!=='*'&&(!typedLocals||[K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0))fail('typed local initialization/coercion lowering required');
                 if(typedLocals&&type&&type.text!=='*'){
+                    const vector=type.kind===K.VECTOR&&plan.vectors.find(v=>v.owner===owner&&v.start===type.start&&v.end===type.end);
                     const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
-                    if(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'&&ref.kind!=='native'))fail('typed local source reference lowering required');
+                    if(!vector&&(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'&&ref.kind!=='native')))fail('typed local source reference lowering required');
                 }
                 if(this.traits.some(t=>t.name===value.findChild(K.NAME).text))fail('local/lexical declaration-order lookup required');
             });
@@ -191,6 +197,8 @@ export class NativeGeneratedLexical {
         // This independently parsed tree is authenticated against the exact source.
         // Method spans join it to the emitter tree without weakening legacy identity.
         if(typedLocals)this.typedLocals=new NativeTypedLocals(this.ownClass,owner,[],node=>{
+            const vector=node&&node.kind===K.VECTOR&&plan.vectors.find(v=>v.owner===owner&&v.start===node.start&&v.end===node.end);
+            if(vector)return vector.identity;
             const ref=node&&plan.references.find(r=>r.owner===owner&&r.start===node.start&&r.end===node.end);
             return ref&&(ref.kind==='interface'||ref.kind==='declaration'||ref.kind==='native')?ref.identity:undefined;
         },true,this.nestedFunctions,this.anonymousFunctions);
@@ -198,6 +206,11 @@ export class NativeGeneratedLexical {
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}
     typeExpression(node:Node,owner:string,domain:string,array:string):string {
         if(!node)return '"*"';
+        if(node.kind===K.VECTOR){
+            const vector=this.plan.vectors.find(v=>v.owner===owner&&v.start===node.start&&v.end===node.end);
+            if(!vector)fail('exact Vector specialization required');
+            return '{name:'+JSON.stringify(vector.name)+',vector:'+domain+'.'+vector.specExport+'}';
+        }
         const ref=this.plan.references.find(r=>r.owner===owner&&r.start===node.start&&r.end===node.end);
         if(!ref)fail('exact lexical type span');
         if(ref.kind==='intrinsic') {

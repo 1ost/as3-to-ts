@@ -24,6 +24,12 @@ export class NativeTypedLocals {
                 const rest=p.findChild(K.REST);
                 if(rest&&this.matchSourceSpans)locals.push({name:rest.text,type:'Array',parameter:true});
                 const value = p.findChild(K.NAME_TYPE_INIT);
+                if(value&&value.findChild(K.VECTOR)){
+                    const reference=referenceFor&&referenceFor(value.findChild(K.VECTOR));
+                    if(!reference)this.fail('Vector parameter requires specialization authority');
+                    locals.push({name:value.findChild(K.NAME).text,type:reference,reference,parameter:true});
+                    return;
+                }
                 if (value && nativeSourceTypeIdentity(value.findChild(K.TYPE), qname, imports) === '*')
                     wildcards.push(value.findChild(K.NAME).text);
             });
@@ -40,7 +46,7 @@ export class NativeTypedLocals {
                 if (value.kind===K.ASSIGN&&[K.ARRAY,K.OBJECT].indexOf(unwrapEncapsulatedExpression(value.children[0]).kind)>=0)
                     this.fail('source destructuring targets held');
                 if ([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(value.kind)>=0) value.findChildren(K.NAME_TYPE_INIT).forEach(decl=>{
-                    const annotation=decl.findChild(K.TYPE),reference=referenceFor && referenceFor(annotation);
+                    const annotation=decl.findChild(K.VECTOR)||decl.findChild(K.TYPE),reference=referenceFor && referenceFor(annotation);
                     const type=reference || nativeSourceTypeIdentity(annotation,qname,imports),name=decl.findChild(K.NAME).text;
                     const other=declared.find(local=>local.name===name);
                     if(other&&other.type!==type&&(type!=='*'||other.type!=='*'))this.fail('conflicting local declaration types');
@@ -138,7 +144,7 @@ export class NativeTypedLocals {
         const binding=emitter.findDefInScope(name);
         return !!binding&&!binding.bound&&binding.as3Type!=='*';
     }
-    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string): string {
+    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string, vectorCoerce?:(identity:string,value:string)=>string): string {
         const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic&&m.node.kind===kind);
         if(!method||!method.locals.length&&!method.outerCaptures.length&&!this.nested.some(fn=>fn.methodStart===method.node.start&&!!fn.returned))return source;
         const ts=require('typescript'),S=ts.SyntaxKind,file=ts.createSourceFile('TypedLocals.ts',source,ts.ScriptTarget.Latest,true);
@@ -157,7 +163,7 @@ export class NativeTypedLocals {
             if(!referenceToken)this.fail('foreign local requires exact declaration-domain output');
             return referenceToken(local.reference);
         };
-        const coerce=(local:Local,value:string):string=>local.type==='Class'?(classProvider?classProvider+'.as3CoerceClass('+value+')':this.fail('Class local requires common class provider')):local.reference?provider+'.as3CoerceReference('+value+','+reference(local)+')':local.type==='Boolean'?'!!('+value+')':local.type==='String'?stringProvider+'.as3CoerceString('+value+')'
+        const coerce=(local:Local,value:string):string=>local.reference&&local.reference.indexOf('Vector.<')===0?(vectorCoerce?vectorCoerce(local.reference,value):this.fail('Vector local coercion requires provider')):local.type==='Class'?(classProvider?classProvider+'.as3CoerceClass('+value+')':this.fail('Class local requires common class provider')):local.reference?provider+'.as3CoerceReference('+value+','+reference(local)+')':local.type==='Boolean'?'!!('+value+')':local.type==='String'?stringProvider+'.as3CoerceString('+value+')'
             :local.type==='Array'?provider+'.as3CoerceReference('+value+','+array+')'
             :coercionProvider+'.as3Coerce'+(local.type==='int'?'Int':local.type==='uint'?'Uint':local.type)+'('+value+')';
         const write=(local:Local,value:string):string=>{const rhs=unique('typedRaw');return '(()=>{const '+rhs+': any='+value+';'+local.name+'='+coerce(local,rhs)+';return '+rhs+';})()';};
