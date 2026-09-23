@@ -98,7 +98,7 @@ export class NativeGeneratedLexical {
                 scope.findChild(K.PARAMETER_LIST).children.forEach(p=>{const d=p.findChild(K.NAME_TYPE_INIT);if(d)declarations.push(d);});
                 const collect=(n:Node):void=>{if(n.kind===K.FUNCTION||n.kind===K.LAMBDA)return;if([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(n.kind)>=0)declarations.push(...n.findChildren(K.NAME_TYPE_INIT));n.children.forEach(collect);};collect(scope.findChild(K.BLOCK));
                 const slot=declarations.find(d=>d.findChild(K.NAME).text===target.text);
-                if(slot){if(slot.findChild(K.TYPE)&&slot.findChild(K.TYPE).text!=='*')fail('typed for-in target held');return;}
+                if(slot){if(slot.findChild(K.TYPE)&&['*','String'].indexOf(slot.findChild(K.TYPE).text)<0)fail('typed for-in target held');return;}
             }
             fail('for-in target has no source local ownership');
         };

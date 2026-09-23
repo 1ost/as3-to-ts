@@ -1442,11 +1442,12 @@ function emitForIn(emitter:Emitter, node:Node):void {
  if(emitter.generated){
   const target=node.children[0].children[0],receiver=node.children[1].children[0],body=node.children[2];
   const binding=target&&target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
-  if(!binding||binding.bound||binding.as3Type!=='*')throw new Error('AS3_ENUMERATION_UNSUPPORTED: generated for-in requires a declared wildcard target');
+  if(!binding||binding.bound||['*','String'].indexOf(binding.as3Type)<0)throw new Error('AS3_ENUMERATION_UNSUPPORTED: generated for-in requires a declared wildcard or String target');
   for(let scope=node.parent;scope&&scope.kind!==NodeKind.FUNCTION&&scope.kind!==NodeKind.LAMBDA;scope=scope.parent)
    if(scope.kind===NodeKind.CATCH&&scope.findChild(NodeKind.NAME).text===target.text)throw new Error('AS3_ENUMERATION_UNSUPPORTED: catch-shadow loop target held');
   if(!emitter.options.nativeEnumeration)throw new Error('AS3_ENUMERATION_UNSUPPORTED: explicit common enumeration providers required');
   const helper=dictionaryEnumerationHelper(emitter,'as3EnumerableKeys');
+  const stringCoercion=binding.as3Type==='String'?propertyHelper(emitter,'as3String',emitter.options.nativeEnumeration.stringModule):null;
   let cursor:string,step:string;
   do {emitter.loopObjectCounter++;cursor='__as3_keys_'+emitter.loopObjectCounter;step='__as3_keyStep_'+emitter.loopObjectCounter;}
   while(emitter.source.indexOf(cursor)>=0||emitter.source.indexOf(step)>=0);
@@ -1454,7 +1455,7 @@ function emitForIn(emitter:Emitter, node:Node):void {
   emitter.skipTo(receiver.start);visitNode(emitter,receiver);emitter.catchup(receiver.end);
   emitter.insert(');let '+step+':any;try{');
   if(emitter.pendingStatementLabel){emitter.insert(emitter.pendingStatementLabel+':');emitter.pendingStatementLabel=null;}
-  emitter.insert('for(;!('+step+'='+cursor+'.next()).done;){'+(emitter.getIdentifierRemap(target.text)||target.text)+'='+step+'.value;');
+  emitter.insert('for(;!('+step+'='+cursor+'.next()).done;){'+(emitter.getIdentifierRemap(target.text)||target.text)+'='+(stringCoercion?stringCoercion+'('+step+'.value)':step+'.value')+';');
   emitter.skipTo(body.start);visitNode(emitter,body);finishEnumerationBody(emitter,body,false);
   emitter.insert('}}finally{if('+step+'&&!'+step+'.done&&'+cursor+'.return)'+cursor+'.return();}}');return;
  }

@@ -17,6 +17,7 @@ on abrupt completion. This is source lowering, not an application-local bridge.
 The host observer creates its mutable destination with the common dynamic Object
 factory; it does not weaken source object ownership checks.
 
-Typed, inline-declared, member and catch-shadow targets remain held. Mutation
+String targets have separate AIR qualification in native-generated-string-forin.
+Other typed, inline-declared, member and catch-shadow targets remain held. Mutation
 during iteration and prototype/delegate ordering are not qualified by this
 packet. The complete ObjectUtil methods and application still require validation.
