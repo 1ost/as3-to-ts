@@ -2340,7 +2340,7 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 			emitter.catchup(getEffectiveNodeEnd(init));
 			const lexical = emitter.lexical && emitter.lexical.trait(node.findChild(NodeKind.NAME).text, true);
             if(generatedLexical){
-                if(emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
+                if(generatedLexical.kind!=='constant'&&emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
                     emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.as3SetLexicalMember('+emitter.classFactory.value+','+generatedLexical.access+','+emitter.output.slice(start)+');');
             } else emitter.classFactory.fields.push(deferred ? deferred+'('+emitter.output.slice(start)+');'
                 : emitter.classFactory.value + '[' + (lexical ? lexical.key : JSON.stringify(node.findChild(NodeKind.NAME).text))
@@ -3411,7 +3411,7 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
     return true;
 }
 
-interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; lexical?:boolean; }
+interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; lexical?:boolean; ownStatic?:boolean; }
 
 function isDictionaryReceiver(emitter:Emitter, node:Node):boolean {
 	if (!node || node.kind !== NodeKind.IDENTIFIER) return false;
@@ -3510,6 +3510,17 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
         return null;
     }
     const generated=generatedReceiver(emitter,receiver),definition=emitter.findDefInScope(receiver.text);
+    if(node.kind===NodeKind.ARRAY_ACCESSOR&&emitter.generated&&emitter.classFactory
+        &&receiver.text===emitter.generated.lexical.owner.split('.').pop()
+        &&(!definition||!Object.prototype.hasOwnProperty.call(definition,'as3Type'))
+        &&emitter.generated.lexical.own.some(t=>t.static&&t.kind==='constant')){
+        let member=node;while(member.parent&&member.parent.kind!==NodeKind.CONTENT)member=member.parent;
+        const mods=member.findChild(NodeKind.MOD_LIST),keyDefinition=key.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(key.text);
+        if(member.kind!==NodeKind.FUNCTION||!mods||!mods.children.some(mod=>mod.text==='static')
+            ||!keyDefinition||keyDefinition.bound||keyDefinition.as3Type!=='String')
+            throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: own static constant lookup requires a method String key');
+        return {receiver,key,lexical:true,ownStatic:true};
+    }
     if(!generated&&(!definition||['Object','*'].indexOf(definition.as3Type)<0))return null;
     const lexical=!!generated&&receiver.text==='this';
     if(lexical){
@@ -3538,6 +3549,10 @@ function dynamicHelper(emitter:Emitter,access:DictionaryAccess,operation:string,
 }
 function emitDynamicKey(emitter:Emitter,access:DictionaryAccess):void {
     if(access.lexical)emitter.insert(emitter.generated.lexical.scope+', ');
+    if(access.ownStatic){
+        emitter.insert(emitter.classFactory.value+', ');emitter.skipTo(access.key.start);
+        visitNode(emitter,access.key);emitter.catchup(access.key.end);return;
+    }
     emitPropertyKey(emitter,access);
 }
 function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {

@@ -326,7 +326,7 @@ export class NativeCallableClasses {
                 superMethodNames.set(key, capture);
             }
             const args = unique('superCallArguments');
-            return '((...' + args + ': any[]) => {'
+            return '((...' + args + ': any[]): any => {'
                 + (this.generated?'':parameters.slice(0, supplied).map((_,index) => args + '[' + index + '] = !!' + args + '[' + index + '];').join(''))
                 + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
         };
@@ -505,6 +505,7 @@ export class NativeCallableClasses {
                 this.fail('reserved static callable constructor identity');
             if (member.kind === S.PropertyDeclaration) {
                 if (lexicalMember) {
+                    if (lexicalMember.kind === 'constant') return; // Installed before authored effects by the lexical registrar.
                     if (!isStatic && member.initializer) initializers.push(this.generated
                         ? this.generated.lexical.provider + '.as3SetLexicalMember(this,' + lexicalMember.access + ',' + text(member.initializer) + ');'
                         : 'this[' + lexicalMember.key + '] = ' + text(member.initializer) + ';');
