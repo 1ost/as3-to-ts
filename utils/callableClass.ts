@@ -3,8 +3,11 @@
 // by the emitted constructor interface, never inherited from Function.
 export interface NativeCallableFunction { readonly prototype: any; }
 const constructors = new WeakMap<Function, Function>();
-interface NativeBaseEntry {constructor:Function;prepareInstance:(receiver:object)=>void;initializeInstance:(receiver:object,args:ReadonlyArray<unknown>)=>void;}
+interface NativeBaseEntry {constructor:Function;prepareInstance:(receiver:object)=>void;initializeInstance:(receiver:object,args:ReadonlyArray<unknown>)=>void;allocateInstance?:(constructor:Function)=>object;}
 const nativeBases = new WeakMap<Function,NativeBaseEntry>();
+const nativeAllocators = new WeakMap<Function,(constructor:Function)=>object>();
+const allocatedReceivers = new WeakSet<object>();
+const allocationPlaceholders = new WeakSet<object>();
 interface ConstructionEntry {
     status: 'active' | 'completed' | 'failed';
     stack: Function[];
@@ -41,7 +44,32 @@ export const callableClassIntrinsics = Object.freeze({
             const field=Object.getOwnPropertyDescriptor(adapter,key);return !field||!('value' in field)||typeof field.value!=='function';
         })||adapter.constructor!==ctor||nativeBases.has(ctor)&&nativeBases.get(ctor)!==adapter
             ||constructors.has(ctor)&&!nativeBases.has(ctor))throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: native base entry authority');
+        const allocate=Object.getOwnPropertyDescriptor(adapter,'allocateInstance');
+        if(allocate&&(!('value' in allocate)||typeof allocate.value!=='function'))
+            throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: native allocation entry authority');
+        if(allocate)nativeAllocators.set(ctor,allocate.value);
         nativeBases.set(ctor,adapter);constructors.set(ctor,null);
+    },
+    /** Compiler constructor shell: native allocation precedes source field effects. */
+    invokeNativeConstructor(receiver:object,ctor:Function,args:ArrayLike<any>,body:Function):any {
+        if(!constructors.has(ctor)||receiver===null||typeof receiver!=='object')throw failure(1006,'TypeError');
+        const entry=entries.get(receiver);
+        if(entry) {
+            if(entry.status!=='active'||entry.expected!==ctor)throw failure(1006,'TypeError');
+            return Reflect.apply(body,receiver,args);
+        }
+        if(Object.getPrototypeOf(receiver)!==ctor.prototype||allocationPlaceholders.has(receiver))throw failure(1006,'TypeError');
+        let base=ctor;
+        while(base&&!nativeAllocators.has(base))base=constructors.get(base);
+        const allocate=base&&nativeAllocators.get(base);
+        if(!allocate)return Reflect.apply(body,receiver,args);
+        allocationPlaceholders.add(receiver);
+        const native=allocate(ctor);
+        if(native===null||typeof native!=='object'||native===receiver||allocatedReceivers.has(native)
+            ||entries.has(native)||Object.getPrototypeOf(native)!==ctor.prototype)throw failure(1006,'TypeError');
+        allocatedReceivers.add(native);
+        Reflect.apply(body,native,args);
+        return native;
     },
     prepareNativeBase(receiver:object,base:Function):void {
         const entry=entries.get(receiver),adapter=nativeBases.get(base);
