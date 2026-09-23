@@ -3292,6 +3292,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitDirectToString(emitter, node)) return;
 	if (emitBuiltinStringCoercion(emitter, node)) return;
     if (emitBuiltinIntCoercion(emitter, node)) return;
+    if (emitBuiltinBooleanCoercion(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
 	if (emitArraySortOn(emitter, node)) return;
 	if (emitTweenTo(emitter, node)) return;
@@ -3969,6 +3970,23 @@ function emitBuiltinIntCoercion(emitter:Emitter, node:Node):boolean {
     emitter.catchup(node.start);emitter.insert(helper+'(');
     emitter.skipTo(args.children[0].start);visitNode(emitter,args.children[0]);
     emitter.catchup(args.children[0].end);emitter.insert(')');emitter.skipTo(node.end);return true;
+}
+
+/** A source Boolean call is a runtime conversion, never a TS type assertion. */
+function emitBuiltinBooleanCoercion(emitter:Emitter, node:Node):boolean {
+    if(!emitter.generated||emitter.isNew||!node||node.kind!==NodeKind.CALL)return false;
+    const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
+    if(!callee||callee.kind!==NodeKind.IDENTIFIER||sourceIdentifier(callee,emitter.source)!=='Boolean'
+        ||typeOfBinding(callee,emitter.source,Object.keys(emitter.options.nativeClassInitialization.classes))!=='builtin'
+        ||emitter.findDefInScope('Boolean')||!args)return false;
+    if(args.children.length!==1)throw new Error('AS3_BOOLEAN_CALL_UNSUPPORTED: Boolean requires exactly one source argument');
+    const module=generatedModule(emitter.options.nativeObjectCreationModule);
+    let helper='__as3_booleanCall';while(emitter.source.indexOf(helper)>=0)helper+='_';
+    emitter.ensureImportIdentifier('as3CallClass as '+helper,module,false);
+    emitter.nativeSourceHelpers.add(helper);
+    emitter.catchup(node.start);emitter.insert(helper+'(Boolean,[');
+    emitter.skipTo(args.children[0].start);visitNode(emitter,args.children[0]);
+    emitter.catchup(args.children[0].end);emitter.insert('])');emitter.skipTo(node.end);return true;
 }
 
 function emitBuiltinStringCoercion(emitter:Emitter, node:Node):boolean {
