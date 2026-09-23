@@ -45,7 +45,7 @@ assert.equal(typeof NativeCallableClasses,'function');
 const only={'contracts.Implementation':sources['contracts.Implementation'].source};
 assert.throws(()=>new NativeCallableClasses(only['contracts.Implementation'],only,{'contracts.Implementation':'lazy'},provider('AS3MethodBinding')),/interface construction identity requires separate authority/);guards++;
 const {NativeReferenceCoercion}=require('../../lib/emit/native-reference-coercion');
-assert.throws(()=>new NativeReferenceCoercion(sources['contracts.Holder'].source,{plan,module:'./domain',coercionModule:provider('AS3Type')},false),/source interface coercion lowering requires separate emission qualification/);guards++;
+assert.throws(()=>new NativeReferenceCoercion(sources['contracts.Holder'].source,{plan,module:'./domain',coercionModule:provider('AS3Type')},false),/reference field storage requires generated class registration/);guards++;
 fs.writeFileSync(path.join(run,'domain.ts'),plan.moduleSource);fs.writeFileSync(path.join(run,'other.ts'),plan.moduleSource);
 const names=Object.fromEntries(plan.interfaces.map(b=>[b.qname,b.tokenExport])),bindings=Object.fromEntries(plan.bindings.map(b=>[b.qname,b]));
 const driver=fs.readFileSync(path.join(__dirname,'driver.txt'),'utf8').replace('@NAMES@',JSON.stringify(names)).replace('@BINDINGS@',JSON.stringify(bindings)).replace('@METADATA@',provider('FlashTypeMetadata')).replace('@TYPE@',provider('AS3Type'));

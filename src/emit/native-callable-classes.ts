@@ -26,7 +26,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -575,6 +575,8 @@ export class NativeCallableClasses {
                 if(returns && returns.text !== 'void' && returns.text !== '*') {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
                     if(reference&&reference.kind==='native'&&reference.identity!=='flash.utils.Dictionary'&&reference.identity!=='flash.net.SharedObject'
+                        &&!(this.byteArrayReference&&reference.identity==='flash.utils.ByteArray')
+                        &&!this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&binding.nativeInterface)
                         &&!(reference.identity==='flash.media.ID3Info'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity))
                         &&!(this.dateReference&&reference.identity==='Date')&&!(this.displayReference&&reference.identity==='flash.display.DisplayObject')&&!(reference.identity==='flash.events.Event'
                         &&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&!!binding.nativeBaseExport)))
@@ -606,7 +608,7 @@ export class NativeCallableClasses {
                 if (isStatic && !lexicalMember) staticMethods.push(key);
             } else if (member.kind === S.GetAccessor || member.kind === S.SetAccessor) {
                 const identity = (isStatic ? 'static.' : '') + key;
-                if (!accessorTypes.has(identity)) {
+                if (!lexicalMember && !accessorTypes.has(identity)) {
                     (isStatic ? staticTypes : instanceTypes).push(key + ': ' + (member.kind === S.GetAccessor ? type(member) : type(member.parameters[0])) + ';');
                     accessorTypes.add(identity);
                 }
@@ -669,7 +671,7 @@ export class NativeCallableClasses {
         const constructorParameters = '(this: ' + name
             + (ctor && this.own.parameters.length ? ', ' + (this.generated?params(ctor,false):params(ctor,true)) : '') + ')';
         const replacement = (this.lexical ? this.lexical.traits.map(t=>'const ' + t.key + '=' + intrinsic + '.symbol();').join('\n')+'\n' : '')
-            + (this.generated ? this.generated.lexical.own.filter(t=>t.kind==='method').map(t=>'const '+t.key+'='+intrinsic+'.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + constructorParameters + ' {\n'
+            + (this.generated ? this.generated.lexical.own.filter(t=>t.kind==='method'||t.kind==='accessor').map(t=>'const '+t.key+'='+intrinsic+'.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + constructorParameters + ' {\n'
             + (nativeBase ? 'return '+intrinsic+'.invokeNativeConstructor(this,'+identity+',arguments,function'+constructorParameters+' {\n' : '')
             + 'const ' + fresh + ' = ' + intrinsic + '.enter(this, ' + identity + ');\nlet ' + succeeded + ' = false;\ntry {\n'
             + arity + coercions

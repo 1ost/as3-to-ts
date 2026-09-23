@@ -2,19 +2,19 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),parse=require('../../lib/parse'),emit=require('../../lib/emit'),ts=require('typescript');
 const engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
-const evidence=path.join(engine,'tests/nativeFlashOracle','generated-protected-static-strings');const captured=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(engine,'tests/nativeFlashOracle','generated-internal-methods');const captured=require(path.join(evidence,'verify.cjs'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const root=path.resolve('.cache/native-generated-protected-static-strings');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
+const root=path.resolve('.cache/native-generated-internal-methods');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
 const modulePath=file=>{let r=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
 const sources={};
 function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,item.name);
- if(item.isDirectory())walk(file);else if(item.name.endsWith('.as')&&item.name!=='StaticStringsProbe.as'){
+ if(item.isDirectory())walk(file);else if(item.name.endsWith('.as')&&item.name!=='InternalMethodProbe.as'){
  const qname=path.relative(path.join(evidence,'source'),file).replaceAll('\\','/').slice(0,-3).replaceAll('/','.');
  const source=fs.readFileSync(file,'utf8');sources[qname]={source,sourceSha256:hash(source)};}}}
-walk(path.join(evidence,'source'));assert.equal(Object.keys(sources).length,3);
+walk(path.join(evidence,'source'));assert.equal(Object.keys(sources).length,7);
 const nativeProviders={};
-const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-protected-static-strings',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
+const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-internal-methods',lexicalProviderModule:provider('AS3LexicalMembers'),providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
 const fileFor=q=>q.split('.').pop(),definitionsByNamespace={};
 for(const q of Object.keys(sources)){const i=q.lastIndexOf('.');(definitionsByNamespace[q.slice(0,i)]??=[]).push(q.slice(i+1));}
@@ -25,11 +25,38 @@ const options={customVisitors:[],importModules:{"compiler.AS3Invocation":provide
  nativeSourceErrorModule:modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts')),nativeDynamicPropertyReadsModule:provider('AS3Property'),nativeDynamicPropertyWritesModule:provider('AS3Property'),nativeComputedTypeTestModule:provider('AS3Type'),nativeDictionaryPropertyModule:provider('AS3Property'),nativeEnumeration:{dictionaryModule:provider("Dictionary"),coercionModule:provider("AS3Coercion"),stringModule:provider("AS3String")},nativeObjectCreationModule:provider("AS3Class"),nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition'),nativeArrayCreationModule:provider('AS3ArrayCreation')};
 const combined=process.argv.includes('--combined');if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./declarationDomain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
 options.nativeReferenceCoercion={plan,module:'./declarationDomain',coercionModule:provider('AS3Type')};
+options.nativeGlobalModules={trace:modulePath(path.join(engine,'src/layaAir/flash/debug/trace.ts'))};
 let rejectionGuards=0;
-for(const body of ['protected static var value:String=String(7);','protected static var value:Number=7;','protected static var value:Boolean=1;','private static var value:String=String(7);']){
- const source='package stringcases {public class Guard {'+body+'}}';
- assert.throws(()=>{const p=api.createNativeGeneratedDeclarationPlan({scope:'strings-guard',providerModule:provider('AS3GeneratedClass'),sources:{...sources,'stringcases.Guard':{source,sourceSha256:hash(source)}}});emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}});},/AS3_[A-Z_]+UNSUPPORTED/,body);rejectionGuards++;
+function rejected(changed,owner='methodcases.Holder',providerEnabled=true){
+ const guardSources={...sources,[owner]:{source:changed,sourceSha256:hash(changed)}};
+ assert.throws(()=>{const guard=api.createNativeGeneratedDeclarationPlan({scope:'internal-guard',providerModule:provider('AS3GeneratedClass'),...(providerEnabled?{lexicalProviderModule:provider('AS3LexicalMembers')}:{}),sources:guardSources});
+ emit(parse(owner+'.as',changed),changed,{...options,nativeGeneratedDeclarations:{plan:guard,module:'./guard'},nativeReferenceCoercion:{plan:guard,module:'./guard',coercionModule:provider('AS3Type')}});
+ },/AS3_[A-Z_]+UNSUPPORTED/);rejectionGuards++;
 }
+const holder=sources['methodcases.Holder'].source;
+rejected(holder,'methodcases.Holder',false);
+for(const changed of [
+ holder.replace('internal function parse(', 'internal static function parse('),
+ holder.replace('internal function parse(input:IInput):Boolean', 'internal function parse(input:Object):Boolean'),
+ holder.replace('internal function parse(input:IInput):Boolean', 'internal function parse(input:IInput):uint'),
+ holder.replace('internal function parse(input:IInput):Boolean', 'internal function parse(input:IInput=null):Boolean'),
+ holder.replace('internal function parse(input:IInput):Boolean', 'internal function parse(input:IInput,other:IInput):Boolean'),
+ holder.replace('internal function parse(input:IInput):Boolean', 'internal function parse(...input):Boolean'),
+ holder.replace('internal function parse(', 'customNS function parse('),
+ holder.replace('return parse(input);','return delete parse;'),
+ holder.replace('return parse(input);','return parse=null;'),
+ holder.replace('return parse(input);','return ++parse;'),
+ holder.replace('internal function parse(', 'override internal function parse(')
+])rejected(changed);
+const peer=sources['methodcases.Peer'].source;
+for(const expression of ['value.parse=null','delete value.parse','++value.parse'])
+ rejected(peer.replace('return value.parse(input);','return '+expression+';'),'methodcases.Peer');
+const child=sources['methodcases.Child'].source;
+rejected(child.replace('override internal','internal'),'methodcases.Child');
+rejected(child.replace('return input.read()<0;','return super.parse(input);'),'methodcases.Child');
+rejected(child.replace('):Boolean','):void'),'methodcases.Child');
+rejected('package othermethod {import methodcases.Holder; import methodcases.IInput; public class Bad {public function read(value:Holder,input:IInput):Boolean{return value.parse(input);}}}','othermethod.Bad');
+assert.equal(rejectionGuards,19);
 fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];
 for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
  const opts={...options};
@@ -41,13 +68,13 @@ const files=[path.join(run,'declarationDomain.ts'),...emitted.map(e=>e.file),...
 const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
 const diagnostics=modern.getPreEmitDiagnostics(program).map(d=>({file:d.file&&path.relative(run,d.file.fileName),code:d.code,text:modern.flattenDiagnosticMessageText(d.messageText,'\n')}));fs.writeFileSync(path.join(run,'types.json'),JSON.stringify(diagnostics,null,2));assert.deepEqual(diagnostics.filter(d=>!d.file.startsWith('..')),[]);
 assert.deepEqual(diagnostics,[]);
-const names=['getQualifiedClassName','AS3Vector','AS3MethodBinding','AS3Coercion','AS3String','AS3Type','AS3Property','AS3Class','AS3Invocation','AS3DeclarationType','FlashTypeMetadata','AS3LexicalMembers','AS3ArrayCreation','AS3Addition','QName','AS3DynamicObject','AS3SourceError','AS3ScriptGlobal','AS3GeneratedClass'];
-const moduleFor=n=>'src/layaAir/flash/'+(['AS3SourceError','IllegalOperationError'].includes(n)?'errors':'utils')+'/'+n;
+const names=['IOError','AS3CanonicalErrorConstruction','trace','Dictionary','getQualifiedClassName','AS3Vector','AS3MethodBinding','AS3Coercion','AS3String','AS3Type','AS3Property','AS3Class','AS3Invocation','AS3DeclarationType','FlashTypeMetadata','AS3LexicalMembers','AS3ArrayCreation','AS3Addition','QName','AS3DynamicObject','AS3SourceError','AS3ScriptGlobal','AS3GeneratedClass'];
+const moduleFor=n=>'src/layaAir/flash/'+(n==='trace'?'debug':['IOError','AS3SourceError','IllegalOperationError'].includes(n)?'errors':'utils')+'/'+n;
 const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
 const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
-const driverFile=path.resolve('tests/native-generated-protected-static-strings/runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
-const wanted=captured;assert.equal(wanted.length,13);
-for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v[0].value=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
+const driverFile=path.resolve('tests/native-generated-internal-methods/runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
+const wanted=captured;assert.equal(wanted.length,16);
+for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v[0].value[0]=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');specs.push({name:relative,code:out.outputText});}
@@ -58,5 +85,5 @@ try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  for(const actual of [node,web]){assert.deepEqual(actual,wanted);}
  results.push({target,node,web});
 }}finally{await browser.close();}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Private/computed String initializers and other primitive initializer forms','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Internal static/super methods, optional/rest or other method signatures, setters and computed field initializers','Complete Zip/ZipFile and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:16,comparisons:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

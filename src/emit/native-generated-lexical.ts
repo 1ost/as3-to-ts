@@ -6,7 +6,7 @@ import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, native
 import {NativeGeneratedClassTraits} from './native-generated-traits';
 
 interface Trait {
-    name: string; visibility: string; static: boolean; kind: 'variable' | 'constant' | 'method';
+    name: string; visibility: string; static: boolean; kind: 'variable' | 'constant' | 'method' | 'accessor';
     owner: string; node: Node; type: Node; key: string; access: string; parameterCount: number;
 }
 function inputPackageEnabled(plan:NativeGeneratedDeclarationPlan):boolean{return !!nativeGeneratedDeclarationInputs(plan,plan.scope).lexicalProviderModule;}
@@ -37,6 +37,15 @@ export class NativeGeneratedLexical {
         }
         return this.internalContents.get(owner);
     }
+    private internalMethod(owner:string,member:Node):boolean {
+        if(member.kind!==K.FUNCTION||modifiers(member).indexOf('static')>=0)return false;
+        const parameters=member.findChild(K.PARAMETER_LIST).children,returned=member.findChild(K.TYPE);
+        if(parameters.length!==1||!returned||['Boolean','void'].indexOf(returned.text)<0)return false;
+        const value=parameters[0].findChild(K.NAME_TYPE_INIT),type=value&&value.findChild(K.TYPE);
+        if(!type||value.findChild(K.INIT)||parameters[0].findChild(K.REST))return false;
+        return this.plan.references.some(r=>r.owner===owner&&r.start===type.start&&r.end===type.end
+            &&(r.kind==='interface'||r.kind==='native'&&this.plan.nativeBindings.some(b=>b.qname===r.identity&&b.nativeInterface)));
+    }
     private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string;readonly kind:string}>>();
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
@@ -62,25 +71,36 @@ export class NativeGeneratedLexical {
                 if(visibility==='public'||inherited&&visibility==='private')return;
                 if(visibility==='internal'){
                     if(!input.lexicalProviderModule)fail('internal namespace storage authority');
-                    if(mods.some(mod=>['internal','static'].indexOf(mod)<0))fail('custom namespace is not package-internal storage');
+                    if(mods.some(mod=>['internal','static'].indexOf(mod)<0 && !(mod==='override' && [K.GET,K.FUNCTION].indexOf(member.kind)>=0)))fail('custom namespace is not package-internal storage');
                     if(inherited&&packageOf(name)!==packageOf(owner))return;
                 }
                 const isStatic=mods.indexOf('static')>=0;
                 const constant=member.kind===K.CONST_LIST&&(visibility==='protected'||visibility==='private'&&isStatic||visibility==='internal'&&isStatic);
                 if(isStatic && member.kind!==K.VAR_LIST&&!constant&&(visibility!=='private'||member.kind!==K.FUNCTION))fail('static lexical initialization lowering required');
                 if(inherited&&visibility==='internal'&&isStatic)return;
-                const inheritedStrings=visibility==='protected'&&member.kind===K.VAR_LIST
-                    &&member.findChildren(K.NAME_TYPE_INIT).every(node=>node.findChild(K.TYPE)&&node.findChild(K.TYPE).text==='String');
-                if(inherited&&isStatic&&(!constant&&!inheritedStrings||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
-                if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant)fail('lexical constant/accessor lowering required');
+                const inheritedPrimitives=visibility==='protected'&&member.kind===K.VAR_LIST
+                    &&member.findChildren(K.NAME_TYPE_INIT).every(node=>node.findChild(K.TYPE)&&['String','Boolean'].indexOf(node.findChild(K.TYPE).text)>=0);
+                if(inherited&&isStatic&&(!constant&&!inheritedPrimitives||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
+                const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
+                if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
+                    fail('internal instance method requires one authenticated interface parameter and Boolean/void return');
+                const internalGetter=visibility==='internal'&&!isStatic&&member.kind===K.GET
+                    &&member.findChild(K.TYPE)&&member.findChild(K.TYPE).text==='Boolean'
+                    &&member.findChild(K.PARAMETER_LIST).children.length===0;
+                if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant&&!internalGetter)fail('lexical constant/accessor lowering required');
                 const declarations=member.kind===K.VAR_LIST||constant?member.findChildren(K.NAME_TYPE_INIT):[member];
                 declarations.forEach(node=>{
                     const local=node.findChild(K.NAME).text;
                     const previous=this.traits.find(t=>t.name===local&&t.static===isStatic);
                     if(previous) {
-                        if(inherited&&previous.visibility==='protected'&&visibility==='protected'&&previous.kind==='method'&&member.kind===K.FUNCTION) {
+                        if(inherited&&previous.visibility==='internal'&&visibility==='internal'&&previous.kind==='accessor'&&internalGetter) {
+                            if(modifiers(previous.node).indexOf('override')<0)fail('internal getter override requires source override');
+                            overridden.add(previous);return;
+                        }
+                        if(inherited&&previous.visibility===visibility&&(visibility==='protected'||visibility==='internal'&&internalMethod)&&previous.kind==='method'&&member.kind===K.FUNCTION) {
                             const ancestor={owner:name,node} as Trait;
-                            if(modifiers(previous.node).indexOf('override')<0 || mods.indexOf('final')>=0 || signature(previous)!==signature(ancestor))
+                            if(modifiers(previous.node).indexOf('override')<0 || mods.indexOf('final')>=0 || signature(previous)!==signature(ancestor)
+                                ||visibility==='internal'&&previous.type.text!==member.findChild(K.TYPE).text)
                                 fail('protected override requires matching source signature');
                             overridden.add(previous);return;
                         }
@@ -90,9 +110,9 @@ export class NativeGeneratedLexical {
                     if(vector&&(isStatic||visibility!=='private'||member.kind!==K.VAR_LIST
                         ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
                         fail('lexical vector storage authority');
-                    const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':'method',owner:name,node,
+                    const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':internalGetter?'accessor':'method',owner:name,node,
                         type:vector||node.findChild(K.TYPE),key:fresh('key'),access:fresh('access'),parameterCount:member.kind===K.FUNCTION?node.findChild(K.PARAMETER_LIST).children.filter(p=>!p.findChild(K.REST)).length:0};
-                    if(visibility==='internal'&&!(trait.type&&trait.type.text==='uint'
+                    if(visibility==='internal'&&!internalGetter&&!internalMethod&&!(trait.type&&trait.type.text==='uint'
                         &&(trait.kind==='variable'&&!isStatic||trait.kind==='constant'&&isStatic)))fail('internal uint field/static constant required');
                     if(visibility==='internal'&&trait.kind==='variable')this.earlyInstanceValue(trait);
                     if(constant)this.constantValue(trait);
@@ -121,7 +141,7 @@ export class NativeGeneratedLexical {
                 scope.findChild(K.PARAMETER_LIST).children.forEach(p=>{const d=p.findChild(K.NAME_TYPE_INIT);if(d)declarations.push(d);});
                 const collect=(n:Node):void=>{if(n.kind===K.FUNCTION||n.kind===K.LAMBDA)return;if([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(n.kind)>=0)declarations.push(...n.findChildren(K.NAME_TYPE_INIT));n.children.forEach(collect);};collect(scope.findChild(K.BLOCK));
                 const slot=declarations.find(d=>d.findChild(K.NAME).text===target.text);
-                if(slot){if(slot.findChild(K.TYPE)&&['*','String'].indexOf(slot.findChild(K.TYPE).text)<0)fail('typed for-in target held');return;}
+                if(slot){if(slot.findChild(K.TYPE)&&['*','String','Object'].indexOf(slot.findChild(K.TYPE).text)<0)fail('typed for-in target held');return;}
             }
             fail('for-in target has no source local ownership');
         };
@@ -279,6 +299,12 @@ export class NativeGeneratedLexical {
                 &&isFinite(Number(value)))return value;
         }
         const expression=unwrapEncapsulatedExpression(init.children[0]);
+        if(trait.visibility==='protected'&&trait.type&&trait.type.text==='Boolean'){
+            if(/^(true|false)$/.test(value))return value;
+            // Computed values execute in cinit after default storage publication;
+            // literal Booleans above are trait values visible before cinit.
+            if(expression&&[K.CALL,K.RELATION,K.EQUALITY,K.AND].indexOf(expression.kind)>=0)return undefined;
+        }
         // A call initializer runs in cinit after default storage publication;
         // unlike an int literal it is not an early trait value.
         if(trait.visibility==='private'&&trait.type&&trait.type.text==='int'&&expression&&expression.kind===K.CALL)return undefined;
@@ -314,6 +340,7 @@ export class NativeGeneratedLexical {
         const native=own.base&&this.plan.nativeBindings.find(b=>b.qname===own.base&&!!b.nativeBaseExport);
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
+            +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
             +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
         return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?domain+'.'+parent.lexicalExport+'.get('+base+')':native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
@@ -322,7 +349,7 @@ export class NativeGeneratedLexical {
             +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
     emit(emitter:any,node:Node,visit:(emitter:any,node:Node)=>void):boolean {
-        const resolve=(value:Node):{trait:Trait;receiver:Node;publicName?:string;publicMethod?:boolean;internalOwner?:string;internalName?:string}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -338,14 +365,19 @@ export class NativeGeneratedLexical {
             if(receiver) {
                 // Public members on another authenticated source receiver use
                 // common property dispatch, including source null errors.
-                let references = this.plan.references.filter(r=>r.owner===this.owner&&r.kind==='declaration'
+                let references = this.plan.references.filter(r=>r.owner===this.owner&&(r.kind==='declaration'||r.kind==='native')
                     &&receiver.kind===K.IDENTIFIER&&binding&&r.sourceName===binding.as3Type);
                 if(receiver.kind===K.DOT&&receiver.children[0].text==='this') {
                     const field=this.traits.find(t=>t.name===receiver.children[1].text&&!t.static&&t.kind==='variable');
-                    references=field&&field.type?this.plan.references.filter(r=>r.owner===field.owner&&r.kind==='declaration'
+                    references=field&&field.type?this.plan.references.filter(r=>r.owner===field.owner&&(r.kind==='declaration'||r.kind==='native')
                         &&r.start===field.type.start&&r.end===field.type.end):[];
                 }
                 const identities=Array.from(new Set(references.map(r=>r.identity)));
+                if(identities.length===1&&identities[0]==='flash.utils.ByteArray'
+                    &&references.every(r=>r.kind==='native')&&['compress','uncompress','deflate','inflate'].indexOf(name)>=0) {
+                    if(!emitter.options.nativeByteArrayReferenceModule)fail('native ByteArray method requires exact provider');
+                    return {trait:null,receiver,nativeMethod:name};
+                }
                 if(inputPackageEnabled(this.plan)) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                     const knownClass=receiver.kind===K.IDENTIFIER&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type'))
@@ -356,18 +388,21 @@ export class NativeGeneratedLexical {
                     for(let current=identity;current;current=this.plan.bindings.find(b=>b.qname===current).base){
                         if(!input.sources[current]||input.sources[current].referenceOnly)break;
                         const content=this.internalContent(current);
-                        const field=content.children.filter(Boolean).find(m=>[K.VAR_LIST,K.CONST_LIST].indexOf(m.kind)>=0
+                        const field=content.children.filter(Boolean).find(m=>[K.VAR_LIST,K.CONST_LIST,K.GET,K.FUNCTION].indexOf(m.kind)>=0
                             &&modifiers(m).every(mod=>['public','private','protected'].indexOf(mod)<0)
-                            &&(modifiers(m).indexOf('static')>=0)===statics&&m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===name));
+                            &&(modifiers(m).indexOf('static')>=0)===statics&&([K.GET,K.FUNCTION].indexOf(m.kind)>=0?m.findChild(K.NAME).text===name:m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===name)));
                         if(!field)continue;
                         if(statics&&current!==identity)fail('inherited internal static lookup requires qualification');
                         if(packageOf(current)!==packageOf(this.owner)){inaccessible=true;continue;}
-                        const value=field.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===name);
-                        if(!value.findChild(K.TYPE)||value.findChild(K.TYPE).text!=='uint'
-                            ||statics&&field.kind!==K.CONST_LIST||!statics&&field.kind!==K.VAR_LIST)
+                        const value=[K.GET,K.FUNCTION].indexOf(field.kind)>=0?field:field.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===name);
+                        const getter=field.kind===K.GET&&!statics&&value.findChild(K.TYPE)&&value.findChild(K.TYPE).text==='Boolean'
+                            &&value.findChild(K.PARAMETER_LIST).children.length===0;
+                        const method=this.internalMethod(current,field);
+                        if(!getter&&!method&&(!value.findChild(K.TYPE)||value.findChild(K.TYPE).text!=='uint'
+                            ||statics&&field.kind!==K.CONST_LIST||!statics&&field.kind!==K.VAR_LIST))
                             fail('foreign internal uint field/static constant required');
                         if(current===this.owner&&receiver.text==='this')break;
-                        return {trait:null,receiver,internalOwner:current,internalName:name};
+                        return {trait:null,receiver,internalOwner:current,internalName:name,internalMethod:method};
                     }
                     if(inaccessible)fail('internal declaration belongs to another package');
                 }
@@ -417,9 +452,9 @@ export class NativeGeneratedLexical {
         if(node.kind===K.IDENTIFIER&&node.parent&&node.parent.kind===K.DOT&&node.parent.children[1]===node)return false;
         if(target.kind===K.DOT&&target.children[1]&&['call','apply'].indexOf(target.children[1].text)>=0) {
             const inner=target.children[0],slot=resolve(inner);
-            if(slot&&slot.trait&&slot.trait.kind==='variable') {
-                const ref=slot.trait.type&&this.plan.references.find(r=>r.owner===slot.trait.owner&&r.start===slot.trait.type.start&&r.end===slot.trait.type.end);
-                if(operation!=='call'||!ref||ref.kind!=='intrinsic'||ref.identity!=='Function'||slot.trait.static)
+            if(slot&&(slot.nativeMethod||slot.trait&&slot.trait.kind==='variable')) {
+                const ref=slot.trait&&slot.trait.type&&this.plan.references.find(r=>r.owner===slot.trait.owner&&r.start===slot.trait.type.start&&r.end===slot.trait.type.end);
+                if(operation!=='call'||!slot.nativeMethod&&(!ref||ref.kind!=='intrinsic'||ref.identity!=='Function'||slot.trait.static))
                     fail('lexical Function intrinsic requires direct instance call');
                 let helper='__as3_generated_callProperty';while(emitter.source.indexOf(helper)>=0)helper+='_';
                 emitter.ensureImportIdentifier('as3CallProperty as '+helper,emitter.generated.propertyModule,false);
@@ -434,18 +469,36 @@ export class NativeGeneratedLexical {
             }
         }
         const found=resolve(target);if(!found)return false;
+        if(found.nativeMethod) {
+            if(operation!=='get'&&operation!=='call')fail('native ByteArray method assignment');
+            let helper='__as3_bytearray_method';while(emitter.source.indexOf(helper)>=0)helper+='_';
+            emitter.ensureImportIdentifier('as3GetByteArrayCompressionMethod as '+helper,emitter.options.nativeByteArrayReferenceModule,false);
+            emitter.nativeSourceHelpers.add(helper);
+            emitter.catchup(node.start);
+            if(operation==='call')emitter.insert('(<any>((target:any,values:any[])=>'+helper+'(target,'+JSON.stringify(found.nativeMethod)+').apply(null,values))(');
+            else emitter.insert('(<any>'+helper+'(');
+            emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
+            if(operation==='call'){
+                // The typed receiver is retained before evaluating arguments;
+                // null dispatch errors follow argument effects, as in AIR.
+                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']))');
+            }else emitter.insert(','+JSON.stringify(found.nativeMethod)+'))');
+            emitter.skipTo(node.end);return true;
+        }
         if(found.internalName){
-            if(operation!=='get'&&operation!=='set'||operation==='set'&&node.children[1].text!=='=')fail('internal field operation requires get/set');
+            if(operation==='call'&&!found.internalMethod||operation==='set'&&(found.internalMethod||node.children[1].text!=='='))fail('internal member operation requires qualified get/set/call');
             const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
             const members=this.internalContent(found.internalOwner).children;
+            if(operation==='set'&&members.some(m=>m.kind===K.GET&&m.findChild(K.NAME).text===found.internalName))fail('internal readonly getter assignment');
             if(operation==='set'&&members.some(m=>m.kind===K.CONST_LIST&&m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===found.internalName)))fail('internal constant assignment');
             const binding=this.plan.bindings.find(b=>b.qname===found.internalOwner);
             let token='__as3_internalType_'+binding.tokenExport;while(emitter.source.indexOf(token)>=0)token+='_';
             emitter.ensureImportIdentifier(binding.tokenExport+' as '+token,emitter.generated.options.module,false);
-            emitter.catchup(node.start);emitter.insert('(<any>'+this.provider+'.'+(operation==='get'?'as3GetInternalMember':'as3SetInternalMember')+'(');
+            emitter.catchup(node.start);emitter.insert('(<any>'+this.provider+'.'+(operation==='get'?'as3GetInternalMember':operation==='call'?'as3CallInternalMember':'as3SetInternalMember')+'(');
             emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
             emitter.insert(','+this.scope+','+token+','+JSON.stringify(found.internalName));
             if(operation==='set'){emitter.insert(',');emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);}
+            if(operation==='call'){emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');}
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(found.publicName) {
@@ -473,6 +526,7 @@ export class NativeGeneratedLexical {
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(operation==='set'&&(node.children[1].text!=='='||found.trait.kind!=='variable'))fail('lexical assignment kind');
+        if(operation==='call'&&found.trait.kind==='accessor')fail('internal getter invocation held');
         const fieldCall=operation==='call'&&found.trait.kind==='variable';
         if(fieldCall) {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);

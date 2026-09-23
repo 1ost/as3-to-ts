@@ -17,7 +17,7 @@ export interface NativeGeneratedDeclarationInput {
     /** Explicit class subset; omission selects all planned source classes. */
     scriptGlobalSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
-    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher'}};
+    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher'; nativeInterface?: true}};
 }
 export interface NativeGeneratedDeclarationBinding {
     readonly qname: string;
@@ -50,7 +50,7 @@ export interface NativeGeneratedDeclarationPlan {
     readonly references: ReadonlyArray<NativeGeneratedReference>;
     readonly vectors: ReadonlyArray<{readonly owner:string;readonly start:number;readonly end:number;readonly identity:string;readonly name:string;readonly specExport:string}>;
     readonly sourceHashes: {[qname: string]: string};
-    readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly eventBaseExport?: string; readonly nativeBaseExport?: string; readonly declarationExport?: string}>;
+    readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly nativeInterface?: true; readonly eventBaseExport?: string; readonly nativeBaseExport?: string; readonly declarationExport?: string}>;
 }
 interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan;}
 const contexts = new WeakMap<object, Context>();
@@ -113,7 +113,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if (names.indexOf(name) >= 0 || builtins.indexOf(name) >= 0) fail('source/provider or builtin collision: ' + name);
         const provider = providers[name];
         if (!table(provider)) fail('provider binding required');
-        fields(provider, ['module', 'exportName','nativeBase']);
+        fields(provider, ['module', 'exportName','nativeBase','nativeInterface']);
+        if (provider.nativeInterface !== undefined && (provider.nativeInterface !== true || provider.nativeBase !== undefined || !data.interfaceProviderModule))
+            fail('native interface requires explicit interface provider and cannot be a native Class base');
         if(provider.nativeBase !== undefined && !((provider.nativeBase === 'Event' && name === 'flash.events.Event' && provider.exportName === 'Event')
             || (provider.nativeBase === 'Error' && name === 'Error' && provider.exportName === 'Error')
             || (provider.nativeBase === 'EventDispatcher' && name === 'flash.events.EventDispatcher' && provider.exportName === 'EventDispatcher')))
@@ -199,6 +201,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     if(data.scriptGlobalProviderModule)lines.push('import {createAS3ScriptDomain,instantiateAS3ScriptUnit} from '+JSON.stringify(data.scriptGlobalProviderModule)+';',
         'const __scriptDomain=createAS3ScriptDomain();');
     if (interfaces.length) lines.push('import {defineAS3Interface,registerAS3Class} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
+    if (nativeNames.some(name => providers[name].nativeInterface))
+        lines.push('import {isAS3Interface as __isNativeInterface} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     const emittedInterfaces = new Set<string>(), activeInterfaces = new Set<string>();
     const addInterface = (binding: NativeGeneratedInterfaceBinding): void => {
         if (emittedInterfaces.has(binding.qname)) return;
@@ -242,6 +246,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     }
     const nativeBindings: Array<NativeGeneratedDeclarationPlan['nativeBindings'][number]> = nativeNames.map((name, index) => {
         const provider = providers[name], referenceExport = 'native' + index;
+        if (provider.nativeInterface) {
+            lines.push('import {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';',
+                'if(!__isNativeInterface(' + referenceExport + ')||' + referenceExport + '.name!==' + JSON.stringify(name.replace(/\.([^.]*)$/, '::$1'))
+                    + ')throw new TypeError("AS3_GENERATED_DECLARATIONS_UNSUPPORTED: native interface token");',
+                'export {' + referenceExport + '};');
+            return Object.freeze({qname:name,referenceExport,nativeInterface:true as true});
+        }
         lines.push('export {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';');
         if(provider.nativeBase) {
             const declarationExport='nativeType'+index,nativeBaseExport='nativeEntry'+index;
