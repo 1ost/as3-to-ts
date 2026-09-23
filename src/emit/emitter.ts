@@ -3891,9 +3891,12 @@ function emitRelation(emitter:Emitter, node:Node):void {
         emitter.insert(',');emitter.skipTo(node.lastChild.start);visitNode(emitter,node.lastChild);
         emitter.catchup(node.lastChild.end);emitter.insert(')');emitter.skipTo(node.end);return;
     }
+    const interfaceAs = emitter.generated && emitter.references && node.children.length===3
+        && node.children[1].kind===NodeKind.AS && node.lastChild.kind===NodeKind.IDENTIFIER
+        && emitter.references.sourceInterface(node.lastChild.text);
     if (emitter.generated && node.children.length===3 && node.children[1].kind===NodeKind.AS
         && node.lastChild.kind===NodeKind.IDENTIFIER
-        && (emitter.classInitializers.resolve(node,node.lastChild.text)==='lazy'
+        && (interfaceAs || emitter.classInitializers.resolve(node,node.lastChild.text)==='lazy'
             || node.lastChild.text===emitter.currentClassName)) {
         const target=node.lastChild,definition=emitter.findDefInScope(target.text);
         if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
@@ -3907,7 +3910,15 @@ function emitRelation(emitter:Emitter, node:Node):void {
         emitter.nativeSourceHelpers.add(helper);
         emitter.catchup(node.start);emitter.insert(helper+'(');
         visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
-        emitter.insert(',');emitter.skipTo(target.start);visitNode(emitter,target);
+        emitter.insert(',');emitter.skipTo(target.start);
+        if (interfaceAs) {
+            // An interface token has no implementing-class initializer. Keep
+            // operand evaluation in place and use the authenticated domain token.
+            let token='__as3_interface_as_'+interfaceAs;
+            while(emitter.source.indexOf(token)>=0)token+='_';
+            emitter.ensureImportIdentifier(interfaceAs+' as '+token,emitter.references.options.module,false);
+            emitter.nativeSourceHelpers.add(token);emitter.insert(token);emitter.skipTo(target.end);
+        } else visitNode(emitter,target);
         emitter.catchup(target.end);emitter.insert(')');emitter.skipTo(node.end);return;
     }
 

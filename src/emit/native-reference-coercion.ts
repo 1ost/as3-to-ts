@@ -153,7 +153,8 @@ export class NativeReferenceCoercion {
                 && node.lastChild.kind === K.IDENTIFIER && this.resolve(node.lastChild.text) === 'flash.events.Event'
                 && options.plan.nativeBindings.some(binding => binding.qname === 'flash.events.Event' && !!binding.eventBaseExport);
             const sourceAs = generated && node.kind===K.RELATION && node.children.length===3
-                && node.children[1].kind===K.AS && node.lastChild.kind===K.IDENTIFIER && this.sourceClass(node.lastChild.text);
+                && node.children[1].kind===K.AS && node.lastChild.kind===K.IDENTIFIER
+                && (this.sourceClass(node.lastChild.text) || !!this.sourceInterface(node.lastChild.text));
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
                 && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !sourceAs)
                 fail('reference type operation requires class-evaluation authority');
@@ -223,6 +224,11 @@ export class NativeReferenceCoercion {
     sourceClass(name: string): boolean {
         const identity = this.resolve(name);
         return this.options.plan.bindings.some(binding => binding.qname === identity);
+    }
+    sourceInterface(name: string): string {
+        const identity = this.resolve(name);
+        const binding = this.options.plan.interfaces.find(item => item.qname === identity);
+        return binding ? binding.tokenExport : null;
     }
     declaration(node: Node): ReferenceLocal {return node && this.declarations.get(node.start);}
     local(node: Node, name: string): ReferenceLocal {
