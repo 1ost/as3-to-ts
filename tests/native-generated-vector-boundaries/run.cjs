@@ -32,6 +32,7 @@ for(const body of [
  'private var queue:Vector.<IOrder>;',
  'public function get queue():Vector.<IOrder> {return null;}',
  'public function call(v:Vector.<IOrder>=null):void {}',
+ 'public function Guard(v:Vector.<IOrder>) {}',
  'public function call():Vector.<IOrder>{return new Vector.<IOrder>();}',
  'public var queue:Vector.<ProbeOrder>;',
  'public var queue:Vector.<Vector.<IOrder>>;'

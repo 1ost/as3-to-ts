@@ -157,6 +157,9 @@ export class NativeGeneratedLexical {
             if(node.kind===K.FUNCTION&&node.findChild(K.VECTOR)
                 || node.kind===K.PARAMETER&&node.findChild(K.NAME_TYPE_INIT)&&node.findChild(K.NAME_TYPE_INIT).findChild(K.VECTOR)){
                 const vector=node.findChild(K.VECTOR)||node.findChild(K.NAME_TYPE_INIT).findChild(K.VECTOR);
+                if(node.kind===K.PARAMETER&&node.parent&&node.parent.parent&&node.parent.parent.kind===K.FUNCTION
+                    &&node.parent.parent.findChild(K.NAME).text===this.ownClass.findChild(K.NAME).text)
+                    fail('Vector constructor parameter lowering requires separate qualification');
                 if(!plan.vectors.some(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end))
                     fail('vector callable signature lowering required');
                 if(node.kind===K.FUNCTION&&node.parent!==content)fail('nested Vector callable held');

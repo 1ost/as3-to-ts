@@ -15,8 +15,8 @@ entry/return/local conversions use the matching common property specialization.
 Interface signature annotations use nativeVectorTypes with the same exact plan.
 No Vector Array substitution or authored body rewriting is used.
 
-Eight rejection guards retain Vector construction, static/constant/accessor or
-private storage, optional parameters, source class element publication and nested
+Nine rejection guards retain Vector construction, static/constant/accessor or
+private storage, optional/constructor parameters, source class element publication and nested
 specialization publication as separate prerequisites. Three comparison controls
 detect row omission, ordering and loss of raw undefined assignment results.
 
