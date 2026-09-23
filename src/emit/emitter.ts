@@ -3281,6 +3281,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitReflectionXML(emitter, node)) return;
 	if (emitDirectToString(emitter, node)) return;
 	if (emitBuiltinStringCoercion(emitter, node)) return;
+    if (emitBuiltinIntCoercion(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
 	if (emitArraySortOn(emitter, node)) return;
 	if (emitTweenTo(emitter, node)) return;
@@ -3687,6 +3688,17 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!node||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.kind)<0||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(!receiver||!key)return null;
+    const internal=emitter.generated&&nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope).lexicalProviderModule;
+    if(internal&&node.kind===NodeKind.ARRAY_ACCESSOR&&receiver.kind===NodeKind.CALL
+        &&receiver.children[0].kind===NodeKind.IDENTIFIER&&receiver.children[0].text==='Object'
+        &&!emitter.findDefInScope('Object')&&typeOfBinding(receiver.children[0],emitter.source,Object.keys(emitter.generated.classes))==='builtin'
+        &&receiver.children[1].children.length===1){
+        const argument=receiver.children[1].children[0];
+        const definition=argument.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(argument.text);
+        if(argument.kind===NodeKind.IDENTIFIER&&(!definition||!Object.prototype.hasOwnProperty.call(definition,'as3Type'))
+            &&emitter.generated.options.plan.bindings.some(b=>b.qname.split('.').pop()===argument.text))
+            return {receiver,key,lexical:true};
+    }
     if(receiver.kind!==NodeKind.IDENTIFIER){
         if(emitter.generated&&emitter.generated.projection.metadata.isDynamic)
             throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: computed receiver in dynamic class held');
@@ -3707,8 +3719,8 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
         return {receiver,key,lexical:true,ownStatic:true};
     }
     if(!generated&&(!definition||['Object','*'].indexOf(definition.as3Type)<0))return null;
-    const lexical=!!generated&&receiver.text==='this';
-    if(lexical){
+    const lexical=!!generated&&receiver.text==='this'||!!internal&&node.kind===NodeKind.ARRAY_ACCESSOR;
+    if(lexical&&receiver.text==='this'){
         let member=node;while(member.parent&&member.parent.kind!==NodeKind.CONTENT)member=member.parent;
         const mods=member.findChild(NodeKind.MOD_LIST);
         if(mods&&mods.children.some(mod=>mod.text==='static'))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: static this dispatch held');
@@ -3917,6 +3929,23 @@ function emitDirectToString(emitter:Emitter, node:Node):boolean {
 	emitter.insert('))');
 	emitter.skipTo(node.end);
 	return true;
+}
+
+/** Explicit source int conversion must truncate and wrap, not call host Number. */
+function emitBuiltinIntCoercion(emitter:Emitter, node:Node):boolean {
+    const module=emitter.options.nativeCallableCoercionModule;
+    if(module===undefined||!emitter.generated||!node||node.kind!==NodeKind.CALL)return false;
+    const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
+    if(!callee||callee.kind!==NodeKind.IDENTIFIER||sourceIdentifier(callee,emitter.source)!=='int'
+        ||typeOfBinding(callee,emitter.source,Object.keys(emitter.options.nativeClassInitialization.classes))!=='builtin'
+        ||emitter.findDefInScope('int')||!args)return false;
+    if(args.children.length!==1)throw new Error('AS3_NUMERIC_CALL_UNSUPPORTED: int requires exactly one source argument');
+    let helper='__as3_int';while(emitter.source.indexOf(helper)>=0)helper+='_';
+    emitter.ensureImportIdentifier('as3CoerceInt as '+helper,module,false);
+    emitter.nativeSourceHelpers.add(helper);
+    emitter.catchup(node.start);emitter.insert(helper+'(');
+    emitter.skipTo(args.children[0].start);visitNode(emitter,args.children[0]);
+    emitter.catchup(args.children[0].end);emitter.insert(')');emitter.skipTo(node.end);return true;
 }
 
 function emitBuiltinStringCoercion(emitter:Emitter, node:Node):boolean {
