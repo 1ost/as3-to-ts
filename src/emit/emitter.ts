@@ -2328,6 +2328,7 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
             return;
         }
 		const init = node.findChild(NodeKind.INIT);
+		const generatedLexical=emitter.generated&&emitter.generated.lexical.trait(node.findChild(NodeKind.NAME).text,true);
 		visitNodes(emitter, node.children.filter(child => child && child !== init));
 		const type = getAS3DeclarationType(node);
 		const last = node.findChild(NodeKind.TYPE) || node.findChild(NodeKind.NAME);
@@ -2338,7 +2339,10 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 			visitNode(emitter, init);
 			emitter.catchup(getEffectiveNodeEnd(init));
 			const lexical = emitter.lexical && emitter.lexical.trait(node.findChild(NodeKind.NAME).text, true);
-            emitter.classFactory.fields.push(deferred ? deferred+'('+emitter.output.slice(start)+');'
+            if(generatedLexical){
+                if(emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
+                    emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.as3SetLexicalMember('+emitter.classFactory.value+','+generatedLexical.access+','+emitter.output.slice(start)+');');
+            } else emitter.classFactory.fields.push(deferred ? deferred+'('+emitter.output.slice(start)+');'
                 : emitter.classFactory.value + '[' + (lexical ? lexical.key : JSON.stringify(node.findChild(NodeKind.NAME).text))
                     + '] = ' + emitter.output.slice(start) + ';');
 			emitter.output = emitter.output.slice(0, start);

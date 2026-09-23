@@ -47,7 +47,7 @@ export class NativeGeneratedLexical {
                 if(visibility==='public'||inherited&&visibility==='private')return;
                 if(visibility==='internal')fail('internal namespace storage authority');
                 const isStatic=mods.indexOf('static')>=0;
-                if(isStatic && (visibility!=='private'||member.kind!==K.FUNCTION))fail('static lexical initialization lowering required');
+                if(isStatic && member.kind!==K.VAR_LIST&&(visibility!=='private'||member.kind!==K.FUNCTION))fail('static lexical initialization lowering required');
                 if(inherited&&isStatic)fail('inherited static lexical ownership');
                 if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION)fail('lexical constant/accessor lowering required');
                 const declarations=member.kind===K.VAR_LIST?member.findChildren(K.NAME_TYPE_INIT):[member];
@@ -64,7 +64,7 @@ export class NativeGeneratedLexical {
                         fail('ambiguous lexical declaration: '+local);
                     }
                     const vector=node.findChild(K.VECTOR);
-                    if(vector&&(visibility!=='private'||member.kind!==K.VAR_LIST
+                    if(vector&&(isStatic||visibility!=='private'||member.kind!==K.VAR_LIST
                         ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
                         fail('lexical vector storage authority');
                     const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':'method',owner:name,node,
@@ -210,6 +210,22 @@ export class NativeGeneratedLexical {
         },true,this.nestedFunctions,this.anonymousFunctions);
     }
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}
+    earlyStaticValue(trait:Trait):string|undefined {
+        if(!trait.static||trait.kind!=='variable')return undefined;
+        const init=trait.node.findChild(K.INIT);if(!init)return undefined;
+        const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
+        const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
+        const value=input.sources[trait.owner].source.slice(init.start,end(init)).trim();
+        if(value==='null')return 'null';
+        if(/^[+-]?\d+$/.test(value)&&trait.type&&trait.type.text==='int'&&Number(value)>=-2147483648&&Number(value)<=2147483647)return value;
+        if(trait.type&&['int','uint','Number','Boolean','String','*'].indexOf(trait.type.text)>=0)
+            fail('static lexical primitive initializer requires qualification');
+        const expression=unwrapEncapsulatedExpression(init.children[0]);
+        if(!expression||[K.ARRAY,K.CALL,K.NEW,K.DOT,K.IDENTIFIER].indexOf(expression.kind)<0
+            ||expression.kind===K.IDENTIFIER&&['true','false','undefined','NaN','Infinity'].indexOf(expression.text)>=0)
+            fail('static lexical literal storage requires qualification');
+        return undefined;
+    }
     typeExpression(node:Node,owner:string,domain:string,array:string):string {
         if(!node)return '"*"';
         if(node.kind===K.VECTOR){
@@ -237,7 +253,8 @@ export class NativeGeneratedLexical {
             +(t.kind==='variable'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array'):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
         return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?domain+'.'+parent.lexicalExport+'.get('+base+')':native?domain+'.'+native.eventBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
-            +this.traits.map(t=>'const '+t.access+'='+this.provider+'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(t.name)+','+JSON.stringify(t.visibility)+','+t.static+');').join('\n');
+            +this.traits.map(t=>'const '+t.access+'='+this.provider+'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(t.name)+','+JSON.stringify(t.visibility)+','+t.static+');').join('\n')
+            +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
     emit(emitter:any,node:Node,visit:(emitter:any,node:Node)=>void):boolean {
         const resolve=(value:Node):{trait:Trait;receiver:Node}|null=>{
@@ -259,7 +276,7 @@ export class NativeGeneratedLexical {
                 if(receiver.text!=='this'&&binding&&!binding.bound&&binding.as3Type==='Object')return null;
                 if(receiver.text===this.owner.split('.').pop()&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type')))isStatic=true;
                 else if(receiver.text!=='this'&&(!binding||[this.owner,this.owner.split('.').pop()].indexOf(binding.as3Type)<0))fail('lexical receiver requires exact source type');
-            } else isStatic=staticContext;
+            } else isStatic=staticContext||!this.traits.some(t=>t.name===name&&!t.static);
             const trait=this.traits.find(t=>t.name===name&&t.static===isStatic);
             if(!trait)fail('lexical static/instance ownership');
             if(!isStatic&&staticContext)fail('instance lexical access in static method');

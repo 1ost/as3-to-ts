@@ -42,7 +42,7 @@ reject(baseSource+' ',options,'source-byte mismatch');
 reject(sources['declcases.StorageProbe'].source,options,'reference-only publication');
 for(const body of [
  'public static const value:int=make();public static function make():*{return 1;}',
- 'private static var value:int;',
+ 'private static const value:int=1;',
  'internal var value:int;',
  'private function get value():int { return 0; }',
  'private var value:int; public function run():void { value++; }',
@@ -50,7 +50,7 @@ for(const body of [
  'private var value:int; public function run():void { delete value; }',
  'public function run(n:int=NaN):void {}',
  'public function run(...values):void {}',
- 'public function run():int { try { return 0; } finally {} }',
+ 'public function run():int { try { return 0; } finally { return; } }',
  'public function run():Vector.<int> { return null; }',
  'public function Subject(value:Vector.<int>) {}',
  'public function run():void { var value:int; }',

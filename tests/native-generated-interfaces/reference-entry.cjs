@@ -23,7 +23,7 @@ const combined=process.argv.includes('--combined');
 if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./domain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
 let guards=0;
 for(const body of [
- 'private static var count:int;',
+ 'private static const count:int=1;',
  'protected static function call():void {}',
  'private static function get value():int {return 0;}',
  'private static function call(...values):void {}',
