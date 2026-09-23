@@ -3445,19 +3445,27 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
 interface DictionaryAccess { receiver:Node; key:Node; literalKey?:string; lexical?:boolean; ownStatic?:boolean; }
 
 function isDictionaryReceiver(emitter:Emitter, node:Node):boolean {
-	// The generated trait projection authenticates the getter's declared type.
-	// Keep arbitrary expression receivers out of this admission; evaluate the
-	// qualified this getter once through the ordinary source property lowering.
+	// Resolve field identity in its declaring class, including protected ancestors.
+	// A local with the same spelling continues to own an unqualified identifier.
+	const lexicalDictionary = (name:string):boolean => {
+		if (!emitter.generated) return false;
+		const trait=emitter.generated.lexical.traits.find(t=>t.name===name&&!t.static&&t.kind==='variable');
+		const ref=trait&&trait.type&&emitter.generated.options.plan.references.find(r=>
+			r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
+		return !!ref&&ref.kind==='native'&&ref.identity==='flash.utils.Dictionary';
+	};
 	if (node && node.kind === NodeKind.DOT && emitter.generated
 		&& node.children[0].kind === NodeKind.IDENTIFIER && node.children[0].text === 'this'
 		&& node.children[1].kind === NodeKind.LITERAL) {
 		const trait = emitter.generated.projection.instanceTraits.find(t => t.name === node.children[1].text);
 		const binding = emitter.generated.options.plan.nativeBindings.find(b => b.qname === 'flash.utils.Dictionary');
-		return !!binding && !!trait && trait.kind === 'accessor' && typeof trait.type === 'object'
+		return lexicalDictionary(node.children[1].text) || !!binding && !!trait
+			&& (trait.kind === 'accessor' || trait.kind === 'variable') && typeof trait.type === 'object'
 			&& trait.type.referenceExport === binding.referenceExport;
 	}
 	if (!node || node.kind !== NodeKind.IDENTIFIER) return false;
 	const definition = emitter.findDefInScope(node.text);
+	if ((!definition || definition.bound) && lexicalDictionary(node.text)) return true;
 	const dictionary = emitter.findDefInScope('Dictionary');
 	return !!definition && (definition.as3Type === 'Dictionary' || definition.as3Type === 'flash.utils.Dictionary')
 		&& !!dictionary && dictionary.sourceImport === 'flash.utils.Dictionary';
@@ -3506,6 +3514,10 @@ function emitPropertyKey(emitter:Emitter, access:DictionaryAccess):void {
 function emitDictionaryProperty(emitter:Emitter, node:Node, exported:string):boolean {
 	const access = dictionaryAccess(emitter, node);
 	if (!access) return false;
+	const target=outerEncapsulatedExpression(node),parent=target&&target.parent;
+	if (parent && parent.children[0]===target
+		&& [NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC].indexOf(parent.kind)>=0)
+		throw new Error('AS3_DICTIONARY_PROPERTY_UNSUPPORTED: indexed read cannot substitute compound/update dispatch');
 	const helper = dictionaryHelper(emitter, exported);
 	emitter.catchup(node.start);
 	emitter.insert('(<any>' + helper + '(');
@@ -3616,10 +3628,12 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
 }
 
 function emitDynamicPropertyAddition(emitter:Emitter, target:Node, value:Node):boolean {
-    const access=dynamicWriteAccess(emitter,target);
+    const dictionary=dictionaryAccess(emitter,target);
+    const access=dictionary||dynamicWriteAccess(emitter,target);
     if(!access)return false;
     if(access.lexical||access.literalKey!==undefined)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: lexical/dot compound assignment held');
-    const helper=propertyHelper(emitter,'as3AddAssignProperty',emitter.options.nativeDynamicPropertyWritesModule);
+    const helper=propertyHelper(emitter,'as3AddAssignProperty',dictionary
+        ? emitter.options.nativeDictionaryPropertyModule : emitter.options.nativeDynamicPropertyWritesModule);
     emitter.catchup(target.parent.start);emitter.insert('(<any>'+helper+'(');
     const start=emitter.output.length;
     visitNode(emitter,access.receiver);emitter.catchup(access.receiver.end);
