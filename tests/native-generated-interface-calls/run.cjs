@@ -27,6 +27,7 @@ const combined=process.argv.includes('--combined');if(combined)Object.assign(opt
 options.nativeReferenceCoercion={plan,module:'./declarationDomain',coercionModule:provider('AS3Type')};
 let rejectionGuards=0;
 for(const [body,missing,reason]of [
+ ['private var value:ICall;public function run():int{return this.value.zero();}','nativeDynamicPropertyReadsModule',/explicit module binding required/],
  ['public function run(v:*):int{return (v as ICall).zero();}','nativeDynamicPropertyReadsModule',/explicit module binding required/],
  ['public function run(v:*):int{return (v as ICall).zero();}','nativeComputedTypeTestModule',/explicit module binding required/],
  ['public function run(v:*,ICall:*):int{return (v as ICall).zero();}',null,/shadowed source as target/]
@@ -52,7 +53,7 @@ const moduleFor=n=>'src/layaAir/flash/'+(['AS3SourceError','IllegalOperationErro
 const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
 const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
 const driverFile=path.resolve('tests/native-generated-interface-calls/runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
-const wanted=captured;assert.equal(wanted.length,30);
+const wanted=captured;assert.equal(wanted.length,44);
 for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v[0].value=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){

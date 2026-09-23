@@ -14,4 +14,12 @@ for(var value of [values[0],null]) {var index=0;for(var input of [[numeric,numer
  Trace.events.length=0;try{result=c.pair(value,input[0],input[1]);rows.push({id:"pair:"+(value===null?"null":"good")+":"+index,value:[["ok",result],Trace.events.slice()]});}
  catch(e){rows.push({id:"pair:"+(value===null?"null":"good")+":"+index,value:[[e.name,e.errorID,e.errorID===0?e.message:""],Trace.events.slice()]});}index++;
 }}
+Trace.events.length=0;try{result=c.field(numeric);rows.push({id:"field-default",value:[["ok",result],Trace.events.slice()]});}
+catch(e){rows.push({id:"field-default",value:[[e.name,e.errorID,e.errorID===0?e.message:""],Trace.events.slice()]});}
+for(method of ["field","fieldZero"]){for(i=0;i<values.length;i++){
+ Trace.events.length=0;try{c.store(values[i]);result=method==="field"?c.field(numeric):c.fieldZero();rows.push({id:method+":"+labels[i],value:[["ok",result],Trace.events.slice()]});}
+ catch(e){rows.push({id:method+":"+labels[i],value:[[e.name,e.errorID,e.errorID===0?e.message:""],Trace.events.slice()]});}
+}}
+c.store(null);Trace.events.length=0;try{result=c.field("throw");rows.push({id:"field-argument-throw",value:[["ok",result],Trace.events.slice()]});}
+catch(e){rows.push({id:"field-argument-throw",value:[[e.name,e.errorID,e.errorID===0?e.message:""],Trace.events.slice()]});}
 globalThis.result=rows;
