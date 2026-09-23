@@ -92,6 +92,7 @@ parameters, no local declarations/context access, and normal wildcard/void or
 interface returns. Escaping/anonymous functions, construction, nested typed
 parameters, nested exception regions and receiver/context references remain held.
 For-in and typed for-each header declarations remain held. Typed outer methods
-may contain try/catch with returns after the protected region; returns inside
-try/catch/finally still reject. Optional interface defaults, Signal optional/rest
+may contain typed value returns inside try/catch/finally, as qualified separately
+by native-generated-method-completions (23 AIR rows). The three protected-region
+guards here reject bare returns in typed methods. Optional interface defaults, Signal optional/rest
 callables, SlotList.NIL and whole-game runtime remain unqualified.

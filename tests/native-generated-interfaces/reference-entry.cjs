@@ -43,9 +43,11 @@ for(const body of [
  'public function call():void {var f:*;function f():void{}f();}',
  'public function call():void {var x:IValue;for(x in {}){}}',
  'public function call():void {for each(var x:IValue in []){}}',
- 'public function call():Array {try{return [];}catch(e:*){}return [];}',
- 'public function call():Array {try{}catch(e:*){return [];}return [];}',
- 'public function call():Array {try{}finally{return [];}return [];}'
+ // Typed values in these regions are qualified by native-generated-method-completions.
+ // Bare returns remain invalid for a typed method, including protected regions.
+ 'public function call():Array {try{return;}catch(e:*){}return [];}',
+ 'public function call():Array {try{}catch(e:*){return;}return [];}',
+ 'public function call():Array {try{}finally{return;}return [];}'
 ]){
  const source='package cases {public class Guard {'+body+'}}';
  const p=api.createNativeGeneratedDeclarationPlan({scope:'interface-emission-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources:{...sources,'cases.Guard':{source,sourceSha256:hash(source)}}});
@@ -89,7 +91,7 @@ async function main(){
    assert.deepEqual(actual,wanted);assert.deepEqual(browserRows,wanted);
    results.push({target,node:actual,browser:browserRows,inputs:Object.keys(bundle.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:8,held:['Anonymous/escaping/nested-context callables and nested typed parameters/local declarations','for-in and for-each header declarations','Ordinary consumer interface coercion','Static lexical variables, accessors and protected methods','Optional/rest methods and constructors, typed exception-return regions']},null,2));
+ fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,guards,emitted,results,typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:8,scope:'Required interface entry and locals; separate feature suites qualify broader emission. Bare typed returns remain rejected.'},null,2));
  console.log('Generated interface emission: '+guards+' guards, 32 AIR rows in Node/Chromium, ES5/ES2015; exact 7 AIR classes and 1 interface. '+run);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
