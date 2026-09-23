@@ -29,7 +29,7 @@ let rejectionGuards=0;
 for(const body of [
  'private static const value:int=1;',
  'protected static const value:int=1;',
- 'private static var value:Boolean=true;',
+ 'private static var value:Boolean=Boolean(1);',
  'private static var value:int=1+1;',
  'private static var value:Object=(true);',
  'private static var value:Vector.<int>;',

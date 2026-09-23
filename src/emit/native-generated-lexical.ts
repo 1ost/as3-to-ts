@@ -236,9 +236,16 @@ export class NativeGeneratedLexical {
         const value=input.sources[trait.owner].source.slice(init.start,end(init)).trim();
         if(value==='null')return 'null';
         if(/^[+-]?\d+$/.test(value)&&trait.type&&trait.type.text==='int'&&Number(value)>=-2147483648&&Number(value)<=2147483647)return value;
-        if(trait.visibility==='protected'&&trait.type&&trait.type.text==='String'
+        if(['protected','private'].indexOf(trait.visibility)>=0&&trait.type&&trait.type.text==='String'
             &&/^(?:"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(value))
             return value.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
+        if(trait.visibility==='private'&&trait.type){
+            if(trait.type.text==='Boolean'&&/^(true|false)$/.test(value))return value;
+            // Retain literal spelling (especially -0); reject legacy octal,
+            // nonfinite literals and executable expressions until qualified.
+            if(trait.type.text==='Number'&&/^(?:0[xX][0-9a-fA-F]+|[+-]?(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/.test(value)
+                &&isFinite(Number(value)))return value;
+        }
         const expression=unwrapEncapsulatedExpression(init.children[0]);
         // A call initializer runs in cinit after default storage publication;
         // unlike an int literal it is not an early trait value.
