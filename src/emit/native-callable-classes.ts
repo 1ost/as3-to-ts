@@ -635,7 +635,7 @@ export class NativeCallableClasses {
             + (this.generated ? [] : chainFields).map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
             + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
         const ancestry = cls.heritageClauses && cls.heritageClauses.find((clause:any)=>clause.token===S.ExtendsKeyword);
-        const base = ancestry ? 'const ' + baseName + ' = ' + (directNativeBase ? nativeBaseClass : text(ancestry.types[0].expression)) + ';\n' : '';
+        const base = ancestry ? 'const ' + baseName + ' = ' + intrinsic + '.constructorIdentity(' + (directNativeBase ? nativeBaseClass : text(ancestry.types[0].expression)) + ');\n' : '';
         const sourceBaseName = this.own.base && (directNativeBase ? nativeBaseClass : this.classes.get(this.own.base).name);
         const constructorBody = ctor ? body(ctor, true) : '';
         const tail = ctor && ctor.body.statements[ctor.body.statements.length - 1];
@@ -674,7 +674,7 @@ export class NativeCallableClasses {
                 + intrinsic + '.apply(' + intrinsic + '.arraySlice, arguments, []);\n' : '') + '\nif (' + fresh + ') {\n' + defaults + '\n' + bindInstance + '\n}\n'
             + (this.metadata ? lowerNativeSourceOperations(initializers.join('\n'), provider, compilerHelpers, unique, this.lexical) : initializers.join('\n')) + '\n' + completedBody + '\n' + completion + '\n} finally { '
             + intrinsic + '.leave(this, ' + identity + ', ' + succeeded + '); }\n} as any;\n'
-            + 'const ' + identity + ' = ' + name + ';\n'
+            + 'const ' + identity + ' = ' + intrinsic + '.constructorIdentity(' + name + ');\n'
             + (this.own.base ? intrinsic + '.setPrototypeOf(' + name + ', ' + baseName + ');\n'
                 + name + '.prototype = ' + intrinsic + '.create(' + baseName + '.prototype);\n' : '')
             + intrinsic + '.defineProperty(' + name + '.prototype, "constructor", {value:' + name + ', writable:false, configurable:true});\n'
@@ -683,20 +683,20 @@ export class NativeCallableClasses {
             + definitions.join('\n') + '\n'
             + staticMethods.map(key => bindName + '(' + name + ', ' + JSON.stringify(key) + ');').join('\n')
             + (this.metadata ? '\n' + intrinsic + '.defineProperty(' + name + ', "prototype", {writable:false});\n'
-                + provider + '.registerFlashTypeMetadata(' + name + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].metadata) + ');\n'
-                + provider + '.registerAS3Class(' + name + ', []);\n'
-                + 'const ' + generation + ' = ' + declaration + '.publishGeneration(' + name + ');\n'
-                + provider + '.registerAS3PropertyTraits(' + name + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].instanceTraits, declaration, intrinsic)
+                + provider + '.registerFlashTypeMetadata(' + identity + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].metadata) + ');\n'
+                + provider + '.registerAS3Class(' + identity + ', []);\n'
+                + 'const ' + generation + ' = ' + declaration + '.publishGeneration(' + identity + ');\n'
+                + provider + '.registerAS3PropertyTraits(' + identity + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].instanceTraits, declaration, intrinsic)
                     + ', ' + this.emitPropertyTraits(this.metadata.classes[this.own.qname].staticTraits, declaration, intrinsic) + ');\n'
-                + (this.lexical ? this.lexicalPublication(name, intrinsic) : '')
-                + provider + '.registerAS3Constructor(' + name + ', {minimum:' + required + ', maximum:'
+                + (this.lexical ? this.lexicalPublication(identity, intrinsic) : '')
+                + provider + '.registerAS3Constructor(' + identity + ', {minimum:' + required + ', maximum:'
                     + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '')
             + (this.generated ? '\n' + intrinsic + '.defineProperty(' + name + ', "prototype", {writable:false});\n'
-                + 'const ' + generation + ' = ' + provider + '.registerAS3GeneratedClass(' + name + ','
+                + 'const ' + generation + ' = ' + provider + '.registerAS3GeneratedClass(' + identity + ','
                 + this.generated.projection.emitDefinition(domainImport,intrinsic + '.array') + ');\n'
-                + this.generated.lexical.publication(name,baseName,domainImport,intrinsic) + '\n'
+                + this.generated.lexical.publication(identity,baseName,domainImport,intrinsic) + '\n'
                 + Object.keys(this.generated.uintOrInitializers.variables).map(key=>generatedProperty+'.as3SetProperty('+name+','+JSON.stringify(key)+','+this.generated.uintOrInitializers.variables[key]+');\n').join('')
-                + (this.classValueModule ? classValue+'.registerAS3Constructor('+name+', {minimum:'+required+',maximum:'+(this.own.usesArguments||this.own.rest?'Infinity':this.own.parameters.length)+',coerceArguments:(values:any)=>values});\n' : '')
+                + (this.classValueModule ? classValue+'.registerAS3Constructor('+identity+', {minimum:'+required+',maximum:'+(this.own.usesArguments||this.own.rest?'Infinity':this.own.parameters.length)+',coerceArguments:(values:any)=>values});\n' : '')
                 + (this.generated.projection.binding.scriptGlobalExport ? 'const '+this.generated.lexical.scriptGlobal+'='+domainImport+'.'+this.generated.projection.binding.scriptGlobalExport+'('+name+');\n' : '') : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
             + ' {\n' + instanceTypes.join('\n') + '\n}\ninterface ' + constructorType

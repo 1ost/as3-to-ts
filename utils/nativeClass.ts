@@ -1,16 +1,19 @@
+/** A source Class can shadow host Function fields such as name. */
+export interface NativeClassConstructor { new(...args: any[]): any; readonly prototype: any; }
+
 interface NativeClassBinding {
-    factory: (finalize: <T extends Function>(value: T) => T) => Function;
+    factory: (finalize: <T extends NativeClassConstructor>(value: T) => T) => NativeClassConstructor;
     initializing: boolean;
-    value: Function;
+    value: NativeClassConstructor;
 }
 
-const bindings = new WeakMap<Function, NativeClassBinding>();
+const bindings = new WeakMap<object, NativeClassBinding>();
 
 /** A compiler binding, never an authored Class value. All source reads must use
  * readNativeClass. Keeping native class construction inside the factory defers
  * its base resolution and permits fresh allocation after a failed initializer.
  */
-export function declareNativeClass<T extends Function>(factory: (finalize: <V extends Function>(value: V) => V) => T): T {
+export function declareNativeClass<T extends NativeClassConstructor>(factory: (finalize: <V extends NativeClassConstructor>(value: V) => V) => T): T {
     if (typeof factory !== 'function') throw new TypeError('Native class factory must be callable');
     const fail = (): never => { throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unresolved native class binding'); };
     const handle = new Proxy(function (): never { return fail(); }, {
@@ -20,7 +23,7 @@ export function declareNativeClass<T extends Function>(factory: (finalize: <V ex
     return handle as any as T;
 }
 
-function finalizeIdentity<T extends Function>(value: T): T {
+function finalizeIdentity<T extends NativeClassConstructor>(value: T): T {
     const prototype = value && value.prototype;
     const constructor = prototype && Object.getOwnPropertyDescriptor(prototype, 'constructor');
     if (!constructor || !constructor.configurable || typeof constructor.value !== 'function')
@@ -36,7 +39,7 @@ function finalizeIdentity<T extends Function>(value: T): T {
  * This intentionally does not guess that an arbitrary native function is a
  * registered source class or initialize unrelated eager provider classes.
  */
-export function readNativeClass<T extends Function>(handle: T, context: 'value' | 'read' | 'unsupported' = 'value'): T {
+export function readNativeClass<T extends NativeClassConstructor>(handle: T, context: 'value' | 'read' | 'unsupported' = 'value'): T {
     const binding = bindings.get(handle);
     if (!binding) throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unknown native class binding');
     if (binding.value) return binding.value as T;

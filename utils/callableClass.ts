@@ -1,7 +1,9 @@
 /** Captured outside every authored module/scope. No constructor body lives here. */
-export interface NativeCallableFunction extends Function {}
+// Source static traits override host Function properties. They are described
+// by the emitted constructor interface, never inherited from Function.
+export interface NativeCallableFunction { readonly prototype: any; }
 const constructors = new WeakMap<Function, Function>();
-interface NativeBaseEntry {constructor:Function;prepareInstance:(receiver:object)=>void;initializeInstance:(receiver:object,args:readonly unknown[])=>void;}
+interface NativeBaseEntry {constructor:Function;prepareInstance:(receiver:object)=>void;initializeInstance:(receiver:object,args:ReadonlyArray<unknown>)=>void;}
 const nativeBases = new WeakMap<Function,NativeBaseEntry>();
 interface ConstructionEntry {
     status: 'active' | 'completed' | 'failed';
@@ -16,6 +18,12 @@ function failure(id: number, name: string): Error {
     return error;
 }
 export const callableClassIntrinsics = Object.freeze({
+    /** Compiler-only carrier projection; preserves the exact constructor identity. */
+    constructorIdentity(value: object): Function & {new(...args: any[]): any} {
+        if (typeof value !== "function" || !value.prototype || typeof value.prototype !== "object")
+            throw new TypeError("Native class identity must be a constructor");
+        return value as Function & {new(...args: any[]): any};
+    },
     defineProperty: Object.defineProperty,
     getOwnPropertyDescriptor: Object.getOwnPropertyDescriptor,
     getPrototypeOf: Object.getPrototypeOf,
@@ -42,7 +50,7 @@ export const callableClassIntrinsics = Object.freeze({
         if(parent!==base)throw failure(1006,'TypeError');
         adapter.prepareInstance(receiver);
     },
-    callNativeBase(receiver:object,owner:Function,base:Function,args:readonly unknown[]):void {
+    callNativeBase(receiver:object,owner:Function,base:Function,args:ReadonlyArray<unknown>):void {
         const entry=entries.get(receiver),adapter=nativeBases.get(base);
         if(!entry||entry.status!=='active'||entry.expected||entry.stack[entry.stack.length-1]!==owner
             ||constructors.get(owner)!==base||!adapter)throw failure(1006,'TypeError');
