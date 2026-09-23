@@ -3,6 +3,7 @@ import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
+import {NativeGeneratedClassTraits} from './native-generated-traits';
 
 interface Trait {
     name: string; visibility: string; static: boolean; kind: 'variable' | 'constant' | 'method';
@@ -24,6 +25,7 @@ export class NativeGeneratedLexical {
     readonly nestedFunctions: NestedLocalFunction[] = [];
     readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
     readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [];
+    private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string}>>();
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
         let serial=0;
@@ -272,7 +274,7 @@ export class NativeGeneratedLexical {
             +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
     emit(emitter:any,node:Node,visit:(emitter:any,node:Node)=>void):boolean {
-        const resolve=(value:Node):{trait:Trait;receiver:Node}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;publicName?:string}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -285,6 +287,25 @@ export class NativeGeneratedLexical {
             if(!receiver&&binding&&!binding.bound)return null;
             let isStatic=false;
             if(receiver) {
+                // A same-spelled private member does not capture a public
+                // member on a different, authenticated source receiver type.
+                let references = this.plan.references.filter(r=>r.owner===this.owner&&r.kind==='declaration'
+                    &&receiver.kind===K.IDENTIFIER&&binding&&r.sourceName===binding.as3Type);
+                if(receiver.kind===K.DOT&&receiver.children[0].text==='this') {
+                    const field=this.traits.find(t=>t.name===receiver.children[1].text&&!t.static&&t.kind==='variable');
+                    references=field&&field.type?this.plan.references.filter(r=>r.owner===field.owner&&r.kind==='declaration'
+                        &&r.start===field.type.start&&r.end===field.type.end):[];
+                }
+                const identities=Array.from(new Set(references.map(r=>r.identity)));
+                if(identities.length===1&&identities[0]!==this.owner&&this.plan.bindings.some(b=>b.qname===identities[0])) {
+                    const identity=identities[0];
+                    if(!this.foreignPublicMembers.has(identity)) {
+                        const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
+                        this.foreignPublicMembers.set(identity,new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,input.sources[identity].source).instanceTraits
+                            .filter(member=>member.kind==='variable'||member.kind==='accessor'));
+                    }
+                    if(this.foreignPublicMembers.get(identity).some(member=>member.name===name))return {trait:null,receiver,publicName:name};
+                }
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
                 // Object-typed locals address the public property, even when the
                 // current class has a private member with the same spelling.
@@ -304,7 +325,7 @@ export class NativeGeneratedLexical {
         if(node.kind===K.IDENTIFIER&&node.parent&&node.parent.kind===K.DOT&&node.parent.children[1]===node)return false;
         if(target.kind===K.DOT&&target.children[1]&&['call','apply'].indexOf(target.children[1].text)>=0) {
             const inner=target.children[0],slot=resolve(inner);
-            if(slot&&slot.trait.kind==='variable') {
+            if(slot&&slot.trait&&slot.trait.kind==='variable') {
                 const ref=slot.trait.type&&this.plan.references.find(r=>r.owner===slot.trait.owner&&r.start===slot.trait.type.start&&r.end===slot.trait.type.end);
                 if(operation!=='call'||!ref||ref.kind!=='intrinsic'||ref.identity!=='Function'||slot.trait.static)
                     fail('lexical Function intrinsic requires direct instance call');
@@ -321,6 +342,18 @@ export class NativeGeneratedLexical {
             }
         }
         const found=resolve(target);if(!found)return false;
+        if(found.publicName) {
+            if(operation==='call'||operation==='set'&&node.children[1].text!=='=')fail('foreign public lexical collision operation');
+            const member=operation==='set'?'as3SetProperty':'as3GetProperty';
+            let helper='__as3_generated_foreign_'+member;while(emitter.source.indexOf(helper)>=0)helper+='_';
+            emitter.ensureImportIdentifier(member+' as '+helper,emitter.generated.propertyModule,false);
+            emitter.nativeSourceHelpers.add(helper);
+            emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+            emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
+            emitter.insert(','+JSON.stringify(found.publicName));
+            if(operation==='set'){emitter.insert(',');emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);}
+            emitter.insert('))');emitter.skipTo(node.end);return true;
+        }
         if(operation==='set'&&(node.children[1].text!=='='||found.trait.kind!=='variable'))fail('lexical assignment kind');
         const fieldCall=operation==='call'&&found.trait.kind==='variable';
         if(fieldCall) {
