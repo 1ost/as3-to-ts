@@ -2792,6 +2792,15 @@ function emitType(emitter:Emitter, node:Node):void {
 }
 
 
+/** Vector provider bindings are relative to the plan's declaration module. */
+function vectorProviderModule(module:string,domain:string):string {
+    generatedModule(module);generatedModule(domain);
+    if(module.charAt(0)!=='.')return module;
+    const path=require('path').posix;
+    const result=path.normalize(path.join(path.dirname(domain),module));
+    return result.charAt(0)==='.'?result:'./'+result;
+}
+
 function emitVector(emitter:Emitter, node:Node):void {
     const options=emitter.options.nativeVectorTypes||emitter.options.nativeGeneratedDeclarations;
     if(options){
@@ -2802,7 +2811,7 @@ function emitVector(emitter:Emitter, node:Node):void {
             if(!vector)throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: exact source specialization required');
             if(emitter.isNew)throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: construction requires separate qualification');
             let alias='__as3_Vector';while(emitter.source.indexOf(alias)>=0)alias+='_';
-            emitter.ensureImportIdentifier('AS3Vector as '+alias,input.vectorProviderModule,false);
+            emitter.ensureImportIdentifier('AS3Vector as '+alias,vectorProviderModule(input.vectorProviderModule,options.module),false);
             emitter.catchup(node.start);emitter.insert(alias+'<');
             const element=node.findChild(NodeKind.TYPE);emitter.skipTo(element.start);emitType(emitter,element);
             emitter.insert('>');emitter.skipTo(node.end);return;
@@ -2903,7 +2912,7 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node):boolean {
  let helper='__as3_createVector',specialization='__as3_vectorSpec_'+spec.specExport;
  // Each specialization needs a distinct binding even when a class constructs several types.
  while(emitter.source.indexOf(helper)>=0)helper+='_';while(emitter.source.indexOf(specialization)>=0)specialization+='_';
- emitter.ensureImportIdentifier('as3VectorCreate as '+helper,input.vectorProviderModule,false);
+ emitter.ensureImportIdentifier('as3VectorCreate as '+helper,vectorProviderModule(input.vectorProviderModule,options.module),false);
  emitter.ensureImportIdentifier(spec.specExport+' as '+specialization,generatedModule(options.module),false);
  emitter.nativeSourceHelpers.add(helper);
  emitter.catchup(node.start);emitter.insert(helper+'('+specialization);

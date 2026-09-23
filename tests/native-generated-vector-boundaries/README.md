@@ -54,3 +54,10 @@ greater-than-100 limit, eviction, null entries and concrete element rejection.
 Input Vector construction in the observer remains setup; VectorQueue construction
 and mutations run through its emitted methods. No application implementation is
 replaced, and this is not full OrderManager or EMVC qualification.
+
+`node tests/native-generated-vector-boundaries/run.cjs --queue --combined --nested`
+places all eleven subjects two directories below the declaration domain. Both
+Vector type imports and constructor helper imports must resolve to the real
+provider. Before the path correction this fails with six TS2307 diagnostics;
+afterward all 58 retained AIR rows agree in Node and Chromium on ES5/ES2015,
+with zero type diagnostics. The default flat layout remains covered separately.

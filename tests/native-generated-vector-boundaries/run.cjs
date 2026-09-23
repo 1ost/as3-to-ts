@@ -5,7 +5,8 @@ const modern=require(path.join(engine,'node_modules/typescript')),esbuild=requir
 const evidence=path.join(engine,'tests/nativeFlashOracle','generated-interface-vectors');const captured=require(path.join(evidence,'verify.cjs'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const root=path.resolve('.cache/native-generated-vector-boundaries');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
-const modulePath=file=>{let r=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
+const nested=process.argv.includes('--nested'),sourceRoot=nested?path.join(run,'subjects/deep'):run,domainModule=nested?'../../declarationDomain':'./declarationDomain';
+const modulePath=file=>{let r=path.relative(sourceRoot,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
 const sources={};
 function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,item.name);
@@ -23,17 +24,18 @@ if(privateFields){
  if(queueConstruction){const source=fs.readFileSync(path.join(packet,'source/queuecases/VectorQueue.as'),'utf8');sources['queuecases.VectorQueue']={source,sourceSha256:hash(source)};}
 }
 const nativeProviders={};
-const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-vector-boundaries',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
+const domainProvider=name=>{let r=path.relative(run,path.join(engine,'src/layaAir/flash/utils',name)).replaceAll('\\','/');return r.startsWith('.')?r:'./'+r;};
+const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-vector-boundaries',providers:nativeProviders,providerModule:domainProvider('AS3GeneratedClass'),interfaceProviderModule:domainProvider('AS3Type'),vectorProviderModule:domainProvider('AS3Vector'),scriptGlobalProviderModule:domainProvider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
 const fileFor=q=>q.split('.').pop(),definitionsByNamespace={};
 for(const q of Object.keys(sources)){const i=q.lastIndexOf('.');(definitionsByNamespace[q.slice(0,i)]??=[]).push(q.slice(i+1));}
 const options={customVisitors:[],importModules:{"compiler.AS3Invocation":provider("AS3Invocation"),"compiler.AS3Class":provider("AS3Class"),...Object.fromEntries(Object.keys(sources).map(q=>[q,'./'+fileFor(q)])),...Object.fromEntries(Object.entries(nativeProviders).map(([q,b])=>[q,b.module]))},definitionsByNamespace,
  decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
- nativeGeneratedDeclarations:{plan,module:'./declarationDomain'},nativeClassTraitsModule:provider('AS3GeneratedClass'),nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
+ nativeGeneratedDeclarations:{plan,module:domainModule},nativeClassTraitsModule:provider('AS3GeneratedClass'),nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
  nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
  nativeSourceErrorModule:modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts')),nativeDynamicPropertyWritesModule:provider('AS3Property'),nativeComputedTypeTestModule:provider('AS3Type'),nativeDictionaryPropertyModule:provider('AS3Property'),nativeEnumeration:{dictionaryModule:provider("Dictionary"),coercionModule:provider("AS3Coercion"),stringModule:provider("AS3String")},nativeObjectCreationModule:provider("AS3Class"),nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition'),nativeArrayCreationModule:provider('AS3ArrayCreation')};
-const combined=process.argv.includes('--combined');if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./declarationDomain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
-options.nativeReferenceCoercion={plan,module:'./declarationDomain',coercionModule:provider('AS3Type')};
+const combined=process.argv.includes('--combined');if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:domainModule,coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
+options.nativeReferenceCoercion={plan,module:domainModule,coercionModule:provider('AS3Type')};
 let rejectionGuards=0;
 for(const body of [
  'public static var queue:Vector.<IOrder>;',
@@ -68,10 +70,10 @@ for(const argumentsSource of ['0','3,false','2,true']){
  assert.equal(ts.createSourceFile('Guard.ts',output,ts.ScriptTarget.Latest,true).parseDiagnostics.length,0);
 }
 fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];
-for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
+for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources[binding.qname].source,file=path.join(sourceRoot,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
  const opts={...options};
  if(plan.interfaces.some(i=>i.qname===binding.qname)){for(const k of Object.keys(opts))if(k.startsWith('native'))delete opts[k];}
- opts.nativeVectorTypes={plan,module:'./declarationDomain'};
+ opts.nativeVectorTypes={plan,module:domainModule};
  const output=emit(parse(binding.qname+'.as',source),source,opts);fs.writeFileSync(file,output);emitted.push({qname:binding.qname,file,sourceSha256:hash(source),outputSha256:hash(output)});
 }
 const files=[path.join(run,'declarationDomain.ts'),...emitted.map(e=>e.file),...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f))];
@@ -88,7 +90,7 @@ const wanted=captured.filter(r=>r.id==='default'||/^(read-|exchange-|assign-|loc
 for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='assign-undefined').value[0].value[3]=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
- const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');specs.push({name:relative,code:out.outputText});}
+ const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.basename(file,'.ts');specs.push({name:relative,code:out.outputText});}
  for(const name of ['bound','classBound','nativeClass','callableClass'])specs.push({name,code:modern.transpileModule(fs.readFileSync(path.resolve('utils',name+'.ts'),'utf8'),{compilerOptions:{target,module:modern.ModuleKind.CommonJS}}).outputText});
  const script='{if(typeof window==="undefined"){globalThis.window=globalThis;globalThis.document={};}const api=(()=>{const module={exports:{}};'+built.outputFiles[0].text+';return module.exports;})();const shared=new Map(),specs=new Map('+JSON.stringify(specs)+'.map(s=>[s.name,s.code])),providers=new Set('+JSON.stringify(names)+'),localNames=new Set('+JSON.stringify(['declarationDomain',...emitted.map(e=>fileFor(e.qname))])+');function createDomainLoader(){const local=new Map();function load(name){if(providers.has(name))return api;const modules=localNames.has(name)?local:shared;if(modules.has(name))return modules.get(name);if(!specs.has(name))throw Error("unresolved module "+name);const output={};modules.set(name,output);new Function("exports","require",specs.get(name))(output,r=>load(r.split("/").pop()));return output;}load.loaded=local;return load;}const load=createDomainLoader();'+observer+'}';
  fs.writeFileSync(path.join(run,'bundle-'+target+'.js'),script);const node=JSON.parse(JSON.stringify(new Function(script+';return globalThis.result;')()));
@@ -96,5 +98,5 @@ try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  for(const actual of [node,web]){assert.deepEqual(actual,wanted);}
  results.push({target,node,web});
 }}finally{await browser.close();}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,privateFields,queueConstruction,emitted,results,providerGraph,observer:{files:[driverFile,...privateFields?[privateDriverFile]:[],...queueConstruction?[path.join(__dirname,'queue-runtime-driver.js')]:[]],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Vector reflection and general constructor argument coercion','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({nested,combined,privateFields,queueConstruction,emitted,results,providerGraph,observer:{files:[driverFile,...privateFields?[privateDriverFile]:[],...queueConstruction?[path.join(__dirname,'queue-runtime-driver.js')]:[]],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Vector reflection and general constructor argument coercion','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});
