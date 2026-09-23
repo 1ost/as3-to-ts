@@ -1592,12 +1592,12 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let inNode = node.children[1];
 	let objNode = inNode.children[0];
 	let blockNode = node.children[2];
-    const wildcardTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
-    if(emitter.generated&&wildcardTarget&&!wildcardTarget.bound&&wildcardTarget.as3Type==='*'){
+    const localTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
+    if(emitter.generated&&localTarget&&!localTarget.bound&&['*','String'].indexOf(localTarget.as3Type)>=0){
         // The legacy parser represents a member target as a NAME plus a malformed
         // IN span. Require the original simple-target separator before lowering.
         const separator=emitter.source.slice(varNode.end,objNode.start).replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'').trim();
-        if(separator!=='in')throw new Error('AS3_ENUMERATION_UNSUPPORTED: wildcard for-each requires a simple local target');
+        if(separator!=='in')throw new Error('AS3_ENUMERATION_UNSUPPORTED: for-each requires a simple local target');
         if(!emitter.options.nativeEnumeration)throw new Error('AS3_ENUMERATION_UNSUPPORTED: explicit common enumeration providers required');
         const keys=dictionaryEnumerationHelper(emitter,'as3EnumerableKeys'),get=dictionaryEnumerationHelper(emitter,'as3GetProperty');
         let receiver:string,cursor:string,step:string;
@@ -4674,7 +4674,8 @@ function emitLocalTypeOf(emitter:Emitter, node:Node):void {
     const operand = node.children.length === 1 && unwrapEncapsulatedExpression(node.children[0]);
     const local = operand && operand.kind === NodeKind.IDENTIFIER && emitter.references
         && emitter.references.local(operand,operand.text);
-    if (!local || !local.stringLocal) {visitNodes(emitter,node.children); return;}
+    const generatedString=operand&&emitter.generated&&emitter.typedLocalPlan&&emitter.typedLocalPlan.stringLocal(operand,emitter);
+    if ((!local || !local.stringLocal)&&!generatedString) {visitNodes(emitter,node.children); return;}
     // Qualified String storage includes the source null String atom. The read
     // has no side effects; never fold property/call/assignment operands here.
     emitter.catchup(node.start); emitter.insert('("string")');
