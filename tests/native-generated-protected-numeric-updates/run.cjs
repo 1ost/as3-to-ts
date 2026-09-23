@@ -2,19 +2,19 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),parse=require('../../lib/parse'),emit=require('../../lib/emit'),ts=require('typescript');
 const engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
-const evidence=path.join(engine,'tests/nativeFlashOracle','generated-lexical-numeric-updates');const captured=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(engine,'tests/nativeFlashOracle','generated-protected-numeric-updates');const captured=require(path.join(evidence,'verify.cjs'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const root=path.resolve('.cache/native-generated-lexical-numeric-updates');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
+const root=path.resolve('.cache/native-generated-protected-numeric-updates');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
 const modulePath=file=>{let r=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
 const sources={};
 function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,item.name);
- if(item.isDirectory())walk(file);else if(item.name.endsWith('.as')&&item.name==='Counter.as'){
+ if(item.isDirectory())walk(file);else if(item.name.endsWith('.as')&&['Counter.as','LeafCounter.as'].includes(item.name)){
  const qname=path.relative(path.join(evidence,'source'),file).replaceAll('\\','/').slice(0,-3).replaceAll('/','.');
  const source=fs.readFileSync(file,'utf8');sources[qname]={source,sourceSha256:hash(source)};}}}
-walk(path.join(evidence,'source'));assert.equal(Object.keys(sources).length,1);
+walk(path.join(evidence,'source'));assert.equal(Object.keys(sources).length,2);
 const nativeProviders={};
-const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-lexical-numeric-updates',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
+const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-protected-numeric-updates',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
 const fileFor=q=>q.split('.').pop(),definitionsByNamespace={};
 for(const q of Object.keys(sources)){const i=q.lastIndexOf('.');(definitionsByNamespace[q.slice(0,i)]??=[]).push(q.slice(i+1));}
@@ -29,9 +29,9 @@ options.nativeGlobalModules={trace:modulePath(path.join(engine,'src/layaAir/flas
 let rejectionGuards=0;
 const source=sources['updatecases.Counter'].source;
 for(const changed of [
- source.replace('private var i:int','private var i:*'),
- source.replace('private var i:int','private var i:String'),
- source.replace('private var i:int','private static var i:int'),
+ source.replace('protected var i:int','protected var i:*'),
+ source.replace('protected var i:int','protected var i:String'),
+ source.replace('protected var i:int','protected static var i:int'),
  source.replace('this.i++','delete this.i')
 ]){
  assert.throws(()=>{
@@ -54,8 +54,8 @@ const names=['AS3CanonicalErrorConstruction','trace','Dictionary','getQualifiedC
 const moduleFor=n=>'src/layaAir/flash/'+(n==='trace'?'debug':['AS3SourceError','IllegalOperationError'].includes(n)?'errors':'utils')+'/'+n;
 const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
 const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
-const driverFile=path.resolve('tests/native-generated-lexical-numeric-updates/runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
-const wanted=captured;assert.equal(wanted.length,22);
+const driverFile=path.resolve('tests/native-generated-protected-numeric-updates/runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
+const wanted=captured;assert.equal(wanted.length,29);
 for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='int-4').value[2]=0]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
@@ -67,5 +67,5 @@ try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  for(const actual of [node,web]){assert.deepEqual(actual,wanted);}
  results.push({target,node,web});
 }}finally{await browser.close();}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Static/protected/wildcard/accessor updates and deletes','Complete JSON and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:22,comparisons:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Static/wildcard/accessor updates and deletes','Complete SoundPlayer and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:29,comparisons:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -3987,15 +3987,26 @@ function isCast(emitter:Emitter, node:Node):boolean {
 function emitCatch(emitter:Emitter, node:Node):void {
 	const name = node.findChild(NodeKind.NAME), type = node.findChild(NodeKind.TYPE);
     if (emitter.references && type && type.text !== '*') {
-        if (type.text !== 'Error' || emitter.references.resolve('Error') !== 'Error' || emitter.findDefInScope('Error')
-            || emitter.references.owner === 'Error'
+        const spelling = type.qualifiedName || type.text;
+        const identity = emitter.references.resolve(spelling), definition = emitter.findDefInScope(spelling);
+        const builtinError = spelling === 'Error' && identity === 'Error' && !definition
+            && emitter.references.owner !== 'Error';
+        const ioError = identity === 'flash.errors.IOError'
+            && emitter.references.owner !== identity
+            && (!definition || definition.sourceImport === identity && !definition.bound
+                && !Object.prototype.hasOwnProperty.call(definition,'as3Type'))
+            && emitter.references.options.plan.nativeBindings.some(binding => binding.qname === identity)
+            && emitter.references.options.plan.references.some(reference => reference.owner === emitter.references.owner
+                && reference.start === type.start && reference.end === type.end
+                && reference.kind === 'native' && reference.identity === identity);
+        if ((!builtinError && !ioError)
             || node.previousSibling && node.previousSibling.kind === NodeKind.CATCH
             || node.nextSibling && node.nextSibling.kind === NodeKind.CATCH)
-            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: only a single builtin Error catch is qualified');
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: only a single builtin Error or bound native IOError catch is qualified');
         generatedModule(emitter.options.nativeSourceErrorModule);
         let helper = '__as3_reference_catchError';
         while (emitter.source.indexOf(helper) >= 0) helper += '_';
-        emitter.ensureImportIdentifier('as3IsSourceErrorInstance as ' + helper,emitter.options.nativeSourceErrorModule,false);
+        emitter.ensureImportIdentifier((ioError ? 'as3IsSourceIOErrorInstance' : 'as3IsSourceErrorInstance') + ' as ' + helper,emitter.options.nativeSourceErrorModule,false);
         const scope = emitter.enterScope([{name:name.text,as3Type:'*'}]);
         emitter.catchup(name.end); emitter.skipTo(type.end);
         const body = node.findChild(NodeKind.BLOCK);
