@@ -523,9 +523,10 @@ export class NativeCallableClasses {
                     const constantType=constant.type==='Array'?'{name:"Array",reference:'+intrinsic+'.array}'
                         : typeof constant.type==='string'?JSON.stringify(constant.type)
                         : '{name:'+JSON.stringify(constant.type.name)+',reference:'+domainImport+'.'+constant.type.referenceExport+'}';
+                    const uintOr=this.generated.uintOrInitializers.constants[key];
                     definitions.push(deferred ? 'const '+deferred+'='+provider+'.declareAS3GeneratedStaticConstant('+destination+','+encoded+','+constantType+');'
                         : provider + '.defineAS3GeneratedStaticConstant(' + destination + ',' + encoded + ','
-                            + constantType + ',' + text(member.initializer) + ');');
+                            + constantType + ',' + (uintOr===undefined?text(member.initializer):uintOr) + ');');
                 }
                 if (isStatic && !this.generated) definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
                     + ', {value: ' + (member.initializer ? text(member.initializer) : 'void 0') + ', writable:true, enumerable:true, configurable:false});');
@@ -694,6 +695,7 @@ export class NativeCallableClasses {
                 + 'const ' + generation + ' = ' + provider + '.registerAS3GeneratedClass(' + name + ','
                 + this.generated.projection.emitDefinition(domainImport,intrinsic + '.array') + ');\n'
                 + this.generated.lexical.publication(name,baseName,domainImport,intrinsic) + '\n'
+                + Object.keys(this.generated.uintOrInitializers.variables).map(key=>generatedProperty+'.as3SetProperty('+name+','+JSON.stringify(key)+','+this.generated.uintOrInitializers.variables[key]+');\n').join('')
                 + (this.classValueModule ? classValue+'.registerAS3Constructor('+name+', {minimum:'+required+',maximum:'+(this.own.usesArguments||this.own.rest?'Infinity':this.own.parameters.length)+',coerceArguments:(values:any)=>values});\n' : '')
                 + (this.generated.projection.binding.scriptGlobalExport ? 'const '+this.generated.lexical.scriptGlobal+'='+domainImport+'.'+this.generated.projection.binding.scriptGlobalExport+'('+name+');\n' : '') : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')

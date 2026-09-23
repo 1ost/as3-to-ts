@@ -1,4 +1,5 @@
 import {nativeNumericProductConstant} from './native-numeric-product-constant';
+import {nativeUintOrConstants} from './native-uint-or-constants';
 import Node, {outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
@@ -228,6 +229,8 @@ export class NativeReferenceCoercion {
             }
             const end=(node:Node):number=>node.children.reduce((last,child)=>Math.max(last,end(child)),Math.max(node.start,node.end));
             const literal=source.slice(init.start,end(init)).trim();
+            const uintOr=nativeUintOrConstants(declaration,source).constants[member];
+            if(uintOr!==undefined)return {type:type.text,literal:uintOr};
             if(!/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal) && !nativeNumericProductConstant(literal,type.text))
                 fail('computed consumer constant requires initialization authority');
             return {type:type.text,literal:literal.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029')};

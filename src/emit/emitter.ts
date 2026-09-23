@@ -2380,6 +2380,11 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
             return;
         }
 		const init = node.findChild(NodeKind.INIT);
+		if(emitter.generated&&emitter.generated.uintOrInitializers.variables[node.findChild(NodeKind.NAME).text]!==undefined){
+			visitNodes(emitter,node.children.filter(child=>child&&child!==init));
+			if(init)emitter.skipTo(getEffectiveNodeEnd(init));
+			return;
+		}
 		const generatedLexical=emitter.generated&&emitter.generated.lexical.trait(node.findChild(NodeKind.NAME).text,true);
 		visitNodes(emitter, node.children.filter(child => child && child !== init));
 		const type = getAS3DeclarationType(node);

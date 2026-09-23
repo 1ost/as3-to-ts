@@ -1,4 +1,5 @@
 import {nativeNumericProductConstant} from './native-numeric-product-constant';
+import {nativeUintOrConstants} from './native-uint-or-constants';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
 import {NativeGeneratedClassTraits} from './native-generated-traits';
 import {NativeGeneratedLexical} from './native-generated-lexical';
@@ -27,6 +28,7 @@ export class NativeGeneratedEmission {
     readonly sources: {[qname: string]: string} = Object.create(null);
     readonly classes: {[qname: string]: 'lazy' | 'ready'} = Object.create(null);
     readonly deferredConstants: {[name: string]: string} = Object.create(null);
+    readonly uintOrInitializers: {constants: {[name:string]:string}; variables: {[name:string]:string}};
     constructor(source: string, readonly options: NativeGeneratedEmissionOptions,
         readonly registrar: string, readonly helpers: NativeClassHelperModules,
         readonly lexicalModule: string, readonly propertyModule: string, typedLocals = false) {
@@ -47,6 +49,7 @@ export class NativeGeneratedEmission {
             ancestor=options.plan.bindings.find(binding=>binding.qname===ancestor.base);
         }
         this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source,typedLocals);
+        this.uintOrInitializers=nativeUintOrConstants(this.lexical.ownClass,source);
         if(this.projection.binding.scriptGlobalExport) {
             // Publishing a class into a script unit consumes that unit identity.
             // Retry/global identity after a source static initializer fails needs
@@ -85,6 +88,7 @@ export class NativeGeneratedEmission {
                 this.deferredConstants[trait.name]=name;
                 return;
             }
+            if(this.uintOrInitializers.constants[trait.name]!==undefined)return;
             // Literals and AIR-qualified numeric products are early storage.
             // Other computed primitive constants still require source authority.
             if (!literal || !/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal) && !nativeNumericProductConstant(literal,trait.type))
