@@ -156,6 +156,7 @@ export interface EmitterOptions {
 	nativeReflectionXMLModule?: string;
     nativeXMLModule?: string;
     nativeDisplayObjectReferenceModule?: string;
+    nativeByteArrayReferenceModule?: string;
 	/** Builtin AS3 global names and their authenticated common modules. */
 	nativeGlobalModules?:{[name:string]:string};
 	/** Authenticated common flash.utils.Proxy module. */
@@ -417,6 +418,17 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules['flash.display.DisplayObject']!==module)
                 throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: exact DisplayObject provider binding required');
         }
+        if (this.options.nativeByteArrayReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeByteArrayReferenceModule);
+            if(!this.generated||!this.options.nativeReferenceCoercion)
+                throw new Error('AS3_BYTEARRAY_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(this.generated.options.plan,this.generated.options.plan.scope);
+            const provider=inputs.providers&&inputs.providers['flash.utils.ByteArray'];
+            if(!provider||provider.exportName!=='ByteArray'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,this.generated.options.module)!==module
+                ||!this.options.importModules||this.options.importModules['flash.utils.ByteArray']!==module)
+                throw new Error('AS3_BYTEARRAY_REFERENCE_UNSUPPORTED: exact ByteArray provider binding required');
+        }
         if (this.options.nativeXMLModule !== undefined) {
             generatedModule(this.options.nativeXMLModule);
             if (!this.generated || !this.options.nativeReferenceCoercion)
@@ -439,7 +451,7 @@ export default class Emitter {
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
                 this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
                 this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : [],
-                this.options.nativeDisplayObjectReferenceModule!==undefined);
+                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -637,7 +649,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date))
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -4081,6 +4093,23 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if(emitter.options.nativeByteArrayReferenceModule!==undefined&&emitter.references&&node.children.length===3
+        &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
+        &&emitter.references.resolve(node.lastChild.text)==='flash.utils.ByteArray') {
+        const target=node.lastChild,definition=emitter.findDefInScope(target.text);
+        if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
+            throw new Error('AS3_BYTEARRAY_REFERENCE_UNSUPPORTED: shadowed target requires separate Class authority');
+        let method=node.parent;while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
+        if(!method)throw new Error('AS3_BYTEARRAY_REFERENCE_UNSUPPORTED: class initializer type operation held');
+        const operation=node.children[1].text;
+        let helper='__as3_bytearray_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
+        emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,generatedModule(emitter.options.nativeComputedTypeTestModule),false);
+        emitter.nativeSourceHelpers.add(helper);
+        emitter.catchup(node.start);emitter.insert(helper+'(');
+        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+        emitter.insert(',');emitter.skipTo(target.start);visitNode(emitter,target);
+        emitter.catchup(target.end);emitter.insert(')');emitter.skipTo(node.end);return;
+    }
     if(emitter.options.nativeDisplayObjectReferenceModule!==undefined&&emitter.references&&node.children.length===3
         &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
         &&emitter.references.resolve(node.lastChild.text)==='flash.display.DisplayObject') {
