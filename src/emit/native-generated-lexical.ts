@@ -280,15 +280,16 @@ export class NativeGeneratedLexical {
             if(value.kind===K.IDENTIFIER)name=value.text;
             else if(value.kind===K.DOT&&value.children[1]){name=value.children[1].text;receiver=unwrapEncapsulatedExpression(value.children[0]);}
             else return null;
-            if(!this.traits.some(t=>t.name===name))return null;
+            const lexicalName=this.traits.some(t=>t.name===name);
+            if(!lexicalName&&!receiver)return null;
             let method=node;while(method.parent&&method.parent.kind!==K.CONTENT)method=method.parent;
             const staticContext=modifiers(method).indexOf('static')>=0;
             const binding=emitter.findDefInScope(receiver?receiver.text:name);
             if(!receiver&&binding&&!binding.bound)return null;
             let isStatic=false;
             if(receiver) {
-                // A same-spelled private member does not capture a public
-                // member on a different, authenticated source receiver type.
+                // Public members on another authenticated source receiver use
+                // common property dispatch, including source null errors.
                 let references = this.plan.references.filter(r=>r.owner===this.owner&&r.kind==='declaration'
                     &&receiver.kind===K.IDENTIFIER&&binding&&r.sourceName===binding.as3Type);
                 if(receiver.kind===K.DOT&&receiver.children[0].text==='this') {
@@ -306,6 +307,7 @@ export class NativeGeneratedLexical {
                     }
                     if(this.foreignPublicMembers.get(identity).some(member=>member.name===name))return {trait:null,receiver,publicName:name};
                 }
+                if(!lexicalName)return null;
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
                 // Object-typed locals address the public property, even when the
                 // current class has a private member with the same spelling.
