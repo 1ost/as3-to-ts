@@ -349,7 +349,7 @@ export class NativeGeneratedLexical {
             +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
     emit(emitter:any,node:Node,visit:(emitter:any,node:Node)=>void):boolean {
-        const resolve=(value:Node):{trait:Trait;receiver:Node;publicName?:string;publicMethod?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -365,14 +365,19 @@ export class NativeGeneratedLexical {
             if(receiver) {
                 // Public members on another authenticated source receiver use
                 // common property dispatch, including source null errors.
-                let references = this.plan.references.filter(r=>r.owner===this.owner&&r.kind==='declaration'
+                let references = this.plan.references.filter(r=>r.owner===this.owner&&(r.kind==='declaration'||r.kind==='native')
                     &&receiver.kind===K.IDENTIFIER&&binding&&r.sourceName===binding.as3Type);
                 if(receiver.kind===K.DOT&&receiver.children[0].text==='this') {
                     const field=this.traits.find(t=>t.name===receiver.children[1].text&&!t.static&&t.kind==='variable');
-                    references=field&&field.type?this.plan.references.filter(r=>r.owner===field.owner&&r.kind==='declaration'
+                    references=field&&field.type?this.plan.references.filter(r=>r.owner===field.owner&&(r.kind==='declaration'||r.kind==='native')
                         &&r.start===field.type.start&&r.end===field.type.end):[];
                 }
                 const identities=Array.from(new Set(references.map(r=>r.identity)));
+                if(identities.length===1&&identities[0]==='flash.utils.ByteArray'
+                    &&references.every(r=>r.kind==='native')&&['compress','uncompress','deflate','inflate'].indexOf(name)>=0) {
+                    if(!emitter.options.nativeByteArrayReferenceModule)fail('native ByteArray method requires exact provider');
+                    return {trait:null,receiver,nativeMethod:name};
+                }
                 if(inputPackageEnabled(this.plan)) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                     const knownClass=receiver.kind===K.IDENTIFIER&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type'))
@@ -447,9 +452,9 @@ export class NativeGeneratedLexical {
         if(node.kind===K.IDENTIFIER&&node.parent&&node.parent.kind===K.DOT&&node.parent.children[1]===node)return false;
         if(target.kind===K.DOT&&target.children[1]&&['call','apply'].indexOf(target.children[1].text)>=0) {
             const inner=target.children[0],slot=resolve(inner);
-            if(slot&&slot.trait&&slot.trait.kind==='variable') {
-                const ref=slot.trait.type&&this.plan.references.find(r=>r.owner===slot.trait.owner&&r.start===slot.trait.type.start&&r.end===slot.trait.type.end);
-                if(operation!=='call'||!ref||ref.kind!=='intrinsic'||ref.identity!=='Function'||slot.trait.static)
+            if(slot&&(slot.nativeMethod||slot.trait&&slot.trait.kind==='variable')) {
+                const ref=slot.trait&&slot.trait.type&&this.plan.references.find(r=>r.owner===slot.trait.owner&&r.start===slot.trait.type.start&&r.end===slot.trait.type.end);
+                if(operation!=='call'||!slot.nativeMethod&&(!ref||ref.kind!=='intrinsic'||ref.identity!=='Function'||slot.trait.static))
                     fail('lexical Function intrinsic requires direct instance call');
                 let helper='__as3_generated_callProperty';while(emitter.source.indexOf(helper)>=0)helper+='_';
                 emitter.ensureImportIdentifier('as3CallProperty as '+helper,emitter.generated.propertyModule,false);
@@ -464,6 +469,22 @@ export class NativeGeneratedLexical {
             }
         }
         const found=resolve(target);if(!found)return false;
+        if(found.nativeMethod) {
+            if(operation!=='get'&&operation!=='call')fail('native ByteArray method assignment');
+            let helper='__as3_bytearray_method';while(emitter.source.indexOf(helper)>=0)helper+='_';
+            emitter.ensureImportIdentifier('as3GetByteArrayCompressionMethod as '+helper,emitter.options.nativeByteArrayReferenceModule,false);
+            emitter.nativeSourceHelpers.add(helper);
+            emitter.catchup(node.start);
+            if(operation==='call')emitter.insert('(<any>((target:any,values:any[])=>'+helper+'(target,'+JSON.stringify(found.nativeMethod)+').apply(null,values))(');
+            else emitter.insert('(<any>'+helper+'(');
+            emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
+            if(operation==='call'){
+                // The typed receiver is retained before evaluating arguments;
+                // null dispatch errors follow argument effects, as in AIR.
+                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']))');
+            }else emitter.insert(','+JSON.stringify(found.nativeMethod)+'))');
+            emitter.skipTo(node.end);return true;
+        }
         if(found.internalName){
             if(operation==='call'&&!found.internalMethod||operation==='set'&&(found.internalMethod||node.children[1].text!=='='))fail('internal member operation requires qualified get/set/call');
             const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
