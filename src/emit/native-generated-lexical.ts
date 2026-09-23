@@ -51,7 +51,9 @@ export class NativeGeneratedLexical {
                 const isStatic=mods.indexOf('static')>=0;
                 const constant=member.kind===K.CONST_LIST&&(visibility==='protected'||visibility==='private'&&isStatic);
                 if(isStatic && member.kind!==K.VAR_LIST&&!constant&&(visibility!=='private'||member.kind!==K.FUNCTION))fail('static lexical initialization lowering required');
-                if(inherited&&isStatic&&(!constant||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
+                const inheritedStrings=visibility==='protected'&&member.kind===K.VAR_LIST
+                    &&member.findChildren(K.NAME_TYPE_INIT).every(node=>node.findChild(K.TYPE)&&node.findChild(K.TYPE).text==='String');
+                if(inherited&&isStatic&&(!constant&&!inheritedStrings||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
                 if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant)fail('lexical constant/accessor lowering required');
                 const declarations=member.kind===K.VAR_LIST||constant?member.findChildren(K.NAME_TYPE_INIT):[member];
                 declarations.forEach(node=>{
@@ -234,6 +236,9 @@ export class NativeGeneratedLexical {
         const value=input.sources[trait.owner].source.slice(init.start,end(init)).trim();
         if(value==='null')return 'null';
         if(/^[+-]?\d+$/.test(value)&&trait.type&&trait.type.text==='int'&&Number(value)>=-2147483648&&Number(value)<=2147483647)return value;
+        if(trait.visibility==='protected'&&trait.type&&trait.type.text==='String'
+            &&/^(?:"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(value))
+            return value.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
         const expression=unwrapEncapsulatedExpression(init.children[0]);
         // A call initializer runs in cinit after default storage publication;
         // unlike an int literal it is not an early trait value.

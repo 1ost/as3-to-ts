@@ -2,19 +2,19 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),parse=require('../../lib/parse'),emit=require('../../lib/emit'),ts=require('typescript');
 const engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
-const evidence=path.join(engine,'tests/nativeFlashOracle','generated-protected-constants');const captured=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(engine,'tests/nativeFlashOracle','generated-protected-static-strings');const captured=require(path.join(evidence,'verify.cjs'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const root=path.resolve('.cache/native-generated-protected-constants');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
+const root=path.resolve('.cache/native-generated-protected-static-strings');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
 const modulePath=file=>{let r=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
 const sources={};
 function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,item.name);
- if(item.isDirectory())walk(file);else if(item.name.endsWith('.as')&&item.name!=='ProtectedConstantsProbe.as'){
+ if(item.isDirectory())walk(file);else if(item.name.endsWith('.as')&&item.name!=='StaticStringsProbe.as'){
  const qname=path.relative(path.join(evidence,'source'),file).replaceAll('\\','/').slice(0,-3).replaceAll('/','.');
  const source=fs.readFileSync(file,'utf8');sources[qname]={source,sourceSha256:hash(source)};}}}
 walk(path.join(evidence,'source'));assert.equal(Object.keys(sources).length,3);
 const nativeProviders={};
-const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-protected-constants',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
+const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-protected-static-strings',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
 const fileFor=q=>q.split('.').pop(),definitionsByNamespace={};
 for(const q of Object.keys(sources)){const i=q.lastIndexOf('.');(definitionsByNamespace[q.slice(0,i)]??=[]).push(q.slice(i+1));}
@@ -26,18 +26,9 @@ const options={customVisitors:[],importModules:{"compiler.AS3Invocation":provide
 const combined=process.argv.includes('--combined');if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./declarationDomain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
 options.nativeReferenceCoercion={plan,module:'./declarationDomain',coercionModule:provider('AS3Type')};
 let rejectionGuards=0;
-for(const body of ['private const value:String="hidden";','protected const value:Number=7;','protected static const value:int=7;','protected const value:String=String(7);','protected const value:int=1+1;','protected const value:int=2147483648;','protected const value:Object=null;','protected const value:String;','protected const value:Vector.<int>;','protected static var value:String=String(7);','protected const value:String="a";public function change():void{value="b";}']){
- const source='package constantcases {public class Guard {'+body+'}}';
- assert.throws(()=>{const p=api.createNativeGeneratedDeclarationPlan({scope:'constant-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),sources:{...sources,'constantcases.Guard':{source,sourceSha256:hash(source)}}});emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}});},/AS3_[A-Z_]+UNSUPPORTED/,body);rejectionGuards++;
-}
-for(const source of [
- 'package constantcases {public class Guard {public static function read(name:String):*{return ProtectedConstants[name];}}}',
- 'package constantcases {public class Guard {protected static const C:String="c";public static function read(name:*):*{return Guard[name];}}}',
- 'package constantcases {public class Guard {protected static const C:String="c";public static var name:String="C";public static var before:*=Guard[name];}}',
- 'package constantcases {public class Guard extends DerivedConstants {public function Guard(){super();}}}',
- 'package constantcases {public class Guard extends ProtectedConstants {protected const MESSAGE:String="shadow";public function Guard(){super();}}}'
-]){
- assert.throws(()=>{const p=api.createNativeGeneratedDeclarationPlan({scope:'constant-ownership-guard',providerModule:provider('AS3GeneratedClass'),sources:{...sources,'constantcases.Guard':{source,sourceSha256:hash(source)}}});emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}});},/AS3_[A-Z_]+UNSUPPORTED/,source);rejectionGuards++;
+for(const body of ['protected static var value:String=String(7);','protected static var value:Number=7;','protected static var value:Boolean=true;','private static var value:String="hidden";']){
+ const source='package stringcases {public class Guard {'+body+'}}';
+ assert.throws(()=>{const p=api.createNativeGeneratedDeclarationPlan({scope:'strings-guard',providerModule:provider('AS3GeneratedClass'),sources:{...sources,'stringcases.Guard':{source,sourceSha256:hash(source)}}});emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}});},/AS3_[A-Z_]+UNSUPPORTED/,body);rejectionGuards++;
 }
 fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];
 for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
@@ -54,9 +45,9 @@ const names=['getQualifiedClassName','AS3Vector','AS3MethodBinding','AS3Coercion
 const moduleFor=n=>'src/layaAir/flash/'+(['AS3SourceError','IllegalOperationError'].includes(n)?'errors':'utils')+'/'+n;
 const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
 const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
-const driverFile=path.resolve('tests/native-generated-protected-constants/runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
-const wanted=captured;assert.equal(wanted.length,21);
-for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='write-MESSAGE').value[4]=1]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
+const driverFile=path.resolve('tests/native-generated-protected-static-strings/runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
+const wanted=captured;assert.equal(wanted.length,13);
+for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v[0].value=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');specs.push({name:relative,code:out.outputText});}
@@ -67,5 +58,5 @@ try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  for(const actual of [node,web]){assert.deepEqual(actual,wanted);}
  results.push({target,node,web});
 }}finally{await browser.close();}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Private/computed constants and inherited computed static lookup','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Private/computed String initializers and other primitive initializer forms','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

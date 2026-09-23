@@ -3637,7 +3637,8 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(node.kind===NodeKind.ARRAY_ACCESSOR&&emitter.generated&&emitter.classFactory
         &&receiver.text===emitter.generated.lexical.owner.split('.').pop()
         &&(!definition||!Object.prototype.hasOwnProperty.call(definition,'as3Type'))
-        &&emitter.generated.lexical.own.some(t=>t.static&&t.kind==='constant')){
+        &&emitter.generated.lexical.own.some(t=>t.static&&(t.kind==='constant'
+            ||t.kind==='variable'&&t.visibility==='protected'&&t.type&&t.type.text==='String'))){
         let member=node;while(member.parent&&member.parent.kind!==NodeKind.CONTENT)member=member.parent;
         const mods=member.findChild(NodeKind.MOD_LIST),keyDefinition=key.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(key.text);
         const privateStatic=emitter.generated.lexical.own.some(t=>t.static&&t.kind==='constant'&&t.visibility==='private');
