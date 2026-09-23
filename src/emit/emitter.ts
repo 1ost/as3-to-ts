@@ -3283,6 +3283,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitArraySortOn(emitter, node)) return;
 	if (emitTweenTo(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
+    if (emitInternalDynamicCall(emitter, node)) return;
     const callee = node.children[0];
     if(callee.kind===NodeKind.IDENTIFIER&&callee.text==='parseInt') {
         const binding=emitter.nativeGlobals.resolve(callee),args=node.findChild(NodeKind.ARGUMENTS);
@@ -3800,6 +3801,18 @@ function emitDynamicPropertyAssignment(emitter:Emitter, target:Node, value:Node)
 	emitter.insert(')');
 	emitter.skipTo(getEffectiveNodeEnd(target.parent));
 	return true;
+}
+
+function emitInternalDynamicCall(emitter:Emitter,node:Node):boolean {
+    if(!emitter.generated||!nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope).lexicalProviderModule
+        ||node.children[0].kind!==NodeKind.ARRAY_ACCESSOR)return false;
+    const access=dynamicAccess(emitter,node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);
+    if(!access||!access.lexical||access.ownStatic||!args)return false;
+    const helper=dynamicHelper(emitter,access,'Call',emitter.options.nativeDynamicPropertyReadsModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitDynamicKey(emitter,access);
+    emitter.insert(',()=>[');
+    args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
+    emitter.insert(']))');emitter.skipTo(node.end);return true;
 }
 
 function emitDictionaryPropertyCall(emitter:Emitter, node:Node):boolean {
