@@ -3213,7 +3213,31 @@ function emitReflectionXML(emitter:Emitter, node:Node):boolean {
 	return false;
 }
 
+function emitInterfaceCastCall(emitter:Emitter,node:Node):boolean {
+    if(!emitter.generated||!emitter.references)return false;
+    const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
+    if(!callee||callee.kind!==NodeKind.DOT||callee.children.length!==2||!args)return false;
+    const receiver=callee.children[0],cast=unwrapEncapsulatedExpression(receiver),member=callee.children[1];
+    if(!cast||cast.kind!==NodeKind.RELATION||cast.children.length!==3
+        ||cast.children[1].kind!==NodeKind.AS||cast.lastChild.kind!==NodeKind.IDENTIFIER
+        ||!emitter.references.sourceInterface(cast.lastChild.text)||member.kind!==NodeKind.LITERAL)return false;
+    if(emitter.isNew)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: interface-cast method construction requires separate authority');
+    const module=generatedModule(emitter.options.nativeDynamicPropertyReadsModule);
+    const helper=propertyHelper(emitter,'as3CallProperty',module);
+    // AIR evaluates the cast and every argument before resolving the method.
+    // In particular, an argument throw precedes a failed-cast null receiver error.
+    emitter.catchup(node.start);
+    emitter.insert('(<any>(function(target:any,values:any[]){return '+helper+'(target,'+JSON.stringify(member.text)+',()=>values);})(');
+    emitter.skipTo(receiver.start);visitNode(emitter,receiver);emitter.catchup(receiver.end);
+    emitter.insert(',[');
+    args.children.forEach((arg:Node,index:number)=>{
+        if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));
+    });
+    emitter.insert(']))');emitter.skipTo(node.end);return true;
+}
+
 function emitCall(emitter:Emitter, node:Node):void {
+    if (emitInterfaceCastCall(emitter,node)) return;
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
     if (emitJSONParse(emitter,node)) return;
