@@ -27,7 +27,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = []) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -149,6 +149,9 @@ export class NativeReferenceCoercion {
                 && node.lastChild.kind === K.IDENTIFIER
                 && this.resolve(node.lastChild.qualifiedName || node.lastChild.text) === 'Date'
                 && options.plan.nativeBindings.some(binding => binding.qname === 'Date');
+            const nativeXMLTest = generated && node.kind === K.RELATION && node.children.some(child => child.text === 'is')
+                && node.lastChild.kind === K.IDENTIFIER && nativeXML.indexOf(this.resolve(node.lastChild.text)) >= 0
+                && options.plan.nativeBindings.some(binding => binding.qname === this.resolve(node.lastChild.text));
             const nativeEventTest = nativeEvent && generated && node.kind === K.RELATION && node.children.some(child => child.text === 'is')
                 && node.lastChild.kind === K.IDENTIFIER && this.resolve(node.lastChild.text) === 'flash.events.Event'
                 && options.plan.nativeBindings.some(binding => binding.qname === 'flash.events.Event' && !!binding.eventBaseExport);
@@ -156,7 +159,7 @@ export class NativeReferenceCoercion {
                 && node.children[1].kind===K.AS && node.lastChild.kind===K.IDENTIFIER
                 && (this.sourceClass(node.lastChild.text) || !!this.sourceInterface(node.lastChild.text));
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
-                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !sourceAs)
+                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !nativeXMLTest && !sourceAs)
                 fail('reference type operation requires class-evaluation authority');
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text

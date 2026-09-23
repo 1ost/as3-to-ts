@@ -52,7 +52,7 @@ export interface NativeGeneratedDeclarationPlan {
 }
 interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan;}
 const contexts = new WeakMap<object, Context>();
-const builtins = ['*', 'void', 'int', 'uint', 'Number', 'Boolean', 'String', 'Object', 'Array', 'Function', 'Class', 'XML', 'XMLList'];
+const builtins = ['*', 'void', 'int', 'uint', 'Number', 'Boolean', 'String', 'Object', 'Array', 'Function', 'Class'];
 function fail(reason: string): never {throw new Error('AS3_GENERATED_DECLARATIONS_UNSUPPORTED: ' + reason);}
 function moduleName(value: string): string {
     if (typeof value !== 'string' || !value.trim() || /[\x00\r\n]/.test(value)) fail('module specifier');

@@ -1,3 +1,4 @@
+import {emitNativeXML, xmlGlobalProviderModule} from './native-xml';
 import {NativeClassMetadataOptions} from './native-class-metadata';
 import {nativeGeneratedDeclarationInputs} from './native-generated-declarations';
 import {nativeSourceTypeIdentity} from './native-source-type';
@@ -153,6 +154,7 @@ export interface EmitterOptions {
 	nativeReflectionQueryModule?: string;
 	/** Common XML reflection module for authenticated describeType XML access. */
 	nativeReflectionXMLModule?: string;
+    nativeXMLModule?: string;
 	/** Builtin AS3 global names and their authenticated common modules. */
 	nativeGlobalModules?:{[name:string]:string};
 	/** Authenticated common flash.utils.Proxy module. */
@@ -273,6 +275,7 @@ export function visitNode(emitter:Emitter, node:Node):void {
 		}
 	}
 
+	if (emitNativeXML(emitter,node,visitNode)) return;
 	if (emitter.lexical && emitter.lexical.emit(emitter, node, visitNode)) return;
     if (emitter.generated && emitter.generated.lexical.emit(emitter,node,visitNode)) return;
 
@@ -401,6 +404,18 @@ export default class Emitter {
             ast = require('../parse')(this.generated.projection.binding.qname + '.as',this.source);
         }
 
+        if (this.options.nativeXMLModule !== undefined) {
+            generatedModule(this.options.nativeXMLModule);
+            if (!this.generated || !this.options.nativeReferenceCoercion)
+                throw new Error('AS3_XML_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(this.generated.options.plan,this.generated.options.plan.scope);
+            for (const name of ['XML','XMLList']) {
+                const provider=inputs.providers && inputs.providers[name];
+                if (!provider || provider.exportName!==name || !this.options.nativeGlobalModules
+                    || this.options.nativeGlobalModules[name]!==xmlGlobalProviderModule(provider.module,this.generated.options.module))
+                    throw new Error('AS3_XML_UNSUPPORTED: exact XML/XMLList provider bindings required');
+            }
+        }
         if (this.options.nativeReferenceCoercion !== undefined) {
             if (this.options.useNamespaces || this.options.customVisitors.length || this.options.nativeTypedLocals && !this.generated)
                 throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: exact source without conflicting transforms required');
@@ -409,7 +424,8 @@ export default class Emitter {
                 throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: generated and consumer domain must agree');
             this.references = new NativeReferenceCoercion(this.source,this.options.nativeReferenceCoercion,!!this.generated,
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
-                this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'));
+                this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
+                this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : []);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -3944,10 +3960,10 @@ function emitRelation(emitter:Emitter, node:Node):void {
             &&targetBinding.sourceImport==='flash.events.Event';
         const nativeArray=emitter.generated&&target.kind===NodeKind.IDENTIFIER&&target.text==='Array'
             &&!targetBinding&&emitter.generated.projection.binding.qname.split('.').pop()!=='Array';
-        if (global && global.name === 'AS3Date' || nativeEvent || nativeArray) {
+        if (global && (global.name === 'AS3Date' || emitter.options.nativeXMLModule && ['XML','XMLList'].indexOf(global.name)>=0) || nativeEvent || nativeArray) {
             const module = emitter.options.nativeComputedTypeTestModule;
             generatedModule(module);
-            let helper = nativeArray ? '__as3_array_is' : nativeEvent ? '__as3_event_is' : '__as3_date_is';
+            let helper = nativeArray ? '__as3_array_is' : nativeEvent ? '__as3_event_is' : global.name === 'AS3Date' ? '__as3_date_is' : '__as3_xml_is';
             while (emitter.source.indexOf(helper) >= 0) helper += '_';
             emitter.ensureImportIdentifier('as3Is as ' + helper,module,false);
             emitter.catchup(node.start); emitter.insert(helper + '(');
