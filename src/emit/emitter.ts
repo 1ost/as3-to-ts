@@ -245,6 +245,7 @@ const VISITORS:{[kind:number]:NodeVisitor} = {
 	[NodeKind.CONST_LIST]: emitConstList,
 	[NodeKind.NAME_TYPE_INIT]: emitNameTypeInit,
 	[NodeKind.VALUE]: emitObjectValue,
+	[NodeKind.OBJECT]: emitObjectLiteral,
 	[NodeKind.DOT]: emitDot,
 	[NodeKind.ARRAY_ACCESSOR]: emitArrayAccessor,
 	[NodeKind.LITERAL]: emitLiteral,
@@ -2333,6 +2334,27 @@ function emitConstList(emitter:Emitter, node:Node):void {
 
 function emitObjectValue(emitter:Emitter, node:Node):void {
 	visitNodes(emitter, node.children);
+}
+
+function emitObjectLiteral(emitter:Emitter, node:Node):void {
+    if (emitter.options.nativeObjectCreationModule === undefined) {visitNodes(emitter,node.children);return;}
+    let helper='__as3_source_objectLiteral';
+    while(emitter.source.indexOf(helper)>=0)helper+='_';
+    emitter.ensureImportIdentifier('as3CreateObjectLiteral as '+helper,emitter.options.nativeObjectCreationModule,false);
+    emitter.nativeSourceHelpers.add(helper);
+    emitter.catchup(node.start);emitter.insert('('+helper+'([');
+    node.children.forEach((property,index)=>{
+        const key=property.findChild(NodeKind.NAME),value=property.findChild(NodeKind.VALUE);
+        if(!key||!value||value.children.length!==1)throw new Error('AS3_OBJECT_CREATION_UNSUPPORTED: literal property shape');
+        const text=key.text;
+        if(index)emitter.insert(',');
+        // Keys are static source tokens, never host object-literal syntax (__proto__).
+        const token=/^["'0-9]/.test(text)?text:JSON.stringify(text);
+        emitter.insert('['+token.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029')+',');
+        const expression=value.children[0];emitter.skipTo(expression.start);visitNode(emitter,expression);
+        emitter.catchup(expression.end);emitter.insert(']');
+    });
+    emitter.insert(']))');emitter.skipTo(node.end);
 }
 
 function emitNameTypeInit(emitter:Emitter, node:Node):void {
