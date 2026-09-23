@@ -58,7 +58,7 @@ export class NativeTypedLocals {
                         return;
                     }
                     if(value.kind===K.CONST_LIST||value.kind===K.CONST)this.fail('typed local const held');
-                    if(!reference&&['Number','int','uint','Boolean','String','Object','Array','Class'].indexOf(type)<0)this.fail('foreign local reference identity held');
+                    if(!reference&&!(this.matchSourceSpans&&type==='Function')&&['Number','int','uint','Boolean','String','Object','Array','Class'].indexOf(type)<0)this.fail('foreign local reference identity held');
                     if(parameters.indexOf(name)>=0)this.fail('typed local/parameter redeclaration held');
                     const previous=locals.find(local=>local.name===name);
                     if(previous&&previous.type!==type)this.fail('conflicting local declaration types');
@@ -144,7 +144,7 @@ export class NativeTypedLocals {
         const binding=emitter.findDefInScope(name);
         return !!binding&&!binding.bound&&binding.as3Type!=='*';
     }
-    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string, vectorCoerce?:(identity:string,value:string)=>string): string {
+    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string, vectorCoerce?:(identity:string,value:string)=>string, propertyProvider?:string): string {
         const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic&&m.node.kind===kind);
         if(!method||!method.locals.length&&!method.outerCaptures.length&&!this.nested.some(fn=>fn.methodStart===method.node.start&&!!fn.returned))return source;
         const ts=require('typescript'),S=ts.SyntaxKind,file=ts.createSourceFile('TypedLocals.ts',source,ts.ScriptTarget.Latest,true);
@@ -163,7 +163,7 @@ export class NativeTypedLocals {
             if(!referenceToken)this.fail('foreign local requires exact declaration-domain output');
             return referenceToken(local.reference);
         };
-        const coerce=(local:Local,value:string):string=>local.reference&&local.reference.indexOf('Vector.<')===0?(vectorCoerce?vectorCoerce(local.reference,value):this.fail('Vector local coercion requires provider')):local.type==='Class'?(classProvider?classProvider+'.as3CoerceClass('+value+')':this.fail('Class local requires common class provider')):local.reference?provider+'.as3CoerceReference('+value+','+reference(local)+')':local.type==='Boolean'?'!!('+value+')':local.type==='String'?stringProvider+'.as3CoerceString('+value+')'
+        const coerce=(local:Local,value:string):string=>local.type==='Function'?(propertyProvider?propertyProvider+'.coerceAS3PropertyValue('+value+',"Function")':this.fail('Function local requires common property provider')):local.reference&&local.reference.indexOf('Vector.<')===0?(vectorCoerce?vectorCoerce(local.reference,value):this.fail('Vector local coercion requires provider')):local.type==='Class'?(classProvider?classProvider+'.as3CoerceClass('+value+')':this.fail('Class local requires common class provider')):local.reference?provider+'.as3CoerceReference('+value+','+reference(local)+')':local.type==='Boolean'?'!!('+value+')':local.type==='String'?stringProvider+'.as3CoerceString('+value+')'
             :local.type==='Array'?provider+'.as3CoerceReference('+value+','+array+')'
             :coercionProvider+'.as3Coerce'+(local.type==='int'?'Int':local.type==='uint'?'Uint':local.type)+'('+value+')';
         const write=(local:Local,value:string):string=>{const rhs=unique('typedRaw');return '(()=>{const '+rhs+': any='+value+';'+local.name+'='+coerce(local,rhs)+';return '+rhs+';})()';};
@@ -180,7 +180,7 @@ export class NativeTypedLocals {
             if(node.kind===S.BinaryExpression){const local=resolve(node.left),op=node.operatorToken.kind;
                 if(local&&op===S.EqualsToken)return write(local,render(node.right));
                 if(local&&op>=S.FirstCompoundAssignment&&op<=S.LastCompoundAssignment){
-                    if(local.reference||local.parameter||local.type==='Class')this.fail('reference local compound operation held');
+                    if(local.reference||local.parameter||['Class','Function'].indexOf(local.type)>=0)this.fail('reference local compound operation held');
                     const operator=raw(node.operatorToken).slice(0,-1),old=unique('typedOld'),rhs=unique('typedRhs'),value=unique('typedValue');
                     if(operator==='&&'||operator==='||')this.fail('typed logical assignment held');
                     const arithmetic=operator==='+'?additionProvider+'.as3Add('+old+','+rhs+')':coercionProvider+'.as3CoerceNumber('+old+')'+operator+coercionProvider+'.as3CoerceNumber('+rhs+')';

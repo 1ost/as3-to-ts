@@ -3,7 +3,7 @@ const nc=load('nativeClass'),klass=name=>nc.readNativeClass(load(name)[name]);
 const Boundary=klass('DictionaryBoundary'),LogSink=klass('LogSink');
 const rows=[],row=(id,value)=>rows.push({id,value});
 const get=(object,key)=>api.as3GetProperty(object,key);
-const error=e=>api.as3IsSourceErrorInstance(e)?[get(e,'name'),get(e,'errorID')]:[e.name,e.errorID];
+const error=e=>{if(!api.as3IsSourceErrorInstance(e))throw e;return [get(e,'name'),get(e,'errorID')];};
 const typeError=e=>api.as3IsSourceErrorInstance(e)&&api.sourceErrorParent(e)===api.getAS3SourceErrorPrototype('TypeError');
 const isDictionary=v=>api.as3Is(v,api.Dictionary);
 const good=new api.Dictionary(),weak=new api.Dictionary(true);

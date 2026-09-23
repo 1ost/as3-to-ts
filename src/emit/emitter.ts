@@ -607,7 +607,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -2895,7 +2895,7 @@ function emitSourceErrorConstruction(emitter:Emitter, node:Node):boolean {
 	if (!exported) return false;
 	const args = call.findChild(NodeKind.ARGUMENTS);
 	if (!args) return false;
-	if (node.kind === NodeKind.CALL && (callee.text !== 'Error' || args.children.length !== 1))
+	if (node.kind === NodeKind.CALL && args.children.length !== 1)
 		throw new Error('AS3_SOURCE_ERROR_UNSUPPORTED: direct Error call requires one message');
 	let helper = '__as3_' + exported;
 	while (emitter.source.indexOf(helper) >= 0) helper += '_';

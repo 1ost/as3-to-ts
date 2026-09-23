@@ -25,10 +25,8 @@ provider as `new Error(message)` instead of emitting a TypeScript cast.
 The authored getLog start-offset behavior and empty result text are preserved.
 This does not qualify full EMVC routing, weak-key GC timing, arbitrary computed
 receivers, derived Dictionary types, general trace values or trace identity.
-Generated arity errors currently retain name/id but use the old helper's native
-Error identity: this fixture compares only the AIR name/id and zero body entries
-for those two rows. A source-catch identity fixture and common error wiring remain
-required before claiming that separate behavior.
+Generated arity Error identity is additionally qualified by the source-errors
+fixture. This observer rejects non-source exceptions, including arity failures.
 
 The OP2 toolkit test `test_bulk_generated_dictionaries.mjs` independently emits
 these complete subjects through the actual bulk worker and reuses this observer.

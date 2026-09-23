@@ -26,7 +26,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -270,6 +270,8 @@ export class NativeCallableClasses {
         const unique = (label: string): string => { let result = '__as3_callable_' + label; while (source.indexOf(result) >= 0) result += '_'; return result; };
         const baseName = unique('base'), constructorType = unique('constructor'), bindName = unique('bind');
         const intrinsic = unique('intrinsics'), identity = unique('identity'), fresh = unique('fresh'), succeeded = unique('succeeded');
+        const argumentCountError = this.generated && this.sourceErrorModule ? unique('argumentCountError') : '';
+        const arityFailure = argumentCountError ? argumentCountError + '()' : intrinsic + '.arityError()';
         const functionType = unique('functionType'), superArguments = unique('superArguments');
         const numberCoercion = unique('number'), intCoercion = unique('int'), uintCoercion = unique('uint');
         const stringCoercion = unique('string');
@@ -488,7 +490,7 @@ export class NativeCallableClasses {
                     const vector=this.generated.options.plan.vectors.find(v=>v.identity===identity);
                     if(!vector)this.fail('unplanned Vector local identity');
                     return generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(vector.name)+',vector:'+domainImport+'.'+vector.specExport+'})';
-                }:undefined);
+                }:undefined,this.generated?generatedProperty:undefined);
             return result;
         };
         const accessorTypes = new Set<string>();
@@ -544,7 +546,7 @@ export class NativeCallableClasses {
                 if(spread&&parameters[parameters.length-1]!==spread)this.fail('rest method must be last');
                 if(spread&&!typedLocals)this.fail('rest method requires typed local storage');
                 const minimum=fixed.filter(p=>!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)).length;
-                signature = 'if(arguments.length < ' + minimum + (spread?'':' || arguments.length > '+fixed.length) + ')throw ' + intrinsic + '.arityError();\n'
+                signature = 'if(arguments.length < ' + minimum + (spread?'':' || arguments.length > '+fixed.length) + ')throw ' + arityFailure + ';\n'
                     + fixed.map((p,index) => {
                         const value=p.findChild(K.NAME_TYPE_INIT),name=value.findChild(K.NAME).text,type=value.findChild(K.VECTOR)||value.findChild(K.TYPE),init=value.findChild(K.INIT);
                         if(type&&type.kind===K.VECTOR&&init)this.fail('optional Vector parameter requires qualification');
@@ -640,7 +642,7 @@ export class NativeCallableClasses {
         const required = this.own.parameters.filter(parameter => !parameter.optional).length;
         const arity = 'if (arguments.length < ' + required
             + (this.own.usesArguments || this.own.rest ? '' : ' || arguments.length > ' + this.own.parameters.length)
-            + ') {throw ' + intrinsic + '.arityError();}\n';
+            + ') {throw ' + arityFailure + ';}\n';
         const coercions = this.own.parameters.map((parameter, index) => {
             const value = parameter.name;
             const conversion = parameter.reference
@@ -758,6 +760,7 @@ export class NativeCallableClasses {
                 : 'const ' + declaration + ' = ' + provider + '.declareAS3ReferenceType<' + name + '>(' + JSON.stringify(this.metadata.classes[this.own.qname].metadata.name) + ');\n') : '')
             + 'import {callableClassIntrinsics as ' + intrinsic + ', NativeCallableFunction as ' + functionType + '} from '
             + JSON.stringify(this.generated ? this.generated.helpers.callableClass : helperPath.replace(/bound$/, 'callableClass')) + ';\n'
+            + (argumentCountError ? 'import {createAS3ArgumentCountError as '+argumentCountError+'} from '+JSON.stringify(this.sourceErrorModule)+';\n' : '')
             + (this.classValueModule?'import * as '+classValue+' from '+JSON.stringify(this.classValueModule)+';\n':'')
             + 'import {bindAS3Method as ' + bindName + '} from '
             + JSON.stringify(this.methodBindingModule) + ';\n'
