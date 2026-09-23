@@ -15,9 +15,10 @@ entry/return/local conversions use the matching common property specialization.
 Interface signature annotations use nativeVectorTypes with the same exact plan.
 No Vector Array substitution or authored body rewriting is used.
 
-Nine rejection guards retain Vector construction, static/constant/accessor or
+Twelve rejection guards retain Vector conversion calls, static/constant/accessor or
 protected storage, optional/constructor parameters, source class element publication and nested
-specialization publication as separate prerequisites. Three comparison controls
+specialization publication, extra construction arguments, unqualified constructor
+argument coercion and missing Vector providers as separate prerequisites. Three comparison controls
 detect row omission, ordering and loss of raw undefined assignment results.
 
 The two arity observations establish name, errorID and pre-body timing only.
@@ -34,6 +35,22 @@ complete subjects and 44 rows. It covers null defaults, accepted identity,
 nullish coercion, raw assignment results, failed writes preserving storage,
 authored source Error catches and separate instance slots. The compiler binds
 the exact planned specialization through common AS3LexicalMembers; no new local
-storage implementation is supplied. Source Vector construction, static and
-protected Vector storage remain held. The queue construction observations in
+storage implementation is supplied. Static and protected Vector storage remain
+held. The queue construction observations in
 the AIR packet are not claimed by this private storage fixture.
+
+Add --queue (also with --combined) to emit the complete VectorQueue too. This
+compares all 25 observations in the private queue packet alongside the original
+33, for eleven subjects and 58 rows. Empty construction, typed uint length and
+Boolean fixed parameters use as3VectorCreate with the exact domain specialization.
+Nonnegative decimal length literals within the provider allocation cap and
+Boolean literals use the same path. Arbitrary constructor argument coercion and
+side-effecting argument expressions remain held. The provider's existing
+1,048,576-element allocation cap remains an explicit limitation.
+
+The complete emitted queue exercises constructor-time null storage, empty and
+sized/fixed construction, fresh identity, reset, separate instances, the authored
+greater-than-100 limit, eviction, null entries and concrete element rejection.
+Input Vector construction in the observer remains setup; VectorQueue construction
+and mutations run through its emitted methods. No application implementation is
+replaced, and this is not full OrderManager or EMVC qualification.

@@ -13,13 +13,14 @@ function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){c
  const qname=path.relative(path.join(evidence,'source'),file).replaceAll('\\','/').slice(0,-3).replaceAll('/','.');
  const source=fs.readFileSync(file,'utf8');sources[qname]={source,sourceSha256:hash(source)};}}}
 walk(path.join(evidence,'source'));assert.equal(Object.keys(sources).length,9);
-const privateFields=process.argv.includes('--private');
+const queueConstruction=process.argv.includes('--queue'),privateFields=queueConstruction||process.argv.includes('--private');
 let privateCaptured=[];
 if(privateFields){
  const packet=path.join(engine,'tests/nativeFlashOracle/generated-private-vector-queues');
- privateCaptured=require(path.join(packet,'verify.cjs')).filter(r=>r.id.startsWith('slot-'));assert.equal(privateCaptured.length,11);
+ privateCaptured=require(path.join(packet,'verify.cjs')).filter(r=>queueConstruction||r.id.startsWith('slot-'));assert.equal(privateCaptured.length,queueConstruction?25:11);
  const source=fs.readFileSync(path.join(packet,'source/queuecases/PrivateVectorSlot.as'),'utf8');
  sources['queuecases.PrivateVectorSlot']={source,sourceSha256:hash(source)};
+ if(queueConstruction){const source=fs.readFileSync(path.join(packet,'source/queuecases/VectorQueue.as'),'utf8');sources['queuecases.VectorQueue']={source,sourceSha256:hash(source)};}
 }
 const nativeProviders={};
 const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-vector-boundaries',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
@@ -41,7 +42,9 @@ for(const body of [
  'public function get queue():Vector.<IOrder> {return null;}',
  'public function call(v:Vector.<IOrder>=null):void {}',
  'public function Guard(v:Vector.<IOrder>) {}',
- 'public function call():Vector.<IOrder>{return new Vector.<IOrder>();}',
+ 'public function call():Vector.<IOrder>{return Vector.<IOrder>(null);}',
+ 'public function call():Vector.<IOrder>{return new Vector.<IOrder>(0,false,true);}',
+ 'public function call(v:*):Vector.<IOrder>{return new Vector.<IOrder>(v);}',
  'public var queue:Vector.<ProbeOrder>;',
  'public var queue:Vector.<Vector.<IOrder>>;'
 ]){
@@ -50,6 +53,19 @@ for(const body of [
   const p=api.createNativeGeneratedDeclarationPlan({scope:'vector-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),sources:{...sources,'vectorcases.Guard':{source,sourceSha256:hash(source)}}});
   emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}});
  },/AS3_[A-Z_]+UNSUPPORTED/,body);rejectionGuards++;
+}
+{
+ const source='package vectorcases {public class Guard {public function call():* {return new Vector.<int>();}}}';
+ const p=api.createNativeGeneratedDeclarationPlan({scope:'vector-no-provider',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources:{...sources,'vectorcases.Guard':{source,sourceSha256:hash(source)}}});
+ assert.throws(()=>emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}}),/explicit Vector provider required/);
+ rejectionGuards++;
+}
+for(const argumentsSource of ['0','3,false','2,true']){
+ const source='package vectorcases {import org.emvc.interfaces.IOrder;public class Guard {public function call():* {return new Vector.<IOrder>('+argumentsSource+');}}}';
+ const p=api.createNativeGeneratedDeclarationPlan({scope:'vector-literal',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),sources:{...sources,'vectorcases.Guard':{source,sourceSha256:hash(source)}}});
+ const output=emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}});
+ assert.ok(output.includes('as3VectorCreate as __as3_createVector'));assert.ok(output.includes(','+argumentsSource+')'));
+ assert.equal(ts.createSourceFile('Guard.ts',output,ts.ScriptTarget.Latest,true).parseDiagnostics.length,0);
 }
 fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];
 for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
@@ -67,7 +83,7 @@ const moduleFor=n=>'src/layaAir/flash/'+(['AS3SourceError','IllegalOperationErro
 const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
 const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
 const driverFile=path.resolve('tests/native-generated-vector-boundaries/runtime-driver.js'),privateDriverFile=path.resolve('tests/native-generated-vector-boundaries/private-runtime-driver.js');
-const observer=fs.readFileSync(driverFile,'utf8').replace('@TOKENS@',JSON.stringify(Object.fromEntries(plan.interfaces.map(b=>[b.qname,b.tokenExport]))))+(privateFields?fs.readFileSync(privateDriverFile,'utf8'):'');
+const observer=fs.readFileSync(driverFile,'utf8').replace('@TOKENS@',JSON.stringify(Object.fromEntries(plan.interfaces.map(b=>[b.qname,b.tokenExport]))))+(privateFields?fs.readFileSync(privateDriverFile,'utf8'):'')+(queueConstruction?fs.readFileSync(path.join(__dirname,'queue-runtime-driver.js'),'utf8'):'');
 const wanted=captured.filter(r=>r.id==='default'||/^(read-|exchange-|assign-|local-|catch-|missing-argument|extra-argument)/.test(r.id));assert.equal(wanted.length,33);wanted.push(...privateCaptured);
 for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='assign-undefined').value[0].value[3]=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
@@ -80,5 +96,5 @@ try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  for(const actual of [node,web]){assert.deepEqual(actual,wanted);}
  results.push({target,node,web});
 }}finally{await browser.close();}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,privateFields,emitted,results,providerGraph,observer:{files:[driverFile,...privateFields?[privateDriverFile]:[]],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Vector reflection and construction','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,privateFields,queueConstruction,emitted,results,providerGraph,observer:{files:[driverFile,...privateFields?[privateDriverFile]:[],...queueConstruction?[path.join(__dirname,'queue-runtime-driver.js')]:[]],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Vector reflection and general constructor argument coercion','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

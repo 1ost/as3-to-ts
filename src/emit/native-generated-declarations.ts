@@ -213,8 +213,10 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         names.forEach(owner=>{
             const walk=(node:Node):void=>{
                 if(node.kind===K.VECTOR){
-                    if(!node.parent||[K.NAME_TYPE_INIT,K.FUNCTION,K.GET,K.TYPE].indexOf(node.parent.kind)<0)
-                        fail('Vector expression construction/conversion requires separate qualification');
+                    const construction=node.parent&&node.parent.kind===K.CALL&&node.parent.children[0]===node
+                        &&node.parent.parent&&node.parent.parent.kind===K.NEW;
+                    if(!construction&&(!node.parent||[K.NAME_TYPE_INIT,K.FUNCTION,K.GET,K.TYPE].indexOf(node.parent.kind)<0))
+                        fail('Vector expression conversion requires separate qualification');
                     const element=node.findChild(K.TYPE);
                     if(!element||node.children.length!==1)fail('nested Vector specialization publication requires qualification');
                     const identity=resolve(owner,element.qualifiedName||element.text);

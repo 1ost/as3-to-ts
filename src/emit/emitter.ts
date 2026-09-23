@@ -2798,6 +2798,7 @@ function emitShortVector(emitter:Emitter, node:Node):void {
 
 
 function emitNew(emitter:Emitter, node:Node):void {
+ if(emitGeneratedVectorConstruction(emitter,node))return;
  if(emitter.generated&&node.children.length===1&&node.children[0].kind===NodeKind.CALL){
   const call=node.children[0],callee=call.children[0],args=call.findChild(NodeKind.ARGUMENTS);
   const binding=callee&&callee.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(callee.text);
@@ -2820,6 +2821,38 @@ function emitNew(emitter:Emitter, node:Node):void {
 	visitNodes(emitter, node.children);
 	emitter.isNew = false;
 	emitter.emitThisForNextIdent = true;
+}
+
+function emitGeneratedVectorConstruction(emitter:Emitter,node:Node):boolean {
+ const options=emitter.options.nativeVectorTypes||emitter.options.nativeGeneratedDeclarations;
+ if(!options||node.children.length!==1)return false;
+ const call=node.children[0],vector=call&&call.kind===NodeKind.CALL&&call.children[0];
+ if(!vector||vector.kind!==NodeKind.VECTOR)return false;
+ const input=nativeGeneratedDeclarationInputs(options.plan,options.plan.scope);
+ const fail=(reason:string):never=>{throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: '+reason);};
+ if(!input.vectorProviderModule){if(emitter.generated)fail('explicit Vector provider required');return false;}
+ if(!emitter.generated)fail('construction requires generated class authority');
+ const owner=emitter.generated.projection.binding.qname;
+ const spec=options.plan.vectors.find(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end);
+ if(!spec||input.sources[owner].source!==emitter.source)fail('exact construction specialization required');
+ const args=call.findChild(NodeKind.ARGUMENTS);
+ if(!args||args.children.length>2)fail('constructor argument count requires qualification');
+ args.children.forEach((arg,index)=>{
+  const value=unwrapEncapsulatedExpression(arg),binding=value.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(value.text);
+  const typed=binding&&!binding.bound&&binding.as3Type===(index===0?'uint':'Boolean');
+  const literal=index===0?value.kind===NodeKind.LITERAL&&/^\d+$/.test(value.text)&&Number(value.text)<=1048576
+   :value.kind===NodeKind.IDENTIFIER&&/^(true|false)$/.test(value.text);
+  if(!typed&&!literal)fail('constructor requires uint length and Boolean fixed values; argument coercion held');
+ });
+ let helper='__as3_createVector',specialization='__as3_vectorSpec_'+spec.specExport;
+ // Each specialization needs a distinct binding even when a class constructs several types.
+ while(emitter.source.indexOf(helper)>=0)helper+='_';while(emitter.source.indexOf(specialization)>=0)specialization+='_';
+ emitter.ensureImportIdentifier('as3VectorCreate as '+helper,input.vectorProviderModule,false);
+ emitter.ensureImportIdentifier(spec.specExport+' as '+specialization,generatedModule(options.module),false);
+ emitter.nativeSourceHelpers.add(helper);
+ emitter.catchup(node.start);emitter.insert(helper+'('+specialization);
+ args.children.forEach(arg=>{emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
+ emitter.insert(')');emitter.skipTo(node.end);return true;
 }
 
 function emitBuiltinEmptyStringConstruction(emitter:Emitter, node:Node):boolean {
