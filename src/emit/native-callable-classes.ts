@@ -606,7 +606,7 @@ export class NativeCallableClasses {
                 if (isStatic && !lexicalMember) staticMethods.push(key);
             } else if (member.kind === S.GetAccessor || member.kind === S.SetAccessor) {
                 const identity = (isStatic ? 'static.' : '') + key;
-                if (!accessorTypes.has(identity)) {
+                if (!lexicalMember && !accessorTypes.has(identity)) {
                     (isStatic ? staticTypes : instanceTypes).push(key + ': ' + (member.kind === S.GetAccessor ? type(member) : type(member.parameters[0])) + ';');
                     accessorTypes.add(identity);
                 }
@@ -669,7 +669,7 @@ export class NativeCallableClasses {
         const constructorParameters = '(this: ' + name
             + (ctor && this.own.parameters.length ? ', ' + (this.generated?params(ctor,false):params(ctor,true)) : '') + ')';
         const replacement = (this.lexical ? this.lexical.traits.map(t=>'const ' + t.key + '=' + intrinsic + '.symbol();').join('\n')+'\n' : '')
-            + (this.generated ? this.generated.lexical.own.filter(t=>t.kind==='method').map(t=>'const '+t.key+'='+intrinsic+'.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + constructorParameters + ' {\n'
+            + (this.generated ? this.generated.lexical.own.filter(t=>t.kind==='method'||t.kind==='accessor').map(t=>'const '+t.key+'='+intrinsic+'.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + constructorParameters + ' {\n'
             + (nativeBase ? 'return '+intrinsic+'.invokeNativeConstructor(this,'+identity+',arguments,function'+constructorParameters+' {\n' : '')
             + 'const ' + fresh + ' = ' + intrinsic + '.enter(this, ' + identity + ');\nlet ' + succeeded + ' = false;\ntry {\n'
             + arity + coercions

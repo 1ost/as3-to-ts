@@ -6,7 +6,7 @@ import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, native
 import {NativeGeneratedClassTraits} from './native-generated-traits';
 
 interface Trait {
-    name: string; visibility: string; static: boolean; kind: 'variable' | 'constant' | 'method';
+    name: string; visibility: string; static: boolean; kind: 'variable' | 'constant' | 'method' | 'accessor';
     owner: string; node: Node; type: Node; key: string; access: string; parameterCount: number;
 }
 function inputPackageEnabled(plan:NativeGeneratedDeclarationPlan):boolean{return !!nativeGeneratedDeclarationInputs(plan,plan.scope).lexicalProviderModule;}
@@ -62,7 +62,7 @@ export class NativeGeneratedLexical {
                 if(visibility==='public'||inherited&&visibility==='private')return;
                 if(visibility==='internal'){
                     if(!input.lexicalProviderModule)fail('internal namespace storage authority');
-                    if(mods.some(mod=>['internal','static'].indexOf(mod)<0))fail('custom namespace is not package-internal storage');
+                    if(mods.some(mod=>['internal','static'].indexOf(mod)<0 && !(mod==='override' && member.kind===K.GET)))fail('custom namespace is not package-internal storage');
                     if(inherited&&packageOf(name)!==packageOf(owner))return;
                 }
                 const isStatic=mods.indexOf('static')>=0;
@@ -72,12 +72,19 @@ export class NativeGeneratedLexical {
                 const inheritedStrings=visibility==='protected'&&member.kind===K.VAR_LIST
                     &&member.findChildren(K.NAME_TYPE_INIT).every(node=>node.findChild(K.TYPE)&&node.findChild(K.TYPE).text==='String');
                 if(inherited&&isStatic&&(!constant&&!inheritedStrings||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
-                if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant)fail('lexical constant/accessor lowering required');
+                const internalGetter=visibility==='internal'&&!isStatic&&member.kind===K.GET
+                    &&member.findChild(K.TYPE)&&member.findChild(K.TYPE).text==='Boolean'
+                    &&member.findChild(K.PARAMETER_LIST).children.length===0;
+                if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant&&!internalGetter)fail('lexical constant/accessor lowering required');
                 const declarations=member.kind===K.VAR_LIST||constant?member.findChildren(K.NAME_TYPE_INIT):[member];
                 declarations.forEach(node=>{
                     const local=node.findChild(K.NAME).text;
                     const previous=this.traits.find(t=>t.name===local&&t.static===isStatic);
                     if(previous) {
+                        if(inherited&&previous.visibility==='internal'&&visibility==='internal'&&previous.kind==='accessor'&&internalGetter) {
+                            if(modifiers(previous.node).indexOf('override')<0)fail('internal getter override requires source override');
+                            overridden.add(previous);return;
+                        }
                         if(inherited&&previous.visibility==='protected'&&visibility==='protected'&&previous.kind==='method'&&member.kind===K.FUNCTION) {
                             const ancestor={owner:name,node} as Trait;
                             if(modifiers(previous.node).indexOf('override')<0 || mods.indexOf('final')>=0 || signature(previous)!==signature(ancestor))
@@ -90,9 +97,9 @@ export class NativeGeneratedLexical {
                     if(vector&&(isStatic||visibility!=='private'||member.kind!==K.VAR_LIST
                         ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
                         fail('lexical vector storage authority');
-                    const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':'method',owner:name,node,
+                    const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':internalGetter?'accessor':'method',owner:name,node,
                         type:vector||node.findChild(K.TYPE),key:fresh('key'),access:fresh('access'),parameterCount:member.kind===K.FUNCTION?node.findChild(K.PARAMETER_LIST).children.filter(p=>!p.findChild(K.REST)).length:0};
-                    if(visibility==='internal'&&!(trait.type&&trait.type.text==='uint'
+                    if(visibility==='internal'&&!internalGetter&&!(trait.type&&trait.type.text==='uint'
                         &&(trait.kind==='variable'&&!isStatic||trait.kind==='constant'&&isStatic)))fail('internal uint field/static constant required');
                     if(visibility==='internal'&&trait.kind==='variable')this.earlyInstanceValue(trait);
                     if(constant)this.constantValue(trait);
@@ -314,6 +321,7 @@ export class NativeGeneratedLexical {
         const native=own.base&&this.plan.nativeBindings.find(b=>b.qname===own.base&&!!b.nativeBaseExport);
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
+            +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
             +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
         return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?domain+'.'+parent.lexicalExport+'.get('+base+')':native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
@@ -356,15 +364,17 @@ export class NativeGeneratedLexical {
                     for(let current=identity;current;current=this.plan.bindings.find(b=>b.qname===current).base){
                         if(!input.sources[current]||input.sources[current].referenceOnly)break;
                         const content=this.internalContent(current);
-                        const field=content.children.filter(Boolean).find(m=>[K.VAR_LIST,K.CONST_LIST].indexOf(m.kind)>=0
+                        const field=content.children.filter(Boolean).find(m=>[K.VAR_LIST,K.CONST_LIST,K.GET].indexOf(m.kind)>=0
                             &&modifiers(m).every(mod=>['public','private','protected'].indexOf(mod)<0)
-                            &&(modifiers(m).indexOf('static')>=0)===statics&&m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===name));
+                            &&(modifiers(m).indexOf('static')>=0)===statics&&(m.kind===K.GET?m.findChild(K.NAME).text===name:m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===name)));
                         if(!field)continue;
                         if(statics&&current!==identity)fail('inherited internal static lookup requires qualification');
                         if(packageOf(current)!==packageOf(this.owner)){inaccessible=true;continue;}
-                        const value=field.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===name);
-                        if(!value.findChild(K.TYPE)||value.findChild(K.TYPE).text!=='uint'
-                            ||statics&&field.kind!==K.CONST_LIST||!statics&&field.kind!==K.VAR_LIST)
+                        const value=field.kind===K.GET?field:field.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===name);
+                        const getter=field.kind===K.GET&&!statics&&value.findChild(K.TYPE)&&value.findChild(K.TYPE).text==='Boolean'
+                            &&value.findChild(K.PARAMETER_LIST).children.length===0;
+                        if(!getter&&(!value.findChild(K.TYPE)||value.findChild(K.TYPE).text!=='uint'
+                            ||statics&&field.kind!==K.CONST_LIST||!statics&&field.kind!==K.VAR_LIST))
                             fail('foreign internal uint field/static constant required');
                         if(current===this.owner&&receiver.text==='this')break;
                         return {trait:null,receiver,internalOwner:current,internalName:name};
@@ -438,6 +448,7 @@ export class NativeGeneratedLexical {
             if(operation!=='get'&&operation!=='set'||operation==='set'&&node.children[1].text!=='=')fail('internal field operation requires get/set');
             const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
             const members=this.internalContent(found.internalOwner).children;
+            if(operation==='set'&&members.some(m=>m.kind===K.GET&&m.findChild(K.NAME).text===found.internalName))fail('internal readonly getter assignment');
             if(operation==='set'&&members.some(m=>m.kind===K.CONST_LIST&&m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===found.internalName)))fail('internal constant assignment');
             const binding=this.plan.bindings.find(b=>b.qname===found.internalOwner);
             let token='__as3_internalType_'+binding.tokenExport;while(emitter.source.indexOf(token)>=0)token+='_';
@@ -473,6 +484,7 @@ export class NativeGeneratedLexical {
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(operation==='set'&&(node.children[1].text!=='='||found.trait.kind!=='variable'))fail('lexical assignment kind');
+        if(operation==='call'&&found.trait.kind==='accessor')fail('internal getter invocation held');
         const fieldCall=operation==='call'&&found.trait.kind==='variable';
         if(fieldCall) {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
