@@ -52,7 +52,7 @@ reject(()=>storage.emitDefinition('domain;sideEffect()','Array'));
 reject(()=>storage.emitDefinition('domain','getArray()'));
 for(const body of [
   'public var bad:Missing;', 'public var bad:Class;', 'public var bad:XML;', 'public var bad:Vector.<int>;',
-  'public const bad:int=1;', 'public var x:int; public var x:String;',
+  'public const bad:int=1+1;', 'public var x:int; public var x:String;',
   'public function get x(a:int):int { return a; }',
   'public function set x():void {}', 'public function set x(a:int=0):void {}',
   'public function set x(a:int):int { return a; }',
