@@ -3796,10 +3796,12 @@ function emitDirectToString(emitter:Emitter, node:Node):boolean {
 	emitter.ensureImportIdentifier('as3InvokeToString as ' + helper, module, false);
 	emitter.nativeSourceHelpers.add(helper);
 	emitter.catchup(node.start);
-	emitter.insert(helper + '(');
+	// The common provider retains a raw source result. Its unknown boundary must
+	// not leak into generated AS3 calls as a TypeScript-only argument rejection.
+	emitter.insert('(<any>' + helper + '(');
 	visitNode(emitter, receiver);
 	emitter.catchup(receiver.end);
-	emitter.insert(')');
+	emitter.insert('))');
 	emitter.skipTo(node.end);
 	return true;
 }
