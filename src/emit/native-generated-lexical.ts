@@ -78,9 +78,9 @@ export class NativeGeneratedLexical {
                 const constant=member.kind===K.CONST_LIST&&(visibility==='protected'||visibility==='private'&&isStatic||visibility==='internal'&&isStatic);
                 if(isStatic && member.kind!==K.VAR_LIST&&!constant&&(visibility!=='private'||member.kind!==K.FUNCTION))fail('static lexical initialization lowering required');
                 if(inherited&&visibility==='internal'&&isStatic)return;
-                const inheritedStrings=visibility==='protected'&&member.kind===K.VAR_LIST
-                    &&member.findChildren(K.NAME_TYPE_INIT).every(node=>node.findChild(K.TYPE)&&node.findChild(K.TYPE).text==='String');
-                if(inherited&&isStatic&&(!constant&&!inheritedStrings||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
+                const inheritedPrimitives=visibility==='protected'&&member.kind===K.VAR_LIST
+                    &&member.findChildren(K.NAME_TYPE_INIT).every(node=>node.findChild(K.TYPE)&&['String','Boolean'].indexOf(node.findChild(K.TYPE).text)>=0);
+                if(inherited&&isStatic&&(!constant&&!inheritedPrimitives||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
                     fail('internal instance method requires one authenticated interface parameter and Boolean/void return');
@@ -299,6 +299,12 @@ export class NativeGeneratedLexical {
                 &&isFinite(Number(value)))return value;
         }
         const expression=unwrapEncapsulatedExpression(init.children[0]);
+        if(trait.visibility==='protected'&&trait.type&&trait.type.text==='Boolean'){
+            if(/^(true|false)$/.test(value))return value;
+            // Computed values execute in cinit after default storage publication;
+            // literal Booleans above are trait values visible before cinit.
+            if(expression&&[K.CALL,K.RELATION,K.EQUALITY,K.AND].indexOf(expression.kind)>=0)return undefined;
+        }
         // A call initializer runs in cinit after default storage publication;
         // unlike an int literal it is not an early trait value.
         if(trait.visibility==='private'&&trait.type&&trait.type.text==='int'&&expression&&expression.kind===K.CALL)return undefined;
