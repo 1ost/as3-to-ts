@@ -12,6 +12,8 @@ export interface NativeGeneratedDeclarationInput {
     vectorProviderModule?: string;
     /** Optional explicit script-global provider for generated lexical calls. */
     scriptGlobalProviderModule?: string;
+    /** Explicit provider for sealed package-internal lexical membership. */
+    lexicalProviderModule?: string;
     /** Explicit class subset; omission selects all planned source classes. */
     scriptGlobalSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
@@ -93,9 +95,10 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'lexicalProviderModule', 'sources', 'providers']);
     moduleName(data.providerModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
+    if (data.lexicalProviderModule !== undefined) moduleName(data.lexicalProviderModule);
     if (data.vectorProviderModule !== undefined) moduleName(data.vectorProviderModule);
     if (data.scriptGlobalProviderModule !== undefined) moduleName(data.scriptGlobalProviderModule);
     if(data.scriptGlobalSources!==undefined&&(!data.scriptGlobalProviderModule||!Array.isArray(data.scriptGlobalSources)
@@ -280,6 +283,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         active.delete(binding.qname); emitted.add(binding.qname);
     };
     bindings.forEach(add);
+    if(data.lexicalProviderModule){
+        lines.push('import {declareAS3InternalPackage} from '+JSON.stringify(data.lexicalProviderModule)+';');
+        const packages=new Map<string,string[]>();
+        bindings.forEach(binding=>{const split=binding.qname.lastIndexOf('.'),pkg=split<0?'':binding.qname.slice(0,split);
+            if(!packages.has(pkg))packages.set(pkg,[]);packages.get(pkg).push(binding.tokenExport);});
+        packages.forEach(tokens=>lines.push('declareAS3InternalPackage(['+tokens.join(',')+']);'));
+    }
     const interfaceContracts=projectNativeGeneratedInterfaceContracts(classes,bindings,interfaces,resolve,
         name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0);
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',

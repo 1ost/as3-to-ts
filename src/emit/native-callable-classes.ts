@@ -112,7 +112,7 @@ export class NativeCallableClasses {
                 const mods = member.findChild(K.MOD_LIST);
                 const isStatic = mods && mods.children.some(mod => mod.text === 'static');
                 const lexicalMember = classLexical && classLexical.proves(member)
-                    || generated && mods && mods.children.some(mod=>mod.text==='private'||mod.text==='protected');
+                    || generated && (!mods || !mods.children.some(mod=>mod.text==='public'));
                 if (!isStatic && !lexicalMember && [K.FUNCTION, K.GET, K.SET].indexOf(member.kind) >= 0) {
                     const memberName = member.findChild(K.NAME).text;
                     if (memberName !== name) instanceMembers.push({name: memberName, method: member.kind === K.FUNCTION});
@@ -509,7 +509,7 @@ export class NativeCallableClasses {
             if (member.kind === S.PropertyDeclaration) {
                 if (lexicalMember) {
                     if (lexicalMember.kind === 'constant') return; // Installed before authored effects by the lexical registrar.
-                    if (!isStatic && member.initializer) initializers.push(this.generated
+                    if (!isStatic && member.initializer && !(this.generated&&this.generated.lexical.earlyInstanceValue(lexicalMember as any)!==undefined)) initializers.push(this.generated
                         ? this.generated.lexical.provider + '.as3SetLexicalMember(this,' + lexicalMember.access + ',' + text(member.initializer) + ');'
                         : 'this[' + lexicalMember.key + '] = ' + text(member.initializer) + ';');
                     return;

@@ -3685,6 +3685,17 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!node||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.kind)<0||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(!receiver||!key)return null;
+    const internal=emitter.generated&&nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope).lexicalProviderModule;
+    if(internal&&node.kind===NodeKind.ARRAY_ACCESSOR&&receiver.kind===NodeKind.CALL
+        &&receiver.children[0].kind===NodeKind.IDENTIFIER&&receiver.children[0].text==='Object'
+        &&!emitter.findDefInScope('Object')&&typeOfBinding(receiver.children[0],emitter.source,Object.keys(emitter.generated.classes))==='builtin'
+        &&receiver.children[1].children.length===1){
+        const argument=receiver.children[1].children[0];
+        const definition=argument.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(argument.text);
+        if(argument.kind===NodeKind.IDENTIFIER&&(!definition||!Object.prototype.hasOwnProperty.call(definition,'as3Type'))
+            &&emitter.generated.options.plan.bindings.some(b=>b.qname.split('.').pop()===argument.text))
+            return {receiver,key,lexical:true};
+    }
     if(receiver.kind!==NodeKind.IDENTIFIER){
         if(emitter.generated&&emitter.generated.projection.metadata.isDynamic)
             throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: computed receiver in dynamic class held');
@@ -3705,8 +3716,8 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
         return {receiver,key,lexical:true,ownStatic:true};
     }
     if(!generated&&(!definition||['Object','*'].indexOf(definition.as3Type)<0))return null;
-    const lexical=!!generated&&receiver.text==='this';
-    if(lexical){
+    const lexical=!!generated&&receiver.text==='this'||!!internal&&node.kind===NodeKind.ARRAY_ACCESSOR;
+    if(lexical&&receiver.text==='this'){
         let member=node;while(member.parent&&member.parent.kind!==NodeKind.CONTENT)member=member.parent;
         const mods=member.findChild(NodeKind.MOD_LIST);
         if(mods&&mods.children.some(mod=>mod.text==='static'))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: static this dispatch held');
