@@ -46,6 +46,7 @@ const reject=(source,bindings=providers)=>{
 const guardSource='package {import flash.events.Event;public class Guard extends Event {public function Guard(){super("g");}}}';
 reject(guardSource,{'flash.events.Event':{module:eventModule,exportName:'Event'}});
 reject(guardSource,{'flash.events.Event':{module:eventModule,exportName:'Event',nativeBase:'Date'}});
+reject('package {import flash.display.Sprite;public class Guard extends Sprite {public function Guard(){super();}}}',{'flash.display.Sprite':{module:provider('AS3GeneratedSpriteConstruction'),exportName:'Sprite',nativeBase:'Sprite'}});
 reject(guardSource,{'flash.events.Event':{module:eventModule,exportName:'Fake',nativeBase:'Event'}});
 reject(guardSource,{'other.Event':{module:eventModule,exportName:'Event',nativeBase:'Event'}});
 for(const body of [
@@ -74,6 +75,7 @@ const emitted=[];
 for(const binding of plan.bindings) {
   const source=sources[binding.qname].source;
   const output=emit(parse(binding.qname+'.as',source),source,options);
+  assert.match(output,/\.invokeNativeConstructor\(this,/,'native source constructors use the allocation shell');
   const file=path.join(run,binding.qname.split('.').pop()+'.ts');fs.writeFileSync(file,output);emitted.push({file,sourceSha256:hash(source),generatedSha256:hash(output)});
 }
 const driver=fs.readFileSync(path.join(__dirname,'driver.txt'),'utf8').replaceAll('@NATIVE_CLASS@',helpers.nativeClass).replaceAll('@EVENT@',eventModule).replaceAll('@PROPERTY@',provider('AS3Property')).replaceAll('@METADATA@',provider('FlashTypeMetadata')).replaceAll('@TYPE@',provider('AS3Type'));

@@ -664,16 +664,19 @@ export class NativeCallableClasses {
             return value + ' = ' + (parameter.optional ? 'arguments.length <= ' + index + ' ? ' + defaultValue + ' : ' : '') + conversion + ';\n'
                 + 'if (arguments.length > ' + index + ') arguments[' + index + '] = ' + value + ';';
         }).join('\n');
+        const constructorParameters = '(this: ' + name
+            + (ctor && this.own.parameters.length ? ', ' + (this.generated?params(ctor,false):params(ctor,true)) : '') + ')';
         const replacement = (this.lexical ? this.lexical.traits.map(t=>'const ' + t.key + '=' + intrinsic + '.symbol();').join('\n')+'\n' : '')
-            + (this.generated ? this.generated.lexical.own.filter(t=>t.kind==='method').map(t=>'const '+t.key+'='+intrinsic+'.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + '(this: ' + name
-            + (ctor && this.own.parameters.length ? ', ' + (this.generated?params(ctor,false):params(ctor,true)) : '') + ') {\n'
+            + (this.generated ? this.generated.lexical.own.filter(t=>t.kind==='method').map(t=>'const '+t.key+'='+intrinsic+'.symbol();').join('\n')+'\n' : '') + base + superMethods.join('\n') + '\nconst ' + name + ': ' + constructorType + ' = function ' + name + constructorParameters + ' {\n'
+            + (nativeBase ? 'return '+intrinsic+'.invokeNativeConstructor(this,'+identity+',arguments,function'+constructorParameters+' {\n' : '')
             + 'const ' + fresh + ' = ' + intrinsic + '.enter(this, ' + identity + ');\nlet ' + succeeded + ' = false;\ntry {\n'
             + arity + coercions
             + (this.own.rest ? '\nvar '+this.own.rest+': any = '+intrinsic+'.apply('+intrinsic+'.arraySlice,arguments,['+this.own.parameters.length+']);\n' : '')
             + (this.own.usesArguments ? '\nlet ' + sourceArguments + ': any[] = '
                 + intrinsic + '.apply(' + intrinsic + '.arraySlice, arguments, []);\n' : '') + '\nif (' + fresh + ') {\n' + defaults + '\n' + bindInstance + '\n}\n'
             + (this.metadata ? lowerNativeSourceOperations(initializers.join('\n'), provider, compilerHelpers, unique, this.lexical) : initializers.join('\n')) + '\n' + completedBody + '\n' + completion + '\n} finally { '
-            + intrinsic + '.leave(this, ' + identity + ', ' + succeeded + '); }\n} as any;\n'
+            + intrinsic + '.leave(this, ' + identity + ', ' + succeeded + '); }\n'
+            + (nativeBase ? '});\n' : '') + '} as any;\n'
             + 'const ' + identity + ' = ' + intrinsic + '.constructorIdentity(' + name + ');\n'
             + (this.own.base ? intrinsic + '.setPrototypeOf(' + name + ', ' + baseName + ');\n'
                 + name + '.prototype = ' + intrinsic + '.create(' + baseName + '.prototype);\n' : '')
