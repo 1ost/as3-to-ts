@@ -27,7 +27,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
