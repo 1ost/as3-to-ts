@@ -321,7 +321,23 @@ export class NativeGeneratedLexical {
         let target=node,operation='get',right:Node,args:Node;
         if(node.kind===K.ASSIGN){target=node.children[0];operation='set';right=node.children[2];}
         else if(node.kind===K.CALL){target=node.children[0];operation='call';args=node.children[1];}
-        else if([K.DELETE,K.PRE_INC,K.POST_INC,K.PRE_DEC,K.POST_DEC].indexOf(node.kind)>=0){if(resolve(node.children[0]))fail('lexical update/delete lowering required');return false;}
+        else if([K.PRE_INC,K.POST_INC,K.PRE_DEC,K.POST_DEC].indexOf(node.kind)>=0) {
+            const found=resolve(node.children[0]);if(!found)return false;
+            if(!found.trait||found.trait.kind!=='variable'||found.trait.static||found.trait.visibility!=='private'
+                ||!found.trait.type||['int','uint','Number'].indexOf(found.trait.type.text)<0)
+                fail('lexical numeric update requires private instance numeric variable');
+            const delta=node.kind===K.PRE_INC||node.kind===K.POST_INC?'+1':'-1';
+            const prefix=node.kind===K.PRE_INC||node.kind===K.PRE_DEC;
+            // Storage conversion happens in the provider; the prefix expression
+            // returns the unwrapped Number result, including integer overflow.
+            emitter.catchup(node.start);
+            emitter.insert('(<any>((target:any)=>{const previous:number=<any>'+this.provider+'.as3GetLexicalMember(target,'+found.trait.access+');'
+                +'const next=previous'+delta+';'+this.provider+'.as3SetLexicalMember(target,'+found.trait.access+',next);return '+(prefix?'next':'previous')+';})(');
+            if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
+            else emitter.insert('this');
+            emitter.insert('))');emitter.skipTo(node.end);return true;
+        }
+        else if(node.kind===K.DELETE){if(resolve(node.children[0]))fail('lexical update/delete lowering required');return false;}
         if(node.kind===K.IDENTIFIER&&node.parent&&node.parent.kind===K.DOT&&node.parent.children[1]===node)return false;
         if(target.kind===K.DOT&&target.children[1]&&['call','apply'].indexOf(target.children[1].text)>=0) {
             const inner=target.children[0],slot=resolve(inner);
