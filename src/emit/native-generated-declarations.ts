@@ -15,7 +15,7 @@ export interface NativeGeneratedDeclarationInput {
     /** Explicit class subset; omission selects all planned source classes. */
     scriptGlobalSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
-    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event'}};
+    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error'}};
 }
 export interface NativeGeneratedDeclarationBinding {
     readonly qname: string;
@@ -48,7 +48,7 @@ export interface NativeGeneratedDeclarationPlan {
     readonly references: ReadonlyArray<NativeGeneratedReference>;
     readonly vectors: ReadonlyArray<{readonly owner:string;readonly start:number;readonly end:number;readonly identity:string;readonly name:string;readonly specExport:string}>;
     readonly sourceHashes: {[qname: string]: string};
-    readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly eventBaseExport?: string; readonly declarationExport?: string}>;
+    readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly eventBaseExport?: string; readonly nativeBaseExport?: string; readonly declarationExport?: string}>;
 }
 interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan;}
 const contexts = new WeakMap<object, Context>();
@@ -111,8 +111,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         const provider = providers[name];
         if (!table(provider)) fail('provider binding required');
         fields(provider, ['module', 'exportName','nativeBase']);
-        if(provider.nativeBase !== undefined && (provider.nativeBase !== 'Event' || name !== 'flash.events.Event' || provider.exportName !== 'Event'))
-            fail('native base requires the exact supported Event provider');
+        if(provider.nativeBase !== undefined && !((provider.nativeBase === 'Event' && name === 'flash.events.Event' && provider.exportName === 'Event')
+            || (provider.nativeBase === 'Error' && name === 'Error' && provider.exportName === 'Error')))
+            fail('native base requires the exact supported Event or Error provider');
         moduleName(provider.module);
         if (!/^[A-Za-z_$][\w$]*$/.test(provider.exportName)) fail('provider export name');
     });
@@ -164,7 +165,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 if (!interfaces.some(binding => binding.qname === name)) fail('interface declaration authority required: ' + owner + ':' + name);
             });
             const baseNode = cls.findChild(K.EXTENDS), base = baseNode ? resolve(owner, baseNode.qualifiedName || baseNode.text) : 'Object';
-            if (base !== 'Object' && (!data.sources[base] || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && providers[base].nativeBase === 'Event'))
+            if (base !== 'Object' && (!data.sources[base] || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error')))
                 fail('base requires a planned source declaration: ' + owner + ':' + base);
             bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
                 tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length,
@@ -238,12 +239,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     const nativeBindings: Array<NativeGeneratedDeclarationPlan['nativeBindings'][number]> = nativeNames.map((name, index) => {
         const provider = providers[name], referenceExport = 'native' + index;
         lines.push('export {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';');
-        if(provider.nativeBase === 'Event') {
-            const declarationExport='nativeType'+index,eventBaseExport='nativeEntry'+index;
-            lines.push('import {EventDeclaration as '+declarationExport+'} from '+JSON.stringify(provider.module)+';');
+        if(provider.nativeBase) {
+            const declarationExport='nativeType'+index,nativeBaseExport='nativeEntry'+index;
+            lines.push('import {'+provider.nativeBase+'Declaration as '+declarationExport+'} from '+JSON.stringify(provider.module)+';');
             lines.push('export {'+declarationExport+'};');
-            lines.push('export {EventConstructorEntry as '+eventBaseExport+'} from '+JSON.stringify(provider.module)+';');
-            return Object.freeze({qname:name,referenceExport,declarationExport,eventBaseExport});
+            lines.push('export {'+provider.nativeBase+'ConstructorEntry as '+nativeBaseExport+'} from '+JSON.stringify(provider.module)+';');
+            return Object.freeze({qname:name,referenceExport,declarationExport,nativeBaseExport,
+                ...(provider.nativeBase==='Event'?{eventBaseExport:nativeBaseExport}:{})});
         }
         return Object.freeze({qname: name, referenceExport});
     });

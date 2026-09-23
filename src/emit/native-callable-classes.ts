@@ -99,9 +99,10 @@ export class NativeCallableClasses {
                 pkg.findChild(K.CONTENT).findChildren(K.IMPORT).forEach(imp => {
                     const candidate = imp.text.endsWith('.*') ? imp.text.slice(0, -1) + ext.text : imp.text;
                     if (candidate.split('.').pop() === ext.text && (Object.prototype.hasOwnProperty.call(options, candidate)
-                        || generated && generated.options.plan.nativeBindings.some(binding=>binding.qname===candidate&&!!binding.eventBaseExport))
+                        || generated && generated.options.plan.nativeBindings.some(binding=>binding.qname===candidate&&!!binding.nativeBaseExport))
                         && candidates.indexOf(candidate) < 0) candidates.push(candidate);
                 });
+                if (!candidates.length && ext.text === 'Error' && generated && generated.options.plan.nativeBindings.some(binding=>binding.qname==='Error'&&!!binding.nativeBaseExport)) candidates.push('Error');
                 if (candidates.length !== 1) this.fail('mixed/unknown/ambiguous base chain: ' + qname + ' extends ' + ext.text);
                 base = candidates[0];
             }
@@ -129,11 +130,11 @@ export class NativeCallableClasses {
                 });
             });
             const constructor = cls.findChild(K.CONTENT).children.find(member => member.kind === K.FUNCTION && member.findChild(K.NAME).text === name);
-            if(generated && generated.options.plan.nativeBindings.some(binding=>binding.qname===base&&!!binding.eventBaseExport)) {
+            if(generated && generated.options.plan.nativeBindings.some(binding=>binding.qname===base&&!!binding.nativeBaseExport)) {
                 let calls=0;
                 const scan=(node:Node):void=>{if(node.kind===K.CALL&&node.children[0]&&node.children[0].text==='super')calls++;node.children.forEach(scan);};
                 if(constructor)scan(constructor.findChild(K.BLOCK));
-                if(calls!==1)this.fail('native Event requires one explicit source base call');
+                if(calls!==1)this.fail('native base requires one explicit source base call');
             }
             const parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}}[] = [];
             let usesArguments = false, rest: string;
@@ -339,9 +340,9 @@ export class NativeCallableClasses {
         const planned = this.declarationDomain && this.declarationDomain.bindings.find(binding => binding.qname === this.own.qname);
         if (this.declarationDomain && !planned) this.fail('current source declaration is absent from its compiler domain');
         const domainImport = planned || this.generated ? unique('declarationDomain') : '';
-        const eventBase=this.generated&&this.generated.eventBase;
-        const eventClass=eventBase&&domainImport+'.'+eventBase.referenceExport;
-        const directEventBase=eventBase&&this.own.base===eventBase.qname;
+        const nativeBase=this.generated&&this.generated.nativeBase;
+        const nativeBaseClass=nativeBase&&domainImport+'.'+nativeBase.referenceExport;
+        const directNativeBase=nativeBase&&this.own.base===nativeBase.qname;
         const referenceToken = planned || this.generated ? (qname:string):string => {
             const binding=this.declarationDomain&&this.declarationDomain.bindings.find(value=>value.qname===qname)
                 ||this.generated&&[...this.generated.options.plan.interfaces,...this.generated.options.plan.bindings].find(value=>value.qname===qname);
@@ -465,7 +466,7 @@ export class NativeCallableClasses {
                     if (++superCount > 1) this.fail('repeated super construction');
                     edits.push({start: node.getStart(file), end: node.end,
                         value: '{const ' + superArguments + ': any[] = [' + node.arguments.map(argumentExpression).join(', ') + ']; '
-                            + (directEventBase ? intrinsic+'.callNativeBase(this,'+identity+','+baseName+','+superArguments+'); }'
+                            + (directNativeBase ? intrinsic+'.callNativeBase(this,'+identity+','+baseName+','+superArguments+'); }'
                                 : intrinsic + '.expectBase(this, ' + identity + ', ' + baseName + '); '
                                     + intrinsic + '.apply(' + baseName + ', this, ' + superArguments + '); }')});
                     node.arguments.forEach((argument: any) => walk(argument, true, nestedFunction)); return;
@@ -573,7 +574,7 @@ export class NativeCallableClasses {
                 if(returns && returns.text !== 'void' && returns.text !== '*') {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
                     if(reference&&reference.kind==='native'&&reference.identity!=='flash.utils.Dictionary'&&!(reference.identity==='flash.events.Event'
-                        &&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&!!binding.eventBaseExport)))
+                        &&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&!!binding.nativeBaseExport)))
                         this.fail('generated native return type requires separate qualification');
                     const sourceBody=sourceMethod.findChild(K.BLOCK);
                     const inspect=(node:Node,inFinally=false):void=>{
@@ -624,17 +625,17 @@ export class NativeCallableClasses {
                 }
             });
         }
-        const bindInstance = instanceMethods.filter(key=>!eventBase||['clone','toString','formatToString','stopImmediatePropagation','preventDefault','isDefaultPrevented','stopPropagation'].indexOf(key)<0)
+        const bindInstance = instanceMethods.filter(key=>!nativeBase||(nativeBase.qname==='Error'?['getStackTrace']:['clone','toString','formatToString','stopImmediatePropagation','preventDefault','isDefaultPrevented','stopPropagation']).indexOf(key)<0)
             .map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
         const defaults = (this.metadata || this.generated ? generation + '.enterInstance(this);\n' : '')
-            + (eventBase ? intrinsic+'.prepareNativeBase(this,'+eventClass+');\n' : '')
+            + (nativeBase ? intrinsic+'.prepareNativeBase(this,'+nativeBaseClass+');\n' : '')
             + (this.generated ? this.generated.lexical.provider+'.initializeAS3LexicalInstance('+this.generated.lexical.scope+',this);\n' : '')
             + (this.lexical ? this.lexical.provider + '.initializeAS3LexicalInstance(' + this.lexical.scope + ',this);\n' : '')
             + (this.generated ? [] : chainFields).map(field => intrinsic + '.defineProperty(this, ' + JSON.stringify(field.name)
             + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
         const ancestry = cls.heritageClauses && cls.heritageClauses.find((clause:any)=>clause.token===S.ExtendsKeyword);
-        const base = ancestry ? 'const ' + baseName + ' = ' + text(ancestry.types[0].expression) + ';\n' : '';
-        const sourceBaseName = this.own.base && (directEventBase ? this.own.base.split('.').pop() : this.classes.get(this.own.base).name);
+        const base = ancestry ? 'const ' + baseName + ' = ' + (directNativeBase ? nativeBaseClass : text(ancestry.types[0].expression)) + ';\n' : '';
+        const sourceBaseName = this.own.base && (directNativeBase ? nativeBaseClass : this.classes.get(this.own.base).name);
         const constructorBody = ctor ? body(ctor, true) : '';
         const tail = ctor && ctor.body.statements[ctor.body.statements.length - 1];
         const completion = !constructorReturns && tail && tail.kind === S.ThrowStatement ? '' : succeeded + ' = true;';
@@ -676,7 +677,7 @@ export class NativeCallableClasses {
             + (this.own.base ? intrinsic + '.setPrototypeOf(' + name + ', ' + baseName + ');\n'
                 + name + '.prototype = ' + intrinsic + '.create(' + baseName + '.prototype);\n' : '')
             + intrinsic + '.defineProperty(' + name + '.prototype, "constructor", {value:' + name + ', writable:false, configurable:true});\n'
-            + (eventBase ? intrinsic+'.registerNativeBase('+eventClass+','+domainImport+'.'+eventBase.eventBaseExport+');\n' : '')
+            + (nativeBase ? intrinsic+'.registerNativeBase('+nativeBaseClass+','+domainImport+'.'+nativeBase.nativeBaseExport+');\n' : '')
             + intrinsic + '.register(' + identity + ', ' + (this.own.base ? baseName : 'null') + ');\n'
             + definitions.join('\n') + '\n'
             + staticMethods.map(key => bindName + '(' + name + ', ' + JSON.stringify(key) + ');').join('\n')

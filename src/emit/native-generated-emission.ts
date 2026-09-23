@@ -23,7 +23,7 @@ export function generatedModule(value: string): string {
 export class NativeGeneratedEmission {
     readonly projection: NativeGeneratedClassTraits;
     readonly lexical: NativeGeneratedLexical;
-    readonly eventBase: {qname:string; referenceExport:string; eventBaseExport?:string};
+    readonly nativeBase: {qname:string; referenceExport:string; nativeBaseExport?:string};
     readonly sources: {[qname: string]: string} = Object.create(null);
     readonly classes: {[qname: string]: 'lazy' | 'ready'} = Object.create(null);
     readonly deferredConstants: {[name: string]: string} = Object.create(null);
@@ -42,8 +42,8 @@ export class NativeGeneratedEmission {
         this.projection = new NativeGeneratedClassTraits(options.plan,input.scope,owners[0],source);
         let ancestor=this.projection.binding;
         while(ancestor.base) {
-            const native=options.plan.nativeBindings.find(binding=>binding.qname===ancestor.base&&!!binding.eventBaseExport);
-            if(native){this.eventBase=native;break;}
+            const native=options.plan.nativeBindings.find(binding=>binding.qname===ancestor.base&&!!binding.nativeBaseExport);
+            if(native){this.nativeBase=native;break;}
             ancestor=options.plan.bindings.find(binding=>binding.qname===ancestor.base);
         }
         this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source,typedLocals);

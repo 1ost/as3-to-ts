@@ -67,6 +67,14 @@ export class NativeGeneratedClassTraits {
                 .forEach(name=>instance.push({name,kind:'method',parameterCount:name==='formatToString'?1:0,declaredBy}));
             surfaces.set('flash.events.Event',{instance,statics:[],dynamic:false,final:false});
         }
+        if(plan.nativeBindings.some(binding=>binding.qname==='Error'&&!!binding.nativeBaseExport)) {
+            const declaredBy='Error';
+            const instance: Member[] = [{name:'name',kind:'variable',type:'*',declaredBy},
+                {name:'message',kind:'variable',type:'*',declaredBy},
+                {name:'errorID',kind:'accessor',access:'readonly',type:'int',declaredBy},
+                {name:'getStackTrace',kind:'method',parameterCount:0,declaredBy}];
+            surfaces.set('Error',{instance,statics:[],dynamic:true,final:false});
+        }
         const type = (qname: string, node: Node): TraitType => {
             if (!node) return '*';
             if(node.kind===K.VECTOR){

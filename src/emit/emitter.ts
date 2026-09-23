@@ -409,7 +409,7 @@ export default class Emitter {
                 throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: generated and consumer domain must agree');
             this.references = new NativeReferenceCoercion(this.source,this.options.nativeReferenceCoercion,!!this.generated,
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
-                this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.eventBase));
+                this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'));
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -3939,7 +3939,7 @@ function emitRelation(emitter:Emitter, node:Node):void {
     if (containsIsKeyword(node) && node.children.length === 3) {
         const target = node.lastChild, global = emitter.nativeGlobals.resolve(target);
         const targetBinding=target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
-        const nativeEvent=emitter.generated&&emitter.generated.eventBase&&targetBinding
+        const nativeEvent=emitter.generated&&emitter.generated.nativeBase&&emitter.generated.nativeBase.qname==='flash.events.Event'&&targetBinding
             &&targetBinding.sourceImport==='flash.events.Event';
         const nativeArray=emitter.generated&&target.kind===NodeKind.IDENTIFIER&&target.text==='Array'
             &&!targetBinding&&emitter.generated.projection.binding.qname.split('.').pop()!=='Array';
