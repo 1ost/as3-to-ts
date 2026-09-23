@@ -3218,6 +3218,15 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitTweenTo(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
     const callee = node.children[0];
+    if(callee.kind===NodeKind.IDENTIFIER&&callee.text==='parseInt') {
+        const binding=emitter.nativeGlobals.resolve(callee),args=node.findChild(NodeKind.ARGUMENTS);
+        if(binding) {
+            if(emitter.isNew||!args||args.children.length>2)
+                throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: parseInt requires a direct zero-to-two argument call');
+            emitter.nativeSourceHelpers.add(binding.alias);
+            emitter.catchup(node.start);visitNodes(emitter,node.children);emitter.catchup(node.end);return;
+        }
+    }
     if (!emitter.isNew && callee.kind === NodeKind.IDENTIFIER && emitter.nativeGlobals.resolve(callee))
         throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: callable builtin conversion requires native lowering: ' + callee.text);
     if (callee.kind === NodeKind.IDENTIFIER && callee.text === 'super') {
