@@ -3587,7 +3587,8 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
         &&emitter.generated.lexical.own.some(t=>t.static&&t.kind==='constant')){
         let member=node;while(member.parent&&member.parent.kind!==NodeKind.CONTENT)member=member.parent;
         const mods=member.findChild(NodeKind.MOD_LIST),keyDefinition=key.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(key.text);
-        if(member.kind!==NodeKind.FUNCTION||!mods||!mods.children.some(mod=>mod.text==='static')
+        const privateStatic=emitter.generated.lexical.own.some(t=>t.static&&t.kind==='constant'&&t.visibility==='private');
+        if(member.kind!==NodeKind.FUNCTION||!privateStatic&&(!mods||!mods.children.some(mod=>mod.text==='static'))
             ||!keyDefinition||keyDefinition.bound||keyDefinition.as3Type!=='String')
             throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: own static constant lookup requires a method String key');
         return {receiver,key,lexical:true,ownStatic:true};

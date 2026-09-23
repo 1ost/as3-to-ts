@@ -49,7 +49,7 @@ export class NativeGeneratedLexical {
                 if(visibility==='public'||inherited&&visibility==='private')return;
                 if(visibility==='internal')fail('internal namespace storage authority');
                 const isStatic=mods.indexOf('static')>=0;
-                const constant=member.kind===K.CONST_LIST&&visibility==='protected';
+                const constant=member.kind===K.CONST_LIST&&(visibility==='protected'||visibility==='private'&&isStatic);
                 if(isStatic && member.kind!==K.VAR_LIST&&!constant&&(visibility!=='private'||member.kind!==K.FUNCTION))fail('static lexical initialization lowering required');
                 if(inherited&&isStatic&&(!constant||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
                 if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant)fail('lexical constant/accessor lowering required');
@@ -220,11 +220,11 @@ export class NativeGeneratedLexical {
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
         const value=init&&input.sources[trait.owner].source.slice(init.start,end(init)).trim();
         const type=trait.type&&trait.type.text;
-        if(trait.kind==='constant'&&trait.visibility==='protected'&&value
+        if(trait.kind==='constant'&&(trait.visibility==='protected'||trait.visibility==='private'&&trait.static&&type==='String')&&value
             &&(type==='String'&&/^(?:"(?:[^"\\\r\n]|\\[^\r\n])*"|'(?:[^'\\\r\n]|\\[^\r\n])*')$/.test(value)
                 ||type==='int'&&!trait.static&&/^[+-]?(?:0|[1-9]\d*)$/.test(value)&&Number(value)>=-2147483648&&Number(value)<=2147483647))
             return type==='int'?String(Number(value)):value.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
-        return fail('protected String/instance int literal constant required');
+        return fail('protected String/instance int or private static String literal constant required');
     }
     earlyStaticValue(trait:Trait):string|undefined {
         if(!trait.static||trait.kind!=='variable')return undefined;
