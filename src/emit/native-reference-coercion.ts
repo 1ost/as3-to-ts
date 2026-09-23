@@ -27,7 +27,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -142,6 +142,9 @@ export class NativeReferenceCoercion {
             }
             if (node.kind === K.EXTENDS && this.sourceClass(node.qualifiedName || node.text) && !generated)
                 fail('source reference ancestry requires generated class registration');
+            if (node.kind === K.IMPLEMENTS_LIST && !generated && node.children.some(child =>
+                !!this.sourceInterface(child.qualifiedName || child.text)))
+                fail('source interface implementation requires generated class registration');
             if ([K.AS,K.RELATION].indexOf(node.kind) >= 0 && node.children.some(child =>
                 child.kind === K.TYPE && !!this.type(child.qualifiedName || child.text)))
                 fail('reference type operation requires class-evaluation authority');
@@ -190,7 +193,8 @@ export class NativeReferenceCoercion {
         const identity = this.resolve(name), plan = this.options.plan;
         const contract = plan.interfaces.find(binding => binding.qname === identity);
         if (contract) {
-            if (!this.generated) fail('source interface coercion lowering requires separate emission qualification');
+            // Ordinary method boundaries use the same authenticated nominal token.
+            // This does not publish the consumer itself as an interface implementer.
             return contract.tokenExport;
         }
         const source = plan.bindings.find(binding => binding.qname === identity);
