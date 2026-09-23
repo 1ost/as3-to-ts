@@ -43,7 +43,8 @@ export class NativeGeneratedLexical {
         if(parameters.length!==1||!returned||['Boolean','void'].indexOf(returned.text)<0)return false;
         const value=parameters[0].findChild(K.NAME_TYPE_INIT),type=value&&value.findChild(K.TYPE);
         if(!type||value.findChild(K.INIT)||parameters[0].findChild(K.REST))return false;
-        return this.plan.references.some(r=>r.owner===owner&&r.start===type.start&&r.end===type.end&&r.kind==='interface');
+        return this.plan.references.some(r=>r.owner===owner&&r.start===type.start&&r.end===type.end
+            &&(r.kind==='interface'||r.kind==='native'&&this.plan.nativeBindings.some(b=>b.qname===r.identity&&b.nativeInterface)));
     }
     private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string;readonly kind:string}>>();
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {

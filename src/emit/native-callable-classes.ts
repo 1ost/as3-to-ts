@@ -575,6 +575,7 @@ export class NativeCallableClasses {
                 if(returns && returns.text !== 'void' && returns.text !== '*') {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);
                     if(reference&&reference.kind==='native'&&reference.identity!=='flash.utils.Dictionary'&&reference.identity!=='flash.net.SharedObject'
+                        &&!this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&binding.nativeInterface)
                         &&!(reference.identity==='flash.media.ID3Info'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity))
                         &&!(this.dateReference&&reference.identity==='Date')&&!(this.displayReference&&reference.identity==='flash.display.DisplayObject')&&!(reference.identity==='flash.events.Event'
                         &&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&!!binding.nativeBaseExport)))

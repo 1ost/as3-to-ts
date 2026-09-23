@@ -164,7 +164,7 @@ export class NativeReferenceCoercion {
                 && (this.sourceClass(node.lastChild.text) || !!this.sourceInterface(node.lastChild.text));
             const sourceIs = generated && node.kind===K.RELATION && node.children.length===3
                 && node.children[1].text==='is' && node.lastChild.kind===K.IDENTIFIER
-                && !!this.sourceClass(node.lastChild.text);
+                && (!!this.sourceClass(node.lastChild.text) || !!this.nativeInterface(node.lastChild.text));
             const displayTest = nativeDisplayObject && generated && node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && this.resolve(node.lastChild.text)==='flash.display.DisplayObject';
@@ -178,6 +178,12 @@ export class NativeReferenceCoercion {
                 const name = qualified(node);
                 if (name && options.plan.bindings.some(binding => binding.qname === name))
                     fail('qualified reference class value requires source binding resolution');
+            }
+            if (node.kind === K.NEW) {
+                const expression=unwrapEncapsulatedExpression(node.children[0]);
+                const target=expression&&expression.kind===K.CALL?expression.children[0]:expression;
+                if(target&&target.kind===K.IDENTIFIER&&this.sourceInterface(target.text))
+                    fail('an interface token is not a source constructor');
             }
             node.children.forEach(guard);
         };
@@ -260,7 +266,12 @@ export class NativeReferenceCoercion {
     sourceInterface(name: string): string {
         const identity = this.resolve(name);
         const binding = this.options.plan.interfaces.find(item => item.qname === identity);
-        return binding ? binding.tokenExport : null;
+        return binding ? binding.tokenExport : this.nativeInterface(name);
+    }
+    nativeInterface(name: string): string {
+        const identity = this.resolve(name);
+        const native = this.options.plan.nativeBindings.find(item => item.qname === identity && item.nativeInterface);
+        return native ? native.referenceExport : null;
     }
     declaration(node: Node): ReferenceLocal {return node && this.declarations.get(node.start);}
     local(node: Node, name: string): ReferenceLocal {

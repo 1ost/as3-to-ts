@@ -4106,11 +4106,11 @@ function emitRelation(emitter:Emitter, node:Node):void {
         emitter.catchup(node.lastChild.end);emitter.insert(')');emitter.skipTo(node.end);return;
     }
     const interfaceAs = emitter.generated && emitter.references && node.children.length===3
-        && node.children[1].kind===NodeKind.AS && node.lastChild.kind===NodeKind.IDENTIFIER
-        && emitter.references.sourceInterface(node.lastChild.text);
+        && (node.children[1].kind===NodeKind.AS || node.children[1].text==='is') && node.lastChild.kind===NodeKind.IDENTIFIER
+        && (node.children[1].kind===NodeKind.AS ? emitter.references.sourceInterface(node.lastChild.text) : emitter.references.nativeInterface(node.lastChild.text));
     const sourceIs = emitter.generated && emitter.references && node.children.length===3
         && node.children[1].text==='is' && node.lastChild.kind===NodeKind.IDENTIFIER
-        && emitter.references.sourceClass(node.lastChild.text);
+        && (emitter.references.sourceClass(node.lastChild.text) || !!emitter.references.nativeInterface(node.lastChild.text));
     if (emitter.generated && node.children.length===3 && (node.children[1].kind===NodeKind.AS || sourceIs)
         && node.lastChild.kind===NodeKind.IDENTIFIER
         && (interfaceAs || emitter.classInitializers.resolve(node,node.lastChild.text)==='lazy'
