@@ -33,9 +33,19 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
         let alias='__as3_xml_'+name;while(e.source.indexOf(alias)>=0)alias+='_';
         e.ensureImportIdentifier(name+' as '+alias,module,false);e.nativeSourceHelpers.add(alias);return alias;
     };
-    const attribute=(value:Node):boolean=>value&&value.kind===K.DOT&&value.children[1]
-        &&value.children[1].kind===K.LITERAL&&/^@[A-Za-z_$][A-Za-z0-9_$]*$/.test(value.children[1].text)
-        &&type(value.children[0])==='XML';
+    const attribute=(value:Node):{receiver:Node;name:string}|null=>{
+        if(value&&value.kind===K.DOT&&value.children[1]
+            &&value.children[1].kind===K.LITERAL&&/^@[A-Za-z_$][A-Za-z0-9_$]*$/.test(value.children[1].text)
+            &&type(value.children[0])==='XML')return {receiver:value.children[0],name:value.children[1].text.slice(1)};
+        if(value&&value.kind===K.CALL&&value.children[0].kind===K.DOT
+            &&value.children[0].children[1].text==='attribute'&&type(value.children[0].children[0])==='XML'){
+            const args=value.findChild(K.ARGUMENTS).children;
+            if(args.length!==1||args[0].kind!==K.LITERAL||!/^(["'])[A-Za-z_$][A-Za-z0-9_$]*\1$/.test(args[0].text))
+                fail('XML attribute method requires one unqualified literal name');
+            return {receiver:value.children[0].children[0],name:args[0].text.slice(1,-1)};
+        }
+        return null;
+    };
     const call=(value:Node,method:string):Node=>value&&value.kind===K.CALL&&value.children[0].kind===K.DOT
         &&value.children[0].children[1].text===method&&value.findChild(K.ARGUMENTS).children.length===0
         ?value.children[0].children[0]:null;
@@ -63,7 +73,9 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
         return {receiver:root.children[0],names:filterNames(value.children[1])};
     };
     if(n.kind===K.FOREACH){
-        const selected=selection(n.children[1].children[0]);if(!selected)return false;
+        const iterable=n.children[1].children[0],children=call(iterable,'children');
+        const selected=children&&type(children)==='XML'?{receiver:children,names:null}:selection(iterable);
+        if(!selected)return false;
         const target=n.children[0],binding=e.findDefInScope(target.text);
         if(target.kind!==K.NAME||!binding||binding.bound||e.references.resolve(binding.as3Type)!=='XML')
             fail('XML enumeration requires an existing XML local');
@@ -71,9 +83,9 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
         e.declareInScope({name:temporary});
         e.catchup(n.start);e.insert('{');
         if(e.pendingStatementLabel){e.insert(e.pendingStatementLabel+': ');e.pendingStatementLabel=null;}
-        e.insert('for(var '+temporary+' of '+helper('as3XMLDescendantsNamed')+'(');
+        e.insert('for(var '+temporary+' of '+helper(selected.names?'as3XMLDescendantsNamed':'as3XMLChildren')+'(');
         e.skipTo(selected.receiver.start);visit(e,selected.receiver);e.catchup(selected.receiver.end);
-        e.insert(', '+JSON.stringify(selected.names)+')){'+(e.getIdentifierRemap(target.text)||target.text)+'='+temporary+';');
+        e.insert((selected.names?', '+JSON.stringify(selected.names):'')+')){'+(e.getIdentifierRemap(target.text)||target.text)+'='+temporary+';');
         const body=n.children[2];e.skipTo(body.start);visit(e,body);e.catchup(body.end);e.insert('}}');e.skipTo(n.end);return true;
     }
     if(n.kind===K.E4X_FILTER){selection(n);fail('XML filtered list escape requires separate qualification');}
@@ -82,11 +94,12 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
         const global=target&&e.nativeGlobals.resolve(target);
         if(global&&['XML','XMLList'].indexOf(global.name)>=0)fail('XML construction requires separate qualification');
     }
-    if(attribute(n)){
+    const selectedAttribute=attribute(n);
+    if(selectedAttribute){
         const outer=outerEncapsulatedExpression(n);
         if(outer.parent&&outer.parent.children[0]===outer&&[K.ASSIGN,K.DELETE,K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC].indexOf(outer.parent.kind)>=0)
             fail('XML attribute writes require separate qualification');
-        emit(n,n.children[0],'as3XMLAttribute',JSON.stringify(n.children[1].text.slice(1)));return true;
+        emit(n,selectedAttribute.receiver,'as3XMLAttribute',JSON.stringify(selectedAttribute.name));return true;
     }
     if(n.kind===K.TYPEOF&&attribute(n.children[0])){emit(n,n.children[0],'as3TypeOf');return true;}
     const stringReceiver=call(n,'toString'),lengthReceiver=call(n,'length');
