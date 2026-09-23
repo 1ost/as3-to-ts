@@ -1,0 +1,3350 @@
+[
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 0,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "null"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 1,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 0,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 2,
+    "storedIsRhs": false,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "effects": [],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 3,
+    "storedIsRhs": false,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 4,
+    "storedIsRhs": false,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": false,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": 1,
+      "kind": "number"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 5,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": false,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "value": "value",
+      "kind": "string"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 6,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "object"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 7,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 8
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 0
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 0
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 1
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "null"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "null"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 1
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 2
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 0,
+      "kind": "number"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "value": 0,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 2
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 3
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "value": false,
+      "kind": "boolean"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 3
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 4
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "",
+      "kind": "string"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "value": "",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 4
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 5
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": 1,
+      "kind": "number"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "value": 1,
+      "kind": "number"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 5
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 6
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "value": "value",
+      "kind": "string"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "value": "value",
+      "kind": "string"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 6
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": false,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 7
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "object"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "object"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": false,
+    "rhsIndex": 7
+  },
+  {
+    "op": "or",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  },
+  {
+    "op": "and",
+    "before": {
+      "kind": "array"
+    },
+    "effects": [
+      "rhs"
+    ],
+    "stored": {
+      "kind": "array"
+    },
+    "initialIndex": 8,
+    "storedIsRhs": true,
+    "result": {
+      "kind": "array"
+    },
+    "sameStoredResult": true,
+    "storedIsInitial": true,
+    "rhsIndex": 8
+  }
+]

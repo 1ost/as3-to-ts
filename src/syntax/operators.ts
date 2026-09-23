@@ -1,7 +1,7 @@
 export let AND = '&&';
+export let LOGICAL_AND_EQUAL = '&&=';
 export let AND_AS2 = 'and';
 export let AND_EQUAL = '&=';
-export let LOGICAL_AND_EQUAL = '&&=';
 export let AT = '@';
 export let B_AND = '&';
 export let B_OR = '|';
@@ -11,6 +11,8 @@ export let COMMA = ',';
 export let DECREMENT = '--';
 export let DIVIDED_EQUAL = '/=';
 export let DOT = '.';
+/** E4X descendant selector (for example `value..method`). */
+export let DOUBLE_DOT = '..';
 export let DOUBLE_COLUMN = '::';
 export let DOUBLE_EQUAL = '==';
 export let DOUBLE_EQUAL_AS2 = 'eq';
@@ -29,8 +31,8 @@ export let LEFT_CURLY_BRACKET = '{';
 export let LEFT_PARENTHESIS = '(';
 export let LEFT_SQUARE_BRACKET = '[';
 export let LOGICAL_OR = '||';
-export let LOGICAL_OR_AS2 = 'or';
 export let LOGICAL_OR_EQUAL = '||=';
+export let LOGICAL_OR_AS2 = 'or';
 export let MINUS = '-';
 export let MINUS_EQUAL = '-=';
 export let MODULO = '%';

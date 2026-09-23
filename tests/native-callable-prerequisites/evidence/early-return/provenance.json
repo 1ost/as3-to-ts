@@ -1,0 +1,84 @@
+{
+  "files": [
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\sources\\ReturnOracle.as",
+      "sha256": "124cbab963a63f46d49742747f97458ee66e1e25658f070751513097ad328c23"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\sources\\early\\Child.as",
+      "sha256": "0172f8195a8a644483e250fda6951db6e1521ea63d28d8e11f8558ba1563be17"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\sources\\early\\Journal.as",
+      "sha256": "d84fe1ae0e4df68760203d0f300b35dfabb43745a8d1af1c67b1df76185bd74a"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\sources\\early\\Subject.as",
+      "sha256": "6b029b92474fec740ae2284037cd7a4fcf7f49c90847f8cd2e6bb8f938a5ac9e"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\capture.cjs",
+      "sha256": "a4f5a6f1b6177805f1fcec356d4ab39738e0efb96796aad1eba17e3e03fd85cb"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\oracle.swf",
+      "sha256": "242258beade9df097dd0b40ba8abe56c1490a864a45060c6e347c11f19b156c5"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\flash.json",
+      "sha256": "d2aadf2dc4c86430885169c40785d961a75348dae7a6ac0ae21219a287c4e084"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\capture.py",
+      "sha256": "ec4ec2a868a363a5415eea0f6d71c28b3c41372468ff63f323d03ec34e2ca6ec"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-debug=true",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\sources",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\sources\\ReturnOracle.as"
+      ],
+      "exitCode": 0,
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\oracle.swf (2412 bytes)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\capture.cjs",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-early-return\\flash-43kb2daq\\flash.json",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+      ],
+      "exitCode": 0,
+      "stdout": "\n",
+      "stderr": ""
+    }
+  ]
+}

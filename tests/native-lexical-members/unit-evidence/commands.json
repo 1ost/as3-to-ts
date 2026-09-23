@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-flash\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-original\\ConstructorOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-flash",
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-flash\\oracle.swf (2391 bytes)\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-original\\probe\\LexicalUnit.as(15): col: 45 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public function closure():* { return this.secretMethod; }\n                                            ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-original\\probe\\LexicalUnit.as(16): col: 54 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public function protectedClosure():* { return this.amountMethod; }\n                                                     ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-original\\probe\\LexicalUnit.as(17): col: 60 Warning: Function value used where type * was expected.  Possibly the parentheses () are missing after this function reference.\n\n  public static function callback():* { return LexicalUnit.event; }\n                                                           ^\n\n"
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-flash\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-flash\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\unit-flash",
+    "exitCode": 0,
+    "stdout": "\n",
+    "stderr": ""
+  }
+]

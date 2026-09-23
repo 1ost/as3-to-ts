@@ -1,0 +1,363 @@
+{
+  "instances": [
+    "<type name=\"probe::Journal\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"probe::StringPair\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"String\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"String\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"second\" type=\"String\"/>\n  <variable name=\"first\" type=\"String\"/>\n</type>",
+    "<type name=\"probe::OptionalString\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"String\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"value\" type=\"String\"/>\n</type>",
+    "<type name=\"probe::SelfNode\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"probe::SelfNode\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"next\" type=\"probe::SelfNode\"/>\n</type>",
+    "<type name=\"probe::SelfChild\" base=\"probe::SelfNode\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"probe::SelfNode\"/>\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"probe::SelfNode\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"next\" type=\"probe::SelfNode\"/>\n</type>",
+    "<type name=\"com.greensock.core::PropTween\" base=\"Object\" isDynamic=\"false\" isFinal=\"true\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"Object\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"String\" optional=\"false\"/>\n    <parameter index=\"3\" type=\"Number\" optional=\"false\"/>\n    <parameter index=\"4\" type=\"Number\" optional=\"false\"/>\n    <parameter index=\"5\" type=\"String\" optional=\"false\"/>\n    <parameter index=\"6\" type=\"Boolean\" optional=\"false\"/>\n    <parameter index=\"7\" type=\"com.greensock.core::PropTween\" optional=\"true\"/>\n    <parameter index=\"8\" type=\"int\" optional=\"true\"/>\n  </constructor>\n  <variable name=\"isPlugin\" type=\"Boolean\"/>\n  <variable name=\"name\" type=\"String\"/>\n  <variable name=\"property\" type=\"String\"/>\n  <variable name=\"nextNode\" type=\"com.greensock.core::PropTween\"/>\n  <variable name=\"start\" type=\"Number\"/>\n  <variable name=\"change\" type=\"Number\"/>\n  <variable name=\"prevNode\" type=\"com.greensock.core::PropTween\"/>\n  <variable name=\"priority\" type=\"int\"/>\n  <variable name=\"target\" type=\"Object\"/>\n</type>"
+  ],
+  "reflection": [
+    "<type name=\"probe::Journal\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"events\" type=\"Array\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"add\" declaredBy=\"probe::Journal\" returnType=\"void\">\n    <parameter index=\"1\" type=\"String\" optional=\"false\"/>\n  </method>\n  <method name=\"describe\" declaredBy=\"probe::Journal\" returnType=\"String\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <factory type=\"probe::Journal\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::StringPair\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::StringPair\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"String\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"String\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"second\" type=\"String\"/>\n    <variable name=\"first\" type=\"String\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::OptionalString\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::OptionalString\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"String\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"value\" type=\"String\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::SelfNode\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::SelfNode\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"probe::SelfNode\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"next\" type=\"probe::SelfNode\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::SelfChild\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::SelfChild\">\n    <extendsClass type=\"probe::SelfNode\"/>\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"probe::SelfNode\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"next\" type=\"probe::SelfNode\"/>\n  </factory>\n</type>",
+    "<type name=\"com.greensock.core::PropTween\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"com.greensock.core::PropTween\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"Object\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"String\" optional=\"false\"/>\n      <parameter index=\"3\" type=\"Number\" optional=\"false\"/>\n      <parameter index=\"4\" type=\"Number\" optional=\"false\"/>\n      <parameter index=\"5\" type=\"String\" optional=\"false\"/>\n      <parameter index=\"6\" type=\"Boolean\" optional=\"false\"/>\n      <parameter index=\"7\" type=\"com.greensock.core::PropTween\" optional=\"true\"/>\n      <parameter index=\"8\" type=\"int\" optional=\"true\"/>\n    </constructor>\n    <variable name=\"isPlugin\" type=\"Boolean\"/>\n    <variable name=\"name\" type=\"String\"/>\n    <variable name=\"property\" type=\"String\"/>\n    <variable name=\"nextNode\" type=\"com.greensock.core::PropTween\"/>\n    <variable name=\"start\" type=\"Number\"/>\n    <variable name=\"change\" type=\"Number\"/>\n    <variable name=\"prevNode\" type=\"com.greensock.core::PropTween\"/>\n    <variable name=\"priority\" type=\"int\"/>\n    <variable name=\"target\" type=\"Object\"/>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "id": "string-required-missing",
+      "events": []
+    },
+    {
+      "value": [
+        "x",
+        "default"
+      ],
+      "id": "string-default",
+      "events": [
+        "arg:a",
+        "body:string:x:string:default",
+        "arguments:1:string:undefined"
+      ]
+    },
+    {
+      "value": [
+        null,
+        null
+      ],
+      "id": "string-null",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "body:null:null",
+        "arguments:2:object:object"
+      ]
+    },
+    {
+      "value": [
+        null,
+        null
+      ],
+      "id": "string-undefined",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "body:null:null",
+        "arguments:2:object:object"
+      ]
+    },
+    {
+      "value": [
+        "123",
+        "true"
+      ],
+      "id": "string-scalars",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "body:string:123:string:true",
+        "arguments:2:string:string"
+      ]
+    },
+    {
+      "value": [
+        "a",
+        "b"
+      ],
+      "id": "string-hooks-order",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "a:toString",
+        "b:toString",
+        "body:string:a:string:b",
+        "arguments:2:string:string"
+      ]
+    },
+    {
+      "value": [
+        "17",
+        "default"
+      ],
+      "id": "string-hook-null",
+      "events": [
+        "a:toString",
+        "a:valueOf",
+        "body:string:17:string:default",
+        "arguments:1:string:undefined"
+      ]
+    },
+    {
+      "value": [
+        "undefined",
+        "default"
+      ],
+      "id": "string-hook-undefined",
+      "events": [
+        "a:toString",
+        "body:string:undefined:string:default",
+        "arguments:1:string:undefined"
+      ]
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1050
+      },
+      "id": "string-hook-object",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "a:toString",
+        "a:valueOf"
+      ]
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 7001
+      },
+      "id": "string-hook-throw",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "a:toString"
+      ]
+    },
+    {
+      "value": "body-return",
+      "id": "string-too-many",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "arg:extra",
+        "a:toString",
+        "b:toString",
+        "body:string:a:string:b",
+        "arguments:3:string:string"
+      ]
+    },
+    {
+      "value": null,
+      "id": "optional-missing",
+      "events": [
+        "body:null"
+      ]
+    },
+    {
+      "value": null,
+      "id": "optional-undefined",
+      "events": [
+        "body:null"
+      ]
+    },
+    {
+      "value": null,
+      "id": "optional-null",
+      "events": [
+        "body:null"
+      ]
+    },
+    {
+      "value": true,
+      "id": "self-missing",
+      "events": [
+        "self-body:null",
+        "self-arguments:0:undefined"
+      ]
+    },
+    {
+      "value": true,
+      "id": "self-undefined",
+      "events": [
+        "arg:v",
+        "self-body:null",
+        "self-arguments:1:null"
+      ]
+    },
+    {
+      "value": true,
+      "id": "self-null",
+      "events": [
+        "arg:v",
+        "self-body:null",
+        "self-arguments:1:null"
+      ]
+    },
+    {
+      "value": true,
+      "id": "self-exact",
+      "events": [
+        "arg:v",
+        "self-body:node",
+        "self-arguments:1:other"
+      ]
+    },
+    {
+      "value": true,
+      "id": "self-child",
+      "events": [
+        "arg:v",
+        "self-body:child",
+        "self-arguments:1:other"
+      ]
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "self-object",
+      "events": [
+        "arg:v"
+      ]
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "self-number",
+      "events": [
+        "arg:v"
+      ]
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "self-class",
+      "events": [
+        "arg:v"
+      ]
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "self-too-many",
+      "events": [
+        "arg:v",
+        "arg:extra"
+      ]
+    },
+    {
+      "value": true,
+      "id": "child-self",
+      "events": [
+        "self-body:node",
+        "self-arguments:1:other",
+        "child-body"
+      ]
+    },
+    {
+      "value": [
+        "x",
+        "n",
+        0,
+        true
+      ],
+      "id": "actual-six",
+      "events": []
+    },
+    {
+      "value": [
+        "p",
+        "n",
+        3,
+        true,
+        true
+      ],
+      "id": "actual-eight-links",
+      "events": [
+        "arg:property",
+        "arg:name",
+        "arg:next",
+        "arg:priority",
+        "p:toString",
+        "n:toString"
+      ]
+    },
+    {
+      "value": [
+        null,
+        null,
+        true
+      ],
+      "id": "actual-undefined",
+      "events": []
+    },
+    {
+      "value": [
+        null,
+        null,
+        true
+      ],
+      "id": "actual-null",
+      "events": []
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "actual-wrong-self",
+      "events": [
+        "arg:property",
+        "arg:name",
+        "arg:next",
+        "p:toString",
+        "n:toString"
+      ]
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "actual-self-Class",
+      "events": []
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "id": "actual-too-few",
+      "events": [
+        "arg:property",
+        "arg:name"
+      ]
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "id": "actual-too-many",
+      "events": [
+        "arg:property",
+        "arg:name",
+        "arg:extra"
+      ]
+    }
+  ]
+}

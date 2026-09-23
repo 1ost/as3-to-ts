@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),path=require('node:path');
+const parse=require('../../lib/parse'),emit=require('../../lib/emit'),K=require('../../lib/syntax/nodeKind').default;
+const esbuild=require(path.resolve('../LayaAir-op2/node_modules/esbuild'));
+const source='package probe {public class Conditional { public function snapshot(flag:Boolean,value:*):Array {return [flag ? null : value.read(),flag ? value.more(2) : value.read(),flag ? (value.read()+1) : (flag ? 0 : value.more(3))];} }}';
+const tree=parse('Conditional.as',source),spans=[];
+function walk(node){if(!node)return;if(node.kind===K.CONDITIONAL){assert.equal(node.end,node.lastChild.end);spans.push(source.slice(node.start,node.end));}node.children.forEach(walk);}walk(tree);assert.equal(spans.length,4);
+const output=emit(tree,source,{customVisitors:[],decoratorModules:{bound:path.resolve('utils/bound').replaceAll('\\','/'),classBound:path.resolve('utils/classBound').replaceAll('\\','/')}});
+const bundle=esbuild.buildSync({stdin:{contents:output,loader:'ts',resolveDir:process.cwd()},bundle:true,write:false,format:'cjs',platform:'node',tsconfigRaw:{compilerOptions:{experimentalDecorators:true}}}).outputFiles[0].text;
+const moduleObject={exports:{}};new Function('module','exports','require',bundle)(moduleObject,moduleObject.exports,require);
+const calls=[],v={read(){calls.push('read');return 7;},more(n){calls.push(n);return n+10;}};
+const instance=new moduleObject.exports.Conditional();
+assert.deepEqual(instance.snapshot(true,v),[null,12,8]);assert.deepEqual(calls,[2,'read']);calls.length=0;
+assert.deepEqual(instance.snapshot(false,v),[7,7,13]);assert.deepEqual(calls,['read','read',3]);
+console.log('Conditional expression spans: four AST boundaries and both runtime branches pass.');

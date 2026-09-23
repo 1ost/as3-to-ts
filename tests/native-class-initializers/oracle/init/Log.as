@@ -1,0 +1,1 @@
+package init { public class Log { public static var rows:Array=[]; public static function mark(label:String):int{rows.push(label);return rows.length;} } }

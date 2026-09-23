@@ -1,0 +1,10 @@
+const common=load('AS3MethodBinding'),date=dates().make(123),method=common.as3GetProperty(date,'getTime');
+rec('date-method-identity',()=>method===common.as3GetProperty(date,'getTime'));
+rec('date-method-length',()=>common.getAS3FunctionLength(method));
+rec('date-extracted',()=>common.as3CallValue(method,()=>[]));
+rec('date-borrowed',()=>common.as3CallValue(method,()=>[],dates().make(456)));
+rec('date-extra-args',()=>common.as3CallValue(method,()=>[1]));
+rec('date-public-replace',()=>common.as3SetProperty(date,'getTime',()=>789));
+rec('date-public-delete',()=>common.as3DeleteProperty(date,'getTime'));
+rec('date-after-delete',()=>dates().time(date));
+globalThis.result={rows};

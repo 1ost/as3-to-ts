@@ -1,0 +1,85 @@
+{
+  "rows": [
+    {
+      "mode": 0,
+      "trace": [
+        11,
+        22,
+        33,
+        "calls:0"
+      ]
+    },
+    {
+      "mode": 1,
+      "trace": [
+        11,
+        22,
+        33,
+        "calls:1"
+      ]
+    },
+    {
+      "mode": 2,
+      "trace": [
+        11,
+        22,
+        33,
+        "calls:1"
+      ]
+    },
+    {
+      "mode": 3,
+      "trace": [
+        11,
+        22,
+        33,
+        "calls:0"
+      ]
+    },
+    {
+      "mode": 4,
+      "trace": [
+        11,
+        77,
+        33,
+        "calls:0"
+      ]
+    },
+    {
+      "mode": 5,
+      "trace": [
+        11,
+        22,
+        33,
+        "calls:1"
+      ]
+    },
+    {
+      "mode": 6,
+      "trace": [
+        "else",
+        "calls:0"
+      ]
+    },
+    {
+      "mode": 7,
+      "trace": [
+        4,
+        5,
+        "calls:0"
+      ]
+    },
+    {
+      "mode": 8,
+      "trace": [
+        11,
+        22,
+        33,
+        "object:key",
+        "calls:1"
+      ]
+    }
+  ],
+  "failure": "",
+  "ready": true
+}

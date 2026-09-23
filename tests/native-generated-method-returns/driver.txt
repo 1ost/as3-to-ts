@@ -1,0 +1,35 @@
+import {ReturnMethods as MethodsBinding} from './ReturnMethods';
+import {ReturnValue as ValueBinding} from './ReturnValue';
+import {ChildValue as ChildBinding} from './ChildValue';
+import {readNativeClass} from '@NATIVE_CLASS@';
+import {as3CreateDynamicObject} from '@DYNAMIC@';
+import {as3SetProperty} from '@PROPERTY@';
+export function run(){
+ const ReturnMethods=readNativeClass(MethodsBinding),ReturnValue=readNativeClass(ValueBinding),ChildValue=readNativeClass(ChildBinding);
+ const subject:any=new ReturnMethods(),rows:any[]=[];
+ function kind(v:any):any {if(v===undefined)return "undefined";if(v!==v)return "NaN";if(v===0&&1/v<0)return "-0";return v;}
+ function hook(text:boolean,bad:boolean):any {
+  const value=as3CreateDynamicObject();
+  as3SetProperty(value,'valueOf',function(){subject.events.push('valueOf');if(bad)throw Object.assign(new Error('hook'),{errorID:42});return 7.9;});
+  as3SetProperty(value,'toString',function(){subject.events.push('toString');if(bad)throw Object.assign(new Error('hook'),{errorID:42});return 'converted';});return value;
+ }
+ function capture(id:string,method:string,value:any,identity=false):void {
+  subject.events=[];try{const result=subject[method](value);rows.push({id,value:identity?[result===value,result===null]:kind(result),events:subject.events.concat()});}
+  catch(error){const e:any=error;rows.push({id,error:[e.name,e.errorID,e===value],events:subject.events.concat()});}
+ }
+   capture("number-string","number","3.5");capture("number-undefined","number",undefined);capture("number-negative-zero","number",-0);
+   capture("number-hook","number",hook(false,false));capture("number-hook-throw","number",hook(false,true));
+   capture("int-fraction","integer",-3.9);capture("int-overflow","integer",2147483648);capture("uint-negative","unsigned",-1);
+   capture("bool-object","booleanValue",hook(false,true));capture("bool-zero","booleanValue",0);
+   capture("string-undefined","stringValue",undefined);capture("string-null","stringValue",null);capture("string-hook","stringValue",hook(true,false));capture("string-hook-throw","stringValue",hook(true,true));
+   capture("object-undefined","objectValue",undefined,true);capture("object-primitive","objectValue",7,true);capture("object-identity","objectValue",{},true);
+   capture("array-identity","arrayValue",[1],true);capture("array-undefined","arrayValue",undefined,true);capture("array-rejection","arrayValue",{length:1},true);
+   capture("reference-exact","referenceValue",new ReturnValue(),true);capture("reference-child","referenceValue",new ChildValue(),true);capture("reference-undefined","referenceValue",undefined,true);capture("reference-rejection","referenceValue",{value:7},true);
+   capture("function-identity","functionValue",function(){},true);capture("function-undefined","functionValue",undefined,true);capture("function-rejection","functionValue",{},true);
+   capture("throw-identity","throwing",Object.assign(new Error("sentinel"),{errorID:77}));capture("void-early","finished",true);capture("void-fallthrough","finished",false);
+   capture("local-raw-result","localResult",2147483647);
+   subject.events=[];rows.push({id:"branch-early",value:subject.choose(hook(true,false),true),events:subject.events.concat()});
+   subject.events=[];rows.push({id:"branch-late",value:subject.choose(hook(true,true),false),events:subject.events.concat()});
+   rows.push({id:"static",value:ReturnMethods.staticString(12),events:[]});
+ return rows;
+}

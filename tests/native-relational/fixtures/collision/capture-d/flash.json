@@ -1,0 +1,39 @@
+{
+  "classXML": "<type name=\"probe::RelationalReview\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::RelationalReview\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"less\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n    <method name=\"commentChain\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n    <method name=\"greater\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n    <method name=\"lessEqual\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n    <method name=\"greaterEqual\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n    <method name=\"returnPrefix\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n  </factory>\n</type>",
+  "rows": [
+    {
+      "value": [
+        true,
+        9
+      ],
+      "id": "less"
+    },
+    {
+      "value": [
+        true,
+        8
+      ],
+      "id": "lessEqual"
+    },
+    {
+      "value": [
+        true,
+        7
+      ],
+      "id": "greater"
+    },
+    {
+      "value": false,
+      "id": "greaterEqual"
+    },
+    {
+      "value": true,
+      "id": "commentChain"
+    },
+    {
+      "value": true,
+      "id": "returnPrefix"
+    }
+  ],
+  "instanceXML": "<type name=\"probe::RelationalReview\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"less\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n  <method name=\"commentChain\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n  <method name=\"greater\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n  <method name=\"lessEqual\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n  <method name=\"greaterEqual\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n  <method name=\"returnPrefix\" declaredBy=\"probe::RelationalReview\" returnType=\"*\"/>\n</type>"
+}

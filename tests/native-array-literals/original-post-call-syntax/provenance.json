@@ -1,0 +1,32 @@
+{
+  "files": [
+    {
+      "path": "comma-expression/Probe.as",
+      "sha256": "a19d79cbe82dd28e20b9821fc5cbe1ac6ed1fb7c37348b6529e4f04838099160"
+    },
+    {
+      "path": "comma-expression/Probe.swf",
+      "sha256": "f0641f3fd07f5dab94268f869ef821f2b773c1f95cbc233f25f7415fdcaf6085"
+    },
+    {
+      "path": "empty/Probe.as",
+      "sha256": "e94bb77f16b937b25f068b53d8fbb8815a7bd70adb84e650fcf378447efcf627"
+    },
+    {
+      "path": "hole/Probe.as",
+      "sha256": "87a3099783b452aa945466390aeb55908aa3d897e217b722861e9e62aacc89c1"
+    },
+    {
+      "path": "middle-hole/Probe.as",
+      "sha256": "afac0bd6fe2cbeca817647835bd07b5955154223a9795ae773e6a5584f52472a"
+    },
+    {
+      "path": "report.json",
+      "sha256": "34d8d970825e6e8cb4cb9968237f4799f0d349458c221da2ea57626f7745d3e1"
+    },
+    {
+      "path": "trailing-comma/Probe.as",
+      "sha256": "8458775c4ca1e640696a2eec977e7b62d0b561793191800c1cedcf6a70a812e8"
+    }
+  ]
+}

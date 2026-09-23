@@ -1,0 +1,1 @@
+package refs.cycle {import refs.cycle.Left;public class Right {public function Right(){}public function empty():*{var peer:Left;return peer;}public function accept(value:*):*{var peer:Left=value;return peer;}}}

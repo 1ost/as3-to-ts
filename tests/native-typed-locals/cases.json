@@ -1,0 +1,331 @@
+[
+  {
+    "id": "entry-defaults",
+    "method": "case0",
+    "body": "var before:*=[TypedLocals.kind(n),i,u,b,s,o,a];var n:Number;var i:int;var u:uint;var b:Boolean;var s:String;var o:Object;var a:Array;return [before,[TypedLocals.kind(n),i,u,b,s,o,a]];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "runtime-skipped",
+    "method": "case1",
+    "body": "if(flag){var n:Number=3;var s:String=\"x\";var i:int=2;}return [TypedLocals.kind(n),s,i];",
+    "params": "flag:*",
+    "args": "false"
+  },
+  {
+    "id": "source-order",
+    "method": "case2",
+    "body": "var log:*=[];log.push(i,TypedLocals.kind(n));var i:int=(log.push(\"i\"),3.9);log.push(i,TypedLocals.kind(n));var n:Number=(log.push(\"n\"),value);return [log,i,n];",
+    "params": "value:*",
+    "args": "\"7.5\""
+  },
+  {
+    "id": "block-shared",
+    "method": "case3",
+    "body": "{var n:int=1;}if(true){n=2;var s:String=\"shared\";}return [n,s];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "loop-no-reset",
+    "method": "case4",
+    "body": "var result:*= [];for(var i:int=0;i<3;i++){var n:int;result.push(n);n++;}return [result,n,i];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "scalar-initializers",
+    "method": "case5",
+    "body": "var n:Number=value;var i:int=value;var u:uint=-1;var b:Boolean=\"\";return [n,i,u,b];",
+    "params": "value:*",
+    "args": "\"4.9\""
+  },
+  {
+    "id": "raw-int-writes",
+    "method": "case6",
+    "body": "var i:int=7;var r:*=i=first;var q:*=i=second;return [r,q,i];",
+    "params": "first:*,second:*",
+    "args": "3.9,\"-2.8\""
+  },
+  {
+    "id": "raw-number-hook",
+    "method": "case7",
+    "body": "var n:Number=1;var r:*=n=value;return [r===value,n];",
+    "params": "value:*",
+    "args": "hook(\"valueOf\",6.5)"
+  },
+  {
+    "id": "raw-string-hook",
+    "method": "case8",
+    "body": "var s:String=\"old\";var r:*=s=value;return [r===value,s];",
+    "params": "value:*",
+    "args": "hook(\"toString\",\"converted\")"
+  },
+  {
+    "id": "object-undefined",
+    "method": "case9",
+    "body": "var o:Object={};var r:*=o=undefined;return [TypedLocals.kind(r),TypedLocals.kind(o)];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "string-null",
+    "method": "case10",
+    "body": "var s:String=\"x\";var r:*=s=undefined;var before:*=TypedLocals.kind(s);var q:*=s=null;return [TypedLocals.kind(r),before,TypedLocals.kind(q),TypedLocals.kind(s)];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "array-null",
+    "method": "case11",
+    "body": "var a:Array=[1];var r:*=a=undefined;var before:*=TypedLocals.kind(a);var q:*=a=null;return [TypedLocals.kind(r),before,TypedLocals.kind(q),TypedLocals.kind(a)];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "object-values",
+    "method": "case12",
+    "body": "var o:Object=value;var same:*=o===value;o=3;var before:*=o;o=\"text\";return [same,before,o];",
+    "params": "value:*",
+    "args": "({x:1})"
+  },
+  {
+    "id": "array-identity",
+    "method": "case13",
+    "body": "var a:Array=value;var r:*=a=value;return [a===value,r===value];",
+    "params": "value:*",
+    "args": "[1]"
+  },
+  {
+    "id": "array-error-retains",
+    "method": "case14",
+    "body": "var a:Array=[1];var old:*=a;try{a=value;}catch(e:*){return [inspect.read(e,\"name\"),inspect.read(e,\"errorID\"),a===old];}return \"no error\";",
+    "params": "value:*,inspect:*",
+    "args": "({length:1}),inspector"
+  },
+  {
+    "id": "bool-no-hooks",
+    "method": "case15",
+    "body": "var b:Boolean=value;return b;",
+    "params": "value:*",
+    "args": "hook(\"valueOf\",1,true)"
+  },
+  {
+    "id": "chain-raw-object",
+    "method": "case16",
+    "body": "var i:int=0;var n:Number=0;var r:*=i=n=value;return [r===value,i,n];",
+    "params": "value:*",
+    "args": "hook(\"valueOf\",7.9)"
+  },
+  {
+    "id": "multiple-types",
+    "method": "case17",
+    "body": "var i:int=value,s:String=value,n:Number=value;return [i,s,n];",
+    "params": "value:*",
+    "args": "hook(\"valueOf\",2.8)"
+  },
+  {
+    "id": "throw-retains",
+    "method": "case18",
+    "body": "var n:Number=9;try{n=value;}catch(e:*){return [inspect.read(e,\"errorID\"),n];}return \"no error\";",
+    "params": "value:*,inspect:*",
+    "args": "hook(\"valueOf\",0,true),inspector"
+  },
+  {
+    "id": "initializer-throw-default",
+    "method": "case19",
+    "body": "try{var n:Number=value;}catch(e:*){}return TypedLocals.kind(n);",
+    "params": "value:*",
+    "args": "hook(\"valueOf\",0,true)"
+  },
+  {
+    "id": "int-wrap",
+    "method": "case20",
+    "body": "var i:int;var r:*= [];i=2147483648;r.push(i);i=4294967297;r.push(i);i=-2147483649;r.push(i);i=NaN;r.push(i);return r;",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "uint-wrap",
+    "method": "case21",
+    "body": "var u:uint;var r:*= [];u=-1;r.push(u);u=4294967296;r.push(u);u=-4294967297;r.push(u);u=NaN;r.push(u);return r;",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "int-prefix-overflow",
+    "method": "case22",
+    "body": "var i:int=2147483647;var a:*=++i;var b:*=i;i=2147483647;var c:*=i++;return [a,b,c,i];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "int-prefix-underflow",
+    "method": "case23",
+    "body": "var i:int=-2147483648;var a:*=--i;var b:*=i;i=-2147483648;var c:*=i--;return [a,b,c,i];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "uint-prefix-overflow",
+    "method": "case24",
+    "body": "var u:uint=4294967295;var a:*=++u;var b:*=u;u=4294967295;var c:*=u++;return [a,b,c,u];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "uint-prefix-underflow",
+    "method": "case25",
+    "body": "var u:uint=0;var a:*=--u;var b:*=u;u=0;var c:*=u--;return [a,b,c,u];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "int-compound",
+    "method": "case26",
+    "body": "var i:int=2147483647;var a:*=i+=1;var b:*=i;i=3;var c:*=i/=2;var d:*=i;i=3;var e:*=i+=suffix;return [a,b,c,d,e,i];",
+    "params": "suffix:*",
+    "args": "\".9\""
+  },
+  {
+    "id": "uint-compound",
+    "method": "case27",
+    "body": "var u:uint=0;var a:*=u-=1;var b:*=u;u=4294967295;var c:*=u+=1;return [a,b,c,u];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "compound-hook",
+    "method": "case28",
+    "body": "var n:int=3;var r:*=n+=value;return [r,n];",
+    "params": "value:*",
+    "args": "hook(\"valueOf\",2.8)"
+  },
+  {
+    "id": "compound-throw",
+    "method": "case29",
+    "body": "var n:int=3;try{n+=value;}catch(e:*){return [inspect.read(e,\"errorID\"),n];}return \"no error\";",
+    "params": "value:*,inspect:*",
+    "args": "hook(\"valueOf\",0,true),inspector"
+  },
+  {
+    "id": "negative-zero",
+    "method": "case30",
+    "body": "var n:Number=-0;var r:*=n++;return [TypedLocals.kind(r),TypedLocals.kind(n)];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "catch-shadow",
+    "method": "case31",
+    "body": "var n:int=7;var inside:*;try{throw \"caught\";}catch(n:*){inside=n;}return [inside,n];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "catch-body-local",
+    "method": "case32",
+    "body": "try{throw \"caught\";}catch(e:*){var i:int=3.9;}return i;",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "postfix-index-pattern",
+    "method": "case33",
+    "body": "var a:Array=[];var cursor:*=0;while(cursor<3){var index:Number;a[index=cursor++]=index;}return [a,index,cursor];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "countdown-pattern",
+    "method": "case34",
+    "body": "var values:Array=[10,20,30];var count:int=values.length;var result:Array=[];while(--count>-1){var value:Number;value=values[count];result.push(value);}return [result,count,value];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "null-undefined-numbers",
+    "method": "case35",
+    "body": "var n:Number=value;var i:int=value;var u:uint=value;var b:Boolean=value;var before:*= [TypedLocals.kind(n),i,u,b];value=null;n=value;i=value;u=value;b=value;return [before,[TypedLocals.kind(n),i,u,b]];",
+    "params": "value:*",
+    "args": "undefined"
+  },
+  {
+    "id": "string-throw",
+    "method": "case36",
+    "body": "var s:String=\"old\";try{s=value;}catch(e:*){return [inspect.read(e,\"errorID\"),s];}return \"no error\";",
+    "params": "value:*,inspect:*",
+    "args": "hook(\"toString\",0,true),inspector"
+  },
+  {
+    "id": "bitwise-compounds",
+    "method": "case37",
+    "body": "var i:int=-1;var a:*=i>>>=1;var u:uint=4294967295;var b:*=u<<=1;return [a,i,b,u];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "runtime-skipped-loop",
+    "method": "case38",
+    "body": "while(flag){var n:Number=8;var i:int=7;}return [TypedLocals.kind(n),i];",
+    "params": "flag:*",
+    "args": "false"
+  },
+  {
+    "id": "repeated-uninitialized",
+    "method": "case39",
+    "body": "var i:int=2;var i:int;var n:Number=5;var n:Number;return [i,n];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "compound-rhs-write",
+    "method": "case40",
+    "body": "var n:int=3;var r:*=n+=(n=20,value);return [r,n];",
+    "params": "value:*",
+    "args": "hook(\"valueOf\",2.8)"
+  },
+  {
+    "id": "compound-rhs-write-throw",
+    "method": "case41",
+    "body": "var n:int=3;try{n+=(n=20,value);}catch(e:*){return [inspect.read(e,\"errorID\"),n];}return \"no error\";",
+    "params": "value:*,inspect:*",
+    "args": "hook(\"valueOf\",0,true),inspector"
+  },
+  {
+    "id": "write-before-declaration",
+    "method": "case42",
+    "body": "var r:*=i=value;var i:int;return [r,i];",
+    "params": "value:*",
+    "args": "\"4.9\""
+  },
+  {
+    "id": "typed-object-receiver",
+    "method": "case43",
+    "body": "var box:Object={receiverMember:3};box.receiverMember=4;return [box.receiverMember,this.receiverMember];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "typed-public-field-shadow",
+    "method": "case44",
+    "body": "var marker:Object={value:6};marker.value=8;return [marker.value,this.marker];",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "constructor-locals",
+    "method": "case45",
+    "body": "return this.constructorState;",
+    "params": "",
+    "args": ""
+  },
+  {
+    "id": "numeric-compounds",
+    "method": "case46",
+    "body": "var n:Number=12;var a:*=n*=2;var b:*=n-=3;var c:*=n%=4;var i:int=9;var d:*=i&=3;var e:*=i|=4;var f:*=i^=6;var g:*=i>>=1;return [a,b,c,n,d,e,f,g,i];",
+    "params": "",
+    "args": ""
+  }
+]

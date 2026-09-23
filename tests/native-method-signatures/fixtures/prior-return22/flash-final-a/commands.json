@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\flash-final-a\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\original\\ConstructorOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\flash-final-a",
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nupdateOffset2: can't match i 1468 with a new offset\n{1379=37, 1350=11, 1383=41, 1423=81, 1425=83, 1457=112, 1458=113, 1396=54, 1398=56, 1462=117, 1465=120, 1402=60, 1372=30, 1436=94, 1374=32}\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\flash-final-a\\oracle.swf (2933 bytes)\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\flash-final-a\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\flash-final-a\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\timing-accessor-signature-audit\\flash-final-a",
+    "exitCode": 0,
+    "stdout": "\n",
+    "stderr": ""
+  }
+]

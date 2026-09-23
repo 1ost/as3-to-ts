@@ -1,0 +1,687 @@
+[
+  {
+    "path": "src/emit/native-method-signatures.ts",
+    "sha256": "b1cf4dd169061f66ab740d1b68921cdcdf5fdb671fe02c563b750386bb1eb2b5",
+    "bytes": 18709
+  },
+  {
+    "path": "tests/native-method-signatures/.gitattributes",
+    "sha256": "eb27149ac0d99d02d65a2286c99c0ffc7ac4f1d09298993b935e50feda1713ad",
+    "bytes": 31
+  },
+  {
+    "path": "tests/native-method-signatures/files.json",
+    "sha256": "e29915b195d6863325392758e10bf6896098be9de919d3cbe62a77be4c6240ed",
+    "bytes": 20639
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-a/commands.json",
+    "sha256": "5546e2f2a10997a59c9c64d3c00be083680f4e9b70746ccbb59de1346130ab11",
+    "bytes": 2059
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-a/flash.json",
+    "sha256": "b3a8562d57ae7083bf9c9388a995e848d66fd6fa32504c4b63b43ea23702354d",
+    "bytes": 4055
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-a/oracle.swf",
+    "sha256": "c8c72953977830ffb3edad378ef2b206411fa25c348b77e1f18a06faeffa5dad",
+    "bytes": 1972
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-a/provenance.json",
+    "sha256": "c9e476e2af86726e2ff498380026fdbdfec63d90f26758022e7fb52c75e741cd",
+    "bytes": 1854
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-a/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-a/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-a/sources/original/ConstructorOracle.as",
+    "sha256": "f23c2c15fd42f27dd74fe91ed8f7e6c8042d7c1fbfbc93601fdd1c4c5463e562",
+    "bytes": 2577
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-a/sources/original/probe/AritySubject.as",
+    "sha256": "8062b91a0a23f87b02e47277301c61393ce13d722554b8d849e885da4a88fafa",
+    "bytes": 139
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-b/commands.json",
+    "sha256": "6102731c92dc2fb831acf558093c552d6f747586f386375876e41e570c05de75",
+    "bytes": 2059
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-b/flash.json",
+    "sha256": "b3a8562d57ae7083bf9c9388a995e848d66fd6fa32504c4b63b43ea23702354d",
+    "bytes": 4055
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-b/oracle.swf",
+    "sha256": "97d6df28a75622b7751d47ccffd13cf39e73a454caa807eb8399b1bb465250fa",
+    "bytes": 1972
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-b/provenance.json",
+    "sha256": "c13f7caf6b444f00348fa68a4dca8b6c96fa98fcba0d09babd67880ace6ea82e",
+    "bytes": 1854
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-b/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-b/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-b/sources/original/ConstructorOracle.as",
+    "sha256": "f23c2c15fd42f27dd74fe91ed8f7e6c8042d7c1fbfbc93601fdd1c4c5463e562",
+    "bytes": 2577
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/arity9/flash-b/sources/original/probe/AritySubject.as",
+    "sha256": "8062b91a0a23f87b02e47277301c61393ce13d722554b8d849e885da4a88fafa",
+    "bytes": 139
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/commands.json",
+    "sha256": "0c2c59f5360ecb3f16a77fc4279224e440e8d86b6995136ef06f5b89b00e3f69",
+    "bytes": 5236
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/flash.json",
+    "sha256": "2608eae0274072d116cbc541314927398014bd04174d07a4e337458207efc12f",
+    "bytes": 13011
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/oracle.swf",
+    "sha256": "33e2e26bf945012913c8a51d82ce8bd92e5cded4d4e7a9284f086740752ffde5",
+    "bytes": 3561
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/provenance.json",
+    "sha256": "00e12114409f22219ae4e4f58cdb6254caad697bcc2c18aaa17d43444108cdbf",
+    "bytes": 2306
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/sources/original/ConstructorOracle.as",
+    "sha256": "ebfd03ed8245d637f074ab02710abab4cdb413017ea2e4f4f26bf0509ebd4f46",
+    "bytes": 4517
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/sources/original/probe/EntrySubject.as",
+    "sha256": "d24b2413420a64718d0efb850517cc162b0016a73e7a97288c1ceaf1bc43abe4",
+    "bytes": 618
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/sources/original/probe/OverrideBase.as",
+    "sha256": "bb16a628bb1b5b37e5595cae21ef0fae114aa8aa0bb7eb3f0e7db87231dcc5b1",
+    "bytes": 351
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/sources/original/probe/OverrideChild.as",
+    "sha256": "f90bdf57c5b0d78463b8ed52fd0d4ca54e46103fee9d57dea87a9eca04ebffed",
+    "bytes": 364
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-a/sources/original/probe/ReturnSubject.as",
+    "sha256": "da64eff62037d761aa55e727d883ec30df2a8d5c5e98e3bcdee18aa7d2a8805b",
+    "bytes": 1064
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/commands.json",
+    "sha256": "53c638146e869f4993c445b601e4e65ef43132f6c636728527212efef0d464b1",
+    "bytes": 5236
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/flash.json",
+    "sha256": "9246b7553ee3bf7557e1505fcfd6edeffbfde9e6396c15050cab7bf7143fbdd0",
+    "bytes": 13011
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/oracle.swf",
+    "sha256": "a407455215984881ce9a5f439a4f908cca0214897faf5adf19f650bc39119831",
+    "bytes": 3560
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/provenance.json",
+    "sha256": "6fad8786d57c3279d57aefe218c1e58fbecfbdade47dd7144ece94755cd29d32",
+    "bytes": 2306
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/sources/original/ConstructorOracle.as",
+    "sha256": "ebfd03ed8245d637f074ab02710abab4cdb413017ea2e4f4f26bf0509ebd4f46",
+    "bytes": 4517
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/sources/original/probe/EntrySubject.as",
+    "sha256": "d24b2413420a64718d0efb850517cc162b0016a73e7a97288c1ceaf1bc43abe4",
+    "bytes": 618
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/sources/original/probe/OverrideBase.as",
+    "sha256": "bb16a628bb1b5b37e5595cae21ef0fae114aa8aa0bb7eb3f0e7db87231dcc5b1",
+    "bytes": 351
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/sources/original/probe/OverrideChild.as",
+    "sha256": "f90bdf57c5b0d78463b8ed52fd0d4ca54e46103fee9d57dea87a9eca04ebffed",
+    "bytes": 364
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/entry-return33/flash-b/sources/original/probe/ReturnSubject.as",
+    "sha256": "da64eff62037d761aa55e727d883ec30df2a8d5c5e98e3bcdee18aa7d2a8805b",
+    "bytes": 1064
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-a/commands.json",
+    "sha256": "c652a0273133ec100e52a7588f261eb558f118bf5c4fd823f299eccfb7ec2ab3",
+    "bytes": 2077
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-a/flash.json",
+    "sha256": "c664bec9e03dbf50888e69481c0085fb4d44c93f6d0c75be8a4fcfe8857a2e93",
+    "bytes": 3214
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-a/oracle.swf",
+    "sha256": "25e3b8e458e7f3695444ef1c36d90b5a83c608bcc8bbaa204f87c0f42f10a1d2",
+    "bytes": 1649
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-a/provenance.json",
+    "sha256": "396812f531b94fa068c50d38f0c156403b41985478bda5cc3bd1f3ce30d16ee8",
+    "bytes": 1853
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-a/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-a/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-a/sources/original/ConstructorOracle.as",
+    "sha256": "d147c15e8fde7ae13930d5dee255a9a350c4f5d66a02c16cfe44d428a045536c",
+    "bytes": 1421
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-a/sources/original/probe/PlanSubject.as",
+    "sha256": "031335f3b2271602b0e795926cc035a2f2a4a70fb2fb545b86c3998aac83cc3b",
+    "bytes": 359
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-b/commands.json",
+    "sha256": "0f83a4ccfd7a68124fdc3996bdebf9ddcc500950535ad42b6ef04edabf319faf",
+    "bytes": 2077
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-b/flash.json",
+    "sha256": "8c3d90d95cdad101b78f64461f60be11db40be350296752dc9aa1d5844381bf0",
+    "bytes": 3214
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-b/oracle.swf",
+    "sha256": "57b554a5c4056eddd308c04a1bbd3820fd141a7e4ca3fc9c7322cb7d7c0da323",
+    "bytes": 1649
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-b/provenance.json",
+    "sha256": "d4568a6ae26abfd82ee68bade08677dfe84619cf4167dc86d92932fdd45eacd7",
+    "bytes": 1853
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-b/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-b/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-b/sources/original/ConstructorOracle.as",
+    "sha256": "d147c15e8fde7ae13930d5dee255a9a350c4f5d66a02c16cfe44d428a045536c",
+    "bytes": 1421
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/extra7/flash-b/sources/original/probe/PlanSubject.as",
+    "sha256": "031335f3b2271602b0e795926cc035a2f2a4a70fb2fb545b86c3998aac83cc3b",
+    "bytes": 359
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-a/commands.json",
+    "sha256": "095b196bd58228bb0a456995fe6e14ce4b954815a4e18b7a739520434056db00",
+    "bytes": 2926
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-a/flash.json",
+    "sha256": "c6fbdb45bee85ffd9823dacb1be1128bd028225c7386614613f916ad08a344e3",
+    "bytes": 4303
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-a/oracle.swf",
+    "sha256": "18277b88e171841ceb6d31f18fed0d95c78ec1262a7ec9941155c58520569c7a",
+    "bytes": 1990
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-a/provenance.json",
+    "sha256": "24dfd6117816cebd4be818cd6dd53196a7b158984b1ebf3783af30f926e0b4c1",
+    "bytes": 1854
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-a/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-a/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-a/sources/original/ConstructorOracle.as",
+    "sha256": "b826ca084ca853229a5faf184b7598ffa4e5e9eef19853f165bbc7c4e227dc9e",
+    "bytes": 1997
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-a/sources/original/probe/PlainSubject.as",
+    "sha256": "c07b7a6800616f976b7a5b43ffea83e6d48e089b503c191410d9e2987f9d19ae",
+    "bytes": 748
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-b/commands.json",
+    "sha256": "12a684b80a5ce6c84bbfe2f2d2db62561cac681cfc785baeb98d624378790403",
+    "bytes": 2926
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-b/flash.json",
+    "sha256": "98b73b7734c2efac91bcacf47a8208dff95d405a2ca56e1a6a173c8996e4b8c6",
+    "bytes": 4303
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-b/oracle.swf",
+    "sha256": "3dd4b0eb3bff33702175d0e44fecf279412765d37a6fc82f37114f4e415686f5",
+    "bytes": 1989
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-b/provenance.json",
+    "sha256": "e7315f54ec3fe37cf82b098bb584d801567d4f4a2d4c7ce23804b51f2e24442b",
+    "bytes": 1854
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-b/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-b/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-b/sources/original/ConstructorOracle.as",
+    "sha256": "b826ca084ca853229a5faf184b7598ffa4e5e9eef19853f165bbc7c4e227dc9e",
+    "bytes": 1997
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/plain12/flash-b/sources/original/probe/PlainSubject.as",
+    "sha256": "c07b7a6800616f976b7a5b43ffea83e6d48e089b503c191410d9e2987f9d19ae",
+    "bytes": 748
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/commands.json",
+    "sha256": "e70bbacc5f8e4a4fb53ba90fd70c2492d1751056f199ef3f241616bf6ecfa5dd",
+    "bytes": 1969
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/flash.json",
+    "sha256": "3a18b110ae59b94353fec309c3e5804b82624091118c3cbe9119a81f6db8e8fd",
+    "bytes": 11324
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/oracle.swf",
+    "sha256": "fb0c97599e9d86eee88cba9eaad4e379e5263e767a3c6a2044252abb9fe26bae",
+    "bytes": 3365
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/provenance.json",
+    "sha256": "503b324fdd3f22277ab9cdd06cbc692d1214f4fff9783c51c1b55f70480ed0e5",
+    "bytes": 2292
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/sources/original/ConstructorOracle.as",
+    "sha256": "fbd0018ad8b2b72dbda74c1cb2c8b82bd841a7e0b5b7527a27372b5e8a3e8939",
+    "bytes": 6008
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/sources/original/probe/Journal.as",
+    "sha256": "b3c25907875af8eeb247281dc5e693d428d1f124b0a2e90666b99586ab5630a8",
+    "bytes": 357
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/sources/original/probe/Peer.as",
+    "sha256": "066ae4e45eb9929c4dac4cc2114d141be66d8b840a720a88e2df85b9f8926bbc",
+    "bytes": 39
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/sources/original/probe/PeerChild.as",
+    "sha256": "8e7b2f6274a7f2e8704c440f33c289e327f652b648f5545d4c61af300e09e37b",
+    "bytes": 57
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-a/sources/original/probe/SignatureSubject.as",
+    "sha256": "d54fbf366486f58517f96057e7c5697f4f8328a5884471aeceb4c77693bae121",
+    "bytes": 1306
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/commands.json",
+    "sha256": "44faa914c216a4e99f38bf1c9b6420d29fd08dcd1f5d369c3e6dcfba93afef53",
+    "bytes": 1969
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/flash.json",
+    "sha256": "b031db54c29fc96218c63e70786b74822ed23a08198809a9070f458fa6482049",
+    "bytes": 11324
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/oracle.swf",
+    "sha256": "fa444ea89bf7af234cabd619de8a6e4d79c7a34d9420c1c271c3f9689c2de957",
+    "bytes": 3365
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/provenance.json",
+    "sha256": "da0bdd32c86c9e1ee8e22b11bce7276f6e1b2634d26bde898d561032da15909d",
+    "bytes": 2292
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/sources/original/ConstructorOracle.as",
+    "sha256": "fbd0018ad8b2b72dbda74c1cb2c8b82bd841a7e0b5b7527a27372b5e8a3e8939",
+    "bytes": 6008
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/sources/original/probe/Journal.as",
+    "sha256": "b3c25907875af8eeb247281dc5e693d428d1f124b0a2e90666b99586ab5630a8",
+    "bytes": 357
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/sources/original/probe/Peer.as",
+    "sha256": "066ae4e45eb9929c4dac4cc2114d141be66d8b840a720a88e2df85b9f8926bbc",
+    "bytes": 39
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/sources/original/probe/PeerChild.as",
+    "sha256": "8e7b2f6274a7f2e8704c440f33c289e327f652b648f5545d4c61af300e09e37b",
+    "bytes": 57
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-entry43/flash-b/sources/original/probe/SignatureSubject.as",
+    "sha256": "d54fbf366486f58517f96057e7c5697f4f8328a5884471aeceb4c77693bae121",
+    "bytes": 1306
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/commands.json",
+    "sha256": "87c3f35633fcffe5fb8eff161cab02cd1ae571666d1436395899ac6763a22edd",
+    "bytes": 2172
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/flash.json",
+    "sha256": "80f439a8a63540e13b31004d4dcd2e1ed91703c87ef37467a7ad87230eabadc4",
+    "bytes": 9625
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/oracle.swf",
+    "sha256": "64f728c37b1d00f3af8b0a954f0090d0d47b64998cbb767163bb9fc4e03db513",
+    "bytes": 2933
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/provenance.json",
+    "sha256": "f2f145ef0c573265b2a2db35fb1c262d8f450667c44299358d256313c955d335",
+    "bytes": 2149
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/sources/original/ConstructorOracle.as",
+    "sha256": "bc1290a8e8fdc230cf2aed14e3cff8e126fd4a47b89f40909ebc54361ea5239e",
+    "bytes": 4295
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/sources/original/probe/Journal.as",
+    "sha256": "f76bbe41c68a729200302fbe067333facdc5af063bd52da3807eb3bdb77a0f5f",
+    "bytes": 132
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/sources/original/probe/ReturnChild.as",
+    "sha256": "0f3d4645fdde862d7a66ddef1d3e45bc50e049d9a7a410fe8a8ad8510a4859e7",
+    "bytes": 66
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-a/sources/original/probe/ReturnSubject.as",
+    "sha256": "da28c8d5cad1d07afed3f6ce9df9d0ed26d0e4fc9ee24fbd26f562caa568b3f1",
+    "bytes": 2212
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/commands.json",
+    "sha256": "8ec40a2977478b710c236eba5b473edaea2f1b728e07e12533836fe19117d3c6",
+    "bytes": 2172
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/flash.json",
+    "sha256": "80f439a8a63540e13b31004d4dcd2e1ed91703c87ef37467a7ad87230eabadc4",
+    "bytes": 9625
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/oracle.swf",
+    "sha256": "09fc8f0dd5ea20084bf44fdd7a3cf3b4d8301d77bd1c0e40ac1df1035769cae8",
+    "bytes": 2934
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/provenance.json",
+    "sha256": "8d6209254b7685b3852ed6177a33ce3bf7e437b61017fc1914ad6fcbf562accd",
+    "bytes": 2149
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/sources/original/ConstructorOracle.as",
+    "sha256": "bc1290a8e8fdc230cf2aed14e3cff8e126fd4a47b89f40909ebc54361ea5239e",
+    "bytes": 4295
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/sources/original/probe/Journal.as",
+    "sha256": "f76bbe41c68a729200302fbe067333facdc5af063bd52da3807eb3bdb77a0f5f",
+    "bytes": 132
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/sources/original/probe/ReturnChild.as",
+    "sha256": "0f3d4645fdde862d7a66ddef1d3e45bc50e049d9a7a410fe8a8ad8510a4859e7",
+    "bytes": 66
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/prior-return22/flash-final-b/sources/original/probe/ReturnSubject.as",
+    "sha256": "da28c8d5cad1d07afed3f6ce9df9d0ed26d0e4fc9ee24fbd26f562caa568b3f1",
+    "bytes": 2212
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-a/commands.json",
+    "sha256": "4b8325de1fb099ce1026292d7796a9b0fc7541f3e619165013bc9456e1d12cd7",
+    "bytes": 2077
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-a/flash.json",
+    "sha256": "b0b5760ad583cf08ff1e2ada2beb7d643096cbee92a680619c0079a6b0810965",
+    "bytes": 3760
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-a/oracle.swf",
+    "sha256": "f99fb648658aa722d15dcc285dd10f81bc189c53b102f5fa7f6230f39454e2a6",
+    "bytes": 1698
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-a/provenance.json",
+    "sha256": "14646121c8e99b61d51eb17d906a2e25d021bd03d30d6dafd0e6e39e0fd75c4f",
+    "bytes": 1858
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-a/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-a/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-a/sources/original/ConstructorOracle.as",
+    "sha256": "f1fbfa05f0afda6fa905d15d26fe003517bcbebf7fc3e4adc40e885877e9789a",
+    "bytes": 1567
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-a/sources/original/probe/ParameterStorage.as",
+    "sha256": "d5ba8ddf6d893074c8189ebd2644077accac9ae0e362f75e94189f5e7af873b6",
+    "bytes": 460
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-b/commands.json",
+    "sha256": "39cecf0dee7abc06d22c567c25c5dc9e3e78137f7c4ffe93b7678b00b7802063",
+    "bytes": 2077
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-b/flash.json",
+    "sha256": "40d9071476091dff1b51fa0f1e1dd338825a17672aba55f9e142697ad9ee995a",
+    "bytes": 3760
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-b/oracle.swf",
+    "sha256": "1a07e8f2469126403540981741e9f85d3dd51a3fb6c153afa09cde43ae0213e3",
+    "bytes": 1696
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-b/provenance.json",
+    "sha256": "8b1aa11af87346a90e52c230b53f61e304d3a422ffe027fc2a79e9aa921e4ef7",
+    "bytes": 1858
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-b/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-b/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-b/sources/original/ConstructorOracle.as",
+    "sha256": "f1fbfa05f0afda6fa905d15d26fe003517bcbebf7fc3e4adc40e885877e9789a",
+    "bytes": 1567
+  },
+  {
+    "path": "tests/native-method-signatures/fixtures/storage8/flash-b/sources/original/probe/ParameterStorage.as",
+    "sha256": "d5ba8ddf6d893074c8189ebd2644077accac9ae0e362f75e94189f5e7af873b6",
+    "bytes": 460
+  },
+  {
+    "path": "tests/native-method-signatures/prior-entry-handoff.json",
+    "sha256": "464a077899742df223d87d014ee835d8212e8be1031d544eb9a975771c1642a9",
+    "bytes": 400
+  },
+  {
+    "path": "tests/native-method-signatures/prior-return-handoff.json",
+    "sha256": "5d71f2ee1549797d6049b9b5da806b0431b0150b4eff616e54ae1f9fc24b3f7b",
+    "bytes": 2541
+  },
+  {
+    "path": "tests/native-method-signatures/README.md",
+    "sha256": "f4901734b89a05be2d799ff2ab71df74b7e6fab3b65bedfd66c79b3af54231cb",
+    "bytes": 3835
+  },
+  {
+    "path": "tests/native-method-signatures/research-handoff.json",
+    "sha256": "d437984efce3c5e54cc16c54549ed87bad477485762bcc651aef1dbda4d9c88b",
+    "bytes": 1637
+  },
+  {
+    "path": "tests/native-method-signatures/research-review.json",
+    "sha256": "4fdec961ade5ead04d2f819050eb3e3134a48bbb244f2528a729c3eed96a344d",
+    "bytes": 2382
+  },
+  {
+    "path": "tests/native-method-signatures/run.cjs",
+    "sha256": "b3657067ef817c2313e135f98a6741f819d2b4798562a9b5286732a6a271bd01",
+    "bytes": 9807
+  }
+]

@@ -1,0 +1,11 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const parse=require('../../lib/parse'),emit=require('../../lib/emit');
+const root=path.join(__dirname,'evidence'),hash=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+assert.equal(hash(path.join(root,'provenance.json')),'RECEIPT');
+for(const item of JSON.parse(fs.readFileSync(path.join(root,'provenance.json'))).files){const rel=item.path.replaceAll('\\','/');const file=[path.join(root,rel),path.join(root,'sources',rel)].find(fs.existsSync);assert.equal(hash(file),item.sha256);}
+const source=fs.readFileSync(path.join(root,'sources/original/probe/StaticMethods.as'),'utf8');
+assert.equal(hash(path.join(__dirname,'original/probe/StaticMethods.as')),hash(path.join(root,'sources/original/probe/StaticMethods.as')));
+const rows=JSON.parse(fs.readFileSync(path.join(root,'flash.json'))).rows;assert.equal(rows.length,26);
+let diagnostic;try{emit(parse('probe/StaticMethods.as',source),source,{customVisitors:[],definitionsByNamespace:{probe:['StaticMethods','inside','alias']},namespaceUris:{'probe.inside':'urn:op2:static-method','probe.alias':'urn:op2:static-method'}});}catch(e){diagnostic=e.message;}
+assert.match(diagnostic||'',/AS3_NAMESPACE_UNSUPPORTED: static namespace method closures require separate lowering/);
+console.log(JSON.stringify({originalRows:26,compilerStatus:'held',diagnostic}));

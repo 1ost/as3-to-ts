@@ -1,0 +1,56 @@
+{
+  "reflection": [
+    "<type name=\"probe::PlanSubject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::PlanSubject\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"fail\" declaredBy=\"probe::PlanSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"number\" declaredBy=\"probe::PlanSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"defaults\" declaredBy=\"probe::PlanSubject\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"true\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"true\"/>\n      <parameter index=\"3\" type=\"*\" optional=\"true\"/>\n      <parameter index=\"4\" type=\"*\" optional=\"true\"/>\n      <parameter index=\"5\" type=\"*\" optional=\"true\"/>\n    </method>\n    <method name=\"negative\" declaredBy=\"probe::PlanSubject\" returnType=\"*\">\n      <parameter index=\"1\" type=\"Number\" optional=\"true\"/>\n      <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n    </method>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "thrown": 9,
+      "id": "number-throw-primitive"
+    },
+    {
+      "value": true,
+      "id": "number-throw-identity"
+    },
+    {
+      "value": [
+        0,
+        true,
+        null,
+        "undefined",
+        "text"
+      ],
+      "id": "wildcard-defaults"
+    },
+    {
+      "value": [
+        "undefined",
+        "undefined",
+        "undefined",
+        "undefined",
+        "undefined"
+      ],
+      "id": "wildcard-supplied-undefined"
+    },
+    {
+      "value": [
+        true,
+        false
+      ],
+      "id": "negative-zero-default"
+    },
+    {
+      "value": [
+        false,
+        true
+      ],
+      "id": "positive-zero-supplied"
+    },
+    {
+      "value": 7,
+      "id": "number-return-comment"
+    }
+  ],
+  "instances": [
+    "<type name=\"probe::PlanSubject\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"fail\" declaredBy=\"probe::PlanSubject\" returnType=\"Number\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"number\" declaredBy=\"probe::PlanSubject\" returnType=\"Number\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"defaults\" declaredBy=\"probe::PlanSubject\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"true\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"true\"/>\n    <parameter index=\"3\" type=\"*\" optional=\"true\"/>\n    <parameter index=\"4\" type=\"*\" optional=\"true\"/>\n    <parameter index=\"5\" type=\"*\" optional=\"true\"/>\n  </method>\n  <method name=\"negative\" declaredBy=\"probe::PlanSubject\" returnType=\"*\">\n    <parameter index=\"1\" type=\"Number\" optional=\"true\"/>\n    <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n  </method>\n</type>"
+  ]
+}

@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\order-original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\order-flash-repeat\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\order-original\\ConstructorOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\order-flash-repeat",
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\order-flash-repeat\\oracle.swf (1780 bytes)\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\order-flash-repeat\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\order-flash-repeat\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\lexical-compiler-provider\\order-flash-repeat",
+    "exitCode": 0,
+    "stdout": "\n",
+    "stderr": ""
+  }
+]

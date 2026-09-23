@@ -1,0 +1,34 @@
+import * as domain from './domain';
+import * as other from './other';
+import {registerFlashTypeMetadata,FlashTypeMetadata} from '@METADATA@';
+import {as3Is,as3As} from '@TYPE@';
+const names:any=@NAMES@;
+const bindings:any=@BINDINGS@;
+// Only class-generation scaffolding. Source bodies are deliberately not replaced
+// or claimed emitted: this test authenticates declaration-domain identities.
+export function run(){
+ const first:any=domain,second:any=other,rows:any[]=[],guards:string[]=[];
+ const root=first[names['contracts.IRoot']],left=first[names['contracts.ILeft']],right=first[names['contracts.IRight']],leaf=first[names['contracts.ILeaf']];
+ const row=(id:string,value:any)=>rows.push({id,value});
+ function nominal(id:string,value:any){row(id,[as3Is(value,root),as3Is(value,left),as3Is(value,right),as3Is(value,leaf),as3As(value,root)===value,as3As(value,leaf)===value]);}
+ function publish(constructor:Function,name:string,base:string){
+  Object.defineProperty(constructor,'prototype',{writable:false});
+  const members:FlashTypeMetadata['instance']={variables:[],accessors:[],methods:[],constants:[]};
+  registerFlashTypeMetadata(constructor,{name:name.replace(/\.([^.]*)$/,'::$1'),base,isDynamic:false,isFinal:false,instance:members,statics:members});
+  return first[bindings[name].publishExport](constructor);
+ }
+ let baseEntry:any,childEntry:any,fakeEntry:any;
+ class Implementation{constructor(){baseEntry.enterInstance(this);}}
+ class Child extends Implementation{constructor(){super();childEntry.enterInstance(this);}}
+ class Lookalike{constructor(){fakeEntry.enterInstance(this);}}
+ baseEntry=publish(Implementation,'contracts.Implementation','Object');childEntry=publish(Child,'contracts.Child','contracts::Implementation');
+ fakeEntry=publish(Lookalike,'contracts.Lookalike','Object');
+ const fake=new Lookalike(),base=new Implementation(),child=new Child();
+ nominal('lookalike',fake);nominal('exact',base);nominal('inherited',child);
+ row('null-is-as',[as3Is(null,root),as3As(null,root)===null]);row('undefined-is-as',[as3Is(undefined,root),as3As(undefined,root)===null]);
+ nominal('plain-object',{});nominal('class-object',Implementation);
+ if(root===second[names['contracts.IRoot']]||as3Is(base,second[names['contracts.IRoot']]))throw Error('domain identity');guards.push('distinct-domain');
+ if(as3Is(Object.create(Implementation.prototype),root))throw Error('forged generation');guards.push('constructor-entry-required');
+ for(const key of Object.values(names) as string[])if(!Object.isFrozen(first[key]))throw Error('mutable interface token');guards.push('frozen-tokens');
+ return {rows,guards};
+}

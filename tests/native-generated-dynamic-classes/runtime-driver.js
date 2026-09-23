@@ -1,0 +1,21 @@
+// Separate host observer; all five original source classes are emitted unchanged.
+const nc=load('nativeClass'),p=load('AS3Property'),cls=n=>nc.readNativeClass(load(n)[n]);
+const Record=cls('Record'),Access=cls('Access'),Child=cls('Child'),Sealed=cls('Sealed'),r=new Record(),a=new Access(),rows=[],row=(id,value)=>rows.push({id,value});
+const failure=fn=>{try{fn();return [];}catch(e){return [e.name,e.errorID];}};
+row('missing',[r.read('extra')===undefined,a.read(r,'other')===undefined]);
+row('indexed-own',[r.write('extra',11),r.read('extra'),a.read(r,'extra')]);
+row('dot-own',[r.dotWrite(12),r.dotRead(),r.read('extra')]);
+row('typed-access',[a.typedWrite(r,'extra',13),a.typedRead(r,'extra'),a.typedDot(r,14),a.typedDotRead(r),r.read('extra')]);
+row('declared-coercion',[r.write('value',4.8),r.value,r.write('base',5.9),r.base]);
+row('private-collision',[r.write('hidden',21),r.read('hidden'),r.hiddenValue()]);
+row('protected-collision',[r.write('saved',22),r.read('saved'),r.savedValue()]);
+row('constant-write',failure(()=>r.write('fixed',8)));row('method-write',failure(()=>r.write('method',8)));
+row('method-read',[r.read('method')===r.read('method'),r.read('method')()]);
+row('special-keys',[r.write('__proto__',23),r.read('__proto__'),r.write('toString',24),r.read('toString')]);
+row('enumeration',Array.from(p.as3EnumerableKeys(r)).sort());row('own',['extra','base','hidden','absent'].map(k=>p.as3HasOwnProperty(r,k)));
+row('delete',[r.dotRemove(),r.read('extra')===undefined,r.remove('extra'),r.remove('fixed'),r.remove('value'),r.remove('method')]);
+const child=new Child();row('dynamic-child',[a.write(child,'extra',31),a.read(child,'extra'),child.base]);
+const sealed=new Sealed();row('sealed-write',failure(()=>a.write(sealed,'extra',32)));row('sealed-read',failure(()=>a.read(sealed,'extra')));row('sealed-delete',a.remove(sealed,'extra'));
+row('lexical-delete',[r.remove('hidden'),r.remove('saved'),r.hiddenValue(),r.savedValue()]);
+const other=new Record();row('public-collision',[a.write(other,'hidden',41),a.read(other,'hidden'),other.read('hidden'),other.hiddenValue()]);
+row('fresh-instance',[new Record().read('extra')===undefined,new Record().hiddenValue()]);globalThis.result=rows;

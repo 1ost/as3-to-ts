@@ -1,0 +1,47 @@
+[
+  {
+    "captures": [
+      "capture-c",
+      "capture-d"
+    ],
+    "rows": 33,
+    "initializationRows": 0,
+    "errorRows": 0,
+    "completeClasses": 9,
+    "wholeXMLSemanticEquality": true,
+    "receiptSHA256": [
+      "5f88a533ab3232c1a0da06d76f748d85f16ccc83727651fb028f15b722776863",
+      "a2cb589c39c7436b1e13381a65149bc305775b3597189ee0b589d8c51f41fab0"
+    ]
+  },
+  {
+    "captures": [
+      "capture-e",
+      "capture-f"
+    ],
+    "rows": 33,
+    "initializationRows": 7,
+    "errorRows": 0,
+    "completeClasses": 12,
+    "wholeXMLSemanticEquality": true,
+    "receiptSHA256": [
+      "bb55aa7b127cdb36c3e0122213103b9a3aeb8e4ac8e501d4d49c4f4c6401048a",
+      "21b85bde07d447eb5b92966fb7ac18125b73eec004d885fcbf214d7d5b1e34a1"
+    ]
+  },
+  {
+    "captures": [
+      "capture-g",
+      "capture-h"
+    ],
+    "rows": 33,
+    "initializationRows": 7,
+    "errorRows": 14,
+    "completeClasses": 12,
+    "wholeXMLSemanticEquality": true,
+    "receiptSHA256": [
+      "138be8ac54ec5472a2adc0552b98ef56e0e4abc73e1eba073737abb1af174c8b",
+      "1c1c79ec148692181b95281c49f6bdfdf516daf97f4ae8a077f32f5f39b8dbba"
+    ]
+  }
+]

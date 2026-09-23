@@ -1,0 +1,26 @@
+// Host observer only: both complete captured AS3 subjects are emitted unchanged.
+const nc=load('nativeClass'),p=load('AS3Property'),errors=load('AS3SourceError');
+const Mutator=nc.readNativeClass(load('Mutator').Mutator),Slot=nc.readNativeClass(load('Slot').Slot),m=new Mutator();
+const object=values=>Object.assign(load('AS3DynamicObject').as3CreateDynamicObject(),values);
+const info=e=>errors.isAS3SourceError(e)?[p.as3GetProperty(e,'name'),p.as3GetProperty(e,'errorID')]:[e.name,e.errorID];
+const failure=fn=>{try{fn();return [];}catch(e){return info(e);}},rows=[],row=(id,value)=>rows.push({id,value});
+let o=object({value:3}),events=[],s=new Slot(events);
+row('add-number',[m.add(o,'value',4),p.as3GetProperty(o,'value')]);
+row('add-string',[m.add(o,'value','x'),p.as3GetProperty(o,'value')]);
+row('add-missing',[isNaN(m.add(o,'missing',1)),isNaN(p.as3GetProperty(o,'missing'))]);
+let raw=m.add(s,'value',0.8),stored=s.value;row('add-typed-raw',[raw,stored,events]);
+o=object({value:3});const replacement=object({value:5});row('stable-receiver',[m.replace(o,'value',replacement),p.as3GetProperty(o,'value'),p.as3GetProperty(replacement,'value')]);
+o=object({a:1,b:2});row('key-variable-reassigned',[m.replaceKey(o,'a','b'),p.as3GetProperty(o,'a'),p.as3GetProperty(o,'b')]);
+events=[];o=object({value:3});const keyObject={toString(){events.push('keyString');return 'value';}};
+let key=function(){events.push('keyExpr');return keyObject;};const rhs=function(){events.push('rhs');return 4;};
+raw=m.addCall(o,key,rhs);row('key-rhs-order',[raw,p.as3GetProperty(o,'value'),events]);
+events=[];let err=failure(()=>m.addCall(null,key,rhs));row('null-before-rhs',[err,events]);
+events=[];s=new Slot(events);key=function(){events.push('keyExpr');return 'value';};raw=m.addCall(s,key,rhs);stored=s.value;row('accessor-rhs-order',[raw,stored,events]);
+events=[];key=function(){events.push('keyExpr');return 'missing';};err=failure(()=>m.addCall(s,key,rhs));row('missing-before-rhs',[err,events]);
+o=object({value:3});row('delete-own',[m.remove(o,'value'),p.as3HasOwnProperty(o,'value')]);
+row('delete-absent',m.remove(o,'missing'));row('delete-sealed',[m.remove(s,'value'),m.remove(s,'missing')]);
+const a=[3,4];row('delete-array',[m.remove(a,0),a.length,a.hasOwnProperty(0),a[1]]);
+row('delete-null',failure(()=>m.remove(null,'x')));row('delete-object-undefined',failure(()=>m.remove(undefined,'x')));row('delete-wildcard-undefined',failure(()=>m.removeWildcard(undefined,'x')));
+events=[];o=object({value:1});row('delete-key-coercion',[m.remove(o,keyObject),events,p.as3HasOwnProperty(o,'value')]);
+events=[];err=failure(()=>m.remove(null,keyObject));row('delete-null-key',[err,events]);
+globalThis.result=rows;

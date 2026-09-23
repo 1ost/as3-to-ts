@@ -1,0 +1,1 @@
+package lifecycle{public class Failure{public static var value:int=Journal.leak(Failure);public static var failed:int=Journal.fail();Journal.record("unreachable-body");}}

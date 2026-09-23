@@ -1,0 +1,9 @@
+const R=modules.get('Recorder').Recorder, rows=R.rows;const get=name=>modules.get('nativeClass').readNativeClass(modules.get(name)[name]); let C=get('NumberSubject');
+rows.push('omitted');new C();rows.push('one');new C(2.5);rows.push('undefined');new C(undefined,undefined);rows.push('null');new C(null,null);rows.push('invalid-string');new C('not-a-number','1e-4000');rows.push('extra');new C(1,2,3);
+const shared={valueOf(){rows.push('shared-coerce');return '13.25';}};rows.push('same-object');new C(shared,shared);
+rows.push('evaluation-order');new C((rows.push('evaluate:first'),shared),(rows.push('evaluate:second'),shared));
+const fromBits=hex=>{const bytes=new Uint8Array(hex.match(/../g).map(x=>parseInt(x,16)));return new DataView(bytes.buffer).getFloat64(0);};rows.push('nan-payloads');new C(fromBits('7ff8123456789abc'),fromBits('fff823456789abcd'));
+const fallback={valueOf(){rows.push('fallback-value');return null;},toString(){rows.push('fallback-string');return '17.5';}};rows.push('fallback');new C(fallback);
+const fail={valueOf(){rows.push('coerce-throw');throw R.failure;}};rows.push('throw-first');try{new C(fail,shared);}catch(e){rows.push('same-error:'+(e===R.failure));}rows.push('throw-second');try{new C(shared,fail);}catch(e){rows.push('same-error:'+(e===R.failure));}
+rows.push('after-throw');new C(3,4);C=get('Required');rows.push('required-missing');try{new C();}catch(e){rows.push('arity:'+e.errorID);}rows.push('required-extra');try{new C(shared,fail);}catch(e){rows.push('arity:'+e.errorID);}rows.push('required-undefined');new C(undefined);
+C=get('IntegerSubject');rows.push('integers');new C('4294967297','-1.75');rows.push('integer-fallback');new C(fallback,shared); C=get('Derived');rows.push('derived-nan');new C(fromBits('7ff8123456789abc'),fromBits('fff823456789abcd'));rows.push('derived-undefined');new C(undefined,undefined);C=get('Rebind');new C(1);globalThis.numericRows=rows;

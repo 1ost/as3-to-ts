@@ -1,0 +1,453 @@
+{
+  "schema": 1,
+  "captureSha256": "3b1dd65ee033849b5cfb1ac32b3a9ef373987daa1165d32a375217c5e36d9124",
+  "classes": {
+    "entryreview.Subject": {
+      "sourceSha256": "fe4a2c2421628dbca961812496e06973a5bb71826d0201c515f25ea125c47d9b",
+      "metadata": {
+        "name": "entryreview::Subject",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [
+            {
+              "name": "n",
+              "declaredBy": "entryreview::Subject",
+              "type": "int"
+            }
+          ],
+          "accessors": [],
+          "methods": [],
+          "constants": []
+        },
+        "statics": {
+          "variables": [
+            {
+              "name": "count",
+              "declaredBy": "entryreview::Subject",
+              "type": "int"
+            }
+          ],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ],
+          "methods": [],
+          "constants": []
+        }
+      },
+      "instanceTraits": [
+        {
+          "name": "n",
+          "kind": "variable",
+          "type": "int"
+        }
+      ],
+      "staticTraits": [
+        {
+          "name": "count",
+          "kind": "variable",
+          "type": "int"
+        }
+      ]
+    },
+    "entryreview.Probe": {
+      "sourceSha256": "040b4e5e267f0b3fe9c50401d3cf4676b74d2beb856a8f84f730e6ef1b98156d",
+      "metadata": {
+        "name": "entryreview::Probe",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [],
+          "accessors": [],
+          "methods": [],
+          "constants": []
+        },
+        "statics": {
+          "variables": [],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ],
+          "methods": [
+            {
+              "name": "bindNew",
+              "declaredBy": "entryreview::Probe",
+              "parameterCount": 0
+            },
+            {
+              "name": "aliasCoerce",
+              "declaredBy": "entryreview::Probe",
+              "parameterCount": 0
+            },
+            {
+              "name": "freshPrototype",
+              "declaredBy": "entryreview::Probe",
+              "parameterCount": 0
+            }
+          ],
+          "constants": []
+        }
+      },
+      "instanceTraits": [],
+      "staticTraits": [
+        {
+          "name": "bindNew",
+          "kind": "method"
+        },
+        {
+          "name": "aliasCoerce",
+          "kind": "method"
+        },
+        {
+          "name": "freshPrototype",
+          "kind": "method"
+        }
+      ]
+    },
+    "entryreview.FlowProbe": {
+      "sourceSha256": "c233cb5ec062c1c1adfd843bd3c4b14c07ae2be9fa22f9b8cdc25b388d199999",
+      "metadata": {
+        "name": "entryreview::FlowProbe",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [],
+          "accessors": [],
+          "methods": [],
+          "constants": []
+        },
+        "statics": {
+          "variables": [],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ],
+          "methods": [
+            {
+              "name": "objectAllocate",
+              "declaredBy": "entryreview::FlowProbe",
+              "parameterCount": 0
+            },
+            {
+              "name": "transitiveCoerce",
+              "declaredBy": "entryreview::FlowProbe",
+              "parameterCount": 0
+            },
+            {
+              "name": "arrayCoerce",
+              "declaredBy": "entryreview::FlowProbe",
+              "parameterCount": 0
+            },
+            {
+              "name": "arrayAllocate",
+              "declaredBy": "entryreview::FlowProbe",
+              "parameterCount": 0
+            },
+            {
+              "name": "allocate",
+              "declaredBy": "entryreview::FlowProbe",
+              "parameterCount": 1
+            },
+            {
+              "name": "callbackAllocate",
+              "declaredBy": "entryreview::FlowProbe",
+              "parameterCount": 0
+            },
+            {
+              "name": "objectCoerce",
+              "declaredBy": "entryreview::FlowProbe",
+              "parameterCount": 0
+            }
+          ],
+          "constants": []
+        }
+      },
+      "instanceTraits": [],
+      "staticTraits": [
+        {
+          "name": "objectAllocate",
+          "kind": "method"
+        },
+        {
+          "name": "transitiveCoerce",
+          "kind": "method"
+        },
+        {
+          "name": "arrayCoerce",
+          "kind": "method"
+        },
+        {
+          "name": "arrayAllocate",
+          "kind": "method"
+        },
+        {
+          "name": "allocate",
+          "kind": "method"
+        },
+        {
+          "name": "callbackAllocate",
+          "kind": "method"
+        },
+        {
+          "name": "objectCoerce",
+          "kind": "method"
+        }
+      ]
+    },
+    "entryreview.OperationProbe": {
+      "sourceSha256": "5308e048a0e426ffab698d51957fccc3afc4d1141fd080b87f76b6402bac3f08",
+      "metadata": {
+        "name": "entryreview::OperationProbe",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [],
+          "accessors": [],
+          "methods": [],
+          "constants": []
+        },
+        "statics": {
+          "variables": [
+            {
+              "name": "target",
+              "declaredBy": "entryreview::OperationProbe",
+              "type": "Object"
+            },
+            {
+              "name": "log",
+              "declaredBy": "entryreview::OperationProbe",
+              "type": "*"
+            }
+          ],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ],
+          "methods": [
+            {
+              "name": "receiver",
+              "declaredBy": "entryreview::OperationProbe",
+              "parameterCount": 0
+            },
+            {
+              "name": "key",
+              "declaredBy": "entryreview::OperationProbe",
+              "parameterCount": 0
+            },
+            {
+              "name": "run",
+              "declaredBy": "entryreview::OperationProbe",
+              "parameterCount": 0
+            }
+          ],
+          "constants": []
+        }
+      },
+      "instanceTraits": [],
+      "staticTraits": [
+        {
+          "name": "target",
+          "kind": "variable",
+          "type": "Object"
+        },
+        {
+          "name": "log",
+          "kind": "variable",
+          "type": "*"
+        },
+        {
+          "name": "receiver",
+          "kind": "method"
+        },
+        {
+          "name": "key",
+          "kind": "method"
+        },
+        {
+          "name": "run",
+          "kind": "method"
+        }
+      ]
+    },
+    "entryreview.LifecycleLog": {
+      "sourceSha256": "ff706cc4b197564b1245b09e01b0f1d7dd250117484124a0654b84992347cda4",
+      "metadata": {
+        "name": "entryreview::LifecycleLog",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [],
+          "accessors": [],
+          "methods": [],
+          "constants": []
+        },
+        "statics": {
+          "variables": [
+            {
+              "name": "first",
+              "declaredBy": "entryreview::LifecycleLog",
+              "type": "*"
+            },
+            {
+              "name": "fail",
+              "declaredBy": "entryreview::LifecycleLog",
+              "type": "Boolean"
+            },
+            {
+              "name": "failure",
+              "declaredBy": "entryreview::LifecycleLog",
+              "type": "Object"
+            },
+            {
+              "name": "rows",
+              "declaredBy": "entryreview::LifecycleLog",
+              "type": "*"
+            }
+          ],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ],
+          "methods": [
+            {
+              "name": "capture",
+              "declaredBy": "entryreview::LifecycleLog",
+              "parameterCount": 1
+            }
+          ],
+          "constants": []
+        }
+      },
+      "instanceTraits": [],
+      "staticTraits": [
+        {
+          "name": "first",
+          "kind": "variable",
+          "type": "*"
+        },
+        {
+          "name": "fail",
+          "kind": "variable",
+          "type": "Boolean"
+        },
+        {
+          "name": "failure",
+          "kind": "variable",
+          "type": "Object"
+        },
+        {
+          "name": "rows",
+          "kind": "variable",
+          "type": "*"
+        },
+        {
+          "name": "capture",
+          "kind": "method"
+        }
+      ]
+    },
+    "entryreview.Lifecycle": {
+      "sourceSha256": "3263abb8ebe691e37d117dc7bb55bfa9a945e17c1fe7c546c24a041485443233",
+      "metadata": {
+        "name": "entryreview::Lifecycle",
+        "base": "Object",
+        "isDynamic": false,
+        "isFinal": false,
+        "instance": {
+          "variables": [
+            {
+              "name": "n",
+              "declaredBy": "entryreview::Lifecycle",
+              "type": "int"
+            }
+          ],
+          "accessors": [],
+          "methods": [],
+          "constants": []
+        },
+        "statics": {
+          "variables": [
+            {
+              "name": "captured",
+              "declaredBy": "entryreview::Lifecycle",
+              "type": "*"
+            },
+            {
+              "name": "token",
+              "declaredBy": "entryreview::Lifecycle",
+              "type": "int"
+            }
+          ],
+          "accessors": [
+            {
+              "name": "prototype",
+              "declaredBy": "Class",
+              "access": "readonly"
+            }
+          ],
+          "methods": [
+            {
+              "name": "record",
+              "declaredBy": "entryreview::Lifecycle",
+              "parameterCount": 0
+            },
+            {
+              "name": "begin",
+              "declaredBy": "entryreview::Lifecycle",
+              "parameterCount": 0
+            }
+          ],
+          "constants": []
+        }
+      },
+      "instanceTraits": [
+        {
+          "name": "n",
+          "kind": "variable",
+          "type": "int"
+        }
+      ],
+      "staticTraits": [
+        {
+          "name": "captured",
+          "kind": "variable",
+          "type": "*"
+        },
+        {
+          "name": "token",
+          "kind": "variable",
+          "type": "int"
+        },
+        {
+          "name": "record",
+          "kind": "method"
+        },
+        {
+          "name": "begin",
+          "kind": "method"
+        }
+      ]
+    }
+  }
+}

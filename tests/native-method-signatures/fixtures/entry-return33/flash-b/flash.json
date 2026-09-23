@@ -1,0 +1,328 @@
+{
+  "instances": [
+    "<type name=\"probe::EntrySubject\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <variable name=\"tag\" type=\"*\"/>\n  <variable name=\"journal\" type=\"*\"/>\n  <method name=\"pick\" declaredBy=\"probe::EntrySubject\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"publicEntry\" declaredBy=\"probe::EntrySubject\" returnType=\"*\">\n    <parameter index=\"1\" type=\"Number\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n    <parameter index=\"3\" type=\"Number\" optional=\"true\"/>\n  </method>\n</type>",
+    "<type name=\"probe::ReturnSubject\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <variable name=\"journal\" type=\"*\"/>\n  <method name=\"finalReplacement\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"numberFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"booleanFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"Boolean\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"pick\" declaredBy=\"probe::ReturnSubject\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"numberCatch\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"number\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"probe::OverrideBase\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <variable name=\"journal\" type=\"*\"/>\n  <method name=\"renderTime\" declaredBy=\"probe::OverrideBase\" returnType=\"void\">\n    <parameter index=\"1\" type=\"Number\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n  </method>\n  <method name=\"pick\" declaredBy=\"probe::OverrideBase\" returnType=\"*\"/>\n</type>",
+    "<type name=\"probe::OverrideChild\" base=\"probe::OverrideBase\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"probe::OverrideBase\"/>\n  <extendsClass type=\"Object\"/>\n  <constructor>\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </constructor>\n  <variable name=\"journal\" type=\"*\"/>\n  <method name=\"renderTime\" declaredBy=\"probe::OverrideChild\" returnType=\"void\">\n    <parameter index=\"1\" type=\"Number\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n  </method>\n  <method name=\"pick\" declaredBy=\"probe::OverrideBase\" returnType=\"*\"/>\n</type>"
+  ],
+  "rows": [
+    {
+      "value": [
+        2,
+        true,
+        5
+      ],
+      "id": "public-omitted",
+      "events": [
+        "public:owner"
+      ]
+    },
+    {
+      "value": [
+        "NaN",
+        false,
+        "NaN"
+      ],
+      "id": "public-undefined",
+      "events": [
+        "public:owner"
+      ]
+    },
+    {
+      "value": [
+        0,
+        false,
+        0
+      ],
+      "id": "public-null",
+      "events": [
+        "public:owner"
+      ]
+    },
+    {
+      "value": [
+        7,
+        true,
+        7
+      ],
+      "id": "public-hook-order",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "arg:c",
+        "a:valueOf",
+        "c:valueOf",
+        "public:owner"
+      ]
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "id": "public-too-few",
+      "events": []
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "id": "public-excess",
+      "events": [
+        "arg:a",
+        "arg:b",
+        "arg:c",
+        "arg:extra"
+      ]
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 7201
+      },
+      "id": "public-throw",
+      "events": [
+        "a:valueOf"
+      ]
+    },
+    {
+      "value": [
+        3,
+        false
+      ],
+      "id": "protected-default",
+      "events": [
+        "protected:owner"
+      ]
+    },
+    {
+      "value": [
+        "NaN",
+        false
+      ],
+      "id": "protected-undefined",
+      "events": [
+        "protected:owner"
+      ]
+    },
+    {
+      "value": [
+        4,
+        true
+      ],
+      "id": "private-default",
+      "events": [
+        "private:owner"
+      ]
+    },
+    {
+      "value": [
+        0,
+        false
+      ],
+      "id": "private-null",
+      "events": [
+        "private:owner"
+      ]
+    },
+    {
+      "value": [
+        5,
+        false
+      ],
+      "id": "private-call-receiver",
+      "events": [
+        "private:owner"
+      ]
+    },
+    {
+      "value": [
+        3,
+        2,
+        2,
+        1,
+        1
+      ],
+      "id": "formal-lengths",
+      "events": []
+    },
+    {
+      "value": "NaN",
+      "id": "number-undefined",
+      "events": [
+        "number:body"
+      ]
+    },
+    {
+      "value": 0,
+      "id": "number-null",
+      "events": [
+        "number:body"
+      ]
+    },
+    {
+      "value": 7,
+      "id": "number-hook",
+      "events": [
+        "number:body",
+        "return:valueOf"
+      ]
+    },
+    {
+      "value": 7,
+      "id": "number-hook-finally",
+      "events": [
+        "try",
+        "finally",
+        "return:valueOf"
+      ]
+    },
+    {
+      "value": 19,
+      "id": "number-hook-catch",
+      "events": [
+        "try",
+        "return:valueOf",
+        "catch"
+      ]
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 7201
+      },
+      "id": "number-throw-finally",
+      "events": [
+        "try",
+        "finally",
+        "return:valueOf",
+        "finally"
+      ]
+    },
+    {
+      "value": 7,
+      "id": "finally-replacement",
+      "events": [
+        "try",
+        "finally:replacement",
+        "second:valueOf"
+      ]
+    },
+    {
+      "value": false,
+      "id": "boolean-undefined",
+      "events": [
+        "boolean:body"
+      ]
+    },
+    {
+      "value": false,
+      "id": "boolean-null",
+      "events": [
+        "boolean:body"
+      ]
+    },
+    {
+      "value": true,
+      "id": "boolean-object-no-hooks",
+      "events": [
+        "boolean:body"
+      ]
+    },
+    {
+      "value": true,
+      "id": "boolean-finally-no-hooks",
+      "events": [
+        "boolean:try",
+        "boolean:finally"
+      ]
+    },
+    {
+      "value": "undefined",
+      "id": "void-early",
+      "events": [
+        "void:body"
+      ]
+    },
+    {
+      "value": "undefined",
+      "id": "void-fallthrough",
+      "events": [
+        "void:body",
+        "void:fallthrough"
+      ]
+    },
+    {
+      "error": {
+        "name": "ArgumentError",
+        "errorID": 1063
+      },
+      "id": "void-excess",
+      "events": []
+    },
+    {
+      "value": "undefined",
+      "id": "override-omitted",
+      "events": [
+        "child:3:false",
+        "base:3:false"
+      ]
+    },
+    {
+      "value": "undefined",
+      "id": "override-undefined",
+      "events": [
+        "child:NaN:false",
+        "base:NaN:false"
+      ]
+    },
+    {
+      "value": true,
+      "id": "override-protected-default",
+      "events": [
+        "child:enabled",
+        "base:enabled"
+      ]
+    },
+    {
+      "value": false,
+      "id": "override-protected-null",
+      "events": [
+        "child:enabled",
+        "base:enabled"
+      ]
+    },
+    {
+      "value": 11,
+      "id": "number-return-reentry",
+      "events": [
+        "try",
+        "finally",
+        "return:enter",
+        "private:owner",
+        "return:leave"
+      ]
+    },
+    {
+      "value": [
+        11,
+        true,
+        5
+      ],
+      "id": "number-entry-reentry",
+      "events": [
+        "entry:enter",
+        "private:owner",
+        "entry:leave",
+        "public:owner"
+      ]
+    }
+  ],
+  "reflection": [
+    "<type name=\"probe::EntrySubject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::EntrySubject\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <variable name=\"tag\" type=\"*\"/>\n    <variable name=\"journal\" type=\"*\"/>\n    <method name=\"pick\" declaredBy=\"probe::EntrySubject\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"publicEntry\" declaredBy=\"probe::EntrySubject\" returnType=\"*\">\n      <parameter index=\"1\" type=\"Number\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n      <parameter index=\"3\" type=\"Number\" optional=\"true\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"probe::ReturnSubject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::ReturnSubject\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <variable name=\"journal\" type=\"*\"/>\n    <method name=\"finalReplacement\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"booleanFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"Boolean\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"pick\" declaredBy=\"probe::ReturnSubject\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberCatch\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"number\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"probe::OverrideBase\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::OverrideBase\">\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <variable name=\"journal\" type=\"*\"/>\n    <method name=\"renderTime\" declaredBy=\"probe::OverrideBase\" returnType=\"void\">\n      <parameter index=\"1\" type=\"Number\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n    </method>\n    <method name=\"pick\" declaredBy=\"probe::OverrideBase\" returnType=\"*\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::OverrideChild\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::OverrideChild\">\n    <extendsClass type=\"probe::OverrideBase\"/>\n    <extendsClass type=\"Object\"/>\n    <constructor>\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </constructor>\n    <variable name=\"journal\" type=\"*\"/>\n    <method name=\"renderTime\" declaredBy=\"probe::OverrideChild\" returnType=\"void\">\n      <parameter index=\"1\" type=\"Number\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"Boolean\" optional=\"true\"/>\n    </method>\n    <method name=\"pick\" declaredBy=\"probe::OverrideBase\" returnType=\"*\"/>\n  </factory>\n</type>"
+  ]
+}

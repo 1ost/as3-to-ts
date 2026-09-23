@@ -1,0 +1,20 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-debug=true",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-a9klv55s\\sources",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-a9klv55s\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-a9klv55s\\sources\\MetadataOracle.as"
+    ],
+    "exitCode": 1,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-a9klv55s\\sources\\typeprobe\\Subject.as(19): col: 68 Error: Access of undefined property absentName.\n\n  public static function missingIdentifier():String {return typeof absentName;}\n                                                                   ^\n\n"
+  }
+]

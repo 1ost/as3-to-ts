@@ -1,0 +1,2 @@
+		emitter.output = emitter.output.slice(0, insertion) + '\nvar ' + temporaries.join(', ') + ';\n'
+			+ emitter.output.slice(insertion);

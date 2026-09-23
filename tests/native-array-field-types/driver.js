@@ -1,0 +1,22 @@
+const common=modules.get('AS3MethodBinding');
+const C=modules.get('nativeClass').readNativeClass(modules.get('ArrayFields').ArrayFields);
+const first=new C(),second=new C(),item=common.as3CreateArrayLiteral([]),rows=[];
+const get=(target,key)=>common.as3GetProperty(target,key);
+const set=(target,key,value)=>common.as3SetProperty(target,key,value);
+function rec(id,fn){try{rows.push({id,value:fn()});}catch(e){rows.push({id,error:{name:e.name,errorID:e.errorID}});}}
+rec('instance-default-null',()=>get(first,'items')===null);
+rec('static-default-null',()=>get(C,'cache')===null);
+rec('instance-array-identity',()=>{set(first,'items',item);return get(first,'items')===item;});
+rec('instances-storage-independent',()=>get(second,'items')===null);
+rec('static-array-identity',()=>{set(C,'cache',item);return get(C,'cache')===item;});
+rec('instance-undefined-null',()=>{set(first,'items',undefined);return get(first,'items')===null;});
+rec('static-undefined-null',()=>{set(C,'cache',undefined);return get(C,'cache')===null;});
+rec('instance-null',()=>{set(first,'items',null);return get(first,'items')===null;});
+rec('instance-object-rejected',()=>{set(first,'items',{});return false;});
+rec('static-number-rejected',()=>{set(C,'cache',2);return false;});
+rec('arraylike-rejected',()=>{set(first,'items',{length:0});return false;});
+rec('vector-rejected',()=>{set(first,'items',common.as3VectorCreate(common.as3VectorPrimitiveSpec('Number'),0,false));return false;});
+rec('wrong-conversion-no-valueOf',()=>{let count=0;const value={valueOf(){count++;return item;}};try{set(first,'items',value);}catch(e){return [e.errorID,count,get(first,'items')===null];}return false;});
+rec('assignment-rhs-undefined',()=>{const result=set(first,'items',undefined);return [result===undefined,get(first,'items')===null];});
+globalThis.result=rows;
+globalThis.boundaries=[common.as3Is(first,C),modules.get('callableClass').callableClassIntrinsics.array===Array];

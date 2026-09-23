@@ -1,0 +1,6 @@
+ private var values:Dictionary;
+ public var publicSlot:Dictionary;
+ public function get item():Dictionary {return values;}
+ public function set item(value:Dictionary):void {values=value;}
+ public function paramWrite(value:Dictionary,next:*):Dictionary {value=next;return value;}
+ public function failedLocal(value:Dictionary,next:*):Dictionary {var local:Dictionary=value;try{local=next;}catch(e:*){}return local;}

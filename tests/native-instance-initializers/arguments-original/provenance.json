@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "commands": [
+    {
+      "command": [
+        "java",
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-instance-initializers\\arguments-original",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-instance-initializers\\arguments-original\\ArgumentOracle.as"
+      ],
+      "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2",
+      "exitCode": 0,
+      "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2\\oracle.swf (1904 bytes)\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2\\capture.cjs",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2\\flash.json",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+      ],
+      "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2",
+      "exitCode": 0,
+      "stdout": "\n",
+      "stderr": ""
+    }
+  ],
+  "files": [
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-instance-initializers\\arguments-original\\ArgumentOracle.as",
+      "sha256": "56fdf05c7c9b74ca38576707a12667df1aec940450f71c48158355a3c19d2202"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-instance-initializers\\arguments-original\\callorder\\Base.as",
+      "sha256": "f9500f4e93191f2da8225f8f8853ee5c43e03479df8926469fc4ffa9f804a112"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-instance-initializers\\arguments-original\\callorder\\Journal.as",
+      "sha256": "45a58c43ee98e751fe0cf0f2b938205379b13baf745f352c4cf086a9b80e57a5"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-instance-initializers\\arguments-original\\callorder\\Plain.as",
+      "sha256": "82bf9664dd6c0bc73c7d7ce8a079553ab424c25c061d5732be9abe025f3205b3"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-instance-initializers\\arguments-original\\callorder\\Subject.as",
+      "sha256": "5241b8e3738910148bb166962328d654d777ffaec66ae1021e59d8791ef64a52"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-instance-initializers\\CaptureArguments.py",
+      "sha256": "87707637cfa273a37d778aa41d501b9bcba0a7b37284f509c5f6cf31f03c1f57"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2\\capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2\\oracle.swf",
+      "sha256": "1880b396f47d95db70bf9d2271bbdb62413d7e2a38cee9970cfb8a02ba0a656e"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\instance-initializer-review\\arguments-2\\flash.json",
+      "sha256": "b4ecff93e9e733631ba01d74642d4df151c7904b9a98d55e57749bfd48c24e83"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ]
+}

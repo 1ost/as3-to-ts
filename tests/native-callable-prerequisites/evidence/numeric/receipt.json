@@ -1,0 +1,93 @@
+{
+  "schema": 1,
+  "sourceCapture": "compiler-number-constructor/flash-capture-v4",
+  "files": [
+    {
+      "path": "sources/NumberOracle.as",
+      "sha256": "035a68e380d66e3d85a30860494be5fc9121d38f7a8ba103f6faa44eacf81167",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\oracle\\NumberOracle.as"
+    },
+    {
+      "path": "sources/numeric/Derived.as",
+      "sha256": "97e57c1e6f87facb23a56c2a903a9b414db23d44018bc1bfdb379116c6dd031c",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\oracle\\numeric\\Derived.as"
+    },
+    {
+      "path": "sources/numeric/IntegerSubject.as",
+      "sha256": "6344f4fa1b871bfbc01d4347a48daeaa2c2217fb767973e8a890c5f4d8243b10",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\oracle\\numeric\\IntegerSubject.as"
+    },
+    {
+      "path": "sources/numeric/NumberSubject.as",
+      "sha256": "4af36903877d0d6720fba48ccab1fb68766d1bdfb12f24a9bd009c216365d60f",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\oracle\\numeric\\NumberSubject.as"
+    },
+    {
+      "path": "sources/numeric/NumericBase.as",
+      "sha256": "c9c17f537091d2244cde97c5a34f3bad2b0739c33a48580028d8b60df971f04e",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\oracle\\numeric\\NumericBase.as"
+    },
+    {
+      "path": "sources/numeric/Rebind.as",
+      "sha256": "2b2fa3c515b8c56ced040d6590896e4e96c802d8aef74500a2126f753e08b129",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\oracle\\numeric\\Rebind.as"
+    },
+    {
+      "path": "sources/numeric/Recorder.as",
+      "sha256": "4f4bd4b71343e2b1d3e7f33e15e1317b0e3f0b7f8be0ae00ac1099ee7c1cc842",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\oracle\\numeric\\Recorder.as"
+    },
+    {
+      "path": "sources/numeric/Required.as",
+      "sha256": "d16f6dd5f9c25e26800b2fdfa795398c3b8a5e3e6e849f5949e50e86a96448fa",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\oracle\\numeric\\Required.as"
+    },
+    {
+      "path": "capture.py",
+      "sha256": "714151f39a89cc5f2e03d3f19375bde0e3e9f135a0305526e31f056f8bf8a351",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\capture.py"
+    },
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\flash-capture-v4\\capture.cjs"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "bf4fe890d7ba12092996799e04cb7b9028dd057dd327f587d36954194d1836e7",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\flash-capture-v4\\oracle.swf"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "8026f43577690c2a6e3e02eafe99326b1015d68749c21613108b7d140ac365d7",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-number-constructor\\flash-capture-v4\\flash.json"
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "2713210b0a30395b35fb900c6af4a679a9f183d2511ac88503a0b54b94022879"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "314a43bd09a8280dce38840067ab85056049b68a6a1f46f15cfe72d2f89c8156"
+    }
+  ],
+  "externalTools": [
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ],
+  "rowCount": 101
+}

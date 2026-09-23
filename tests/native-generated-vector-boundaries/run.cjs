@@ -1,0 +1,102 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const api=require('../../lib'),parse=require('../../lib/parse'),emit=require('../../lib/emit'),ts=require('typescript');
+const engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
+const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
+const evidence=path.join(engine,'tests/nativeFlashOracle','generated-interface-vectors');const captured=require(path.join(evidence,'verify.cjs'));
+const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
+const root=path.resolve('.cache/native-generated-vector-boundaries');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
+const nested=process.argv.includes('--nested'),sourceRoot=nested?path.join(run,'subjects/deep'):run,domainModule=nested?'../../declarationDomain':'./declarationDomain';
+const modulePath=file=>{let r=path.relative(sourceRoot,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
+const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
+const sources={};
+function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,item.name);
+ if(item.isDirectory())walk(file);else if(item.name.endsWith('.as')&&item.name!=='InterfaceVectorsProbe.as'){
+ const qname=path.relative(path.join(evidence,'source'),file).replaceAll('\\','/').slice(0,-3).replaceAll('/','.');
+ const source=fs.readFileSync(file,'utf8');sources[qname]={source,sourceSha256:hash(source)};}}}
+walk(path.join(evidence,'source'));assert.equal(Object.keys(sources).length,9);
+const queueConstruction=process.argv.includes('--queue'),privateFields=queueConstruction||process.argv.includes('--private');
+let privateCaptured=[];
+if(privateFields){
+ const packet=path.join(engine,'tests/nativeFlashOracle/generated-private-vector-queues');
+ privateCaptured=require(path.join(packet,'verify.cjs')).filter(r=>queueConstruction||r.id.startsWith('slot-'));assert.equal(privateCaptured.length,queueConstruction?25:11);
+ const source=fs.readFileSync(path.join(packet,'source/queuecases/PrivateVectorSlot.as'),'utf8');
+ sources['queuecases.PrivateVectorSlot']={source,sourceSha256:hash(source)};
+ if(queueConstruction){const source=fs.readFileSync(path.join(packet,'source/queuecases/VectorQueue.as'),'utf8');sources['queuecases.VectorQueue']={source,sourceSha256:hash(source)};}
+}
+const nativeProviders={};
+const domainProvider=name=>{let r=path.relative(run,path.join(engine,'src/layaAir/flash/utils',name)).replaceAll('\\','/');return r.startsWith('.')?r:'./'+r;};
+const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-vector-boundaries',providers:nativeProviders,providerModule:domainProvider('AS3GeneratedClass'),interfaceProviderModule:domainProvider('AS3Type'),vectorProviderModule:domainProvider('AS3Vector'),scriptGlobalProviderModule:domainProvider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
+const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
+const fileFor=q=>q.split('.').pop(),definitionsByNamespace={};
+for(const q of Object.keys(sources)){const i=q.lastIndexOf('.');(definitionsByNamespace[q.slice(0,i)]??=[]).push(q.slice(i+1));}
+const options={customVisitors:[],importModules:{"compiler.AS3Invocation":provider("AS3Invocation"),"compiler.AS3Class":provider("AS3Class"),...Object.fromEntries(Object.keys(sources).map(q=>[q,'./'+fileFor(q)])),...Object.fromEntries(Object.entries(nativeProviders).map(([q,b])=>[q,b.module]))},definitionsByNamespace,
+ decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
+ nativeGeneratedDeclarations:{plan,module:domainModule},nativeClassTraitsModule:provider('AS3GeneratedClass'),nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
+ nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
+ nativeSourceErrorModule:modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts')),nativeDynamicPropertyWritesModule:provider('AS3Property'),nativeComputedTypeTestModule:provider('AS3Type'),nativeDictionaryPropertyModule:provider('AS3Property'),nativeEnumeration:{dictionaryModule:provider("Dictionary"),coercionModule:provider("AS3Coercion"),stringModule:provider("AS3String")},nativeObjectCreationModule:provider("AS3Class"),nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition'),nativeArrayCreationModule:provider('AS3ArrayCreation')};
+const combined=process.argv.includes('--combined');if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:domainModule,coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
+options.nativeReferenceCoercion={plan,module:domainModule,coercionModule:provider('AS3Type')};
+let rejectionGuards=0;
+for(const body of [
+ 'public static var queue:Vector.<IOrder>;',
+ 'public const queue:Vector.<IOrder> = null;',
+ 'protected var queue:Vector.<IOrder>;',
+ 'public function get queue():Vector.<IOrder> {return null;}',
+ 'public function call(v:Vector.<IOrder>=null):void {}',
+ 'public function Guard(v:Vector.<IOrder>) {}',
+ 'public function call():Vector.<IOrder>{return Vector.<IOrder>(null);}',
+ 'public function call():Vector.<IOrder>{return new Vector.<IOrder>(0,false,true);}',
+ 'public function call(v:*):Vector.<IOrder>{return new Vector.<IOrder>(v);}',
+ 'public var queue:Vector.<ProbeOrder>;',
+ 'public var queue:Vector.<Vector.<IOrder>>;'
+]){
+ const source='package vectorcases {import org.emvc.interfaces.IOrder;public class Guard {'+body+'}}';
+ assert.throws(()=>{
+  const p=api.createNativeGeneratedDeclarationPlan({scope:'vector-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),sources:{...sources,'vectorcases.Guard':{source,sourceSha256:hash(source)}}});
+  emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}});
+ },/AS3_[A-Z_]+UNSUPPORTED/,body);rejectionGuards++;
+}
+{
+ const source='package vectorcases {public class Guard {public function call():* {return new Vector.<int>();}}}';
+ const p=api.createNativeGeneratedDeclarationPlan({scope:'vector-no-provider',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),sources:{...sources,'vectorcases.Guard':{source,sourceSha256:hash(source)}}});
+ assert.throws(()=>emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}}),/explicit Vector provider required/);
+ rejectionGuards++;
+}
+for(const argumentsSource of ['0','3,false','2,true']){
+ const source='package vectorcases {import org.emvc.interfaces.IOrder;public class Guard {public function call():* {return new Vector.<IOrder>('+argumentsSource+');}}}';
+ const p=api.createNativeGeneratedDeclarationPlan({scope:'vector-literal',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),sources:{...sources,'vectorcases.Guard':{source,sourceSha256:hash(source)}}});
+ const output=emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard-domain'},nativeReferenceCoercion:{plan:p,module:'./guard-domain',coercionModule:provider('AS3Type')}});
+ assert.ok(output.includes('as3VectorCreate as __as3_createVector'));assert.ok(output.includes(','+argumentsSource+')'));
+ assert.equal(ts.createSourceFile('Guard.ts',output,ts.ScriptTarget.Latest,true).parseDiagnostics.length,0);
+}
+fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];
+for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources[binding.qname].source,file=path.join(sourceRoot,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
+ const opts={...options};
+ if(plan.interfaces.some(i=>i.qname===binding.qname)){for(const k of Object.keys(opts))if(k.startsWith('native'))delete opts[k];}
+ opts.nativeVectorTypes={plan,module:domainModule};
+ const output=emit(parse(binding.qname+'.as',source),source,opts);fs.writeFileSync(file,output);emitted.push({qname:binding.qname,file,sourceSha256:hash(source),outputSha256:hash(output)});
+}
+const files=[path.join(run,'declarationDomain.ts'),...emitted.map(e=>e.file),...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f))];
+const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
+const diagnostics=modern.getPreEmitDiagnostics(program).map(d=>({file:d.file&&path.relative(run,d.file.fileName),code:d.code,text:modern.flattenDiagnosticMessageText(d.messageText,'\n')}));fs.writeFileSync(path.join(run,'types.json'),JSON.stringify(diagnostics,null,2));assert.deepEqual(diagnostics.filter(d=>!d.file.startsWith('..')),[]);
+assert.deepEqual(diagnostics,[]);
+const names=['getQualifiedClassName','AS3Vector','AS3MethodBinding','AS3Coercion','AS3String','AS3Type','AS3Property','AS3Class','AS3Invocation','AS3DeclarationType','FlashTypeMetadata','AS3LexicalMembers','AS3ArrayCreation','AS3Addition','QName','AS3DynamicObject','AS3SourceError','AS3ScriptGlobal','AS3GeneratedClass'];
+const moduleFor=n=>'src/layaAir/flash/'+(['AS3SourceError','IllegalOperationError'].includes(n)?'errors':'utils')+'/'+n;
+const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
+const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
+const driverFile=path.resolve('tests/native-generated-vector-boundaries/runtime-driver.js'),privateDriverFile=path.resolve('tests/native-generated-vector-boundaries/private-runtime-driver.js');
+const observer=fs.readFileSync(driverFile,'utf8').replace('@TOKENS@',JSON.stringify(Object.fromEntries(plan.interfaces.map(b=>[b.qname,b.tokenExport]))))+(privateFields?fs.readFileSync(privateDriverFile,'utf8'):'')+(queueConstruction?fs.readFileSync(path.join(__dirname,'queue-runtime-driver.js'),'utf8'):'');
+const wanted=captured.filter(r=>r.id==='default'||/^(read-|exchange-|assign-|local-|catch-|missing-argument|extra-argument)/.test(r.id));assert.equal(wanted.length,33);wanted.push(...privateCaptured);
+for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='assign-undefined').value[0].value[3]=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
+(async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
+try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
+ const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.basename(file,'.ts');specs.push({name:relative,code:out.outputText});}
+ for(const name of ['bound','classBound','nativeClass','callableClass'])specs.push({name,code:modern.transpileModule(fs.readFileSync(path.resolve('utils',name+'.ts'),'utf8'),{compilerOptions:{target,module:modern.ModuleKind.CommonJS}}).outputText});
+ const script='{if(typeof window==="undefined"){globalThis.window=globalThis;globalThis.document={};}const api=(()=>{const module={exports:{}};'+built.outputFiles[0].text+';return module.exports;})();const shared=new Map(),specs=new Map('+JSON.stringify(specs)+'.map(s=>[s.name,s.code])),providers=new Set('+JSON.stringify(names)+'),localNames=new Set('+JSON.stringify(['declarationDomain',...emitted.map(e=>fileFor(e.qname))])+');function createDomainLoader(){const local=new Map();function load(name){if(providers.has(name))return api;const modules=localNames.has(name)?local:shared;if(modules.has(name))return modules.get(name);if(!specs.has(name))throw Error("unresolved module "+name);const output={};modules.set(name,output);new Function("exports","require",specs.get(name))(output,r=>load(r.split("/").pop()));return output;}load.loaded=local;return load;}const load=createDomainLoader();'+observer+'}';
+ fs.writeFileSync(path.join(run,'bundle-'+target+'.js'),script);const node=JSON.parse(JSON.stringify(new Function(script+';return globalThis.result;')()));
+ const page=await browser.newPage();await page.addScriptTag({content:script});const web=await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.result)));await page.close();
+ for(const actual of [node,web]){assert.deepEqual(actual,wanted);}
+ results.push({target,node,web});
+}}finally{await browser.close();}
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({nested,combined,privateFields,queueConstruction,emitted,results,providerGraph,observer:{files:[driverFile,...privateFields?[privateDriverFile]:[],...queueConstruction?[path.join(__dirname,'queue-runtime-driver.js')]:[]],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Vector reflection and general constructor argument coercion','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+})().catch(e=>{console.error(e);process.exitCode=1;});

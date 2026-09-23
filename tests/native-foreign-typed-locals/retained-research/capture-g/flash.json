@@ -1,0 +1,481 @@
+{
+  "rows": [
+    {
+      "events": [],
+      "value": {
+        "kind": "null"
+      },
+      "id": "default"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "peer"
+      },
+      "id": "init-peer"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "child"
+      },
+      "id": "init-child"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "null"
+      },
+      "id": "init-null"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "null"
+      },
+      "id": "init-undefined"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "init-other-peer"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "init-plain"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "init-number"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "init-string"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "init-Class"
+    },
+    {
+      "events": [],
+      "value": [
+        {
+          "kind": "peer"
+        },
+        {
+          "kind": "peer"
+        }
+      ],
+      "id": "assign-peer"
+    },
+    {
+      "events": [],
+      "value": [
+        {
+          "kind": "undefined"
+        },
+        {
+          "kind": "null"
+        }
+      ],
+      "id": "assign-undefined"
+    },
+    {
+      "events": [],
+      "value": [
+        {
+          "kind": "undefined"
+        },
+        {
+          "kind": "null"
+        },
+        {
+          "kind": "undefined"
+        }
+      ],
+      "id": "chain-undefined"
+    },
+    {
+      "events": [],
+      "value": [
+        {
+          "kind": "null"
+        },
+        {
+          "kind": "null"
+        }
+      ],
+      "id": "assign-null"
+    },
+    {
+      "events": [],
+      "value": [
+        {
+          "kind": "peer"
+        },
+        [
+          "TypeError",
+          1034
+        ]
+      ],
+      "id": "failed-write"
+    },
+    {
+      "events": [],
+      "value": [
+        {
+          "kind": "null"
+        },
+        [
+          "TypeError",
+          1034
+        ]
+      ],
+      "id": "failed-init"
+    },
+    {
+      "events": [],
+      "value": [
+        {
+          "kind": "peer"
+        },
+        [
+          "TypeError",
+          1034
+        ]
+      ],
+      "id": "incompatible-no-hooks"
+    },
+    {
+      "events": [
+        "rhs"
+      ],
+      "value": {
+        "kind": "peer"
+      },
+      "id": "rhs-once"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [
+        "rhs"
+      ],
+      "sameThrow": false,
+      "id": "bad-rhs-once"
+    },
+    {
+      "error": [
+        null,
+        null
+      ],
+      "events": [
+        "rhs-throw"
+      ],
+      "sameThrow": true,
+      "id": "rhs-throw"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "self"
+      },
+      "id": "self-valid"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "self-wrong"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "other-peer"
+      },
+      "id": "qualified-valid"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "qualified-wrong-import"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "peer"
+      },
+      "id": "import-valid"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "import-wrong-qualified"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "companion"
+      },
+      "id": "same-package"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "same-package-wrong"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "null"
+      },
+      "id": "cycle-A-default"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "null"
+      },
+      "id": "cycle-B-default"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "B"
+      },
+      "id": "cycle-A-B"
+    },
+    {
+      "events": [],
+      "value": {
+        "kind": "A"
+      },
+      "id": "cycle-B-A"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "sameThrow": false,
+      "id": "cycle-A-wrong"
+    }
+  ],
+  "errorRows": [
+    {
+      "value": [
+        "TypeError",
+        "Error #1034",
+        1034
+      ],
+      "id": "foreign-instance-fields"
+    },
+    {
+      "value": [
+        "TypeError",
+        "Error #1034",
+        1034
+      ],
+      "id": "plain-fields"
+    },
+    {
+      "value": [
+        "TypeError",
+        "Error #1034",
+        1034
+      ],
+      "id": "number-fields"
+    },
+    {
+      "value": [
+        "TypeError",
+        "Error #1034",
+        1034
+      ],
+      "id": "Class-fields"
+    },
+    {
+      "value": true,
+      "id": "fresh-failure-identity"
+    },
+    {
+      "value": [
+        17,
+        null,
+        1034
+      ],
+      "id": "wildcard-fields"
+    },
+    {
+      "value": [
+        false,
+        false,
+        false
+      ],
+      "id": "delete-fixed"
+    },
+    {
+      "value": [
+        "ReferenceError",
+        "Error #1074",
+        1074
+      ],
+      "id": "readonly-id-error"
+    },
+    {
+      "value": 1034,
+      "id": "readonly-id-retained"
+    },
+    {
+      "value": [
+        "slot",
+        true,
+        true
+      ],
+      "id": "dynamic-slot"
+    },
+    {
+      "fields": [
+        "TypeError",
+        "Error #1034",
+        1034
+      ],
+      "value": true,
+      "id": "rethrow-same-caught-object"
+    },
+    {
+      "value": [
+        "ChangedTypeError",
+        "Error #1034",
+        1034
+      ],
+      "id": "prototype-name-snapshot"
+    },
+    {
+      "events": [],
+      "value": [
+        "TypeError",
+        "Error #1034",
+        1034
+      ],
+      "id": "failure-no-conversion-hooks"
+    },
+    {
+      "value": true,
+      "id": "rhs-thrown-identity-not-replaced"
+    }
+  ],
+  "reflection": [
+    "<type name=\"probe::ForeignLocals\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::ForeignLocals\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"initialize\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"expression\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"chain\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"assignment\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"catchRethrow\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"failure\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"3\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"self\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"failedInit\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"empty\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\"/>\n  </factory>\n</type>",
+    "<type name=\"probe::QualifiedLocals\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::QualifiedLocals\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"imported\" declaredBy=\"probe::QualifiedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"qualified\" declaredBy=\"probe::QualifiedLocals\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"probe::SamePackage\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::SamePackage\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"accept\" declaredBy=\"probe::SamePackage\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"probe::Companion\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::Companion\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"foreign::Peer\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"foreign::Peer\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"foreign::Child\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"foreign::Child\">\n    <extendsClass type=\"foreign::Peer\"/>\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"other::Peer\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"other::Peer\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"cycle::A\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"cycle::A\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"empty\" declaredBy=\"cycle::A\" returnType=\"*\"/>\n    <method name=\"accept\" declaredBy=\"cycle::A\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"cycle::B\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"cycle::B\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"empty\" declaredBy=\"cycle::B\" returnType=\"*\"/>\n    <method name=\"accept\" declaredBy=\"cycle::B\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"init::State\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"events\" type=\"Array\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"init::State\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"init::DeferredPeer\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"stamp\" type=\"*\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"init::DeferredPeer\">\n    <extendsClass type=\"Object\"/>\n  </factory>\n</type>",
+    "<type name=\"init::DeferredHolder\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"init::DeferredHolder\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"empty\" declaredBy=\"init::DeferredHolder\" returnType=\"*\"/>\n    <method name=\"accept\" declaredBy=\"init::DeferredHolder\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>"
+  ],
+  "instances": [
+    "<type name=\"probe::ForeignLocals\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"initialize\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"expression\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"chain\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"assignment\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"catchRethrow\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"failure\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"3\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"self\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"failedInit\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"empty\" declaredBy=\"probe::ForeignLocals\" returnType=\"*\"/>\n</type>",
+    "<type name=\"probe::QualifiedLocals\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"imported\" declaredBy=\"probe::QualifiedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"qualified\" declaredBy=\"probe::QualifiedLocals\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"probe::SamePackage\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"accept\" declaredBy=\"probe::SamePackage\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"probe::Companion\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"foreign::Peer\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"foreign::Child\" base=\"foreign::Peer\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"foreign::Peer\"/>\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"other::Peer\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"cycle::A\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"empty\" declaredBy=\"cycle::A\" returnType=\"*\"/>\n  <method name=\"accept\" declaredBy=\"cycle::A\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"cycle::B\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"empty\" declaredBy=\"cycle::B\" returnType=\"*\"/>\n  <method name=\"accept\" declaredBy=\"cycle::B\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>",
+    "<type name=\"init::State\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"init::DeferredPeer\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n</type>",
+    "<type name=\"init::DeferredHolder\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"empty\" declaredBy=\"init::DeferredHolder\" returnType=\"*\"/>\n  <method name=\"accept\" declaredBy=\"init::DeferredHolder\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n</type>"
+  ],
+  "initializationRows": [
+    {
+      "events": [],
+      "id": "oracle-entry"
+    },
+    {
+      "events": [],
+      "id": "holder-construction"
+    },
+    {
+      "events": [],
+      "isNull": true,
+      "id": "foreign-default"
+    },
+    {
+      "events": [],
+      "isNull": true,
+      "id": "foreign-undefined"
+    },
+    {
+      "error": [
+        "TypeError",
+        1034
+      ],
+      "events": [],
+      "id": "foreign-invalid"
+    },
+    {
+      "events": [
+        "Peer.cinit",
+        "Peer.ctor"
+      ],
+      "id": "foreign-construction"
+    },
+    {
+      "events": [
+        "Peer.cinit",
+        "Peer.ctor"
+      ],
+      "same": true,
+      "id": "foreign-genuine"
+    }
+  ]
+}

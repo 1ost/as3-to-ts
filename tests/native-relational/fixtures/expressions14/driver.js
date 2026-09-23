@@ -1,0 +1,10 @@
+const P=modules.get('AS3MethodBinding'),C=modules.get('nativeClass').readNativeClass(modules.get('RelationalReview').RelationalReview),x=P.as3ConstructValue(C,()=>[]);
+var events=[],rows=[],token={marker:"token"};
+function dynamic(){return P.as3CreateDynamicObject();}
+function put(o,n,v){P.as3SetProperty(o,n,v);}
+function hook(label,text){var o=dynamic();put(o,"valueOf",function(){events.push(label+":valueOf");return null;});put(o,"toString",function(){events.push(label+":toString");return text;});return o;}
+function box(mode){var b=dynamic(),left=hook("left","11"),right=hook("right","2"),third=hook("third","3");put(b,"left",function(){events.push("expr:left");return mode==="nan"?NaN:left;});put(b,"right",function(){events.push("expr:right");if(mode==="throw-rhs")throw token;return right;});put(b,"third",function(){events.push("expr:third");return third;});put(b,"skipped",function(){events.push("expr:alternate");return "alternate";});return b;}
+function invoke(name,args){return P.as3CallProperty(x,name,()=>args);}
+function row(id,name,args){events=[];try{var value=invoke(name,args);rows.push({id:id,value:value,events:events.concat()});}catch(e){rows.push({id:id,thrownSame:e===token,events:events.concat()});}}
+row("and-short","andExpr",[false,box("normal")]);row("and-evaluate","andExpr",[true,box("normal")]);row("or-short","orExpr",[true,box("normal")]);row("or-evaluate","orExpr",[false,box("normal")]);row("conditional-alternate","conditional",[false,box("normal")]);row("conditional-compare","conditional",[true,box("normal")]);row("nested-left","nestedLeft",[box("normal")]);row("nested-right","nestedRight",[box("normal")]);row("flat-chain","chain",[box("normal")]);row("addition-operand","additionOperand",[box("normal")]);row("negate-unordered","negateUnordered",[box("nan")]);row("numeric-loop","numericLoop",[]);row("assignment-operand","assignmentOperand",[box("normal")]);row("rhs-throw-no-conversion","andExpr",[true,box("throw-rhs")]);
+globalThis.result=rows;

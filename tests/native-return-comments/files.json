@@ -1,0 +1,66 @@
+[
+  {
+    "path": "evidence/commands.json",
+    "sha256": "23f589744de26f92f8c2ee5a5374e1038cf11174d381f287ab4806017b37c588"
+  },
+  {
+    "path": "evidence/flash.json",
+    "sha256": "ab067c5396d71b780ea993f8eca653a0da0a394a60805bf416f9ae654ab2aa6c"
+  },
+  {
+    "path": "evidence/oracle.swf",
+    "sha256": "10d7db2a2fedc328fe044d9d745effd2d3850dcd2fb09fb08525a179c0d63a9d"
+  },
+  {
+    "path": "evidence/provenance.json",
+    "sha256": "68f82f40b2864de94092e09a3c32827c116926324493c36ccf407936048a3df7"
+  },
+  {
+    "path": "evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "evidence/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "evidence/sources/original/ConstructorOracle.as",
+    "sha256": "24005d54a9f3c17087235b9422883881cea65c28cf2548cfc4d76a096b512133"
+  },
+  {
+    "path": "evidence/sources/original/probe/CommentReturn.as",
+    "sha256": "39f3a2f019409fbc1010b9b1bda737702170be8d51bca1a3b9ffb9d40f94242a"
+  },
+  {
+    "path": "repeat-evidence/commands.json",
+    "sha256": "6a308713d21ee22e7e18a7ef3ed998ef93e34e42ee82acea26d731c4fa4498d3"
+  },
+  {
+    "path": "repeat-evidence/flash.json",
+    "sha256": "2eb59b68847e30e56f1a4e920d191405ad6fc585516f7858a24831d2e6c3f1de"
+  },
+  {
+    "path": "repeat-evidence/oracle.swf",
+    "sha256": "e07372907657f42959d50838083de7952f79583c9ecb50c5f8d7f8e13efeb012"
+  },
+  {
+    "path": "repeat-evidence/provenance.json",
+    "sha256": "22a9103daa9b22bac8494188719a153bba59340f3ef6d8c070581172d226302d"
+  },
+  {
+    "path": "repeat-evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "repeat-evidence/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "repeat-evidence/sources/original/ConstructorOracle.as",
+    "sha256": "24005d54a9f3c17087235b9422883881cea65c28cf2548cfc4d76a096b512133"
+  },
+  {
+    "path": "repeat-evidence/sources/original/probe/CommentReturn.as",
+    "sha256": "39f3a2f019409fbc1010b9b1bda737702170be8d51bca1a3b9ffb9d40f94242a"
+  }
+]

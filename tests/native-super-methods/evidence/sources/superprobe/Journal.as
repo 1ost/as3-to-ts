@@ -1,0 +1,1 @@
+package superprobe { public class Journal { public static var rows:Array=[]; public static var failure:Object={}; public static function mark(label:String,value:*):* {rows.push(label); return value;} public static function failArgument():* {rows.push("argument-throw");throw failure;} } }

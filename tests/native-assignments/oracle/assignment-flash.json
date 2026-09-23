@@ -1,0 +1,124 @@
+[
+  {
+    "op": "or",
+    "initial": null,
+    "stored": 11,
+    "result": 11,
+    "log": [
+      "get",
+      "rhs",
+      "set"
+    ]
+  },
+  {
+    "op": "and",
+    "initial": null,
+    "stored": null,
+    "result": null,
+    "log": [
+      "get",
+      "set"
+    ]
+  },
+  {
+    "op": "or",
+    "initial": 0,
+    "stored": 11,
+    "result": 11,
+    "log": [
+      "get",
+      "rhs",
+      "set"
+    ]
+  },
+  {
+    "op": "and",
+    "initial": 0,
+    "stored": 0,
+    "result": 0,
+    "log": [
+      "get",
+      "set"
+    ]
+  },
+  {
+    "op": "or",
+    "initial": 7,
+    "stored": 7,
+    "result": 7,
+    "log": [
+      "get",
+      "set"
+    ]
+  },
+  {
+    "op": "and",
+    "initial": 7,
+    "stored": 11,
+    "result": 11,
+    "log": [
+      "get",
+      "rhs",
+      "set"
+    ]
+  },
+  {
+    "op": "or",
+    "initial": "",
+    "stored": 11,
+    "result": 11,
+    "log": [
+      "get",
+      "rhs",
+      "set"
+    ]
+  },
+  {
+    "op": "and",
+    "initial": "",
+    "stored": "",
+    "result": "",
+    "log": [
+      "get",
+      "set"
+    ]
+  },
+  {
+    "op": "or",
+    "initial": true,
+    "stored": true,
+    "result": true,
+    "log": [
+      "get",
+      "set"
+    ]
+  },
+  {
+    "op": "and",
+    "initial": true,
+    "stored": 11,
+    "result": 11,
+    "log": [
+      "get",
+      "rhs",
+      "set"
+    ]
+  },
+  {
+    "signedResult": -1,
+    "unsignedResult": 4294967295,
+    "signed": -1,
+    "unsigned": 4294967295
+  },
+  {
+    "stringType": "string",
+    "booleanResult": true,
+    "numberValue": 3,
+    "numberType": "number",
+    "stringResult": "5",
+    "booleanValue": true,
+    "booleanType": "boolean",
+    "numberResult": 3,
+    "stringValue": "5"
+  }
+]

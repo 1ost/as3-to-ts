@@ -1,0 +1,66 @@
+[
+  {
+    "path": "held-evidence/commands.json",
+    "sha256": "b224ed1dd156eebab87ccf45469d474fe6190eb59470accef2d1e5692186f1ce"
+  },
+  {
+    "path": "held-evidence/flash.json",
+    "sha256": "7e500d1e99a675547c911a974935bac95c1e26789a2de38b893d7636dc713118"
+  },
+  {
+    "path": "held-evidence/oracle.swf",
+    "sha256": "74b7626a0002d992a49d5dda054067ca1df088d7dc026c4ce0e60ec265e45082"
+  },
+  {
+    "path": "held-evidence/provenance.json",
+    "sha256": "59e00bd738f0822d089f1d5a3f137723003ceceb5df1cee6b4883099f2b9a0e4"
+  },
+  {
+    "path": "held-evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "held-evidence/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "held-evidence/sources/original/ConstructorOracle.as",
+    "sha256": "8f040b60db688455b37b30197410e0e55ce82c26084ec56f5923ea69a30ca684"
+  },
+  {
+    "path": "held-evidence/sources/original/probe/Placement.as",
+    "sha256": "8c690dd997c769a4c36efa6107125a8842b42d0b1a4724efe6298e487d50eed4"
+  },
+  {
+    "path": "held-repeat-evidence/commands.json",
+    "sha256": "d54dde2a377ef17177b6b81f8060e7f117be8a0a96897977b3e59efa77a2ef63"
+  },
+  {
+    "path": "held-repeat-evidence/flash.json",
+    "sha256": "7e500d1e99a675547c911a974935bac95c1e26789a2de38b893d7636dc713118"
+  },
+  {
+    "path": "held-repeat-evidence/oracle.swf",
+    "sha256": "82bcd570b21fc6a6206f2b550e50b134bdab322575d914d87942e95091e1fe51"
+  },
+  {
+    "path": "held-repeat-evidence/provenance.json",
+    "sha256": "3e8bdac7407b779e0110836a4e17f00733f8544e20a05b59bd9ab57b40f4c7ff"
+  },
+  {
+    "path": "held-repeat-evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+  },
+  {
+    "path": "held-repeat-evidence/sources/capture.py",
+    "sha256": "06f3b92298d55f6b2dc512548487861d4feaa3d20da64e3a34bb079723566440"
+  },
+  {
+    "path": "held-repeat-evidence/sources/original/ConstructorOracle.as",
+    "sha256": "8f040b60db688455b37b30197410e0e55ce82c26084ec56f5923ea69a30ca684"
+  },
+  {
+    "path": "held-repeat-evidence/sources/original/probe/Placement.as",
+    "sha256": "8c690dd997c769a4c36efa6107125a8842b42d0b1a4724efe6298e487d50eed4"
+  }
+]

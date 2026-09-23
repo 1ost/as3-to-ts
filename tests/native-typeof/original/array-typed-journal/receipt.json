@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "group": "array-typed-journal",
+  "files": [
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-xw24nqtg\\capture.cjs"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "436c89b60a8bf83ddfd9e7f34cbe33e4b8898303a2cee187876c8a11982880bc"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "98cd3d63a4de1cf94aa73578492541456586d4ad3fa6f4b16ec03f2e21ed0d30",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-xw24nqtg\\flash.json"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "d28a59d78666961bff3cd29c0f3bae3cc0f2cf0d866c27c0306f4595d86566c2",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-xw24nqtg\\oracle.swf"
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "2995aab3af32ab0481ff898fc3bf54fad7fd1b07edb7b14a4b5476a904c33056"
+    },
+    {
+      "path": "sources/MetadataOracle.as",
+      "sha256": "d87590da554722c0707d519a9cfb1e526f60b5563536fea39b6ac14012eccc82",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-xw24nqtg\\sources\\MetadataOracle.as"
+    },
+    {
+      "path": "sources/typeprobe/Subject.as",
+      "sha256": "4b451cd8000ef7fd5f648a7995c3a7a887b1dca8a03090420e32b0e574d4d01e",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-typeof\\flash-xw24nqtg\\sources\\typeprobe\\Subject.as"
+    },
+    {
+      "path": "metadata.json",
+      "sha256": "313027b0bf57e28ee809cd4e090a41fbc77f9dc9cb86da2d494163a07c19f0ae"
+    }
+  ],
+  "rows": 32,
+  "lifecycleSteps": 0,
+  "operationTrace": false,
+  "held": "Source Array-typed field traits require authenticated native reference lowering; actual common provider rejects bare Array type string."
+}

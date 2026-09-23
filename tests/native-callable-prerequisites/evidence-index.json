@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "groups": [
+    {
+      "group": "numeric",
+      "receipt": "evidence/numeric/receipt.json",
+      "sha256": "550d99b9aa5842a67f31ece732d8eaa68584adfce527c0077108b0d53daaae12"
+    },
+    {
+      "group": "early-return",
+      "receipt": "evidence/early-return/receipt.json",
+      "sha256": "56e8017b31762ef86837bce6fb33be5a48e53a46b6acf19563f4c52d52272d18"
+    },
+    {
+      "group": "wildcard-catch",
+      "receipt": "evidence/wildcard-catch/receipt.json",
+      "sha256": "1c55ff9a52e7b30c4812c573f2239889399e5bb742c8a97f29dc539b84e5f7b1"
+    },
+    {
+      "group": "merge-interactions",
+      "receipt": "evidence/merge-interactions/receipt.json",
+      "sha256": "6c111ea2ebf8b00ce8ac4520ae06ec556b0fedff094a856d18734bfec04ad740"
+    }
+  ]
+}

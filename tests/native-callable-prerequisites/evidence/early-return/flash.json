@@ -1,0 +1,148 @@
+{
+  "ready": true,
+  "failure": "",
+  "rows": [
+    {
+      "mode": 0,
+      "child": false,
+      "trace": [
+        "enter:0:1",
+        "finally:1",
+        "nested:17",
+        "tail",
+        "result:7"
+      ]
+    },
+    {
+      "mode": 1,
+      "child": false,
+      "trace": [
+        "enter:1:1",
+        "result:2"
+      ]
+    },
+    {
+      "mode": 2,
+      "child": false,
+      "trace": [
+        "enter:2:1",
+        "finally:3",
+        "result:3"
+      ]
+    },
+    {
+      "mode": 3,
+      "child": false,
+      "trace": [
+        "enter:3:1",
+        "catch:true",
+        "finally:4",
+        "result:4"
+      ]
+    },
+    {
+      "mode": 4,
+      "child": false,
+      "trace": [
+        "enter:4:1",
+        "finally:1",
+        "nested:17",
+        "tail",
+        "result:7"
+      ]
+    },
+    {
+      "mode": 5,
+      "child": false,
+      "trace": [
+        "enter:5:1",
+        "finally:1",
+        "nested:17",
+        "result:6"
+      ]
+    },
+    {
+      "mode": 6,
+      "child": false,
+      "trace": [
+        "enter:6:1",
+        "finally:1",
+        "thrown:true"
+      ]
+    },
+    {
+      "mode": 0,
+      "child": true,
+      "trace": [
+        "enter:0:1",
+        "finally:1",
+        "nested:17",
+        "tail",
+        "child:7:9",
+        "result:7:10"
+      ]
+    },
+    {
+      "mode": 1,
+      "child": true,
+      "trace": [
+        "enter:1:1",
+        "child:2:9",
+        "result:2:9"
+      ]
+    },
+    {
+      "mode": 2,
+      "child": true,
+      "trace": [
+        "enter:2:1",
+        "finally:3",
+        "child:3:9",
+        "result:3:10"
+      ]
+    },
+    {
+      "mode": 3,
+      "child": true,
+      "trace": [
+        "enter:3:1",
+        "catch:true",
+        "finally:4",
+        "child:4:9",
+        "result:4:10"
+      ]
+    },
+    {
+      "mode": 4,
+      "child": true,
+      "trace": [
+        "enter:4:1",
+        "finally:1",
+        "nested:17",
+        "tail",
+        "child:7:9",
+        "result:7:10"
+      ]
+    },
+    {
+      "mode": 5,
+      "child": true,
+      "trace": [
+        "enter:5:1",
+        "finally:1",
+        "nested:17",
+        "child:6:9",
+        "result:6:10"
+      ]
+    },
+    {
+      "mode": 6,
+      "child": true,
+      "trace": [
+        "enter:6:1",
+        "finally:1",
+        "thrown:true"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\SuperOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded",
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\oracle.swf (1887 bytes)\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\original\\superprobe\\Leaf.as(15): col: 53 Warning: null used where a Boolean value was expected.\n\n   Journal.rows.push(\"protected-null:\"+super.hidden(null));\n                                                    ^\n\n"
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-super-method\\flash-expanded",
+    "exitCode": 0,
+    "stdout": "\n",
+    "stderr": ""
+  }
+]

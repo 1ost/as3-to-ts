@@ -1,0 +1,156 @@
+{
+  "rows": [
+    {
+      "index": 0,
+      "mode": 0,
+      "trace": [
+        "caught:true",
+        "kind:undefined",
+        "nested:true",
+        "unchanged:true",
+        "inner-finally",
+        "outer-finally",
+        "survived:true"
+      ]
+    },
+    {
+      "index": 0,
+      "mode": 1,
+      "trace": [
+        "caught:true",
+        "kind:undefined",
+        "inner-finally",
+        "outer:true",
+        "outer-finally",
+        "escaped:true"
+      ]
+    },
+    {
+      "index": 1,
+      "mode": 0,
+      "trace": [
+        "caught:true",
+        "kind:object",
+        "nested:true",
+        "unchanged:true",
+        "inner-finally",
+        "outer-finally",
+        "survived:true"
+      ]
+    },
+    {
+      "index": 1,
+      "mode": 1,
+      "trace": [
+        "caught:true",
+        "kind:object",
+        "inner-finally",
+        "outer:true",
+        "outer-finally",
+        "escaped:true"
+      ]
+    },
+    {
+      "index": 2,
+      "mode": 0,
+      "trace": [
+        "caught:true",
+        "kind:object",
+        "nested:true",
+        "unchanged:true",
+        "inner-finally",
+        "outer-finally",
+        "survived:true"
+      ]
+    },
+    {
+      "index": 2,
+      "mode": 1,
+      "trace": [
+        "caught:true",
+        "kind:object",
+        "inner-finally",
+        "outer:true",
+        "outer-finally",
+        "escaped:true"
+      ]
+    },
+    {
+      "index": 3,
+      "mode": 0,
+      "trace": [
+        "caught:true",
+        "kind:string",
+        "nested:true",
+        "unchanged:true",
+        "inner-finally",
+        "outer-finally",
+        "survived:true"
+      ]
+    },
+    {
+      "index": 3,
+      "mode": 1,
+      "trace": [
+        "caught:true",
+        "kind:string",
+        "inner-finally",
+        "outer:true",
+        "outer-finally",
+        "escaped:true"
+      ]
+    },
+    {
+      "index": 4,
+      "mode": 0,
+      "trace": [
+        "caught:true",
+        "kind:number",
+        "nested:true",
+        "unchanged:true",
+        "inner-finally",
+        "outer-finally",
+        "survived:true"
+      ]
+    },
+    {
+      "index": 4,
+      "mode": 1,
+      "trace": [
+        "caught:true",
+        "kind:number",
+        "inner-finally",
+        "outer:true",
+        "outer-finally",
+        "escaped:true"
+      ]
+    },
+    {
+      "index": 5,
+      "mode": 0,
+      "trace": [
+        "caught:true",
+        "kind:boolean",
+        "nested:true",
+        "unchanged:true",
+        "inner-finally",
+        "outer-finally",
+        "survived:true"
+      ]
+    },
+    {
+      "index": 5,
+      "mode": 1,
+      "trace": [
+        "caught:true",
+        "kind:boolean",
+        "inner-finally",
+        "outer:true",
+        "outer-finally",
+        "escaped:true"
+      ]
+    }
+  ],
+  "ready": true,
+  "failure": ""
+}

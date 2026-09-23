@@ -1,0 +1,153 @@
+{
+  "schema": 1,
+  "scope": "Independent actual Flash class initialization captures; no application readiness",
+  "retentionScriptSHA256": "b1969e161e02381364da4268f899853a4ab33f16e4fc8064d8eab94e31ae6698",
+  "files": [
+    {
+      "path": "InitOracle.as",
+      "sha256": "f1a9a9007b3cfc6231d76904c52cea9c77e060f1dc6800cf1546832ded58c3c0"
+    },
+    {
+      "path": "init/Log.as",
+      "sha256": "c977b6a8542434c279a3819d0426e8673c1908116fb817fff2ec8420ffc4ba98"
+    },
+    {
+      "path": "init/Base.as",
+      "sha256": "95777fba538ac1cdb08625da539de0a6c3097ee5ea605ad33179f578038f958c"
+    },
+    {
+      "path": "init/Subject.as",
+      "sha256": "af5790098a6bb4539106674531c8e6bd7dd083e36112693778e2dfebdd818fcb"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "42401d088b2cddfa7b90b4cda387941a1b8aa2a8e3ea43b12e5a207a5529d715"
+    },
+    {
+      "path": "evidence.json",
+      "sha256": "8fdb9a04124602ff717119d6c187a7bf66d0dcafe9de19327f4be5fb2ae58269"
+    },
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "publication/PublicationOracle.as",
+      "sha256": "6e6b4656327c8d1c28749341f45d2c94acd53e6f4be71d8866489a1fa591ab79"
+    },
+    {
+      "path": "publication/lifecycle/Journal.as",
+      "sha256": "2d688d2e6a2afbd0ec1b8cab52f4b9cd0d04ee52b5eb464a69f89ae58d27ba9f"
+    },
+    {
+      "path": "publication/lifecycle/First.as",
+      "sha256": "fb717ad56447cd9e17d9d470bcfddf7e83b18feb56bd111e2010e53571942e74"
+    },
+    {
+      "path": "publication/lifecycle/Second.as",
+      "sha256": "838ab4f3be480bfcd5184d7c37e7b7d7fb1ad4df1589458f1ce4d164ac47eaad"
+    },
+    {
+      "path": "publication/lifecycle/Failure.as",
+      "sha256": "226d65a2dcceaf32b958fe54b7b051aad79258d627c8e480be84e1d0ca156428"
+    },
+    {
+      "path": "publication/flash.json",
+      "sha256": "36f22a468e2c42fe01b9dc4315dde6c9519d63488dda0f3dcf273cf53a0783d3"
+    },
+    {
+      "path": "publication/provenance.json",
+      "sha256": "e66cdfb1884f3758fc26bab8ec9c85e0030b41d70ace75ca6e8f3059580f5bb9"
+    },
+    {
+      "path": "publication/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "class-reads/ReadsOracle.as",
+      "sha256": "a0d380f55f41365fe91c720419b99694dfdc8d25d362a091d5210f5af56fa3b0"
+    },
+    {
+      "path": "class-reads/reads/Journal.as",
+      "sha256": "df6426525597c4c2c7629771b9c46a1e37c55a85104f8b83d4a215166928d9bb"
+    },
+    {
+      "path": "class-reads/reads/CastTarget.as",
+      "sha256": "6defd175259d3cb64b70897c3f2bb595feda60a324c5b8584ca10cc8fc508ef8"
+    },
+    {
+      "path": "class-reads/reads/IsTarget.as",
+      "sha256": "5411d3017b62bc6d1e3e137678b901a5aa201b7582ab58cae7167a72b4361fb0"
+    },
+    {
+      "path": "class-reads/reads/NewTarget.as",
+      "sha256": "955b0988fbae745094b8e01c34d087f33fe134c4adf7c6f6db5b9b294454fb2a"
+    },
+    {
+      "path": "class-reads/flash.json",
+      "sha256": "d070963c129d87dcc36be86bd9884e86c580da8c55b660d4861cfbb0fdf7f127"
+    },
+    {
+      "path": "class-reads/provenance.json",
+      "sha256": "8ef3a236fa1d11fb025dfb4943b351959a8c71dd18e19419098072c74a53cddc"
+    },
+    {
+      "path": "class-reads/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "cycles-errors/CycleOracle.as",
+      "sha256": "a8e34a86f5bcfec9a5ba6d3c0b9cf8149c216ae5b49f5972b8e1cd8282935868"
+    },
+    {
+      "path": "cycles-errors/probe/Log.as",
+      "sha256": "7dd480ec7b674109d70828b281e178001b9616abd082cde775acd6df26d91173"
+    },
+    {
+      "path": "cycles-errors/probe/A.as",
+      "sha256": "ef54c0934cbb156444d2e31dfa3d69da63d9efa19c53435c6ea12165ba5af144"
+    },
+    {
+      "path": "cycles-errors/probe/B.as",
+      "sha256": "b6d3cd7280efd0400a8a8d60b9c5faefbcce95d0c6d0c1367ec6f87d16572717"
+    },
+    {
+      "path": "cycles-errors/probe/Failure.as",
+      "sha256": "d58db90fd7f24d532fdabc3d909cf3aa183fff0750e2d59f60f45ca3ea275a5a"
+    },
+    {
+      "path": "cycles-errors/flash.json",
+      "sha256": "87e6df01a016e912ba6725ef43f5929ca004108d179724940f0e8a54b1fdee7d"
+    },
+    {
+      "path": "cycles-errors/commands.json",
+      "sha256": "1602e14479d2a9cead69924e58940d5e9e3714239dfd8b10a843d181b9c0b6df"
+    },
+    {
+      "path": "cycles-errors/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    }
+  ],
+  "swfs": [
+    {
+      "group": "initial-order",
+      "sourcePath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\oracle.swf",
+      "sha256": "bbf72c959f9843d9e954d4459669ed8c763155faccd264be57df8533d5854c1a"
+    },
+    {
+      "group": "publication",
+      "sourcePath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\publication\\oracle.swf",
+      "sha256": "c3829eba866d6bcd1599dbe82c94276e5a878ec52cc9ca11a030bcbd4ed87880"
+    },
+    {
+      "group": "class-reads",
+      "sourcePath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\class-reads\\oracle.swf",
+      "sha256": "b07fbde9f0f0f9ac9146b46b9c66c32060751ae8be96cf868bf80e32fc90bd8d"
+    },
+    {
+      "group": "cycles-errors",
+      "sourcePath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\tweenmax-init-review\\cycles-errors\\oracle.swf",
+      "sha256": "6a86e0bd37d23e1037b91c215260c9fc4ebc99b08b550f90ee74e39cc0f70c1a"
+    }
+  ]
+}

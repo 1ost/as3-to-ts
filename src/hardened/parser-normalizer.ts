@@ -2,7 +2,7 @@ import parse from "../parse/index";
 import { inspectIncludeSyntax } from "./source-includes-parser";
 import { expandSourceIncludes } from "./source-includes";
 import Node from "../syntax/node";
-import { nodeKindName } from "../syntax/nodeKind";
+import NodeKind, { nodeKindName } from "../syntax/nodeKind";
 import { NormalizedParserAst, NormalizedParserNode, SourceSpan } from "./contracts";
 import { Sha256Function } from "./ledger";
 
@@ -200,22 +200,60 @@ export function normalizeParserAst(
         if (!Number.isInteger(raw.kind)) {
             fail("PARSER_NORMALIZER_KIND", "parser node kind must be a known numeric NodeKind", id);
         }
-        const kind = nodeKindName(Number(raw.kind));
+        let kind = nodeKindName(Number(raw.kind));
+        // The native emitter retains explicit wrappers and selector nodes. Project
+        // those source-backed shapes into the existing closed AP AST vocabulary.
+        if (kind === "CLASS_INITIALIZER") {
+            if (!Array.isArray(raw.children) || raw.children.length !== 1) {
+                fail("PARSER_NORMALIZER_CHILDREN", "class initializer requires one statement", id);
+            }
+            const statement = raw.children[0] as Node;
+            if (!statement || statement.start < rawSpan.start || statement.end > rawSpan.end) {
+                fail("PARSER_NORMALIZER_SPAN", "class initializer statement escapes its wrapper", id);
+            }
+            parserNodes.push(node);
+            visit(statement, parentId, order, parentSpan, siblingBoundary);
+            return;
+        }
+        if (kind === "NAMESPACE_ACCESS") kind = "DOT";
+        if (kind === "NAMESPACE_DECLARATION") kind = "NAMESPACE";
         if (typeof kind !== "string" || !ADMITTED_KINDS.has(kind)) {
             fail("PARSER_NORMALIZER_UNSUPPORTED_KIND", "parser node kind is unsupported: " + String(kind), id);
         }
         if (!Array.isArray(raw.children)) {
             fail("PARSER_NORMALIZER_CHILDREN", "parser node children must be an array", id);
         }
-        const children = raw.children as unknown[];
-        const span = exactSpan(node, sourceText, rawSpan, parentSpan, siblingBoundary, children.length, id);
+        let children = raw.children as unknown[];
+        let textNode: Node = node;
+        if (node.kind === NodeKind.TYPE && node.qualifiedName) {
+            textNode = {...node, text: node.qualifiedName} as Node;
+        } else if (node.kind === NodeKind.NAMESPACE_ACCESS) {
+            textNode = {...node, text: "::"} as Node;
+        } else if (kind === "LABEL" && children.length === 2) {
+            const name = children[0] as Node;
+            if (name.kind !== NodeKind.IDENTIFIER) fail("PARSER_NORMALIZER_CHILDREN", "label requires an identifier", id);
+            textNode = {...node, text: name.text} as Node;
+            children = children.slice(1);
+        } else if (node.kind === NodeKind.NAMESPACE_DECLARATION) {
+            const name = node.children.find(child => child.kind === NodeKind.NAME);
+            const value = node.children[node.children.length - 1];
+            if (!name || !value || value === name) fail("PARSER_NORMALIZER_CHILDREN", "namespace requires a name and initializer", id);
+            const assignment = sourceText.indexOf("=", name.end);
+            if (assignment < name.end || assignment >= value.start) fail("PARSER_NORMALIZER_SPAN", "namespace initializer requires its source assignment", id);
+            const init = Object.assign(new Node(), {kind: NodeKind.INIT,
+                start: assignment, end: value.end, children: [value], leadingTrivia: [],
+            });
+            textNode = {...node, text: name.text} as Node;
+            children = [init, ...node.children.filter(child => child.kind === NodeKind.MOD_LIST || child.kind === NodeKind.META_LIST)];
+        }
+        const span = exactSpan(textNode, sourceText, rawSpan, parentSpan, siblingBoundary, children.length, id);
         const output: NormalizedParserNode = {
             id,
             parentId,
             order,
             kind,
             span,
-            text: normalizedText(node, sourceText, span, id),
+            text: normalizedText(textNode, sourceText, span, id),
         };
         if (kind === "XML_LITERAL" && (children.length !== 0 || typeof output.text !== "string"
             || output.text !== sourceText.slice(span.start, span.end))) {

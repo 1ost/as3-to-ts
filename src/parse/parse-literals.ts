@@ -8,19 +8,27 @@ import {parseExpression} from "./parse-expressions";
 import {parseType} from "./parse-types";
 
 
-export function parseArrayLiteral(parser:AS3Parser):Node {
+export function parseArrayLiteral(parser:AS3Parser, allowElisions:boolean = true):Node {
     let tok = consume(parser, Operators.LEFT_SQUARE_BRACKET);
     let result:Node = createNode(NodeKind.ARRAY, {start: tok.index});
-    while (!tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) {
+    while (true) {
+        while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
+        if (tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) break;
         assertNotEOF(parser, 'array literal');
         const checkpoint = getParserCheckPoint(parser);
-        result.children.push(parseExpression(parser));
-        if (!tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) {
-            if (!tokIs(parser, Operators.COMMA)) {
-                throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', ', or ]', 'array literal');
-            }
-            nextToken(parser);
+        if (tokIs(parser, Operators.COMMA)) {
+            if (!allowElisions) throw new Error('AS3_VECTOR_LITERAL: missing element before comma');
+            // AS3 elisions create own undefined entries, not JavaScript holes.
+            // A zero-width literal leaves the separator available to emission.
+            const start = parser.tok.index;
+            result.children.push(createNode(NodeKind.LITERAL, {start, end: start, text: 'void 0'}));
+            nextToken(parser, true);
+            continue;
         }
+        result.children.push(parseExpression(parser));
+        while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
+        if (tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) break;
+        consume(parser, Operators.COMMA);
         assertProgress(parser, checkpoint, 'array literal');
     }
     result.end = consume(parser, Operators.RIGHT_SQUARE_BRACKET).end;
@@ -69,7 +77,7 @@ export function parseShortVector(parser:AS3Parser):Node {
     vector.children.push(parseType(parser));
     vector.end = consume(parser, Operators.SUPERIOR).end;
 
-    let arrayLiteral = parseArrayLiteral(parser);
+    let arrayLiteral = parseArrayLiteral(parser, false);
 
     return createNode(NodeKind.SHORT_VECTOR, {start: vector.start, end: arrayLiteral.end}, vector, arrayLiteral);
 }

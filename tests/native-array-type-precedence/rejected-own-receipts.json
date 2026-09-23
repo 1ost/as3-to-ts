@@ -1,0 +1,18 @@
+[
+  {
+    "path": "rejected-own/commands.json",
+    "sha256": "d52c61f0ea6d6d4da138693c7ed966cc462d959a734f20f8820681ded42e0f4a"
+  },
+  {
+    "path": "rejected-own/rejected-original/ConstructorOracle.as",
+    "sha256": "bb449cf9a263de1b39cf2327951ae39a4ee80f6c9472e8ff6d353906b0349d61"
+  },
+  {
+    "path": "rejected-own/rejected-original/probe/Array.as",
+    "sha256": "99e757c16c84595f58afd3abf8fbb25c6ba41fb232aebfba311f09a69cfb29ef"
+  },
+  {
+    "path": "rejected-own/rejected-original/probe/Holder.as",
+    "sha256": "65190274a3c31e8f578bf6be496377b9e04459cdb56bfb17d3155899ed7a72ee"
+  }
+]

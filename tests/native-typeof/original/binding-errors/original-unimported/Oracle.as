@@ -1,0 +1,1 @@
+package { import flash.display.Sprite;import consumer.Subject;import foreign.hidden; public class Oracle extends Sprite { public function Oracle(){var force:*=new hidden();Subject.check();} } }

@@ -1,0 +1,49 @@
+    /** Resolve only a direct instance receiver with a complete lexical namespace set.
+     * Preserve the original span/children so existing selector coercion and write
+     * guards handle the operation; no text replacement or public-name aliasing. */
+    private lowerOpenedThisAccesses(): void {
+        this.walk(this.root, node => {
+            if (node.kind !== NodeKind.DOT || node.children.length !== 2
+                || node.children[0].kind !== NodeKind.IDENTIFIER || node.children[0].text !== 'this') return;
+            const owner = this.ancestor(node, NodeKind.CLASS);
+            if (!owner) return;
+            const name = node.children[1].text;
+            if (!Array.from(this.members.values()).some(member => member.name === name && !member.static)) return;
+            const pkg = this.ancestor(node, NodeKind.PACKAGE);
+            const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
+                .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+            const candidates: {member: NamespaceMember; qualifier: string}[] = [];
+            opened.forEach(directive => {
+                const uri = this.resolve(directive, directive.text), member = this.findMember(owner, uri, name, false);
+                if (member && !candidates.some(value => value.member === member))
+                    candidates.push({member, qualifier:directive.text});
+            });
+            if (!candidates.length) return;
+            if (candidates.length !== 1) this.fail('ambiguous open namespace member: ' + name);
+            for (let scope = node.parent; scope && scope !== owner; scope = scope.parent) {
+                if ([NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET,NodeKind.LAMBDA].indexOf(scope.kind) >= 0) {
+                    const mods = scope.findChild(NodeKind.MOD_LIST);
+                    if (scope.parent !== owner.findChild(NodeKind.CONTENT)
+                        || mods && mods.children.some(mod => mod.text === 'static'))
+                        this.fail('open namespace this requires an instance member receiver');
+                }
+                if (scope.findChildren(NodeKind.USE).length)
+                    this.fail('function-local open namespaces require separate resolution');
+            }
+            for (const cls of this.hierarchy(owner)) {
+                for (const declaration of cls.findChild(NodeKind.CONTENT).children) {
+                    if (this.memberDeclaration(declaration)) continue;
+                    const names = [NodeKind.VAR_LIST,NodeKind.CONST_LIST].indexOf(declaration.kind) >= 0
+                        ? declaration.findChildren(NodeKind.NAME_TYPE_INIT).map(value => value.findChild(NodeKind.NAME))
+                        : [declaration.findChild(NodeKind.NAME)];
+                    if (names.some(value => value && value.text === name))
+                        this.fail('open namespace spelling collides with an ordinary member: ' + name);
+                }
+            }
+            const selected = candidates[0];
+            this.openedAccesses.set(node, {uri:selected.member.uri, name, receiver:node.children[0],
+                implicitMember:null, qualifier:selected.qualifier});
+            node.kind = NodeKind.NAMESPACE_ACCESS;
+        });
+    }
+

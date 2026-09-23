@@ -1,0 +1,13 @@
+import {ConstantReads} from './ConstantReads';
+import {Trace as TraceBinding} from './Trace';
+import {readNativeClass} from '@NATIVE_CLASS@';
+export function run(){
+ const Trace=readNativeClass(TraceBinding),read=new ConstantReads();const rows:any[]=[];
+ rows.push({id:'before',value:Trace.events.concat()});
+ const first=read.first();rows.push({id:'first-read',value:[first,Trace.events.concat()]});
+ rows.push({id:'scalars',value:read.scalars()});
+ rows.push({id:'base-own',value:[read.base(),Trace.events.concat()]});
+ rows.push({id:'repeat',value:[read.first(),Trace.events.concat()]});
+ rows.push({id:'shadow',value:read.shadow({CHANGE:'local'})});
+ return rows;
+}

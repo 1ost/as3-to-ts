@@ -1,0 +1,1 @@
+package refs {import refs.DeferredPeer;public class DeferredHolder {public function DeferredHolder(){}public function empty():*{var peer:DeferredPeer;return peer;}public function accept(value:*):*{var peer:DeferredPeer=value;return peer;}}}

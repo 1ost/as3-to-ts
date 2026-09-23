@@ -1,0 +1,18 @@
+const guards=[];function guard(id,fn,pattern){assert.throws(fn,pattern);guards.push(id);}
+const fresh=()=>structuredClone(input),compile=(p,extra={})=>emit(parse('Registry.as',p.sources['probe.Registry']),p.sources['probe.Registry'],{...options(p),...extra});
+function reject(id,edit,pattern){guard(id,()=>{const value=fresh();edit(value);api.createNativeDeclarationDomain(value);},pattern);}
+reject('missing-native-binding',v=>delete v.nativeReferences,/foreign local|exact source|supported type/);
+reject('source-native-collision',v=>v.nativeReferences['probe.Registry']={module:'Registry',exportName:'Registry'},/distinct qualified/);
+reject('builtin-native-collision',v=>v.nativeReferences['foreign.Array']={module:'Array',exportName:'Array'},/distinct qualified/);
+reject('wrong-export',v=>v.nativeReferences['flash.utils.Dictionary'].exportName='Other',/export binding/);
+reject('empty-module',v=>v.nativeReferences['flash.utils.Dictionary'].module='',/module specifier/);
+reject('domain-cycle',v=>v.nativeReferences['flash.utils.Dictionary'].module=v.module,/cannot import its domain/);
+reject('array-table',v=>v.nativeReferences=[],/reference table/);
+reject('unknown-descriptor-key',v=>v.nativeReferences['flash.utils.Dictionary'].extra=true,/export binding/);
+reject('metadata-native-injection',v=>v.metadata.nativeReferences=v.nativeReferences,/configured on the domain/);
+reject('changed-source',v=>v.sources['probe.Registry']+=' ',/exact authenticated source/);
+guard('import-binding-changed',()=>compile(domain,{importModules:{'flash.utils.Dictionary':'wrong'}}),/import binding changed/);
+guard('provider-not-ready',()=>compile(domain,{nativeClassInitialization:{classes:{'probe.Registry':'lazy'}}}),/ready provider identity/);
+guard('serialized-domain',()=>compile({...domain,metadata:JSON.parse(JSON.stringify(domain.metadata))}),/compiler domain capability/);
+if(process.argv.includes('--guards-only')){console.log(JSON.stringify({guards}));process.exit(0);}
+const generated=Object.fromEntries(Object.entries(domain.sources).map(([q,s])=>[q,emit(parse(q+'.as',s),s,options())]));

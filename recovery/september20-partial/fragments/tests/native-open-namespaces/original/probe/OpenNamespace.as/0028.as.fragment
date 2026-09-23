@@ -1,0 +1,5 @@
+  public function explicitWrite(value:Number):Array { var result:Number=(this.internalA::count=value); return [result,this.count]; }
+  public function chain(value:Number):Array { var result:Number=(this.count=this.unsigned=value); return [result,this.count,this.unsigned]; }
+  public function retarget(other:OpenNamespace,value:Number):Array { var original:OpenNamespace=other; var result:Number=(other.internalA::count=(other=this,value)); return [result,original.internalA::count,other===this]; }
+  public function recursive(depth:int):Number { if(depth==0) return 3.8; return (this.count=this.recursive(depth-1)); }
+  public function same()

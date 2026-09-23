@@ -1,0 +1,14 @@
+    // A typed namespace store converts storage but the assignment expression
+    // returns its unconverted RHS. Keep the LHS before RHS evaluation; one
+    // function-local temporary also preserves receiver changes and recursion.
+    if (operator.text === '=' && unwrapEncapsulatedExpression(left).kind === NodeKind.NAMESPACE_ACCESS) {
+        const value = allocateAssignmentTemporary(emitter, node);
+        emitter.catchup(node.start); emitter.insert('(');
+        visitNode(emitter, left); emitter.catchup(getEffectiveNodeEnd(left));
+        emitter.catchup(operator.start); emitter.skipTo(operator.end); emitter.insert(' = ');
+        emitIntegerCoercionStart(emitter); emitter.insert(value + ' = ');
+        emitter.skipTo(getExpressionStart(right)); visitNode(emitter, right); emitter.catchup(getEffectiveNodeEnd(right));
+        emitIntegerCoercionEnd(emitter, target.declaration.as3Type);
+        emitter.insert(', ' + value + ')'); return;
+    }
+

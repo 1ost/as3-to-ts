@@ -1,0 +1,7 @@
+const read=modules.nativeClass.readNativeClass,Subject=read(modules.Subject.Subject),Child=read(modules.Child.Child),Journal=read(modules.Journal.Journal),actual=[];
+for(const type of [Subject,Child])for(let mode=0;mode<9;mode++){
+ Journal.rows=[];const shared={valueOf(){Journal.rows.push('coerce');return '7.5';}},fail={valueOf(){Journal.rows.push('coerce-fail');throw Journal.thrown;}};
+ try {let value;if(mode<4)value=new type(shared,mode);else if(mode===4)value=new type();else if(mode===5)value=new type(undefined,1);else if(mode===6)value=new type(null,1);else if(mode===7)value=new type('3.25',1,'extra');else value=new type(fail,1);Journal.rows.push('result:'+value.stage+(type===Child?':'+value.ownStage:''));}
+ catch(e){Journal.rows.push('thrown:'+(e===Journal.thrown));}
+ actual.push({child:type===Child,mode,trace:Array.from(Journal.rows)});
+}globalThis.result=actual;

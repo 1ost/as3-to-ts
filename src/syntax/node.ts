@@ -2,6 +2,8 @@ import NodeKind, {nodeKindName} from './nodeKind';
 import Token from '../parse/token';
 
 interface CreateNodeOptions {
+    importKeywordStart?: number;
+    qualifiedName?: string;
     start?: number;
     end?: number;
     text?: string;
@@ -37,11 +39,29 @@ export function createNode(kind: NodeKind, options?: CreateNodeOptions, ... chil
     node.text = text;
     node.children = children.filter(child => !!child);
     node.leadingTrivia = options && options.tok ? options.tok.leadingTrivia.slice() : [];
+    if (options && options.qualifiedName) node.qualifiedName = options.qualifiedName;
+    if (options && options.importKeywordStart !== undefined) node.importKeywordStart = options.importKeywordStart;
 
     return node;
 }
 
+/** Parentheses preserve a single expression's reference; comma lists do not. */
+export function unwrapEncapsulatedExpression(node: Node): Node {
+    while (node.kind === NodeKind.ENCAPSULATED && node.children.length === 1) node = node.children[0];
+    return node;
+}
+
+export function outerEncapsulatedExpression(node: Node): Node {
+    while (node.parent && node.parent.kind === NodeKind.ENCAPSULATED
+        && node.parent.children.length === 1 && node.parent.children[0] === node) node = node.parent;
+    return node;
+}
+
 export default class Node {
+    /** Full source type spelling when the legacy text retains only its terminal name. */
+    public qualifiedName?: string;
+    /** Exact import keyword start; the node range retains the qualified name. */
+    public importKeywordStart?: number;
     public kind: NodeKind;
     public start: number;
     public end: number;

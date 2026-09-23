@@ -1,0 +1,62 @@
+{
+  "files": [
+    {
+      "path": "original\\ClassConversionOracle.as",
+      "sha256": "f22ca964a489b4511898dbb135f6491d63716096803afb4da69cbfca669d0d83"
+    },
+    {
+      "path": "original\\foreign\\Node.as",
+      "sha256": "79ce929b1ab87ffb862a6005fe074787066c1deb17928de46598b9f295519a4d"
+    },
+    {
+      "path": "original\\foreign\\String.as",
+      "sha256": "0660dcd6e5c91238beb3e33ea64dac67546874f7e0b7facf625fe595aa9e87e3"
+    },
+    {
+      "path": "original\\ImportOracle.as",
+      "sha256": "fa7c60cc460192f560b7b4cdc4a9949e8212c8606e4fbf3ae90ce93a75e565c0"
+    },
+    {
+      "path": "original\\probe\\Holder.as",
+      "sha256": "f7f5346e282d99f4f2992176c54bb7361be7c7e598d96af204ae3b5091928baf"
+    },
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "capture.py",
+      "sha256": "7ef99b8c5a23681579e7ec4a6dabc8edd7df89c6af5b6a27810ff78b0c6110b6"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "1d25e09c6240596cbc0996470edad90903ec4354ebcf957d3d711b6631ea4371"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "1c719d19c55cf119efad4f48ad1e7cc7125f1520972ea11b1b8d10160754b3f7"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "4878e1ba2720e8339bfa451d9814c8eaad639801e41f76b8058654c6009ea09c"
+    }
+  ],
+  "tools": [
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ]
+}

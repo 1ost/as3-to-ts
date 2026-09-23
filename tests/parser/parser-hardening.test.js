@@ -45,7 +45,7 @@ function all(node, kind, result = []) {
 
 function childText(node, kind) {
     const child = node.children.find(candidate => candidate.kind === kind);
-    return child && child.text;
+    return child && (child.qualifiedName || child.text);
 }
 
 function assertMonotoneSpans(node, source, label, parent = null) {
@@ -100,7 +100,7 @@ assert.strictEqual(functions.length, 1, 'omitted member access modifier is valid
 const parameterTypes = all(functions[0], NodeKind.PARAMETER)
     .map(parameter => childText(parameter.findChild(NodeKind.NAME_TYPE_INIT), NodeKind.TYPE));
 assert.deepStrictEqual(parameterTypes, ['flash.display.Sprite']);
-assert.ok(all(functions[0], NodeKind.TYPE).some(type => type.text === 'flash.events.Event'),
+assert.ok(all(functions[0], NodeKind.TYPE).some(type => (type.qualifiedName || type.text) === 'flash.events.Event'),
     'fully-qualified return type is preserved');
 assert.ok(all(functions[0], NodeKind.IDENTIFIER).some(identifier => identifier.text === 'int'),
     'int expression identity is preserved in the parser AST');

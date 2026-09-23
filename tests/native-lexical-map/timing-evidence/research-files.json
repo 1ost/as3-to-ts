@@ -1,0 +1,297 @@
+[
+  {
+    "path": "authentication.json",
+    "sha256": "945987a2fe495ab47bb8eaaa0e92ef22d23477c961f095ee3b2d39e092e99370",
+    "bytes": 2230
+  },
+  {
+    "path": "metadata.json",
+    "sha256": "226eb42893a1b78b237f69ed74ce3af08a80e5e0aacb987671c779885f98abda",
+    "bytes": 41698
+  },
+  {
+    "path": "options/native-lexical-structural-com.greensock.core.PropTween.options.json",
+    "sha256": "ce3e621d0c2c1eb57e894881203520fc8e5e2f899b00ee8fea81b8b1a22ecf7d",
+    "bytes": 80569
+  },
+  {
+    "path": "options/native-lexical-structural-com.greensock.core.SimpleTimeline.options.json",
+    "sha256": "ce3e621d0c2c1eb57e894881203520fc8e5e2f899b00ee8fea81b8b1a22ecf7d",
+    "bytes": 80569
+  },
+  {
+    "path": "options/native-lexical-structural-com.greensock.core.TweenCore.options.json",
+    "sha256": "ce3e621d0c2c1eb57e894881203520fc8e5e2f899b00ee8fea81b8b1a22ecf7d",
+    "bytes": 80569
+  },
+  {
+    "path": "options/native-lexical-structural-com.greensock.plugins.TweenPlugin.options.json",
+    "sha256": "ce3e621d0c2c1eb57e894881203520fc8e5e2f899b00ee8fea81b8b1a22ecf7d",
+    "bytes": 80569
+  },
+  {
+    "path": "options/native-lexical-structural-com.greensock.TweenLite.options.json",
+    "sha256": "ce3e621d0c2c1eb57e894881203520fc8e5e2f899b00ee8fea81b8b1a22ecf7d",
+    "bytes": 80569
+  },
+  {
+    "path": "options/native-typed-locals-structural-com.greensock.core.PropTween.options.json",
+    "sha256": "eec737d976347906a4ed994c037a4d9f35b02088746fa918f966c8161869b296",
+    "bytes": 80646
+  },
+  {
+    "path": "options/native-typed-locals-structural-com.greensock.core.SimpleTimeline.options.json",
+    "sha256": "eec737d976347906a4ed994c037a4d9f35b02088746fa918f966c8161869b296",
+    "bytes": 80646
+  },
+  {
+    "path": "options/native-typed-locals-structural-com.greensock.core.TweenCore.options.json",
+    "sha256": "eec737d976347906a4ed994c037a4d9f35b02088746fa918f966c8161869b296",
+    "bytes": 80646
+  },
+  {
+    "path": "options/native-typed-locals-structural-com.greensock.plugins.TweenPlugin.options.json",
+    "sha256": "eec737d976347906a4ed994c037a4d9f35b02088746fa918f966c8161869b296",
+    "bytes": 80646
+  },
+  {
+    "path": "options/native-typed-locals-structural-com.greensock.TweenLite.options.json",
+    "sha256": "eec737d976347906a4ed994c037a4d9f35b02088746fa918f966c8161869b296",
+    "bytes": 80646
+  },
+  {
+    "path": "provider-checks.json",
+    "sha256": "ff54379d1b95319e4815292d0735ce38231802c547f28cc5398cb5481e7cb9dd",
+    "bytes": 658
+  },
+  {
+    "path": "REPORT.md",
+    "sha256": "6df3aec20829fe3560497dfb430550d5d4111b989ce87b5b88f927def2c24d9a",
+    "bytes": 8690
+  },
+  {
+    "path": "retained/current-engine-checks/nativeAS3LexicalAccessors/browser.js",
+    "sha256": "c6b9ed91fd44c342ca3312fc1aec615034d326fd2f425d8ea45b8f0351dde6d8",
+    "bytes": 218118
+  },
+  {
+    "path": "retained/current-engine-checks/nativeAS3LexicalAccessors/native.cjs",
+    "sha256": "e4da2ce89b2536e515b82a6694d4b322a82ca187536d5215720ee8d6afcc20a5",
+    "bytes": 208768
+  },
+  {
+    "path": "retained/current-engine-checks/nativeAS3LexicalAccessors/report.json",
+    "sha256": "44091b2ff41aefe15e64f06f8468632cd3a2e10fc39e556f69015bcefdde319a",
+    "bytes": 25777
+  },
+  {
+    "path": "retained/current-engine-checks/nativeAS3LexicalMembers/browser.js",
+    "sha256": "5c650df2add849031f2e5efba880d2ef24b72c928f12b4a558be31db1f1558c4",
+    "bytes": 194448
+  },
+  {
+    "path": "retained/current-engine-checks/nativeAS3LexicalMembers/native.cjs",
+    "sha256": "183dc366fff492ac5d0791c7933e5ee8935d283449d7a82e37ca79c440921aa3",
+    "bytes": 186192
+  },
+  {
+    "path": "retained/current-engine-checks/nativeAS3LexicalMembers/report.json",
+    "sha256": "2f2259804b94a6766eacc1df85192b7b2fc1079fe63ebc3724459d8c4ae8d0e1",
+    "bytes": 20241
+  },
+  {
+    "path": "retained/reviewed-provider-sources/compiler/src/emit/emitter.ts",
+    "sha256": "dcf10b1bb5cef37517ef8988a4e13fe0c016b0df8e7d248756d0d0bc0a551b6e",
+    "bytes": 103684
+  },
+  {
+    "path": "retained/reviewed-provider-sources/compiler/src/emit/native-callable-classes.ts",
+    "sha256": "ed1e9d280928a0a78f2ab1354a47be4dba8fd96e36d53ee64b8ba792e5471875",
+    "bytes": 42077
+  },
+  {
+    "path": "retained/reviewed-provider-sources/compiler/src/emit/native-class-metadata.ts",
+    "sha256": "6e6388d3e14a706eec7822a0dbadc60eed588a3c53cd04e7851936def032993e",
+    "bytes": 6351
+  },
+  {
+    "path": "retained/reviewed-provider-sources/compiler/src/emit/native-lexical-members.ts",
+    "sha256": "74e75f67f2db64f822e9aafe3bfed721c7a4a55d0a04f853d47ea9b49680f5d0",
+    "bytes": 12376
+  },
+  {
+    "path": "retained/reviewed-provider-sources/compiler/src/emit/native-typed-locals.ts",
+    "sha256": "2d67bd5f2f87b8810b7d2e90928fea8f3231e7ef493c35dc1ae391e823b0e034",
+    "bytes": 13345
+  },
+  {
+    "path": "retained/reviewed-provider-sources/compiler/tests/native-super-methods/README.md",
+    "sha256": "6ab931a82d19501e71cbe98803f442c4ca1a3742ad1cce66e9ba9ed51e1e4e62",
+    "bytes": 5728
+  },
+  {
+    "path": "retained/reviewed-provider-sources/engine/src/layaAir/flash/utils/AS3Class.ts",
+    "sha256": "809530fe0081933fd14c2947fc7e3b94ec3fe1a9d9d218c8507332b7a553589c",
+    "bytes": 9141
+  },
+  {
+    "path": "retained/reviewed-provider-sources/engine/src/layaAir/flash/utils/AS3LexicalMembers.ts",
+    "sha256": "70c70254dbdae8f3c1d7a8fc5085aa26b416ba3507a6cf085fec0f1f505ca616",
+    "bytes": 18644
+  },
+  {
+    "path": "retained/reviewed-provider-sources/engine/src/layaAir/flash/utils/AS3Property.ts",
+    "sha256": "98c34dc447b12f01aa1033160f23bf561672596df284c6a9ba3cfa763cec7fc9",
+    "bytes": 41891
+  },
+  {
+    "path": "retained/reviewed-provider-sources/engine/tests/nativeAS3LexicalAccessors/README.md",
+    "sha256": "19e9e44caf74f2c76aaf1b02566e2d37fbe541ee5c968539b8ac4df1fe5c8ecb",
+    "bytes": 5259
+  },
+  {
+    "path": "retained/reviewed-provider-sources/engine/tests/nativeAS3LexicalMembers/README.md",
+    "sha256": "b29ee268883a6611e6ad6211f95774dcd926afdc6f97f16d20a8e2d34bc6f6e8",
+    "bytes": 4538
+  },
+  {
+    "path": "retained/standalone-proptween97-report.json",
+    "sha256": "1b99e78e6986ae3b17069e9761344725597e60bde70c0d4d3e2f8567456b9696",
+    "bytes": 47566
+  },
+  {
+    "path": "retained/timing-originals/evidence/flash.json",
+    "sha256": "c891f23b4db1359c1a9aa91a67c378c1c283a85c072fe30a83907717d12748a0",
+    "bytes": 4463
+  },
+  {
+    "path": "retained/timing-originals/evidence/oracle.swf",
+    "sha256": "7564b05ec6ddf8b70ee1049410db8a2d63c348177db1194fe83403384194958a",
+    "bytes": 13220
+  },
+  {
+    "path": "retained/timing-originals/evidence/provenance.json",
+    "sha256": "f06b488feb0414e5df69ad8eafee8ac78af83e5acb285c512f98085f10e4c9f5",
+    "bytes": 4660
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/commands.json",
+    "sha256": "c57d9f7e189efe8b7c13112be46c2dc8483723e24d89809e92c6acec276ac304",
+    "bytes": 1840
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/flash.json",
+    "sha256": "3e667511eba4a1196e8ff34d673ce4012ccab7763b97164d8944979424463ac2",
+    "bytes": 36217
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/oracle.swf",
+    "sha256": "9374ddf3eeb8c30d446b619a27ad112455f31ffbbecf5a5f0f879126fe021275",
+    "bytes": 7064
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/provenance.json",
+    "sha256": "cb460fd363a4f277b2dc31d436c7257a43c3a0896f8bd5aac05d9fe05253e2a6",
+    "bytes": 2518
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/README.md",
+    "sha256": "201d502df112c372727d7d22d2b242c105363661bacf0f1077c01f096fb500e6",
+    "bytes": 2646
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/sources/capture.cjs",
+    "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6",
+    "bytes": 1785
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/sources/capture.py",
+    "sha256": "dc1bbd606bd729d4d5f870d196502092d5efca885fb483b263521e719e9fded4",
+    "bytes": 2147
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/sources/original/com/greensock/core/PropTween.as",
+    "sha256": "e71959076819c4dbcd840bda7fbcfdc14b46d61eb1ca46f749c7280892a394b8",
+    "bytes": 975
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/sources/original/com/greensock/core/SimpleTimeline.as",
+    "sha256": "f4fa50eb42f3133efbbbb09a6615239904228f8bc81034766d80011b6c2d68df",
+    "bytes": 3230
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/sources/original/com/greensock/core/TweenCore.as",
+    "sha256": "3f883b6e1ac8183c1d8a371bc46395daa5b8f1ee4e2e44452ab0418bff620c12",
+    "bytes": 9490
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/sources/original/com/greensock/plugins/TweenPlugin.as",
+    "sha256": "e7e4b26c38d45e1faf5adda4d5808caeee8d83abe10e1e7fc1ea8dfb6cedf786",
+    "bytes": 4989
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/sources/original/com/greensock/TweenLite.as",
+    "sha256": "92cc8f2fb203d1d60c101ab5c1757cd04f86962d09ac9dddfef3b46e549ba766",
+    "bytes": 17103
+  },
+  {
+    "path": "retained/timing-originals/metadata-evidence/sources/original/ConstructorOracle.as",
+    "sha256": "116e1b60b67aaf51dff60cd4149b8542a006cb234bd129d51a950b285ed3017a",
+    "bytes": 1251
+  },
+  {
+    "path": "retained/tools/probe_generated_proptween.cjs",
+    "sha256": "3e67adb25e8510d01ac963151966eb5d436f7d521505b409616d76c24f245b66",
+    "bytes": 8824
+  },
+  {
+    "path": "retained/tools/probe_timing_prerequisites.cjs",
+    "sha256": "58c8fa6a623865cb81111e18716ba7159d54d87ede04fafbb7f265bc1ab3d695",
+    "bytes": 10632
+  },
+  {
+    "path": "retained/tools/verify_timing_metadata.py",
+    "sha256": "fa66d4b1e5c787793241cc5ce16398efd01941c470d3a5224236f3a3fdf20af1",
+    "bytes": 10345
+  },
+  {
+    "path": "sources/game-client-flash/src/com/greensock/core/PropTween.as",
+    "sha256": "e71959076819c4dbcd840bda7fbcfdc14b46d61eb1ca46f749c7280892a394b8",
+    "bytes": 975
+  },
+  {
+    "path": "sources/game-client-flash/src/com/greensock/core/SimpleTimeline.as",
+    "sha256": "f4fa50eb42f3133efbbbb09a6615239904228f8bc81034766d80011b6c2d68df",
+    "bytes": 3230
+  },
+  {
+    "path": "sources/game-client-flash/src/com/greensock/core/TweenCore.as",
+    "sha256": "3f883b6e1ac8183c1d8a371bc46395daa5b8f1ee4e2e44452ab0418bff620c12",
+    "bytes": 9490
+  },
+  {
+    "path": "sources/game-client-flash/src/com/greensock/plugins/TweenPlugin.as",
+    "sha256": "e7e4b26c38d45e1faf5adda4d5808caeee8d83abe10e1e7fc1ea8dfb6cedf786",
+    "bytes": 4989
+  },
+  {
+    "path": "sources/game-client-flash/src/com/greensock/TweenLite.as",
+    "sha256": "92cc8f2fb203d1d60c101ab5c1757cd04f86962d09ac9dddfef3b46e549ba766",
+    "bytes": 17103
+  },
+  {
+    "path": "trace-output.json",
+    "sha256": "18828fa721b424ab481d50827dfd075c3356490e763f30fe2383034703c7df06",
+    "bytes": 5012
+  },
+  {
+    "path": "trace.cjs",
+    "sha256": "f481a4d837a5e6e52adfda42c32d1a1737d0f75c05b004ad31eeeb5464442447",
+    "bytes": 4649
+  },
+  {
+    "path": "trace.json",
+    "sha256": "420a1f9f002df34d5af1c03b54633bc76257ea3c79e4f62bcd410dc001972e88",
+    "bytes": 64938
+  }
+]

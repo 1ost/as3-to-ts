@@ -1,0 +1,6 @@
+const guards=[];
+for(const [id,value] of [['forged-prototype',Object.create(Dictionary.prototype)],['forged-constructor',{constructor:Dictionary}],['host-map',new Map()]]){
+ let caught=false;try{unit.local(value);}catch(e){if(e.name!=='TypeError'||e.errorID!==1034)throw e;caught=true;}
+ if(!caught)throw Error('Native reference accepted '+id);guards.push(id);
+}
+globalThis.result={rows,guards};

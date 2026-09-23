@@ -1,0 +1,29 @@
+{
+  "handoffSHA256": "fa91ddfe15a9eab3ad6291887c924ace1944f913aa07cc6e24c12c4d48b5b07b",
+  "productionFiles": [
+    {
+      "path": "src/layaAir/flash/utils/AS3Addition.ts",
+      "sha256": "1a23bb2bf5b9863cd89c27a3ad5377b8b3eb2699c9c91309fc557a9a13dfe77a",
+      "bytes": 1473
+    },
+    {
+      "path": "src/layaAir/flash/utils/AS3Coercion.ts",
+      "sha256": "e8a8e61d5e23a1f29319ba1384da7cd78783f82911a7efae80d157dc16794ade",
+      "bytes": 6462
+    }
+  ],
+  "engineCommit": "27aa27de84d17cac430e0ee59c334d5ee6fd3797",
+  "sourceMode": "committed-engine",
+  "committedProductionFiles": [
+    {
+      "path": "src/layaAir/flash/utils/AS3Addition.ts",
+      "sha256": "1a23bb2bf5b9863cd89c27a3ad5377b8b3eb2699c9c91309fc557a9a13dfe77a",
+      "bytes": 1473
+    },
+    {
+      "path": "src/layaAir/flash/utils/AS3Coercion.ts",
+      "sha256": "e8a8e61d5e23a1f29319ba1384da7cd78783f82911a7efae80d157dc16794ade",
+      "bytes": 6462
+    }
+  ]
+}

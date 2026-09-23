@@ -1,0 +1,42 @@
+const rows=[],nc=load("nativeClass"),DynamicReplace=nc.readNativeClass(load("DynamicReplace").DynamicReplace),d=new DynamicReplace(),StringUtil=load("StringUtil").StringUtil;
+function record(id,fn){try{rows.push({id,value:fn()});}catch(e){
+ const info=(api.isAS3SourceError(e)?{name:api.as3GetProperty(e,'name'),errorID:api.as3GetProperty(e,'errorID')}:null);rows.push({id,value:{name:info?.name||e.name,id:info?.errorID||e.errorID||0}});
+}}
+record('substitute-rest',function(){return StringUtil.substitute('{0}/{1}/{0}/{2}','A',7);});
+record('substitute-array',function(){return StringUtil.substitute('{0}/{1}/{2}',[null,undefined,true]);});
+record('substitute-no-args',function(){return StringUtil.substitute('{0}');});
+record('substitute-empty-array',function(){return StringUtil.substitute('{0}',[]);});
+record('substitute-cascade',function(){return StringUtil.substitute('{0}','{1}','done');});
+record('substitute-dollar-tokens',function(){return StringUtil.substitute('L{0}R',"$$/$&/$"+String.fromCharCode(96)+"/$'/$1");});
+record('substitute-leading-zero',function(){return StringUtil.substitute('{00}/{0}/{10}',[0,1,2,3,4,5,6,7,8,9,10]);});
+record('substitute-unicode',function(){return StringUtil.substitute('\u4e2d{0}\ud83d\ude00{0}','X');});
+record('substitute-nul',function(){return StringUtil.substitute('A{0}\u0000B{0}','X');});
+record('substitute-null',function(){return StringUtil.substitute(null,'x');});
+record('substitute-null-no-args',function(){return StringUtil.substitute(null);});
+record('substitute-object-once',function(){var log=[],o={toString:function(){log.push('string');return 'x';}};return [StringUtil.substitute('{0}/{0}',o),log];});
+record('substitute-no-match-conversion',function(){var log=[],o={toString:function(){log.push('string');return 'x';}};return [StringUtil.substitute('plain',o),log];});
+record('substitute-callback',function(){var log=[],fn=function(m,offset,input) {log.push([m,offset,input]);return '$&';};api.registerAS3Function(fn,api.getAS3BuiltinScriptGlobal(),3);return [StringUtil.substitute('A{0}B{0}',fn),log];});
+record('replace-split-join',function(){return [StringUtil.replace('ababa','b','X'),StringUtil.replace('abc','','-')];});
+record('whitespace',function(){return [StringUtil.isWhitespace(' '),StringUtil.isWhitespace('\t'),StringUtil.isWhitespace('\u00a0'),StringUtil.isAllWhitespace(''),StringUtil.isAllWhitespace(' \t\r\n\f'),StringUtil.isAllWhitespace(' x')];});
+record('trim',function(){return [StringUtil.trim(' x '),StringUtil.trimLeft('  '),StringUtil.trimRight('  '),StringUtil.trim('\u00a0x\u00a0')];});
+record('repeat',function(){return [StringUtil.repeat('ab',3),StringUtil.repeat('x',0),StringUtil.repeat('x',-1),StringUtil.repeat(null,2)];});
+record('restrict',function(){return [StringUtil.restrict('aA1!','a-z'),StringUtil.restrict('aA1!','^a-z'),StringUtil.restrict('abc',null),StringUtil.restrict('abc','')];});
+record('edges',function(){return [StringUtil.startsWith('abc','ab'),StringUtil.endsWith('abc','bc'),StringUtil.isLetter('Az'),StringUtil.isLetter('['),StringUtil.isLetter(''),StringUtil.isLetter(null)];});
+record('length',function(){return [StringUtil.getStringLength('abc'),StringUtil.getStringLength('\u4e2dA'),StringUtil.getStringLength('\ud83d\ude00')];});
+record('slice',function(){return [StringUtil.sliceString('abc',1,2),StringUtil.sliceString('\u4e2dAB',1,3),StringUtil.sliceString('\u4e2dAB',0,1)];});
+record('dynamic-basic',function(){return [d.replace('a1a','a','g','x'),d.replace('a1a','a','','x')];});
+record('dynamic-number',function(){return d.replace('a12b12',12,'g','x');});
+record('dynamic-null-pattern',function(){return d.replace('null/undefined',null,'g','x');});
+record('dynamic-undefined-pattern',function(){return d.replace('null/undefined',undefined,'g','x');});
+record('dynamic-null-flags',function(){return d.replace('aaa','a',null,'x');});
+record('dynamic-undefined-flags',function(){return d.replace('aaa','a',undefined,'x');});
+record('dynamic-coercion-order',function(){var log=[],p={toString:function(){log.push('pattern');return 'a';}},f={toString:function(){log.push('flags');return 'g';}},r={toString:function(){log.push('replacement');return 'x';}};if(typeof fn==='function')api.registerAS3Function(fn,api.getAS3BuiltinScriptGlobal(),3);return [d.replace('aa',p,f,r),log];});
+record('dynamic-null-receiver-order',function(){var log=[],p={toString:function(){log.push('pattern');return 'a';}},f={toString:function(){log.push('flags');return 'g';}},r={toString:function(){log.push('replacement');return 'x';}};try{d.replace(null,p,f,r);}catch(e){return [api.isAS3SourceError(e)?api.as3GetProperty(e,'name'):e.name,api.isAS3SourceError(e)?api.as3GetProperty(e,'errorID'):e.errorID,log];}return log;});
+record('dynamic-empty-subject',function(){return [d.replace('',undefined,'g','x'),d.replace('',undefined,'','x')];});
+record('dynamic-empty-unicode',function(){return [d.replace('\u4e2d\ud83d\ude00A',undefined,'g','x'),d.replace('\u4e2d\ud83d\ude00A',undefined,'','x')];});
+record('dynamic-empty-nul',function(){return d.replace('A\u0000B',undefined,'g','x');});
+record('dynamic-empty-callback',function(){var log=[],fn=function(m,offset,input) {log.push([m,offset,input]);return 'X';};if(typeof fn==='function')api.registerAS3Function(fn,api.getAS3BuiltinScriptGlobal(),3);return [d.replace('\u4e2dA',undefined,'g',fn),log];});
+record('dynamic-empty-callback-empty',function(){var log=[],fn=function(m,offset,input) {log.push([m,offset,input]);return 'X';};if(typeof fn==='function')api.registerAS3Function(fn,api.getAS3BuiltinScriptGlobal(),3);return [d.replace('',undefined,'g',fn),log];});
+record('dynamic-empty-callback-first',function(){var log=[],fn=function(m,offset,input) {log.push([m,offset,input]);return 'X';};if(typeof fn==='function')api.registerAS3Function(fn,api.getAS3BuiltinScriptGlobal(),3);return [d.replace('AB',undefined,'',fn),log];});
+
+globalThis.result=rows;

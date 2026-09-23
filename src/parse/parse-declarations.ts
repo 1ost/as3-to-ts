@@ -9,6 +9,8 @@ import AS3Parser, {
 } from './parser';
 import {parseQualifiedName, parseBlock, parseParameterList, parseNameTypeInit} from './parse-common';
 import {parseExpression} from './parse-expressions';
+import {startsWith} from '../string';
+import {parseStatement} from './parse-statements';
 import {parseOptionalType} from './parse-types';
 
 /**
@@ -97,7 +99,7 @@ function parsePackageContent(parser:AS3Parser, allowScriptStatements:boolean):No
             modifiers.length = 0;
             meta.length = 0;
         } else if (allowScriptStatements && tokIs(parser, Keywords.NAMESPACE)) {
-            result.children.push(parseNamespaceDeclaration(parser, meta, modifiers));
+            result.children.push(parseNativeNamespaceDeclaration(parser, modifiers));
             skip(parser, Operators.SEMI_COLUMN);
             modifiers.length = 0;
             meta.length = 0;
@@ -146,13 +148,14 @@ function parseNamespaceDeclaration(parser:AS3Parser, meta:Node[], modifiers:Toke
 
 function parseImport(parser:AS3Parser):Node {
 
-    consume(parser, Keywords.IMPORT);
+    const keyword = consume(parser, Keywords.IMPORT);
     const nameStart = parser.tok.index;
     let name = parseImportName(parser);
     // Imported identifiers are syntactic namespace candidates; semantic authority resolves their kind.
     const importedName = name.text.slice(name.text.lastIndexOf(".") + 1);
     if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(importedName)) parser.activeNamespaces.add(importedName);
     let result:Node = createNode(NodeKind.IMPORT, {start: nameStart, end: name.end, text: name.text});
+    result.importKeywordStart = keyword.index;
     skip(parser, Operators.SEMI_COLUMN);
     return result;
 }
@@ -192,6 +195,23 @@ function parseUse(parser:AS3Parser):Node {
     });
     skip(parser, Operators.SEMI_COLUMN);
     return result;
+}
+
+
+function parseNativeNamespaceDeclaration(parser:AS3Parser, modifiers:Token[]):Node {
+    let token = consume(parser, Keywords.NAMESPACE);
+    let name = createNode(NodeKind.NAME, {tok: parser.tok});
+    nextToken(parser);
+    if (!tokIs(parser, Operators.EQUAL)) {
+        throw new Error('AS3_NAMESPACE_UNSUPPORTED: namespace requires an explicit literal URI or alias');
+    }
+    nextToken(parser);
+    let value = parseExpression(parser);
+    let end = value.end;
+    if (tokIs(parser, Operators.SEMI_COLUMN)) end = consume(parser, Operators.SEMI_COLUMN).end;
+    return createNode(NodeKind.NAMESPACE_DECLARATION,
+        {start: modifiers.length ? modifiers[0].index : token.index, end: end},
+        convertModifiers(parser, modifiers), name, value);
 }
 
 
@@ -309,9 +329,7 @@ function parseClassContent(parser:AS3Parser):Node {
     while (!tokIs(parser, Operators.RIGHT_CURLY_BRACKET)) {
         assertNotEOF(parser, 'class body');
         const checkpoint = getParserCheckPoint(parser);
-        if (tokIs(parser, Operators.LEFT_CURLY_BRACKET)) {
-            result.children.push(parseBlock(parser));
-        } else if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
+        if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET) && classMetadataPrefix(parser)) {
             meta.push(parseMetaData(parser));
         } else if (tokIs(parser, Keywords.VAR)) {
             parseClassField(parser, result, modifiers, meta);
@@ -321,31 +339,82 @@ function parseClassContent(parser:AS3Parser):Node {
             result.children.push(parseImport(parser));
         } else if (tokIs(parser, Keywords.USE)) {
             result.children.push(parseUse(parser));
+        } else if (tokIs(parser, Keywords.NAMESPACE)) {
+            throw new Error('AS3_NAMESPACE_UNSUPPORTED: class-local namespace declaration');
         } else if (tokIs(parser, Keywords.INCLUDE) || tokIs(parser, Keywords.INCLUDE_AS2)) {
             result.children.push(parseIncludeExpression(parser));
         } else if (tokIs(parser, Keywords.FUNCTION)) {
             parseClassFunctions(parser, result, modifiers, meta);
         } else if (tokIs(parser, Operators.SEMI_COLUMN)) {
             nextToken(parser);
-        } else if (isDeclarationModifier(parser.tok.text) || parser.activeNamespaces.has(parser.tok.text)) {
+        } else if (classDeclarationPrefix(parser)) {
             modifiers.push(parser.tok);
             nextTokenIgnoringDocumentation(parser);
-        } else if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) {
-            if (modifiers.length !== 0 || meta.length !== 0) {
+        } else {
+            if (modifiers.length || meta.length)
                 throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
                     'a class member following declaration metadata and modifiers', 'class body');
-            }
-            const expression = parseExpression(parser);
-            consume(parser, Operators.SEMI_COLUMN);
-            result.children.push(expression);
-        } else {
-            throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
-                'a class member or declaration modifier', 'class body');
+            const start = parser.tok.index;
+            const statement = parseStatement(parser);
+            result.children.push(createNode(NodeKind.CLASS_INITIALIZER,
+                {start, end: statement.end}, statement));
         }
         assertProgress(parser, checkpoint, 'class body');
     }
     result.end = parser.tok.index;
     return result;
+}
+
+/** A namespace qualifier is a declaration prefix only before a declaration.
+ * Expression tokens (including a call's array argument) must never accumulate
+ * in the next field's MOD_LIST/META_LIST. Lookahead restores all scanner state.
+ */
+function classDeclarationPrefix(parser: AS3Parser): boolean {
+    const modifiers = ['public', 'private', 'protected', 'internal', 'static',
+        'override', 'final', 'native', 'dynamic'];
+    if (modifiers.indexOf(parser.tok.text) >= 0) return true;
+    if (!/^[A-Za-z_$][\w$]*$/.test(parser.tok.text)) return false;
+    const scanner: any = parser.scn;
+    const saved: any = {};
+    Object.keys(scanner).forEach(key => saved[key] = scanner[key]);
+    try {
+        let token = scanner.nextToken();
+        while (token.text === '\n' || modifiers.indexOf(token.text) >= 0
+            || startsWith(token.text, '/*') || startsWith(token.text, '//')) token = scanner.nextToken();
+        return ['var', 'const', 'function'].indexOf(token.text) >= 0;
+    } finally {
+        Object.keys(scanner).forEach(key => { if (!Object.prototype.hasOwnProperty.call(saved, key)) delete scanner[key]; });
+        Object.keys(saved).forEach(key => scanner[key] = saved[key]);
+    }
+}
+
+function classMetadataPrefix(parser: AS3Parser): boolean {
+    const scanner: any = parser.scn, saved: any = {};
+    Object.keys(scanner).forEach(key => saved[key] = scanner[key]);
+    try {
+        let token = scanner.nextToken();
+        if (!/^[A-Za-z_$][\w$]*$/.test(token.text)) return false;
+        token = scanner.nextToken();
+        if (token.text !== '(' && token.text !== ']') return false;
+        let depth = token.text === ']' ? 0 : 1;
+        while (depth) {
+            token = scanner.nextToken();
+            if (!token.text || token.text === Keywords.EOF)
+                throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unterminated class metadata or array expression');
+            if (token.text === '[') depth++;
+            if (token.text === ']') depth--;
+        }
+        do { token = scanner.nextToken(); }
+        while (token.text === '\n' || startsWith(token.text, '/*') || startsWith(token.text, '//'));
+        if (['[', 'var', 'const', 'function', 'public', 'private', 'protected', 'internal',
+            'static', 'override', 'final', 'native', 'dynamic'].indexOf(token.text) >= 0) return true;
+        if (!/^[A-Za-z_$][\w$]*$/.test(token.text)) return false;
+        token = scanner.nextToken();
+        return ['var', 'const', 'function', 'static'].indexOf(token.text) >= 0;
+    } finally {
+        Object.keys(scanner).forEach(key => { if (!Object.prototype.hasOwnProperty.call(saved, key)) delete scanner[key]; });
+        Object.keys(saved).forEach(key => scanner[key] = saved[key]);
+    }
 }
 
 

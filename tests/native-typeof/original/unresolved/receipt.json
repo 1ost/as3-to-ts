@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "files": [
+    {
+      "path": "capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "73c2f466721c81ad4b0af551c039bc4908d5dfc56228b2cc3d59c65e464f1e57"
+    },
+    {
+      "path": "sources/MetadataOracle.as",
+      "sha256": "7d302eb7dc087908ffa8f40a304a25ca91343813e7f3e0ef546b44e0520d7948"
+    },
+    {
+      "path": "sources/typeprobe/Subject.as",
+      "sha256": "8797badbc5655fe536a8fc313f9af09b6e2f596e846457acfe1e08a10f05e5ab"
+    }
+  ],
+  "expected": "Flex strict compilation rejects absentName before SWF generation"
+}

@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "sourceCapture": "compiler-constructor-merge-review/flash-jn3qkasa",
+  "files": [
+    {
+      "path": "sources/ReturnOracle.as",
+      "sha256": "aefdb878b7f931c7da2f105717c13d50ca8280fd2af1236885005d174bfdf2ba",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-constructor-merge-review\\flash-jn3qkasa\\sources\\ReturnOracle.as"
+    },
+    {
+      "path": "sources/early/Child.as",
+      "sha256": "912076a940acff04bee721317003abce204f601f1a2b536d0f6e12fa9202978b",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-constructor-merge-review\\flash-jn3qkasa\\sources\\early\\Child.as"
+    },
+    {
+      "path": "sources/early/Journal.as",
+      "sha256": "d84fe1ae0e4df68760203d0f300b35dfabb43745a8d1af1c67b1df76185bd74a",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-constructor-merge-review\\flash-jn3qkasa\\sources\\early\\Journal.as"
+    },
+    {
+      "path": "sources/early/Subject.as",
+      "sha256": "6392f383101a97f362df22ee70b3f358869b16c9687e709d52e71cb8e0ead67f",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-constructor-merge-review\\flash-jn3qkasa\\sources\\early\\Subject.as"
+    },
+    {
+      "path": "capture.cjs",
+      "sha256": "a4f5a6f1b6177805f1fcec356d4ab39738e0efb96796aad1eba17e3e03fd85cb",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-constructor-merge-review\\flash-jn3qkasa\\capture.cjs"
+    },
+    {
+      "path": "oracle.swf",
+      "sha256": "3c3df194403ca7c638cc8a203c1aa7a8ce0703eb8235557c9631a2ea3954b907",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-constructor-merge-review\\flash-jn3qkasa\\oracle.swf"
+    },
+    {
+      "path": "flash.json",
+      "sha256": "d7fe3bd0e816260d6848a0bbf0637e58c6024f385c6ec57a39793fcc667ffbf6",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-constructor-merge-review\\flash-jn3qkasa\\flash.json"
+    },
+    {
+      "path": "capture.py",
+      "sha256": "ec4ec2a868a363a5415eea0f6d71c28b3c41372468ff63f323d03ec34e2ca6ec",
+      "originalPath": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-constructor-merge-review\\capture.py"
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "1d271ec692b7535c37e38291dbab41d6108b76e448c2e9e8670ed3dea4eaf9c7"
+    },
+    {
+      "path": "commands.json",
+      "sha256": "4dd7cc9dbdcc2b5a1392e41305f305968e3e168aec75b4d14fa2dc38492b53da"
+    }
+  ],
+  "externalTools": [
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "path": "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ],
+  "rowCount": 18
+}

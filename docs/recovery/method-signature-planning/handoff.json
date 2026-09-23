@@ -1,0 +1,58 @@
+{
+  "status": "review-ready-planning-only",
+  "compilerBase": "2a5a57a9d558df4846ccc96fbb53e5a59f1f6b1f",
+  "files": 137,
+  "productionFiles": [
+    "src/emit/native-method-signatures.ts"
+  ],
+  "runtimeAdmission": false,
+  "originalRowsRetained": 134,
+  "checks": 611,
+  "wholeHolds": [
+    "ReturnSubject",
+    "OverrideChild"
+  ],
+  "integration": "Not wired; additional authenticated complete XML evidence required. No legacy GreenSock expansion following GSAP decision.",
+  "artifacts": [
+    {
+      "path": "HANDOFF.md",
+      "sha256": "11a08fe6a0fb195bd5e2ca896d08feef0cb3a177eb13c8a937c00b74b62b0f07"
+    },
+    {
+      "path": "changed-files.json",
+      "sha256": "950cbc653f46b2d1aeb89f5c679641834dcf81aed53d49d053dbb60de82ca949"
+    },
+    {
+      "path": "provider.patch",
+      "sha256": "7441e2a18801ad86113c7cad577f776bada19581a20e2c13fa03cfeb117fd1b2"
+    },
+    {
+      "path": "delivery.zip",
+      "sha256": "848ceb368c14fd6293f185718c0f40baf0f0e8d6bdad586f0b9405ba6a825948"
+    },
+    {
+      "path": "tool-verification.json",
+      "sha256": "f31cf50295e24effe2658caae3c35158d5409860f00a39dedbeee44834beb920"
+    },
+    {
+      "path": "verify.py",
+      "sha256": "5906665130c122f1f6a18fa08923beb00ee65998963233d81993748ce08ca12a"
+    },
+    {
+      "path": "freeze.py",
+      "sha256": "31b0853400fe981b5fd383faca757d860a8aa94e1fa9ab888402b7dd9061125a"
+    },
+    {
+      "path": "verification/build.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "verification/focused.json",
+      "sha256": "154c4cfa169ccae37aea37b2c26e76b4d2b021be2dc50d826e1652145ddcb227"
+    },
+    {
+      "path": "verification/replay.json",
+      "sha256": "9c88e2f93e95d64faa0d530af606c2cd8b1f98d1c4fa0186ba1cb1864e9200ad"
+    }
+  ]
+}

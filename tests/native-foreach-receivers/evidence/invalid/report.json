@@ -1,0 +1,34 @@
+{
+  "command": [
+    "java",
+    "-Xmx384m",
+    "-jar",
+    "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+    "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+    "-target-player=26.0",
+    "-swf-version=37",
+    "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-foreach\\invalid-original\\invalid.swf",
+    "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-foreach\\invalid-original\\ForEachSimple.as"
+  ],
+  "exitCode": 1,
+  "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\n",
+  "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-foreach\\invalid-original\\ForEachSimple.as(8): col: 19 Error: Access of undefined property value.\n\n        for each (value in myObj)\n                  ^\n\n",
+  "files": [
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-foreach\\compiler\\tests\\simple\\as3\\ForEachSimple.as",
+      "sha256": "876a37aaa4bec3b5e64e44c35a1aba8167b4e7a0edb5b866aa387ee031bbe9df"
+    },
+    {
+      "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\compiler-foreach\\invalid-original\\ForEachSimple.as",
+      "sha256": "876a37aaa4bec3b5e64e44c35a1aba8167b4e7a0edb5b866aa387ee031bbe9df"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "path": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "scope": "Actual Flash constructor arity, coercion and receiver identity",
+  "files": [
+    {
+      "path": "arguments-original/ArgumentOracle.as",
+      "sha256": "56fdf05c7c9b74ca38576707a12667df1aec940450f71c48158355a3c19d2202"
+    },
+    {
+      "path": "arguments-original/callorder/Base.as",
+      "sha256": "f9500f4e93191f2da8225f8f8853ee5c43e03479df8926469fc4ffa9f804a112"
+    },
+    {
+      "path": "arguments-original/callorder/Journal.as",
+      "sha256": "45a58c43ee98e751fe0cf0f2b938205379b13baf745f352c4cf086a9b80e57a5"
+    },
+    {
+      "path": "arguments-original/callorder/Plain.as",
+      "sha256": "82bf9664dd6c0bc73c7d7ce8a079553ab424c25c061d5732be9abe025f3205b3"
+    },
+    {
+      "path": "arguments-original/callorder/Subject.as",
+      "sha256": "5241b8e3738910148bb166962328d654d777ffaec66ae1021e59d8791ef64a52"
+    },
+    {
+      "path": "arguments-original/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "arguments-original/commands.json",
+      "sha256": "a0ed072337c4e3467c8ee3a66e7e394ecd7f15465adb1b77c610f9757d056dd5"
+    },
+    {
+      "path": "arguments-original/flash.json",
+      "sha256": "b4ecff93e9e733631ba01d74642d4df151c7904b9a98d55e57749bfd48c24e83"
+    },
+    {
+      "path": "arguments-original/provenance.json",
+      "sha256": "01a52ab231b48d1681782492c739878b7e7ba2c433b47ba8c4829e4df08d0508"
+    },
+    {
+      "path": "CaptureArguments.py",
+      "sha256": "87707637cfa273a37d778aa41d501b9bcba0a7b37284f509c5f6cf31f03c1f57"
+    },
+    {
+      "path": "RetainArguments.py",
+      "sha256": "29d6f810127eb1073e0d6d645c73aa8575f5ba594e4b028edd1b8e776f45de08"
+    }
+  ]
+}

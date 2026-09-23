@@ -45,7 +45,17 @@ export function parsePrimaryExpression(parser:AS3Parser):Node {
     } else if (parser.tok.text === VECTOR) {
         return parseVector(parser);
     } else if (tokIs(parser, Operators.INFERIOR)) {
-        let res = tryParse(parser, () => parseShortVector(parser));
+        let vectorElementError:Error = null;
+        let res = tryParse(parser, () => {
+            try { return parseShortVector(parser); }
+            catch (error) {
+                // Once a Vector element list is recognized, a missing element
+                // must not be reinterpreted as a different expression.
+                if (error instanceof Error && error.message.indexOf('AS3_VECTOR_LITERAL:') === 0) vectorElementError = error;
+                throw error;
+            }
+        });
+        if (vectorElementError) throw vectorElementError;
         if (res) {
             return res;
         }
@@ -122,7 +132,9 @@ function parseEncapsulatedExpression(parser:AS3Parser):Node {
 
     let tok = consume(parser, Operators.LEFT_PARENTHESIS);
     let result:Node = createNode(NodeKind.ENCAPSULATED, {start: tok.index});
+    skipExpressionComments(parser);
     result.children.push(parseExpressionList(parser));
+    skipExpressionComments(parser);
     tok = consume(parser, Operators.RIGHT_PARENTHESIS);
     result.end = tok.end;
     return result;
@@ -425,15 +437,20 @@ function parseDecrement(parser:AS3Parser, node:Node):Node {
 }
 
 
+function skipExpressionComments(parser:AS3Parser):void {
+    while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
+}
+
 function parseAccessExpression(parser:AS3Parser):Node {
     let node:Node = parsePrimaryExpression(parser);
 
     while (true) {
+        skipExpressionComments(parser);
         if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
             node = parseFunctionCall(parser, node);
             continue;
         }
-        if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_COLUMN)) {
+        if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_DOT) || tokIs(parser, Operators.DOUBLE_COLUMN)) {
             node = parseDot(parser, node);
         } else if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
             node = parseArrayAccessor(parser, node);
@@ -450,7 +467,9 @@ function parseFunctionCall(parser:AS3Parser, node:Node):Node {
     let result:Node = createNode(NodeKind.CALL, {start: node.start});
     result.children.push(node);
 
-    result.children.push(parseArgumentList(parser));
+    while (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
+        result.children.push(parseArgumentList(parser));
+    }
     result.end = result.children.reduce((index:number, child:Node) => {
         return Math.max(index, child ? child.end : 0);
     }, 0);
@@ -461,16 +480,19 @@ function parseFunctionCall(parser:AS3Parser, node:Node):Node {
 function parseArgumentList(parser:AS3Parser):Node {
     let tok = consume(parser, Operators.LEFT_PARENTHESIS);
     let result:Node = createNode(NodeKind.ARGUMENTS, {start: tok.index});
+    skipExpressionComments(parser);
     while (!tokIs(parser, Operators.RIGHT_PARENTHESIS)) {
         assertNotEOF(parser, 'argument list');
         const checkpoint = getParserCheckPoint(parser);
         result.children.push(parseExpression(parser));
+        skipExpressionComments(parser);
         if (!tokIs(parser, Operators.RIGHT_PARENTHESIS)) {
             if (!tokIs(parser, Operators.COMMA)) {
                 throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', ', or )', 'argument list');
             }
             nextToken(parser);
         }
+        skipExpressionComments(parser);
         assertProgress(parser, checkpoint, 'argument list');
     }
     tok = consume(parser, Operators.RIGHT_PARENTHESIS);
@@ -482,10 +504,35 @@ function parseArgumentList(parser:AS3Parser):Node {
 
 function parseDot(parser:AS3Parser, node:Node):Node {
     const separator = parser.tok.text;
-    nextToken(parser);
+	const descendantAccess = tokIs(parser, Operators.DOUBLE_DOT);
+    let namespaceAccess = tokIs(parser, Operators.DOUBLE_COLUMN)
+        && !(node.kind === NodeKind.IDENTIFIER && node.text === 'CONFIG');
+    nextToken(parser, true);
+    if (namespaceAccess) {
+        if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) {
+            throw new Error('AS3_NAMESPACE_UNSUPPORTED: computed or wildcard namespace selector');
+        }
+        let member = createNode(NodeKind.LITERAL, {tok: parser.tok});
+        nextToken(parser, true);
+        return createNode(NodeKind.NAMESPACE_ACCESS, {start: node.start, end: member.end}, node, member);
+    }
+	if (descendantAccess) {
+		if (tokIs(parser, Operators.TIMES)) {
+			const wildcard = createNode(NodeKind.LITERAL, {tok: parser.tok});
+			nextToken(parser, true);
+			return createNode(NodeKind.E4X_DESCENDANT, {start: node.start, end: wildcard.end}, node, wildcard);
+		}
+		if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text))
+			throw new Error('AS3_E4X_UNSUPPORTED: descendant selector requires a literal name or wildcard');
+		const member = createNode(NodeKind.LITERAL, {tok: parser.tok});
+		nextToken(parser, true);
+		return createNode(NodeKind.E4X_DESCENDANT, {start: node.start, end: member.end}, node, member);
+	}
     if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
         nextToken(parser);
-        let result:Node = createNode(NodeKind.E4X_FILTER, {start: parser.tok.index});
+        // The filter expression owns its receiver. Starting at the predicate
+        // drops the source range needed by a qualified native E4X lowering.
+        let result:Node = createNode(NodeKind.E4X_FILTER, {start: node.start});
         result.children.push(node);
         result.children.push(parseExpression(parser));
         result.end = consume(parser, Operators.RIGHT_PARENTHESIS).end;
@@ -512,7 +559,17 @@ function parseArrayAccessor(parser:AS3Parser, node:Node):Node {
     result.children.push(node);
     while (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
         nextToken(parser, true);
-        result.children.push(parseExpression(parser));
+        let index:Node = createNode(NodeKind.EXPR_LIST, {start: parser.tok.index});
+        while (true) {
+            if (tokIs(parser, Operators.RIGHT_SQUARE_BRACKET) || tokIs(parser, Operators.COMMA))
+                throw new Error('AS3_ARRAY_ACCESSOR: index expression required');
+            index.children.push(parseExpression(parser));
+            while (parser.tok.text.indexOf('/*') === 0) nextToken(parser, true);
+            if (!tokIs(parser, Operators.COMMA)) break;
+            nextToken(parser, true);
+        }
+        index.end = index.children[index.children.length - 1].end;
+        result.children.push(index.children.length === 1 ? index.children[0] : index);
         result.end = consume(parser, Operators.RIGHT_SQUARE_BRACKET).end;
     }
     return result;

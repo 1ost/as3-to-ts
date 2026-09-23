@@ -1,0 +1,1 @@
+package consumer { public class Subject { public function Subject(){} public static function check():* { return [typeof Object,typeof Array,typeof Number,typeof String,typeof Boolean,typeof Function,typeof Class,typeof int,typeof uint]; } } }

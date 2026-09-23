@@ -1,0 +1,118 @@
+{
+  "classXML": "<type name=\"probe::CommentReturn\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::CommentReturn\">\n    <extendsClass type=\"Object\"/>\n    <method name=\"throwArray\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"newline\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"compact\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"throwDoc\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"afterComment\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"block\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"noValue\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"multiline\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"doc\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"multiple\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"number\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"identifier\" declaredBy=\"probe::CommentReturn\" returnType=\"*\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"lineComment\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n    <method name=\"object\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  </factory>\n</type>",
+  "instanceXML": "<type name=\"probe::CommentReturn\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <method name=\"throwArray\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"newline\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"compact\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"throwDoc\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"afterComment\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"block\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"noValue\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"multiline\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"doc\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"multiple\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"number\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"identifier\" declaredBy=\"probe::CommentReturn\" returnType=\"*\">\n    <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n  </method>\n  <method name=\"lineComment\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n  <method name=\"object\" declaredBy=\"probe::CommentReturn\" returnType=\"*\"/>\n</type>",
+  "rows": [
+    {
+      "id": "compact",
+      "result": {
+        "value": [
+          1
+        ],
+        "kind": "object"
+      }
+    },
+    {
+      "id": "block",
+      "result": {
+        "value": [
+          2
+        ],
+        "kind": "object"
+      }
+    },
+    {
+      "id": "doc",
+      "result": {
+        "value": [
+          3
+        ],
+        "kind": "object"
+      }
+    },
+    {
+      "id": "multiple",
+      "result": {
+        "value": [
+          4
+        ],
+        "kind": "object"
+      }
+    },
+    {
+      "id": "multiline",
+      "result": {
+        "value": "undefined",
+        "kind": "undefined"
+      }
+    },
+    {
+      "id": "lineComment",
+      "result": {
+        "value": "undefined",
+        "kind": "undefined"
+      }
+    },
+    {
+      "id": "newline",
+      "result": {
+        "value": "undefined",
+        "kind": "undefined"
+      }
+    },
+    {
+      "id": "afterComment",
+      "result": {
+        "value": "undefined",
+        "kind": "undefined"
+      }
+    },
+    {
+      "id": "noValue",
+      "result": {
+        "value": "undefined",
+        "kind": "undefined"
+      }
+    },
+    {
+      "id": "number",
+      "result": {
+        "value": 42,
+        "kind": "number"
+      }
+    },
+    {
+      "id": "identifier",
+      "result": {
+        "value": "identity",
+        "kind": "string"
+      }
+    },
+    {
+      "id": "object",
+      "result": {
+        "value": {
+          "answer": 9
+        },
+        "kind": "object"
+      }
+    },
+    {
+      "thrown": {
+        "value": [
+          10
+        ],
+        "kind": "object"
+      },
+      "id": "throwArray"
+    },
+    {
+      "thrown": {
+        "value": [
+          11
+        ],
+        "kind": "object"
+      },
+      "id": "throwDoc"
+    }
+  ]
+}

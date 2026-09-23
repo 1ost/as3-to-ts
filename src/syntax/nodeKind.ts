@@ -103,7 +103,11 @@ enum NodeKind {
     IDENTIFIER,
     EMBED,
     THROW,
-    NAMESPACE
+    NAMESPACE,
+    NAMESPACE_DECLARATION,
+    NAMESPACE_ACCESS,
+    CLASS_INITIALIZER,
+    E4X_DESCENDANT
 }
 
 // Can't do 'export default enum Foo {...}' for some reason?

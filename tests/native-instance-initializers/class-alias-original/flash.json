@@ -1,0 +1,21 @@
+[
+  [
+    "bindNew",
+    "error",
+    1006,
+    0
+  ],
+  [
+    "freshPrototype",
+    "error",
+    1006,
+    0
+  ],
+  [
+    "aliasCoerce",
+    "ok",
+    7,
+    true,
+    1
+  ]
+]

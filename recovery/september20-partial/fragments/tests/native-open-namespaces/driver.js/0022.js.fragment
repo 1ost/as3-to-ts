@@ -1,0 +1,1 @@
+const rows=[];const a=new OpenNamespace(),b=new OpenNamespace(7);function rec(id,f){try{rows.push({id,value:f()});}catch(e){rows.push({id,error:{name:e.name,errorID:e.errorID}});}}

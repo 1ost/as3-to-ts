@@ -1,0 +1,8 @@
+// Isolate compiler/browser verification so failures cannot consume an unattended host indefinitely.
+if (!process.argv.includes('--bounded-child')) {
+ const result=require('node:child_process').spawnSync(process.execPath,
+  ['--max-old-space-size=512',__filename,'--bounded-child'],
+  {stdio:'inherit',windowsHide:true,timeout:120000});
+ if(result.error)console.error(result.error.message);
+ process.exit(result.status===0?0:1);
+}

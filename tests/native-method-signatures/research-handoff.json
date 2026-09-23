@@ -1,0 +1,56 @@
+{
+  "status": "research-complete-no-implementation",
+  "compilerBase": "293d1b9ac9f602e67de240116b91a2e8f531e570",
+  "engineBase": "7ae41d50d43f3288b17873922a903d3f0350a911",
+  "originalGroups": [
+    {
+      "group": "entry-return",
+      "originalRows": 33,
+      "matchingRepeats": 2,
+      "fullClassDocuments": 4,
+      "fullInstanceDocuments": 4,
+      "nativeRowsAdmitted": 0
+    },
+    {
+      "group": "storage",
+      "originalRows": 8,
+      "matchingRepeats": 2,
+      "fullClassDocuments": 1,
+      "fullInstanceDocuments": 1,
+      "nativeRowsAdmitted": 0
+    },
+    {
+      "group": "plain",
+      "originalRows": 12,
+      "matchingRepeats": 2,
+      "fullClassDocuments": 1,
+      "fullInstanceDocuments": 1,
+      "nativeRowsAdmitted": 0
+    },
+    {
+      "group": "arity",
+      "originalRows": 9,
+      "matchingRepeats": 2,
+      "fullClassDocuments": 2,
+      "fullInstanceDocuments": 2,
+      "nativeRowsAdmitted": 0
+    }
+  ],
+  "newOriginalRows": 62,
+  "reusedOriginalRows": [
+    43,
+    22
+  ],
+  "nativeRowsAdmitted": 0,
+  "maintainedSources": 5,
+  "wholeSourceHoldsRetained": true,
+  "methodParameterStorageRequired": true,
+  "ordinaryMethodAritySourceErrorPrerequisite": true,
+  "sourceErrorIdentityClassAndStackHeld": true,
+  "productionEdits": 0,
+  "pinEdits": 0,
+  "files": 402,
+  "manifestSHA256": "dc7fc3a2830cbe063ef6f3d8ae84f4ca1423ce21ba86d15a826903a5928f26bb",
+  "reportSHA256": "595e0942c8b7c0d44c0204889e17d4ddd4505502e7f2a52c0e6ab846ca4799f8",
+  "compilerHoldsSHA256": "9d53aea85070ee3573404af881807770ebc11adbabf63e7f7cfb58198b5101c3"
+}

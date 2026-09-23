@@ -1,0 +1,138 @@
+{
+  "failure": "",
+  "ready": true,
+  "rows": [
+    [
+      "builtinObject",
+      "object"
+    ],
+    [
+      "shadowObject",
+      "number"
+    ],
+    [
+      "builtinArray",
+      "object"
+    ],
+    [
+      "shadowArray",
+      "number"
+    ],
+    [
+      "builtinNumber",
+      "object"
+    ],
+    [
+      "shadowNumber",
+      "number"
+    ],
+    [
+      "builtinString",
+      "object"
+    ],
+    [
+      "shadowString",
+      "number"
+    ],
+    [
+      "builtinBoolean",
+      "object"
+    ],
+    [
+      "shadowBoolean",
+      "number"
+    ],
+    [
+      "builtinFunction",
+      "object"
+    ],
+    [
+      "shadowFunction",
+      "number"
+    ],
+    [
+      "builtinClass",
+      "object"
+    ],
+    [
+      "shadowClass",
+      "number"
+    ],
+    [
+      "builtinint",
+      "object"
+    ],
+    [
+      "shadowint",
+      "number"
+    ],
+    [
+      "builtinuint",
+      "object"
+    ],
+    [
+      "shadowuint",
+      "number"
+    ],
+    [
+      "identityintNumber",
+      "object"
+    ],
+    [
+      "identityuintNumber",
+      "object"
+    ],
+    [
+      "identityintuint",
+      "object"
+    ],
+    [
+      "identityClassFunction",
+      "object"
+    ],
+    [
+      "classPeer",
+      "object"
+    ],
+    [
+      "classvisible",
+      "object"
+    ],
+    [
+      "classwild",
+      "object"
+    ],
+    [
+      "parenthesized",
+      "object"
+    ],
+    [
+      "nested",
+      "object"
+    ],
+    [
+      "memberName",
+      "number"
+    ],
+    [
+      "undefinedLocal",
+      "number"
+    ],
+    [
+      "catchClass",
+      "number"
+    ]
+  ],
+  "instances": [
+    "<type name=\"consumer::Subject\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_ctor_definition_help\">\n    <arg key=\"pos\" value=\"100\"/>\n  </metadata>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"74\"/>\n  </metadata>\n</type>",
+    "<type name=\"consumer::Peer\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_ctor_definition_help\">\n    <arg key=\"pos\" value=\"55\"/>\n  </metadata>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"32\"/>\n  </metadata>\n</type>",
+    "<type name=\"foreign::visible\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_ctor_definition_help\">\n    <arg key=\"pos\" value=\"57\"/>\n  </metadata>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"31\"/>\n  </metadata>\n</type>",
+    "<type name=\"wildpkg::wild\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <metadata name=\"__go_to_ctor_definition_help\">\n    <arg key=\"pos\" value=\"54\"/>\n  </metadata>\n  <metadata name=\"__go_to_definition_help\">\n    <arg key=\"pos\" value=\"31\"/>\n  </metadata>\n</type>"
+  ],
+  "reflection": [
+    "<type name=\"consumer::Subject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <method name=\"shadowString\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"627\"/>\n    </metadata>\n  </method>\n  <method name=\"identityintuint\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1625\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinBoolean\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"706\"/>\n    </metadata>\n  </method>\n  <method name=\"identityClassFunction\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1727\"/>\n    </metadata>\n  </method>\n  <method name=\"shadowBoolean\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"773\"/>\n    </metadata>\n  </method>\n  <method name=\"classPeer\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1841\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinFunction\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"855\"/>\n    </metadata>\n  </method>\n  <method name=\"classvisible\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1900\"/>\n    </metadata>\n  </method>\n  <method name=\"shadowFunction\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"924\"/>\n    </metadata>\n  </method>\n  <method name=\"classwild\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1965\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinObject\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"135\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinClass\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1009\"/>\n    </metadata>\n  </method>\n  <method name=\"parenthesized\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"2024\"/>\n    </metadata>\n  </method>\n  <method name=\"shadowClass\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1072\"/>\n    </metadata>\n  </method>\n  <method name=\"nested\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"2090\"/>\n    </metadata>\n  </method>\n  <method name=\"shadowObject\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"200\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinint\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1148\"/>\n    </metadata>\n  </method>\n  <method name=\"memberName\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"2161\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinArray\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"279\"/>\n    </metadata>\n  </method>\n  <method name=\"shadowint\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1207\"/>\n    </metadata>\n  </method>\n  <method name=\"undefinedLocal\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"2250\"/>\n    </metadata>\n  </method>\n  <method name=\"shadowArray\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"342\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinuint\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1277\"/>\n    </metadata>\n  </method>\n  <method name=\"catchClass\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"2337\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinNumber\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"418\"/>\n    </metadata>\n  </method>\n  <method name=\"shadowuint\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1338\"/>\n    </metadata>\n  </method>\n  <method name=\"shadowNumber\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"483\"/>\n    </metadata>\n  </method>\n  <method name=\"identityintNumber\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1411\"/>\n    </metadata>\n  </method>\n  <method name=\"builtinString\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"562\"/>\n    </metadata>\n  </method>\n  <method name=\"identityuintNumber\" declaredBy=\"consumer::Subject\" returnType=\"*\">\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"1517\"/>\n    </metadata>\n  </method>\n  <factory type=\"consumer::Subject\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_ctor_definition_help\">\n      <arg key=\"pos\" value=\"100\"/>\n    </metadata>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"74\"/>\n    </metadata>\n  </factory>\n</type>",
+    "<type name=\"consumer::Peer\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"consumer::Peer\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_ctor_definition_help\">\n      <arg key=\"pos\" value=\"55\"/>\n    </metadata>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"32\"/>\n    </metadata>\n  </factory>\n</type>",
+    "<type name=\"foreign::visible\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"foreign::visible\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_ctor_definition_help\">\n      <arg key=\"pos\" value=\"57\"/>\n    </metadata>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"31\"/>\n    </metadata>\n  </factory>\n</type>",
+    "<type name=\"wildpkg::wild\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"wildpkg::wild\">\n    <extendsClass type=\"Object\"/>\n    <metadata name=\"__go_to_ctor_definition_help\">\n      <arg key=\"pos\" value=\"54\"/>\n    </metadata>\n    <metadata name=\"__go_to_definition_help\">\n      <arg key=\"pos\" value=\"31\"/>\n    </metadata>\n  </factory>\n</type>"
+  ]
+}

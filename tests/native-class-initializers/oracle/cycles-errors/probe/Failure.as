@@ -1,0 +1,1 @@
+package probe{public class Failure{public static var x:int=Log.fail();public static var y:int=Log.mark("after-failure-field");Log.mark("failure-body");}}

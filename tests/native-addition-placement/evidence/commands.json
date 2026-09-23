@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\capture-k\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\original\\ConstructorOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\capture-k",
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\capture-k\\oracle.swf (3016 bytes)\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\original\\probe\\Placement.as(31): col: 39 Warning: variable 's' has no type declaration.\n\npublic function case28(value:*):*{var s=\"x\";var r=s+=value;return [r,s];}\n                                      ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\original\\probe\\Placement.as(31): col: 49 Warning: variable 'r' has no type declaration.\n\npublic function case28(value:*):*{var s=\"x\";var r=s+=value;return [r,s];}\n                                                ^\n\n"
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\capture-k\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\capture-k\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-addition-expression-correction\\capture-k",
+    "exitCode": 0,
+    "stdout": "\n",
+    "stderr": ""
+  }
+]

@@ -1,0 +1,66 @@
+{
+  "scope": "Actual Flash26 Object typed logical assignment; 9 initial values x9 RHS values x2 operators",
+  "commands": [
+    {
+      "command": "java",
+      "args": [
+        "-Xmx384m",
+        "-jar",
+        "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+        "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+        "-target-player=26.0",
+        "-swf-version=37",
+        "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries",
+        "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\ObjectAssignmentOracle.as"
+      ]
+    },
+    {
+      "command": "D:/bleach-oracle-electron/node_modules/electron/dist/electron.exe",
+      "args": [
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\capture.cjs",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\oracle.swf",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\flash.json",
+        "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+      ]
+    }
+  ],
+  "environment": {
+    "PLAYERGLOBAL_HOME": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player",
+    "ELECTRON_RUN_AS_NODE": "unset"
+  },
+  "files": [
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\ObjectAssignmentOracle.as",
+      "sha256": "558485d872ecad83136d850a76ad080f25db8d12c8583e8ae83485e5c1723d2a"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\oracle.swf",
+      "sha256": "81f000640a2eb10973a4c92be26e210ed54fd884f875cd7004f3e4be46e2378f"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\as3-to-layaair-porting-kit\\.local\\native-assignment-review\\object-boundaries\\flash.json",
+      "sha256": "305f201c4e6cf7ea373e463d3e446fbb06dcfcc8f61d228aa15c6d89a5ab7530"
+    },
+    {
+      "file": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "sha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b"
+    },
+    {
+      "file": "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\libs\\player\\26.0\\playerglobal.swc",
+      "sha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295"
+    },
+    {
+      "file": "D:/bleach-oracle-electron/node_modules/electron/dist/electron.exe",
+      "sha256": "59334f8b0a897100eba8e86381b0de0d79e3e461967ae3c64e244eb90501d2df"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll",
+      "sha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35"
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+package numeric {public class Rebind {public function Rebind(a:Number=0) {var original:Array=arguments;arguments=[];arguments.push(2);Recorder.rows.push("rebind:"+original.length+":"+arguments.length+":"+arguments[0]);}}}

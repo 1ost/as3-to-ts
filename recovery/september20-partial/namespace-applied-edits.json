@@ -1,0 +1,87 @@
+[
+  {
+    "history_index": 256,
+    "path": "src/emit/native-namespaces.ts",
+    "matches": 1,
+    "before": "    private configured:",
+    "after": "    private openedAccesses = new Map<Node, NamespaceAccess>();\r\n    private configured:"
+  },
+  {
+    "history_index": 256,
+    "path": "src/emit/native-namespaces.ts",
+    "matches": 0,
+    "before": "        this.walk(root, node => {\r\n            if (node.kind === NodeKind.USE) this.resolve(node, node.text);",
+    "after": "        this.lowerOpenedThisAccesses();\r\n        this.walk(root, node => {\r\n            if (node.kind === NodeKind.USE) this.resolve(node, node.text);"
+  },
+  {
+    "history_index": 256,
+    "path": "src/emit/native-namespaces.ts",
+    "matches": 0,
+    "before": "    access(node: Node): NamespaceAccess {\r\n",
+    "after": "    access(node: Node): NamespaceAccess {\r\n        const opened = this.openedAccesses.get(node);\r\n        if (opened) {\r\n            const reference = outerEncapsulatedExpression(node);\r\n            if (reference.parent && [NodeKind.DELETE, NodeKind.PRE_INC, NodeKind.POST_INC, NodeKind.PRE_DEC, NodeKind.POST_DEC].indexOf(reference.parent.kind) >= 0)\r\n                this.fail('namespace delete/update requires separate lowering');\r\n            return opened;\r\n        }\r\n"
+  },
+  {
+    "history_index": 256,
+    "path": "src/emit/native-namespaces.ts",
+    "matches": 1,
+    "before": "    ownAccessMember(node: Node): NamespaceMember {",
+    "after": "    /** Resolve only a direct instance receiver with a complete lexical namespace set.\r\n     * Preserve the original span/children so existing selector coercion and write\r\n     * guards handle the operation; no text replacement or public-name aliasing. */\r\n    private lowerOpenedThisAccesses(): void {\r\n        this.walk(this.root, node => {\r\n            if (node.kind !== NodeKind.DOT || node.children.length !== 2\r\n                || node.children[0].kind !== NodeKind.IDENTIFIER || node.children[0].text !== 'this') return;\r\n            const owner = this.ancestor(node, NodeKind.CLASS);\r\n            if (!owner) return;\r\n            const name = node.children[1].text;\r\n            if (!Array.from(this.members.values()).some(member => member.name === name && !member.static)) return;\r\n            const pkg = this.ancestor(node, NodeKind.PACKAGE);\r\n            const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])\r\n                .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));\r\n            const candidates: {member: NamespaceMember; qualifier: string}[] = [];\r\n            opened.forEach(directive => {\r\n                const uri = this.resolve(directive, directive.text), member = this.findMember(owner, uri, name, false);\r\n                if (member && !candidates.some(value => value.member === member))\r\n                    candidates.push({member, qualifier:directive.text});\r\n            });\r\n            if (!candidates.length) return;\r\n            if (candidates.length !== 1) this.fail('ambiguous open namespace member: ' + name);\r\n            for (let scope = node.parent; scope && scope !== owner; scope = scope.parent) {\r\n                if ([NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET,NodeKind.LAMBDA].indexOf(scope.kind) >= 0) {\r\n                    const mods = scope.findChild(NodeKind.MOD_LIST);\r\n                    if (scope.parent !== owner.findChild(NodeKind.CONTENT)\r\n                        || mods && mods.children.some(mod => mod.text === 'static'))\r\n                        this.fail('open namespace this requires an instance member receiver');\r\n                }\r\n                if (scope.findChildren(NodeKind.USE).length)\r\n                    this.fail('function-local open namespaces require separate resolution');\r\n            }\r\n            for (const cls of this.hierarchy(owner)) {\r\n                for (const declaration of cls.findChild(NodeKind.CONTENT).children) {\r\n                    if (this.memberDeclaration(declaration)) continue;\r\n                    const names = [NodeKind.VAR_LIST,NodeKind.CONST_LIST].indexOf(declaration.kind) >= 0\r\n                        ? declaration.findChildren(NodeKind.NAME_TYPE_INIT).map(value => value.findChild(NodeKind.NAME))\r\n                        : [declaration.findChild(NodeKind.NAME)];\r\n                    if (names.some(value => value && value.text === name))\r\n                        this.fail('open namespace spelling collides with an ordinary member: ' + name);\r\n                }\r\n            }\r\n            const selected = candidates[0];\r\n            this.openedAccesses.set(node, {uri:selected.member.uri, name, receiver:node.children[0],\r\n                implicitMember:null, qualifier:selected.qualifier});\r\n            node.kind = NodeKind.NAMESPACE_ACCESS;\r\n        });\r\n    }\r\n\r\n    ownAccessMember(node: Node): NamespaceMember {"
+  },
+  {
+    "history_index": 256,
+    "path": "tests/native-namespaces/NativeNamespacesTests.js",
+    "stopped": "Original context is missing"
+  },
+  {
+    "history_index": 247,
+    "path": "src/emit/native-namespaces.ts",
+    "matches": 1,
+    "before": "        this.walk(root, node => {\n            if (node.kind === NodeKind.USE)",
+    "after": "        this.lowerOpenedThisAccesses();\n        this.walk(root, node => {\n            if (node.kind === NodeKind.USE)"
+  },
+  {
+    "history_index": 247,
+    "path": "src/emit/native-namespaces.ts",
+    "matches": 1,
+    "before": "        const left = node.children[0];",
+    "after": "        const opened = this.openedAccesses.get(node);\n        if (opened) return opened;\n        const left = node.children[0];"
+  },
+  {
+    "history_index": 242,
+    "path": "src/emit/emitter.ts",
+    "matches": 1,
+    "before": "    emitter.catchup(node.start);\n    visitNode(emitter, left);\n    emitter.catchup(left.end);\n\n    if (operator.text === '=') {",
+    "after": "    // A typed namespace store converts storage but the assignment expression\n    // returns its unconverted RHS. Keep the LHS before RHS evaluation; one\n    // function-local temporary also preserves receiver changes and recursion.\n    if (operator.text === '=' && unwrapEncapsulatedExpression(left).kind === NodeKind.NAMESPACE_ACCESS) {\n        const value = allocateAssignmentTemporary(emitter, node);\n        emitter.catchup(node.start); emitter.insert('(');\n        visitNode(emitter, left); emitter.catchup(getEffectiveNodeEnd(left));\n        emitter.catchup(operator.start); emitter.skipTo(operator.end); emitter.insert(' = ');\n        emitIntegerCoercionStart(emitter); emitter.insert(value + ' = ');\n        emitter.skipTo(getExpressionStart(right)); visitNode(emitter, right); emitter.catchup(getEffectiveNodeEnd(right));\n        emitIntegerCoercionEnd(emitter, target.declaration.as3Type);\n        emitter.insert(', ' + value + ')'); return;\n    }\n\n    emitter.catchup(node.start);\n    visitNode(emitter, left);\n    emitter.catchup(left.end);\n\n    if (operator.text === '=') {"
+  },
+  {
+    "history_index": 236,
+    "path": "src/emit/emitter.ts",
+    "stopped": "Original context is missing"
+  },
+  {
+    "history_index": 235,
+    "path": "src/emit/emitter.ts",
+    "matches": 1,
+    "before": "\t\temitter.output = emitter.output.slice(0, insertion) + '\\nvar ' + temporaries.join(', ') + ';\\n'\n\t\t\t+ emitter.output.slice(insertion);",
+    "after": "        const owner = method && method.parent && method.parent.parent;\n        const constructor = method && method.kind === NodeKind.FUNCTION && owner && owner.kind === NodeKind.CLASS\n            && method.findChild(NodeKind.NAME).text === owner.findChild(NodeKind.NAME).text;\n        if (constructor) {\n            // Uninitialized var declarations hoist. Keeping them after the source\n            // body avoids making them precede super(), which changes old TS's\n            // placement of derived instance field initializers.\n            emitter.catchup(node.end - 1);\n            emitter.insert('\\nvar ' + temporaries.join(', ') + ';\\n');\n        } else {\n            emitter.output = emitter.output.slice(0, insertion) + '\\nvar ' + temporaries.join(', ') + ';\\n'\n                + emitter.output.slice(insertion);\n        }"
+  },
+  {
+    "history_index": 233,
+    "path": "tests/native-namespaces/InheritedNamespacesTests.js",
+    "stopped": "Call(func=Attribute(value=Name(id='s', ctx=Load()), attr='splitlines', ctx=Load()), args=[], keywords=[keyword(arg='keepends', value=Constant(value=True))])"
+  },
+  {
+    "history_index": 228,
+    "path": "src/emit/native-namespaces.ts",
+    "matches": 1,
+    "before": "output += 'const ' + key + ' = globalThis.Symbol.for('",
+    "after": "output += 'const ' + key + ': unique symbol = globalThis.Symbol.for('"
+  },
+  {
+    "history_index": 202,
+    "path": "src/emit/native-namespaces.ts",
+    "matches": 1,
+    "before": "output += 'const ' + key + ': unique symbol = globalThis.Symbol.for('",
+    "after": "output += 'const ' + key + ' = globalThis.Symbol.for('"
+  }
+]

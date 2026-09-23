@@ -399,8 +399,11 @@ try {
     assert.ok(Object.isFrozen(normalized.nodes));
     const rawPreorder = [];
     (function collect(node) {
-        rawPreorder.push(node);
-        node.children.forEach(collect);
+        const labelName = node.kind === require(path.join(built.output, "syntax/nodeKind.js")).default.LABEL
+            && node.children.length === 2 && typeof node.children[0].text === "string"
+            && /^[A-Za-z_$][\w$]*\s*:/.test(source.slice(node.start));
+        rawPreorder.push(labelName ? {...node, text: node.children[0].text} : node);
+        (labelName ? node.children.slice(1) : node.children).forEach(collect);
     }(parserTree));
     const siblingOrders = new Map();
     normalized.nodes.forEach((node, index) => {

@@ -1,0 +1,2 @@
+assert.equal(diagnostics.length,3);assert(diagnostics.every(d=>d.code===1166));
+ const script

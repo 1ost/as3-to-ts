@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "groups": [
+    {
+      "group": "typeof",
+      "receipt": "original/typeof/receipt.json",
+      "sha256": "a279eb37a5d686bbce65e98c2abc8aa5580e05110c1beef9c39e80d8a4189957"
+    },
+    {
+      "group": "array-typed-journal",
+      "receipt": "original/array-typed-journal/receipt.json",
+      "sha256": "1a8bffb6d9890855eafc7325fb056e47e81ef10f1d9e1568d66413e59d35eec6"
+    },
+    {
+      "group": "binding",
+      "receipt": "original/binding/receipt.json",
+      "sha256": "8ddf2551b0c80595f449e49b84993f0da37bfeacb3abbf0bdb601e3631124d2b"
+    }
+  ]
+}

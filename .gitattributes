@@ -1,1 +1,60 @@
 config/big-turntable-inner-dto-authority.json text eol=lf
+tests/native-assignments/oracle/* -text
+tests/native-assignments/RetainFlashAssignments.js text eol=lf
+tests/native-class-initializers/oracle/** -text
+tests/native-class-initializers/RetainOracleEvidence.js text eol=lf
+
+# Retain original Flash evidence and receipt hashes byte-for-byte.
+tests/native-instance-initializers/** -text whitespace=cr-at-eol
+tests/native-callable-prerequisites/** -text whitespace=cr-at-eol
+tests/native-super-methods/** -text whitespace=cr-at-eol
+
+tests/native-class-metadata/** -text whitespace=cr-at-eol
+
+tests/native-foreach-receivers/** -text whitespace=cr-at-eol
+tests/native-typeof/** -text whitespace=cr-at-eol
+
+tests/native-array-literals/** -text whitespace=cr-at-eol
+# Original comment-whitespace regressions intentionally retain spaces before newlines.
+tests/native-array-literals/**/*.as whitespace=cr-at-eol,-blank-at-eol
+
+# Authenticate source Array allocation capture bytes.
+tests/native-array-allocation/** -text whitespace=cr-at-eol
+tests/native-string-constructors/** -text whitespace=cr-at-eol
+# Preserve authored whitespace in the unchanged maintained timing source.
+tests/native-string-constructors/evidence/sources/original/com/greensock/core/PropTween.as whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+tests/native-self-constructors/** -text whitespace=cr-at-eol
+# Verbatim maintained PropTween source retains authored blank-line whitespace.
+tests/native-self-constructors/evidence/sources/original/com/greensock/core/PropTween.as whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve authenticated lexical source, captures and receipts.
+tests/native-lexical-members/** -text whitespace=cr-at-eol
+
+# Preserve authenticated typed-local original sources, captures and receipts.
+tests/native-typed-locals/** -text whitespace=cr-at-eol
+tests/native-addition-review/** -text whitespace=cr-at-eol
+tests/native-addition-placement/** -text whitespace=cr-at-eol
+
+# Preserve original lexical-map captures and complete source evidence.
+tests/native-lexical-map/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve authenticated relational compiler fixtures and receipt bytes.
+tests/native-relational/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve complete declaration-domain captures and receipts.
+tests/native-declaration-domain/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve complete foreign typed-local originals and receipts.
+tests/native-foreign-typed-locals/** -text whitespace=cr-at-eol,-blank-at-eol,-blank-at-eof
+
+# Preserve recovered source literals and their recorded hashes.
+recovery/september20-partial/** -text -whitespace
+
+# Preserve native AIR namespace-update source, binary and receipt bytes.
+tests/native-namespace-updates/source/** -text whitespace=cr-at-eol
+tests/native-namespace-updates/evidence/** -text whitespace=cr-at-eol
+
+# Preserve original class-local sources and repeated native AIR capture artifacts.
+tests/native-generated-class-locals/source/** -text -whitespace
+tests/native-generated-class-locals/evidence/** -text -whitespace

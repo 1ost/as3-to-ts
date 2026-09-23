@@ -1,0 +1,10 @@
+{
+  "scope": "Original ordinary fixed method signature observations, not native implementation",
+  "originalRows": 43,
+  "captures": 2,
+  "files": 31,
+  "manifestSHA256": "c586bbcd1bee82940876ce50be0af7de050203fb72f3c99e4d28a687c23d8e73",
+  "engineBase": "9fd3c0ab0480e09907da5974c484a1db3875570e",
+  "compilerBase": "0cfb72e7754daa5914eda91109f6830063c64871",
+  "nativeAdmission": false
+}

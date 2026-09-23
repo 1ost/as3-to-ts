@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "scope": "Independent actual Flash constructor hygiene, alias replay and failed receiver evidence",
+  "files": [
+    {
+      "path": "review-original/adversary/FailureLeaf.as",
+      "sha256": "7c3fc093e78c3fee9338dd1dcc3ad343ad90db034cf37547f3b537d81f9db700"
+    },
+    {
+      "path": "review-original/adversary/LocalError.as",
+      "sha256": "5a489b292d01d854cc6a04eaeef0da9bfe086f555bc329f21caebce2f1129e72"
+    },
+    {
+      "path": "review-original/adversary/LocalObject.as",
+      "sha256": "55c835bb83d0ba984c5cacc0318c7cc33ae8172573cbba8e380eb3e5f50a5dc3"
+    },
+    {
+      "path": "review-original/adversary/LocalSelf.as",
+      "sha256": "71618990985a49d0af03e64d8bc0efb5fa32fcf9c6dce2bf525b41c3b495a730"
+    },
+    {
+      "path": "review-original/adversary/ParameterError.as",
+      "sha256": "96ea369101ddf03460758dcaae68d45e3d4438fd4b46ea9b489283dd16336675"
+    },
+    {
+      "path": "review-original/adversary/ParameterNumber.as",
+      "sha256": "1099a33ac1931e363b75f48dfc617fc6cbf6277aca43e6a26d473dc631c3b068"
+    },
+    {
+      "path": "review-original/adversary/ParameterObject.as",
+      "sha256": "cbf80699fc88f85f28d3308e38d7a3793f7f897f052994fd7b7fc16a37e40505"
+    },
+    {
+      "path": "review-original/adversary/ParameterSelf.as",
+      "sha256": "5c68d3f325e198c2c0d942c58f1645aa127d3dbff74694d822710b6c4ceac6ae"
+    },
+    {
+      "path": "review-original/adversary/Root.as",
+      "sha256": "4dae2680bc402441b2917838c71207ea852164921048ecf03aa66a6e510cdc65"
+    },
+    {
+      "path": "review-original/adversary/Subject.as",
+      "sha256": "32daa95320791a6437958ff8206c9dc604f47670258496604a492bbca7a19a83"
+    },
+    {
+      "path": "review-original/capture.cjs",
+      "sha256": "d32b39c8c3f5cd3be8c2091dcd8a61a76b8599e9ff1602808db41959097a4fc6"
+    },
+    {
+      "path": "review-original/commands.json",
+      "sha256": "a6b69369cb6c23496cc4bd22c1389f800d37e8a2ca5bd377559565d331435e69"
+    },
+    {
+      "path": "review-original/flash.json",
+      "sha256": "5f06b6a50dc90c072e27c338cfe73fd3f9e94ea1ddf89b0491dd61dfda69358d"
+    },
+    {
+      "path": "review-original/provenance.json",
+      "sha256": "e96d933ffb4807491011b809d9511736aac5ff6d7b9f88d68b62f846b9425e49"
+    },
+    {
+      "path": "review-original/ReviewOracle.as",
+      "sha256": "f7260a62464616b1fd163335dd08a590fa90bc834c37a581f45e919de8365af5"
+    },
+    {
+      "path": "RetainReview.py",
+      "sha256": "cfd69a44e8747d44db2bd0955efa2954d24d0c9089ba83f1f8fbd3092d023630"
+    }
+  ]
+}

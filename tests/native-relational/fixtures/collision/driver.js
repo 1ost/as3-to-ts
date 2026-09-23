@@ -1,0 +1,1 @@
+const P=modules.get('AS3MethodBinding'),C=modules.get('nativeClass').readNativeClass(modules.get('RelationalReview').RelationalReview),x=P.as3ConstructValue(C,()=>[]),rows=[];for(const name of ['less','lessEqual','greater','greaterEqual','commentChain','returnPrefix'])rows.push({id:name,value:P.as3CallProperty(x,name,()=>[])});globalThis.result=rows;

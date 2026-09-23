@@ -1,0 +1,13 @@
+[
+  "before",
+  "second-body",
+  "first-body",
+  "publication:true:true:true",
+  "leak",
+  "throw",
+  "failure:true",
+  "leak",
+  "throw",
+  "failure:true",
+  "fresh:true:true"
+]

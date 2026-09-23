@@ -1,0 +1,243 @@
+{
+  "reflection": [
+    "<type name=\"probe::ReturnSubject\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::ReturnSubject\">\n    <extendsClass type=\"Object\"/>\n    <variable name=\"marker\" type=\"String\"/>\n    <variable name=\"value\" type=\"*\"/>\n    <accessor name=\"caughtNumeric\" access=\"readonly\" type=\"Number\" declaredBy=\"probe::ReturnSubject\"/>\n    <accessor name=\"numeric\" access=\"readonly\" type=\"Number\" declaredBy=\"probe::ReturnSubject\"/>\n    <method name=\"numberFinallyReturn\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberCatchFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberFinallyThrow\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"stringFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"String\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberPlain\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"stringCatchFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"String\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"referenceFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"probe::ReturnSubject\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberCatch\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"referenceCatchFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"probe::ReturnSubject\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>",
+    "<type name=\"probe::ReturnChild\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::ReturnChild\">\n    <extendsClass type=\"probe::ReturnSubject\"/>\n    <extendsClass type=\"Object\"/>\n    <variable name=\"marker\" type=\"String\"/>\n    <variable name=\"value\" type=\"*\"/>\n    <accessor name=\"caughtNumeric\" access=\"readonly\" type=\"Number\" declaredBy=\"probe::ReturnSubject\"/>\n    <accessor name=\"numeric\" access=\"readonly\" type=\"Number\" declaredBy=\"probe::ReturnSubject\"/>\n    <method name=\"numberFinallyReturn\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n      <parameter index=\"2\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberCatchFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberFinallyThrow\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"stringFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"String\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberPlain\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"stringCatchFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"String\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"referenceFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"probe::ReturnSubject\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"numberCatch\" declaredBy=\"probe::ReturnSubject\" returnType=\"Number\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n    <method name=\"referenceCatchFinally\" declaredBy=\"probe::ReturnSubject\" returnType=\"probe::ReturnSubject\">\n      <parameter index=\"1\" type=\"*\" optional=\"false\"/>\n    </method>\n  </factory>\n</type>"
+  ],
+  "rows": [
+    {
+      "events": [
+        "body",
+        "n:valueOf"
+      ],
+      "value": 3,
+      "id": "number-plain-hook"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial",
+        "n:valueOf"
+      ],
+      "value": 3,
+      "id": "number-finally-hook"
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 7001
+      },
+      "events": [
+        "try",
+        "finally:initial",
+        "bad:valueOf",
+        "finally:coerced"
+      ],
+      "id": "number-finally-throwing-hook"
+    },
+    {
+      "events": [
+        "try",
+        "bad:valueOf",
+        "catch:7001"
+      ],
+      "value": 9,
+      "id": "number-catch-hook"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial",
+        "bad:valueOf",
+        "catch:7001",
+        "finally:coerced"
+      ],
+      "value": 9,
+      "id": "number-catch-finally-hook"
+    },
+    {
+      "events": [
+        "try",
+        "finally",
+        "last:valueOf"
+      ],
+      "value": 3,
+      "id": "number-finally-return-overrides"
+    },
+    {
+      "events": [
+        "try",
+        "finally",
+        "last:valueOf"
+      ],
+      "value": 3,
+      "id": "number-finally-return-overrides-throw"
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 8001
+      },
+      "events": [
+        "try",
+        "finally"
+      ],
+      "id": "number-finally-throw-overrides"
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 8001
+      },
+      "events": [
+        "try",
+        "finally"
+      ],
+      "id": "number-finally-throw-overrides-conversion-throw"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial",
+        "s:toString"
+      ],
+      "value": "4",
+      "id": "string-finally-hook"
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 7001
+      },
+      "events": [
+        "try",
+        "finally:initial",
+        "bad:toString",
+        "finally:coerced"
+      ],
+      "id": "string-finally-throwing-hook"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial",
+        "bad:toString",
+        "catch:7001",
+        "finally:coerced"
+      ],
+      "value": "caught",
+      "id": "string-catch-finally-hook"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial"
+      ],
+      "value": true,
+      "id": "reference-finally-child"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial"
+      ],
+      "value": true,
+      "id": "reference-finally-undefined"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "events": [
+        "try",
+        "finally:initial",
+        "finally:initial"
+      ],
+      "id": "reference-finally-wrong"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial",
+        "catch:1034",
+        "finally:initial"
+      ],
+      "value": true,
+      "id": "reference-catch-finally-wrong"
+    },
+    {
+      "events": [
+        "getter:try",
+        "getter:finally:initial",
+        "g:valueOf"
+      ],
+      "value": 3,
+      "id": "getter-finally-hook"
+    },
+    {
+      "error": {
+        "name": "Error",
+        "errorID": 7001
+      },
+      "events": [
+        "getter:try",
+        "getter:finally:initial",
+        "bad:valueOf",
+        "getter:finally:coerced"
+      ],
+      "id": "getter-finally-throwing-hook"
+    },
+    {
+      "events": [
+        "getter:try",
+        "getter:finally:initial",
+        "bad:valueOf",
+        "getter:catch:7001",
+        "getter:finally:coerced"
+      ],
+      "value": 9,
+      "id": "getter-catch-finally-hook"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial",
+        "outer:valueOf",
+        "try",
+        "finally:outer",
+        "inner:valueOf",
+        "outer:after:3"
+      ],
+      "value": 7,
+      "id": "method-return-reentrant-method"
+    },
+    {
+      "events": [
+        "getter:try",
+        "getter:finally:initial",
+        "outer:valueOf",
+        "getter:try",
+        "getter:finally:initial",
+        "inner:valueOf",
+        "outer:after:3"
+      ],
+      "value": 7,
+      "id": "getter-return-reentrant-getter"
+    },
+    {
+      "events": [
+        "try",
+        "finally:initial",
+        "outer:valueOf",
+        "try",
+        "finally:initial",
+        "inner:valueOf",
+        "finally:coerced",
+        "catch:7001",
+        "finally:coerced"
+      ],
+      "value": 9,
+      "id": "reentrant-conversion-throw-caught-by-outer"
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "rows": [
+    {
+      "value": true,
+      "id": "instance-default-null"
+    },
+    {
+      "value": true,
+      "id": "static-default-null"
+    },
+    {
+      "value": true,
+      "id": "instance-array-identity"
+    },
+    {
+      "value": true,
+      "id": "instances-storage-independent"
+    },
+    {
+      "value": true,
+      "id": "static-array-identity"
+    },
+    {
+      "value": true,
+      "id": "instance-undefined-null"
+    },
+    {
+      "value": true,
+      "id": "static-undefined-null"
+    },
+    {
+      "value": true,
+      "id": "instance-null"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "instance-object-rejected"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "static-number-rejected"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "arraylike-rejected"
+    },
+    {
+      "error": {
+        "name": "TypeError",
+        "errorID": 1034
+      },
+      "id": "vector-rejected"
+    },
+    {
+      "value": [
+        1034,
+        0,
+        true
+      ],
+      "id": "wrong-conversion-no-valueOf"
+    },
+    {
+      "value": [
+        true,
+        true
+      ],
+      "id": "assignment-rhs-undefined"
+    }
+  ],
+  "instanceXML": "<type name=\"probe::ArrayFields\" base=\"Object\" isDynamic=\"false\" isFinal=\"false\" isStatic=\"false\">\n  <extendsClass type=\"Object\"/>\n  <variable name=\"items\" type=\"Array\"/>\n</type>",
+  "classXML": "<type name=\"probe::ArrayFields\" base=\"Class\" isDynamic=\"true\" isFinal=\"true\" isStatic=\"true\">\n  <extendsClass type=\"Class\"/>\n  <extendsClass type=\"Object\"/>\n  <variable name=\"cache\" type=\"Array\"/>\n  <accessor name=\"prototype\" access=\"readonly\" type=\"*\" declaredBy=\"Class\"/>\n  <factory type=\"probe::ArrayFields\">\n    <extendsClass type=\"Object\"/>\n    <variable name=\"items\" type=\"Array\"/>\n  </factory>\n</type>"
+}

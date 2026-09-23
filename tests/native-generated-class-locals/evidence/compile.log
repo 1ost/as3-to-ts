@@ -1,0 +1,78 @@
+Loading configuration: C:\Users\admin\Desktop\AIRSDK\AIRSDK_51.3.4\frameworks\air-config.xml
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:4
+Warning: variable 'initializationRows' has no type declaration.
+var initializationRows=[];initializationRows.push({id:"entry",events:State.events.concat()});
+    ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:12
+Warning: variable 'events' has no type declaration.
+var rows=[],events=[],token={token:true};
+            ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:12
+Warning: variable 'token' has no type declaration.
+var rows=[],events=[],token={token:true};
+                      ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:12
+Warning: variable 'rows' has no type declaration.
+var rows=[],events=[],token={token:true};
+    ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:13
+Warning: variable 'out' has no type declaration.
+function encode(value:*):*{if(value===undefined)return {kind:"undefined"};if(value===null)return {kind:"null"};if(value===peer)return {kind:"peer"};if(value===other)return {kind:"other"};if(value===x)return {kind:"self"};if(value===companion)return {kind:"companion"};if(value===left)return {kind:"left"};if(value===right)return {kind:"right"};if(value is Array){var out=[];for(var i:int=0;i<value.length;i++)out.push(encode(value[i]));return out;}return value;}
+                                                                                                                                                                                                                                                                                                                                                                               ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:15
+Warning: variable 'observer' has no type declaration.
+var observer={error:errorValue};
+    ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:18
+Warning: variable 'labels' has no type declaration.
+var inputs=[peer,null,undefined,other,{},3,"peer",refs.Peer],labels=["peer","null","undefined","other","plain","number","string","Class"];
+                                                             ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:18
+Warning: variable 'inputs' has no type declaration.
+var inputs=[peer,null,undefined,other,{},3,"peer",refs.Peer],labels=["peer","null","undefined","other","plain","number","string","Class"];
+    ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:23
+Warning: variable 'box' has no type declaration.
+var box={next:function():*{events.push("rhs");return peer;}};row("rhs-once",x,"expression",[box]);box.next=function():*{events.push("rhs");return other;};row("rhs-invalid",x,"expression",[box]);box.next=function():*{events.push("rhs-throw");throw token;};row("rhs-throw",x,"expression",[box]);
+    ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:30
+Warning: variable 'errorRows' has no type declaration.
+var errorRows=[];function failure(v:*):*{try{x.initialize(v);}catch(e:*){return e;}return null;}function fields(e:*):*{return [e.name,typeof e.message,e.message===null,e.errorID];}
+    ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:35
+Warning: variable 'objects' has no type declaration.
+var classes=[Constructed,Entry,refs.Peer,elsewhere.Peer,Companion,Qualified,SamePackage,Left,Right,State,DeferredPeer,DeferredHolder],objects=[new Constructed(peer),x,peer,other,companion,q,same,left,right,new State(),deferred,holder],reflection=[],instances=[];
+                                                                                                                                      ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:35
+Warning: variable 'reflection' has no type declaration.
+var classes=[Constructed,Entry,refs.Peer,elsewhere.Peer,Companion,Qualified,SamePackage,Left,Right,State,DeferredPeer,DeferredHolder],objects=[new Constructed(peer),x,peer,other,companion,q,same,left,right,new State(),deferred,holder],reflection=[],instances=[];
+                                                                                                                                                                                                                                           ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:35
+Warning: variable 'instances' has no type declaration.
+var classes=[Constructed,Entry,refs.Peer,elsewhere.Peer,Companion,Qualified,SamePackage,Left,Right,State,DeferredPeer,DeferredHolder],objects=[new Constructed(peer),x,peer,other,companion,q,same,left,right,new State(),deferred,holder],reflection=[],instances=[];
+                                                                                                                                                                                                                                                         ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\GeneratedClassLocalProbe.as:35
+Warning: variable 'classes' has no type declaration.
+var classes=[Constructed,Entry,refs.Peer,elsewhere.Peer,Companion,Qualified,SamePackage,Left,Right,State,DeferredPeer,DeferredHolder],objects=[new Constructed(peer),x,peer,other,companion,q,same,left,right,new State(),deferred,holder],reflection=[],instances=[];
+    ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\source\refs\Entry.as:13
+Warning: Duplicate variable definition: item.
+ public function repeated(value:*):* {var item:Peer=value;var item:Peer;return item;}
+                                                             ^
+
+6567 bytes written to C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2\.cache\generated-class-locals-air-c\oracle.swf in 1.738 seconds

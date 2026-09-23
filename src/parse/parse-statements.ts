@@ -18,8 +18,12 @@ export function parseStatement(parser:AS3Parser):Node {
     const checkpoint = getParserCheckPoint(parser);
     let result:Node;
 
-    if (tokIs(parser, Keywords.FOR)) {
+    if (isStatementLabel(parser)) {
+        result = parseStatementLabel(parser);
+    } else if (tokIs(parser, Keywords.FOR)) {
         result = parseFor(parser);
+    } else if (tokIs(parser, Keywords.USE) || tokIs(parser, Keywords.NAMESPACE)) {
+        throw new Error('AS3_NAMESPACE_UNSUPPORTED: function-local namespace scope');
     } else if (tokIs(parser, Keywords.IF)) {
         result = parseIf(parser);
     } else if (tokIs(parser, Keywords.SWITCH)) {
@@ -69,6 +73,24 @@ export function parseStatement(parser:AS3Parser):Node {
         }
     }
     assertProgress(parser, checkpoint, 'statement');
+    return result;
+}
+
+function isStatementLabel(parser:AS3Parser):boolean {
+    if (!parser.tok || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) return false;
+    const checkpoint = parser.scn.getCheckPoint();
+    const next = parser.scn.nextToken();
+    parser.scn.rewind(checkpoint);
+    return !!next && next.text === ':';
+}
+
+function parseStatementLabel(parser:AS3Parser):Node {
+    const label = parser.tok;
+    const name = createNode(NodeKind.IDENTIFIER, {tok: label});
+    nextToken(parser, true);
+    consume(parser, ':');
+    const statement = parseStatement(parser);
+    const result = createNode(NodeKind.LABEL, {start: label.index, end: statement.end}, name, statement);
     return result;
 }
 
@@ -336,8 +358,15 @@ function parseReturnStatement(parser:AS3Parser):Node {
     let index = parser.tok.index,
         end = parser.tok.end;
     nextTokenAllowNewLine(parser);
-    if (tokIs(parser, NEW_LINE) || tokIs(parser, Operators.SEMI_COLUMN)) {
-        nextToken(parser, true);
+    // Documentation/block comments are trivia here, not expression identifiers.
+    // A line break inside a block comment still terminates a source return.
+    let commentLineBreak = false;
+    while (parser.tok.text.indexOf('/*') === 0) {
+        commentLineBreak = commentLineBreak || /[\r\n]/.test(parser.tok.text);
+        nextTokenAllowNewLine(parser);
+    }
+    if (commentLineBreak || tokIs(parser, NEW_LINE) || tokIs(parser, Operators.SEMI_COLUMN)) {
+        if (tokIs(parser, NEW_LINE) || tokIs(parser, Operators.SEMI_COLUMN)) nextToken(parser, true);
         result = createNode(NodeKind.RETURN, {start: index, end: end});
     } else if (tokIs(parser, Operators.RIGHT_CURLY_BRACKET) || tokIs(parser, Keywords.EOF)) {
         result = createNode(NodeKind.RETURN, {start: index, end: end});
@@ -353,7 +382,12 @@ function parseReturnStatement(parser:AS3Parser):Node {
 function parseThrowStatement(parser:AS3Parser):Node {
     let tok = parser.tok;
     nextTokenAllowNewLine(parser);
-    if (tokIs(parser, NEW_LINE)) {
+    let commentLineBreak = false;
+    while (parser.tok.text.indexOf('/*') === 0) {
+        commentLineBreak = commentLineBreak || /[\r\n]/.test(parser.tok.text);
+        nextTokenAllowNewLine(parser);
+    }
+    if (commentLineBreak || tokIs(parser, NEW_LINE)) {
         throw parseError(parser, 'AS3_PARSE_THROW_LINE_BREAK', 'an expression on the same line',
             'throw statement', 'line break');
     }

@@ -1,0 +1,1 @@
+const P=modules.get('AS3MethodBinding'),C=modules.get('nativeClass').readNativeClass(modules.get('RelationalReview').RelationalReview),x=P.as3ConstructValue(C,()=>[]),rows=[];for(const name of ['mixedIs','mixedAs','mixedIn','mixedInstance']){try{rows.push({id:name,value:P.as3CallProperty(x,name,()=>[1,2])});}catch(e){rows.push({id:name,error:e.name});}}globalThis.result=rows;

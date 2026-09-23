@@ -1,0 +1,33 @@
+[
+  {
+    "command": [
+      "java",
+      "-Xmx384m",
+      "-jar",
+      "C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\lib\\mxmlc.jar",
+      "+flexlib=C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks",
+      "-target-player=26.0",
+      "-swf-version=37",
+      "-source-path=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\original",
+      "-output=C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\capture-n\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\original\\ConstructorOracle.as"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\capture-n",
+    "exitCode": 0,
+    "stdout": "Loading configuration file C:\\Users\\admin\\AppData\\Local\\BleachPortTools\\apache-flex-sdk-4.16.1\\frameworks\\flex-config.xml\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\capture-n\\oracle.swf (4492 bytes)\n",
+    "stderr": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\original\\probe\\TypedLocals.as(7): col: 73 Warning: Negative value used where a uint (non-negative) value is expected.\n\npublic function case5(value:*):*{var n:Number=value;var i:int=value;var u:uint=-1;var b:Boolean=\"\";return [n,i,u,b];}\n                                                                        ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\original\\probe\\TypedLocals.as(7): col: 97 Warning: String used where a Boolean value was expected.  The expression will be type coerced to Boolean.\n\npublic function case5(value:*):*{var n:Number=value;var i:int=value;var u:uint=-1;var b:Boolean=\"\";return [n,i,u,b];}\n                                                                                                ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\original\\probe\\TypedLocals.as(23): col: 54 Warning: Negative value used where a uint (non-negative) value is expected.\n\npublic function case21():*{var u:uint;var r:*= [];u=-1;r.push(u);u=4294967296;r.push(u);u=-4294967297;r.push(u);u=NaN;r.push(u);return r;}\n                                                     ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\original\\probe\\TypedLocals.as(23): col: 92 Warning: Negative value used where a uint (non-negative) value is expected.\n\npublic function case21():*{var u:uint;var r:*= [];u=-1;r.push(u);u=4294967296;r.push(u);u=-4294967297;r.push(u);u=NaN;r.push(u);return r;}\n                                                                                           ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\original\\probe\\TypedLocals.as(41): col: 44 Warning: Duplicate variable definition.\n\npublic function case39():*{var i:int=2;var i:int;var n:Number=5;var n:Number;return [i,n];}\n                                           ^\n\nC:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\original\\probe\\TypedLocals.as(41): col: 69 Warning: Duplicate variable definition.\n\npublic function case39():*{var i:int=2;var i:int;var n:Number=5;var n:Number;return [i,n];}\n                                                                    ^\n\n"
+  },
+  {
+    "command": [
+      "D:\\bleach-oracle-electron\\node_modules\\electron\\dist\\electron.exe",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\capture.cjs",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\capture-n\\oracle.swf",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\capture-n\\flash.json",
+      "C:\\Users\\admin\\Desktop\\GITHUB REPO\\bleach-services\\game-client\\electron_desktop\\plugins\\pepflashplayer.dll"
+    ],
+    "cwd": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\typed-local-compiler-provider\\capture-n",
+    "exitCode": 0,
+    "stdout": "\n",
+    "stderr": ""
+  }
+]
