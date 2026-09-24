@@ -15,7 +15,7 @@ async function main(){
  try{for(const target of ['ES5','ES2015']){
   const dir=path.join(out,target);fs.mkdirSync(dir);
   const modulePath=file=>{const r=path.relative(dir,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
-  const artifacts={},typechecks=[];
+  const artifacts={},typechecks=[];let rejectionGuards=0;
   for(const [cohort,sources]of Object.entries(cohorts)){
   const dir=path.join(out,target,cohort);fs.mkdirSync(dir);
   const modulePath=file=>{const r=path.relative(dir,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
@@ -26,11 +26,11 @@ async function main(){
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
    const nativeProviders={};
    const trace=modulePath(path.join(engine,'src/layaAir/flash/debug/trace.ts'));externalModules.push(trace,...Object.values(nativeProviders).map(p=>p.module));
-   const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true};
+   const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,classScriptSources:Object.keys(sources)};
 
    const plan=api.createNativeGeneratedDeclarationPlan(input);
    const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
-   const options={customVisitors:[],definitionsByNamespace,nativeGlobalModules:{trace,XML:provider('AS3CanonicalXMLReference'),XMLList:provider('AS3CanonicalXMLReference')},nativeXMLModule:provider('AS3XML'),nativeReflectionXMLModule:provider('AS3ReflectionQuery'),nativeDisplayObjectReferenceModule:provider('AS3CanonicalDisplayReference'),nativeVectorTypes:{plan,module:'./__native_declarations'},nativeStringIntrinsicsModule:provider('AS3StringIntrinsics'),nativeStringLocalCoercionModule:provider('AS3String'),nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},importModules:{...Object.fromEntries(Object.entries(nativeProviders).map(([q,p])=>[q,p.module])),'flash.utils.describeType':provider('describeType'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
+   const options={customVisitors:[],definitionsByNamespace,nativeGlobalModules:{trace},nativeVectorTypes:{plan,module:'./__native_declarations'},nativeStringIntrinsicsModule:provider('AS3StringIntrinsics'),nativeStringLocalCoercionModule:provider('AS3String'),nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},importModules:{...Object.fromEntries(Object.entries(nativeProviders).map(([q,p])=>[q,p.module])),'flash.utils.describeType':provider('describeType'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
     decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
     nativeClassTraitsModule:provider('AS3GeneratedClass'),nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
     nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
@@ -39,6 +39,20 @@ async function main(){
     nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition'),nativeArrayCreationModule:provider('AS3ArrayCreation'),
     nativeReferenceCoercion:{plan,module:'./unused',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')};
    const config={plan,target,emitterOptions:options,externalModules:[...new Set(externalModules)],loadingSessionModule:provider('NativeSourceClassLoadingSession')};
+   const emitPlan=p=>api.emitNativeSourceClassModule({...config,plan:p,emitterOptions:{...options,nativeVectorTypes:{...options.nativeVectorTypes,plan:p},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:p}}});
+   for(const change of [
+    {classScriptSources:[]},{classScriptSources:['retrycases.Retry','retrycases.Retry']},
+    {classScriptSources:['retrycases.Missing']},{scriptDomainProvider:undefined,inheritScriptClasses:undefined},
+    {scriptGlobalProviderModule:undefined},{scriptGlobalSources:['retrycases.Trace'],inheritScriptClasses:undefined},
+    {lexicalProviderModule:provider('AS3LexicalMembers'),inheritScriptClasses:undefined}
+   ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,...change}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;}
+   const oldPlan=api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:undefined});
+   assert.throws(()=>emitPlan(oldPlan),/script global with static initializer requires retry identity authority/);rejectionGuards++;
+   const parentSource='package retrycases {public class Parent {}}',childSource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry extends Parent {');
+   assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Parent':{source:parentSource,sourceSha256:hash(parentSource)},'retrycases.Retry':{source:childSource,sourceSha256:hash(childSource)}}}),/planned root class with script global/);rejectionGuards++;
+   const bodySource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry { initial=[];');
+   const bodyPlan=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Retry':{source:bodySource,sourceSha256:hash(bodySource)}}});
+   assert.throws(()=>emitPlan(bodyPlan),/script global with class-body initializer requires retry identity authority/);rejectionGuards++;
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);
    const files=[];
@@ -61,16 +75,16 @@ async function main(){
   const vm=require('node:vm');const execute=async code=>{const context=vm.createContext({console,setTimeout,clearTimeout,AbortController,AbortSignal,DOMException,performance});context.window=context;context.document={};new vm.Script(code).runInContext(context);await context.completion;return JSON.parse(JSON.stringify(context.result));};
   const node=await execute(code);assert.deepEqual(node.rows,expected);
   const page=await browser.newPage();await page.route('http://loaded-generated.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script></body>'}));
-  await page.goto('http://loaded-generated.test/');await page.evaluate(()=>globalThis.completion);const web=await page.evaluate(()=>globalThis.result);await page.close();assert.deepEqual(web,node);
-  results.push({target,node,web,typechecks,artifacts,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
-  console.log(JSON.stringify({target,observations:node.rows.length,typeErrors:0}));
+  await page.goto('http://loaded-generated.test/');await page.evaluate(()=>globalThis.completion);const web=await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.result)));await page.close();assert.deepEqual(web,node);
+  const factoryFile=path.join(dir,'parent/parent-factory.js'),originalFactory=fs.readFileSync(factoryFile,'utf8');
+  const mutation=originalFactory.replaceAll('.instantiateAS3ClassScriptUnit(','.instantiateAS3ScriptUnit(');assert.notEqual(mutation,originalFactory);
+  try{fs.writeFileSync(factoryFile,mutation);const changed=await build();await assert.rejects(()=>execute(changed.outputFiles[0].text),/failed source function creation context/);}finally{fs.writeFileSync(factoryFile,originalFactory);}
+  results.push({target,node,web,typechecks,artifacts,rejectionGuards,mutations:1,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
+  console.log(JSON.stringify({target,observations:node.rows.length,typeErrors:0,rejectionGuards,domainChecks:node.domainChecks.length,mutations:1}));
  }}finally{await browser.close();}
  for(const item of compilerInputs)assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  for(const result of results)for(const item of [...result.inputs,...result.typechecks.flatMap(check=>check.inputs)])assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,cohorts,compilerInputs,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),held:['CfgItem/ContextUtil/DataStoreProxy integration','Document Sprite adapter','Full startup and game account flow']},null,2));
  console.log(JSON.stringify({out,status:'passed',observations:expected.length,targets:2,realms:2}));
 }
-main().then(()=>{assert(!process.argv.includes('--expect-held'),'Expected compiler hold no longer occurs');}).catch(error=>{
- if(process.argv.includes('--expect-held')&&/AS3_GENERATED_EMISSION_UNSUPPORTED: script global with static initializer requires retry identity authority/.test(error.message)){console.log(JSON.stringify({status:'expected-compiler-hold',message:error.message}));return;}
- console.error(error);process.exitCode=1;
-});
+main().catch(error=>{console.error(error);process.exitCode=1;});

@@ -23,6 +23,8 @@ export interface NativeGeneratedDeclarationInput {
     patternProviderModule?: string;
     /** Explicit class subset; omission selects all planned source classes. */
     scriptGlobalSources?: ReadonlyArray<string>;
+    /** Explicit single-Class script units whose failed initializer globals are retained. */
+    classScriptSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
     providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher'; nativeInterface?: true; nativeVector?: true}};
 }
@@ -103,7 +105,7 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'inheritScriptClasses', 'scriptGlobalSources', 'lexicalProviderModule', 'patternProviderModule', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'inheritScriptClasses', 'scriptGlobalSources', 'classScriptSources', 'lexicalProviderModule', 'patternProviderModule', 'sources', 'providers']);
     moduleName(data.providerModule);
     if (data.patternProviderModule !== undefined) moduleName(data.patternProviderModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
@@ -121,6 +123,10 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         fail('inherited Classes require explicit script cohort; package-internal aliases require separate qualification');
     if(data.scriptGlobalSources!==undefined&&(!data.scriptGlobalProviderModule||!Array.isArray(data.scriptGlobalSources)
         ||new Set(data.scriptGlobalSources).size!==data.scriptGlobalSources.length))fail('script global source selection requires unique names and provider');
+    if(data.classScriptSources!==undefined&&(!data.scriptGlobalProviderModule||!data.scriptDomainProvider||data.lexicalProviderModule
+        ||!Array.isArray(data.classScriptSources)||!data.classScriptSources.length
+        ||new Set(data.classScriptSources).size!==data.classScriptSources.length))
+        fail('Class script selection requires unique names, explicit script domain and no internal aliases');
     if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
     if (data.providers !== undefined && !table(data.providers)) fail('provider table required');
     const providers = data.providers || {}, names = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
@@ -225,10 +231,14 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         fail('script global source must be a planned class');
     if(data.inheritScriptClasses && bindings.some(binding=>!binding.scriptGlobalExport))
         fail('inherited Class selection requires all class script globals');
+    if(data.classScriptSources&&data.classScriptSources.some(name=>{
+        const binding=bindings.find(value=>value.qname===name);
+        return !binding||!binding.scriptGlobalExport||!!binding.base;
+    }))fail('Class script selection requires a planned root class with script global');
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
     if(data.scriptGlobalProviderModule) {
-        lines.push('import {instantiateAS3ScriptUnit'+(data.inheritScriptClasses?',selectAS3ScriptDomainClass,selectAS3ScriptDomainType':'')+(data.scriptDomainProvider?'':',createAS3ScriptDomain')+'} from '+JSON.stringify(data.scriptGlobalProviderModule)+';');
+        lines.push('import {instantiateAS3ScriptUnit'+(data.classScriptSources?',instantiateAS3ClassScriptUnit':'')+(data.inheritScriptClasses?',selectAS3ScriptDomainClass,selectAS3ScriptDomainType':'')+(data.scriptDomainProvider?'':',createAS3ScriptDomain')+'} from '+JSON.stringify(data.scriptGlobalProviderModule)+';');
         lines.push(data.scriptDomainProvider
             ? 'import {'+data.scriptDomainProvider.exportName+' as __scriptDomain} from '+JSON.stringify(data.scriptDomainProvider.module)+';'
             : 'const __scriptDomain=createAS3ScriptDomain();');
@@ -332,7 +342,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if(binding.scriptGlobalExport) {
             const split=binding.qname.lastIndexOf('.'),local=binding.qname.slice(split+1),uri=split<0?'':binding.qname.slice(0,split);
             const declaration={sourceId:binding.qname,sourceSha256:sourceHashes[binding.qname],bindings:[{name:local,uri,kind:'constant',type:name}]};
-            lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>'+(data.inheritScriptClasses?selection+'?'+selection+'.resolve() as T:':'')+'instantiateAS3ScriptUnit(__scriptDomain,'+JSON.stringify(declaration)
+            const instantiate=data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0?'instantiateAS3ClassScriptUnit':'instantiateAS3ScriptUnit';
+            lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>'+(data.inheritScriptClasses?selection+'?'+selection+'.resolve() as T:':'')+instantiate+'(__scriptDomain,'+JSON.stringify(declaration)
                 +',context=>[{name:'+JSON.stringify(local)+',uri:'+JSON.stringify(uri)+',value:factory(context.global)}])'
                 +'.export('+JSON.stringify(local)+','+JSON.stringify(uri)+') as T;');
         }

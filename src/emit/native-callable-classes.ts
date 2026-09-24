@@ -722,7 +722,8 @@ export class NativeCallableClasses {
         if (this.generated && this.generated.projection.binding.scriptGlobalExport) {
             // The defining global must exist throughout Class creation, including
             // registration and callbacks. Publish the Class only after the whole
-            // lazy factory succeeds; the common provider invalidates failed units.
+            // lazy factory succeeds; the selected common provider owns failed
+            // unit lifetime (retained for explicit single-Class script units).
             const body = cls.parent;
             if (body.kind !== S.Block || body.parent.kind !== S.ArrowFunction
                 || !body.statements.length || body.statements[body.statements.length - 1].kind !== S.ReturnStatement)

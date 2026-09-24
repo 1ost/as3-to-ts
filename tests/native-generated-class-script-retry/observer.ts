@@ -23,5 +23,10 @@ export async function run(module){
  const again=read();row('success-once',[count(),get(again,0)===get(state,0),get(again,1)===get(state,1)]);
  const binding=(global,expected)=>{try{const value=get(global,new QName('retrycases','Retry'));return ['value',value===expected,value===null,value===undefined];}catch(e){return ['error',e===get(Trace,'failure'),String(e)];}};
  row('failed-global-binding',binding(item('globals',0),item('classes',0)));row('successful-global-binding',binding(item('globals',2),selected));row('after-binding-reads',count());
- return {rows};
+ const sibling=new ApplicationDomain(ApplicationDomain.currentDomain),siblingSession=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:1});await siblingSession.load('sibling',sibling);
+ const otherTrace=sibling.getDefinition('retrycases.Trace');
+ const child=new ApplicationDomain(domain),childSession=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:1});await childSession.load('child',child);
+ const domainChecks=[otherTrace!==Trace,get(otherTrace,'globals')!==array('globals'),get(get(otherTrace,'globals'),'length')===0,child.getDefinition('retrycases.Trace')===Trace,child.getDefinition('retrycases.Retry')===selected];
+ if(domainChecks.some(value=>value!==true))throw new Error('Class script domain isolation/inheritance mismatch');
+ return {rows,domainChecks};
 }

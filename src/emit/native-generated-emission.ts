@@ -52,14 +52,14 @@ export class NativeGeneratedEmission {
         this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source,typedLocals);
         this.uintOrInitializers=nativeUintOrConstants(this.lexical.ownClass,source);
         if(this.projection.binding.scriptGlobalExport) {
-            // Publishing a class into a script unit consumes that unit identity.
-            // Retry/global identity after a source static initializer fails needs
-            // independent evidence; never silently allocate a replacement global.
+            // Only explicit Class-script units use the AIR-qualified provider
+            // that retains failed globals and allocates a fresh retry identity.
+            const classScript=input.classScriptSources&&input.classScriptSources.indexOf(owners[0])>=0;
             const members=this.lexical.ownClass.findChild(K.CONTENT).children;
             const constantInitializers=nativeScriptConstantInitializers(this.lexical.ownClass,source,this.uintOrInitializers.constants);
             if(members.some(member=>member.kind===K.CLASS_INITIALIZER))
                 fail('script global with class-body initializer requires retry identity authority');
-            if(members.some(member=>[K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0
+            if(!classScript&&members.some(member=>[K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0
                 &&member.findChild(K.MOD_LIST)&&member.findChild(K.MOD_LIST).children.some(mod=>mod.text==='static')
                 &&member.findChildren(K.NAME_TYPE_INIT).some(value=>!!value.findChild(K.INIT)&&!constantInitializers.has(value))))
                 fail('script global with static initializer requires retry identity authority');
