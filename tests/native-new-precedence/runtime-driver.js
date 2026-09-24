@@ -1,0 +1,12 @@
+const get=n=>load('nativeClass').readNativeClass(load(n)[n]);
+const Factory=get('Factory'),Box=get('Box'),Other=get('Other');
+const rows=[],subject=new Factory();let log=[],value;
+value=subject.cast(Box,log);rows.push({id:"cast-match",value:[value instanceof Box,value.value,log]});
+log=[];value=subject.cast(Other,log);rows.push({id:"cast-mismatch",value:[value===null,log]});
+log=[];rows.push({id:"is-match",value:[subject.test(Box,log),log]});
+log=[];rows.push({id:"is-mismatch",value:[subject.test(Other,log),log]});
+log=[];value=subject.known(log);rows.push({id:"known-cast",value:[value.value,log]});
+log=[];rows.push({id:"member-add",value:[subject.chain(log),log]});
+log=[];rows.push({id:"conditional",value:[subject.condition(log),log]});
+rows.push({id:"indexed",value:subject.indexed()});
+globalThis.result=rows;

@@ -117,22 +117,25 @@ function parseLambdaExpression(parser:AS3Parser):Node {
 
 
 function parseNewExpression(parser:AS3Parser):Node {
-    let tok = consume(parser, Keywords.NEW);
-
-    let result:Node = createNode(NodeKind.NEW, {start: tok.index});
-    result.children.push(parseExpression(parser)); // name
-    if (tokIs(parser, Operators.VECTOR_START)) {
-        let index = parser.tok.index;
-        let vec = parseVector(parser);
-        result.children.push(createNode(NodeKind.VECTOR, {start: index, end: vec.end}, vec));
+    const tok = consume(parser, Keywords.NEW);
+    skipExpressionComments(parser);
+    // A constructor target owns member/index access, but not the trailing
+    // relation, arithmetic or conditional expression. Consume one argument
+    // list here; the outer access parser owns calls/members on the result.
+    let target = parsePrimaryExpression(parser);
+    while (true) {
+        skipExpressionComments(parser);
+        if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_DOT) || tokIs(parser, Operators.DOUBLE_COLUMN))
+            target = parseDot(parser, target);
+        else if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET))
+            target = parseArrayAccessor(parser, target);
+        else break;
     }
     if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
-        result.children.push(parseArgumentList(parser));
+        const args = parseArgumentList(parser);
+        target = createNode(NodeKind.CALL, {start: target.start, end: args.end}, target, args);
     }
-    result.end = result.children.reduce((index:number, child:Node) => {
-        return Math.max(index, child ? child.end : 0);
-    }, result.end);
-    return result;
+    return createNode(NodeKind.NEW, {start: tok.index, end: target.end}, target);
 }
 
 
