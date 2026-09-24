@@ -707,13 +707,26 @@ export class NativeCallableClasses {
                 + this.generated.lexical.publication(identity,baseName,domainImport,intrinsic) + '\n'
                 + Object.keys(this.generated.uintOrInitializers.variables).map(key=>generatedProperty+'.as3SetProperty('+name+','+JSON.stringify(key)+','+this.generated.uintOrInitializers.variables[key]+');\n').join('')
                 + (this.classValueModule ? classValue+'.registerAS3Constructor('+identity+', {minimum:'+required+',maximum:'+(this.own.usesArguments||this.own.rest?'Infinity':this.own.parameters.length)+',coerceArguments:(values:any)=>values});\n' : '')
-                + (this.generated.projection.binding.scriptGlobalExport ? 'const '+this.generated.lexical.scriptGlobal+'='+domainImport+'.'+this.generated.projection.binding.scriptGlobalExport+'('+name+');\n' : '') : '');
+                : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
             + ' {\n' + instanceTypes.join('\n') + '\n}\ninterface ' + constructorType
             + ' extends ' + functionType + ' {new(' + (ctor ? params(ctor, true) : '') + '): ' + name + '; prototype: ' + name + ';\n'
             + staticTypes.join('\n') + '\n}';
         const replacements = [{start: cls.getStart(file), end: cls.end, value: replacement},
             {start: alias.getStart(file), end: alias.end, value: surface}];
+        if (this.generated && this.generated.projection.binding.scriptGlobalExport) {
+            // The defining global must exist throughout Class creation, including
+            // registration and callbacks. Publish the Class only after the whole
+            // lazy factory succeeds; the common provider invalidates failed units.
+            const body = cls.parent;
+            if (body.kind !== S.Block || body.parent.kind !== S.ArrowFunction
+                || !body.statements.length || body.statements[body.statements.length - 1].kind !== S.ReturnStatement)
+                this.fail('lazy script factory body required for publication');
+            replacements.push({start: body.getStart(file) + 1, end: body.getStart(file) + 1,
+                value: '\nreturn ' + domainImport + '.' + this.generated.projection.binding.scriptGlobalExport
+                    + '((' + this.generated.lexical.scriptGlobal + ':object)=>{\n'});
+            replacements.push({start: body.end - 1, end: body.end - 1, value: '\n});\n'});
+        }
         if (this.metadata) {
             const statements = cls.parent.statements;
             if (!statements) this.fail('lazy native factory body required for publication');

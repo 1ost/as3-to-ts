@@ -306,8 +306,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if(binding.scriptGlobalExport) {
             const split=binding.qname.lastIndexOf('.'),local=binding.qname.slice(split+1),uri=split<0?'':binding.qname.slice(0,split);
             const declaration={sourceId:binding.qname,sourceSha256:sourceHashes[binding.qname],bindings:[{name:local,uri,kind:'constant',type:name}]};
-            lines.push('export const '+binding.scriptGlobalExport+'=(value:Function)=>instantiateAS3ScriptUnit(__scriptDomain,'+JSON.stringify(declaration)
-                +',()=>[{name:'+JSON.stringify(local)+',uri:'+JSON.stringify(uri)+',value}]).global;');
+            lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>instantiateAS3ScriptUnit(__scriptDomain,'+JSON.stringify(declaration)
+                +',context=>[{name:'+JSON.stringify(local)+',uri:'+JSON.stringify(uri)+',value:factory(context.global)}])'
+                +'.export('+JSON.stringify(local)+','+JSON.stringify(uri)+') as T;');
         }
         active.delete(binding.qname); emitted.add(binding.qname);
     };
