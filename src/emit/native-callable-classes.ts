@@ -362,6 +362,8 @@ export class NativeCallableClasses {
         let ctor: any, constructorReturns = 0;
         const body = (member: any, constructor: boolean, returnType?: string): string => {
             if (!member.body) this.fail('bodyless member');
+            const returnPrefix = '<any>'+(returnType==='"Class"'?classValue+'.as3CoerceClass(':generatedProperty+'.coerceAS3PropertyValue(');
+            const returnSuffix = returnType==='"Class"'?')':','+returnType+')';
             const edits: {start: number; end: number; value: string}[] = [];
             let superCount = 0;
             const deferred=new Map<any,{label:string;value:string;pending:string}>();
@@ -378,7 +380,7 @@ export class NativeCallableClasses {
                 if(!entry){
                     const id=deferred.size;entry={label:unique('returnRegion'+id),value:unique('returnValue'+id),pending:unique('returnPending'+id)};deferred.set(outer,entry);
                     edits.push({start:outer.getStart(file),end:outer.getStart(file),value:'{let '+entry.value+':any;let '+entry.pending+'=false;'+entry.label+':'});
-                    edits.push({start:outer.end,end:outer.end,value:';if('+entry.pending+')return <any>'+generatedProperty+'.coerceAS3PropertyValue('+entry.value+','+returnType+');}'});
+                    edits.push({start:outer.end,end:outer.end,value:';if('+entry.pending+')return '+returnPrefix+entry.value+returnSuffix+';}'});
                 }
                 // A finalizer may throw and an enclosing catch may resume normally.
                 // Such a catch cancels this pending return. Catches inside the
@@ -448,8 +450,8 @@ export class NativeCallableClasses {
                     }
                     // Insert around the original return expression. Walk its children
                     // normally, retaining nested compiler-helper return ownership.
-                    edits.push({start:node.expression.getStart(file),end:node.expression.getStart(file),value:'<any>'+generatedProperty+'.coerceAS3PropertyValue('});
-                    edits.push({start:node.expression.end,end:node.expression.end,value:','+returnType+')'});
+                    edits.push({start:node.expression.getStart(file),end:node.expression.getStart(file),value:returnPrefix});
+                    edits.push({start:node.expression.end,end:node.expression.end,value:returnSuffix});
                 }
                 if (node.kind === S.ReturnStatement && constructor && !nestedFunction) {
                     if (node.expression) this.fail('constructor return value');
@@ -597,7 +599,10 @@ export class NativeCallableClasses {
                     inspect(sourceBody);
                     if(!generatedMethodCompletes(sourceBody))
                         this.fail('generated typed fallthrough completion requires separate qualification');
-                    returnType=this.generated.lexical.typeExpression(returns,this.own.qname,domainImport,intrinsic+'.array');
+                    if(returns.text==='Class') {
+                        if(!this.classValueModule)this.fail('Class return requires common class provider');
+                        returnType='"Class"';
+                    } else returnType=this.generated.lexical.typeExpression(returns,this.own.qname,domainImport,intrinsic+'.array');
                 }
             }
             const functionValue = 'function(this: ' + receiver + (member.parameters.length ? ', ' : '') + params(member, false)

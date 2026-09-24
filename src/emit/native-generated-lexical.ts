@@ -342,7 +342,7 @@ export class NativeGeneratedLexical {
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
             +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
             +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
-        return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?domain+'.'+parent.lexicalExport+'.get('+base+')':native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
+        return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?(nativeGeneratedDeclarationInputs(this.plan,this.plan.scope).inheritScriptClasses?this.provider+'.getAS3InheritedLexicalBase('+base+')':domain+'.'+parent.lexicalExport+'.get('+base+')'):native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
             +this.traits.filter(t=>t.static&&t.owner!==this.owner).map(t=>'const '+t.key+'='+base+';\n').join('')
             +this.traits.map(t=>'const '+t.access+'='+this.provider+'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(t.name)+','+JSON.stringify(t.visibility)+','+t.static+');').join('\n')
