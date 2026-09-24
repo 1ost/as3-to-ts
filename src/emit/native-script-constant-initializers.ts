@@ -15,6 +15,16 @@ export function nativeScriptConstantInitializers(declaration: Node, source: stri
     const fields:Node[]=[],allowed=new Set<Node>(),early=new Set<string>();
     declaration.findChild(K.CONTENT).children.forEach(member=>{
         const mods=member.findChild(K.MOD_LIST),flags=mods?mods.children.map(m=>m.text):[];
+        // Existing lexical lowering owns these String slots. Their literal
+        // values cannot invoke source code or observe a partial Class. Keep
+        // mutable slots out of the early-constant dependency set below.
+        const lexicalString=flags.length===2&&flags.indexOf('static')>=0
+            &&(member.kind===K.CONST_LIST&&(flags.indexOf('private')>=0||flags.indexOf('protected')>=0)
+                ||member.kind===K.VAR_LIST&&flags.indexOf('protected')>=0);
+        if(lexicalString)member.findChildren(K.NAME_TYPE_INIT).forEach(field=>{
+            const type=field.findChild(K.TYPE),init=field.findChild(K.INIT);
+            if(type&&type.text==='String'&&init&&/^["']/.test(text(init))&&literal(text(init)))allowed.add(field);
+        });
         if(member.kind!==K.CONST_LIST||flags.length!==2||flags.indexOf('public')<0||flags.indexOf('static')<0)return;
         fields.push(...member.findChildren(K.NAME_TYPE_INIT));
     });
