@@ -5487,7 +5487,29 @@ function emitLexicalApplicationDomain(emitter:Emitter,node:Node):boolean {
     return true;
 }
 
+/** Read an authenticated public Array field through the source property provider.
+ * Direct JS indexing/length leaks host TypeErrors when the field is null. */
+function emitGeneratedArrayFieldRead(emitter:Emitter, node:Node):boolean {
+    if(!emitter.generated || !node || node.children.length!==2)return false;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),key=node.children[1];
+    if(!receiver || receiver.kind!==NodeKind.DOT || receiver.children.length!==2
+        ||receiver.children[0].kind!==NodeKind.IDENTIFIER||receiver.children[0].text!=='this'
+        ||receiver.children[1].kind!==NodeKind.LITERAL)return false;
+    const field=emitter.generated.projection.instanceTraits.find(t=>t.name===receiver.children[1].text);
+    if(!field||field.kind!=='variable'||field.type!=='Array')return false;
+    if(node.kind===NodeKind.DOT&&(key.kind!==NodeKind.LITERAL||key.text!=='length'))return false;
+    const outer=outerEncapsulatedExpression(node),parent=outer&&outer.parent;
+    // Writes, updates and calls retain their existing separate lowering paths.
+    if(parent&&(parent.children[0]===outer&&[NodeKind.ASSIGN,NodeKind.CALL].indexOf(parent.kind)>=0
+        ||[NodeKind.DELETE,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC].indexOf(parent.kind)>=0))return false;
+    const helper=propertyHelper(emitter,'as3GetProperty',emitter.generated.propertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+    emitPropertyKey(emitter,node.kind===NodeKind.DOT?{receiver:node.children[0],key,literalKey:key.text}:{receiver:node.children[0],key});
+    emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 function emitDot(emitter:Emitter, node:Node) {
+    if (emitGeneratedArrayFieldRead(emitter,node)) return;
     if (emitLexicalApplicationDomain(emitter,node)) return;
     const lookupModule = emitter.options.importModules && emitter.options.importModules['flash.utils.getDefinitionByName'];
     const lookupReceiver = unwrapEncapsulatedExpression(node.children[0]), member = node.children[1];
@@ -5563,6 +5585,7 @@ function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
 }
 
 function emitArrayAccessor(emitter:Emitter, node:Node):void {
+	if (emitGeneratedArrayFieldRead(emitter,node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
     if (emitDynamicPropertyRead(emitter,node)) return;
     if (emitObjectPropertyRead(emitter,node)) return;
