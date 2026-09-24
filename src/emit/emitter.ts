@@ -2960,6 +2960,13 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node):boolean {
  emitter.ensureImportIdentifier('as3VectorCreate as '+helper,vectorProviderModule(input.vectorProviderModule,options.module),false);
  emitter.ensureImportIdentifier(spec.specExport+' as '+specialization,generatedModule(options.module),false);
  emitter.nativeSourceHelpers.add(helper);
+ if(spec.elementNative){
+  const element=vector.findChild(NodeKind.TYPE),name=element.text,shadow=emitter.findDefInScope(name);
+  if(shadow&&(shadow.bound||Object.prototype.hasOwnProperty.call(shadow,'as3Type')))fail('shadowed native element construction');
+  if(!/^[A-Za-z_$][\w$]*$/.test(name)||emitter.references.resolve(name)!==spec.elementNative
+     ||!emitter.options.importModules||emitter.options.importModules[spec.elementNative]!==input.providers[spec.elementNative].module)
+   fail('native element construction requires the exact provider binding');
+ }
  emitter.catchup(node.start);
  if(spec.elementClass){
   const element=vector.findChild(NodeKind.TYPE),name=element.text,shadow=emitter.findDefInScope(name);
