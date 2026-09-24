@@ -28,7 +28,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -177,15 +177,16 @@ export class NativeReferenceCoercion {
             const sourceIs = generated && node.kind===K.RELATION && node.children.length===3
                 && node.children[1].text==='is' && node.lastChild.kind===K.IDENTIFIER
                 && (!!this.sourceClass(node.lastChild.text) || !!this.nativeInterface(node.lastChild.text));
-            const displayTest = nativeDisplayObject && node.kind===K.RELATION && node.children.length===3
+            const displayTest = node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
-                && this.resolve(node.lastChild.text)==='flash.display.DisplayObject';
+                && ((nativeDisplayObject && this.resolve(node.lastChild.text)==='flash.display.DisplayObject')
+                    || (nativeMovieClip && this.resolve(node.lastChild.text)==='flash.display.MovieClip'));
             const byteArrayTest = nativeByteArray && generated && node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && this.resolve(node.lastChild.text)==='flash.utils.ByteArray';
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
                 && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !nativeXMLTest && !sourceAs && !sourceIs && !interfaceTest && !displayTest && !byteArrayTest)
-                fail('reference type operation requires class-evaluation authority');
+                fail('reference type operation requires class-evaluation authority: '+this.resolve(node.lastChild.qualifiedName || node.lastChild.text)+' at offset '+node.start);
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text
                     : value.kind === K.DOT && value.children[1].kind === K.LITERAL
