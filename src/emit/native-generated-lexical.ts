@@ -107,7 +107,7 @@ export class NativeGeneratedLexical {
                         fail('ambiguous lexical declaration: '+local);
                     }
                     const vector=node.findChild(K.VECTOR);
-                    if(vector&&(isStatic||visibility!=='private'||member.kind!==K.VAR_LIST
+                    if(vector&&(isStatic||['private','protected'].indexOf(visibility)<0||member.kind!==K.VAR_LIST
                         ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
                         fail('lexical vector storage authority');
                     const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':internalGetter?'accessor':'method',owner:name,node,
