@@ -26,7 +26,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -577,6 +577,7 @@ export class NativeCallableClasses {
                     if(reference&&reference.kind==='native'&&reference.identity!=='flash.utils.Dictionary'&&reference.identity!=='flash.net.SharedObject'
                         &&!(this.byteArrayReference&&reference.identity==='flash.utils.ByteArray')
                         &&!(this.movieClipReference&&reference.identity==='flash.display.MovieClip')
+                        &&!(this.textFormatReference&&reference.identity==='flash.text.TextFormat')
                         &&!this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&binding.nativeInterface)
                         &&!(reference.identity==='flash.media.ID3Info'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity))
                         &&!(this.dateReference&&reference.identity==='Date')&&!(this.displayReference&&reference.identity==='flash.display.DisplayObject')&&!(reference.identity==='flash.events.Event'
