@@ -13,13 +13,15 @@ async function main(){
  try{for(const target of ['ES5','ES2015']){
   const dir=path.join(out,target);fs.mkdirSync(dir);
   const modulePath=file=>{const r=path.relative(dir,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
+  const artifacts={},typechecks=[];
+  for(const [cohort,sources]of Object.entries(cohorts)){
+  const dir=path.join(out,target,cohort);fs.mkdirSync(dir);
+  const modulePath=file=>{const r=path.relative(dir,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
   const provider=n=>modulePath(path.join(engine,'src/layaAir/flash/utils',n+'.ts'));
   const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(n=>[n,modulePath(path.resolve('utils',n+'.ts'))]));
   const sourceError=modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts'));
   const modules=['AS3GeneratedClass','AS3ScriptGlobal','AS3Type','AS3Class','AS3Invocation','AS3LexicalMembers','AS3Property','AS3MethodBinding','AS3Coercion','AS3String','AS3Addition','AS3ArrayCreation','NativeSourceClassLoadingSession'];
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
-  const artifacts={},typechecks=[];
-  for(const [cohort,sources]of Object.entries(cohorts)){
    const input={scope:'loaded-interfaces-'+cohort,sources,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true};
    const plan=api.createNativeGeneratedDeclarationPlan(input);
    const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
@@ -57,7 +59,7 @@ async function main(){
   }
   const observer=fs.readFileSync(path.join(__dirname,'observer.ts'),'utf8').replaceAll('@FLASH@',modulePath(path.join(engine,'src/layaAir/flash')));
   fs.writeFileSync(path.join(dir,'observer.ts'),observer);
-  const entry=path.join(dir,'entry.ts');fs.writeFileSync(entry,"import {run} from './observer';import {nativeSourceClassModule as parent} from './parent-factory.js';import {nativeSourceClassModule as child} from './child-factory.js';globalThis.completion=run(parent,child).then(value=>{globalThis.result=value;});");
+  const entry=path.join(dir,'entry.ts');fs.writeFileSync(entry,"import {run} from './observer';import {nativeSourceClassModule as parent} from './parent/parent-factory.js';import {nativeSourceClassModule as child} from './child/child-factory.js';globalThis.completion=run(parent,child).then(value=>{globalThis.result=value;});");
   const build=mutation=>esbuild.build({entryPoints:[entry],bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',metafile:true,loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},plugins:mutation?[{name:mutation,setup(b){b.onLoad({filter:/child-factory\.js$/},args=>{
    let contents=fs.readFileSync(args.path,'utf8');
    if(mutation==='missing-interface-selection'){
@@ -79,6 +81,7 @@ async function main(){
   results.push({target,node,web,typechecks,artifacts,negatives,compilerGuards:4,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
   console.log(JSON.stringify({target,observations:node.rows.length,guards:node.checks.length,typeErrors:0}));
  }}finally{await browser.close();}
+ for(const result of results)for(const item of [...result.inputs,...result.typechecks.flatMap(check=>check.inputs)])assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,cohorts,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),held:['Document Sprite adapter','Full startup and game account flow']},null,2));
  console.log(JSON.stringify({out,status:'passed',observations:61,targets:2,realms:2}));
 }
