@@ -55,9 +55,20 @@ export class NativeGeneratedEmission {
             // Retry/global identity after a source static initializer fails needs
             // independent evidence; never silently allocate a replacement global.
             const members=this.lexical.ownClass.findChild(K.CONTENT).children;
+            const earlyStringConstant=(member:Node,value:Node):boolean=>{
+                const mods=member.findChild(K.MOD_LIST),type=value.findChild(K.TYPE),init=value.findChild(K.INIT);
+                if(member.kind!==K.CONST_LIST || !mods || !mods.children.some(mod=>mod.text==='public')
+                    || !type || type.text!=='String' || !init)return false;
+                // Literal String constants use existing immutable early storage;
+                // there is no user code, reference lookup or coercion hook to fail.
+                const literal=source.slice(init.start,initializerEnd(init)).trim();
+                return /^(?:"(?:[^"\\\r\n]|\\[\s\S])*"|'(?:[^'\\\r\n]|\\[\s\S])*')$/.test(literal);
+            };
+            if(members.some(member=>member.kind===K.CLASS_INITIALIZER))
+                fail('script global with class-body initializer requires retry identity authority');
             if(members.some(member=>[K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0
                 &&member.findChild(K.MOD_LIST)&&member.findChild(K.MOD_LIST).children.some(mod=>mod.text==='static')
-                &&member.findChildren(K.NAME_TYPE_INIT).some(value=>!!value.findChild(K.INIT))))
+                &&member.findChildren(K.NAME_TYPE_INIT).some(value=>!!value.findChild(K.INIT)&&!earlyStringConstant(member,value))))
                 fail('script global with static initializer requires retry identity authority');
         }
         if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => p.name === t.name)))
