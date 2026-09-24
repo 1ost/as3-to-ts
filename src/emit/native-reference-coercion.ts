@@ -10,7 +10,7 @@ export interface NativeReferenceCoercionOptions {
     module: string;
     coercionModule: string;
 }
-export interface ReferenceLocal {node: Node; name: string; exported: string; header: boolean; parameter: boolean; stringLocal?: boolean;}
+export interface ReferenceLocal {node: Node; name: string; exported: string; header: boolean; parameter: boolean; stringLocal?: boolean; objectParameter?: boolean;}
 export interface ReferenceSignature {
     node: Node; returned: string; builtinReturn: string;
     parameters: {node: Node; name: string; type: string; exported: string; optional: boolean}[];
@@ -28,7 +28,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -60,10 +60,15 @@ export class NativeReferenceCoercion {
                         parameters.forEach(p => {
                             if (!p.node) fail('reference signatures with rest parameters require qualification');
                             if (p.name === 'arguments') fail('shadowed arguments in reference signatures');
-                            if (!p.exported && ['*','Number','int','uint','String'].indexOf(p.type) < 0)
+                            if (!p.exported && ['*','Number','int','uint','String','Object'].indexOf(p.type) < 0)
                                 fail('unqualified mixed reference parameter: ' + p.type);
                             if (optional && !p.optional) fail('required parameter follows optional parameter');
                             optional = optional || p.optional;
+                            if (p.optional && p.type === 'Object') {
+                                const init = p.node.findChild(K.INIT);
+                                if (source.slice(init.start,init.end).trim() !== 'null')
+                                    fail('Object parameter default requires literal null');
+                            }
                             if (p.optional && (p.exported || p.type === '*')) {
                                 const init = p.node.findChild(K.INIT);
                                 if (!p.exported || source.slice(init.start,init.end).trim() !== 'null')
@@ -83,6 +88,8 @@ export class NativeReferenceCoercion {
                 if (fn) {
                     const stringLocal = stringLocals && !generated && node.parent.kind !== K.PARAMETER
                         && type && this.resolve(type.qualifiedName || type.text) === 'String';
+                    const objectParameter = !generated && node.parent.kind === K.PARAMETER && !!this.signature(node)
+                        && type && this.resolve(type.qualifiedName || type.text) === 'Object';
                     if (stringLocal) for (let parent = node.parent; parent && parent !== fn; parent = parent.parent) {
                         if (parent.kind === K.CATCH && parent.children.some(child => child.kind === K.NAME && child.text === name))
                             fail('String declaration shadows catch storage');
@@ -90,7 +97,7 @@ export class NativeReferenceCoercion {
                     const scope = this.scopes.get(fn.start);
                     // Generated locals (including repeated declarations) belong to
                     // NativeTypedLocals; keep parameter storage conflicts here.
-                    if (scope.has(name) && (scope.get(name) || (exported || stringLocal) && (!generated || node.parent.kind === K.PARAMETER)))
+                    if (scope.has(name) && (scope.get(name) || (exported || stringLocal || objectParameter) && (!generated || node.parent.kind === K.PARAMETER)))
                         fail('duplicate local declaration requires default-order authority: ' + name);
                     if ((exported || stringLocal) && [K.CONST,K.CONST_LIST].indexOf(node.parent.kind) >= 0) fail('reference local constant lowering required');
                     let header = false;
@@ -99,7 +106,7 @@ export class NativeReferenceCoercion {
                         if (parent && [K.FORIN,K.FOREACH].indexOf(parent.kind) >= 0 && parent.children[0] === value) header = true;
                     }
                     // Generated method storage is lowered once by NativeTypedLocals.
-                    const local = (exported || stringLocal)&&(!generated||node.parent.kind===K.PARAMETER) ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER, stringLocal} : null;
+                    const local = (exported || stringLocal || objectParameter)&&(!generated||node.parent.kind===K.PARAMETER) ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER, stringLocal, objectParameter} : null;
                     scope.set(name,local);
                     if (local) this.declarations.set(node.start,local);
                 }
@@ -162,18 +169,26 @@ export class NativeReferenceCoercion {
             const sourceAs = generated && node.kind===K.RELATION && node.children.length===3
                 && node.children[1].kind===K.AS && node.lastChild.kind===K.IDENTIFIER
                 && (this.sourceClass(node.lastChild.text) || !!this.sourceInterface(node.lastChild.text));
+            // Interface membership uses the authenticated declaration token;
+            // it does not require admitting the consumer as a source Class.
+            const interfaceTest = node.kind===K.RELATION && node.children.length===3
+                && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
+                && !!this.sourceInterface(node.lastChild.text);
             const sourceIs = generated && node.kind===K.RELATION && node.children.length===3
                 && node.children[1].text==='is' && node.lastChild.kind===K.IDENTIFIER
                 && (!!this.sourceClass(node.lastChild.text) || !!this.nativeInterface(node.lastChild.text));
-            const displayTest = nativeDisplayObject && generated && node.kind===K.RELATION && node.children.length===3
+            const displayTest = node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
-                && this.resolve(node.lastChild.text)==='flash.display.DisplayObject';
+                && ((nativeDisplayObject && this.resolve(node.lastChild.text)==='flash.display.DisplayObject')
+                    || (nativeMovieClip && this.resolve(node.lastChild.text)==='flash.display.MovieClip')
+                    || (nativeTextFormat && this.resolve(node.lastChild.text)==='flash.text.TextFormat')
+                    || (nativeInteractiveObject && this.resolve(node.lastChild.text)==='flash.display.InteractiveObject'));
             const byteArrayTest = nativeByteArray && generated && node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && this.resolve(node.lastChild.text)==='flash.utils.ByteArray';
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
-                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !nativeXMLTest && !sourceAs && !sourceIs && !displayTest && !byteArrayTest)
-                fail('reference type operation requires class-evaluation authority');
+                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !nativeXMLTest && !sourceAs && !sourceIs && !interfaceTest && !displayTest && !byteArrayTest)
+                fail('reference type operation requires class-evaluation authority: '+this.resolve(node.lastChild.qualifiedName || node.lastChild.text)+' at offset '+node.start);
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text
                     : value.kind === K.DOT && value.children[1].kind === K.LITERAL

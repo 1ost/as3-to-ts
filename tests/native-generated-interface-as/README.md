@@ -10,10 +10,13 @@ and provider type checks. Coverage includes a diamond of interfaces, inherited
 implementations, structural rejection, nullish values, operand counts and throws,
 no conversion hooks, and deferred implementing-class initialization. Three
 corrupted comparisons must fail. Four compiler guards retain missing-provider,
-shadowed target, class-initializer cast and interface-is boundaries.
+shadowed target, class-initializer cast and shadowed interface-is boundaries.
 
 The fix applies only to a source-resolved identifier with an authenticated
-interface declaration token, generated class emission and explicit reference/type
+interface declaration token and explicit reference/type
 providers. General interface Class values and full application routing remain
 outside this qualification. Keep native-generated-source-as as the regression
 for operand-before-Class initialization semantics.
+
+`native-interface-type-operations` extends this coverage to nominal `is`, ordinary
+consumers and direct cast calls/accessors; the earlier 21-row capture is retained.

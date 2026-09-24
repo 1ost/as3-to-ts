@@ -13,6 +13,8 @@ function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){c
  const qname=path.relative(path.join(evidence,'source'),file).replaceAll('\\','/').slice(0,-3).replaceAll('/','.');
  const source=fs.readFileSync(file,'utf8');sources[qname]={source,sourceSha256:hash(source)};}}}
 walk(path.join(evidence,'source'));assert.equal(Object.keys(sources).length,3);
+const consumerOnly=process.argv.includes('--consumer');if(consumerOnly)sources['displaycases.Reader'].referenceOnly=true;
+const consumerOptions=opts=>{const copy={...opts};for(const key of ['nativeArrayCreationModule','nativeGeneratedDeclarations','nativeClassTraitsModule','nativeTypedLocals','nativeLexicalMembersModule','nativeGeneratedPropertyModule','nativeCallableMethodBindingModule','nativeCallableCoercionModule','nativeCallableStringModule','nativeTypedLocalReferenceModule'])delete copy[key];return copy;};
 const nativeProviders={'flash.display.DisplayObject':{module:provider('AS3CanonicalDisplayReference'),exportName:'DisplayObject'},'flash.geom.Rectangle':{module:modulePath(path.join(engine,'src/layaAir/flash/geom/Rectangle.ts')),exportName:'Rectangle'}};
 const plan=api.createNativeGeneratedDeclarationPlan({scope:'generated-display-references',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
@@ -30,12 +32,12 @@ const reader=sources['displaycases.Reader'].source;
 for(const patch of [
  {nativeDisplayObjectReferenceModule:undefined},
  {nativeReferenceCoercion:undefined},
- {nativeGeneratedDeclarations:undefined},
+
  {nativeDisplayObjectReferenceModule:'./wrong-provider'},
  {importModules:{...options.importModules,'flash.display.DisplayObject':'./wrong-provider'}},
  {nativeComputedTypeTestModule:undefined}
 ]) {
- assert.throws(()=>emit(parse('Reader.as',reader),reader,{...options,...patch}),/AS3_.*UNSUPPORTED/);
+ assert.throws(()=>emit(parse('Reader.as',reader),reader,{...(consumerOnly?consumerOptions(options):options),...patch}),/AS3_.*UNSUPPORTED/);
  rejectionGuards++;
 }
 for(const body of [
@@ -45,13 +47,14 @@ for(const body of [
  'public function test(value:*,DisplayObject:*):*{return value as DisplayObject;}'
 ]) {
  const source='package displaycases {import flash.display.DisplayObject;public class Guard {'+body+'}}';
- const p=api.createNativeGeneratedDeclarationPlan({scope:'display-reference-guard',providerModule:provider('AS3GeneratedClass'),sources:{'displaycases.Guard':{source,sourceSha256:hash(source)}},providers:nativeProviders});
- assert.throws(()=>emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard'},nativeReferenceCoercion:{plan:p,module:'./guard',coercionModule:provider('AS3Type')}}),/AS3_DISPLAY_REFERENCE_UNSUPPORTED/);
+ const p=api.createNativeGeneratedDeclarationPlan({scope:'display-reference-guard',providerModule:provider('AS3GeneratedClass'),sources:{'displaycases.Guard':{source,sourceSha256:hash(source),...(consumerOnly?{referenceOnly:true}:{})}},providers:nativeProviders});
+ const guardOptions={...options,nativeGeneratedDeclarations:{plan:p,module:'./guard'},nativeReferenceCoercion:{plan:p,module:'./guard',coercionModule:provider('AS3Type')}};
+ assert.throws(()=>emit(parse('Guard.as',source),source,consumerOnly?consumerOptions(guardOptions):guardOptions),/AS3_(DISPLAY_REFERENCE|REFERENCE_COERCION)_UNSUPPORTED/);
  rejectionGuards++;
 }
 fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];
-for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
- const opts={...options};
+for(const binding of Object.keys(sources).map(qname=>({qname}))){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
+ const opts=consumerOnly&&binding.qname==='displaycases.Reader'?consumerOptions(options):{...options};
  if(plan.interfaces.some(i=>i.qname===binding.qname)){for(const k of Object.keys(opts))if(k.startsWith('native'))delete opts[k];}
  opts.nativeVectorTypes={plan,module:'./declarationDomain'};
  const output=emit(parse(binding.qname+'.as',source),source,opts);fs.writeFileSync(file,output);emitted.push({qname:binding.qname,file,sourceSha256:hash(source),outputSha256:hash(output)});
@@ -71,11 +74,11 @@ for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='identity-0')
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');specs.push({name:relative,code:out.outputText});}
  for(const name of ['bound','classBound','nativeClass','callableClass'])specs.push({name,code:modern.transpileModule(fs.readFileSync(path.resolve('utils',name+'.ts'),'utf8'),{compilerOptions:{target,module:modern.ModuleKind.CommonJS}}).outputText});
- const script='(async()=>{if(typeof window==="undefined"){globalThis.window=globalThis;globalThis.document={};}const api=(()=>{const module={exports:{}};'+built.outputFiles[0].text+';return module.exports;})();const shared=new Map(),specs=new Map('+JSON.stringify(specs)+'.map(s=>[s.name,s.code])),providers=new Set('+JSON.stringify([...names,'Rectangle'])+'),localNames=new Set('+JSON.stringify(['declarationDomain',...emitted.map(e=>fileFor(e.qname))])+');function createDomainLoader(){const local=new Map();function load(name){if(providers.has(name))return api;const modules=localNames.has(name)?local:shared;if(modules.has(name))return modules.get(name);if(!specs.has(name))throw Error("unresolved module "+name);const output={};modules.set(name,output);new Function("exports","require",specs.get(name))(output,r=>load(r.split("/").pop()));return output;}load.loaded=local;return load;}const load=createDomainLoader();await api.Laya.init(160,100);'+observer+'})().catch(e=>{globalThis.failure=String(e.stack||e);});';
+ const script='(async()=>{if(typeof window==="undefined"){globalThis.window=globalThis;globalThis.document={};}const api=(()=>{const module={exports:{}};'+built.outputFiles[0].text+';return module.exports;})();const shared=new Map(),specs=new Map('+JSON.stringify(specs)+'.map(s=>[s.name,s.code])),providers=new Set('+JSON.stringify([...names,'Rectangle'])+'),localNames=new Set('+JSON.stringify(['declarationDomain',...emitted.map(e=>fileFor(e.qname))])+');function createDomainLoader(){const local=new Map();function load(name){if(providers.has(name))return api;const modules=localNames.has(name)?local:shared;if(modules.has(name))return modules.get(name);if(!specs.has(name))throw Error("unresolved module "+name);const output={};modules.set(name,output);new Function("exports","require",specs.get(name))(output,r=>load(r.split("/").pop()));return output;}load.loaded=local;return load;}const load=createDomainLoader();await api.Laya.init(160,100);const consumerOnly='+JSON.stringify(consumerOnly)+';'+observer+'})().catch(e=>{globalThis.failure=String(e.stack||e);});';
  fs.writeFileSync(path.join(run,'bundle-'+target+'.js'),script);
  const page=await browser.newPage();await page.goto(origin);await page.addScriptTag({content:script});await page.waitForFunction(()=>globalThis.result||globalThis.failure);assert.equal(await page.evaluate(()=>globalThis.failure),undefined);const web=await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.result)));await page.close();
  for(const actual of [web]){assert.deepEqual(actual,wanted);}
  results.push({target,web});
 }}finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Display construction, native subclass entry and Class-initializer type operations','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Chromium with Laya'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({consumerOnly,combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Display construction, native subclass entry and Class-initializer type operations','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Chromium with Laya'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

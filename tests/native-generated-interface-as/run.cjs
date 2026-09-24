@@ -45,7 +45,7 @@ for(const [body,missing,reason] of [
  ['public function run(value:*):*{return value as IRoot;}',true,/explicit module binding required/],
  ['public static var value:Object=null as IRoot;',false,/source as during class initialization/],
  ['public function run(value:*,IRoot:Class):*{return value as IRoot;}',false,/shadowed source as target/],
- ['public function run(value:*):Boolean{return value is IRoot;}',false,/reference type operation requires class-evaluation authority/]
+ ['public function run(value:*,IRoot:Class):Boolean{return value is IRoot;}',false,/shadowed source is target/]
 ]){assert.throws(()=>guardSource(body,missing),reason);rejectionGuards++;}
 const files=[path.join(run,'declarationDomain.ts'),...emitted.map(e=>e.file),...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f))];
 const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
@@ -68,5 +68,5 @@ try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  for(const actual of [node,web]){assert.deepEqual(actual,wanted);}
  results.push({target,node,web});
 }}finally{await browser.close();}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Interface Class values, is expressions and class-initializer casts','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:21,comparisons:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{files:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Interface Class values and class-initializer casts','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:21,comparisons:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

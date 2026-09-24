@@ -106,25 +106,24 @@ function parseLambdaExpression(parser:AS3Parser):Node {
 
 function parseNewExpression(parser:AS3Parser):Node {
     const tok = consume(parser, Keywords.NEW);
-    const result = createNode(NodeKind.NEW, {start: tok.index});
+    skipExpressionComments(parser);
+    // A constructor target owns member/index access, but not the trailing
+    // relation, arithmetic or conditional expression. Consume one argument
+    // list here; the outer access parser owns calls/members on the result.
     let target = parsePrimaryExpression(parser);
-    // A constructor consumes its target and one argument list. Casts, binary
-    // operators and accesses on the new instance belong to the enclosing
-    // expression (for example, new Asset() as Bitmap).
-    if (target.kind !== NodeKind.SHORT_VECTOR) {
-        while (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_COLUMN)
-            || tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
-            target = tokIs(parser, Operators.LEFT_SQUARE_BRACKET)
-                ? parseArrayAccessor(parser, target) : parseDot(parser, target);
-        }
-        if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
-            const args = parseArgumentList(parser);
-            target = createNode(NodeKind.CALL, {start: target.start, end: args.end}, target, args);
-        }
+    while (true) {
+        skipExpressionComments(parser);
+        if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_DOT) || tokIs(parser, Operators.DOUBLE_COLUMN))
+            target = parseDot(parser, target);
+        else if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET))
+            target = parseArrayAccessor(parser, target);
+        else break;
     }
-    result.children.push(target);
-    result.end = target.end;
-    return result;
+    if (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
+        const args = parseArgumentList(parser);
+        target = createNode(NodeKind.CALL, {start: target.start, end: args.end}, target, args);
+    }
+    return createNode(NodeKind.NEW, {start: tok.index, end: target.end}, target);
 }
 
 
@@ -574,4 +573,3 @@ function parseArrayAccessor(parser:AS3Parser, node:Node):Node {
     }
     return result;
 }
-

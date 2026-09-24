@@ -37,8 +37,6 @@ for(const body of [
  'public function f(v:IValue):IValue {return;}',
  'public function f(v:IValue):IValue {var a:*=arguments;return v;}',
  'public function f(v:IValue):IValue {arguments.length=0;return v;}',
- 'public function f(v:*):IValue {return v as IValue;}',
- 'public function f(v:IValue):Boolean {return v is IValue;}',
  'public function f(v:IValue):void {v++;}',
  'public function f(v:IValue):void {delete v;}',
  'public function f(v:IValue):void {function inner():void {}}',
