@@ -38,8 +38,8 @@ remains a compiler error. Generic Class field storage is not admitted here.
 
 The native observer supplies each cohort's domain and atomically publishes its
 pending local headers using actual emitted tokens and lazy Class resolvers. It
-does not replace subject method bodies. A module alias preserves the emitter's
-normal same-package Derived import in the flat temporary harness layout.
+does not replace subject method bodies. Implicit same-package imports use the
+planned QName-to-module mapping; the temporary Derived alias is no longer needed.
 These explicit host operations do not qualify source Loader/Sprite behavior or
 automatic module discovery/activation. Source static initializers, interface and
 package-internal collision selection, full ApplicationDomain semantics, native
@@ -70,3 +70,7 @@ The observer awaits real session completion; it does not rewrite subject bodies.
 The engine's separate session fixture validates real Laya Loader integration and
 cancellation. This mode does not yet generate a production native module bundle
 or prove source document-root initialization or whole-client readiness.
+
+
+Use `--factory` for the production artifact generator. See [FACTORY.md](FACTORY.md)
+for its build contract, CSP verification, guards and explicit remaining scope.

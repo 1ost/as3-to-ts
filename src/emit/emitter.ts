@@ -862,6 +862,11 @@ export default class Emitter {
 		if (
 			this.source.indexOf(`class ${ identifier } `) === -1 && !isGloballyAvailable && !this.findDefInScope(identifier)
 		) {
+			// Same-package implicit imports must use the authenticated QName mapping too.
+			if (checkGlobals && from === `./${identifier}` && this.generated && this.options.importModules) {
+				const qname = this.generated.lexical.resolveTypeName(identifier);
+				if (this.options.importModules[qname]) from = generatedModule(this.options.importModules[qname]);
+			}
 			this.headOutput += `import { ${ identifier } } from "${ from }";\n`;
 			this.declareInScope({name: identifier});
 		}

@@ -54,7 +54,6 @@ for(const [cohort,sources] of Object.entries(cohorts)){
   emitted.push({cohort,qname:binding.qname,file,sourceSha256:hash(source),outputSha256:hash(output)});
  }
 }
-const alias=path.join(run,'Derived.ts');fs.writeFileSync(alias,"export {Derived} from './child_Derived';");files.push(alias);
 const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
 const diagnostics=modern.getPreEmitDiagnostics(program).map(d=>({file:d.file&&path.relative(run,d.file.fileName),code:d.code,text:modern.flattenDiagnosticMessageText(d.messageText,'\n')}));fs.writeFileSync(path.join(run,'types.json'),JSON.stringify(diagnostics,null,2));assert.deepEqual(diagnostics.filter(d=>!d.file.startsWith('..')),[]);
 assert.deepEqual(diagnostics,[]);
@@ -65,7 +64,8 @@ const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').
 const driverFile=path.resolve('tests/native-generated-inherited-classes/'+(process.argv.includes('--session')?'runtime-driver-session.js':'runtime-driver.js')),observer=fs.readFileSync(driverFile,'utf8');
 const wanted=captured;assert.equal(wanted.length,47);
 for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='mode-0-parent-identity').value=false]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
-(async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
+if(process.argv.includes('--factory'))require('./factory.cjs')({api,ts,modern,esbuild,engine,run,plans,options,combined,names,moduleFor,modulePath,provider,helpers,wanted,rejectionGuards}).catch(e=>{console.error(e);process.exitCode=1;});
+else (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');specs.push({name:relative,code:out.outputText});}
  for(const name of ['bound','classBound','nativeClass','callableClass'])specs.push({name,code:modern.transpileModule(fs.readFileSync(path.resolve('utils',name+'.ts'),'utf8'),{compilerOptions:{target,module:modern.ModuleKind.CommonJS}}).outputText});
