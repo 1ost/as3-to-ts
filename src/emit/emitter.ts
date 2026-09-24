@@ -186,6 +186,8 @@ export interface EmitterOptions {
 	nativeDynamicPropertyWritesModule?:string;
     /** Common AS3Property module for source Object/wildcard indexed reads. */
     nativeDynamicPropertyReadsModule?:string;
+    /** Common AS3Property module for public paths rooted in Object/wildcard locals. */
+    nativeObjectPropertyModule?:string;
     /** Common source JSON text parser; JSON Class identity is separate. */
     nativeJSONModule?:string;
 	/** Authenticated common AS3ArraySort module for source Array.sortOn calls. */
@@ -601,6 +603,12 @@ export default class Emitter {
             if(this.options.importModules && this.options.importModules['compiler.AS3JSON']
                 && this.options.importModules['compiler.AS3JSON']!==this.options.nativeJSONModule)
                 throw new Error('AS3_JSON_UNSUPPORTED: common JSON provider binding disagrees');
+        }
+        if (this.options.nativeObjectPropertyModule !== undefined) {
+            generatedModule(this.options.nativeObjectPropertyModule);
+            if(this.options.useNamespaces || !this.options.importModules
+                || this.options.importModules['compiler.AS3Property'] !== this.options.nativeObjectPropertyModule)
+                throw new Error('AS3_OBJECT_PROPERTY_UNSUPPORTED: explicit common AS3Property binding without namespace mode required');
         }
 		if (this.options.nativeArraySortModule !== undefined) {
 			const module = this.options.nativeArraySortModule;
@@ -3384,6 +3392,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitTweenTo(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
     if (emitInternalDynamicCall(emitter, node)) return;
+    if (emitObjectPropertyCall(emitter, node)) return;
     const callee = node.children[0];
     if(callee.kind===NodeKind.IDENTIFIER&&callee.text==='parseInt') {
         const binding=emitter.nativeGlobals.resolve(callee),args=node.findChild(NodeKind.ARGUMENTS);
@@ -3843,6 +3852,41 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
         return {receiver,key,literalKey:key.text,lexical};
     }
     return {receiver,key,lexical};
+}
+/** Public paths whose root is a source Object/wildcard local or parameter.
+ * Bound fields, method return values and other computed roots need their own
+ * source type/visibility proof; do not infer it from TypeScript's any type. */
+function objectPropertyAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    if(!emitter.options.nativeObjectPropertyModule||!emitter.references||!node
+        ||[NodeKind.DOT,NodeKind.ARRAY_ACCESSOR].indexOf(node.kind)<0||node.children.length!==2)return null;
+    const receiver=node.children[0],key=node.children[1],root=unwrapEncapsulatedExpression(receiver);
+    if(!root||!key||node.kind===NodeKind.DOT&&key.kind!==NodeKind.LITERAL)return null;
+    if(root.kind===NodeKind.IDENTIFIER){
+        const definition=emitter.findDefInScope(root.text);
+        if(!definition||definition.bound||['Object','*'].indexOf(definition.as3Type)<0
+            ||definition.as3Type==='Object'&&(emitter.references.sourceClass('Object')||emitter.references.sourceInterface('Object')))return null;
+    }else if(!objectPropertyAccess(emitter,root))return null;
+    return node.kind===NodeKind.DOT?{receiver,key,literalKey:key.text}:{receiver,key};
+}
+function emitObjectPropertyCall(emitter:Emitter,node:Node):boolean {
+    const access=objectPropertyAccess(emitter,node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);
+    if(!access||!args)return false;
+    if(emitter.isNew)throw new Error('AS3_OBJECT_PROPERTY_UNSUPPORTED: property constructor requires separate construction lowering');
+    const helper=propertyHelper(emitter,access.literalKey===undefined?'as3CallProperty':'as3CallNamedProperty',emitter.options.nativeObjectPropertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitPropertyKey(emitter,access);
+    emitter.insert(',()=>[');
+    args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+function emitObjectPropertyRead(emitter:Emitter,node:Node):boolean {
+    const access=objectPropertyAccess(emitter,node);if(!access)return false;
+    const outer=outerEncapsulatedExpression(node),parent=outer&&outer.parent;
+    if(parent&&(parent.children[0]===outer&&[NodeKind.ASSIGN,NodeKind.CALL].indexOf(parent.kind)>=0
+        ||[NodeKind.DELETE,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC].indexOf(parent.kind)>=0))
+        throw new Error('AS3_OBJECT_PROPERTY_UNSUPPORTED: path read cannot substitute write, update, delete or unqualified call');
+    const helper=propertyHelper(emitter,'as3GetProperty',emitter.options.nativeObjectPropertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitPropertyKey(emitter,access);
+    emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 function dynamicWriteAccess(emitter:Emitter,node:Node):DictionaryAccess {
     const access=dynamicAccess(emitter,node);
@@ -5357,6 +5401,7 @@ function emitDot(emitter:Emitter, node:Node) {
             throw new Error('AS3_DEFINITION_LOOKUP_UNSUPPORTED: qualified package value requires source binding authority');
     }
     if (emitDynamicPropertyRead(emitter,node)) return;
+    if (emitObjectPropertyRead(emitter,node)) return;
     if (emitConsumerLiteralConstant(emitter,node)) return;
 	if (emitArraySortConstant(emitter, node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
@@ -5422,6 +5467,7 @@ function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
 function emitArrayAccessor(emitter:Emitter, node:Node):void {
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
     if (emitDynamicPropertyRead(emitter,node)) return;
+    if (emitObjectPropertyRead(emitter,node)) return;
 	emitter.catchup(node.start);
 	visitNodes(emitter, node.children);
 }
