@@ -58,3 +58,15 @@ runtime inherited storage and metadata come from the parent's registered snapsho
 Public overrides in this mode remain compile-time holds pending actual selected
 parent signature validation. Runtime collisions also reject rather than silently
 replacing inherited traits. Default non-inherited plans keep complete-list emission.
+
+Use `--session` to route both parent and child generated cohorts through the
+common NativeSourceClassLoadingSession. It replaces manual host filtering and
+publication with the coordinator's complete header validation and atomic
+publication. The host binder uses actual emitted tokens and Class resolvers with
+a separate module cache bound to each supplied script domain. Combine this with
+`--layout` and/or `--combined`. All 47 unchanged AIR rows still match in Node and
+Chromium on ES5/ES2015, with the existing rejection and mutation controls.
+The observer awaits real session completion; it does not rewrite subject bodies.
+The engine's separate session fixture validates real Laya Loader integration and
+cancellation. This mode does not yet generate a production native module bundle
+or prove source document-root initialization or whole-client readiness.
