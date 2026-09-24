@@ -1459,7 +1459,12 @@ function emitFunction(emitter:Emitter, node:Node):void {
   const parameters=node.findChild(NodeKind.PARAMETER_LIST),body=node.findChild(NodeKind.BLOCK);
   emitter.withScope(getFunctionDeclarations(emitter,node),()=>{
    parameters.children.forEach((p,index)=>{if(index)emitter.insert(',');emitter.skipTo(p.start);visitNode(emitter,p);emitter.catchup(p.end);});
-   emitter.insert('):any ');emitter.skipTo(body.start);visitNode(emitter,body);emitter.catchup(body.end);
+   emitter.insert('):any ');emitter.skipTo(body.start);visitNode(emitter,body);
+   if(anonymous.returned==='Object'){
+    // AIR coerces an implicit undefined completion to null for Object returns.
+    emitter.catchup(body.end-1);emitter.insert('\nreturn null;\n');
+   }
+   emitter.catchup(body.end);
   });
   emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');emitter.skipTo(node.end);return;
  }
@@ -4900,6 +4905,14 @@ function emitReferenceReturn(emitter:Emitter, node:Node):void {
     // The legacy parser also represents `throw expression` as RETURN.
     // A thrown value never passes through the method's return type coercion.
     if (emitter.source.slice(node.start,node.start + 6) !== 'return') {visitNodes(emitter,node.children); return;}
+    let owner=node.parent;
+    while(owner&&[NodeKind.FUNCTION,NodeKind.LAMBDA,NodeKind.GET,NodeKind.SET].indexOf(owner.kind)<0)owner=owner.parent;
+    const anonymous=owner&&emitter.generated&&emitter.generated.lexical.anonymousFunctions.find(fn=>fn.start===owner.start&&fn.end===owner.end);
+    if(anonymous&&anonymous.returned==='Object'){
+        const expression=node.children[0],parts=signatureBuiltinCoercionParts(emitter,'Object');
+        emitter.catchup(getExpressionStart(expression));emitter.insert(parts[0]);
+        visitNode(emitter,expression);emitter.catchup(getEffectiveNodeEnd(expression));emitter.insert(parts[1]);return;
+    }
     if (!signature || !signature.returned && !signature.builtinReturn) {visitNodes(emitter,node.children); return;}
     const expression = node.children[0], parts = signature.returned
         ? referenceCoercionParts(emitter,{exported:signature.returned}) : signatureBuiltinCoercionParts(emitter,signature.builtinReturn);

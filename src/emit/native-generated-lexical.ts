@@ -26,7 +26,7 @@ export class NativeGeneratedLexical {
     readonly typedLocals: NativeTypedLocals;
     readonly nestedFunctions: NestedLocalFunction[] = [];
     readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
-    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [];
+    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[];returned?:string}[] = [];
     readonly resolveTypeName:(name:string)=>string;
     private readonly internalContents=new Map<string,Node>();
     private internalContent(owner:string):Node {
@@ -159,11 +159,13 @@ export class NativeGeneratedLexical {
                     if(!value||value.findChild(K.INIT)||value.findChild(K.VECTOR)||type&&type.text!=='*')fail('anonymous callable requires wildcard parameters');
                     return value.findChild(K.NAME).text;
                 });
-                const returned=node.findChild(K.TYPE);if(returned&&['*','void'].indexOf(returned.text)<0)fail('anonymous typed return held');
+                const returned=node.findChild(K.TYPE),returnType=returned&&this.resolveTypeName(returned.text);
+                if(returned&&['*','void','Object'].indexOf(returnType)<0)fail('anonymous typed return held');
                 const outerNames:string[]=[];
                 const outer=(n:Node):void=>{if(n.kind===K.LAMBDA||n.kind===K.FUNCTION&&n!==method)return;if(n.kind===K.NAME_TYPE_INIT)outerNames.push(n.findChild(K.NAME).text);n.children.forEach(outer);};outer(method);
                 const inspect=(n:Node):void=>{
                     forInTarget(n);
+                    if(returnType==='Object'&&n.kind===K.RETURN&&!n.children.length)fail('anonymous typed bare return held');
                     if(n.kind===K.DOT&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='this')fail('anonymous receiver property access held');
                     if([K.LAMBDA,K.FUNCTION,K.TRY].indexOf(n.kind)>=0)fail('nested anonymous callable body held');
                     if(n.kind===K.IDENTIFIER&&['super','arguments'].concat(memberNames).indexOf(n.text)>=0)fail('anonymous callable receiver/member lookup held');
@@ -173,7 +175,7 @@ export class NativeGeneratedLexical {
                     });
                     n.children.forEach(inspect);
                 };inspect(node.findChild(K.BLOCK));
-                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:method.start,name:fresh('anonymous'),parameters});
+                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:method.start,name:fresh('anonymous'),parameters,returned:returnType});
                 return;
             }
             if(node.kind===K.FUNCTION&&node.parent!==content){
