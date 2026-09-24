@@ -3381,7 +3381,24 @@ function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(']))');emitter.skipTo(node.end);return true;
 }
 
+function emitLocalFunctionIntrinsic(emitter:Emitter,node:Node):boolean {
+    const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
+    if(!emitter.generated||!emitter.typedLocalPlan||!callee||callee.kind!==NodeKind.DOT||!args)return false;
+    const receiver=unwrapEncapsulatedExpression(callee.children[0]),member=callee.children[1];
+    if(!member||['call','apply'].indexOf(member.text)<0||!emitter.typedLocalPlan.functionLocal(receiver,emitter))return false;
+    if(emitter.isNew)throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: Function intrinsic construction');
+    // Capture the Function before argument effects; resolve its intrinsic only
+    // afterwards, preserving AIR null errors and declaration-global receivers.
+    const helper=propertyHelper(emitter,'as3CallNamedProperty',emitter.generated.propertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+    emitter.skipTo(receiver.start);visitNode(emitter,receiver);emitter.catchup(receiver.end);
+    emitter.insert(','+JSON.stringify(member.text)+',()=>[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 function emitCall(emitter:Emitter, node:Node):void {
+    if(emitLocalFunctionIntrinsic(emitter,node))return;
     const pattern=emitter.generated&&emitter.generated.options.plan.patternLocals.find(p=>p.owner===emitter.generated.lexical.owner&&p.calls.indexOf(node.start)>=0);
     if(pattern){
         const helper=propertyHelper(emitter,'sourcePatternTest',nativePatternModule(emitter));

@@ -146,6 +146,12 @@ export class NativeTypedLocals {
     }
     /** Only fold a simple read of qualified generated String storage. */
     stringLocal(node: Node, emitter: any): boolean {
+        return this.typedLocal(node,emitter,'String');
+    }
+    functionLocal(node: Node, emitter: any): boolean {
+        return this.typedLocal(node,emitter,'Function');
+    }
+    private typedLocal(node:Node,emitter:any,type:string):boolean {
         if(!this.matchSourceSpans||node.kind!==K.IDENTIFIER)return false;
         let method: Node=node;
         while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0) {
@@ -154,8 +160,8 @@ export class NativeTypedLocals {
         }
         const plan=this.methods.find(m=>!!method&&m.node.start===method.start&&m.node.end===method.end);
         const binding=emitter.findDefInScope(node.text);
-        return !!plan&&!!binding&&!binding.bound&&binding.as3Type==='String'
-            &&plan.locals.some(l=>l.name===node.text&&l.type==='String'&&!l.parameter);
+        return !!plan&&!!binding&&!binding.bound&&binding.as3Type===type
+            &&plan.locals.some(l=>l.name===node.text&&l.type===type&&!l.parameter);
     }
     /** Prevent the older integer assignment pass from pre-coercing local RHS values. */
     owns(node: Node, emitter: any): boolean {
