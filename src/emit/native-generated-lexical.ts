@@ -27,7 +27,7 @@ export class NativeGeneratedLexical {
     readonly nestedFunctions: NestedLocalFunction[] = [];
     readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
     readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [];
-    private readonly resolveTypeName:(name:string)=>string;
+    readonly resolveTypeName:(name:string)=>string;
     private readonly internalContents=new Map<string,Node>();
     private internalContent(owner:string):Node {
         if(!this.internalContents.has(owner)){

@@ -667,7 +667,9 @@ export default class Emitter {
         }
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris,
 			this.options.nativeProxyModule !== undefined, this.options.nativeSourceAncestry);
-		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization);
+		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization,
+            node=>!!(node.parent&&node.parent.kind===NodeKind.DOT&&node.parent.children[0]===node
+                &&lexicalApplicationDomainModule(this,node.parent)));
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;
 			visitNode(this, filtered);
@@ -5417,7 +5419,52 @@ function emitConsumerLiteralConstant(emitter:Emitter,node:Node):boolean {
     return true;
 }
 
+/** currentDomain belongs to the defining script, independently of receiver/caller. */
+function lexicalApplicationDomainModule(emitter:Emitter,node:Node):string {
+    if (!emitter.generated || !node.children[1] || node.children[1].text !== 'currentDomain') return null;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]);
+    const parts=(value:Node):string[]=>{
+        value=unwrapEncapsulatedExpression(value);
+        if(value.kind===NodeKind.IDENTIFIER||value.kind===NodeKind.LITERAL)return [value.text];
+        if(value.kind===NodeKind.DOT&&value.children.length===2){
+            const left=parts(value.children[0]),right=value.children[1];
+            if(left&&right.kind===NodeKind.LITERAL)return left.concat([right.text]);
+        }
+        return null;
+    };
+    const names=parts(receiver);
+    if(!names)return null;
+    const spelling=names.join('.'),qualified=names.length>1;
+    if(qualified?spelling!=='flash.system.ApplicationDomain'
+        :emitter.generated.lexical.resolveTypeName(spelling)!=='flash.system.ApplicationDomain')return null;
+    let root=receiver;while(root.kind===NodeKind.DOT)root=unwrapEncapsulatedExpression(root.children[0]);
+    const input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+    const binding=emitter.findDefInScope(names[0]);
+    const sourceBinding=typeOfBinding(root,emitter.source,Object.keys(input.sources).concat(Object.keys(input.providers||{})));
+    if(binding&&(qualified||binding.bound||Object.prototype.hasOwnProperty.call(binding,'as3Type'))
+        ||sourceBinding==='lexical'||qualified&&sourceBinding==='class')return null;
+    const provider=input.providers&&input.providers['flash.system.ApplicationDomain'];
+    const fail=(reason:string):never=>{throw new Error('AS3_APPLICATION_DOMAIN_UNSUPPORTED: '+reason);};
+    if(!provider||provider.exportName!=='ApplicationDomain'||provider.nativeBase||provider.nativeInterface||provider.nativeVector
+        ||!emitter.options.importModules||emitter.options.importModules['flash.system.ApplicationDomain']!==xmlGlobalProviderModule(provider.module,emitter.generated.options.module))
+        fail('exact native ApplicationDomain provider required');
+    if(!input.scriptDomainProvider||!input.scriptGlobalProviderModule||!emitter.generated.projection.binding.scriptGlobalExport)
+        fail('defining script requires an explicit cohort domain');
+    const expression=outerEncapsulatedExpression(node),operation=expression.parent;
+    if(operation&&operation.children[0]===expression&&[NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE,NodeKind.CALL,NodeKind.NEW].indexOf(operation.kind)>=0)
+        fail('currentDomain mutation or invocation requires separate authority');
+    return generatedModule(xmlGlobalProviderModule(input.scriptGlobalProviderModule,emitter.generated.options.module));
+}
+function emitLexicalApplicationDomain(emitter:Emitter,node:Node):boolean {
+    const module=lexicalApplicationDomainModule(emitter,node);
+    if(!module)return false;
+    const helper=propertyHelper(emitter,'getAS3ScriptApplicationDomain',module);
+    emitter.catchup(node.start);emitter.insert(helper+'('+emitter.generated.lexical.scriptGlobal+')');emitter.skipTo(node.end);
+    return true;
+}
+
 function emitDot(emitter:Emitter, node:Node) {
+    if (emitLexicalApplicationDomain(emitter,node)) return;
     const lookupModule = emitter.options.importModules && emitter.options.importModules['flash.utils.getDefinitionByName'];
     const lookupReceiver = unwrapEncapsulatedExpression(node.children[0]), member = node.children[1];
     if (lookupModule && member && member.text === 'getDefinitionByName' && lookupReceiver && lookupReceiver.kind === NodeKind.DOT) {

@@ -14,7 +14,7 @@ export class NativeClassInitializers {
     public declareName: string;
     public readName: string;
 
-    constructor(root: Node, source: string, options?: NativeClassInitializationOptions) {
+    constructor(root: Node, source: string, options?: NativeClassInitializationOptions, qualifiedRead?: (node: Node) => boolean) {
         this.enabled = options !== undefined;
         this.classes = options && options.classes || {};
         const fail = (message: string): never => { throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: ' + message); };
@@ -50,7 +50,7 @@ export class NativeClassInitializers {
                     : value.kind === NodeKind.DOT && value.children[1].kind === NodeKind.LITERAL
                     ? qualified(value.children[0]) + '.' + value.children[1].text : '';
                 const name = qualified(node);
-                if (name && Object.prototype.hasOwnProperty.call(this.classes, name))
+                if (name && Object.prototype.hasOwnProperty.call(this.classes, name) && !(qualifiedRead && qualifiedRead(node)))
                     fail('qualified class-value syntax requires separate lowering: ' + name);
             }
             const declaration = node.kind === NodeKind.INIT && node.parent && node.parent.parent;

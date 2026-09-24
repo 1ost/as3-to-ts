@@ -13,6 +13,8 @@ export interface NativeGeneratedDeclarationInput {
     vectorProviderModule?: string;
     /** Optional explicit script-global provider for generated lexical calls. */
     scriptGlobalProviderModule?: string;
+    /** Explicit cohort-owned AS3ScriptDomain, allocated by the native loader/bootstrap. */
+    scriptDomainProvider?: {module: string; exportName: string};
     /** Explicit provider for sealed package-internal lexical membership. */
     lexicalProviderModule?: string;
     /** Common String intrinsics for proven nonescaping RegExp literal locals. */
@@ -99,13 +101,19 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'lexicalProviderModule', 'patternProviderModule', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'scriptGlobalSources', 'lexicalProviderModule', 'patternProviderModule', 'sources', 'providers']);
     moduleName(data.providerModule);
     if (data.patternProviderModule !== undefined) moduleName(data.patternProviderModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
     if (data.lexicalProviderModule !== undefined) moduleName(data.lexicalProviderModule);
     if (data.vectorProviderModule !== undefined) moduleName(data.vectorProviderModule);
     if (data.scriptGlobalProviderModule !== undefined) moduleName(data.scriptGlobalProviderModule);
+    if (data.scriptDomainProvider !== undefined) {
+        if (!data.scriptGlobalProviderModule || !table(data.scriptDomainProvider)) fail('script domain requires explicit global provider');
+        fields(data.scriptDomainProvider, ['module', 'exportName']);
+        moduleName(data.scriptDomainProvider.module);
+        if (typeof data.scriptDomainProvider.exportName !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(data.scriptDomainProvider.exportName)) fail('script domain export identifier');
+    }
     if(data.scriptGlobalSources!==undefined&&(!data.scriptGlobalProviderModule||!Array.isArray(data.scriptGlobalSources)
         ||new Set(data.scriptGlobalSources).size!==data.scriptGlobalSources.length))fail('script global source selection requires unique names and provider');
     if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
@@ -212,8 +220,12 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         fail('script global source must be a planned class');
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
-    if(data.scriptGlobalProviderModule)lines.push('import {createAS3ScriptDomain,instantiateAS3ScriptUnit} from '+JSON.stringify(data.scriptGlobalProviderModule)+';',
-        'const __scriptDomain=createAS3ScriptDomain();');
+    if(data.scriptGlobalProviderModule) {
+        lines.push('import {instantiateAS3ScriptUnit'+(data.scriptDomainProvider?'':',createAS3ScriptDomain')+'} from '+JSON.stringify(data.scriptGlobalProviderModule)+';');
+        lines.push(data.scriptDomainProvider
+            ? 'import {'+data.scriptDomainProvider.exportName+' as __scriptDomain} from '+JSON.stringify(data.scriptDomainProvider.module)+';'
+            : 'const __scriptDomain=createAS3ScriptDomain();');
+    }
     if (interfaces.length) lines.push('import {defineAS3Interface,registerAS3Class} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     if (nativeNames.some(name => providers[name].nativeInterface))
         lines.push('import {isAS3Interface as __isNativeInterface} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
