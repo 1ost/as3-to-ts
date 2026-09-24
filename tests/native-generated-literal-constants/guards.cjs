@@ -14,5 +14,8 @@ module.exports=(api,input)=>{
   assert.throws(()=>new NativeGeneratedEmission(source,{plan,module:'./domain'},'./registrar',
    {nativeClass:'./nativeClass',callableClass:'./callableClass'},'./lexical','./properties',true),/AS3_[A-Z_]+UNSUPPORTED/);
  }
- return members.length;
+ const source='package guards {import shadow.String; public class Subject {public static const VALUE:String="value";public function Subject(){}}}';
+ const shadow='package shadow {public class String {public function String(){}}}';
+ assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{'guards.Subject':{source,sourceSha256:hash(source)},'shadow.String':{source:shadow,sourceSha256:hash(shadow)}}}),/ambiguous builtin type/);
+ return members.length+1;
 };

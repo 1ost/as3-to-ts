@@ -21,6 +21,10 @@ the full constant census is a source comparison. The inherited module reuses the
 parent Class and CSP forbids runtime compilation. Complete configuration-proxy
 behavior remains a separate integration task.
 
+Final run `run-3SPQLS` adds a seventh compiler rejection: an imported class named
+String is rejected by the existing declaration planner as an ambiguous builtin,
+before literal admission. Runtime compiler source is unchanged from beac580.
+
 Generated override regression `run-zNWvsN` still matches all ten AIR observations
 on both targets/runtimes with five loading/lifetime checks, eight compiler
 rejection cases, two runtime mutations and zero type diagnostics.
