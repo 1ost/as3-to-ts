@@ -158,6 +158,7 @@ export interface EmitterOptions {
     nativeDisplayObjectReferenceModule?: string;
     nativeMovieClipReferenceModule?: string;
     nativeTextFormatReferenceModule?: string;
+    nativeInteractiveObjectReferenceModule?: string;
     nativeByteArrayReferenceModule?: string;
 	/** Builtin AS3 global names and their authenticated common modules. */
 	nativeGlobalModules?:{[name:string]:string};
@@ -409,7 +410,7 @@ export default class Emitter {
             ast = require('../parse')(this.generated.projection.binding.qname + '.as',this.source);
         }
 
-        for (const [qname, moduleOption] of [['flash.display.DisplayObject',this.options.nativeDisplayObjectReferenceModule],['flash.display.MovieClip',this.options.nativeMovieClipReferenceModule],['flash.text.TextFormat',this.options.nativeTextFormatReferenceModule]]) if (moduleOption !== undefined) {
+        for (const [qname, moduleOption] of [['flash.display.DisplayObject',this.options.nativeDisplayObjectReferenceModule],['flash.display.MovieClip',this.options.nativeMovieClipReferenceModule],['flash.text.TextFormat',this.options.nativeTextFormatReferenceModule],['flash.display.InteractiveObject',this.options.nativeInteractiveObjectReferenceModule]]) if (moduleOption !== undefined) {
             const name=qname.split('.').pop();
             const module=generatedModule(moduleOption);
             const reference=this.options.nativeReferenceCoercion;
@@ -455,7 +456,7 @@ export default class Emitter {
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
                 this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
                 this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : [],
-                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined);
+                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -653,7 +654,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -4198,7 +4199,8 @@ function emitRelation(emitter:Emitter, node:Node):void {
         &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
         &&((emitter.options.nativeDisplayObjectReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.DisplayObject')
           ||(emitter.options.nativeMovieClipReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.MovieClip')
-          ||(emitter.options.nativeTextFormatReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.text.TextFormat'))) {
+          ||(emitter.options.nativeTextFormatReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.text.TextFormat')
+          ||(emitter.options.nativeInteractiveObjectReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.InteractiveObject'))) {
         const target=node.lastChild,definition=emitter.findDefInScope(target.text);
         if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
             throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: shadowed target requires separate Class authority');
