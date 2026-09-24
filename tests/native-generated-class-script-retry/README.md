@@ -14,14 +14,15 @@ Class binding, while the next attempt allocates new identities. Success publishe
 once. Failed factory values never enter the native Class cache. Original source
 bodies and return annotations are unchanged.
 
-Ten guards require a nonempty unique planned root-Class selection and explicit
+Ten guards require a nonempty unique planned Class selection and explicit
 script domain/provider, preserve old unselected initializer holds, and reject
-class-body initializers and selected classes with a base. An applied mutation
+class-body initializers and unqualified multi-level ancestry. An applied mutation
 switches back to the old generic script provider; the retained-closure check must
 then fail on both targets. Anonymous Object returns and typed local Function
 call/apply have independent AIR/factory comparisons in sibling test directories.
 
-This admits selected root-Class field initializers, not arbitrary class-body
-statements, initializer cycles, derived-Class initialization, package-internal
-aliases or multi-declaration scripts. Application classes still require their
+This fixture qualifies root-Class field initializers. The separate derived-script
+comparison adds one stable source parent. Arbitrary class-body statements,
+initializer cycles, package-internal aliases and multi-declaration scripts remain
+outside that qualification. Application classes still require their
 own complete source dependency and runtime checks; this is not full OP2 startup.

@@ -231,10 +231,18 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         fail('script global source must be a planned class');
     if(data.inheritScriptClasses && bindings.some(binding=>!binding.scriptGlobalExport))
         fail('inherited Class selection requires all class script globals');
-    if(data.classScriptSources&&data.classScriptSources.some(name=>{
+    if(data.classScriptSources)data.classScriptSources.forEach(name=>{
         const binding=bindings.find(value=>value.qname===name);
-        return !binding||!binding.scriptGlobalExport||!!binding.base;
-    }))fail('Class script selection requires a planned root class with script global');
+        if(!binding||!binding.scriptGlobalExport)fail('Class script selection requires a planned class with script global');
+        if(binding.base){
+            const parent=bindings.find(value=>value.qname===binding.base);
+            // Derived retries are qualified over a stable source root parent.
+            // Keep native ancestry and parent/multi-level initializer retries
+            // outside this admission until their lifecycle is independently proved.
+            if(!parent||!parent.scriptGlobalExport||parent.base||data.classScriptSources.indexOf(parent.qname)>=0)
+                fail('derived Class script requires a non-retrying source root parent');
+        }
+    });
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
     if(data.scriptGlobalProviderModule) {

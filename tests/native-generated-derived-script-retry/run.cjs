@@ -2,13 +2,13 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const evidence=path.join(engine,'tests/nativeFlashOracle/script-global-initializer-retry'),air=require(path.join(evidence,'verify.cjs'));
+const evidence=path.resolve('../op2-html5/game-client-laya/tests/derived-script-retry'),air=require(path.join(evidence,'verify.cjs'));
 const expected=air;
 const compilerInputs=fs.readdirSync(path.resolve('src'),{recursive:true}).filter(f=>f.endsWith('.ts')).map(f=>{const file=path.resolve('src',f);return {file,sha256:hash(fs.readFileSync(file))};});
-const cache=path.resolve('.cache/native-generated-class-script-retry');fs.mkdirSync(cache,{recursive:true});
+const cache=path.resolve('.cache/native-generated-derived-script-retry');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
-const cohorts={parent:read('source',['retrycases.Trace','retrycases.Retry'])};
+const cohorts={parent:read('source',['retrycases.Trace','retrycases.Retry','org.emvc.patterns.proxy.Proxy','org.emvc.interfaces.IProxy'])};
 async function main(){
  const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
  const browser=await chromium.launch({headless:true}),results=[];
@@ -26,7 +26,7 @@ async function main(){
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
    const nativeProviders={};
    const trace=modulePath(path.join(engine,'src/layaAir/flash/debug/trace.ts'));externalModules.push(trace,...Object.values(nativeProviders).map(p=>p.module));
-   const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,classScriptSources:Object.keys(sources)};
+   const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,classScriptSources:['retrycases.Trace','retrycases.Retry']};
 
    const plan=api.createNativeGeneratedDeclarationPlan(input);
    const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
@@ -41,18 +41,16 @@ async function main(){
    const config={plan,target,emitterOptions:options,externalModules:[...new Set(externalModules)],loadingSessionModule:provider('NativeSourceClassLoadingSession')};
    const emitPlan=p=>api.emitNativeSourceClassModule({...config,plan:p,emitterOptions:{...options,nativeVectorTypes:{...options.nativeVectorTypes,plan:p},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:p}}});
    for(const change of [
-    {classScriptSources:[]},{classScriptSources:['retrycases.Retry','retrycases.Retry']},
-    {classScriptSources:['retrycases.Missing']},{scriptDomainProvider:undefined,inheritScriptClasses:undefined},
-    {scriptGlobalProviderModule:undefined},{scriptGlobalSources:['retrycases.Trace'],inheritScriptClasses:undefined},
+    {classScriptSources:['retrycases.Trace','retrycases.Retry','org.emvc.patterns.proxy.Proxy']},
+    {scriptGlobalSources:['retrycases.Trace','retrycases.Retry'],inheritScriptClasses:undefined},
+    {classScriptSources:['org.emvc.interfaces.IProxy']},
     {lexicalProviderModule:provider('AS3LexicalMembers'),inheritScriptClasses:undefined}
    ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,...change}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;}
-   const oldPlan=api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:undefined});
-   assert.throws(()=>emitPlan(oldPlan),/script global with static initializer requires retry identity authority/);rejectionGuards++;
-   const parentSource='package retrycases {public class Parent extends Trace {}}',childSource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry extends Parent {');
-   assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Parent':{source:parentSource,sourceSha256:hash(parentSource)},'retrycases.Retry':{source:childSource,sourceSha256:hash(childSource)}}}),/non-retrying source root parent/);rejectionGuards++;
-   const bodySource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry { initial=[];');
-   const bodyPlan=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Retry':{source:bodySource,sourceSha256:hash(bodySource)}}});
-   assert.throws(()=>emitPlan(bodyPlan),/script global with class-body initializer requires retry identity authority/);rejectionGuards++;
+   for(const [q,source]of [
+    ['org.emvc.patterns.proxy.Proxy',sources['org.emvc.patterns.proxy.Proxy'].source.replace('class Proxy implements','class Proxy extends Trace implements').replace('import org.emvc.interfaces.IProxy;','import org.emvc.interfaces.IProxy; import retrycases.Trace;')],
+    ['retrycases.Retry',sources['retrycases.Retry'].source.replace('extends Proxy','extends Error')]
+   ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,providers:{Error:{module:provider('AS3CanonicalErrorConstruction'),exportName:'Error',nativeBase:'Error'}},sources:{...sources,[q]:{source,sourceSha256:hash(source)}}}),/non-retrying source root parent/);rejectionGuards++;}
+   assert.throws(()=>emitPlan(api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:undefined})),/script global with static initializer requires retry identity authority/);rejectionGuards++;
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);
    const files=[];
@@ -79,8 +77,10 @@ async function main(){
   const factoryFile=path.join(dir,'parent/parent-factory.js'),originalFactory=fs.readFileSync(factoryFile,'utf8');
   const mutation=originalFactory.replaceAll('.instantiateAS3ClassScriptUnit(','.instantiateAS3ScriptUnit(');assert.notEqual(mutation,originalFactory);
   try{fs.writeFileSync(factoryFile,mutation);const changed=await build();await assert.rejects(()=>execute(changed.outputFiles[0].text),/failed source function creation context/);}finally{fs.writeFileSync(factoryFile,originalFactory);}
-  results.push({target,node,web,typechecks,artifacts,rejectionGuards,mutations:1,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
-  console.log(JSON.stringify({target,observations:node.rows.length,typeErrors:0,rejectionGuards,domainChecks:node.domainChecks.length,mutations:1}));
+  const wrongParentArgument=originalFactory.replaceAll('"retry"','"wrong-parent-argument"');assert.notEqual(wrongParentArgument,originalFactory);
+  try{fs.writeFileSync(factoryFile,wrongParentArgument);const changed=await build(),actual=await execute(changed.outputFiles[0].text);assert.notDeepEqual(actual.rows.find(r=>r.id==='failed-instance'),expected.find(r=>r.id==='failed-instance'));}finally{fs.writeFileSync(factoryFile,originalFactory);}
+  results.push({target,node,web,typechecks,artifacts,rejectionGuards,mutations:2,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
+  console.log(JSON.stringify({target,observations:node.rows.length,typeErrors:0,rejectionGuards,domainChecks:node.domainChecks.length,mutations:2}));
  }}finally{await browser.close();}
  for(const item of compilerInputs)assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  for(const result of results)for(const item of [...result.inputs,...result.typechecks.flatMap(check=>check.inputs)])assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
