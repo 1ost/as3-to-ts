@@ -4141,7 +4141,7 @@ function emitCatch(emitter:Emitter, node:Node):void {
             || node.nextSibling && node.nextSibling.kind === NodeKind.CATCH)
             throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: only a single builtin Error/SecurityError or bound native IOError catch is qualified');
         generatedModule(emitter.options.nativeSourceErrorModule);
-        let helper = '__as3_reference_catchError';
+        let helper = '__as3_reference_catch' + (ioError ? 'IOError' : builtinSecurityError ? 'SecurityError' : 'Error');
         while (emitter.source.indexOf(helper) >= 0) helper += '_';
         emitter.ensureImportIdentifier((ioError ? 'as3IsSourceIOErrorInstance' : builtinSecurityError ? 'as3IsSourceSecurityErrorInstance' : 'as3IsSourceErrorInstance') + ' as ' + helper,emitter.options.nativeSourceErrorModule,false);
         const scope = emitter.enterScope([{name:name.text,as3Type:'*'}]);
