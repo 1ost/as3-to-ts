@@ -4648,7 +4648,8 @@ function emitIntegerCoercedNode(emitter: Emitter, node: Node, as3Type: string): 
     emitIntegerCoercionEnd(emitter, as3Type);
 }
 
-function referenceCoercionParts(emitter:Emitter, reference:{exported:string; stringLocal?:boolean}):string[] {
+function referenceCoercionParts(emitter:Emitter, reference:{exported:string; stringLocal?:boolean; objectParameter?:boolean}):string[] {
+    if (reference.objectParameter) return signatureBuiltinCoercionParts(emitter,'Object');
     if (reference.stringLocal) {
         const helper = propertyHelper(emitter,'as3CoerceString',emitter.options.nativeStringLocalCoercionModule);
         return [helper + '(', ')'];
@@ -4672,6 +4673,9 @@ function emitReferenceMethodEntry(emitter:Emitter, block:Node):boolean {
         let converted:string;
         if (p.exported) {
             const parts = referenceCoercionParts(emitter,p);
+            converted = parts[0] + p.name + parts[1];
+        } else if (p.type === 'Object') {
+            const parts = signatureBuiltinCoercionParts(emitter,p.type);
             converted = parts[0] + p.name + parts[1];
         } else if (p.type === 'String') {
             const parts = signatureBuiltinCoercionParts(emitter,p.type);

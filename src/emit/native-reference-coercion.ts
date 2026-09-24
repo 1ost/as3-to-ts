@@ -10,7 +10,7 @@ export interface NativeReferenceCoercionOptions {
     module: string;
     coercionModule: string;
 }
-export interface ReferenceLocal {node: Node; name: string; exported: string; header: boolean; parameter: boolean; stringLocal?: boolean;}
+export interface ReferenceLocal {node: Node; name: string; exported: string; header: boolean; parameter: boolean; stringLocal?: boolean; objectParameter?: boolean;}
 export interface ReferenceSignature {
     node: Node; returned: string; builtinReturn: string;
     parameters: {node: Node; name: string; type: string; exported: string; optional: boolean}[];
@@ -60,10 +60,15 @@ export class NativeReferenceCoercion {
                         parameters.forEach(p => {
                             if (!p.node) fail('reference signatures with rest parameters require qualification');
                             if (p.name === 'arguments') fail('shadowed arguments in reference signatures');
-                            if (!p.exported && ['*','Number','int','uint','String'].indexOf(p.type) < 0)
+                            if (!p.exported && ['*','Number','int','uint','String','Object'].indexOf(p.type) < 0)
                                 fail('unqualified mixed reference parameter: ' + p.type);
                             if (optional && !p.optional) fail('required parameter follows optional parameter');
                             optional = optional || p.optional;
+                            if (p.optional && p.type === 'Object') {
+                                const init = p.node.findChild(K.INIT);
+                                if (source.slice(init.start,init.end).trim() !== 'null')
+                                    fail('Object parameter default requires literal null');
+                            }
                             if (p.optional && (p.exported || p.type === '*')) {
                                 const init = p.node.findChild(K.INIT);
                                 if (!p.exported || source.slice(init.start,init.end).trim() !== 'null')
@@ -83,6 +88,8 @@ export class NativeReferenceCoercion {
                 if (fn) {
                     const stringLocal = stringLocals && !generated && node.parent.kind !== K.PARAMETER
                         && type && this.resolve(type.qualifiedName || type.text) === 'String';
+                    const objectParameter = !generated && node.parent.kind === K.PARAMETER && !!this.signature(node)
+                        && type && this.resolve(type.qualifiedName || type.text) === 'Object';
                     if (stringLocal) for (let parent = node.parent; parent && parent !== fn; parent = parent.parent) {
                         if (parent.kind === K.CATCH && parent.children.some(child => child.kind === K.NAME && child.text === name))
                             fail('String declaration shadows catch storage');
@@ -90,7 +97,7 @@ export class NativeReferenceCoercion {
                     const scope = this.scopes.get(fn.start);
                     // Generated locals (including repeated declarations) belong to
                     // NativeTypedLocals; keep parameter storage conflicts here.
-                    if (scope.has(name) && (scope.get(name) || (exported || stringLocal) && (!generated || node.parent.kind === K.PARAMETER)))
+                    if (scope.has(name) && (scope.get(name) || (exported || stringLocal || objectParameter) && (!generated || node.parent.kind === K.PARAMETER)))
                         fail('duplicate local declaration requires default-order authority: ' + name);
                     if ((exported || stringLocal) && [K.CONST,K.CONST_LIST].indexOf(node.parent.kind) >= 0) fail('reference local constant lowering required');
                     let header = false;
@@ -99,7 +106,7 @@ export class NativeReferenceCoercion {
                         if (parent && [K.FORIN,K.FOREACH].indexOf(parent.kind) >= 0 && parent.children[0] === value) header = true;
                     }
                     // Generated method storage is lowered once by NativeTypedLocals.
-                    const local = (exported || stringLocal)&&(!generated||node.parent.kind===K.PARAMETER) ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER, stringLocal} : null;
+                    const local = (exported || stringLocal || objectParameter)&&(!generated||node.parent.kind===K.PARAMETER) ? {node, name, exported, header, parameter:node.parent.kind === K.PARAMETER, stringLocal, objectParameter} : null;
                     scope.set(name,local);
                     if (local) this.declarations.set(node.start,local);
                 }

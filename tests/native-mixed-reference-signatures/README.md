@@ -2,8 +2,9 @@
 
 Build the compiler, then run `npm run test:native-mixed-reference-signatures`.
 The runner authenticates and emits the complete unchanged AIR mixed-signature
-and DateZip probes, plus the typed-return throw probe. All 51 observations match
-in Node/Chromium on ES5/ES2015, with 26 configuration/emission guards.
+and DateZip probes, plus the typed-return throw and Object-parameter probes.
+All 69 observations match in Node/Chromium on ES5/ES2015, with 31
+configuration/emission guards.
 Supplemental emitted checks cover Array value-name shadowing and a U+2028 String
 default, including explicit undefined versus omission.
 
@@ -17,7 +18,12 @@ RETURN nodes between throw and return, so lowering also checks the source keywor
 
 `nativeSignaturePropertyModule` names the common AS3Property module for String,
 Number, int, uint, Boolean and Object returns in methods with planned reference
-parameters/returns, and for mixed String parameters. Array returns use the common
+parameters/returns, and for mixed String and Object parameters. Object entry
+and subsequent simple parameter assignments normalize undefined to null while
+preserving the assignment expression's original RHS. Supplied arguments receive
+entry coercion without aliasing later parameter writes. Literal-null defaults
+are supported; other Object defaults and compound writes remain explicit holds.
+Array returns use the common
 AS3Type `as3CoerceArray` helper, avoiding a source-shadowable Array operand.
 Optional String declarations lose JavaScript defaults; method entry checks
 arguments.length before applying literal String/null defaults and coercion.
