@@ -172,6 +172,8 @@ export interface EmitterOptions {
 	nativeComputedTypeTestModule?:string;
 	/** Exact common Class is/as operations, independent of callable class emission. */
 	nativeClassTypeOperationsModule?:string;
+    /** Common construction of source Object/Function values. */
+    nativeDynamicConstructionModule?:string;
 	/** Authenticated common AS3String module for direct no-argument toString calls. */
 	nativeDirectToStringModule?:string;
 	/** Authenticated common AS3String module for explicit builtin String(value). */
@@ -526,6 +528,12 @@ export default class Emitter {
 				&& this.options.importModules['flash.utils.AS3Coercion'] !== module)
 				throw new Error('AS3_NUMERIC_PARAMETERS_UNSUPPORTED: numeric coercion import binding disagrees with nativeNumericMethodParametersModule');
 		}
+        if (this.options.nativeDynamicConstructionModule !== undefined) {
+            const module = generatedModule(this.options.nativeDynamicConstructionModule);
+            if (this.options.useNamespaces || !this.options.importModules
+                || this.options.importModules['compiler.AS3Invocation'] !== module)
+                throw new Error('AS3_DYNAMIC_CONSTRUCTION_UNSUPPORTED: exact invocation module binding required');
+        }
         if (this.options.nativeClassTypeOperationsModule !== undefined) {
             const module = generatedModule(this.options.nativeClassTypeOperationsModule);
             if (this.options.useNamespaces || !this.options.importModules
@@ -2919,7 +2927,30 @@ function emitShortVector(emitter:Emitter, node:Node):void {
 }
 
 
+function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
+    if (!emitter.references || node.children.length !== 1) return false;
+    const call=node.children[0];
+    const callee=call.kind===NodeKind.CALL?call.children[0]:call;
+    const args=call.kind===NodeKind.CALL?call.findChild(NodeKind.ARGUMENTS):undefined;
+    const target=unwrapEncapsulatedExpression(callee);
+    const binding=target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
+    const classCast=target.kind===NodeKind.RELATION && target.children.length===3
+        && target.children[1].text==='as' && target.lastChild.kind===NodeKind.IDENTIFIER
+        && target.lastChild.text==='Class' && emitter.references.resolve('Class')==='Class'
+        && !emitter.references.sourceClass('Class') && !emitter.references.sourceInterface('Class');
+    if (!classCast && (!binding || binding.bound || ['Object','Function','*'].indexOf(binding.as3Type)<0)) return false;
+    const module=emitter.options.nativeDynamicConstructionModule;
+    if (!module || !args) throw new Error('AS3_DYNAMIC_CONSTRUCTION_UNSUPPORTED: explicit invocation module and argument list required');
+    let helper='__as3_constructValue';while(emitter.source.indexOf(helper)>=0)helper+='_';
+    emitter.ensureImportIdentifier('as3ConstructValue as '+helper,module,false);emitter.nativeSourceHelpers.add(helper);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitter.skipTo(callee.start);
+    visitNode(emitter,callee);emitter.catchup(callee.end);emitter.insert(',()=>[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
+    emitter.insert(']))');emitter.skipTo(node.end);return true;
+}
+
 function emitNew(emitter:Emitter, node:Node):void {
+ if(emitDynamicConstruction(emitter,node))return;
  if(emitGeneratedVectorConstruction(emitter,node))return;
  if(emitter.generated&&node.children.length===1&&node.children[0].kind===NodeKind.CALL){
   const call=node.children[0],callee=call.children[0],args=call.findChild(NodeKind.ARGUMENTS);
