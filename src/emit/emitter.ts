@@ -5058,6 +5058,30 @@ export function emitIdent(emitter:Emitter, node:Node):void {
         emitter.emitThisForNextIdent = true;
         return;
     }
+    // An exact package-function provider owns imported lookup calls. A same-named
+    // source parameter/member/import must retain its own binding, not AS3Utils.
+    const nativeLookupName = node.text === 'getDefinitionByName' && emitter.options.importModules
+        && emitter.options.importModules['flash.utils.getDefinitionByName'];
+    if (nativeLookupName) {
+        if (emitter.options.useNamespaces)
+            throw new Error('AS3_DEFINITION_LOOKUP_UNSUPPORTED: module emission required');
+        const declaration = emitter.findDefInScope(node.text);
+        const lexical = typeOfBinding(node, emitter.source, []) === 'lexical';
+        if (!lexical && declaration && declaration.sourceImport === 'flash.utils.getDefinitionByName') {
+            const expression = outerEncapsulatedExpression(node), call = expression.parent;
+            if (!call || call.kind !== NodeKind.CALL || call.children[0] !== expression
+                || call.parent && call.parent.kind === NodeKind.NEW)
+                throw new Error('AS3_DEFINITION_LOOKUP_UNSUPPORTED: package function requires direct call');
+            generatedModule(nativeLookupName);
+            let alias = '__as3_getDefinitionByName';
+            while (emitter.source.indexOf(alias) >= 0) alias += '_';
+            emitter.ensureImportIdentifier('getDefinitionByName as ' + alias, nativeLookupName, false);
+            emitter.catchup(node.start); emitter.insert(alias); emitter.skipTo(node.end);
+            emitter.emitThisForNextIdent = true; return;
+        }
+        if (!declaration && !lexical)
+            throw new Error('AS3_DEFINITION_LOOKUP_UNSUPPORTED: exact package import or source binding required');
+    }
 	let preservedTypeOfName: string;
 	if (emitter.options.nativeCallableMetadata && insideTypeOf(node)
 		&& !(node.parent.kind === NodeKind.DOT && node.parent.children[0] !== node)) {
@@ -5088,7 +5112,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 		return;
 	}
 	emitter.namespaces.checkIdentifier(node, hasFunctionLocal(emitter, node.text));
-	if (node.text == "getDefinitionByName") {
+	if (node.text == "getDefinitionByName" && !nativeLookupName) {
 		let pathToRoot = ClassList.getLastPathToRoot();
 		emitter.ensureImportIdentifier(AS3_UTIL, `${pathToRoot}${AS3_UTIL}`);
 	}
@@ -5235,7 +5259,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 
 	const canonicalDictionary = node.text === 'Dictionary' && def && def.sourceImport === 'flash.utils.Dictionary'
         && emitter.options.importModules && emitter.options.importModules['flash.utils.Dictionary'];
-    node.text = preservedTypeOfName || (canonicalDictionary ? node.text : emitter.getIdentifierRemap(node.text)) || node.text;
+    node.text = preservedTypeOfName || (canonicalDictionary || nativeLookupName ? node.text : emitter.getIdentifierRemap(node.text)) || node.text;
 
 	emitter.insert(node.text);
 	emitter.skipTo(node.end);
@@ -5264,6 +5288,15 @@ function emitConsumerLiteralConstant(emitter:Emitter,node:Node):boolean {
 }
 
 function emitDot(emitter:Emitter, node:Node) {
+    const lookupModule = emitter.options.importModules && emitter.options.importModules['flash.utils.getDefinitionByName'];
+    const lookupReceiver = unwrapEncapsulatedExpression(node.children[0]), member = node.children[1];
+    if (lookupModule && member && member.text === 'getDefinitionByName' && lookupReceiver && lookupReceiver.kind === NodeKind.DOT) {
+        const namespace = unwrapEncapsulatedExpression(lookupReceiver.children[0]), utils = lookupReceiver.children[1];
+        if (namespace && namespace.kind === NodeKind.IDENTIFIER && namespace.text === 'flash'
+            && utils && utils.text === 'utils' && !emitter.findDefInScope('flash')
+            && typeOfBinding(namespace, emitter.source, []) !== 'lexical')
+            throw new Error('AS3_DEFINITION_LOOKUP_UNSUPPORTED: qualified package value requires source binding authority');
+    }
     if (emitDynamicPropertyRead(emitter,node)) return;
     if (emitConsumerLiteralConstant(emitter,node)) return;
 	if (emitArraySortConstant(emitter, node)) return;
