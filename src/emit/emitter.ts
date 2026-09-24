@@ -325,6 +325,7 @@ function filterAST(node:Node):Node {
 
 
 export default class Emitter {
+    sourcePackage: string = '';
     generated: NativeGeneratedEmission;
     generatedReceiverTraits = new Map<string,NativeGeneratedClassTraits>();
     references: NativeReferenceCoercion;
@@ -863,8 +864,9 @@ export default class Emitter {
 			this.source.indexOf(`class ${ identifier } `) === -1 && !isGloballyAvailable && !this.findDefInScope(identifier)
 		) {
 			// Same-package implicit imports must use the authenticated QName mapping too.
-			if (checkGlobals && from === `./${identifier}` && this.generated && this.options.importModules) {
-				const qname = this.generated.lexical.resolveTypeName(identifier);
+			if (checkGlobals && from === `./${identifier}` && this.options.importModules) {
+				const qname = this.generated ? this.generated.lexical.resolveTypeName(identifier)
+                    : (this.sourcePackage ? this.sourcePackage + '.' : '') + identifier;
 				if (this.options.importModules[qname]) from = generatedModule(this.options.importModules[qname]);
 			}
 			this.headOutput += `import { ${ identifier } } from "${ from }";\n`;
@@ -900,6 +902,7 @@ export default class Emitter {
 
 function emitPackage(emitter:Emitter, node:Node):void {
 	let packageName = node.findChild(NodeKind.NAME);
+    emitter.sourcePackage = packageName ? packageName.text : '';
 	let content = node.findChild(NodeKind.CONTENT);
 
 	if (content){
@@ -5289,6 +5292,22 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	}
 
 	let def = emitter.findDefInScope(node.text);
+    const interfaceValue = emitter.generated && emitter.references && emitter.references.sourceInterface(node.text);
+    if (interfaceValue && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def, 'as3Type'))) {
+        let method = node.parent;
+        while (method && [NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET].indexOf(method.kind) < 0) method = method.parent;
+        const expression = outerEncapsulatedExpression(node), parent = expression.parent;
+        if (!method || parent && (parent.kind === NodeKind.DOT && parent.children[0] === expression
+            || parent.kind === NodeKind.ARRAY_ACCESSOR && parent.children[0] === expression
+            || parent.kind === NodeKind.CALL && parent.children[0] === expression
+            || parent.kind === NodeKind.ASSIGN && parent.children[0] === expression
+            || [NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE].indexOf(parent.kind) >= 0))
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: interface Class value requires a method value expression');
+        let token = '__as3_interface_value_' + interfaceValue;
+        while (emitter.source.indexOf(token) >= 0) token += '_';
+        emitter.ensureImportIdentifier(interfaceValue + ' as ' + token, emitter.references.options.module, false);
+        emitter.nativeSourceHelpers.add(token);emitter.insert(token);emitter.skipTo(node.end);return;
+    }
     if (emitter.references && !emitter.classInitializers.enabled
         && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def,'as3Type'))
         && emitter.references.sourceClass(node.text)) {

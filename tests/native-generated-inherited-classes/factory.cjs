@@ -45,7 +45,10 @@ module.exports=async function testFactory({api,ts,modern,esbuild,engine,run,plan
    if(args.path.endsWith('AS3ScriptGlobal.ts')) {
     const marker='return instantiateUnit(domain, input, factory, false);';assert.equal(contents.split(marker).length,2);
     contents=contents.replace(marker,'globalThis.instantiations.push(input.sourceId);'+marker);
-    if(mutation==='missing-inheritance')contents=contents.replace('const selected = requireScope().selectSourceClass(name);','const selected = undefined;');
+    if(mutation==='missing-inheritance'){
+     const selection='const selected = requireScope().selectSourceType(name);';assert.equal(contents.split(selection).length,2);
+     contents=contents.replace(selection,'const selected = undefined;');
+    }
    }
    if(args.path.endsWith('AS3Class.ts')&&mutation==='uncoerced-Class-return')contents=contents.replace('export function as3CoerceClass(value: unknown): AS3ClassValue | null {','export function as3CoerceClass(value: unknown): AS3ClassValue | null { return value as any;');
    if(args.path.endsWith('factory.js')&&mutation==='shared-cohort-cache') {

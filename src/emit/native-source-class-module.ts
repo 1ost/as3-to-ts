@@ -30,8 +30,8 @@ function specifier(value: string): string {
 export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput): NativeSourceClassModuleArtifact {
     const plan = input.plan, planned = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
     if (!planned.inheritScriptClasses || !planned.scriptDomainProvider || !planned.scriptGlobalProviderModule
-        || !plan.bindings.length || plan.bindings.some(b => !b.scriptGlobalExport)
-        || Object.keys(planned.sources).length !== plan.bindings.length
+        || !(plan.bindings.length + plan.interfaces.length) || plan.bindings.some(b => !b.scriptGlobalExport)
+        || Object.keys(planned.sources).length !== plan.bindings.length + plan.interfaces.length
         || Object.keys(planned.sources).some(q => planned.sources[q].referenceOnly))
         fail('complete inherited script Class cohort required');
     if (input.target !== 'ES5' && input.target !== 'ES2015') fail('target');
@@ -47,10 +47,12 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
     if (external.indexOf(session) < 0 || external.indexOf(helper) < 0) fail('session and native Class helpers must be explicit external modules');
     const domain = planned.scriptDomainProvider, declarations = './__native_declarations';
     const classModules = plan.bindings.map((b, i) => './__native_class_' + i);
-    const local = [domain.module, declarations].concat(classModules);
+    const interfaceModules = plan.interfaces.map((b, i) => './__native_interface_' + i);
+    const local = [domain.module, declarations].concat(classModules, interfaceModules);
     if (new Set(local).size !== local.length || external.some(m => local.indexOf(m) >= 0)) fail('local/external module collision');
     const imports = {...options.importModules};
     plan.bindings.forEach((b, i) => {imports[b.qname] = classModules[i];});
+    plan.interfaces.forEach((b, i) => {imports[b.qname] = interfaceModules[i];});
     const generated = [{module: declarations, source: plan.moduleSource}];
     plan.bindings.forEach((binding, i) => {
         const source = planned.sources[binding.qname].source;
@@ -58,6 +60,15 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
             nativeGeneratedDeclarations: {plan, module: declarations},
             nativeReferenceCoercion: {...options.nativeReferenceCoercion, plan, module: declarations}} as EmitterOptions;
         generated.push({module: classModules[i], source: emit(parse(binding.qname + '.as', source), source, opts)});
+    });
+    // Interfaces retain their complete authored type declarations. Runtime
+    // identity comes from the selected nominal header, never a JS constructor.
+    plan.interfaces.forEach((binding, i) => {
+        const source = planned.sources[binding.qname].source;
+        const opts = {...options, customVisitors: [], importModules: imports} as EmitterOptions;
+        Object.keys(opts).filter(key => key.indexOf('native') === 0).forEach(key => delete (opts as any)[key]);
+        opts.nativeVectorTypes = {plan, module: declarations};
+        generated.push({module: interfaceModules[i], source: emit(parse(binding.qname + '.as', source), source, opts)});
     });
     const dependencies: {module: string; imports: ReadonlyArray<string>}[] = [];
     const bodies = generated.map(item => {
@@ -122,7 +133,9 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         '  return [',
         plan.bindings.map((b, i) => '    {name:' + JSON.stringify(b.qname) + ',declaration:headers[' + JSON.stringify(b.tokenExport)
             + '],resolve:()=>' + providerName(helper) + '.readNativeClass(load(' + JSON.stringify(classModules[i]) + ')['
-            + JSON.stringify(b.qname.split('.').pop()) + '],"value")}').join(',\n'),
+            + JSON.stringify(b.qname.split('.').pop()) + '],"value")}')
+            .concat(plan.interfaces.map(b => '    {name:'+JSON.stringify(b.qname)+',declaration:headers['+JSON.stringify(b.tokenExport)
+                +'],resolve:()=>headers['+JSON.stringify(b.tokenExport)+']}')).join(',\n'),
         '  ];', '}',
         'export const nativeSourceClassModule = ' + providerName(session) + '.createNativeSourceClassModule(async () => bindNativeSourceClasses);');
     return Object.freeze({moduleSource: lines.join('\n') + '\n',
