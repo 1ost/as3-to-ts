@@ -22,6 +22,7 @@ The opt-in lowering proves a public path rooted in an Object/wildcard local or
 parameter, preserving shadowed source Object types and bound fields. Dot calls
 use as3CallNamedProperty; bracket calls retain as3CallProperty. Nested receiver
 reads use as3GetProperty. Existing specialized and lexical dispatch retains its
-own authority. Path writes, updates and property constructors reject instead of
-using a read as their implementation. Computed function-return roots, native
+own authority. Simple path assignments use as3SetProperty and are independently
+qualified by native-object-property-writes. Updates, compound assignments,
+deletion and property constructors remain held. Computed function-return roots, native
 ApplicationDomain publication and full UIComponent remain separate work.

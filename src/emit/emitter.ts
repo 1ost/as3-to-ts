@@ -3878,6 +3878,17 @@ function emitObjectPropertyCall(emitter:Emitter,node:Node):boolean {
     args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
     emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
+function emitObjectPropertyAssignment(emitter:Emitter,node:Node):boolean {
+    const access=objectPropertyAccess(emitter,unwrapEncapsulatedExpression(node.children[0]));
+    if(!access)return false;
+    const value=node.children[2],helper=propertyHelper(emitter,'as3SetProperty',emitter.options.nativeObjectPropertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitPropertyKey(emitter,access);
+    // Receiver and key are captured before RHS effects. The provider validates
+    // after evaluation, stores typed coercion and returns the original RHS.
+    emitter.insert(',(');emitter.skipTo(getExpressionStart(value));visitNode(emitter,value);
+    emitter.catchup(getEffectiveNodeEnd(value));emitter.insert(')))');
+    emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
 function emitObjectPropertyRead(emitter:Emitter,node:Node):boolean {
     const access=objectPropertyAccess(emitter,node);if(!access)return false;
     const outer=outerEncapsulatedExpression(node),parent=outer&&outer.parent;
@@ -5024,6 +5035,7 @@ function emitAssign(emitter: Emitter, node: Node): void {
     }
     if (operator.text === '=' && emitDictionaryPropertyAssignment(emitter, left, right)) return;
     if (operator.text === '=' && emitDynamicPropertyAssignment(emitter, left, right)) return;
+    if (operator.text === '=' && emitObjectPropertyAssignment(emitter, node)) return;
     if (operator.text === '+=' && emitDynamicPropertyAddition(emitter, left, right)) return;
     if ((operator.text === '+=' || operator.text === '=') && emitter.typedLocalPlan) {
         const target = emitter.typedLocalPlan.wildcardReference(left, emitter);
