@@ -1595,12 +1595,12 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let inNode = node.children[1];
 	let objNode = inNode.children[0];
 	let blockNode = node.children[2];
-    const wildcardTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
-    if(emitter.generated&&wildcardTarget&&!wildcardTarget.bound&&wildcardTarget.as3Type==='*'){
+    const localTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
+    if(emitter.generated&&localTarget&&!localTarget.bound&&['*','String','Object'].indexOf(localTarget.as3Type)>=0){
         // The legacy parser represents a member target as a NAME plus a malformed
         // IN span. Require the original simple-target separator before lowering.
         const separator=emitter.source.slice(varNode.end,objNode.start).replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'').trim();
-        if(separator!=='in')throw new Error('AS3_ENUMERATION_UNSUPPORTED: wildcard for-each requires a simple local target');
+        if(separator!=='in')throw new Error('AS3_ENUMERATION_UNSUPPORTED: for-each requires a simple local target');
         if(!emitter.options.nativeEnumeration)throw new Error('AS3_ENUMERATION_UNSUPPORTED: explicit common enumeration providers required');
         const keys=dictionaryEnumerationHelper(emitter,'as3EnumerableKeys'),get=dictionaryEnumerationHelper(emitter,'as3GetProperty');
         let receiver:string,cursor:string,step:string;
@@ -2393,6 +2393,13 @@ function emitObjectLiteral(emitter:Emitter, node:Node):void {
 }
 
 function emitNameTypeInit(emitter:Emitter, node:Node):void {
+    const pattern=emitter.generated&&emitter.generated.options.plan.patternLocals.find(p=>p.owner===emitter.generated.lexical.owner&&p.declarationStart===node.start);
+    if(pattern){
+        const module=nativePatternModule(emitter),compile=propertyHelper(emitter,'compileSourceStringPattern',module);
+        emitter.declareInScope({name:pattern.name,type:'any',as3Type:'RegExp'});
+        emitter.catchup(node.start);emitter.insert(pattern.name+': any = '+compile+'('+JSON.stringify(pattern.source)+','+JSON.stringify(pattern.flags)+')');
+        emitter.skipTo(Math.max(getEffectiveNodeEnd(node),pattern.declarationEnd));return;
+    }
 	if (emitReferenceStringParameter(emitter, node)) return;
 	if (emitNumericParameterDeclaration(emitter, node)) return;
 	const namespaceMember = emitter.namespaces.member(node.findChild(NodeKind.NAME));
@@ -3285,6 +3292,15 @@ function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
+    const pattern=emitter.generated&&emitter.generated.options.plan.patternLocals.find(p=>p.owner===emitter.generated.lexical.owner&&p.calls.indexOf(node.start)>=0);
+    if(pattern){
+        const helper=propertyHelper(emitter,'sourcePatternTest',nativePatternModule(emitter));
+        emitter.catchup(node.start);emitter.insert(helper+'('+pattern.name);
+        node.findChild(NodeKind.ARGUMENTS).children.forEach(argument=>{
+            emitter.insert(',');emitter.skipTo(getExpressionStart(argument));visitNode(emitter,argument);emitter.catchup(getEffectiveNodeEnd(argument));
+        });
+        emitter.insert(')');emitter.skipTo(getEffectiveNodeEnd(node));return;
+    }
     if (emitInterfaceReceiverCall(emitter,node)) return;
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
@@ -3525,6 +3541,15 @@ function emitJSONParse(emitter:Emitter,node:Node):boolean {
     visitNodes(emitter,args.children);
     const close=args.end>args.start&&emitter.source.charAt(args.end-1)===')'?args.end-1:args.end;
     emitter.catchup(close);emitter.insert(')');emitter.skipTo(node.end);return true;
+}
+
+function nativePatternModule(emitter:Emitter):string {
+    const input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+    const module=emitter.options.nativeStringIntrinsicsModule;
+    if(!module||!input.patternProviderModule||!emitter.options.nativeTypedLocals
+        ||module!==xmlGlobalProviderModule(input.patternProviderModule,emitter.generated.options.module))
+        throw new Error('AS3_PATTERN_LOCAL_UNSUPPORTED: exact generated pattern provider and typed locals required');
+    return generatedModule(module);
 }
 
 function emitStringReplace(emitter:Emitter, node:Node):boolean {
@@ -4677,7 +4702,8 @@ function emitLocalTypeOf(emitter:Emitter, node:Node):void {
     const operand = node.children.length === 1 && unwrapEncapsulatedExpression(node.children[0]);
     const local = operand && operand.kind === NodeKind.IDENTIFIER && emitter.references
         && emitter.references.local(operand,operand.text);
-    if (!local || !local.stringLocal) {visitNodes(emitter,node.children); return;}
+    const generatedString=operand&&emitter.generated&&emitter.typedLocalPlan&&emitter.typedLocalPlan.stringLocal(operand,emitter);
+    if ((!local || !local.stringLocal)&&!generatedString) {visitNodes(emitter,node.children); return;}
     // Qualified String storage includes the source null String atom. The read
     // has no side effects; never fold property/call/assignment operands here.
     emitter.catchup(node.start); emitter.insert('("string")');

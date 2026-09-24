@@ -10,7 +10,7 @@ export interface NestedLocalFunction {start:number;end:number;name:string;method
 export class NativeTypedLocals {
     private methods: Method[] = [];
     private memberNames: string[] = [];
-    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false, private nested: NestedLocalFunction[] = [], private anonymous: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = []) {
+    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false, private nested: NestedLocalFunction[] = [], private anonymous: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [], private patternLocal?: (type:Node)=>boolean) {
         owner.findChild(K.CONTENT).children.forEach(member=>{
             if([K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0)
                 member.findChildren(K.NAME_TYPE_INIT).forEach(d=>this.memberNames.push(d.findChild(K.NAME).text));
@@ -47,6 +47,7 @@ export class NativeTypedLocals {
                     this.fail('source destructuring targets held');
                 if ([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(value.kind)>=0) value.findChildren(K.NAME_TYPE_INIT).forEach(decl=>{
                     const annotation=decl.findChild(K.VECTOR)||decl.findChild(K.TYPE),reference=referenceFor && referenceFor(annotation);
+                    if(annotation&&this.patternLocal&&this.patternLocal(annotation))return;
                     const type=reference || nativeSourceTypeIdentity(annotation,qname,imports),name=decl.findChild(K.NAME).text;
                     const other=declared.find(local=>local.name===name);
                     if(other&&other.type!==type&&(type!=='*'||other.type!=='*'))this.fail('conflicting local declaration types');
@@ -74,10 +75,13 @@ export class NativeTypedLocals {
                     const name=value.children[0].text;
                     const reference=locals.some(local=>local.name===name&&!!local.reference);
                     const wildcard=this.matchSourceSpans&&wildcards.indexOf(name)>=0;
-                    if(!reference&&!wildcard)this.fail('source enumeration requires a declared reference or wildcard local');
-                    if(wildcard)for(let scope=value.parent;scope&&scope!==node;scope=scope.parent)
+                    // The generated local assignment pass applies storage coercion
+                    // to each enumerated value before publishing the new value.
+                    const storage=this.matchSourceSpans&&locals.some(local=>local.name===name&&['String','Object'].indexOf(local.type)>=0&&!local.parameter);
+                    if(!reference&&!wildcard&&!storage)this.fail('source enumeration requires a declared reference, String, Object or wildcard local');
+                    if(wildcard||storage)for(let scope=value.parent;scope&&scope!==node;scope=scope.parent)
                         if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===name)
-                            this.fail('wildcard enumeration catch-shadow target held');
+                            this.fail('enumeration catch-shadow target held');
                 }
                 value.children.forEach(enumeration);
             };if(body)enumeration(body);
@@ -139,6 +143,19 @@ export class NativeTypedLocals {
         }
         if(catches.length&&this.memberNames.indexOf(node.text)>=0)this.fail('catch-shadow field write held');
         return catches.length||plan.wildcards.indexOf(node.text)>=0?{reference}:null;
+    }
+    /** Only fold a simple read of qualified generated String storage. */
+    stringLocal(node: Node, emitter: any): boolean {
+        if(!this.matchSourceSpans||node.kind!==K.IDENTIFIER)return false;
+        let method: Node=node;
+        while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0) {
+            if(method.kind===K.CATCH&&method.findChild(K.NAME).text===node.text)return false;
+            method=method.parent;
+        }
+        const plan=this.methods.find(m=>!!method&&m.node.start===method.start&&m.node.end===method.end);
+        const binding=emitter.findDefInScope(node.text);
+        return !!plan&&!!binding&&!binding.bound&&binding.as3Type==='String'
+            &&plan.locals.some(l=>l.name===node.text&&l.type==='String'&&!l.parameter);
     }
     /** Prevent the older integer assignment pass from pre-coercing local RHS values. */
     owns(node: Node, emitter: any): boolean {

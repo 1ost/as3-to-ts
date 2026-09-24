@@ -7,13 +7,15 @@ const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const base=path.join(compiler,'.cache/op2-stringutil');fs.mkdirSync(base,{recursive:true});const run=fs.mkdtempSync(path.join(base,'run-'));
 const modulePath=file=>{let r=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
+const generated=process.argv.includes('--generated');
 const sources={};
 for(const q of ["patterns.DynamicReplace","cn.kyiax.yare.util.StringUtil"]){
- const source=fs.readFileSync(path.join(evidence,'source',q.replaceAll('.','/')+'.as'),'utf8');sources[q]={source,sourceSha256:hash(source),...(q.endsWith(".StringUtil")?{referenceOnly:true}:{})};
+ const source=fs.readFileSync(path.join(evidence,'source',q.replaceAll('.','/')+'.as'),'utf8');sources[q]={source,sourceSha256:hash(source),...(q.endsWith(".StringUtil")&&!generated?{referenceOnly:true}:{})};
  if(q.startsWith('cn.'))assert.equal(source,fs.readFileSync(path.join(root,'game-client-flash/src',q.replaceAll('.','/')+'.as'),'utf8'));
 }
 const nativeProviders={};
-const plan=api.createNativeGeneratedDeclarationPlan({scope:'op2-stringutil',providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),sources});
+if(generated){const source=fs.readFileSync(path.join(engine,'tests/nativeFlashOracle/generated-pattern-locals/source/patterns/PatternLocal.as'),'utf8');sources['patterns.PatternLocal']={source,sourceSha256:hash(source)};}
+const plan=api.createNativeGeneratedDeclarationPlan({scope:'op2-stringutil',...(generated?{patternProviderModule:provider('AS3StringIntrinsics')}:{}),providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),sources});
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.join(compiler,'utils',name+'.ts'))]));
 const fileFor=q=>q.split('.').pop(),definitionsByNamespace={};
 for(const q of Object.keys(sources)){const i=q.lastIndexOf('.');(definitionsByNamespace[q.slice(0,i)]??=[]).push(q.slice(i+1));}
@@ -24,6 +26,7 @@ const options={nativeStringIntrinsicsModule:provider("AS3StringIntrinsics"),cust
  nativeSourceErrorModule:modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts')),nativeDynamicPropertyWritesModule:provider('AS3Property'),nativeDynamicPropertyReadsModule:provider('AS3Property'),nativeJSONModule:provider('AS3JSON'),nativeComputedTypeTestModule:provider('AS3Type'),nativeDictionaryPropertyModule:provider('AS3Property'),nativeEnumeration:{dictionaryModule:provider("Dictionary"),coercionModule:provider("AS3Coercion"),stringModule:provider("AS3String")},nativeObjectCreationModule:provider("AS3Class"),nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition'),nativeArrayCreationModule:provider('AS3ArrayCreation')};
 const combined=true;if(combined)Object.assign(options,{nativeReferenceCoercion:{plan,module:'./declarationDomain',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')});
 let guards=0;
+if(generated)guards+=require('./pattern-local-guards.cjs')({api,parse,emit,options,provider});
 for(const body of [
  'public function f(s:String,p:*):String{return s.replace(p,1);}',
  'public function f(s:String,p:*):*{return s.match(p);}',
@@ -40,9 +43,9 @@ for(const body of [
 }
 
 fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];
-for(const binding of [...plan.bindings,...plan.interfaces,{qname:"cn.kyiax.yare.util.StringUtil"}]){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
+for(const binding of [...plan.bindings,...plan.interfaces,...(generated?[]:[{qname:"cn.kyiax.yare.util.StringUtil"}])]){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
  const opts={...options};
- if(binding.qname.endsWith(".StringUtil")){delete opts.nativeGeneratedDeclarations;delete opts.nativeClassTraitsModule;delete opts.nativeLexicalMembersModule;delete opts.nativeGeneratedPropertyModule;delete opts.nativeTypedLocals;delete opts.nativeArrayCreationModule;opts.nativeStringLocalCoercionModule=provider("AS3String");}
+ if(binding.qname.endsWith(".StringUtil")&&!generated){delete opts.nativeGeneratedDeclarations;delete opts.nativeClassTraitsModule;delete opts.nativeLexicalMembersModule;delete opts.nativeGeneratedPropertyModule;delete opts.nativeTypedLocals;delete opts.nativeArrayCreationModule;opts.nativeStringLocalCoercionModule=provider("AS3String");}
  if(plan.interfaces.some(i=>i.qname===binding.qname)){for(const k of Object.keys(opts))if(k.startsWith('native'))delete opts[k];}
  const output=emit(parse(binding.qname+'.as',source),source,opts);fs.writeFileSync(file,output);emitted.push({qname:binding.qname,file,sourceSha256:hash(source),outputSha256:hash(output)});
 }
@@ -53,14 +56,15 @@ const names=['AS3StringIntrinsics','AS3JSON','ByteArray','AS3Date','AS3MethodBin
 const moduleFor=n=>'src/layaAir/flash/'+(['AS3SourceError','IllegalOperationError'].includes(n)?'errors':'utils')+'/'+n;
 const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
 const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
-const driverFile=path.join(__dirname,'runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
-const wanted=captured;assert.equal(wanted.length,36);
+const driverFile=path.join(__dirname,'runtime-driver.js'),patternDriverFile=path.join(__dirname,'pattern-local-driver.js');
+const observer=fs.readFileSync(driverFile,'utf8')+(generated?'\n'+fs.readFileSync(patternDriverFile,'utf8'):'');
+const wanted=[...captured,...(generated?require(path.join(engine,'tests/nativeFlashOracle/generated-pattern-locals/verify.cjs')).map(row=>({...row,id:'local-'+row.id})):[])];assert.equal(wanted.length,generated?47:36);
 for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v.find(r=>r.id==='dynamic-basic').value[0]='wrong']){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.join(root,'game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  const specs=[];for(const file of files.filter(f=>!f.endsWith('.d.ts'))){const source=fs.readFileSync(file,'utf8'),out=ts.transpileModule(source,{compilerOptions:{target,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});assert.deepEqual(out.diagnostics,[]);const relative=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');specs.push({name:relative,code:out.outputText});}
  for(const name of ['bound','classBound','nativeClass','callableClass'])specs.push({name,code:modern.transpileModule(fs.readFileSync(path.join(compiler,'utils',name+'.ts'),'utf8'),{compilerOptions:{target,module:modern.ModuleKind.CommonJS}}).outputText});
- const script='{if(typeof window==="undefined"){globalThis.window=globalThis;globalThis.document={};}const api=(()=>{const module={exports:{}};'+built.outputFiles[0].text+';return module.exports;})();const shared=new Map(),specs=new Map('+JSON.stringify(specs)+'.map(s=>[s.name,s.code])),providers=new Set('+JSON.stringify(names)+'),localNames=new Set('+JSON.stringify(['declarationDomain',...emitted.map(e=>fileFor(e.qname))])+');function createDomainLoader(){const local=new Map();function load(name){if(providers.has(name))return api;const modules=localNames.has(name)?local:shared;if(modules.has(name))return modules.get(name);if(!specs.has(name))throw Error("unresolved module "+name);const output={};modules.set(name,output);new Function("exports","require",specs.get(name))(output,r=>load(r.split("/").pop()));return output;}load.loaded=local;return load;}const load=createDomainLoader();'+observer+'}';
+ const script='{if(typeof window==="undefined"){globalThis.window=globalThis;globalThis.document={};}const api=(()=>{const module={exports:{}};'+built.outputFiles[0].text+';return module.exports;})();const shared=new Map(),specs=new Map('+JSON.stringify(specs)+'.map(s=>[s.name,s.code])),providers=new Set('+JSON.stringify(names)+'),localNames=new Set('+JSON.stringify(['declarationDomain',...emitted.map(e=>fileFor(e.qname))])+');function createDomainLoader(){const local=new Map();function load(name){if(providers.has(name))return api;const modules=localNames.has(name)?local:shared;if(modules.has(name))return modules.get(name);if(!specs.has(name))throw Error("unresolved module "+name);const output={};modules.set(name,output);new Function("exports","require",specs.get(name))(output,r=>load(r.split("/").pop()));return output;}load.loaded=local;return load;}const load=createDomainLoader();'+'const generatedStringUtil='+generated+';'+observer+'}';
  fs.writeFileSync(path.join(run,'bundle-'+target+'.js'),script);const node=JSON.parse(JSON.stringify(new Function(script+';return globalThis.result;')()));
  const page=await browser.newPage();await page.addScriptTag({content:script});const web=await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.result)));await page.close();
  const compare=actual=>wanted.flatMap((expected,index)=>{try{assert.deepEqual(actual[index],expected);return [];}catch{return [{id:expected.id,expected,actual:actual[index]}];}});
@@ -72,6 +76,6 @@ const status=diagnostics.length||results.some(r=>r.mismatches.length)?'failed':'
 fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({status,guards,emitted,results,providerGraph,
  declarationDomain:{file:path.join(run,'declarationDomain.ts'),sha256:hash(plan.moduleSource)},
  helpers:['bound','classBound','nativeClass','callableClass'].map(name=>{const file=path.join(compiler,'utils',name+'.ts');return {name,file,sha256:hash(fs.readFileSync(file))};}),
- observer:{file:driverFile,sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:3,scope:'Complete maintained StringUtil in ordinary emitter mode and generated DynamicReplace. Retain all 36 AIR rows and explicit failures; StringUtil source Class traits are not qualified.'},null,2));
+ observer:{files:generated?[driverFile,patternDriverFile]:[driverFile],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},comparisonNegativeControls:3,patternLocals:plan.patternLocals,scope:generated?'Complete generated StringUtil, DynamicReplace and PatternLocal; 47 AIR rows. RegExp literal locals have nonescape proofs; no general RegExp Class identity.':'Complete maintained StringUtil in ordinary emitter mode and generated DynamicReplace. Retain all 36 AIR rows and explicit failures; StringUtil source Class traits are not qualified.'},null,2));
 console.log(JSON.stringify({run,status,guards,sources:emitted.length,airRows:wanted.length,typeErrors:diagnostics.length,mismatches:results.map(r=>({target:r.target,ids:r.mismatches.map(m=>m.id)}))}));if(status!=='passed')process.exitCode=1;
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,6 +1,7 @@
 import Node from '../syntax/node';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
+import {NativePatternLocal, nativePatternLocals} from './native-pattern-locals';
 import {NativeGeneratedInterfaceContracts,projectNativeGeneratedInterfaceContracts} from './native-generated-interface-contracts';
 
 export interface NativeGeneratedDeclarationInput {
@@ -14,6 +15,8 @@ export interface NativeGeneratedDeclarationInput {
     scriptGlobalProviderModule?: string;
     /** Explicit provider for sealed package-internal lexical membership. */
     lexicalProviderModule?: string;
+    /** Common String intrinsics for proven nonescaping RegExp literal locals. */
+    patternProviderModule?: string;
     /** Explicit class subset; omission selects all planned source classes. */
     scriptGlobalSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
@@ -38,7 +41,7 @@ export interface NativeGeneratedReference {
     readonly start: number;
     readonly end: number;
     readonly sourceName: string;
-    readonly kind: 'intrinsic' | 'declaration' | 'interface' | 'native' | 'unresolved';
+    readonly kind: 'intrinsic' | 'declaration' | 'interface' | 'native' | 'pattern-local' | 'unresolved';
     readonly identity: string;
 }
 export interface NativeGeneratedDeclarationPlan {
@@ -48,6 +51,7 @@ export interface NativeGeneratedDeclarationPlan {
     readonly interfaces: ReadonlyArray<NativeGeneratedInterfaceBinding>;
     readonly interfaceContracts: NativeGeneratedInterfaceContracts;
     readonly references: ReadonlyArray<NativeGeneratedReference>;
+    readonly patternLocals: ReadonlyArray<NativePatternLocal>;
     readonly vectors: ReadonlyArray<{readonly owner:string;readonly start:number;readonly end:number;readonly identity:string;readonly name:string;readonly specExport:string}>;
     readonly sourceHashes: {[qname: string]: string};
     readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly nativeInterface?: true; readonly eventBaseExport?: string; readonly nativeBaseExport?: string; readonly declarationExport?: string}>;
@@ -95,8 +99,9 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'lexicalProviderModule', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'lexicalProviderModule', 'patternProviderModule', 'sources', 'providers']);
     moduleName(data.providerModule);
+    if (data.patternProviderModule !== undefined) moduleName(data.patternProviderModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
     if (data.lexicalProviderModule !== undefined) moduleName(data.lexicalProviderModule);
     if (data.vectorProviderModule !== undefined) moduleName(data.vectorProviderModule);
@@ -179,6 +184,11 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 interfaces: Object.freeze(declaredInterfaces)}));
         }
     });
+    const patternLocals: NativePatternLocal[] = [];
+    if(data.patternProviderModule) names.forEach(owner => {
+        if(!data.sources[owner].referenceOnly && !providers.RegExp && !classes.has('RegExp'))
+            patternLocals.push(...nativePatternLocals(classes.get(owner),owner,data.sources[owner].source,name=>resolve(owner,name)));
+    });
     names.forEach(owner => {
         const walk = (node: Node): void => {
             // Legacy interface method signatures have a TYPE-kind wrapper named
@@ -187,7 +197,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 const spelling = node.qualifiedName || node.text || '*', identity = resolve(owner, spelling);
                 const kind: NativeGeneratedReference['kind'] = builtins.indexOf(identity) >= 0 ? 'intrinsic' : bindings.some(binding => binding.qname === identity)
                     ? 'declaration' : interfaces.some(binding => binding.qname === identity) ? 'interface'
-                    : nativeNames.indexOf(identity) >= 0 ? 'native' : 'unresolved';
+                    : nativeNames.indexOf(identity) >= 0 ? 'native'
+                    : patternLocals.some(p=>p.owner===owner&&p.typeStart===node.start&&p.typeEnd===node.end) ? 'pattern-local' : 'unresolved';
                 references.push(Object.freeze({owner, start: node.start, end: node.end, sourceName: spelling, kind, identity}));
             }
             node.children.forEach(walk);
@@ -305,7 +316,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0);
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
         sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),vectors:Object.freeze(vectors),
-        nativeBindings: Object.freeze(nativeBindings),interfaceContracts});
+        nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts});
     contexts.set(plan, {input: data, plan});
     return plan;
 }
