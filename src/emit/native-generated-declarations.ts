@@ -119,14 +119,14 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if (typeof data.scriptDomainProvider.exportName !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(data.scriptDomainProvider.exportName)) fail('script domain export identifier');
     }
     if (data.inheritScriptClasses !== undefined && (data.inheritScriptClasses !== true || !data.scriptDomainProvider
-        || !data.scriptGlobalProviderModule || data.lexicalProviderModule))
-        fail('inherited Classes require explicit script cohort; package-internal aliases require separate qualification');
+        || !data.scriptGlobalProviderModule))
+        fail('inherited Classes require explicit script cohort');
     if(data.scriptGlobalSources!==undefined&&(!data.scriptGlobalProviderModule||!Array.isArray(data.scriptGlobalSources)
         ||new Set(data.scriptGlobalSources).size!==data.scriptGlobalSources.length))fail('script global source selection requires unique names and provider');
-    if(data.classScriptSources!==undefined&&(!data.scriptGlobalProviderModule||!data.scriptDomainProvider||data.lexicalProviderModule
+    if(data.classScriptSources!==undefined&&(!data.scriptGlobalProviderModule||!data.scriptDomainProvider||data.lexicalProviderModule&&!data.inheritScriptClasses
         ||!Array.isArray(data.classScriptSources)||!data.classScriptSources.length
         ||new Set(data.classScriptSources).size!==data.classScriptSources.length))
-        fail('Class script selection requires unique names, explicit script domain and no internal aliases');
+        fail('Class script selection requires unique names, explicit script domain and inherited internal membership');
     if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
     if (data.providers !== undefined && !table(data.providers)) fail('provider table required');
     const providers = data.providers || {}, names = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
@@ -234,6 +234,17 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     if(data.classScriptSources)data.classScriptSources.forEach(name=>{
         const binding=bindings.find(value=>value.qname===name);
         if(!binding||!binding.scriptGlobalExport)fail('Class script selection requires a planned class with script global');
+        if(data.lexicalProviderModule){
+            const pkg=name.slice(0,name.lastIndexOf('.'));
+            classes.forEach((cls,qname)=>{
+                if(qname.slice(0,qname.lastIndexOf('.'))!==pkg)return;
+                if(cls.findChild(K.CONTENT).children.some(member=>{
+                    if([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0)return false;
+                    const mods=member.findChild(K.MOD_LIST);
+                    return !mods||!mods.children.some(mod=>['public','private','protected'].indexOf(mod.text)>=0);
+                }))fail('Class script retries with internal declarations in their package require qualification');
+            });
+        }
         if(binding.base){
             const parent=bindings.find(value=>value.qname===binding.base);
             // Derived retries are qualified over a stable source root parent.
@@ -360,11 +371,15 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     bindings.forEach(add);
     lines.push(...vectorLines);
     if(data.lexicalProviderModule){
-        lines.push('import {declareAS3InternalPackage} from '+JSON.stringify(data.lexicalProviderModule)+';');
+        const membership=data.inheritScriptClasses?'bindAS3InternalPackage':'declareAS3InternalPackage';
+        lines.push('import {'+membership+'} from '+JSON.stringify(data.lexicalProviderModule)+';');
         const packages=new Map<string,string[]>();
         bindings.forEach(binding=>{const split=binding.qname.lastIndexOf('.'),pkg=split<0?'':binding.qname.slice(0,split);
             if(!packages.has(pkg))packages.set(pkg,[]);packages.get(pkg).push(binding.tokenExport);});
-        packages.forEach(tokens=>lines.push('declareAS3InternalPackage(['+tokens.join(',')+']);'));
+        packages.forEach((tokens,pkg)=>{
+            if(data.inheritScriptClasses&&!pkg)fail('inherited internal membership requires named source packages');
+            lines.push(membership+'(['+tokens.join(',')+']);');
+        });
     }
     const interfaceContracts=projectNativeGeneratedInterfaceContracts(classes,bindings,interfaces,resolve,
         name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0);

@@ -25,6 +25,13 @@ export function nativeScriptConstantInitializers(declaration: Node, source: stri
             const type=field.findChild(K.TYPE),init=field.findChild(K.INIT);
             if(type&&type.text==='String'&&init&&/^["']/.test(text(init))&&literal(text(init)))allowed.add(field);
         });
+        const internalUint=member.kind===K.CONST_LIST&&flags.indexOf('static')>=0
+            &&flags.every(flag=>flag==='static'||flag==='internal');
+        if(internalUint)member.findChildren(K.NAME_TYPE_INIT).forEach(field=>{
+            const type=field.findChild(K.TYPE),init=field.findChild(K.INIT);
+            if(type&&type.text==='uint'&&init&&/^(?:0[xX][0-9a-fA-F]+|0|[1-9]\d*)$/.test(text(init))
+                &&Number(text(init))<=4294967295)allowed.add(field);
+        });
         if(member.kind!==K.CONST_LIST||flags.length!==2||flags.indexOf('public')<0||flags.indexOf('static')<0)return;
         fields.push(...member.findChildren(K.NAME_TYPE_INIT));
     });

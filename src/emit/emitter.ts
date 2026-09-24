@@ -3858,6 +3858,9 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
         return null;
     }
     const generated=generatedReceiver(emitter,receiver),definition=emitter.findDefInScope(receiver.text);
+    if(internal&&!generated&&node.kind===NodeKind.DOT&&key.kind===NodeKind.LITERAL
+        &&definition&&!definition.bound&&['Object','*','Class'].indexOf(definition.as3Type)>=0)
+        return {receiver,key,literalKey:key.text,lexical:true};
     if(node.kind===NodeKind.ARRAY_ACCESSOR&&emitter.generated&&emitter.classFactory
         &&receiver.text===emitter.generated.lexical.owner.split('.').pop()
         &&(!definition||!Object.prototype.hasOwnProperty.call(definition,'as3Type'))
@@ -4022,7 +4025,7 @@ function emitDynamicPropertyAssignment(emitter:Emitter, target:Node, value:Node)
 
 function emitInternalDynamicCall(emitter:Emitter,node:Node):boolean {
     if(!emitter.generated||!nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope).lexicalProviderModule
-        ||node.children[0].kind!==NodeKind.ARRAY_ACCESSOR)return false;
+        ||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.children[0].kind)<0)return false;
     const access=dynamicAccess(emitter,node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);
     if(!access||!access.lexical||access.ownStatic||!args)return false;
     const helper=dynamicHelper(emitter,access,'Call',emitter.options.nativeDynamicPropertyReadsModule);

@@ -625,7 +625,12 @@ export class NativeCallableClasses {
                     + (member.kind === S.GetAccessor ? 'get' : 'set') + ': ' + functionValue + ', configurable:true, enumerable:false}));');
             } else this.fail('unrecognized complete class member');
         });
-        if (!ctor && this.own.base) this.fail('synthesized derived constructor needs source arity authority');
+        if (!ctor && this.own.base) {
+            const parent=this.classes.get(this.own.base),root=this.sourceRoots.get(this.own.base);
+            if(!this.generated||!parent||parent.base||!root||root.findChild(K.CONTENT).children.some(member=>
+                member.kind===K.FUNCTION&&member.findChild(K.NAME).text===parent.name))
+                this.fail('synthesized derived constructor requires source root with implicit constructor');
+        }
         const chainFields: {name: string; value: string}[] = [];
         for (let current = this.own; current; current = this.classes.get(current.base)) chainFields.push(...current.fields);
         const memberNames = new Set<string>(), instanceMethods: string[] = [];
@@ -649,7 +654,8 @@ export class NativeCallableClasses {
         const ancestry = cls.heritageClauses && cls.heritageClauses.find((clause:any)=>clause.token===S.ExtendsKeyword);
         const base = ancestry ? 'const ' + baseName + ' = ' + intrinsic + '.constructorIdentity(' + (directNativeBase ? nativeBaseClass : text(ancestry.types[0].expression)) + ');\n' : '';
         const sourceBaseName = this.own.base && (directNativeBase ? nativeBaseClass : this.classes.get(this.own.base).name);
-        const constructorBody = ctor ? body(ctor, true) : '';
+        const constructorBody = ctor ? body(ctor, true) : this.own.base
+            ? intrinsic+'.expectBase(this,'+identity+','+baseName+');'+intrinsic+'.apply('+baseName+',this,[]);' : '';
         const tail = ctor && ctor.body.statements[ctor.body.statements.length - 1];
         const completion = !constructorReturns && tail && tail.kind === S.ThrowStatement ? '' : succeeded + ' = true;';
         const completedBody = constructorReturns ? constructorCompletion + ': {\n' + constructorBody + '\n}' : constructorBody;
