@@ -31,11 +31,11 @@ for(const patch of [{inheritScriptClasses:false},{inheritScriptClasses:'true'},{
  {scriptGlobalProviderModule:undefined},{scriptGlobalSources:['child.Reader']},{lexicalProviderModule:provider('AS3LexicalMembers')},
  {sources:{...sources,'child.I':{source:'package child {public interface I {}}',sourceSha256:hash('package child {public interface I {}}')}}}])guarded(patch);
 const overrideSources=Object.fromEntries(Object.entries({
- 'check.Base':'package check {public class Base {public function read():int {return 1;}}}',
- 'check.Child':'package check {public class Child extends Base {override public function read():int {return 2;}}}'
+ 'check.Base':'package check {public class Base {public function read(value:Object=null):int {return 1;}}}',
+ 'check.Child':'package check {public class Child extends Base {override public function read(value:Object=null):int {return 2;}}}'
 }).map(([name,source])=>[name,{source,sourceSha256:hash(source)}]));
 const overridePlan=api.createNativeGeneratedDeclarationPlan({...input,sources:overrideSources});
-assert.throws(()=>new (require('../../lib/emit/native-generated-traits').NativeGeneratedClassTraits)(overridePlan,input.scope,'check.Child',overrideSources['check.Child'].source),/selected parent override requires separate authority/);rejectionGuards++;
+assert.throws(()=>new (require('../../lib/emit/native-generated-traits').NativeGeneratedClassTraits)(overridePlan,input.scope,'check.Child',overrideSources['check.Child'].source),/selected parent override requires matching fixed intrinsic method signature/);rejectionGuards++;
 const emitted=[],plans={},files=[path.join(run,'cohortDomain.ts'),...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f))];
 for(const [cohort,sources] of Object.entries(cohorts)){
  const plan=api.createNativeGeneratedDeclarationPlan({...input,scope:cohort,sources});plans[cohort]=plan;
