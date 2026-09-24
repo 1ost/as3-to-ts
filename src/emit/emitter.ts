@@ -170,6 +170,8 @@ export interface EmitterOptions {
 	nativeNumericMethodParametersModule?:string;
 	/** Authenticated common AS3Type module for expression-valued `is` targets. */
 	nativeComputedTypeTestModule?:string;
+	/** Exact common Class is/as operations, independent of callable class emission. */
+	nativeClassTypeOperationsModule?:string;
 	/** Authenticated common AS3String module for direct no-argument toString calls. */
 	nativeDirectToStringModule?:string;
 	/** Authenticated common AS3String module for explicit builtin String(value). */
@@ -524,6 +526,12 @@ export default class Emitter {
 				&& this.options.importModules['flash.utils.AS3Coercion'] !== module)
 				throw new Error('AS3_NUMERIC_PARAMETERS_UNSUPPORTED: numeric coercion import binding disagrees with nativeNumericMethodParametersModule');
 		}
+        if (this.options.nativeClassTypeOperationsModule !== undefined) {
+            const module = generatedModule(this.options.nativeClassTypeOperationsModule);
+            if (this.options.useNamespaces || !this.options.importModules
+                || this.options.importModules['compiler.AS3Class'] !== module)
+                throw new Error('AS3_CLASS_TYPE_OPERATION_UNSUPPORTED: exact common Class module binding required');
+        }
 		if (this.options.nativeComputedTypeTestModule !== undefined) {
 			const module = this.options.nativeComputedTypeTestModule;
 			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
@@ -4178,6 +4186,26 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if (emitter.references && node.children.length === 3
+        && ['is','as'].indexOf(node.children[1].text) >= 0 && node.lastChild.kind === NodeKind.IDENTIFIER
+        && node.lastChild.text === 'Class' && emitter.references.resolve('Class') === 'Class'
+        && !emitter.references.sourceClass('Class') && !emitter.references.sourceInterface('Class')) {
+        const target = node.lastChild, definition = emitter.findDefInScope('Class');
+        if (definition || typeOfBinding(target,emitter.source,[]) !== 'builtin'
+            || emitter.references.options.plan.nativeBindings.some(binding => binding.qname === 'Class'))
+            throw new Error('AS3_CLASS_TYPE_OPERATION_UNSUPPORTED: shadowed Class target requires separate authority');
+        const module = emitter.options.nativeClassTypeOperationsModule;
+        if (module === undefined)
+            throw new Error('AS3_CLASS_TYPE_OPERATION_UNSUPPORTED: explicit common Class module required');
+        let helper = '__as3_class_as';
+        while (emitter.source.indexOf(helper) >= 0) helper += '_';
+        emitter.ensureImportIdentifier('as3AsClass as ' + helper,module,false);
+        emitter.nativeSourceHelpers.add(helper);
+        emitter.catchup(node.start);emitter.insert('(' + helper + '(');
+        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+        emitter.insert(node.children[1].text === 'is' ? ') !== null)' : '))');
+        emitter.skipTo(node.end);return;
+    }
     if(emitter.options.nativeByteArrayReferenceModule!==undefined&&emitter.references&&node.children.length===3
         &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
         &&emitter.references.resolve(node.lastChild.text)==='flash.utils.ByteArray') {
