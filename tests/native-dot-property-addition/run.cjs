@@ -2,19 +2,19 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),parse=require('../../lib/parse'),emit=require('../../lib/emit'),ts=require('typescript');
 const engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
-const evidence=path.join(engine,'tests/nativeFlashOracle','object-property-writes');const captured=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(engine,'tests/nativeFlashOracle','dot-property-addition');const captured=require(path.join(evidence,'verify.cjs'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const root=path.resolve('.cache/native-object-property-writes');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
+const root=path.resolve('.cache/native-dot-property-addition');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
 const modulePath=file=>{let r=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
 const provider=name=>modulePath(path.join(engine,'src/layaAir/flash/utils',name+'.ts'));
-const sources=Object.fromEntries(['Writer','Root','Slot'].map(name=>{const source=fs.readFileSync(path.join(evidence,'source/cases',name+'.as'),'utf8');return ['cases.'+name,{source,sourceSha256:hash(source)}];}));
-const source=sources['cases.Writer'].source;
+const sources=Object.fromEntries(['Adder','Root','Slot'].map(name=>{const source=fs.readFileSync(path.join(evidence,'source/cases',name+'.as'),'utf8');return ['cases.'+name,{source,sourceSha256:hash(source)}];}));
+const source=sources['cases.Adder'].source;
 const consumerOnly=process.argv.includes('--consumer');
-const consumers=new Set(consumerOnly?['cases.Writer']:[]);
+const consumers=new Set(consumerOnly?['cases.Adder']:[]);
 for(const q of consumers)sources[q].referenceOnly=true;
 const consumerOptions=opts=>{const copy={...opts};for(const key of ['nativeArrayCreationModule','nativeGeneratedDeclarations','nativeClassTraitsModule','nativeTypedLocals','nativeLexicalMembersModule','nativeGeneratedPropertyModule','nativeCallableMethodBindingModule','nativeCallableCoercionModule','nativeCallableStringModule','nativeTypedLocalReferenceModule'])delete copy[key];return copy;};
 const nativeProviders={};
-const planInput={scope:'object-property-writes',interfaceProviderModule:provider('AS3Type'),providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources};
+const planInput={scope:'dot-property-addition',interfaceProviderModule:provider('AS3Type'),providers:nativeProviders,providerModule:provider('AS3GeneratedClass'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptGlobalSources:[],sources};
 const plan=api.createNativeGeneratedDeclarationPlan(planInput);
 const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(name=>[name,modulePath(path.resolve('utils',name+'.ts'))]));
 const fileFor=q=>q.split('.').pop(),definitionsByNamespace={};
@@ -29,13 +29,13 @@ fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);
 let rejectionGuards=0;
 for(const changed of [{...options,nativeObjectPropertyModule:'./wrong'},
  {...options,importModules:{...options.importModules,'compiler.AS3Property':undefined}},{...options,useNamespaces:true}]){
- assert.throws(()=>emit(parse('Writer.as',source),source,changed),/AS3_.*UNSUPPORTED/);rejectionGuards++;
+ assert.throws(()=>emit(parse('Adder.as',source),source,changed),/AS3_.*UNSUPPORTED/);rejectionGuards++;
 }
-for(const replacement of ['return value.value++;','return value.value -= rhs();','return delete value.value;','return new value.value();']){
- const alteredSource=source.replace('return value.value = rhs();',replacement);
+for(const replacement of ['return value.amount++;','return value.amount -= rhs();','return delete value.amount;','return new value.amount();']){
+ const alteredSource=source.replace('return value.amount += rhs();',replacement);
  assert.notEqual(alteredSource,source);
- const altered=api.createNativeGeneratedDeclarationPlan({...planInput,sources:{...sources,'cases.Writer':{source:alteredSource,sourceSha256:hash(alteredSource)}}});
- assert.throws(()=>emit(parse('Writer.as',alteredSource),alteredSource,{...options,
+ const altered=api.createNativeGeneratedDeclarationPlan({...planInput,sources:{...sources,'cases.Adder':{source:alteredSource,sourceSha256:hash(alteredSource)}}});
+ assert.throws(()=>emit(parse('Adder.as',alteredSource),alteredSource,{...options,
   nativeGeneratedDeclarations:{plan:altered,module:'./guard'},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:altered,module:'./guard'}}),/AS3_OBJECT_PROPERTY_UNSUPPORTED/);
  rejectionGuards++;
 }
@@ -53,8 +53,8 @@ const names=['AS3MethodBinding','AS3Coercion','AS3String','AS3Type','AS3Property
 const moduleFor=n=>'src/layaAir/flash/'+(['AS3SourceError','IllegalOperationError'].includes(n)?'errors':'utils')+'/'+n;
 const built=esbuild.buildSync({absWorkingDir:engine,stdin:{contents:names.map(n=>'export * from "./'+moduleFor(n)+'";').join('\n'),resolveDir:engine,loader:'ts'},bundle:true,write:false,format:'cjs',platform:'browser',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},metafile:true});
 const providerGraph=Object.keys(built.metafile.inputs).filter(f=>f!=='<stdin>').map(f=>({file:f,sha256:hash(fs.readFileSync(path.resolve(engine,f)))}));
-const driverFile=path.resolve('tests/native-object-property-writes','runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
-const wanted=captured;assert.equal(wanted.length,57);
+const driverFile=path.resolve('tests/native-dot-property-addition','runtime-driver.js'),observer=fs.readFileSync(driverFile,'utf8');
+const wanted=captured;assert.equal(wanted.length,40);
 for(const mutate of [v=>v.pop(),v=>v.reverse(),v=>v[0].id="wrong"]){const bad=structuredClone(wanted);mutate(bad);assert.throws(()=>assert.deepEqual(bad,wanted));}
 (async()=>{const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));const browser=await chromium.launch({headless:true});const results=[];
 try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){

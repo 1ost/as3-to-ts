@@ -16,7 +16,8 @@ precedence. Receiver and key are evaluated once before the RHS; the provider
 validates and stores after evaluation, returning the original RHS.
 
 Seven rejection guards cover provider mismatch, missing provider import,
-namespace emission, update, compound addition, delete and property construction.
+namespace emission, update, compound subtraction, delete and property construction.
+Dot compound addition is separately qualified by native-dot-property-addition.
 Three corrupted comparison inputs must fail. Other mutation forms, bound-field
 roots and computed function-return roots still require separate source proof.
 This focused fixture does not qualify the full application.

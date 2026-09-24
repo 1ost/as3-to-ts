@@ -3889,6 +3889,20 @@ function emitObjectPropertyAssignment(emitter:Emitter,node:Node):boolean {
     emitter.catchup(getEffectiveNodeEnd(value));emitter.insert(')))');
     emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
+function emitObjectPropertyAddition(emitter:Emitter,node:Node):boolean {
+    const access=objectPropertyAccess(emitter,unwrapEncapsulatedExpression(node.children[0]));
+    if(!access||access.literalKey===undefined)return false;
+    const value=node.children[2],helper=propertyHelper(emitter,'as3AddAssignProperty',emitter.options.nativeObjectPropertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+    const start=emitter.output.length;
+    visitNode(emitter,access.receiver);emitter.catchup(getEffectiveNodeEnd(access.receiver));
+    const receiver=emitter.output.slice(start);
+    emitter.insert(', '+JSON.stringify(access.literalKey)+',()=>(');
+    emitter.skipTo(getExpressionStart(value));visitNode(emitter,value);emitter.catchup(getEffectiveNodeEnd(value));
+    // Flash repeats the receiver path for storage, after RHS addition/coercion.
+    // Capturing just the first receiver would lose reassignment/getter effects.
+    emitter.insert('),()=>('+receiver+')))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
 function emitObjectPropertyRead(emitter:Emitter,node:Node):boolean {
     const access=objectPropertyAccess(emitter,node);if(!access)return false;
     const outer=outerEncapsulatedExpression(node),parent=outer&&outer.parent;
@@ -5037,6 +5051,7 @@ function emitAssign(emitter: Emitter, node: Node): void {
     if (operator.text === '=' && emitDynamicPropertyAssignment(emitter, left, right)) return;
     if (operator.text === '=' && emitObjectPropertyAssignment(emitter, node)) return;
     if (operator.text === '+=' && emitDynamicPropertyAddition(emitter, left, right)) return;
+    if (operator.text === '+=' && emitObjectPropertyAddition(emitter, node)) return;
     if ((operator.text === '+=' || operator.text === '=') && emitter.typedLocalPlan) {
         const target = emitter.typedLocalPlan.wildcardReference(left, emitter);
         if (target && (operator.text === '+=' || target.write)) {

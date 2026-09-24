@@ -23,6 +23,7 @@ parameter, preserving shadowed source Object types and bound fields. Dot calls
 use as3CallNamedProperty; bracket calls retain as3CallProperty. Nested receiver
 reads use as3GetProperty. Existing specialized and lexical dispatch retains its
 own authority. Simple path assignments use as3SetProperty and are independently
-qualified by native-object-property-writes. Updates, compound assignments,
+qualified by native-object-property-writes. Dot compound addition is independently
+qualified by native-dot-property-addition. Updates, other compound assignments,
 deletion and property constructors remain held. Computed function-return roots, native
 ApplicationDomain publication and full UIComponent remain separate work.

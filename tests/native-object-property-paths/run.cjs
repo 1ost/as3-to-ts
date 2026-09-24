@@ -40,7 +40,7 @@ if(order){
   nativeGeneratedDeclarations:{plan:held,module:'./held'},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:held,module:'./held'}}),/AS3_GENERATED_LEXICAL_UNSUPPORTED/);
  rejectionGuards++;
 }
-if(!order)for(const replacement of ['return value.applicationDomain += 1;','return value.applicationDomain++;','return new value.applicationDomain();']){
+if(!order)for(const replacement of ['return value.applicationDomain -= 1;','return value.applicationDomain++;','return new value.applicationDomain();']){
  const alteredSource=source.replace('return value.applicationDomain;',replacement);
  assert.notEqual(alteredSource,source);
  const altered=api.createNativeGeneratedDeclarationPlan({...planInput,sources:{...sources,'cases.Reader':{source:alteredSource,sourceSha256:hash(alteredSource)}}});
