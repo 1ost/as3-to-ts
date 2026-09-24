@@ -2960,9 +2960,23 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node):boolean {
  emitter.ensureImportIdentifier('as3VectorCreate as '+helper,vectorProviderModule(input.vectorProviderModule,options.module),false);
  emitter.ensureImportIdentifier(spec.specExport+' as '+specialization,generatedModule(options.module),false);
  emitter.nativeSourceHelpers.add(helper);
- emitter.catchup(node.start);emitter.insert(helper+'('+specialization);
+ emitter.catchup(node.start);
+ if(spec.elementClass){
+  const element=vector.findChild(NodeKind.TYPE),name=element.text,shadow=emitter.findDefInScope(name);
+  if(shadow&&(shadow.bound||Object.prototype.hasOwnProperty.call(shadow,'as3Type')))fail('shadowed class element construction');
+  if(!/^[A-Za-z_$][\w$]*$/.test(name)||emitter.references.resolve(name)!==spec.elementClass)
+   fail('class element construction requires an exact imported identifier');
+  const own=emitter.classFactory&&emitter.currentClassName===name;
+  if(own)emitter.insert('('+emitter.classFactory.value+',');
+  else {
+   emitter.ensureImportIdentifier(name);
+   const read=propertyHelper(emitter,'readNativeClass',generatedModule(emitter.options.nativeClassHelperModules&&emitter.options.nativeClassHelperModules.nativeClass));
+   emitter.insert('('+read+'('+name+'),');
+  }
+ }
+ emitter.insert(helper+'('+specialization);
  args.children.forEach(arg=>{emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
- emitter.insert(')');emitter.skipTo(node.end);return true;
+ emitter.insert(spec.elementClass?'))':')');emitter.skipTo(node.end);return true;
 }
 
 function emitBuiltinEmptyStringConstruction(emitter:Emitter, node:Node):boolean {

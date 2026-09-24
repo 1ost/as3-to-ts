@@ -52,7 +52,7 @@ export interface NativeGeneratedDeclarationPlan {
     readonly interfaceContracts: NativeGeneratedInterfaceContracts;
     readonly references: ReadonlyArray<NativeGeneratedReference>;
     readonly patternLocals: ReadonlyArray<NativePatternLocal>;
-    readonly vectors: ReadonlyArray<{readonly owner:string;readonly start:number;readonly end:number;readonly identity:string;readonly name:string;readonly specExport:string}>;
+    readonly vectors: ReadonlyArray<{readonly owner:string;readonly start:number;readonly end:number;readonly identity:string;readonly name:string;readonly specExport:string;readonly elementClass?:string}>;
     readonly sourceHashes: {[qname: string]: string};
     readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly nativeInterface?: true; readonly eventBaseExport?: string; readonly nativeBaseExport?: string; readonly declarationExport?: string}>;
 }
@@ -227,8 +227,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     };
     interfaces.forEach(addInterface);
     const vectors:Array<NativeGeneratedDeclarationPlan['vectors'][number]>=[];
+    const vectorLines:string[]=[];
     if(data.vectorProviderModule){
-        lines.push('import {as3VectorInterfaceSpec,as3VectorPrimitiveSpec} from '+JSON.stringify(data.vectorProviderModule)+';');
+        lines.push('import {as3VectorInterfaceSpec,as3VectorPrimitiveSpec,as3VectorDeclarationSpec} from '+JSON.stringify(data.vectorProviderModule)+';');
         const exports=new Map<string,string>();
         names.forEach(owner=>{
             const walk=(node:Node):void=>{
@@ -241,15 +242,16 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                     if(!element||node.children.length!==1)fail('nested Vector specialization publication requires qualification');
                     const identity=resolve(owner,element.qualifiedName||element.text);
                     const contract=interfaces.find(i=>i.qname===identity);
-                    if(!contract&&['*','int','uint','Number','Boolean','String','Object','Function','Class'].indexOf(identity)<0)
-                        fail('Vector element publication requires interface or qualified primitive: '+identity);
+                    const elementClass=bindings.find(b=>b.qname===identity);
+                    if(!contract&&!elementClass&&['*','int','uint','Number','Boolean','String','Object','Function','Class'].indexOf(identity)<0)
+                        fail('Vector element publication requires interface, planned source class or qualified primitive: '+identity);
                     let specExport=exports.get(identity);
                     if(!specExport){
                         specExport='vector'+exports.size;exports.set(identity,specExport);
-                        lines.push('export const '+specExport+'='+(contract?'as3VectorInterfaceSpec('+contract.tokenExport+')':'as3VectorPrimitiveSpec('+JSON.stringify(identity)+')')+';');
+                        vectorLines.push('export const '+specExport+'='+(contract?'as3VectorInterfaceSpec('+contract.tokenExport+')':elementClass?'as3VectorDeclarationSpec('+elementClass.tokenExport+')':'as3VectorPrimitiveSpec('+JSON.stringify(identity)+')')+';');
                     }
                     vectors.push(Object.freeze({owner,start:node.start,end:node.end,identity:'Vector.<'+identity+'>',
-                        name:'__AS3__.vec::Vector.<'+identity.replace(/\.([^.]*)$/,'::$1')+'>',specExport}));
+                        name:'__AS3__.vec::Vector.<'+identity.replace(/\.([^.]*)$/,'::$1')+'>',specExport,...(elementClass?{elementClass:identity}:{})}));
                 }
                 node.children.forEach(walk);
             };walk(roots.get(owner));
@@ -305,6 +307,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         active.delete(binding.qname); emitted.add(binding.qname);
     };
     bindings.forEach(add);
+    lines.push(...vectorLines);
     if(data.lexicalProviderModule){
         lines.push('import {declareAS3InternalPackage} from '+JSON.stringify(data.lexicalProviderModule)+';');
         const packages=new Map<string,string[]>();

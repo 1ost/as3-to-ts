@@ -16,7 +16,7 @@ Interface signature annotations use nativeVectorTypes with the same exact plan.
 No Vector Array substitution or authored body rewriting is used.
 
 Twelve rejection guards retain Vector conversion calls, static/constant/accessor or
-internal storage, optional/constructor parameters, source class element publication and nested
+internal storage, optional/constructor parameters, unplanned source class element publication and nested
 specialization publication, extra construction arguments, unqualified constructor
 argument coercion and missing Vector providers as separate prerequisites. Three comparison controls
 detect row omission, ordering and loss of raw undefined assignment results.
@@ -64,3 +64,6 @@ with zero type diagnostics. The default flat layout remains covered separately.
 
 Protected inherited storage is qualified separately by
 `native-protected-vector-storage` and its nineteen captured AIR observations.
+
+Planned concrete source-class elements and initialization timing are qualified by
+`native-source-class-vectors`; native class elements remain held.

@@ -47,7 +47,7 @@ for(const body of [
  'public function call():Vector.<IOrder>{return Vector.<IOrder>(null);}',
  'public function call():Vector.<IOrder>{return new Vector.<IOrder>(0,false,true);}',
  'public function call(v:*):Vector.<IOrder>{return new Vector.<IOrder>(v);}',
- 'public var queue:Vector.<ProbeOrder>;',
+ 'public var queue:Vector.<Absent>;',
  'public var queue:Vector.<Vector.<IOrder>>;'
 ]){
  const source='package vectorcases {import org.emvc.interfaces.IOrder;public class Guard {'+body+'}}';

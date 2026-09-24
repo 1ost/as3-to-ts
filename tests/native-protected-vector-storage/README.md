@@ -11,7 +11,10 @@ fresh field initializers, base/child reads and writes, assignment-expression RHS
 identity, rejected writes preserving storage, and per-instance mutation/reset.
 No class bodies or storage implementation are replaced by the observer.
 
-Five rejection guards retain static/constant/internal storage, source-class
+Five rejection guards retain static/constant/internal storage, unplanned source-class
 specialization publication and arbitrary constructor coercion boundaries. Three
 comparison controls reject omitted, reordered or changed rows. GameLayer's
 Sprite ancestry and full application admission remain separate prerequisites.
+
+Planned concrete source-class elements and initialization timing are qualified by
+`native-source-class-vectors`; native class elements remain held.
