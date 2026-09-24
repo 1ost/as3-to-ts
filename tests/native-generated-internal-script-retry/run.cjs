@@ -2,14 +2,13 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const evidence=path.join(engine,'tests/nativeFlashOracle/internal-package-domains'),air=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(engine,'tests/nativeFlashOracle/internal-script-retry'),air=require(path.join(evidence,'verify.cjs'));
 const expected=air;
-const construction=require(path.join(engine,'tests/nativeFlashOracle/internal-package-construction/verify.cjs'));
 const compilerInputs=fs.readdirSync(path.resolve('src'),{recursive:true}).filter(f=>f.endsWith('.ts')).map(f=>{const file=path.resolve('src',f);return {file,sha256:hash(fs.readFileSync(file))};});
-const cache=path.resolve('.cache/native-generated-internal-package-domains');fs.mkdirSync(cache,{recursive:true});
+const cache=path.resolve('.cache/native-generated-internal-script-retry');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
-const cohorts={parent:read('source',['packagecases.Shared','packagecases.ParentAccess']),child:read('child-source',['packagecases.Shared','packagecases.ChildAccess','packagecases.Derived','othercases.Alien'])};
+const cohorts={parent:read('source',['retrycases.Trace','retrycases.Retry','retrycases.Peer'])};
 async function main(){
  const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
  const browser=await chromium.launch({headless:true}),results=[];
@@ -27,7 +26,7 @@ async function main(){
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
    const nativeProviders={};
    const trace=modulePath(path.join(engine,'src/layaAir/flash/debug/trace.ts'));externalModules.push(trace,...Object.values(nativeProviders).map(p=>p.module));
-   const input={scope:'internal-package-domains-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,lexicalProviderModule:provider('AS3LexicalMembers')};
+   const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,lexicalProviderModule:provider('AS3LexicalMembers'),classScriptSources:Object.keys(sources)};
 
    const plan=api.createNativeGeneratedDeclarationPlan(input);
    const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
@@ -41,15 +40,21 @@ async function main(){
     nativeReferenceCoercion:{plan,module:'./unused',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')};
    const config={plan,target,emitterOptions:options,externalModules:[...new Set(externalModules)],loadingSessionModule:provider('NativeSourceClassLoadingSession')};
    const emitPlan=p=>api.emitNativeSourceClassModule({...config,plan:p,emitterOptions:{...options,nativeVectorTypes:{...options.nativeVectorTypes,plan:p},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:p}}});
-   for(const change of [{scriptDomainProvider:undefined},{classScriptSources:['packagecases.Missing']}]){
-    assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,...change}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;
-   }
-   const guards=[['packagecases.Shared','LIMIT:uint=19','LIMIT:uint=1+18'],['packagecases.Shared','bump():void','bump(value:uint):void'],['packagecases.Shared','bump():void','bump():Boolean'],['packagecases.Shared','count:uint','count:Number']];
-   if(cohort==='child')guards.push(['packagecases.Shared','public class Shared {','public class Shared { public function Shared(){}']);
-   for(const [q,before,after]of guards){const source=sources[q].source.replace(before,after);assert.notEqual(source,sources[q].source);
-    assert.throws(()=>emitPlan(api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,[q]:{source,sourceSha256:hash(source)}}})),/AS3_[A-Z_]+UNSUPPORTED/);rejectionGuards++;
-   }
-   const unnamed='package {public class Unnamed {}}';assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,Unnamed:{source:unnamed,sourceSha256:hash(unnamed)}}}),/inherited internal membership requires named source packages/);rejectionGuards++;
+   for(const change of [
+    {classScriptSources:[]},{classScriptSources:['retrycases.Retry','retrycases.Retry']},
+    {classScriptSources:['retrycases.Missing']},{scriptDomainProvider:undefined,inheritScriptClasses:undefined},
+    {scriptGlobalProviderModule:undefined},{scriptGlobalSources:['retrycases.Trace'],inheritScriptClasses:undefined},
+    {lexicalProviderModule:provider('AS3LexicalMembers'),inheritScriptClasses:undefined}
+   ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,...change}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;}
+   const oldPlan=api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:undefined});
+   assert.throws(()=>emitPlan(oldPlan),/script global with static initializer requires retry identity authority/);rejectionGuards++;
+   const parentSource='package retrycases {public class Parent extends Trace {}}',childSource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry extends Parent {');
+   assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Parent':{source:parentSource,sourceSha256:hash(parentSource)},'retrycases.Retry':{source:childSource,sourceSha256:hash(childSource)}}}),/internal declarations|non-retrying source root parent/);rejectionGuards++;
+   const stableParent='package retrycases {public class Parent {}}';
+   assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Parent':{source:stableParent,sourceSha256:hash(stableParent)},'retrycases.Retry':{source:childSource,sourceSha256:hash(childSource)}}}),/internal declarations/);rejectionGuards++;
+   const bodySource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry { initial=[];');
+   const bodyPlan=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Retry':{source:bodySource,sourceSha256:hash(bodySource)}}});
+   assert.throws(()=>emitPlan(bodyPlan),/script global with class-body initializer requires retry identity authority/);rejectionGuards++;
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);
    const files=[];
@@ -65,19 +70,19 @@ async function main(){
   }
   const observer=fs.readFileSync(path.join(__dirname,'observer.ts'),'utf8').replaceAll('@FLASH@',modulePath(path.join(engine,'src/layaAir/flash')));
   fs.writeFileSync(path.join(dir,'observer.ts'),observer);
-  const entry=path.join(dir,'entry.ts');fs.writeFileSync(entry,"import {run} from './observer';import {nativeSourceClassModule as parent} from './parent/parent-factory.js';import {nativeSourceClassModule as child} from './child/child-factory.js';globalThis.completion=run(parent,child).then(value=>{globalThis.result=value;});");
+  const entry=path.join(dir,'entry.ts');fs.writeFileSync(entry,"import {run} from './observer';import {nativeSourceClassModule as parent} from './parent/parent-factory.js';globalThis.completion=run(parent).then(value=>{globalThis.result=value;});");
   const build=()=>esbuild.build({entryPoints:[entry],bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',metafile:true,loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'}});
   const built=await build();
   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(dir,'bundle.js'),code);
   const vm=require('node:vm');const execute=async code=>{const context=vm.createContext({console,setTimeout,clearTimeout,AbortController,AbortSignal,DOMException,performance});context.window=context;context.document={};new vm.Script(code).runInContext(context);await context.completion;return JSON.parse(JSON.stringify(context.result));};
-  const node=await execute(code);assert.deepEqual(node.rows,expected);assert.deepEqual(node.constructionRows,construction);
+  const node=await execute(code);assert.deepEqual(node.rows,expected);
   const page=await browser.newPage();await page.route('http://loaded-generated.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script></body>'}));
   await page.goto('http://loaded-generated.test/');await page.evaluate(()=>globalThis.completion);const web=await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.result)));await page.close();assert.deepEqual(web,node);
-  const factoryFile=path.join(dir,'child/child-factory.js'),originalFactory=fs.readFileSync(factoryFile,'utf8');
-  const mutation=originalFactory.replaceAll('.bindAS3InternalPackage(','.declareAS3InternalPackage(');assert.notEqual(mutation,originalFactory);
-  try{fs.writeFileSync(factoryFile,mutation);const changed=await build();await assert.rejects(()=>execute(changed.outputFiles[0].text),/fresh exact package declaration required/);}finally{fs.writeFileSync(factoryFile,originalFactory);}
+  const factoryFile=path.join(dir,'parent/parent-factory.js'),originalFactory=fs.readFileSync(factoryFile,'utf8');
+  const mutation=originalFactory.replaceAll('.instantiateAS3ClassScriptUnit(','.instantiateAS3ScriptUnit(');assert.notEqual(mutation,originalFactory);
+  try{fs.writeFileSync(factoryFile,mutation);const changed=await build();await assert.rejects(()=>execute(changed.outputFiles[0].text),/failed source function creation context/);}finally{fs.writeFileSync(factoryFile,originalFactory);}
   results.push({target,node,web,typechecks,artifacts,rejectionGuards,mutations:1,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
-  console.log(JSON.stringify({target,observations:node.rows.length,constructionRows:construction.length,typeErrors:0,rejectionGuards,domainChecks:node.domainChecks.length,mutations:1}));
+  console.log(JSON.stringify({target,observations:node.rows.length,typeErrors:0,rejectionGuards,domainChecks:node.domainChecks.length,mutations:1}));
  }}finally{await browser.close();}
  for(const item of compilerInputs)assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  for(const result of results)for(const item of [...result.inputs,...result.typechecks.flatMap(check=>check.inputs)])assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
