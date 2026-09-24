@@ -9,7 +9,7 @@ four complete unchanged subjects: the separately compiled parent and child
 shared.Shared, child.Reader and child.Derived. All 47 AIR observations match on
 ES5/ES2015 in Node and Chromium, including a child domain, same-domain load and
 later child inheriting all published subjects. Strict generated and provider
-type checking reports zero diagnostics. Eight compiler rejection guards, fifteen
+type checking reports zero diagnostics. Nine compiler rejection guards, fifteen
 runtime checks per target/runtime, three altered row comparisons and two runtime
 mutations (missing inherited selection and missing Class-return coercion) protect
 the comparison.
@@ -44,3 +44,17 @@ These explicit host operations do not qualify source Loader/Sprite behavior or
 automatic module discovery/activation. Source static initializers, interface and
 package-internal collision selection, full ApplicationDomain semantics, native
 asset loading and authenticated game flows remain separate requirements.
+
+Use `--layout` (also with `--combined`) for the separately authenticated
+generated-inherited-layout packet. The parent Shared declares `tag:int=123` while
+the discarded child duplicate declares String. All 47 AIR rows match, including
+numeric derived storage. A third implementation mutation restores the discarded
+String projection and must fail that comparison.
+
+In inherited cohorts, generated source subclasses submit only their own public
+traits/constants/metadata plus the selected actual base Class to the common
+registrar. The compiler retains its complete source projection for source analysis;
+runtime inherited storage and metadata come from the parent's registered snapshot.
+Public overrides in this mode remain compile-time holds pending actual selected
+parent signature validation. Runtime collisions also reject rather than silently
+replacing inherited traits. Default non-inherited plans keep complete-list emission.

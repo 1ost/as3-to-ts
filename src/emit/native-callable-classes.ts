@@ -708,7 +708,7 @@ export class NativeCallableClasses {
                     + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '')
             + (this.generated ? '\n' + intrinsic + '.defineProperty(' + name + ', "prototype", {writable:false});\n'
                 + 'const ' + generation + ' = ' + provider + '.registerAS3GeneratedClass(' + identity + ','
-                + this.generated.projection.emitDefinition(domainImport,intrinsic + '.array') + ');\n'
+                + this.generated.projection.emitDefinition(domainImport,intrinsic + '.array',baseName) + ');\n'
                 + this.generated.lexical.publication(identity,baseName,domainImport,intrinsic) + '\n'
                 + Object.keys(this.generated.uintOrInitializers.variables).map(key=>generatedProperty+'.as3SetProperty('+name+','+JSON.stringify(key)+','+this.generated.uintOrInitializers.variables[key]+');\n').join('')
                 + (this.classValueModule ? classValue+'.registerAS3Constructor('+identity+', {minimum:'+required+',maximum:'+(this.own.usesArguments||this.own.rest?'Infinity':this.own.parameters.length)+',coerceArguments:(values:any)=>values});\n' : '')

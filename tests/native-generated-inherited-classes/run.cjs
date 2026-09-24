@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),parse=require('../../lib/parse'),emit=require('../../lib/emit'),ts=require('typescript');
 const engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
-const evidence=path.join(engine,'tests/nativeFlashOracle','generated-inherited-classes');const captured=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(engine,'tests/nativeFlashOracle',process.argv.includes('--layout')?'generated-inherited-layout':'generated-inherited-classes');const captured=require(path.join(evidence,'verify.cjs'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const root=path.resolve('.cache/native-generated-inherited-classes');fs.mkdirSync(root,{recursive:true});const run=fs.mkdtempSync(path.join(root,'run-'));
 const modulePath=file=>{let r=path.relative(run,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
@@ -30,6 +30,12 @@ const guarded=patch=>{assert.throws(()=>api.createNativeGeneratedDeclarationPlan
 for(const patch of [{inheritScriptClasses:false},{inheritScriptClasses:'true'},{scriptDomainProvider:undefined},
  {scriptGlobalProviderModule:undefined},{scriptGlobalSources:['child.Reader']},{lexicalProviderModule:provider('AS3LexicalMembers')},
  {sources:{...sources,'child.I':{source:'package child {public interface I {}}',sourceSha256:hash('package child {public interface I {}}')}}}])guarded(patch);
+const overrideSources=Object.fromEntries(Object.entries({
+ 'check.Base':'package check {public class Base {public function read():int {return 1;}}}',
+ 'check.Child':'package check {public class Child extends Base {override public function read():int {return 2;}}}'
+}).map(([name,source])=>[name,{source,sourceSha256:hash(source)}]));
+const overridePlan=api.createNativeGeneratedDeclarationPlan({...input,sources:overrideSources});
+assert.throws(()=>new (require('../../lib/emit/native-generated-traits').NativeGeneratedClassTraits)(overridePlan,input.scope,'check.Child',overrideSources['check.Child'].source),/selected parent override requires separate authority/);rejectionGuards++;
 const emitted=[],plans={},files=[path.join(run,'cohortDomain.ts'),...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f))];
 for(const [cohort,sources] of Object.entries(cohorts)){
  const plan=api.createNativeGeneratedDeclarationPlan({...input,scope:cohort,sources});plans[cohort]=plan;
@@ -73,7 +79,15 @@ try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  assert.throws(()=>new Function(script.replace(marker,marker+'selectAS3ScriptDomainClass:()=>undefined,')+';return globalThis.result;')(),/Child allocated an inherited type token/);
  const uncoerced=JSON.parse(JSON.stringify(new Function(script.replace(marker,marker+'as3CoerceClass:value=>value,')+';return globalThis.result.rows;')()));
  assert.equal(uncoerced.find(row=>row.id==='mode-0-class-wrong').value,'returned');assert.throws(()=>assert.deepEqual(uncoerced,wanted));
- results.push({target,node,web,runtimeGuards,implementationNegatives:['missing-inheritance','uncoerced-Class-return']});
+ const negatives=['missing-inheritance','uncoerced-Class-return'];
+ if(process.argv.includes('--layout')) {
+  // Recreate the old discarded-child String projection without touching subject bodies.
+  const mutation='registerAS3GeneratedClass:(ctor,definition)=>{if(definition.instanceBase){definition={...definition,metadata:{...definition.metadata,instance:{...definition.metadata.instance,variables:[{name:"tag",type:"String",declaredBy:"shared::Shared"},...definition.metadata.instance.variables]}},instanceTraits:[{name:"tag",kind:"variable",type:"String"},...definition.instanceTraits]};delete definition.instanceBase;}return api.registerAS3GeneratedClass(ctor,definition);},';
+  const wrong=JSON.parse(JSON.stringify(new Function(script.replace(marker,marker+mutation)+';return globalThis.result.rows;')()));
+  assert.equal(wrong.find(row=>row.id==='mode-0-derived').value[0],'123');assert.throws(()=>assert.deepEqual(wrong,wanted));
+  negatives.push('discarded-child-field-layout');
+ }
+ results.push({target,node,web,runtimeGuards,implementationNegatives:negatives});
 }}finally{await browser.close();}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({combined,emitted,results,providerGraph,observer:{file:driverFile,sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Source static initializers; Loader/Sprite host port; interfaces and package-internal aliases; automatic cohort header publication; whole-client flows']},null,2));console.log(JSON.stringify({run,sourceClasses:4,airRows:wanted.length,rejectionGuards,runtimeGuards:results.map(r=>r.runtimeGuards),implementationNegatives:2,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({layout:process.argv.includes('--layout'),combined,emitted,results,providerGraph,observer:{file:driverFile,sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Source static initializers; Loader/Sprite host port; interfaces and package-internal aliases; automatic cohort header publication; whole-client flows']},null,2));console.log(JSON.stringify({run,sourceClasses:4,airRows:wanted.length,rejectionGuards,runtimeGuards:results.map(r=>r.runtimeGuards),implementationNegatives:process.argv.includes('--layout')?3:2,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

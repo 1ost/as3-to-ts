@@ -51,6 +51,7 @@ export class NativeGeneratedClassTraits {
     public readonly staticTraits: ReadonlyArray<Trait>;
     public readonly instanceConstants: ReadonlyArray<{name: string; literal: string}>;
     public readonly lexicalMembers: ReadonlyArray<LexicalMember>;
+    public readonly inheritInstanceLayout: boolean;
 
     constructor(plan: NativeGeneratedDeclarationPlan, scope: string, owner: string, source: string) {
         nativeGeneratedDeclarationSource(plan, scope, owner, source);
@@ -202,6 +203,10 @@ export class NativeGeneratedClassTraits {
         };
         build(this.binding);
         const surface = surfaces.get(owner);
+        this.inheritInstanceLayout = !!input.inheritScriptClasses && !!this.binding.base
+            && plan.bindings.some(binding=>binding.qname===this.binding.base);
+        if(this.inheritInstanceLayout && surface.instance.some(item=>item.declaredBy===reflected(owner) && item.override))
+            fail('selected parent override requires separate authority');
         const members = (items: Member[]): any => {
             const result: any = {variables:[],constants:[],methods:[],accessors:[]};
             items.forEach(item => {
@@ -224,8 +229,9 @@ export class NativeGeneratedClassTraits {
     }
 
     /** Domain is a compiler-created import alias; Array is a captured intrinsic. */
-    public emitDefinition(domain: string, array: string): string {
+    public emitDefinition(domain: string, array: string, base?: string): string {
         if (![domain,array].every(value => /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value))) fail('compiler reference expression');
+        if (this.inheritInstanceLayout && (!base || !/^[A-Za-z_$][\w$]*$/.test(base))) fail('compiler base expression');
         const emit = (traits: ReadonlyArray<Trait>): string => '[' + traits.map(trait => {
             const fields = 'name:' + JSON.stringify(trait.name) + ',kind:' + JSON.stringify(trait.kind);
             if (trait.type === undefined) return '{' + fields + '}';
@@ -233,8 +239,12 @@ export class NativeGeneratedClassTraits {
                 : '{name:' + JSON.stringify(trait.type.name) + (trait.type.vectorExport?',vector:':',reference:') + domain + '.' + (trait.type.vectorExport||trait.type.referenceExport) + '}';
             return '{' + fields + ',type:' + type + '}';
         }).join(',') + ']';
-        return '{metadata:' + JSON.stringify(this.metadata) + ',instanceTraits:' + emit(this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
-            + ',instanceConstants:[' + this.instanceConstants.map(item=>'{name:'+JSON.stringify(item.name)+',value:'+item.literal+'}').join(',') + ']'
+        const metadata = this.inheritInstanceLayout ? Object.assign({},this.metadata,{instance:Object.keys(this.metadata.instance).reduce((members:any,kind)=>{
+            members[kind]=this.metadata.instance[kind].filter((member:any)=>member.declaredBy===this.metadata.name);return members;
+        },{})}) : this.metadata;
+        const ownNames = this.inheritInstanceLayout ? new Set<string>([].concat(...Object.keys(metadata.instance).map(kind=>metadata.instance[kind])).map((member:any)=>member.name)) : null;
+        return '{' + (this.inheritInstanceLayout ? 'instanceBase:' + base + ',' : '') + 'metadata:' + JSON.stringify(metadata) + ',instanceTraits:' + emit(ownNames ? this.instanceTraits.filter(trait=>ownNames.has(trait.name)) : this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
+            + ',instanceConstants:[' + this.instanceConstants.filter(item=>!ownNames || ownNames.has(item.name)).map(item=>'{name:'+JSON.stringify(item.name)+',value:'+item.literal+'}').join(',') + ']'
             + ',declaration:{type:' + domain + '.' + this.binding.tokenExport + ',publishGeneration:' + domain + '.' + this.binding.publishExport + '}}';
     }
 }
