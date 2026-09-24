@@ -169,6 +169,11 @@ export class NativeReferenceCoercion {
             const sourceAs = generated && node.kind===K.RELATION && node.children.length===3
                 && node.children[1].kind===K.AS && node.lastChild.kind===K.IDENTIFIER
                 && (this.sourceClass(node.lastChild.text) || !!this.sourceInterface(node.lastChild.text));
+            // Interface membership uses the authenticated declaration token;
+            // it does not require admitting the consumer as a source Class.
+            const interfaceTest = node.kind===K.RELATION && node.children.length===3
+                && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
+                && !!this.sourceInterface(node.lastChild.text);
             const sourceIs = generated && node.kind===K.RELATION && node.children.length===3
                 && node.children[1].text==='is' && node.lastChild.kind===K.IDENTIFIER
                 && (!!this.sourceClass(node.lastChild.text) || !!this.nativeInterface(node.lastChild.text));
@@ -179,7 +184,7 @@ export class NativeReferenceCoercion {
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && this.resolve(node.lastChild.text)==='flash.utils.ByteArray';
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
-                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !nativeXMLTest && !sourceAs && !sourceIs && !displayTest && !byteArrayTest)
+                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !nativeXMLTest && !sourceAs && !sourceIs && !interfaceTest && !displayTest && !byteArrayTest)
                 fail('reference type operation requires class-evaluation authority');
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text

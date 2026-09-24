@@ -3257,16 +3257,21 @@ function emitReflectionXML(emitter:Emitter, node:Node):boolean {
 	return false;
 }
 
+function isInterfaceCast(emitter:Emitter,receiver:Node):boolean {
+    const value=unwrapEncapsulatedExpression(receiver);
+    return !!emitter.references&&!!value&&value.kind===NodeKind.RELATION&&value.children.length===3
+        &&value.children[1].kind===NodeKind.AS&&value.lastChild.kind===NodeKind.IDENTIFIER
+        &&!!emitter.references.sourceInterface(value.lastChild.text);
+}
+
 function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
-    if(!emitter.generated||!emitter.references)return false;
+    if(!emitter.references)return false;
     const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
     if(!callee||callee.kind!==NodeKind.DOT||callee.children.length!==2||!args)return false;
     const receiver=callee.children[0],value=unwrapEncapsulatedExpression(receiver),member=callee.children[1];
     if(!value||member.kind!==NodeKind.LITERAL)return false;
-    const cast=value.kind===NodeKind.RELATION&&value.children.length===3
-        &&value.children[1].kind===NodeKind.AS&&value.lastChild.kind===NodeKind.IDENTIFIER
-        &&!!emitter.references.sourceInterface(value.lastChild.text);
-    const field=value.kind===NodeKind.DOT&&value.children[0].kind===NodeKind.IDENTIFIER
+    const cast=isInterfaceCast(emitter,receiver);
+    const field=emitter.generated&&value.kind===NodeKind.DOT&&value.children[0].kind===NodeKind.IDENTIFIER
         &&value.children[0].text==='this'&&value.children[1].kind===NodeKind.LITERAL
         &&emitter.generated.lexical.own.find(t=>t.name===value.children[1].text
             &&!t.static&&t.kind==='variable'&&t.visibility==='private'&&!!t.type);
@@ -3725,6 +3730,11 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!node||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.kind)<0||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(!receiver||!key)return null;
+    if(isInterfaceCast(emitter,receiver)){
+        if(node.kind!==NodeKind.DOT||key.kind!==NodeKind.LITERAL)
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: computed interface-cast properties require separate authority');
+        return {receiver,key,literalKey:key.text};
+    }
     const internal=emitter.generated&&nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope).lexicalProviderModule;
     if(internal&&node.kind===NodeKind.ARRAY_ACCESSOR&&receiver.kind===NodeKind.CALL
         &&receiver.children[0].kind===NodeKind.IDENTIFIER&&receiver.children[0].text==='Object'
@@ -3772,6 +3782,7 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
 function dynamicWriteAccess(emitter:Emitter,node:Node):DictionaryAccess {
     const access=dynamicAccess(emitter,node);
     if(access&&emitter.options.nativeDynamicPropertyWritesModule===undefined){
+        if(isInterfaceCast(emitter,access.receiver))generatedModule(emitter.options.nativeDynamicPropertyWritesModule);
         if(generatedReceiver(emitter,access.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property writes require provider');
         return null;
     }
@@ -3793,6 +3804,7 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     const module=emitter.options.nativeDynamicPropertyReadsModule;
     const found=dynamicAccess(emitter,node);if(!found)return false;
     if(module===undefined){
+        if(isInterfaceCast(emitter,found.receiver))generatedModule(module);
         if(generatedReceiver(emitter,found.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property reads require provider');
         return false;
     }
@@ -4178,18 +4190,18 @@ function emitRelation(emitter:Emitter, node:Node):void {
         emitter.insert(',');emitter.skipTo(node.lastChild.start);visitNode(emitter,node.lastChild);
         emitter.catchup(node.lastChild.end);emitter.insert(')');emitter.skipTo(node.end);return;
     }
-    const interfaceAs = emitter.generated && emitter.references && node.children.length===3
+    const interfaceAs = emitter.references && node.children.length===3
         && (node.children[1].kind===NodeKind.AS || node.children[1].text==='is') && node.lastChild.kind===NodeKind.IDENTIFIER
-        && (node.children[1].kind===NodeKind.AS ? emitter.references.sourceInterface(node.lastChild.text) : emitter.references.nativeInterface(node.lastChild.text));
+        && emitter.references.sourceInterface(node.lastChild.text);
     const sourceIs = emitter.generated && emitter.references && node.children.length===3
         && node.children[1].text==='is' && node.lastChild.kind===NodeKind.IDENTIFIER
         && (emitter.references.sourceClass(node.lastChild.text) || !!emitter.references.nativeInterface(node.lastChild.text));
-    if (emitter.generated && node.children.length===3 && (node.children[1].kind===NodeKind.AS || sourceIs)
+    if (interfaceAs || emitter.generated && node.children.length===3 && (node.children[1].kind===NodeKind.AS || sourceIs)
         && node.lastChild.kind===NodeKind.IDENTIFIER
         && (interfaceAs || emitter.classInitializers.resolve(node,node.lastChild.text)==='lazy'
             || node.lastChild.text===emitter.currentClassName)) {
         const target=node.lastChild,definition=emitter.findDefInScope(target.text);
-        const operation=sourceIs?'is':'as';
+        const operation=node.children[1].text==='is'?'is':'as';
         if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
             throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: shadowed source '+operation+' target requires Class operand authority');
         let method=node.parent;
@@ -4197,7 +4209,7 @@ function emitRelation(emitter:Emitter, node:Node):void {
         if(!method)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: source '+operation+' during class initialization requires separate authority');
         const module=generatedModule(emitter.options.nativeComputedTypeTestModule);
         let helper='__as3_source_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
-        emitter.ensureImportIdentifier((sourceIs?'as3Is':'as3As')+' as '+helper,module,false);
+        emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,module,false);
         emitter.nativeSourceHelpers.add(helper);
         emitter.catchup(node.start);emitter.insert(helper+'(');
         visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
