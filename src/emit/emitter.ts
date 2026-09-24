@@ -409,12 +409,13 @@ export default class Emitter {
 
         if (this.options.nativeDisplayObjectReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeDisplayObjectReferenceModule);
-            if(!this.generated||!this.options.nativeReferenceCoercion)
-                throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
-            const inputs=nativeGeneratedDeclarationInputs(this.generated.options.plan,this.generated.options.plan.scope);
+            const reference=this.options.nativeReferenceCoercion;
+            if(!reference)
+                throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: authenticated reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
             const provider=inputs.providers&&inputs.providers['flash.display.DisplayObject'];
             if(!provider||provider.exportName!=='DisplayObject'
-                ||xmlGlobalProviderModule(provider.module,this.generated.options.module)!==module
+                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
                 ||!this.options.importModules||this.options.importModules['flash.display.DisplayObject']!==module)
                 throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: exact DisplayObject provider binding required');
         }

@@ -1,5 +1,5 @@
 const nc=load('nativeClass'),klass=name=>nc.readNativeClass(load(name)[name]);
-const Reader=klass('Reader'),Mediator=klass('Mediator');
+const Reader=typeof consumerOnly!=='undefined'&&consumerOnly?load('Reader').Reader:klass('Reader'),Mediator=klass('Mediator');
 const rows=[],r=new Reader(),shape=new api.Shape(),sprite=new api.Sprite();
 const values=[shape,sprite,new api.EventDispatcher(),null,undefined,{},[],7,api.DisplayObject.prototype];
 for(let i=0;i<values.length;i++){

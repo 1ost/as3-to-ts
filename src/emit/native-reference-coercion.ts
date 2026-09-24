@@ -177,7 +177,7 @@ export class NativeReferenceCoercion {
             const sourceIs = generated && node.kind===K.RELATION && node.children.length===3
                 && node.children[1].text==='is' && node.lastChild.kind===K.IDENTIFIER
                 && (!!this.sourceClass(node.lastChild.text) || !!this.nativeInterface(node.lastChild.text));
-            const displayTest = nativeDisplayObject && generated && node.kind===K.RELATION && node.children.length===3
+            const displayTest = nativeDisplayObject && node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && this.resolve(node.lastChild.text)==='flash.display.DisplayObject';
             const byteArrayTest = nativeByteArray && generated && node.kind===K.RELATION && node.children.length===3
