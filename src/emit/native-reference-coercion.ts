@@ -5,6 +5,7 @@ import K from '../syntax/nodeKind';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
 import {generatedModule} from './native-generated-emission';
 
+export const nativeLoaderReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.display.Loader','flash.display.Bitmap','flash.net.URLLoader','flash.media.Sound']);
 export const nativeSpriteOwnerReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.display.LoaderInfo','flash.ui.ContextMenu','flash.display.Stage']);
 export const nativeSpriteValueReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.geom.Transform','flash.media.SoundTransform','flash.accessibility.AccessibilityProperties','flash.text.TextSnapshot']);
 export interface NativeReferenceCoercionOptions {
@@ -30,7 +31,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false, nativeSpriteValues = false, nativeSpriteOwners = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false, nativeSpriteValues = false, nativeSpriteOwners = false, nativeLoaders = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -186,6 +187,7 @@ export class NativeReferenceCoercion {
                     || (nativeTextFormat && this.resolve(node.lastChild.text)==='flash.text.TextFormat')
                     || (nativeAccessibility && this.resolve(node.lastChild.text)==='flash.accessibility.AccessibilityImplementation')
                     || (nativeSpriteValues && nativeSpriteValueReferenceNames.indexOf(this.resolve(node.lastChild.text))>=0)
+                    || (nativeLoaders && nativeLoaderReferenceNames.indexOf(this.resolve(node.lastChild.text))>=0)
                     || (nativeSpriteOwners && nativeSpriteOwnerReferenceNames.indexOf(this.resolve(node.lastChild.text))>=0)
                     || (nativeInteractiveObject && this.resolve(node.lastChild.text)==='flash.display.InteractiveObject'));
             const byteArrayTest = nativeByteArray && generated && node.kind===K.RELATION && node.children.length===3
