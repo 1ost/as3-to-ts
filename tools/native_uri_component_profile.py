@@ -21,10 +21,10 @@ EVIDENCE = {
 DECODE_SOURCE_SHA = "fb3c28c303631a83e412a2f00f2e33563a116b76e6551316cb42593edb55cb90"
 DECODE_ERROR_DECLARATION_SHA = "8e0caed79bcb9712343ad85d3932cdae9c80334219715fb1828eafa8ad94187e"
 DECODE_RUNTIME_SHA = "2f5a8b644405350d04a72c768270d0fd7a29323b5642e2ff5b1e0b5e5b052f02"
-# Requalified after the additive Stage/Transform and accessibility error
-# factories. The URIError factory and typed-catch predicate are unchanged and
-# the retained AIR decoder comparison passes against this source revision.
-DECODE_ERROR_SHA = "5cc2018321903f3a366a9efed066d8a134516ca75b1c0083b08accae98796540"
+# Requalified after the additive TextSnapshot error factory. The URIError
+# factory and typed-catch predicate are unchanged, and the retained AIR
+# decoder comparison passes against this source revision.
+DECODE_ERROR_SHA = "0a8f190ab8aa1184038fc1f42e3d3f25651e14d7733f75c0e8f5f2a652251919"
 DECODE_EVIDENCE = {
     "DecodeURIComponentProbe.as": "3cd30573a0805ebccd8163866ce92ac1a13ff0ae1f6c7e245fd1ceb386c2979d",
     "scenario.json": "dcd1432cfba7a7ec47c762bf52e35bdd7e33a01acee31c152f817309d224d8ec",
