@@ -4745,6 +4745,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const arrayLength = isArrayType(targetType,context) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType,context)
                         && !valuePosition && (["push","pop","shift","unshift","concat","join","reverse","toString","sortOn","sort","splice","hasOwnProperty"].includes(name)
+                            || name === "slice" && context.arraySortProvider !== undefined && targetType.sourceName === "Array"
                             || (["indexOf","filter"].includes(name) || name === "some" && context.arraySomeProvider !== undefined)
                                 && targetType.sourceName === "Array");
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && (["indexOf", "substr", "toLowerCase", "charAt"].includes(name)
@@ -5330,8 +5331,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
             && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee),context)) {
             const name = callee.name;
-            if (!["push","pop","shift","unshift","concat","join","reverse","toString","sortOn","sort","splice","hasOwnProperty","indexOf","filter","some"].includes(name)
-                || (["pop","shift","reverse","toString"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1)
+            if (!["push","pop","shift","unshift","concat","join","reverse","toString","sortOn","sort","splice","slice","hasOwnProperty","indexOf","filter","some"].includes(name)
+                || (["pop","shift","reverse","toString","slice"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1)
                 || (["indexOf","filter","some"].includes(name) && (args.length < 1 || args.length > 2)))
                 fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
@@ -5348,6 +5349,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_ARRAY_TO_STRING", "Array subclass toString requires native dispatch evidence", node);
             if (name === "reverse" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
                 fail("HARDENED_ARRAY_REVERSE", "Array subclass reverse requires native dispatch evidence", node);
+            if (name === "slice" && (!context.arraySortProvider
+                || assignmentType(callee.target,context,rawCallee).sourceName !== "Array"))
+                fail("HARDENED_ARRAY_SLICE", "zero-argument Array.slice requires its authenticated shared provider and native Array receiver",node);
             if (name === "filter" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
                 fail("HARDENED_ARRAY_FILTER", "Array subclass filter requires native dispatch evidence", node);
             if (name === "splice" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
@@ -5381,7 +5385,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             capabilitySource = "Array";
             capabilityMember = name;
-            resultType = name === "indexOf" ? semanticType(node,"int","number") : name === "hasOwnProperty" || name === "some" ? semanticType(node,"Boolean","boolean") : name === "join" || name === "toString" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "filter" || name === "reverse" || name === "sortOn" || name === "sort" || name === "splice" ? semanticType(node,"Array","Array",[],name === "splice")
+            resultType = name === "indexOf" ? semanticType(node,"int","number") : name === "hasOwnProperty" || name === "some" ? semanticType(node,"Boolean","boolean") : name === "join" || name === "toString" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "filter" || name === "reverse" || name === "sortOn" || name === "sort" || name === "splice" || name === "slice" ? semanticType(node,"Array","Array",[],name === "splice")
                 : name === "push" || name === "unshift"
                 ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {
@@ -5611,6 +5615,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             ...(context.arraySortProvider && capabilitySource === "Array" && capabilityMember === "sortOn"
                 && args.length === 2 && args[0]!.kind === "array" && args[1]!.kind === "array"
                 ? {sharedArraySortOnPair:true as const} : {}),
+            ...(context.arraySortProvider && capabilitySource === "Array" && capabilityMember === "slice"
+                && args.length === 0 ? {sharedArraySliceZero:true as const} : {}),
             ...(context.stringRangeProvider && capabilitySource === "String" && ["charAt","charCodeAt","substring","slice"].includes(capabilityMember || "")
                 ? {sharedStringRange:true as const} : {}),
         });
