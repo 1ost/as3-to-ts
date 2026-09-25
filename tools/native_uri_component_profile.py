@@ -21,7 +21,10 @@ EVIDENCE = {
 DECODE_SOURCE_SHA = "fb3c28c303631a83e412a2f00f2e33563a116b76e6551316cb42593edb55cb90"
 DECODE_ERROR_DECLARATION_SHA = "8e0caed79bcb9712343ad85d3932cdae9c80334219715fb1828eafa8ad94187e"
 DECODE_RUNTIME_SHA = "2f5a8b644405350d04a72c768270d0fd7a29323b5642e2ff5b1e0b5e5b052f02"
-DECODE_ERROR_SHA = "62fe72c0183d119d1e50560cd306161c4a8a5f09166beaf45c85a203c920379f"
+# Requalified after Laya's Stage/Transform error factories were added; the
+# URIError factory and typed-catch predicate are unchanged and the retained AIR
+# decoder comparison still passes against this source revision.
+DECODE_ERROR_SHA = "057bdb2ffa72ffbf9303e06a0790df6327f1ab48353975aba8130dabd9bc87d3"
 DECODE_EVIDENCE = {
     "DecodeURIComponentProbe.as": "3cd30573a0805ebccd8163866ce92ac1a13ff0ae1f6c7e245fd1ceb386c2979d",
     "scenario.json": "dcd1432cfba7a7ec47c762bf52e35bdd7e33a01acee31c152f817309d224d8ec",
