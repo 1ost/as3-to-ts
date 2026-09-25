@@ -647,10 +647,14 @@ export class NativeCallableClasses {
             } else this.fail('unrecognized complete class member');
         });
         if (!ctor && this.own.base) {
+            // An implicit constructor owns a zero-argument signature and calls
+            // its immediate source base with no arguments. The base supplies
+            // optional defaults and enters any qualified native ancestor.
             const parent=this.classes.get(this.own.base),root=this.sourceRoots.get(this.own.base);
-            if(!this.generated||!parent||parent.base||!root||root.findChild(K.CONTENT).children.some(member=>
-                member.kind===K.FUNCTION&&member.findChild(K.NAME).text===parent.name))
-                this.fail('synthesized derived constructor requires source root with implicit constructor');
+            if(!this.generated||!parent||!root)
+                this.fail('synthesized derived constructor requires complete generated source base');
+            if(parent.parameters.some(parameter=>!parameter.optional))
+                this.fail('synthesized derived constructor requires zero-argument source base entry');
         }
         const chainFields: {name: string; value: string}[] = [];
         for (let current = this.own; current; current = this.classes.get(current.base)) chainFields.push(...current.fields);
