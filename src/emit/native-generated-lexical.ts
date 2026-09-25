@@ -353,6 +353,37 @@ export class NativeGeneratedLexical {
             +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
     emit(emitter:any,node:Node,visit:(emitter:any,node:Node)=>void):boolean {
+        // Protected methods have lexical symbol storage, so a source super call
+        // must use the selected parent scope rather than a public prototype key.
+        const callee=node.kind===K.CALL&&node.children[0];
+        if(callee&&callee.kind===K.DOT&&callee.children[0].text==='super') {
+            const name=callee.children[1].text;
+            let owner=this.plan.bindings.find(b=>b.qname===this.owner).base,member:Node;
+            while(owner&&this.plan.bindings.some(b=>b.qname===owner)) {
+                member=this.internalContent(owner).children.find(m=>m.findChild(K.NAME)&&m.findChild(K.NAME).text===name);
+                if(member)break;
+                owner=this.plan.bindings.find(b=>b.qname===owner).base;
+            }
+            if(member&&modifiers(member).indexOf('protected')>=0) {
+                let method=node.parent;
+                while(method&&method.kind!==K.FUNCTION)method=method.parent;
+                if(!method||method.parent.kind!==K.CONTENT||modifiers(method).indexOf('static')>=0
+                    ||method.findChild(K.NAME).text===this.owner.split('.').pop())
+                    fail('protected super requires ordinary instance method');
+                if(member.kind!==K.FUNCTION||modifiers(member).indexOf('static')>=0)
+                    fail('protected super requires instance method target');
+                const parameters=member.findChild(K.PARAMETER_LIST).children,args=node.findChild(K.ARGUMENTS);
+                if(parameters.some(p=>!!p.findChild(K.REST)))fail('protected super rest signature held');
+                const minimum=parameters.filter(p=>!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)).length;
+                if(!args||args.children.length<minimum||args.children.length>parameters.length)
+                    fail('protected super source arity');
+                emitter.catchup(node.start);
+                emitter.insert('(<any>'+this.provider+'.as3CallLexicalMember(this,'+this.provider
+                    +'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(name)+',"protected",false,true),()=>[');
+                args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                emitter.insert(']))');emitter.skipTo(node.end);return true;
+            }
+        }
         const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
