@@ -213,6 +213,15 @@ export function as3StringSlice(value:unknown,args:unknown[]):string {
     return as3StringRange(value,args,"slice");
 }
 
+/** AIR string-pattern replacement uses the first match and literal replacement text. */
+export function as3StringReplaceLiteral(value:unknown,search:unknown,replacement:unknown):string {
+    const text=primitiveString(value,"replace");
+    if(typeof search!=="string" || typeof replacement!=="string")
+        throw new AS3ObjectDispatchUnavailable("String.replace requires original String operands");
+    const index=text.indexOf(search);
+    return index<0 ? text : text.slice(0,index)+replacement+text.slice(index+search.length);
+}
+
 /** Native String-delimiter splitting, including argument conversion order. */
 export function as3StringSplit(value:unknown,args:unknown[]):unknown[] {
     primitiveReceiver(value);

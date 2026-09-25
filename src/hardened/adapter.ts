@@ -4739,7 +4739,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                                 && targetType.sourceName === "Array");
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && (["indexOf", "substr", "toLowerCase", "charAt"].includes(name)
                         || name === "charCodeAt" && context.stringRangeProvider !== undefined
-                        || context.sourceMemberAuthority !== null && ["split","lastIndexOf","substring","slice"].includes(name));
+                        || context.sourceMemberAuthority !== null && ["split","lastIndexOf","substring","slice","replace"].includes(name));
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !functionLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
@@ -5168,6 +5168,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (callee.name === "split") {
                 if (args.length > 2) fail("HARDENED_STRING_ARITY", "String.split requires zero, one or two arguments", node);
                 capabilitySource="String";capabilityMember="split";
+            } else if (callee.name === "replace") {
+                if (args.length !== 2) fail("HARDENED_STRING_ARITY", "String.replace requires exactly two arguments", node);
+                capabilitySource="String";capabilityMember="replace";
             } else if (callee.name === "toLowerCase") {
                 if (args.length !== 0) fail("HARDENED_STRING_ARITY", "String.toLowerCase requires its native zero-argument call", node);
                 capabilitySource="String"; capabilityMember="toLowerCase";
@@ -5184,6 +5187,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_STRING_ARITY", "String method requires its native one or two arguments", node);
             args.forEach((argument, index) => {
                 const type = assignmentType(argument, context, node.children[1]!.children[index]!);
+                if (callee.name === "replace") {
+                    if (type.sourceName !== "String" || type.emittedName !== "string")
+                        fail("HARDENED_STRING_ARGUMENT", "String.replace requires String search and replacement values", node);
+                    return;
+                }
                 if (callee.name === "split") {
                     if (type.sourceName === "void") fail("HARDENED_STRING_ARGUMENT", "String.split requires value arguments", node);
                     return;
