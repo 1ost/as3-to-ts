@@ -1,0 +1,30 @@
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+import {createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {EventDispatcher} from '@FLASH@/utils/AS3CanonicalEventDispatcherConstruction';
+import {Event} from '@FLASH@/utils/AS3CanonicalEventConstruction';
+import {as3ConstructClass} from '@FLASH@/utils/AS3Class';
+import {as3GetProperty as get} from '@FLASH@/utils/AS3Property';
+import {as3CallValue} from '@FLASH@/utils/AS3Invocation';
+import {as3Is} from '@FLASH@/utils/AS3Type';
+export async function run(module:any){
+ const load=async()=>{const session=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:1});return session.load('implicit',new ApplicationDomain(ApplicationDomain.currentDomain));};
+ const domain=await load(),def=(n:string)=>domain.getDefinition('implicitctor.'+n);
+ const Base:any=def('Base'),Child:any=def('Child'),Grandchild:any=def('Grandchild'),OptionalBase:any=def('OptionalBase'),OptionalChild:any=def('OptionalChild');
+ const a:any=as3ConstructClass(Child),b:any=as3ConstructClass(Child),g:any=as3ConstructClass(Grandchild);
+ const rows:any[]=[],attempt=(id:string,fn:()=>unknown)=>{try{rows.push({id,value:fn()});}catch(e){rows.push({id,error:[(e as any).name,(e as any).errorID??null]});}};
+ const call=(target:unknown,name:string,args:unknown[])=>as3CallValue(get(target,name),()=>args);
+ attempt('initial',()=>[a.value,a.labelValue,b.value,g.value,g.labelValue]);
+ attempt('ancestry',()=>[as3Is(a,Base),as3Is(a,Child),as3Is(a,Grandchild),as3Is(a,EventDispatcher),as3Is(g,Base),as3Is(g,Child),as3Is(g,Grandchild),as3Is(g,EventDispatcher)]);
+ attempt('listeners',()=>[call(a,'hasEventListener',['ready']),call(b,'hasEventListener',['ready']),call(g,'hasEventListener',['ready'])]);
+ attempt('dispatch',()=>[call(a,'dispatchEvent',[new Event('ready')]),a.value,b.value,g.value]);
+ attempt('grandchild-dispatch',()=>[call(g,'dispatchEvent',[new Event('ready')]),a.value,b.value,g.value]);
+ attempt('closure-binding',()=>{const send=get(a,'dispatchEvent');return [as3CallValue(send,()=>[new Event('ready')]),a.value,b.value,g.value];});
+ attempt('optional-default',()=>(as3ConstructClass(OptionalChild) as any).value);
+ attempt('direct-optional',()=>(as3ConstructClass(OptionalBase,[14]) as any).value);
+ attempt('child-arity',()=>as3ConstructClass(Child,[1]));
+ attempt('optional-child-arity',()=>as3ConstructClass(OptionalChild,[1]));
+ const other=await load(),Other=other.getDefinition('implicitctor.Child'),instance=as3ConstructClass(Other);
+ const domainChecks=[Other!==Child,!as3Is(instance,Child),as3Is(instance,EventDispatcher),(instance as any).value===7];
+ if(domainChecks.some(v=>!v))throw Error('implicit constructor domain identity');
+ return {rows,domainChecks};
+}
