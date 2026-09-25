@@ -234,7 +234,7 @@ export class NativeCallableClasses {
             }
         });
         // This optional compiler pass uses the toolkit's installed TypeScript parser.
-        this.ts = require('typescript');
+        this.ts = require('typescript-4-9');
     }
 
     /** Find the source slot, stopping at each function or catch shadow. */
