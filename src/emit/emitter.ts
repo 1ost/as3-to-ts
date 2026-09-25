@@ -4146,15 +4146,17 @@ function emitDynamicPropertyAddition(emitter:Emitter, target:Node, value:Node):b
     const dictionary=dictionaryAccess(emitter,target);
     const access=dictionary||dynamicWriteAccess(emitter,target);
     if(!access)return false;
-    if(access.lexical||access.literalKey!==undefined)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: lexical/dot compound assignment held');
-    const helper=propertyHelper(emitter,'as3AddAssignProperty',dictionary
+    if(access.ownStatic||!access.lexical&&access.literalKey!==undefined)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: own-static/nonlexical dot compound assignment held');
+    const helper=dynamicHelper(emitter,access,'AddAssign',dictionary
         ? emitter.options.nativeDictionaryPropertyModule : emitter.options.nativeDynamicPropertyWritesModule);
     emitter.catchup(target.parent.start);emitter.insert('(<any>'+helper+'(');
+    if(access.lexical)emitter.insert(emitter.generated.lexical.scope+', ');
     const start=emitter.output.length;
     visitNode(emitter,access.receiver);emitter.catchup(access.receiver.end);
     const receiver=emitter.output.slice(start);
     emitter.insert(', ');emitter.skipTo(access.key.start);
-    visitNode(emitter,access.key);emitter.catchup(access.key.end);
+    if(access.literalKey!==undefined){emitter.insert(JSON.stringify(access.literalKey));emitter.skipTo(access.key.end);}
+    else {visitNode(emitter,access.key);emitter.catchup(access.key.end);}
     emitter.insert(', () => (');emitter.skipTo(getExpressionStart(value));
     visitNode(emitter,value);emitter.catchup(getEffectiveNodeEnd(value));
     emitter.insert('), () => '+receiver+'))');emitter.skipTo(getEffectiveNodeEnd(target.parent));
