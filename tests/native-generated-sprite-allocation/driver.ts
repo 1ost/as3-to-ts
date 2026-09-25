@@ -1,4 +1,6 @@
 import 'ENGINE/tests/nativeDisplayProjection/entry';
+import 'ENGINE/src/layaAir/flash/utils/AS3CanonicalSpriteConstruction';
+import {Sprite} from 'ENGINE/src/layaAir/flash/display/Sprite';
 import {nativeSourceClassModule as mainModule} from './main.js';
 import {nativeSourceClassModule as childModule} from './child.js';
 import {createNativeSourceClassLoadingSession} from 'ENGINE/src/layaAir/flash/utils/NativeSourceClassLoadingSession';
@@ -15,6 +17,9 @@ import {state} from 'ENGINE/tests/nativeDisplayProjection/observe.js';
  const inspect=(value:any)=>{value.transform.perspectiveProjection=new PerspectiveProjection();return state(value.transform.perspectiveProjection);};
  const rows=[inspect(main.make()),inspect(child.make()),inspect(main.invoke(child.make)),inspect(child.invoke(main.make)),
   inspect(Child.makeStatic()),inspect(Main.makeStatic()),inspect(main.invoke(callback))];
- session.retire();rows.push(inspect(callback()));
+ rows.push(inspect(main.captured(Sprite)),inspect(child.captured(Sprite)),inspect(main.dynamicConstruct(Sprite)),inspect(child.dynamicConstruct(Sprite)));
+ rows.push(inspect(main.localConstruct(Sprite)),inspect(child.localConstruct(Sprite)),inspect(main.dynamicCallback(Sprite)()),inspect(child.dynamicCallback(Sprite)()));
+ if(typeof main.captured(Object)!=='object'||typeof child.dynamicConstruct(Object)!=='object')throw Error('non-display construction');
+ session.retire();rows.push(inspect(callback()),inspect(child.captured(Sprite)),inspect(main.dynamicConstruct(Sprite)));
  (globalThis as any).allocationResult=rows;
 })();
