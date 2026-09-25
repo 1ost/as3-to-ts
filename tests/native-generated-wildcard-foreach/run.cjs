@@ -33,7 +33,8 @@ for(const key of ['nativeEnumeration','nativeDictionaryPropertyModule']){
 }
 for(const body of [
  'var item:int=0;for each(item in value){}',
- 'var item:String=null;for each(item in value){}',
+ // String targets are qualified by the dedicated fourteen-row String suite.
+ 'var item:Function=null;for each(item in value){}',
  'for each(var item:* in value){}',
  'for each(value.item in value){}',
  'var item:*;try{throw null;}catch(item:*){for each(item in value){}}',
