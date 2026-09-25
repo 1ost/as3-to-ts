@@ -3476,11 +3476,35 @@ function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(']))');emitter.skipTo(node.end);return true;
 }
 
+/** Recognize declared method values without granting Function authority to an
+ * arbitrary property or a shadowed class/method spelling. Normal member emission
+ * still selects the authenticated class or lexical method closure. */
+function generatedMethodValue(emitter:Emitter,node:Node):boolean {
+    const generated=emitter.generated;if(!generated||!node)return false;
+    const method=(traits:ReadonlyArray<{name:string;kind:string}>,name:string)=>traits.some(t=>t.name===name&&t.kind==='method');
+    if(node.kind===NodeKind.IDENTIFIER){
+        if(hasFunctionLocal(emitter,node.text))return false;
+        return method(generated.lexical.traits,node.text)||method(generated.projection.instanceTraits,node.text)||method(generated.projection.staticTraits,node.text);
+    }
+    if(node.kind!==NodeKind.DOT||node.children.length!==2||node.children[1].kind!==NodeKind.LITERAL)return false;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),name=node.children[1].text;
+    if(!receiver||receiver.kind!==NodeKind.IDENTIFIER)return false;
+    const projection=generatedReceiver(emitter,receiver);
+    if(projection)return method(projection.instanceTraits,name)||receiver.text==='this'&&generated.lexical.traits.some(t=>!t.static&&t.kind==='method'&&t.name===name);
+    const definition=emitter.findDefInScope(receiver.text);
+    if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))return false;
+    const qname=generated.lexical.resolveTypeName(receiver.text),plan=generated.options.plan;
+    if(!plan.bindings.some(b=>b.qname===qname)||!generated.sources[qname])return false;
+    let traits=emitter.generatedReceiverTraits.get(qname);
+    if(!traits){traits=new NativeGeneratedClassTraits(plan,plan.scope,qname,generated.sources[qname]);emitter.generatedReceiverTraits.set(qname,traits);}
+    return method(traits.staticTraits,name)||qname===generated.lexical.owner&&generated.lexical.traits.some(t=>t.static&&t.kind==='method'&&t.name===name);
+}
+
 function emitLocalFunctionIntrinsic(emitter:Emitter,node:Node):boolean {
     const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
     if(!emitter.generated||!emitter.typedLocalPlan||!callee||callee.kind!==NodeKind.DOT||!args)return false;
     const receiver=unwrapEncapsulatedExpression(callee.children[0]),member=callee.children[1];
-    if(!member||['call','apply'].indexOf(member.text)<0||!emitter.typedLocalPlan.functionLocal(receiver,emitter))return false;
+    if(!member||['call','apply'].indexOf(member.text)<0||!emitter.typedLocalPlan.functionLocal(receiver,emitter)&&!generatedMethodValue(emitter,receiver))return false;
     if(emitter.isNew)throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: Function intrinsic construction');
     // Capture the Function before argument effects; resolve its intrinsic only
     // afterwards, preserving AIR null errors and declaration-global receivers.
