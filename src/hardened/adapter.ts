@@ -777,7 +777,8 @@ function flashSemanticImport(authority: LoadedCapabilityAuthority, qname: string
         const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
         const mapping = mappingForRole(authority, qname, "import", node);
         const mappedInterfaceToken = mapping.targetKind === "const"
-            && mapping.targetSignature === `import("repo:/src/layaAir/flash/utils/AS3Type").AS3Interface<${mapping.targetExport}>`;
+            && ["AS3Type", "AS3Interface"].some(module => mapping.targetSignature
+                === `import("repo:/src/layaAir/flash/utils/${module}").AS3Interface<${mapping.targetExport}>`);
         return Object.assign(identity(node), {
             authorityKind: "flash" as "flash", localNodeId: null,
             runtimeConstructible: mapping.targetKind === "class",
