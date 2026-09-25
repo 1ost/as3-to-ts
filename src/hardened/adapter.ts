@@ -3138,11 +3138,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else {
             const cast=constructorValue.kind==="parenthesized" ? constructorValue.expression : null;
             const args=call.children[1]!.children.map(child=>parseExpression(child,context,true));
-            if (cast?.kind!=="runtimeType" || cast.operator!=="as" || cast.targetKind!=="primitive"
-                || cast.runtimeName!=="Class" || cast.targetType.sourceName!=="Class"
-                || assignmentType(constructorValue,context,nameNode).sourceName!=="Class") {
+            const castClass=cast?.kind==="runtimeType" && cast.operator==="as"
+                && cast.targetKind==="primitive" && cast.runtimeName==="Class"
+                && cast.targetType.sourceName==="Class"
+                && assignmentType(constructorValue,context,nameNode).sourceName==="Class";
+            const memberClass=constructorValue.kind==="member"
+                && assignmentType(constructorValue,context,nameNode).sourceName==="Class";
+            if (!castClass && !memberClass) {
                 fail("HARDENED_NEW_DYNAMIC_TYPE",
-                    "computed construction requires one exact parenthesized as-Class expression",nameNode);
+                    "computed construction requires an exact as-Class cast or typed Class member",nameNode);
             }
             if(args.length!==0)
                 fail("HARDENED_NEW_DYNAMIC_ARGUMENT",
