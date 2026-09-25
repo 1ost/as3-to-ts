@@ -1,0 +1,33 @@
+import {createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+import {as3ConstructClass} from '@FLASH@/utils/AS3Class';
+export async function run(parent:any){
+ const session=createNativeSourceClassLoadingSession({resolve:()=>parent,maxModules:2});
+ const domain=await session.load('access',new ApplicationDomain(ApplicationDomain.currentDomain));
+ const Subject:any=domain.getDefinition('ObjectAccess'),subject=new Subject(),rows:any[]=[];
+ const attempt=(id:string,fn:()=>unknown)=>{try{rows.push({id,value:fn()});}catch(e){rows.push({id,error:[(e as any).name,(e as any).errorID??null]});}};
+ const object=(slots:object={})=>Object.assign(as3ConstructClass(Object) as object,slots);
+ let value:any=object(),log:any[]=[];
+ attempt('write',()=>[subject.write(value,7),value.flag]);
+ attempt('read',()=>subject.read(value));
+ attempt('indexed',()=>[subject.indexed(value,'flag',8),value.flag]);
+ attempt('null',()=>subject.write(null,9));
+ attempt('undefined',()=>subject.write(undefined,10));
+ attempt('read-null',()=>subject.read(null)===undefined);
+ attempt('number',()=>subject.write(1,9));
+ attempt('string',()=>subject.write('s',9));
+ attempt('boolean',()=>subject.write(true,9));
+ attempt('as3-method',()=>subject.indexed(object(),'hasOwnProperty',7));
+ attempt('readonly-length',()=>subject.indexed('s','length',7));
+ attempt('nested',()=>{const root:any=object({child:object()});return [subject.nested(root,11),root.child.flag];});
+ attempt('nested-null',()=>subject.nested({child:null},11));
+ attempt('effects',()=>{value=object();log=[];return [subject.effect(()=>{log.push('receiver');return value;},()=>{log.push('rhs');return 12;}),value.flag,log];});
+ attempt('effects-error',()=>{log=[];try{subject.effect(()=>{log.push('receiver');return 1;},()=>{log.push('rhs');return 12;});}catch(e){return [log,(e as any).name,(e as any).errorID??null];}return null;});
+ attempt('call-order',()=>{log=[];value={method(v:any){log.push('old');return v;}};return [subject.invoke(value,()=>{log.push('arg');value.method=function(v:any){log.push('new');log.push(this===value);return v;};return 13;}),log];});
+ attempt('add-order',()=>{log=[];value=object({flag:2});const second:any=object({flag:100});let count=0;return [subject.add(()=>{log.push('receiver');return count++===0?value:second;},()=>{log.push('rhs');return 3;}),value.flag,second.flag,log];});
+ const other=await session.load('access',new ApplicationDomain(ApplicationDomain.currentDomain));
+ const Other:any=other.getDefinition('ObjectAccess');
+ const domainChecks=[Other!==Subject,Other.prototype!==Subject.prototype];
+ if(domainChecks.some(v=>!v))throw Error('source class isolation');
+ session.retire();return {rows,domainChecks};
+}
