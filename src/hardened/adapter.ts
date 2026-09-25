@@ -4369,7 +4369,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             && !context.methods.arguments && !context.accessors.arguments && !context.importsByLocal.arguments) {
             const callable=context.currentCallable;
             if (!valuePosition || context.sourceMemberAuthority === null || !callable || callable.constructor
-                || callable.accessor !== null || callable.namespaceName !== null || callable.modifiers.includes("static")
+                || callable.accessor !== null || callable.namespaceName !== null
+                || callable.modifiers.includes("static") && context.lambdaDepth===0
                 || context.packageFunction)
                 fail("HARDENED_ARGUMENTS_CALLEE_SCOPE","arguments.callee requires an authenticated instance method or its source lambda",node);
             if (context.lambdaDepth === 0 && (context.locals[context.className] || context.parameters[context.className]))
