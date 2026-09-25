@@ -32,7 +32,9 @@ function signature(member:NativeGeneratedInterfaceMember):string{return JSON.str
 export function projectNativeGeneratedInterfaceContracts(
     declarations:Map<string,Node>, classes:ReadonlyArray<NativeGeneratedDeclarationBinding>,
     interfaces:ReadonlyArray<NativeGeneratedInterfaceBinding>, resolve:(owner:string,name:string)=>string,
-    knownType:(name:string)=>boolean):NativeGeneratedInterfaceContracts {
+    knownType:(name:string)=>boolean,
+    nativeInterface:(name:string)=>ReadonlyArray<NativeGeneratedInterfaceMember>|undefined=()=>undefined,
+    nativeBase:(name:string)=>ReadonlyArray<NativeGeneratedInterfaceMember>|undefined=()=>undefined):NativeGeneratedInterfaceContracts {
     const members:NativeGeneratedInterfaceMember[]=[],implementations:NativeGeneratedInterfaceImplementation[]=[];
     const annotation=(owner:string,node:Node):string=>{
         if(node&&node.kind===K.VECTOR){
@@ -64,22 +66,33 @@ export function projectNativeGeneratedInterfaceContracts(
         return Object.freeze({owner,name,kind,returnType:result,parameters:Object.freeze(params)});
     };
     const surfaces=new Map<string,Map<string,NativeGeneratedInterfaceMember>>();
-    const build=(binding:NativeGeneratedInterfaceBinding):Map<string,NativeGeneratedInterfaceMember>=>{
-        if(surfaces.has(binding.qname))return surfaces.get(binding.qname);
+    const build=(name:string):Map<string,NativeGeneratedInterfaceMember>=>{
+        if(surfaces.has(name))return surfaces.get(name);
+        const binding=interfaces.find(i=>i.qname===name);
         const surface=new Map<string,NativeGeneratedInterfaceMember>();
         const merge=(entry:NativeGeneratedInterfaceMember):void=>{
             const old=surface.get(key(entry));
-            if(old&&signature(old)!==signature(entry))fail('conflicting inherited interface signature: '+binding.qname+':'+entry.name);
+            if(old&&signature(old)!==signature(entry))fail('conflicting inherited interface signature: '+name+':'+entry.name);
             for(const other of Array.from(surface.values()).filter(m=>m.name===entry.name)){
-                if((entry.kind==='method')!==(other.kind==='method'))fail('interface method/accessor conflict: '+binding.qname+':'+entry.name);
+                if((entry.kind==='method')!==(other.kind==='method'))fail('interface method/accessor conflict: '+name+':'+entry.name);
                 if(entry.kind!==other.kind){
                     const getter=entry.kind==='get'?entry:other,setter=entry.kind==='set'?entry:other;
-                    if(getter.returnType!==setter.parameters[0].type)fail('interface accessor type mismatch: '+binding.qname+':'+entry.name);
+                    if(getter.returnType!==setter.parameters[0].type)fail('interface accessor type mismatch: '+name+':'+entry.name);
                 }
             }
             surface.set(key(entry),entry);
         };
-        binding.bases.forEach(base=>build(interfaces.find(i=>i.qname===base)).forEach(merge));
+        if(!binding){
+            const contract=nativeInterface(name);
+            if(!contract)fail('native interface contract requires qualification: '+name);
+            contract.forEach(entry=>{
+                if(![entry.returnType,...entry.parameters.map(p=>p.type)].every(knownType))
+                    fail('unresolved native interface signature type: '+name+':'+entry.name);
+                members.push(entry);merge(entry);
+            });
+            surfaces.set(name,surface);return surface;
+        }
+        binding.bases.forEach(base=>build(base).forEach(merge));
         const own=new Set<string>();
         declarations.get(binding.qname).findChild(K.CONTENT).children.forEach(node=>{
             if([K.AS_DOC,K.MULTI_LINE_COMMENT,K.STMT_EMPTY].indexOf(node.kind)>=0)return;
@@ -90,14 +103,16 @@ export function projectNativeGeneratedInterfaceContracts(
         });
         surfaces.set(binding.qname,surface);return surface;
     };
-    interfaces.forEach(build);
-    const closure=(binding:NativeGeneratedInterfaceBinding,set:Set<string>):void=>{
-        if(set.has(binding.qname))return;set.add(binding.qname);binding.bases.forEach(base=>closure(interfaces.find(i=>i.qname===base),set));
+    interfaces.forEach(binding=>build(binding.qname));
+    const closure=(name:string,set:Set<string>):void=>{
+        if(set.has(name))return;set.add(name);
+        const binding=interfaces.find(i=>i.qname===name);
+        if(binding)binding.bases.forEach(base=>closure(base,set));
     };
     for(const cls of classes){
         const required=new Set<string>(),ancestors:NativeGeneratedDeclarationBinding[]=[];
         for(let current=cls;current;current=classes.find(c=>c.qname===current.base)){
-            ancestors.push(current);current.interfaces.forEach(name=>closure(interfaces.find(i=>i.qname===name),required));
+            ancestors.push(current);current.interfaces.forEach(name=>closure(name,required));
         }
         for(const name of Array.from(required).sort())for(const expected of Array.from(surfaces.get(name).values())){
             let actual:NativeGeneratedInterfaceMember;
@@ -107,6 +122,11 @@ export function projectNativeGeneratedInterfaceContracts(
                     &&!(node.kind===K.FUNCTION&&node.findChild(K.NAME).text===ancestor.qname.split('.').pop())
                     &&flags(node).indexOf('public')>=0&&flags(node).indexOf('static')<0);
                 if(candidate){actual=member(ancestor.qname,candidate);break;}
+            }
+            if(!actual){
+                const base=ancestors[ancestors.length-1].base,contract=base&&nativeBase(base);
+                const inherited=contract&&contract.find(entry=>key(entry)===key(expected));
+                if(inherited)actual=Object.freeze({...inherited,owner:base});
             }
             if(!actual)fail('missing public instance interface member: '+cls.qname+':'+name+':'+expected.name+':'+expected.kind);
             if(signature(actual)!==signature(expected))fail('incompatible interface signature: '+cls.qname+':'+name+':'+expected.name);

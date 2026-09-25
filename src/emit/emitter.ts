@@ -1685,21 +1685,21 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let objNode = inNode.children[0];
 	let blockNode = node.children[2];
     const localTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
-    if(emitter.generated&&localTarget&&!localTarget.bound&&['*','String','Object'].indexOf(localTarget.as3Type)>=0){
+    if(emitter.generated&&localTarget&&!localTarget.bound&&['*','String','Object','Class'].indexOf(localTarget.as3Type)>=0){
         // The legacy parser represents a member target as a NAME plus a malformed
         // IN span. Require the original simple-target separator before lowering.
         const separator=emitter.source.slice(varNode.end,objNode.start).replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'').trim();
         if(separator!=='in')throw new Error('AS3_ENUMERATION_UNSUPPORTED: for-each requires a simple local target');
         if(!emitter.options.nativeEnumeration)throw new Error('AS3_ENUMERATION_UNSUPPORTED: explicit common enumeration providers required');
-        const keys=dictionaryEnumerationHelper(emitter,'as3EnumerableKeys'),get=dictionaryEnumerationHelper(emitter,'as3GetProperty');
+        const values=dictionaryEnumerationHelper(emitter,'as3EnumerableValues');
         let receiver:string,cursor:string,step:string;
         do {emitter.loopObjectCounter++;receiver='__as3_eachReceiver_'+emitter.loopObjectCounter;cursor='__as3_eachKeys_'+emitter.loopObjectCounter;step='__as3_eachStep_'+emitter.loopObjectCounter;}
         while([receiver,cursor,step].some(name=>emitter.source.indexOf(name)>=0));
         emitter.catchup(node.start);emitter.insert('{ const '+receiver+'=');
         emitter.skipTo(objNode.start);visitNode(emitter,objNode);emitter.catchup(objNode.end);
-        emitter.insert(';const '+cursor+'='+keys+'('+receiver+');let '+step+':any;try{');
+        emitter.insert(';const '+cursor+'='+values+'('+receiver+');let '+step+':any;try{');
         if(emitter.pendingStatementLabel){emitter.insert(emitter.pendingStatementLabel+':');emitter.pendingStatementLabel=null;}
-        emitter.insert('for(;!('+step+'='+cursor+'.next()).done;){'+(emitter.getIdentifierRemap(varNode.text)||varNode.text)+'='+get+'('+receiver+','+step+'.value);');
+        emitter.insert('for(;!('+step+'='+cursor+'.next()).done;){'+(emitter.getIdentifierRemap(varNode.text)||varNode.text)+'='+step+'.value;');
         emitter.skipTo(blockNode.start);visitNode(emitter,blockNode);finishEnumerationBody(emitter,blockNode,false);
         emitter.insert('}}finally{if('+step+'&&!'+step+'.done&&'+cursor+'.return)'+cursor+'.return();}}');return;
     }
@@ -4080,7 +4080,7 @@ function emitDynamicKey(emitter:Emitter,access:DictionaryAccess):void {
 }
 function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     const module=emitter.options.nativeDynamicPropertyReadsModule;
-    const found=dynamicAccess(emitter,node);if(!found)return false;
+    const found=dynamicAccess(emitter,node)||sourceInterfaceGetterAccess(emitter,node);if(!found)return false;
     if(module===undefined){
         if(isInterfaceCast(emitter,found.receiver))generatedModule(module);
         if(generatedReceiver(emitter,found.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property reads require provider');
@@ -4095,6 +4095,25 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
     emitDynamicKey(emitter,found);emitter.insert('))');emitter.skipTo(node.end);
     return true;
+}
+
+/** Source interface getter reads must preserve source null errors as well as
+ * dispatch. A host property read would instead leak a JavaScript TypeError. */
+function sourceInterfaceGetterAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    if(!emitter.generated||!emitter.references||!node||node.kind!==NodeKind.DOT||node.children.length!==2)return null;
+    const receiver=node.children[0],key=node.children[1];
+    if(receiver.kind!==NodeKind.IDENTIFIER||key.kind!==NodeKind.LITERAL)return null;
+    const definition=emitter.findDefInScope(receiver.text);
+    if(!definition||definition.bound||typeof definition.as3Type!=='string')return null;
+    const token=emitter.references.sourceInterface(definition.as3Type),plan=emitter.generated.options.plan;
+    const contract=plan.interfaces.find(binding=>binding.tokenExport===token);
+    if(!contract)return null;
+    const owners=new Set<string>();
+    const visit=(name:string):void=>{if(owners.has(name))return;owners.add(name);
+        const binding=plan.interfaces.find(value=>value.qname===name);if(binding)binding.bases.forEach(visit);};
+    visit(contract.qname);
+    return plan.interfaceContracts.members.some(member=>owners.has(member.owner)&&member.name===key.text&&member.kind==='get')
+        ?{receiver,key,literalKey:key.text}:null;
 }
 
 function emitDynamicPropertyAddition(emitter:Emitter, target:Node, value:Node):boolean {

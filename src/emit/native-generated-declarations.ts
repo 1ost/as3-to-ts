@@ -3,6 +3,7 @@ import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {NativePatternLocal, nativePatternLocals} from './native-pattern-locals';
 import {NativeGeneratedInterfaceContracts,projectNativeGeneratedInterfaceContracts} from './native-generated-interface-contracts';
+import {nativeGeneratedInterfaceBoundary} from './native-generated-interface-boundaries';
 
 export interface NativeGeneratedDeclarationInput {
     scope: string;
@@ -183,6 +184,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         const bases = node.findChildren(K.EXTENDS).map(base => resolve(owner, base.qualifiedName || base.text));
         if (new Set(bases).size !== bases.length) fail('duplicate interface base: ' + owner);
         bases.forEach(base => {
+            if(providers[base]&&providers[base].nativeInterface&&nativeGeneratedInterfaceBoundary(base))return;
             if (!classes.has(base) || classes.get(base).kind !== K.INTERFACE || data.sources[base].referenceOnly)
                 fail('interface base requires exact source interface: ' + owner + ':' + base);
         });
@@ -282,16 +284,19 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if (emittedInterfaces.has(binding.qname)) return;
         if (activeInterfaces.has(binding.qname)) fail('cyclic source interface inheritance: ' + binding.qname);
         activeInterfaces.add(binding.qname);
-        const parents = binding.bases.map(name => interfaces.find(value => value.qname === name));
+        const parents = binding.bases.map(name => interfaces.find(value => value.qname === name)).filter(Boolean);
         parents.forEach(addInterface);
         const name = JSON.stringify(binding.qname.replace(/\.([^.]*)$/, '::$1'));
-        const create = 'defineAS3Interface<unknown>('+name+',['+parents.map(value => value.tokenExport).join(',')+'])';
+        const tokens=binding.bases.map(base=>{
+            const source=interfaces.find(value=>value.qname===base);
+            return source?source.tokenExport:'native'+nativeNames.indexOf(base);
+        });
+        const create = 'defineAS3Interface<unknown>('+name+',['+tokens.join(',')+'])';
         lines.push('export const ' + binding.tokenExport + '=' + (data.inheritScriptClasses
             ? '(()=>{const selected=selectAS3ScriptDomainType(__scriptDomain,'+name+');if(selected){if(!isAS3Interface(selected.declaration))throw new TypeError("Inherited definition is not an interface");return selected.declaration;}return '+create+';})()'
             : create) + ';');
         activeInterfaces.delete(binding.qname); emittedInterfaces.add(binding.qname);
     };
-    interfaces.forEach(addInterface);
     const vectors:Array<NativeGeneratedDeclarationPlan['vectors'][number]>=[];
     const vectorLines:string[]=[];
     if(data.vectorProviderModule){
@@ -349,6 +354,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         }
         return Object.freeze({qname: name, referenceExport});
     });
+    // Validate native tokens before source interfaces use them as parents.
+    interfaces.forEach(addInterface);
     const emitted = new Set<string>(), active = new Set<string>();
     const add = (binding: NativeGeneratedDeclarationBinding): void => {
         if (emitted.has(binding.qname)) return;
@@ -398,7 +405,10 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         });
     }
     const interfaceContracts=projectNativeGeneratedInterfaceContracts(classes,bindings,interfaces,resolve,
-        name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0);
+        name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0,
+        name=>providers[name]&&providers[name].nativeInterface?nativeGeneratedInterfaceBoundary(name):undefined,
+        name=>name==='flash.events.EventDispatcher'&&providers[name]&&providers[name].nativeBase==='EventDispatcher'
+            ?nativeGeneratedInterfaceBoundary('flash.events.IEventDispatcher'):undefined);
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
         sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),vectors:Object.freeze(vectors),
         nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts});
