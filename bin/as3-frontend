@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+"use strict";
+
+const { run } = require("../lib/command.js");
+
+run(process.argv.slice(2)).then(
+    code => {
+        process.exitCode = code;
+    },
+    error => {
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`as3-frontend: internal error: ${message}\n`);
+        process.exitCode = 70;
+    }
+);

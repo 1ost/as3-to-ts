@@ -59,7 +59,7 @@ for(const name of names.map(name=>name.split('.').pop())){
   fs.writeFileSync(path.join(run,'module.js'),module.moduleSource);
   const generated=[];for(const item of module.generatedSources){const file=path.join(run,item.module+'.ts');fs.writeFileSync(file,item.source);generated.push(file);}
   const defs=['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f));
-  const typeOptions={target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']};
+  const typeOptions={target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,types:[],lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']};
   const diagnostics=modern.getPreEmitDiagnostics(modern.createProgram([...generated,path.join(run,'cohortDomain.ts'),...defs],typeOptions));
   const types=diagnostics.map(d=>({file:d.file?.fileName,code:d.code,message:modern.flattenDiagnosticMessageText(d.messageText,'\n')}));
   fs.writeFileSync(path.join(run,'types-'+target+'.json'),JSON.stringify(types,null,2));assert.deepEqual(types,[]);

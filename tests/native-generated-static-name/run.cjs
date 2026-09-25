@@ -32,12 +32,12 @@ for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources
  const output=emit(parse(binding.qname+'.as',source),source,opts);fs.writeFileSync(file,output);emitted.push({qname:binding.qname,file,sourceSha256:hash(source),outputSha256:hash(output)});
 }
 const files=[path.join(run,'declarationDomain.ts'),...emitted.map(e=>e.file),...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f))];
-const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
+const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,types:[],lib:['lib.es2020.d.ts','lib.dom.d.ts']});
 const diagnostics=modern.getPreEmitDiagnostics(program).map(d=>({file:d.file&&path.relative(run,d.file.fileName),code:d.code,text:modern.flattenDiagnosticMessageText(d.messageText,'\n')}));fs.writeFileSync(path.join(run,'types.json'),JSON.stringify(diagnostics,null,2));assert.deepEqual(diagnostics.filter(d=>!d.file.startsWith('..')),[]);
 assert.deepEqual(diagnostics,[]);
 const typeControl=path.join(run,'type-controls.ts');
 fs.writeFileSync(typeControl,'import {NameConsumer} from "./NameConsumer";\nimport {readNativeClass,declareNativeClass} from '+JSON.stringify(helpers.nativeClass)+';\nconst subject=readNativeClass(NameConsumer);\nconst wrongString:string=subject.name;\nsubject.name();\nreadNativeClass({prototype:{}});\ndeclareNativeClass(()=>({prototype:{}}));\n');
-const controlProgram=modern.createProgram([...files,typeControl],{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
+const controlProgram=modern.createProgram([...files,typeControl],{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,types:[],lib:['lib.es2020.d.ts','lib.dom.d.ts']});
 const controlDiagnostics=modern.getPreEmitDiagnostics(controlProgram).filter(d=>d.file&&path.resolve(d.file.fileName)===typeControl).map(d=>({code:d.code,text:modern.flattenDiagnosticMessageText(d.messageText,'\n')}));
 assert.deepEqual(controlDiagnostics.map(d=>d.code),[2322,2554,2345,2322]);
 fs.writeFileSync(path.join(run,'type-controls.json'),JSON.stringify(controlDiagnostics,null,2));

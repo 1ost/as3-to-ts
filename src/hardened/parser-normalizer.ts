@@ -1,0 +1,316 @@
+import parse from "../parse/index";
+import { inspectIncludeSyntax } from "./source-includes-parser";
+import { expandSourceIncludes } from "./source-includes";
+import Node from "../syntax/node";
+import NodeKind, { nodeKindName } from "../syntax/nodeKind";
+import { NormalizedParserAst, NormalizedParserNode, SourceSpan } from "./contracts";
+import { Sha256Function } from "./ledger";
+
+const SHA256 = /^[0-9a-f]{64}$/;
+
+// Closed structural vocabulary consumed by declaration extraction and adapter.ts.
+// XML_LITERAL is retained as an exact source leaf for declaration authentication;
+// only static literals with a verified shared provider can execute in adapter.ts. Other expansion still
+// requires an explicit structural and semantic admission decision.
+const ADMITTED_KINDS = new Set([
+    "ADD", "AND", "ARGUMENTS", "ARRAY", "ARRAY_ACCESSOR", "AS", "ASSIGN", "B_AND", "B_NOT", "B_OR", "B_XOR", "BLOCK", "BREAK", "CALL", "CLASS", "COMPILATION_UNIT", "CONDITION", "CONDITIONAL", "CONST_LIST", "CONTENT", "CONTINUE", "DELETE", "DOT",
+    "CASE", "CASES", "CATCH", "COND", "DEFAULT", "DO", "E4X_DESCENDANT", "E4X_FILTER", "ENCAPSULATED", "EQUALITY", "EXPR_LIST", "EXTENDS", "FINALLY", "FOR", "FOREACH", "FORIN", "FUNCTION", "GET", "IDENTIFIER", "IF", "IMPLEMENTS", "IMPLEMENTS_LIST", "IMPORT", "IN", "INIT", "INTERFACE", "ITER", "LABEL", "LITERAL", "MODIFIER",
+    "LAMBDA", "META", "META_LIST", "MINUS", "MOD_LIST", "MULTIPLICATION", "NAME", "NAME_TYPE_INIT", "NAMESPACE", "NEW", "NOT", "OBJECT", "OP", "PACKAGE", "PARAMETER", "PARAMETER_LIST", "PLUS",
+    "OR", "POST_DEC", "POST_INC", "PRE_DEC", "PRE_INC", "PROP", "RELATION", "REST", "RETURN", "SET", "SHIFT", "SHORT_VECTOR", "STMT_EMPTY", "SWITCH", "SWITCH_BLOCK", "THROW", "TRY", "TYPE", "TYPEOF", "USE", "VALUE", "VAR", "VAR_LIST", "VECTOR", "WHILE", "XML_LITERAL",
+]);
+
+const RECOVERY_FIELDS = ["diagnostics", "errors", "recovered", "recovery"];
+
+interface ParserTrivia {
+    text: string;
+    index: number;
+    end: number;
+}
+
+export class ParserNormalizationError extends Error {
+    public readonly code: string;
+    public readonly nodeId: string | null;
+
+    public constructor(code: string, message: string, nodeId: string | null = null) {
+        super(message);
+        this.name = "ParserNormalizationError";
+        this.code = code;
+        this.nodeId = nodeId;
+    }
+}
+
+function fail(code: string, message: string, nodeId: string | null = null): never {
+    throw new ParserNormalizationError(code, message, nodeId);
+}
+
+function isObject(value: unknown): value is { [key: string]: unknown } {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function deepFreeze<T>(value: T): T {
+    if (typeof value === "object" && value !== null && !Object.isFrozen(value)) {
+        Object.keys(value as unknown as { [key: string]: unknown }).forEach((key) => {
+            deepFreeze((value as unknown as { [key: string]: unknown })[key]);
+        });
+        Object.freeze(value);
+    }
+    return value;
+}
+
+function exactTrivia(value: unknown, sourceText: string, label: string): ParserTrivia {
+    if (!isObject(value) || typeof value.text !== "string"
+        || !Number.isInteger(value.index) || !Number.isInteger(value.end)) {
+        fail("PARSER_NORMALIZER_TRIVIA", label + " is not exact parser trivia");
+    }
+    const index = Number(value.index);
+    const end = Number(value.end);
+    if (index < 0 || end < index || end > sourceText.length
+        || sourceText.slice(index, end) !== value.text
+        || (!value.text.startsWith("//") && !value.text.startsWith("/*"))) {
+        fail("PARSER_NORMALIZER_TRIVIA", label + " does not preserve an exact comment span");
+    }
+    return value as unknown as ParserTrivia;
+}
+
+function validateTrivia(root: Node, sourceText: string, nodes: Node[]): void {
+    const rootValue = root as unknown as { [key: string]: unknown };
+    if (!Array.isArray(rootValue.trivia)) {
+        fail("PARSER_NORMALIZER_TRIVIA", "compilation unit must expose the parser's complete trivia list", "n0");
+    }
+    const complete = rootValue.trivia.map((value, index) =>
+        exactTrivia(value, sourceText, "compilation trivia[" + index + "]"));
+    const completeObjects = new Set(rootValue.trivia as unknown[]);
+    let previousEnd = -1;
+    complete.forEach((token, index) => {
+        if (token.index < previousEnd) {
+            fail("PARSER_NORMALIZER_TRIVIA_ORDER", "compilation trivia is not unique source order", "n0");
+        }
+        previousEnd = token.end;
+        if (index > 0 && token.index === complete[index - 1].index && token.end === complete[index - 1].end) {
+            fail("PARSER_NORMALIZER_TRIVIA_ORDER", "compilation trivia contains a duplicate", "n0");
+        }
+    });
+    nodes.forEach((node, nodeIndex) => {
+        const value = node as unknown as { [key: string]: unknown };
+        if (!Array.isArray(value.leadingTrivia)) {
+            fail("PARSER_NORMALIZER_TRIVIA", "parser node lacks its leading trivia list", "n" + nodeIndex);
+        }
+        value.leadingTrivia.forEach((token, triviaIndex) => {
+            exactTrivia(token, sourceText, "n" + nodeIndex + ".leadingTrivia[" + triviaIndex + "]");
+            if (!completeObjects.has(token)) {
+                fail("PARSER_NORMALIZER_TRIVIA", "leading trivia is absent from complete parser trivia", "n" + nodeIndex);
+            }
+        });
+    });
+}
+
+function normalizedText(
+    node: Node,
+    sourceText: string,
+    span: SourceSpan,
+    id: string,
+): string | null {
+    const value = (node as unknown as { text?: unknown }).text;
+    if (value === undefined) {
+        return null;
+    }
+    if (typeof value !== "string") {
+        fail("PARSER_NORMALIZER_TEXT", "parser node text must be a string or absent", id);
+    }
+    // Some legacy structural spans begin at their keyword while semantic text
+    // names a later token (IMPORT and FUNCTION). The exact text must still be
+    // present inside the owning source region; it may never be invented.
+    if (value.length > 0 && sourceText.slice(span.start, span.end).indexOf(value) < 0) {
+        fail("PARSER_NORMALIZER_TEXT", "parser node text is not exact text within its normalized source span", id);
+    }
+    return value;
+}
+
+function exactSpan(
+    node: Node,
+    sourceText: string,
+    rawSpan: SourceSpan,
+    parentSpan: SourceSpan | null,
+    siblingBoundary: number,
+    childCount: number,
+    id: string,
+): SourceSpan {
+    const value = (node as unknown as { text?: unknown }).text;
+    if (childCount !== 0 || typeof value !== "string"
+        || sourceText.slice(rawSpan.start, rawSpan.end) === value) {
+        return rawSpan;
+    }
+    const owner = parentSpan === null ? rawSpan : parentSpan;
+    const regionStart = Math.max(owner.start, rawSpan.start);
+    const regionEnd = Math.min(owner.end, siblingBoundary);
+    const start = sourceText.indexOf(value, regionStart);
+    const duplicate = start < 0 ? -1 : sourceText.indexOf(value, start + Math.max(1, value.length));
+    if (start < 0 || start + value.length > regionEnd
+        || (duplicate >= 0 && duplicate + value.length <= regionEnd)) {
+        fail("PARSER_NORMALIZER_TEXT", "leaf parser text lacks one unambiguous exact source span in its owner", id);
+    }
+    return { start, end: start + value.length };
+}
+
+function validateRecovery(root: Node): void {
+    const value = root as unknown as { [key: string]: unknown };
+    const field = RECOVERY_FIELDS.find((name) => Object.prototype.hasOwnProperty.call(value, name));
+    if (field !== undefined) {
+        fail("PARSER_NORMALIZER_RECOVERY", "parser recovery metadata is never admitted: " + field, "n0");
+    }
+}
+
+export function normalizeParserAst(
+    root: Node,
+    sourceText: string,
+    sha256: Sha256Function,
+): NormalizedParserAst {
+    if (!isObject(root) || typeof sourceText !== "string" || typeof sha256 !== "function") {
+        fail("PARSER_NORMALIZER_INPUT", "normalizer requires a parser Node, exact source text, and SHA-256 function");
+    }
+    validateRecovery(root);
+    const seen = new Set<Node>();
+    const parserNodes: Node[] = [];
+    const nodes: NormalizedParserNode[] = [];
+
+    function visit(
+        node: Node,
+        parentId: string | null,
+        order: number,
+        parentSpan: SourceSpan | null,
+        siblingBoundary: number,
+    ): void {
+        const id = "n" + nodes.length;
+        if (!isObject(node)) {
+            fail("PARSER_NORMALIZER_NULL_CHILD", "parser child must be a non-null Node", id);
+        }
+        if (seen.has(node)) {
+            fail("PARSER_NORMALIZER_GRAPH", "parser tree contains a cycle or shared child", id);
+        }
+        seen.add(node);
+        const raw = node as unknown as { [key: string]: unknown };
+        if (!Number.isInteger(raw.start) || !Number.isInteger(raw.end)) {
+            fail("PARSER_NORMALIZER_SPAN", "parser node span must contain integer offsets", id);
+        }
+        const rawSpan: SourceSpan = { start: Number(raw.start), end: Number(raw.end) };
+        if (rawSpan.start < 0 || rawSpan.end < rawSpan.start || rawSpan.end > sourceText.length
+            || (parentSpan !== null && (rawSpan.start < parentSpan.start || rawSpan.end > parentSpan.end))) {
+            fail("PARSER_NORMALIZER_SPAN", "parser node has an invalid or escaping source span", id);
+        }
+        if (!Number.isInteger(raw.kind)) {
+            fail("PARSER_NORMALIZER_KIND", "parser node kind must be a known numeric NodeKind", id);
+        }
+        let kind = nodeKindName(Number(raw.kind));
+        // The native emitter retains explicit wrappers and selector nodes. Project
+        // those source-backed shapes into the existing closed AP AST vocabulary.
+        if (kind === "CLASS_INITIALIZER") {
+            if (!Array.isArray(raw.children) || raw.children.length !== 1) {
+                fail("PARSER_NORMALIZER_CHILDREN", "class initializer requires one statement", id);
+            }
+            const statement = raw.children[0] as Node;
+            if (!statement || statement.start < rawSpan.start || statement.end > rawSpan.end) {
+                fail("PARSER_NORMALIZER_SPAN", "class initializer statement escapes its wrapper", id);
+            }
+            parserNodes.push(node);
+            visit(statement, parentId, order, parentSpan, siblingBoundary);
+            return;
+        }
+        if (kind === "NAMESPACE_ACCESS") kind = "DOT";
+        if (kind === "NAMESPACE_DECLARATION") kind = "NAMESPACE";
+        if (typeof kind !== "string" || !ADMITTED_KINDS.has(kind)) {
+            fail("PARSER_NORMALIZER_UNSUPPORTED_KIND", "parser node kind is unsupported: " + String(kind), id);
+        }
+        if (!Array.isArray(raw.children)) {
+            fail("PARSER_NORMALIZER_CHILDREN", "parser node children must be an array", id);
+        }
+        let children = raw.children as unknown[];
+        let textNode: Node = node;
+        if (node.kind === NodeKind.TYPE && node.qualifiedName) {
+            textNode = {...node, text: node.qualifiedName} as Node;
+        } else if (node.kind === NodeKind.NAMESPACE_ACCESS) {
+            textNode = {...node, text: "::"} as Node;
+        } else if (kind === "LABEL" && children.length === 2) {
+            const name = children[0] as Node;
+            if (name.kind !== NodeKind.IDENTIFIER) fail("PARSER_NORMALIZER_CHILDREN", "label requires an identifier", id);
+            textNode = {...node, text: name.text} as Node;
+            children = children.slice(1);
+        } else if (node.kind === NodeKind.NAMESPACE_DECLARATION) {
+            const name = node.children.find(child => child.kind === NodeKind.NAME);
+            const value = node.children[node.children.length - 1];
+            if (!name || !value || value === name) fail("PARSER_NORMALIZER_CHILDREN", "namespace requires a name and initializer", id);
+            const assignment = sourceText.indexOf("=", name.end);
+            if (assignment < name.end || assignment >= value.start) fail("PARSER_NORMALIZER_SPAN", "namespace initializer requires its source assignment", id);
+            const init = Object.assign(new Node(), {kind: NodeKind.INIT,
+                start: assignment, end: value.end, children: [value], leadingTrivia: [],
+            });
+            textNode = {...node, text: name.text} as Node;
+            children = [init, ...node.children.filter(child => child.kind === NodeKind.MOD_LIST || child.kind === NodeKind.META_LIST)];
+        }
+        const span = exactSpan(textNode, sourceText, rawSpan, parentSpan, siblingBoundary, children.length, id);
+        const output: NormalizedParserNode = {
+            id,
+            parentId,
+            order,
+            kind,
+            span,
+            text: normalizedText(textNode, sourceText, span, id),
+        };
+        if (kind === "XML_LITERAL" && (children.length !== 0 || typeof output.text !== "string"
+            || output.text !== sourceText.slice(span.start, span.end))) {
+            fail("PARSER_NORMALIZER_XML_SOURCE", "XML literal must retain its complete exact source leaf", id);
+        }
+        nodes.push(output);
+        parserNodes.push(node);
+        children.forEach((child, childIndex) => {
+            if (child === null || child === undefined) {
+                fail("PARSER_NORMALIZER_NULL_CHILD", "parser child arrays may not contain null placeholders", id);
+            }
+            const next = children[childIndex + 1] as { start?: unknown } | undefined;
+            const nextStart = next && Number.isInteger(next.start) && Number(next.start) > Number(raw.start)
+                ? Number(next.start) : span.end;
+            visit(child as Node, id, childIndex, span, nextStart);
+        });
+    }
+
+    visit(root, null, 0, null, sourceText.length);
+    if (nodes[0].kind !== "COMPILATION_UNIT" || nodes[0].span!.start !== 0
+        || nodes[0].span!.end !== sourceText.length) {
+        fail("PARSER_NORMALIZER_ROOT", "compilation unit must cover the exact complete source", "n0");
+    }
+    validateTrivia(root, sourceText, parserNodes);
+    const sourceSha256 = sha256(sourceText);
+    const fingerprintSha256 = sha256(JSON.stringify(nodes));
+    if (!SHA256.test(sourceSha256) || !SHA256.test(fingerprintSha256)) {
+        fail("PARSER_NORMALIZER_HASH", "SHA-256 function returned a non-canonical digest");
+    }
+    return deepFreeze({
+        schema: "authored-ui-as3-flat-ast@1",
+        sourceSha256,
+        fingerprintSha256,
+        nodes,
+    });
+}
+
+/** The original source hash stays authoritative; expansion is retained separately. */
+export function normalizeIncludedSource(sourcePath: string, sourceText: string,
+    fragments: import("./source-includes").IncludeSource[], sha256: Sha256Function,
+    expectedEdges?: import("./source-includes").IncludeEdge[]): NormalizedParserAst {
+    const byPath = new Map(fragments.map(source => [source.path, source]));
+    if (byPath.size !== fragments.length) throw new Error("HARDENED_INCLUDE_PROOF: duplicate source");
+    const expanded = expandSourceIncludes(sourcePath, sourceText.replace(/\r\n?/g,"\n"), path => {
+        const source = byPath.get(path);
+        if (!source) throw new Error("HARDENED_INCLUDE_MISSING: " + path);
+        return source;
+    }, sha256, inspectIncludeSyntax);
+    if (expectedEdges) {
+        const owners=new Set([sourcePath,...expanded.proof.fragments.map(item=>item.path)]);
+        const canonical=(edges:import("./source-includes").IncludeEdge[]):string=>JSON.stringify([...new Set(edges.map(edge=>JSON.stringify([edge.ownerPath,edge.directiveStart,edge.directiveEnd,edge.specifier,edge.targetPath,edge.targetSha256])))].sort());
+        if(canonical(expanded.proof.edges)!==canonical(expectedEdges.filter(edge=>owners.has(edge.ownerPath))))
+            throw new Error("HARDENED_INCLUDE_PROOF: parser directives differ from retained inventory");
+    }
+    if (expanded.proof.edges.length === 0)
+        return normalizeParserAst(parse(sourcePath,sourceText),sourceText,sha256);
+    const ast = normalizeParserAst(parse(sourcePath, expanded.content), expanded.content, sha256);
+    return deepFreeze({...ast,
+        sourceSha256: sha256(sourceText), includeExpansion: expanded.proof});
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@bleach/as3-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "exports": {
+    "./AS3Array": "./AS3Authority.generated.js",
+    "./AS3BigTurnTableInnerDto": "./AS3Authority.generated.js",
+    "./AS3ByteArray": "./AS3Authority.generated.js",
+    "./AS3Authority": "./AS3Authority.generated.js",
+    "./AS3Coerce": "./AS3Authority.generated.js",
+    "./AS3Object": "./AS3Authority.generated.js",
+    "./AS3Dictionary": "./AS3Authority.generated.js",
+    "./AS3MethodClosure": "./AS3Authority.generated.js",
+    "./AS3OwnRecord": "./AS3Authority.generated.js",
+    "./AS3Timer": "./AS3Timer.js",
+    "./AS3Type": "./AS3Authority.generated.js",
+    "./AS3Vector": "./AS3Authority.generated.js",
+    "./ApplicationEntry": "./ApplicationEntry.generated.js",
+    "./AS3ObjectDispatch": "./AS3Authority.generated.js"
+  },
+  "files": [
+    "AS3Authority.generated.js",
+    "AS3Timer.js",
+    "ApplicationEntry.generated.js",
+    "application/**/*.js"
+  ]
+}
