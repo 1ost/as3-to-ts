@@ -1,0 +1,2688 @@
+"use strict";
+
+const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
+const childProcess = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const ROOT = path.resolve(__dirname, "../..");
+const EXPECTED_SOURCE_SHA256 = "69f054d0bd30b6a0955a4dae4b7ad3ce2d8d2e05958a37fed566778a8ec29858";
+const EXPECTED_TARGET_SHA256 = "4c641d5beda0f3acbb517517ff76fa14019ddf2dc17b933b896853818a9a27e2";
+const EXPECTED_SOURCE_HEAD = "f96e325da3a5806d9c3bbd84df71b6c279fcddd2";
+const EXPECTED_SOURCE_BLOB = "80cd3254ca58f402f1d2ae4adf6a978ec1b912c3";
+const EXPECTED_TARGET_HEAD = "ecade82aa369d890730c4dc847f9d769d74e8878";
+const EXPECTED_TARGET_BLOB = "8c27b094532af6a26db3bdc4a3a03811e61506fc";
+
+function sha256(bytes) {
+    return crypto.createHash("sha256").update(bytes, "utf8").digest("hex");
+}
+
+function requiredEnvironmentPath(name, expectedKind = "file") {
+    const value = process.env[name];
+    assert.ok(value, `${name} must identify the configured authority`);
+    const resolved = path.resolve(value);
+    const stats = fs.statSync(resolved);
+    assert.ok(expectedKind === "directory" ? stats.isDirectory() : stats.isFile(),
+        `${name} must identify an ordinary ${expectedKind}`);
+    return resolved;
+}
+
+function loadModernTypeScript() {
+    const root = requiredEnvironmentPath("HARDENED_TYPESCRIPT_PATH", "directory");
+    const compiler = require(root);
+    assert.equal(compiler.version, "4.9.5", "test gate pins the exact structural printer version");
+    return compiler;
+}
+
+function git(repo, ...args) {
+    return childProcess.execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" }).trim();
+}
+
+function assertMaintainedArrayReadEvidence(sourceRepo) {
+    const root = path.join(sourceRepo, "game-client/tapplication_main/src");
+    const cases = [
+        {
+            path: "Logics/HDChristmas/THDChristmasCarnivalLanguage.as",
+            sha256: "abbfdaa8ef43d6ee66183ebf5ce4dcbf81bcabc0d5914012ebc58852d4273b94",
+            reads: 6,
+        },
+        {
+            path: "Logics/HDNewYear/THDNewYearLuckEggLanguage.as",
+            sha256: "3786ad15ce99d7198c0a3e8c67caf62540e933549e2c67ecc4e321ea7d1edb8f",
+            reads: 3,
+        },
+    ];
+    cases.forEach(item => {
+        const bytes = fs.readFileSync(path.join(root, ...item.path.split("/")));
+        assert.equal(sha256(bytes), item.sha256, `${item.path} maintained source bytes drifted`);
+        const source = bytes.toString("utf8").replace(/\r\n?/g, "\n");
+        assert.match(source, /var _loc2_:Array = param1\.Language;/);
+        assert.equal((source.match(/_loc2_\[[0-9]+\]/g) || []).length, item.reads);
+        assert.doesNotMatch(source, /_loc2_\[[^\]]+\]\s*=/);
+    });
+}
+
+function compileHardenedSources(ts) {
+    const output = fs.mkdtempSync(path.join(os.tmpdir(), "as3-semantic-ir-"));
+    const sources = fs.readdirSync(path.join(ROOT, "src/hardened"))
+        .filter((name) => name.endsWith(".ts") && name !== "parser-normalizer.ts")
+        .map((name) => path.join(ROOT, "src/hardened", name));
+    const program = ts.createProgram(sources, {
+        target: ts.ScriptTarget.ES2019,
+        module: ts.ModuleKind.CommonJS,
+        moduleResolution: ts.ModuleResolutionKind.NodeJs,
+        strict: true,
+        noImplicitAny: true,
+        types: [],
+        skipLibCheck: true,
+        rootDir: path.join(ROOT, "src"),
+        outDir: output,
+    });
+    const emit = program.emit();
+    const diagnostics = ts.getPreEmitDiagnostics(program).concat(emit.diagnostics);
+    assert.deepEqual(diagnostics.map((item) => ts.flattenDiagnosticMessageText(item.messageText, "\n")), []);
+    return { api: require(path.join(output, "hardened/index.js")), output };
+}
+
+function n(kind, text = null, children = []) {
+    return { kind, text, children };
+}
+
+function mods(...values) {
+    return n("MOD_LIST", null, values.map((value) => n("MODIFIER", value)));
+}
+
+function type(name) {
+    return n("TYPE", name);
+}
+
+function assertGeneratedRuntimeTypechecks(outputs) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "as3-generated-runtime-"));
+    try {
+        const runtime = path.join(root, "runtime");
+        const stubs = path.join(root, "stubs");
+        const generated = path.join(root, "generated");
+        fs.mkdirSync(runtime, { recursive: true });
+        fs.mkdirSync(path.join(runtime, "internal"), { recursive: true });
+        fs.mkdirSync(stubs, { recursive: true });
+        fs.mkdirSync(generated, { recursive: true });
+        fs.mkdirSync(path.join(root, "base"), { recursive: true });
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Type.ts"), path.join(runtime, "AS3Type.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/internal/AS3FileLocalIdentity.ts"), path.join(runtime, "internal", "AS3FileLocalIdentity.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/internal/AS3TypeRegistry.ts"),
+            path.join(runtime, "internal", "AS3TypeRegistry.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3MethodClosure.ts"), path.join(runtime, "AS3MethodClosure.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Vector.ts"), path.join(runtime, "AS3Vector.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Coerce.ts"), path.join(runtime, "AS3Coerce.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3MethodClosure.ts"), path.join(runtime, "AS3MethodClosure.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Dictionary.ts"), path.join(runtime, "AS3Dictionary.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3ByteArray.ts"), path.join(runtime, "AS3ByteArray.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3Array.ts"), path.join(runtime, "AS3Array.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3OwnRecord.ts"), path.join(runtime, "AS3OwnRecord.ts"));
+        fs.copyFileSync(path.join(ROOT, "src/hardened-runtime/AS3BigTurnTableInnerDto.ts"),
+            path.join(runtime, "AS3BigTurnTableInnerDto.ts"));
+        fs.writeFileSync(path.join(stubs, "Sprite.ts"),
+            "export class Sprite { public addEventListener(_type:string,_listener:Function,_capture=false,_priority=0,_weak=false):void {} }\n", "utf8");
+        fs.writeFileSync(path.join(stubs, "Event.ts"), "export class Event {}\n", "utf8");
+        fs.writeFileSync(path.join(root, "base", "Base.ts"),
+            "export class Base { public constructor(_value:number=0) {} }\n", "utf8");
+        fs.writeFileSync(path.join(root, "base", "IReady.ts"), "export interface IReady {}\n", "utf8");
+        outputs.forEach((code, index) => fs.writeFileSync(path.join(generated, `Fixture${index}.ts`), code, "utf8"));
+        const config = path.join(root, "tsconfig.json");
+        fs.writeFileSync(config, JSON.stringify({
+            compilerOptions: {
+                target: "ES2022", module: "CommonJS", moduleResolution: "Node", strict: true,
+                strictNullChecks: true, skipLibCheck: true, noEmit: true, baseUrl: root,
+                paths: {
+                    "@bleach/as3-runtime/*": ["runtime/*"],
+                    "laya/flash/display/Sprite": ["stubs/Sprite"],
+                    "laya/flash/events/Event": ["stubs/Event"],
+                },
+            },
+            include: ["generated/**/*.ts", "runtime/**/*.ts", "stubs/**/*.ts"],
+        }), "utf8");
+        childProcess.execFileSync(process.execPath,
+            [path.join(requiredEnvironmentPath("HARDENED_TYPESCRIPT_PATH", "directory"), "bin/tsc"), "-p", config],
+            { cwd: root, stdio: "inherit" });
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+}
+
+function vectorType(name) {
+    return n("VECTOR", null, [type(name)]);
+}
+
+function nestedVectorType(name) {
+    return n("VECTOR", null, [vectorType(name)]);
+}
+
+function dot(target, name) {
+    return n("DOT", null, [target, n("LITERAL", name)]);
+}
+
+function call(target, args = []) {
+    return n("CALL", null, [target, n("ARGUMENTS", null, args)]);
+}
+
+function assignment(target, value, operator = "=") {
+    return n("ASSIGN", null, [target, n("OP", operator), value]);
+}
+
+function construct(name, args = []) {
+    return n("NEW", null, [call(n("IDENTIFIER", name), args)]);
+}
+
+function parameter(name, typeName, defaultValue) {
+    const children = [n("NAME", name), type(typeName)];
+    if (defaultValue !== undefined) children.push(n("INIT", null, [n("LITERAL", defaultValue)]));
+    return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, children)]);
+}
+
+function method(name, parameters, returnType, body, modifierValues = ["public"]) {
+    return n("FUNCTION", "function", [
+        mods(...modifierValues), n("NAME", name), n("PARAMETER_LIST", null, parameters), type(returnType), n("BLOCK", null, body),
+    ]);
+}
+
+function vectorParameter(name, elementType) {
+    return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, [n("NAME", name), vectorType(elementType)])]);
+}
+
+function expressionParameter(name, typeName, defaultExpression) {
+    return n("PARAMETER", null, [n("NAME_TYPE_INIT", null, [
+        n("NAME", name), type(typeName), n("INIT", null, [defaultExpression]),
+    ])]);
+}
+
+function restParameter(name) {
+    return n("PARAMETER", null, [n("REST", name)]);
+}
+
+function accessor(kind, name, parameters, returnType, body, modifierValues = ["public"]) {
+    return n(kind, name, [
+        mods(...modifierValues), n("NAME", name), n("PARAMETER_LIST", null, parameters),
+        type(returnType), n("BLOCK", null, body),
+    ]);
+}
+
+function binary(kind, left, operator, right) {
+    return n(kind, null, [left, n("OP", operator), right]);
+}
+
+function localDeclaration(kind, name, typeName, initializer) {
+    const children = [n("NAME", name), type(typeName)];
+    if (initializer !== undefined) children.push(n("INIT", null, [initializer]));
+    return n(kind, null, [n("NAME_TYPE_INIT", null, children)]);
+}
+
+function conditional(condition, whenTrue, whenFalse) {
+    return n("CONDITIONAL", null, [condition, whenTrue, whenFalse]);
+}
+
+function objectLiteral(properties) {
+    return n("OBJECT", null, properties.map(([name, value]) => n("PROP", null, [
+        n("NAME", JSON.stringify(name)), n("VALUE", null, [value]),
+    ])));
+}
+
+function lambda(parameters, returnType, body) {
+    return n("LAMBDA", null, [n("PARAMETER_LIST", null, parameters), type(returnType), n("BLOCK", null, body)]);
+}
+
+function constructor(body) {
+    return n("FUNCTION", "function", [
+        mods("public"), n("NAME", "Demo"), n("PARAMETER_LIST"), type(null), n("BLOCK", null, body),
+    ]);
+}
+
+function buildTree(options = {}) {
+    const superStatement = call(n("IDENTIFIER", "super"));
+    const closureStatement = call(n("IDENTIFIER", "addEventListener"), [
+        n("LITERAL", '"ready"'), n("IDENTIFIER", "onEvent"),
+    ]);
+    const body = options.implicitObjectSuper ? [superStatement]
+        : options.badSuperOrder ? [closureStatement, superStatement] : [superStatement, closureStatement];
+    if (options.unsupportedStatement) {
+        body.push(n("DELETE"));
+    }
+    const field = n(options.constFields ? "CONST_LIST" : "VAR_LIST", null, [
+        mods(...(options.fieldModifiers || ["private"])),
+        n("NAME_TYPE_INIT", null, [n("NAME", "a"), type("Number"), n("INIT", null, [
+            options.nestedExpressionWorkpack
+                ? binary("ADD", n("LITERAL", "1"), "+", n("LITERAL", "2"))
+                : options.badNestedExpression ? n("FORIN") : n("LITERAL", "1"),
+        ])]),
+        n("NAME_TYPE_INIT", null, [n("NAME", "b"), type("String"), n("INIT", null, [n("LITERAL", '"x"')])]),
+    ]);
+    if (options.newField) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "sprite"), type("Sprite"),
+            n("INIT", null, [construct("Sprite", options.newArguments || [])]),
+        ]));
+    }
+    if (options.nullableWorkpack || options.badPrimitiveNull) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", options.badPrimitiveNull ? "badNull" : "maybeSprite"),
+            type(options.badPrimitiveNull ? "Number" : "Sprite"),
+            n("INIT", null, [n("LITERAL", "null")]),
+        ]));
+    }
+    if (options.dictionaryWorkpack || options.badDictionaryConstructor) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "dictionary"), type("Dictionary"), n("INIT", null, [
+                construct("Dictionary", options.badDictionaryConstructor ? [n("LITERAL", "1")] : [n("LITERAL", "true")]),
+            ]),
+        ]));
+    }
+    if (options.byteArrayWorkpack || options.heldByteArrayMember) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "bytes"), type("ByteArray"), n("INIT", null, [construct("ByteArray")]),
+        ]));
+    }
+    if (options.vectorWorkpack || options.vectorNumericWorkpack || options.vectorRuntimeWorkpack
+        || options.vectorCallbackWorkpack || options.badVectorCallback || options.staleVectorCallbackProof
+        || options.iterationWorkpack
+        || options.existingForEachWorkpack || options.badForEachType) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "values"), vectorType("int"),
+            n("INIT", null, [n("NEW", null, [call(vectorType("int"), [
+                n("LITERAL", options.vectorNumericWorkpack ? "1.5" : "2"), n("LITERAL", "false")])])]),
+        ]));
+        if (options.vectorWorkpack) {
+            body.push(
+                assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "values"), n("LITERAL", "0")]), n("LITERAL", "4")),
+                call(dot(n("IDENTIFIER", "values"), "push"), [n("LITERAL", "5")]),
+            );
+        }
+        if (options.vectorNumericWorkpack) {
+            body.push(call(dot(n("IDENTIFIER", "values"), "slice"), [n("LITERAL", "4294967295")]));
+        }
+    }
+    if (options.nestedVectorWorkpack) {
+        field.children.push(n("NAME_TYPE_INIT", null, [
+            n("NAME", "matrix"), nestedVectorType("int"),
+            n("INIT", null, [n("NEW", null, [call(nestedVectorType("int"), [n("LITERAL", "1")])])]),
+        ]));
+    }
+    if (options.vectorBuiltinReferenceWorkpack) {
+        for (const [name, element] of [["classes", "Class"], ["routines", "Function"], ["rows", "Array"]]) {
+            field.children.push(n("NAME_TYPE_INIT", null, [
+                n("NAME", name), vectorType(element),
+                n("INIT", null, [n("NEW", null, [call(vectorType(element))])]),
+            ]));
+        }
+    }
+    let onEventBody = options.returnValue ? [n("RETURN", null, [n("LITERAL", "1")])] : [n("RETURN")];
+    if (options.assignment) {
+        const target = n("IDENTIFIER", options.assignmentTarget || "b");
+        const value = n("LITERAL", options.assignmentValue || '"changed"');
+        onEventBody = [assignment(target, value, options.assignmentOperator || "="), n("RETURN")];
+    }
+    if (options.localWorkpack || options.localNoInitializer || options.localMixedAdd
+        || options.localBadNot || options.localNonBooleanWhile || options.localConstWrite
+        || options.localDuplicate || options.localParameterCollision) {
+        const declarationKind = options.localConstWrite ? "CONST_LIST" : "VAR_LIST";
+        let initializer = binary("ADD", n("LITERAL", "1"), "+", n("LITERAL", "2"));
+        if (options.localMixedAdd) initializer = binary("ADD", n("LITERAL", '"x"'), "+", n("LITERAL", "1"));
+        if (options.localBadNot) initializer = n("NOT", null, [n("LITERAL", "1")]);
+        const localName = options.localParameterCollision ? "event" : "total";
+        const declaration = localDeclaration(declarationKind, localName, "Number",
+            options.localNoInitializer ? undefined : initializer);
+        const condition = options.localNonBooleanWhile
+            ? n("IDENTIFIER", "total")
+            : binary("RELATION", n("IDENTIFIER", "total"), ">", n("LITERAL", "0"));
+        const loop = n("WHILE", null, [
+            n("CONDITION", null, [condition]),
+            n("BLOCK", null, [assignment(n("IDENTIFIER", "total"),
+                binary("ADD", n("IDENTIFIER", "total"), "-", n("LITERAL", "1")))]),
+        ]);
+        const active = localDeclaration("VAR_LIST", "active", "Boolean",
+            n("NOT", null, [binary("EQUALITY", n("IDENTIFIER", "total"), "===", n("LITERAL", "0"))]));
+        onEventBody = [declaration];
+        if (options.localDuplicate) {
+            onEventBody.push(localDeclaration("VAR_LIST", "total", "Number", n("LITERAL", "3")));
+        }
+        onEventBody.push(active, loop, n("RETURN"));
+    }
+    if (options.controlWorkpack || options.conditionalNonBoolean || options.conditionalTypeMismatch
+        || options.updateNonNumber || options.breakOutsideLoop) {
+        const active = localDeclaration("VAR_LIST", "active", "Boolean", n("LITERAL", "true"));
+        const total = localDeclaration("VAR_LIST", "total", "Number", n("LITERAL", "2"));
+        const choiceCondition = options.conditionalNonBoolean ? n("IDENTIFIER", "total") : n("IDENTIFIER", "active");
+        const falseChoice = options.conditionalTypeMismatch ? n("LITERAL", '"none"') : n("LITERAL", "0");
+        const chosen = localDeclaration("VAR_LIST", "chosen", "Number",
+            conditional(choiceCondition, n("IDENTIFIER", "total"), falseChoice));
+        const updateTarget = options.updateNonNumber ? n("IDENTIFIER", "b") : n("IDENTIFIER", "total");
+        const loop = n("WHILE", null, [n("CONDITION", null, [n("IDENTIFIER", "active")]), n("BLOCK", null, [
+            n("POST_DEC", null, [updateTarget]),
+            n("IF", null, [
+                n("CONDITION", null, [binary("EQUALITY", n("IDENTIFIER", "total"), "===", n("LITERAL", "1"))]),
+                n("BLOCK", null, [n("CONTINUE")]),
+            ]),
+            n("BREAK"),
+        ])]);
+        onEventBody = options.breakOutsideLoop
+            ? [active, total, chosen, n("BREAK"), n("RETURN")]
+            : [active, total, chosen, loop, n("RETURN")];
+    }
+    if (options.vectorWorkpack) {
+        onEventBody = [
+            n("VAR_LIST", null, [n("NAME_TYPE_INIT", null, [
+                n("NAME", "copy"), vectorType("int"), n("INIT", null, [
+                    call(vectorType("int"), [n("ARRAY", null, [n("LITERAL", "1"), n("LITERAL", "2")])]),
+                ]),
+            ])]),
+            n("RETURN"),
+        ];
+    }
+    if (options.shortVectorWorkpack || options.badShortVectorShape) {
+        const shortVector = options.badShortVectorShape
+            ? n("SHORT_VECTOR", null, [vectorType("int")])
+            : n("SHORT_VECTOR", null, [
+                vectorType("int"), n("ARRAY", null, [n("LITERAL", "1"), n("LITERAL", "2")]),
+            ]);
+        onEventBody = [
+            n("VAR_LIST", null, [n("NAME_TYPE_INIT", null, [
+                n("NAME", "shortValues"), vectorType("int"), n("INIT", null, [shortVector]),
+            ])]),
+            n("RETURN"),
+        ];
+    }
+    if (options.runtimeTypeWorkpack) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "cast", "Event",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "Event")])),
+            localDeclaration("VAR_LIST", "matches", "Boolean",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("OP", "is"), n("IDENTIFIER", "Event")])),
+            localDeclaration("VAR_LIST", "compatibleInt", "int",
+                n("RELATION", null, [n("LITERAL", "1"), n("AS", "as"), n("IDENTIFIER", "int")])),
+            localDeclaration("VAR_LIST", "castInt", "int",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "int")])),
+            localDeclaration("VAR_LIST", "castUint", "uint",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "uint")])),
+            localDeclaration("VAR_LIST", "castNumber", "Number",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "Number")])),
+            localDeclaration("VAR_LIST", "castBoolean", "Boolean",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "Boolean")])),
+            localDeclaration("VAR_LIST", "rawPrimitive", "Object",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("AS", "as"), n("IDENTIFIER", "int")])),
+            localDeclaration("VAR_LIST", "matchesInt", "Boolean",
+                n("RELATION", null, [n("IDENTIFIER", "event"), n("OP", "is"), n("IDENTIFIER", "int")])),
+            n("RETURN"),
+        ];
+    }
+    if (options.vectorRuntimeWorkpack) {
+        onEventBody = [
+            n("VAR_LIST", null, [n("NAME_TYPE_INIT", null, [
+                n("NAME", "castVector"), vectorType("int"), n("INIT", null, [
+                    n("RELATION", null, [n("IDENTIFIER", "values"), n("AS", "as"), vectorType("int")]),
+                ]),
+            ])]),
+            localDeclaration("VAR_LIST", "matchesVector", "Boolean",
+                n("RELATION", null, [n("IDENTIFIER", "values"), n("OP", "is"), vectorType("int")])),
+            n("RETURN"),
+        ];
+    }
+    if (options.vectorCallbackWorkpack || options.badVectorCallback) {
+        onEventBody = [
+            call(dot(n("IDENTIFIER", "values"), "sort"), [
+                n("IDENTIFIER", options.badVectorCallback ? "onEvent" : "compareValues"),
+            ]),
+            call(dot(n("IDENTIFIER", "values"), "forEach"), [n("IDENTIFIER", "visitValue")]),
+            n("RETURN"),
+        ];
+    }
+    if (options.staleVectorCallbackProof) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "callback", "Function",
+                lambda([parameter("value", "int")], "void", [n("RETURN")])),
+            assignment(n("IDENTIFIER", "callback"), n("IDENTIFIER", "visitValue")),
+            call(dot(n("IDENTIFIER", "values"), "forEach"), [
+                n("IDENTIFIER", "callback"), n("LITERAL", "1"),
+            ]),
+            n("RETURN"),
+        ];
+    }
+    if (options.coercionWorkpack) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "signed", "int", call(n("IDENTIFIER", "int"), [n("LITERAL", "4294967295")])),
+            localDeclaration("VAR_LIST", "unsigned", "uint", call(n("IDENTIFIER", "uint"), [n("LITERAL", "-1")])),
+            localDeclaration("VAR_LIST", "message", "String", call(n("IDENTIFIER", "String"), [n("IDENTIFIER", "event")])),
+            n("RETURN"),
+        ];
+    }
+    if (options.statementWorkpack || options.duplicateSwitchDefault || options.continueInSwitch) {
+        const total = localDeclaration("VAR_LIST", "total", "Number", n("LITERAL", "2"));
+        const active = localDeclaration("VAR_LIST", "active", "Boolean", n("LITERAL", "true"));
+        const firstCase = n("CASE", null, [n("LITERAL", "1"), n("SWITCH_BLOCK", null, [
+            assignment(n("IDENTIFIER", "total"), n("LITERAL", "4")),
+            options.continueInSwitch ? n("CONTINUE") : n("BREAK"),
+        ])]);
+        const defaultCase = n("CASE", null, [n("DEFAULT", "default"), n("SWITCH_BLOCK", null, [
+            assignment(n("IDENTIFIER", "total"), n("LITERAL", "3")),
+        ])]);
+        const cases = [firstCase, defaultCase];
+        if (options.duplicateSwitchDefault) cases.push(n("CASE", null, [
+            n("DEFAULT", "default"), n("SWITCH_BLOCK"),
+        ]));
+        onEventBody = [
+            total,
+            active,
+            n("SWITCH", null, [n("CONDITION", null, [n("IDENTIFIER", "total")]), n("CASES", null, cases)]),
+            n("DO", null, [
+                n("BLOCK", null, [assignment(n("IDENTIFIER", "active"), n("LITERAL", "false"))]),
+                n("CONDITION", null, [n("IDENTIFIER", "active")]),
+            ]),
+            n("THROW", null, [n("LITERAL", '"done"')]),
+        ];
+    }
+    if (options.iterationWorkpack || options.existingForEachWorkpack || options.badForEachType) {
+        const bindingType = options.badForEachType ? "String" : "int";
+        const forEachBinding = options.existingForEachWorkpack
+            ? n("NAME", "existingItem")
+            : n("VAR", null, [n("NAME_TYPE_INIT", null, [n("NAME", "item"), type(bindingType)])]);
+        onEventBody = [
+            n("FOR", null, [
+                n("INIT", null, [localDeclaration("VAR_LIST", "i", "Number", n("LITERAL", "0"))]),
+                n("COND", null, [binary("RELATION", n("IDENTIFIER", "i"), "<", n("LITERAL", "2"))]),
+                n("ITER", null, [n("POST_INC", null, [n("IDENTIFIER", "i")])]),
+                n("BLOCK", null, [call(dot(n("IDENTIFIER", "values"), "push"), [call(n("IDENTIFIER", "int"), [n("IDENTIFIER", "i")])])]),
+            ]),
+            ...(options.existingForEachWorkpack
+                ? [localDeclaration("VAR_LIST", "existingItem", "int", n("LITERAL", "0"))] : []),
+            n("FOREACH", null, [
+                forEachBinding,
+                n("IN", null, [n("IDENTIFIER", "values")]),
+                n("BLOCK", null, [call(dot(n("IDENTIFIER", "values"), "indexOf"), [
+                    n("IDENTIFIER", options.existingForEachWorkpack ? "existingItem" : "item"),
+                ])]),
+            ]),
+            n("RETURN"),
+        ];
+    }
+    if (options.tryWorkpack || options.badCatchType || options.strayCatch) {
+        const catchType = options.badCatchType ? "String" : "Error";
+        onEventBody = options.strayCatch ? [n("CATCH", null, [
+            n("NAME", "error"), type(catchType), n("BLOCK"),
+        ])] : [
+            n("TRY", null, [n("BLOCK", null, [n("THROW", null, [n("LITERAL", '"bad"')])])]),
+            n("CATCH", null, [n("NAME", "error"), type(catchType), n("BLOCK", null, [
+                n("THROW", null, [n("IDENTIFIER", "error")]),
+            ])]),
+            n("FINALLY", null, [n("BLOCK", null, [assignment(n("IDENTIFIER", "b"), n("LITERAL", '"done"'))])]),
+        ];
+    }
+    if (options.bitwiseWorkpack || options.badBitwiseType) {
+        const left = options.badBitwiseType ? n("LITERAL", '"bad"') : n("LITERAL", "1");
+        onEventBody = [
+            localDeclaration("VAR_LIST", "flags", "int", binary("B_OR", left, "|", n("LITERAL", "2"))),
+            localDeclaration("VAR_LIST", "shifted", "uint",
+                binary("SHIFT", n("IDENTIFIER", "flags"), ">>>", n("LITERAL", "1"))),
+            localDeclaration("VAR_LIST", "inverted", "int", n("B_NOT", null, [n("IDENTIFIER", "flags")])),
+            n("RETURN"),
+        ];
+    }
+    if (options.compoundWorkpack || options.badLogicalCompound) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "flags", "int", n("LITERAL", "1")),
+            localDeclaration("VAR_LIST", "active", "Boolean", n("LITERAL", "true")),
+            assignment(n("IDENTIFIER", "flags"), n("LITERAL", "2"), "+="),
+            assignment(n("IDENTIFIER", "flags"), n("LITERAL", "1"), ">>>="),
+            assignment(n("IDENTIFIER", "active"), n("LITERAL", options.badLogicalCompound ? "1" : "false"), "&&="),
+            n("RETURN"),
+        ];
+    }
+    if (options.objectWorkpack || options.objectDuplicate || options.objectProto) {
+        const properties = options.objectProto
+            ? [["__proto__", n("LITERAL", "1")]]
+            : options.objectDuplicate
+                ? [["alpha", n("LITERAL", "1")], ["alpha", n("LITERAL", "2")]]
+                : [["alpha", n("LITERAL", "1")], ["label", n("LITERAL", '\"ready\"')]];
+        onEventBody = [
+            localDeclaration("VAR_LIST", "config", "Object", objectLiteral(properties)),
+            n("RETURN"),
+        ];
+    }
+    if (options.defaultParameterWorkpack) {
+        onEventBody = [call(n("IDENTIFIER", "configure")), n("RETURN")];
+    }
+    if (options.nestedExpressionWorkpack) {
+        onEventBody = [call(n("IDENTIFIER", "int"), [
+            binary("MINUS", n("LITERAL", "4"), "-", n("LITERAL", "1")),
+        ]), n("RETURN")];
+    }
+    if (options.labelWorkpack || options.badContinueLabel) {
+        const target = options.badContinueLabel
+            ? n("SWITCH", null, [n("CONDITION", null, [n("LITERAL", "1")]), n("CASES", null, [
+                n("CASE", null, [n("DEFAULT"), n("SWITCH_BLOCK", null, [n("CONTINUE", null, [n("IDENTIFIER", "outer")])])]),
+            ])])
+            : n("WHILE", null, [n("CONDITION", null, [n("LITERAL", "true")]), n("BLOCK", null, [
+                n("BREAK", null, [n("IDENTIFIER", "outer")]),
+            ])]);
+        onEventBody = [n("LABEL", "outer", [target]), n("RETURN")];
+    }
+    if (options.restParameterWorkpack || options.badRestPosition) {
+        onEventBody = options.badRestPosition ? [n("RETURN")] : [
+            call(n("IDENTIFIER", "collect"), [n("LITERAL", '"p"'), n("LITERAL", "1"), n("LITERAL", '"two"')]),
+            n("RETURN"),
+        ];
+    }
+    if (options.forInWorkpack || options.badForInKey || options.badForInIterable) {
+        const keyType = options.badForInKey ? "Number" : "String";
+        const iterableType = options.badForInIterable ? "Number" : "Object";
+        onEventBody = [
+            localDeclaration("VAR_LIST", "key", keyType,
+                n("LITERAL", options.badForInKey ? "0" : '""')),
+            localDeclaration("VAR_LIST", "enumerable", iterableType,
+                options.badForInIterable ? n("LITERAL", "1") : objectLiteral([["alpha", n("LITERAL", "1")]])),
+            n("FORIN", null, [n("INIT", null, [n("IDENTIFIER", "key")]),
+                n("IN", null, [n("IDENTIFIER", "enumerable")]), n("BLOCK", null, [n("CONTINUE")])]),
+            n("RETURN"),
+        ];
+    }
+    if (options.nullableWorkpack) {
+        onEventBody = [
+            localDeclaration("VAR_LIST", "maybeEvent", "Event", n("LITERAL", "null")),
+            localDeclaration("VAR_LIST", "isMissing", "Boolean",
+                binary("EQUALITY", n("IDENTIFIER", "maybeEvent"), "===", n("LITERAL", "null"))),
+            localDeclaration("VAR_LIST", "selected", "Event",
+                conditional(n("LITERAL", "true"), n("IDENTIFIER", "maybeEvent"), n("LITERAL", "null"))),
+            n("RETURN"),
+        ];
+    }
+    if (options.lambdaWorkpack || options.badLambdaThis || options.badLambdaArity || options.badLambdaReturn) {
+        const lambdaBody = options.badLambdaReturn ? [] : [n("RETURN", null, [
+            options.badLambdaThis ? n("IDENTIFIER", "a")
+                : binary("ADD", n("IDENTIFIER", "value"), "+", n("IDENTIFIER", "offset")),
+        ])];
+        onEventBody = [
+            localDeclaration("VAR_LIST", "offset", "Number", n("LITERAL", "1")),
+            localDeclaration("VAR_LIST", "handler", "Function",
+                lambda([parameter("value", "Number")], "Number", lambdaBody)),
+            localDeclaration("VAR_LIST", "result", "Number",
+                call(n("IDENTIFIER", "handler"), options.badLambdaArity ? [] : [n("LITERAL", "2")])),
+            n("RETURN"),
+        ];
+    }
+    if (options.dictionaryWorkpack) {
+        const dictionaryIndex = () => n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "dictionary"), n("IDENTIFIER", "key")]);
+        onEventBody = [
+            localDeclaration("VAR_LIST", "key", "Object", objectLiteral([["id", n("LITERAL", "1")]])),
+            assignment(dictionaryIndex(), n("LITERAL", '"value"')),
+            localDeclaration("VAR_LIST", "found", "Object", dictionaryIndex()),
+            localDeclaration("VAR_LIST", "removed", "Boolean", n("DELETE", null, [dictionaryIndex()])),
+            n("FORIN", null, [n("INIT", null, [n("IDENTIFIER", "key")]),
+                n("IN", null, [n("IDENTIFIER", "dictionary")]), n("BLOCK", null, [n("CONTINUE")])]),
+            n("RETURN"),
+        ];
+    }
+    if (options.byteArrayWorkpack || options.heldByteArrayMember) {
+        onEventBody = options.heldByteArrayMember ? [
+            call(dot(n("IDENTIFIER", "bytes"), "uncompress")), n("RETURN"),
+        ] : [
+            assignment(dot(n("IDENTIFIER", "bytes"), "endian"),
+                dot(n("IDENTIFIER", "Endian"), "LITTLE_ENDIAN")),
+            call(dot(n("IDENTIFIER", "bytes"), "writeInt"), [n("LITERAL", "1")]),
+            assignment(dot(n("IDENTIFIER", "bytes"), "position"), n("LITERAL", "0")),
+            localDeclaration("VAR_LIST", "decoded", "uint",
+                call(dot(n("IDENTIFIER", "bytes"), "readUnsignedInt"))),
+            assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "bytes"), n("LITERAL", "1.5")]),
+                n("LITERAL", "258")),
+            localDeclaration("VAR_LIST", "indexed", "uint",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "bytes"), n("LITERAL", "1")])),
+            call(dot(n("IDENTIFIER", "bytes"), "writeMultiByte"), [n("LITERAL", '"mail"'), n("LITERAL", '""')]),
+            n("RETURN"),
+        ];
+    }
+    const arrayIndexOptions = options.arrayReadWorkpack || options.arrayNegativeLiteral
+        || options.arrayFractionalLiteral || options.arrayUintMaxLiteral || options.arrayNumberIndex
+        || options.arrayStringIndex || options.arrayWrite || options.arrayDelete
+        || options.objectIndex || options.displayIndex;
+    if (arrayIndexOptions) {
+        const arrayIndex = options.arrayNegativeLiteral ? n("LITERAL", "-1")
+            : options.arrayFractionalLiteral ? n("LITERAL", "1.5")
+                : options.arrayUintMaxLiteral ? n("LITERAL", "4294967295")
+                    : options.arrayNumberIndex ? n("IDENTIFIER", "numberIndex")
+                        : options.arrayStringIndex ? n("LITERAL", '"zero"')
+                            : n("LITERAL", "0");
+        const target = options.objectIndex ? n("IDENTIFIER", "record")
+            : options.displayIndex ? n("IDENTIFIER", "display") : n("IDENTIFIER", "items");
+        onEventBody = options.arrayReadWorkpack ? [
+            localDeclaration("VAR_LIST", "first", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("LITERAL", "0")])),
+            localDeclaration("VAR_LIST", "byInt", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("IDENTIFIER", "index")])),
+            localDeclaration("VAR_LIST", "byUint", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("IDENTIFIER", "unsignedIndex")])),
+            localDeclaration("VAR_LIST", "coercedInt", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"),
+                    call(n("IDENTIFIER", "int"), [n("IDENTIFIER", "numberIndex")])])),
+            localDeclaration("VAR_LIST", "lastLegal", "Object",
+                n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("LITERAL", "4294967294")])),
+            localDeclaration("VAR_LIST", "count", "uint", dot(n("IDENTIFIER", "items"), "length")),
+            n("RETURN"),
+        ] : options.arrayWrite ? [
+            assignment(n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("LITERAL", "0")]),
+                n("LITERAL", '"changed"')),
+            n("RETURN"),
+        ] : options.arrayDelete ? [
+            n("DELETE", null, [n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "items"), n("LITERAL", "0")])]),
+            n("RETURN"),
+        ] : [
+            localDeclaration("VAR_LIST", "found", "Object", n("ARRAY_ACCESSOR", null, [target, arrayIndex])),
+            n("RETURN"),
+        ];
+    }
+    const members = [
+        field,
+        constructor(body),
+        method("onEvent", arrayIndexOptions ? [
+            parameter("event", "Event"), parameter("items", "Array"), parameter("index", "int"),
+            parameter("unsignedIndex", "uint"), parameter("numberIndex", "Number"),
+            parameter("record", "Object"), parameter("display", "Sprite"),
+        ] : [parameter("event", "Event")], "void",
+            options.superInMethod ? [call(n("IDENTIFIER", "super"))] : onEventBody,
+            options.staticMethod ? ["public", "static"] : ["public"]),
+    ];
+    if (options.nativeTimerName) {
+        const timerArguments = options.nativeTimerName === "setTimeout" || options.nativeTimerName === "setInterval"
+            ? [lambda([], "void", [n("RETURN")]), n("LITERAL", "0")]
+            : options.nativeTimerName === "getTimer" ? [] : [n("LITERAL", "1")];
+        members.push(method("timerProbe", [], "void", [
+            call(n("IDENTIFIER", options.nativeTimerName), timerArguments), n("RETURN"),
+        ]));
+    }
+    if (options.vectorCallbackWorkpack || options.badVectorCallback || options.staleVectorCallbackProof) {
+        members.push(
+            method("compareValues", [parameter("left", "int"), parameter("right", "int")],
+                "Number", [n("RETURN", null, [n("LITERAL", "0")])]),
+            method("visitValue", [parameter("value", "int")], "void", [n("RETURN")]),
+        );
+    }
+    if (options.defaultParameterWorkpack) {
+        members.push(method("configure", [parameter("enabled", "Boolean", "true")], "void", [n("RETURN")]));
+    }
+    if (options.negativeDefaultWorkpack || options.badNegativeDefault) {
+        const operand = options.badNegativeDefault ? n("LITERAL", '"bad"') : n("LITERAL", "1");
+        members.push(method("configureIndex", [expressionParameter("index", "int",
+            n("MINUS", null, [operand]))], "void", [n("RETURN")]));
+    }
+    if (options.restParameterWorkpack || options.badRestPosition) {
+        const parameters = options.badRestPosition
+            ? [restParameter("values"), parameter("suffix", "String")]
+            : [parameter("prefix", "String"), restParameter("values")];
+        members.push(method("collect", parameters, "void", [n("RETURN")]));
+    }
+    if (options.overrideWorkpack) {
+        members.push(method("addEventListener", [
+            parameter("type", "String"), parameter("listener", "Function"),
+            parameter("useCapture", "Boolean", "false"), parameter("priority", "int", "0"),
+            parameter("useWeakReference", "Boolean", "false"),
+        ], "void", [n("RETURN")], ["override", "public"]));
+    }
+    if (options.nullableWorkpack || options.badPrimitiveNullDefault) {
+        members.push(method("acceptNullable", [parameter("value",
+            options.badPrimitiveNullDefault ? "Number" : "Event", "null")], "void", [n("RETURN")]));
+    }
+    if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
+        members.push(method("namespaced", [], "void", [n("RETURN")],
+            options.namespaceAccessCollision ? ["public", "ResourcesSpace"] : ["ResourcesSpace"]));
+        if (options.namespaceCollision) {
+            members.push(method("namespaced", [], "void", [n("RETURN")], ["OtherSpace"]));
+        }
+    }
+    if (options.implicitObjectSuper) members.splice(0, members.length, constructor(body));
+    if (options.accessors) {
+        const getterBody = options.getterNoReturn ? [] : options.accessorIf
+            ? [n("IF", null, [
+                n("CONDITION", null, [binary("RELATION", n("IDENTIFIER", "a"), options.relationOperator || ">", n("LITERAL", "0"))]),
+                n("BLOCK", null, [n("RETURN", null, [n("IDENTIFIER", "a")])]),
+                n("BLOCK", null, [n("RETURN", null, [n("LITERAL", "0")])]),
+            ])]
+            : [n("RETURN", null, [n("IDENTIFIER", "a")])];
+        members.splice(1, 0,
+            accessor("GET", "value", [], "Number", getterBody),
+            accessor("SET", "value", [parameter("input", options.setterType || "Number")], "void", [
+                assignment(n("IDENTIFIER", "a"), n("IDENTIFIER", "input")),
+            ]));
+    }
+    if (options.nonBooleanIf) {
+        members[members.length - 1].children[4].children.unshift(n("IF", null, [
+            n("CONDITION", null, [n("LITERAL", "1")]), n("BLOCK"),
+        ]));
+    }
+    if (options.noConstructor) {
+        const constructorIndex = members.findIndex((member) => member.kind === "FUNCTION"
+            && member.children.some((child) => child.kind === "NAME" && child.text === "Demo"));
+        members.splice(constructorIndex, 1);
+    }
+    const classChildren = [n("NAME", "Demo"), mods("public")];
+    if (!options.implicitObjectSuper) classChildren.push(n("EXTENDS", "Sprite"));
+    if (options.unsupportedChild) {
+        classChildren.push(n("META_LIST"));
+    }
+    classChildren.push(n("CONTENT", null, members));
+    const imports = options.wildcardImports
+        ? [n("IMPORT", "flash.display.*"), n("IMPORT", "flash.events.*")]
+        : [n("IMPORT", "flash.display.Sprite"), n("IMPORT", "flash.events.Event")];
+    if (options.dictionaryWorkpack || options.badDictionaryConstructor) {
+        imports.push(n("IMPORT", "flash.utils.Dictionary"));
+    }
+    if (options.byteArrayWorkpack || options.heldByteArrayMember) {
+        imports.push(n("IMPORT", "flash.utils.ByteArray"), n("IMPORT", "flash.utils.Endian"));
+    }
+    if (options.nativeTimerName) imports.push(n("IMPORT", `flash.utils.${options.nativeTimerName}`));
+    if (options.unmappedFlashImport) imports.push(n("IMPORT", "flash.geom.Point"));
+    if (options.unusedWildcard) imports.push(n("IMPORT", "flash.geom.*"));
+    if (options.namespaceWorkpack || options.namespaceCollision || options.namespaceAccessCollision) {
+        imports.push(n("USE", "ResourcesSpace"));
+        if (options.namespaceCollision) imports.push(n("USE", "OtherSpace"));
+    }
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [
+            n("NAME", "lobby.ui"),
+            n("CONTENT", null, options.postClassImport ? [
+                n("CLASS", null, classChildren),
+            ].concat(imports) : imports.concat([n("CLASS", null, classChildren)])),
+        ]),
+        n("CONTENT"),
+    ]);
+}
+
+function flatten(tree) {
+    const nodes = [];
+    let cursor = 0;
+    function visit(node, parentId, order) {
+        const id = `n${nodes.length}`;
+        const text = node.text === undefined ? null : node.text;
+        const width = typeof text === "string" && text.length > 0 ? text.length : 1;
+        nodes.push({ id, parentId, order, kind: node.kind, span: { start: cursor, end: cursor + width }, text });
+        cursor += width;
+        node.children.forEach((child, index) => visit(child, id, index));
+    }
+    visit(tree, null, 0);
+    const sourceText = " ".repeat(cursor);
+    const ast = {
+        schema: "authored-ui-as3-flat-ast@1",
+        sourceSha256: sha256(sourceText),
+        fingerprintSha256: sha256(JSON.stringify(nodes)),
+        nodes,
+    };
+    return { ast, sourceText };
+}
+
+function adapt(api, tree, authority) {
+    const normalized = flatten(tree);
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256);
+}
+
+function buildTreeNodeRecordTree(options = {}) {
+    const className = options.otherClass ? "OtherNode" : "TTreeNode";
+    const recordTarget = () => dot(n("IDENTIFIER", "this"), "FData");
+    const key = options.numericKey ? n("LITERAL", "0") : n("IDENTIFIER", "param1");
+    const members = [
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "FData"), type("Object"),
+        ])]),
+        method(className, [], "", [
+            call(n("IDENTIFIER", "super")),
+            ...(options.missingInitializer ? [] : [
+                assignment(recordTarget(), options.badInitializer
+                    ? objectLiteral([["bad", n("LITERAL", "1")]]) : objectLiteral([])),
+            ]),
+            ...(options.duplicateInitializer ? [assignment(recordTarget(), objectLiteral([]))] : []),
+        ], ["public"]),
+        method("GetNode", [parameter("param1", options.numericKey ? "Number" : "String")], className,
+            options.escapeRecord ? [n("RETURN", null, [recordTarget()])]
+                : [n("RETURN", null, [n("ARRAY_ACCESSOR", null, [recordTarget(), key])])]),
+        method("SetNode", [parameter("param1", "String")], className, [
+            localDeclaration("VAR_LIST", "created", className, n("LITERAL", "null")),
+            assignment(n("IDENTIFIER", "created"), construct(className)),
+            assignment(n("ARRAY_ACCESSOR", null, [recordTarget(), n("IDENTIFIER", "param1")]),
+                n("IDENTIFIER", "created")),
+            n("RETURN", null, [n("IDENTIFIER", "created")]),
+        ]),
+    ];
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [n("NAME", options.otherClass ? "Foundation.Other" : "Foundation.SensitiveWord"),
+            n("CONTENT", null, [n("CLASS", null, [
+                n("NAME", className), mods("public"), n("CONTENT", null, members),
+            ])])]),
+        n("CONTENT"),
+    ]);
+}
+
+function adaptTreeNodeRecord(api, authority, options = {}) {
+    const normalized = flatten(buildTreeNodeRecordTree(options));
+    const other = options.otherClass === true;
+    const qname = other ? "Foundation.Other.OtherNode" : "Foundation.SensitiveWord.TTreeNode";
+    const logicalPath = other ? "Foundation/Other/OtherNode.as" : "Foundation/SensitiveWord/TTreeNode.as";
+    const entry = {
+        componentId: "scc-00001", graphSourceSha256: "8".repeat(64), importable: true,
+        module: "application", nodeId: "0000000000000100", prerequisites: [], qname,
+        sourcePath: `game-client/tapplication_main/src/${logicalPath}`,
+        sourceContentSha256: sha256(normalized.sourceText),
+        targetPath: `game-client/layaair/src/application/${logicalPath.replace(/\.as$/, ".ts")}`,
+        topologicalLevel: 0, typeKind: "class",
+    };
+    const document = {
+        dependencyGraphRawSha256: "2".repeat(64), dependencyGraphSemanticSha256: "3".repeat(64),
+        entries: [entry], entryCount: 1, schema: "bleach-local-as3-type-map@2",
+        sourceManifestSha256: "4".repeat(64),
+    };
+    const json = `${canonicalJson(document)}\n`;
+    const locals = api.loadLocalTypeAuthority({
+        expectedDependencyGraphRawSha256: document.dependencyGraphRawSha256,
+        expectedDependencyGraphSemanticSha256: document.dependencyGraphSemanticSha256,
+        expectedEntryCount: 1, expectedSourceManifestSha256: document.sourceManifestSha256,
+        json, sha256: sha256(json),
+    }, sha256);
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
+        locals, logicalPath);
+}
+
+function buildBigTurnTableInnerTree(options = {}) {
+    const className = options.otherClass ? "TBigTurnTableLuckyLotteryOutter"
+        : options.lucky ? "TBigTurnTableLuckyLotteryInner" : "TBigTurnTableGoldLotteryInner";
+    const root = () => n("ARRAY_ACCESSOR", null, [n("IDENTIFIER", "param1"),
+        options.dynamicIndex ? n("IDENTIFIER", "slot") : n("LITERAL", "0")]);
+    const property = (name) => dot(root(), name);
+    const costValue = dot(n("ARRAY_ACCESSOR", null, [property("costChip"), n("LITERAL", "0")]), "value");
+    const costField = options.lucky ? "FCostChip" : "FCost";
+    const members = [
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [n("NAME", "FIndex"), type("int")])]),
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [n("NAME", costField), type("int")])]),
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [n("NAME", "FBtnDescription"), type("String")])]),
+        n("VAR_LIST", null, [mods("protected"), n("NAME_TYPE_INIT", null, [n("NAME", "FFlushVec"), vectorType("int")])]),
+        method(className, [parameter("param1", "Object"),
+            ...(options.dynamicIndex ? [parameter("slot", "int")] : [])], "", [
+            call(n("IDENTIFIER", "super")),
+            ...(options.badWrite ? [assignment(root(), n("LITERAL", "1"))]
+                : [assignment(dot(n("IDENTIFIER", "this"), "FIndex"), property("index"))]),
+            assignment(dot(n("IDENTIFIER", "this"), costField), costValue),
+            assignment(dot(n("IDENTIFIER", "this"), "FBtnDescription"),
+                property(options.extraMember ? "unproved" : "des")),
+            assignment(dot(n("IDENTIFIER", "this"), "FFlushVec"), call(vectorType("int"), [property("flag")])),
+        ], ["public"]),
+    ];
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [n("NAME", "Logics.HDActivityBigTurnTable"), n("CONTENT", null, [
+            n("CLASS", null, [n("NAME", className), mods("public"), n("CONTENT", null, members)]),
+        ])]), n("CONTENT"),
+    ]);
+}
+
+function adaptBigTurnTableInner(api, authority, options = {}) {
+    const normalized = flatten(buildBigTurnTableInnerTree(options));
+    const other = options.otherClass === true;
+    const className = other ? "TBigTurnTableLuckyLotteryOutter"
+        : options.lucky ? "TBigTurnTableLuckyLotteryInner" : "TBigTurnTableGoldLotteryInner";
+    const logicalPath = `Logics/HDActivityBigTurnTable/${className}.as`;
+    const entry = {
+        componentId: "scc-00001", graphSourceSha256: "8".repeat(64), importable: true,
+        module: "application", nodeId: "0000000000000200", prerequisites: [],
+        qname: `Logics.HDActivityBigTurnTable.${className}`,
+        sourcePath: `game-client/tapplication_main/src/${logicalPath}`,
+        sourceContentSha256: sha256(normalized.sourceText),
+        targetPath: `game-client/layaair/src/application/${logicalPath.replace(/\.as$/, ".ts")}`,
+        topologicalLevel: 0, typeKind: "class",
+    };
+    const document = {
+        dependencyGraphRawSha256: "2".repeat(64), dependencyGraphSemanticSha256: "3".repeat(64),
+        entries: [entry], entryCount: 1, schema: "bleach-local-as3-type-map@2",
+        sourceManifestSha256: "4".repeat(64),
+    };
+    const json = `${canonicalJson(document)}\n`;
+    const locals = api.loadLocalTypeAuthority({
+        expectedDependencyGraphRawSha256: document.dependencyGraphRawSha256,
+        expectedDependencyGraphSemanticSha256: document.dependencyGraphSemanticSha256,
+        expectedEntryCount: 1, expectedSourceManifestSha256: document.sourceManifestSha256,
+        json, sha256: sha256(json),
+    }, sha256);
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
+        locals, logicalPath);
+}
+
+function buildInterfaceTree(options = {}) {
+    const members = [
+        n("FUNCTION", "function", [n("NAME", "run"), n("PARAMETER_LIST", null, [
+            parameter("value", "int"), restParameter("rest"),
+        ]), type("String")]),
+        n("GET", "name", [n("NAME", "name"), n("PARAMETER_LIST"), type("String")]),
+        n("SET", "name", [n("NAME", "name"), n("PARAMETER_LIST", null, [parameter("value", "String")]), type("void")]),
+    ];
+    if (options.duplicate) members.push(members[0]);
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [n("NAME", "lobby.api"), n("CONTENT", null, [
+            n("INTERFACE", null, [n("NAME", "IThing"), mods("public"), n("CONTENT", null, members)]),
+        ])]),
+        n("CONTENT"),
+    ]);
+}
+
+function canonicalJson(value) {
+    if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
+        return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+}
+
+function buildLocalBaseTree(options = {}) {
+    const imports = options.samePackage ? []
+        : options.wildcardImports ? [n("IMPORT", "lobby.base.*")] : [n("IMPORT", "lobby.base.Base")];
+    if (options.withPackageSymbols) imports.push(n("IMPORT", "lobby.base.SCore"));
+    if (options.withPackageSymbols || options.withNamespace) {
+        imports.push(n("IMPORT", "lobby.base.InternalSpace"), n("USE", "InternalSpace"));
+    }
+    if (options.withInterface && !options.wildcardImports && !options.samePackage) {
+        imports.push(n("IMPORT", "lobby.base.IReady"));
+    }
+    if (options.localStaticCall || options.badLocalStaticCall || options.localStaticField
+        || options.badLocalStaticWrite) imports.push(n("IMPORT", "lobby.base.Utility"));
+    if (options.importedArrayShadow) imports.push(n("IMPORT", "lobby.base.Array"));
+    if (options.nativeTimerName) imports.push(n("IMPORT", `flash.utils.${options.nativeTimerName}`));
+    const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
+        || options.localInstanceMembers || options.badLocalInstanceReadonly
+        || options.badLocalInstancePrivate || options.badLocalInstanceClosure
+        || options.localInstanceFlashBase || options.multipleLocalBases || options.vectorConcatLocal;
+    if (localInstanceWorkpack) imports.push(n("IMPORT", "lobby.base.Worker"));
+    const classChildren = [n("NAME", "Demo"), mods("public"), n("EXTENDS", "Base")];
+    if (options.withInterface) classChildren.push(n("IMPLEMENTS_LIST", null, [n("IMPLEMENTS", "IReady")]));
+    const superArguments = options.superArgument ? [n("LITERAL", options.badSuperArgument ? '"bad"' : "1")] : [];
+    const members = [constructor([call(n("IDENTIFIER", "super"), superArguments)])];
+    if (options.nativeTimerName) {
+        const timerArguments = options.nativeTimerName === "setTimeout" || options.nativeTimerName === "setInterval"
+            ? [lambda([], "void", [n("RETURN")]), n("LITERAL", "0")]
+            : options.nativeTimerName === "getTimer" ? [] : [n("LITERAL", "1")];
+        members.push(method("timerProbe", [], "void", [
+            call(n("IDENTIFIER", options.nativeTimerName), timerArguments), n("RETURN"),
+        ]));
+    }
+    if (options.vectorConcatLocal) {
+        members.unshift(
+            n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+                n("NAME", "baseValues"), vectorType("Base"),
+            ])]),
+            n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+                n("NAME", "workerValues"), vectorType("Worker"),
+            ])]),
+        );
+        members.push(method("concatWorkers", [], "void", [
+            call(dot(n("IDENTIFIER", "baseValues"), "concat"), [n("IDENTIFIER", "workerValues")]),
+            n("RETURN"),
+        ]));
+    }
+    if (options.numericSortWorkpack || options.samePackageArrayShadow
+        || options.importedArrayShadow || options.wildcardArrayShadow) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "sortValues"), vectorType("int"),
+            n("INIT", null, [n("NEW", null, [call(vectorType("int"))])]),
+        ])]));
+        members.push(method("sortWithShadow", [], "void", [
+            call(dot(n("IDENTIFIER", "sortValues"), "sort"), [dot(n("IDENTIFIER", "Array"), "NUMERIC")]),
+            n("RETURN"),
+        ]));
+    }
+    if (options.vectorInterface) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "readyItems"), vectorType("IReady"),
+            n("INIT", null, [n("NEW", null, [call(vectorType("IReady"))])]),
+        ])]));
+    }
+    if (localInstanceWorkpack) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "worker"), type("Worker"),
+        ])]));
+    }
+    if (options.localOverride || options.badLocalOverride) {
+        members.push(method("run", [vectorParameter("value", options.badLocalOverride ? "uint" : "int")],
+            "String", [n("RETURN", null, [n("LITERAL", '"ok"')])], ["protected", "override"]));
+    }
+    if (options.localNew || options.badLocalNew) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "created"), type("Base"), n("INIT", null, [construct("Base", [
+                n("LITERAL", options.badLocalNew ? '"bad"' : "1"),
+            ])]),
+        ])]));
+    }
+    if (options.inheritedCall || options.badInheritedCall) {
+        const element = options.badInheritedCall ? "uint" : "int";
+        members.push(method("invokeInherited", [], "void", [
+            call(n("IDENTIFIER", "run"), [n("NEW", null, [call(vectorType(element), [])])]),
+            n("RETURN"),
+        ]));
+    }
+    if (options.inheritedMembers) {
+        members.push(method("useInheritedMembers", [], "void", [
+            assignment(n("IDENTIFIER", "count"), n("LITERAL", "1")),
+            localDeclaration("VAR_LIST", "label", "String", n("IDENTIFIER", "title")),
+            assignment(n("IDENTIFIER", "title"), n("LITERAL", '"updated"')),
+            n("RETURN"),
+        ]));
+    }
+    if (options.withPackageSymbols) {
+        members.push(method("usePackageConstant", [], "void", [
+            localDeclaration("VAR_LIST", "shared", "Base", n("IDENTIFIER", "SCore")), n("RETURN"),
+        ]));
+    }
+    if (options.packageInstanceCall) {
+        members.push(method("callPackageInstance", [], "String", [n("RETURN", null, [
+            call(dot(n("IDENTIFIER", "SCore"), "describe"), [n("LITERAL", "1.5")]),
+        ])]));
+    }
+    if (options.withPackageSymbols || options.withNamespace) {
+        members.push(method("packageNamespaced", [], "void", [n("RETURN")], ["InternalSpace"]));
+    }
+    if (options.superMethodCall || options.badSuperMethodCall || options.staticSuperMethodCall
+        || options.lambdaSuperMethodCall) {
+        const superRun = () => call(dot(n("IDENTIFIER", "super"), "run"), [
+            n("NEW", null, [call(vectorType(options.badSuperMethodCall ? "uint" : "int"), [])]),
+        ]);
+        const body = options.lambdaSuperMethodCall ? [
+            localDeclaration("VAR_LIST", "callback", "Function", lambda([], "void", [superRun(), n("RETURN")])),
+            n("RETURN"),
+        ] : [superRun(), n("RETURN")];
+        members.push(method("invokeSuperMethod", [], "void", body,
+            options.staticSuperMethodCall ? ["public", "static"] : ["public"]));
+    }
+    if (options.superMethodField) {
+        members.unshift(n("VAR_LIST", null, [mods("private"), n("NAME_TYPE_INIT", null, [
+            n("NAME", "superMethod"), type("Function"),
+            n("INIT", null, [dot(n("IDENTIFIER", "super"), "run")]),
+        ])]));
+    }
+    if (options.localNamespaceOverride) {
+        members.push(method("namespacedRun", [], "void", [n("RETURN")], ["override", "InternalSpace"]));
+    }
+    if (options.withInterface) members.push(method("check", [parameter("value", "Object")], "void", [
+        localDeclaration("VAR_LIST", "ready", "IReady",
+            n("RELATION", null, [n("IDENTIFIER", "value"), n("AS", "as"), n("IDENTIFIER", "IReady")])),
+        localDeclaration("VAR_LIST", "matches", "Boolean",
+            n("RELATION", null, [n("IDENTIFIER", "value"), n("OP", "is"), n("IDENTIFIER", "IReady")])),
+        n("RETURN"),
+    ]));
+    if (options.localStaticCall || options.badLocalStaticCall) members.push(method("useLocalStatic", [], "String", [
+        n("RETURN", null, [call(dot(n("IDENTIFIER", "Utility"), "describe"), [
+            n("LITERAL", options.badLocalStaticCall ? '"wrong"' : "1.5"),
+        ])]),
+    ]));
+    if (options.localStaticField) members.push(method("readLocalStatic", [], "String", [
+        n("RETURN", null, [dot(n("IDENTIFIER", "Utility"), "VERSION")]),
+    ]));
+    if (options.badLocalStaticWrite) members.push(method("writeLocalStatic", [], "void", [
+        assignment(dot(n("IDENTIFIER", "Utility"), "VERSION"), n("LITERAL", '"changed"')),
+        n("RETURN"),
+    ]));
+    if (options.localInstanceCall || options.badLocalInstanceCall) members.push(
+        method("useLocalInstance", [], "String", [n("RETURN", null, [
+            call(dot(n("IDENTIFIER", "worker"), "process"), [
+                n("LITERAL", options.badLocalInstanceCall ? '"wrong"' : "1.5"),
+            ]),
+        ])]));
+    if (options.localInstanceMembers) members.push(method("useLocalInstanceMembers", [], "String", [
+        assignment(dot(n("IDENTIFIER", "worker"), "label"), n("LITERAL", '"ready"')),
+        n("RETURN", null, [dot(n("IDENTIFIER", "worker"), "label")]),
+    ]));
+    if (options.badLocalInstanceReadonly) members.push(method("writeReadonlyInstance", [], "void", [
+        assignment(dot(n("IDENTIFIER", "worker"), "CODE"), n("LITERAL", '"changed"')), n("RETURN"),
+    ]));
+    if (options.badLocalInstancePrivate) members.push(method("readPrivateInstance", [], "String", [
+        n("RETURN", null, [dot(n("IDENTIFIER", "worker"), "secret")]),
+    ]));
+    if (options.badLocalInstanceClosure) members.push(method("readInstanceClosure", [], "Function", [
+        n("RETURN", null, [dot(n("IDENTIFIER", "worker"), "process")]),
+    ]));
+    if (options.ownProtectedInstance) {
+        members.push(method("ownProtected", [], "void", [n("RETURN")], ["protected"]));
+        members.push(method("callOwnProtected", [], "void", [
+            localDeclaration("VAR_LIST", "peer", "Demo", n("IDENTIFIER", "this")),
+            call(dot(n("IDENTIFIER", "peer"), "ownProtected")), n("RETURN"),
+        ]));
+    }
+    if (options.badBareNamespaceInstance) members.push(method("callBareNamespace", [], "void", [
+        localDeclaration("VAR_LIST", "other", "Base", n("LITERAL", "null")),
+        call(dot(n("IDENTIFIER", "other"), "namespacedRun")), n("RETURN"),
+    ]));
+    if (options.activeNamespaceInstance) members.push(method("callActiveNamespace", [], "void", [
+        localDeclaration("VAR_LIST", "other", "Base", n("LITERAL", "null")),
+        call(dot(n("IDENTIFIER", "other"), "namespacedRun")), n("RETURN"),
+    ]));
+    if (options.localInstanceFlashBase) members.push(method("callFlashBase", [], "void", [
+        call(dot(n("IDENTIFIER", "worker"), "addEventListener"), [
+            n("LITERAL", '"ready"'), lambda([], "void", [n("RETURN")]),
+        ]), n("RETURN"),
+    ]));
+    if (options.multipleLocalBases) members.push(method("callMultipleBase", [], "String", [
+        n("RETURN", null, [call(dot(n("IDENTIFIER", "worker"), "describe"), [n("LITERAL", "1.5")])]),
+    ]));
+    classChildren.push(n("CONTENT", null, members));
+    return n("COMPILATION_UNIT", null, [
+        n("PACKAGE", null, [n("NAME", "lobby.ui"), n("CONTENT", null,
+            imports.concat([n("CLASS", null, classChildren)]))]),
+        n("CONTENT"),
+    ]);
+}
+
+function localAuthority(api, normalized, options = {}) {
+    const baseNodeId = "0000000000000001";
+    const currentNodeId = "0000000000000002";
+    const localInstanceWorkpack = options.localInstanceCall || options.badLocalInstanceCall
+        || options.localInstanceMembers || options.badLocalInstanceReadonly
+        || options.badLocalInstancePrivate || options.badLocalInstanceClosure
+        || options.localInstanceFlashBase || options.multipleLocalBases || options.vectorConcatLocal;
+    const arrayShadow = options.samePackageArrayShadow || options.importedArrayShadow || options.wildcardArrayShadow;
+    const entries = [
+        {
+            componentId: "scc-00001", importable: options.baseImportable !== false, module: options.baseModule || "application",
+            graphSourceSha256: "1".repeat(64), nodeId: baseNodeId, prerequisites: [],
+            qname: options.baseQName || (options.samePackage ? "lobby.ui.Base" : "lobby.base.Base"),
+            sourceContentSha256: "5".repeat(64),
+            sourcePath: options.samePackage ? "game-client/tapplication_main/src/lobby/ui/Base.as"
+                : "game-client/tapplication_main/src/lobby/base/Base.as",
+            targetPath: options.samePackage ? "game-client/layaair/src/application/lobby/ui/Base.ts"
+                : "game-client/layaair/src/application/lobby/base/Base.ts", topologicalLevel: 0,
+            typeKind: options.baseKind || "class",
+        },
+        ...(options.withInterface ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "6".repeat(64), nodeId: "0000000000000003", prerequisites: [],
+            qname: options.samePackage ? "lobby.ui.IReady" : "lobby.base.IReady", sourceContentSha256: "7".repeat(64),
+            sourcePath: options.samePackage ? "game-client/tapplication_main/src/lobby/ui/IReady.as"
+                : "game-client/tapplication_main/src/lobby/base/IReady.as",
+            targetPath: options.samePackage ? "game-client/layaair/src/application/lobby/ui/IReady.ts"
+                : "game-client/layaair/src/application/lobby/base/IReady.ts", topologicalLevel: 0,
+            typeKind: "interface",
+        }] : []),
+        ...(options.withPackageSymbols ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "9".repeat(64), nodeId: "0000000000000004", prerequisites: [baseNodeId],
+            qname: "lobby.base.SCore", sourceContentSha256: "a".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/SCore.as",
+            targetPath: "game-client/layaair/src/application/lobby/base/SCore.ts", topologicalLevel: 1,
+            typeKind: "package",
+        }] : []),
+        ...(options.withPackageSymbols || options.withNamespace ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "b".repeat(64), nodeId: "0000000000000005", prerequisites: [],
+            qname: "lobby.base.InternalSpace", sourceContentSha256: "c".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/InternalSpace.as",
+            targetPath: "game-client/layaair/src/application/lobby/base/InternalSpace.ts", topologicalLevel: 0,
+            typeKind: "package",
+        }] : []),
+        ...(options.localStaticCall || options.badLocalStaticCall || options.localStaticField
+            || options.badLocalStaticWrite ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "d".repeat(64), nodeId: "0000000000000006", prerequisites: [],
+            qname: "lobby.base.Utility", sourceContentSha256: "e".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/Utility.as",
+            targetPath: "game-client/layaair/src/application/lobby/base/Utility.ts", topologicalLevel: 0,
+            typeKind: "class",
+        }] : []),
+        ...(localInstanceWorkpack ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "f".repeat(64), nodeId: "0000000000000007", prerequisites: [],
+            qname: "lobby.base.Worker", sourceContentSha256: "0".repeat(64),
+            sourcePath: "game-client/tapplication_main/src/lobby/base/Worker.as",
+            targetPath: "game-client/layaair/src/application/lobby/base/Worker.ts", topologicalLevel: 0,
+            typeKind: "class",
+        }] : []),
+        ...(arrayShadow ? [{
+            componentId: "scc-00001", importable: true, module: "application",
+            graphSourceSha256: "1".repeat(64), nodeId: "0000000000000008", prerequisites: [],
+            qname: options.samePackageArrayShadow ? "lobby.ui.Array" : "lobby.base.Array",
+            sourceContentSha256: "2".repeat(64),
+            sourcePath: options.samePackageArrayShadow ? "game-client/tapplication_main/src/lobby/ui/Array.as"
+                : "game-client/tapplication_main/src/lobby/base/Array.as",
+            targetPath: options.samePackageArrayShadow ? "game-client/layaair/src/application/lobby/ui/Array.ts"
+                : "game-client/layaair/src/application/lobby/base/Array.ts",
+            topologicalLevel: 0, typeKind: "class",
+        }] : []),
+        {
+            componentId: "scc-00002", graphSourceSha256: "8".repeat(64), importable: true,
+            module: "application", nodeId: currentNodeId,
+            prerequisites: options.withEdge === false ? [] : [baseNodeId]
+                .concat(options.withInterface ? ["0000000000000003"] : [])
+                .concat(options.withPackageSymbols ? ["0000000000000004"] : [])
+                .concat(options.withPackageSymbols || options.withNamespace ? ["0000000000000005"] : [])
+                .concat(options.localStaticCall || options.badLocalStaticCall || options.localStaticField
+                    || options.badLocalStaticWrite ? ["0000000000000006"] : [])
+                .concat(localInstanceWorkpack ? ["0000000000000007"] : [])
+                .concat(arrayShadow ? ["0000000000000008"] : []), qname: "lobby.ui.Demo",
+            sourcePath: options.currentSourcePath || "game-client/tapplication_main/src/lobby/ui/Demo.as",
+            sourceContentSha256: options.currentSourceSha256 || normalized.ast.sourceSha256,
+            targetPath: "game-client/layaair/src/application/lobby/ui/Demo.ts", topologicalLevel: 1, typeKind: "class",
+        },
+    ].sort((left, right) => `${left.module}\u0000${left.qname}`.localeCompare(`${right.module}\u0000${right.qname}`));
+    const document = {
+        dependencyGraphRawSha256: "2".repeat(64), dependencyGraphSemanticSha256: "3".repeat(64), entries,
+        entryCount: entries.length, schema: "bleach-local-as3-type-map@2", sourceManifestSha256: "4".repeat(64),
+    };
+    const json = `${canonicalJson(document)}\n`;
+    return api.loadLocalTypeAuthority({
+        expectedDependencyGraphRawSha256: document.dependencyGraphRawSha256,
+        expectedDependencyGraphSemanticSha256: document.dependencyGraphSemanticSha256,
+        expectedEntryCount: entries.length,
+        expectedSourceManifestSha256: document.sourceManifestSha256,
+        json, sha256: sha256(json),
+    }, sha256);
+}
+
+function adaptLocal(api, authority, options = {}) {
+    const normalized = flatten(buildLocalBaseTree(options));
+    const locals = localAuthority(api, normalized, options);
+    const members = options.withoutMemberAuthority ? undefined : localMemberAuthority(api, locals,
+        options.mutateMemberAuthority || null, options);
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
+        locals, options.logicalPath || "lobby/ui/Demo.as", members, options.runtimeReferenceAuthority);
+}
+
+function localMemberAuthority(api, localTypes, mutate = null, options = {}) {
+    const entries = localTypes.entries.map(entry => ({
+        module: entry.module,
+        qname: entry.qname,
+        nodeId: entry.nodeId,
+        sourceContentSha256: entry.sourceContentSha256,
+        typeKind: entry.typeKind,
+        status: "complete",
+        holdCode: null,
+        holdSha256: null,
+        declaration: entry.typeKind === "package" ? {
+            baseQNames: [], interfaceQNames: [], members: [entry.qname.endsWith(".InternalSpace") ? {
+                kind: "namespace", name: "InternalSpace", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: null, readonly: false,
+            } : {
+                kind: "field", name: "SCore", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "lobby.base.Base", readonly: true,
+            }],
+            packageInitializer: entry.qname.endsWith(".InternalSpace") ? null
+                : { kind: "new", targetQName: "lobby.base.Base", argumentCount: 0 },
+        } : {
+            baseQNames: entry.qname.endsWith(".Demo")
+                ? [options.samePackage ? entry.qname.replace(/\.Demo$/, ".Base") : "lobby.base.Base"]
+                : entry.qname.endsWith(".Worker") && options.localInstanceFlashBase ? ["flash.display.Sprite"]
+                    : entry.qname.endsWith(".Worker") && options.vectorConcatLocal ? ["lobby.base.Base"]
+                    : entry.qname.endsWith(".Worker") && options.multipleLocalBases
+                        ? ["lobby.base.Base", "flash.display.Sprite"] : [],
+            interfaceQNames: [],
+            members: entry.qname.endsWith(".Array") ? [{
+                kind: "constructor", name: "Array", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: null, readonly: false,
+            }] : entry.qname.endsWith(".Utility") ? [{
+                kind: "method", name: "describe", modifiers: ["public", "static"], namespaceName: null,
+                parameters: [{ name: "value", type: "int", optional: false, rest: false }],
+                returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "field", name: "VERSION", modifiers: ["public", "static"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "String", readonly: true,
+            }] : entry.qname.endsWith(".Worker") ? [{
+                kind: "constructor", name: "Worker", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: null, readonly: false,
+            }, {
+                kind: "method", name: "process", modifiers: ["public"], namespaceName: null,
+                parameters: [{ name: "value", type: "int", optional: false, rest: false }],
+                returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "field", name: "label", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "String", readonly: false,
+            }, {
+                kind: "field", name: "CODE", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "String", readonly: true,
+            }, {
+                kind: "field", name: "secret", modifiers: ["private"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "String", readonly: false,
+            }] : entry.qname.endsWith(".Base") ? [{
+                kind: "constructor", name: "Base", modifiers: ["public"], namespaceName: null,
+                parameters: [{ name: "value", type: "int", optional: true, rest: false }],
+                returnType: null, fieldType: null, readonly: false,
+            }, {
+                kind: "method", name: "run", modifiers: ["protected"], namespaceName: null,
+                parameters: [{ name: "value", type: "Vector.<int>", optional: false, rest: false }],
+                returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "method", name: "namespacedRun", modifiers: [], namespaceName: "InternalSpace",
+                parameters: [], returnType: "void", fieldType: null, readonly: false,
+            }, {
+                kind: "method", name: "describe", modifiers: ["public"], namespaceName: null,
+                parameters: [{ name: "value", type: "int", optional: false, rest: false }],
+                returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "field", name: "count", modifiers: ["protected"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: "int", readonly: false,
+            }, {
+                kind: "getter", name: "title", modifiers: ["protected"], namespaceName: null,
+                parameters: [], returnType: "String", fieldType: null, readonly: false,
+            }, {
+                kind: "setter", name: "title", modifiers: ["protected"], namespaceName: null,
+                parameters: [{ name: "value", type: "String", optional: false, rest: false }],
+                returnType: "void", fieldType: null, readonly: false,
+            }] : [{
+                kind: "constructor", name: "Demo", modifiers: ["public"], namespaceName: null,
+                parameters: [], returnType: null, fieldType: null, readonly: false,
+            }].concat(options.ownProtectedInstance ? [{
+                kind: "method", name: "ownProtected", modifiers: ["protected"], namespaceName: null,
+                parameters: [], returnType: "void", fieldType: null, readonly: false,
+            }] : []),
+            packageInitializer: null,
+        },
+    }));
+    if (mutate) mutate(entries);
+    const completeCount=entries.filter(entry=>entry.status==="complete").length;
+    const heldCount=entries.filter(entry=>entry.status==="held").length;
+    const document = {
+        completeCount,
+        declarationWorkerSha256: "a".repeat(64),
+        entries,
+        entryCount: entries.length,
+        heldCount,
+        localTypeMapSha256: "b".repeat(64),
+        schema: "bleach-local-as3-member-map@2",
+        sourceCensusSha256: "c".repeat(64),
+    };
+    const json = `${canonicalJson(document)}\n`;
+    return api.loadLocalMemberAuthority({
+        expectedCompleteCount: completeCount,
+        expectedDeclarationWorkerSha256: document.declarationWorkerSha256,
+        expectedEntryCount: entries.length,
+        expectedHeldCount: heldCount,
+        expectedLocalTypeMapSha256: document.localTypeMapSha256,
+        expectedSourceCensusSha256: document.sourceCensusSha256,
+        json,
+        sha256: sha256(json),
+    }, sha256, localTypes);
+}
+
+function mappingDocument() {
+    return {
+        schema: "as3-source-to-laya-capability-map@1",
+        mappings: [
+            {
+                sourceQName: "flash.display.Sprite",
+                sourceRoles: ["base-type", "constructor", "import"],
+                sourceMember: null,
+                targetCapabilityId: "api.flash.display",
+                targetModule: "src/layaAir/flash/display/Sprite.ts",
+                targetExport: "Sprite",
+                targetKind: "class",
+                targetSignature: "typeof Sprite",
+                targetMember: null,
+            },
+            {
+                sourceQName: "flash.display.Sprite",
+                sourceRoles: ["constructor"],
+                sourceMember: {
+                    access: "call",
+                    name: "Sprite",
+                    minArgs: 0,
+                    maxArgs: 0,
+                    signature: "public function Sprite()",
+                },
+                targetCapabilityId: "api.flash.display",
+                targetModule: "src/layaAir/flash/display/Sprite.ts",
+                targetExport: "Sprite",
+                targetKind: "class",
+                targetSignature: "typeof Sprite",
+                targetMember: {
+                    name: "Sprite",
+                    kind: "constructor",
+                    scope: "static",
+                    signature: "new (): Sprite",
+                },
+            },
+            {
+                sourceQName: "flash.events.Event",
+                sourceRoles: ["import"],
+                sourceMember: null,
+                targetCapabilityId: "api.flash.events",
+                targetModule: "src/layaAir/flash/events/Event.ts",
+                targetExport: "Event",
+                targetKind: "class",
+                targetSignature: "typeof Event",
+                targetMember: null,
+            },
+            {
+                sourceQName: "flash.display.Sprite",
+                sourceRoles: ["instance-member"],
+                sourceMember: {
+                    access: "call",
+                    name: "addEventListener",
+                    minArgs: 2,
+                    maxArgs: 5,
+                    signature: "public native function addEventListener(param1:String, param2:Function, param3:Boolean = false, param4:int = 0, param5:Boolean = false) : void;",
+                },
+                targetCapabilityId: "api.flash.display",
+                targetModule: "src/layaAir/flash/display/Sprite.ts",
+                targetExport: "Sprite",
+                targetKind: "class",
+                targetSignature: "typeof Sprite",
+                targetMember: {
+                    name: "addEventListener",
+                    kind: "method",
+                    scope: "instance",
+                    signature: "(type: string, listener: FlashEventListener, useCapture?: boolean, priority?: number, useWeakReference?: boolean) => void",
+                },
+            },
+        ],
+    };
+}
+
+function mappedTimerSpecification(name, kind, visibility = "public") {
+    const prefix = visibility === "internal" ? "internal" : visibility;
+    if (kind === "field") return {
+        name, access: "read", minArgs: 0, maxArgs: 0, sourceKind: "var", returnType: "Function",
+        sourceSignature: `${prefix} var ${name}:Function;`, targetKind: "property", targetSignature: "Function",
+    };
+    if (kind === "getter") return {
+        name, access: "read", minArgs: 0, maxArgs: 0, sourceKind: "get", returnType: "Function",
+        sourceSignature: `${prefix} function get ${name}() : Function;`, targetKind: "get", targetSignature: "Function",
+    };
+    if (kind === "setter") return {
+        name, access: "write", minArgs: 1, maxArgs: 1, sourceKind: "set", returnType: "void",
+        sourceSignature: `${prefix} function set ${name}(value:Function) : void;`, targetKind: "set",
+        targetSignature: "(value: Function) => void",
+    };
+    const set = name === "setTimeout" || name === "setInterval";
+    const get = name === "getTimer";
+    return {
+        name, access: "call", minArgs: set ? 2 : get ? 0 : 1, maxArgs: set ? 2 : get ? 0 : 1,
+        sourceKind: "method", returnType: set ? "uint" : get ? "int" : "void",
+        sourceSignature: set ? `${prefix} function ${name}(closure:Function, delay:Number) : uint`
+            : get ? `${prefix} function ${name}() : int` : `${prefix} function ${name}(id:uint) : void`,
+        targetKind: "method", targetSignature: set ? "(closure: Function, delay: number) => number"
+            : get ? "() => number" : "(id: number) => void",
+    };
+}
+
+function appendMappedTimerSourceUse(source, specification) {
+    source.as3SourceCapabilities.memberUses.push({
+        access: specification.access,
+        argumentCount: specification.access === "call" ? specification.minArgs : null,
+        classification: "layaair-flash-api-bridge", context: "instance-member", count: 1,
+        evidence: { line: 1, path: "synthetic/MappedTimerBase.as" }, member: specification.name,
+        preserveNameAndSignature: true, qname: "flash.display.Sprite", receiverType: "flash.display.Sprite",
+        signatures: [{ declaredBy: "flash.display.Sprite", kind: specification.sourceKind,
+            maxArgs: specification.maxArgs, minArgs: specification.minArgs,
+            returnType: specification.returnType, signature: specification.sourceSignature, static: false }],
+    });
+}
+
+function capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson, targetCapabilitiesJson,
+    nativeTimerAuthorityJson, specifications) {
+    const source = JSON.parse(sourceCensusJson);
+    const target = JSON.parse(targetCapabilitiesJson);
+    const spriteApi = source.as3SourceCapabilities.apis.find(item => item.qname === "flash.display.Sprite");
+    assert.ok(spriteApi && spriteApi.roles.includes("instance-member"));
+    const display = target.capabilities.find(item => item.id === "api.flash.display");
+    const sprite = display.obligations.find(item => item.module === "src/layaAir/flash/display/Sprite.ts"
+        && item.export === "Sprite");
+    assert.ok(sprite);
+    const document = mappingDocument();
+    for (const specification of specifications) {
+        appendMappedTimerSourceUse(source, specification);
+        const targetMember = { abstract: false, kind: specification.targetKind, name: specification.name,
+            scope: "instance", optional: false, readonly: false, signature: specification.targetSignature };
+        if (!sprite.members.some(item => JSON.stringify(item) === JSON.stringify(targetMember))) {
+            sprite.members.push(targetMember);
+        }
+        document.mappings.push({
+            sourceQName: "flash.display.Sprite", sourceRoles: ["instance-member"],
+            sourceMember: { access: specification.access, name: specification.name,
+                minArgs: specification.minArgs, maxArgs: specification.maxArgs,
+                signature: specification.sourceSignature },
+            targetCapabilityId: "api.flash.display", targetModule: "src/layaAir/flash/display/Sprite.ts",
+            targetExport: "Sprite", targetKind: "class", targetSignature: "typeof Sprite",
+            targetMember: { name: specification.name, kind: specification.targetKind,
+                scope: "instance", signature: specification.targetSignature },
+        });
+    }
+    const sourceJson = JSON.stringify(source);
+    const targetJson = JSON.stringify(target);
+    const mappingJson = api.canonicalMappingJson(document);
+    return api.loadCapabilityAuthority({
+        sourceCensusJson: sourceJson, sourceCensusSha256: sha256(sourceJson),
+        targetCapabilitiesJson: targetJson, targetCapabilitiesSha256: sha256(targetJson),
+        mappingJson, mappingSha256: sha256(mappingJson), nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256: sha256(nativeTimerAuthorityJson),
+    }, sha256);
+}
+
+function capabilityAuthorityWithUnmappedTimerMembers(api, sourceCensusJson, targetCapabilitiesJson,
+    nativeTimerAuthorityJson, specifications) {
+    const source = JSON.parse(sourceCensusJson);
+    const spriteApi = source.as3SourceCapabilities.apis.find(item => item.qname === "flash.display.Sprite");
+    assert.ok(spriteApi && spriteApi.roles.includes("instance-member"));
+    for (const specification of specifications) appendMappedTimerSourceUse(source, specification);
+    const sourceJson = JSON.stringify(source);
+    const mappingJson = api.canonicalMappingJson(mappingDocument());
+    return api.loadCapabilityAuthority({
+        sourceCensusJson: sourceJson, sourceCensusSha256: sha256(sourceJson),
+        targetCapabilitiesJson, targetCapabilitiesSha256: sha256(targetCapabilitiesJson),
+        mappingJson, mappingSha256: sha256(mappingJson), nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256: sha256(nativeTimerAuthorityJson),
+    }, sha256);
+}
+
+function mappedSpriteRuntimeAuthority(api) {
+    const document = { schema: "laya-flash-runtime-type-predicates@1", hashMode: "canonical-lf-utf8", types: [{
+        sourceQName: "flash.display.Sprite", targetCapabilityId: "api.flash.display",
+        targetModule: "src/layaAir/flash/display/Sprite.ts", constructorExport: "Sprite",
+        constructorSignature: "typeof Sprite", constructSignatures: ["new (): Sprite"],
+        predicateExport: "isFlashSprite", predicateSignature: "(value: unknown) => value is Sprite",
+        heritageClosure: [], moduleSha256: "1".repeat(64),
+    }] };
+    const json = JSON.stringify(document);
+    const lock = JSON.stringify({ schema: "bleach-as3-runtime-type-authority-lock@1",
+        predicateAuthorityCanonicalLfSha256: sha256(json), predicateAuthorityEntryCount: 1 });
+    return api.loadMappedRuntimeTypeAuthority(lock, json, ["flash.display.Sprite"], sha256);
+}
+
+function adaptMappedTimer(api, authority, runtimeAuthority, name) {
+    const normalized = flatten(buildTree({ nativeTimerName: name }));
+    return api.adaptNormalizedParserAst(normalized.ast, authority, normalized.sourceText, sha256,
+        undefined, undefined, undefined, runtimeAuthority);
+}
+
+function assertErrorCode(fn, code) {
+    assert.throws(fn, (error) => error && error.code === code, code);
+}
+
+function main() {
+    const ts = loadModernTypeScript();
+    const compiled = compileHardenedSources(ts);
+    const api = compiled.api;
+    const sourceCensusJson = fs.readFileSync(requiredEnvironmentPath("HARDENED_SOURCE_CAPABILITY_CENSUS"), "utf8");
+    const targetCapabilitiesJson = fs.readFileSync(requiredEnvironmentPath("HARDENED_TARGET_CAPABILITIES"), "utf8")
+        .replace(/\r\n?/g, "\n");
+    const nativeTimerAuthorityJson = fs.readFileSync(
+        path.join(__dirname, "../../config/native-timer-authority.json"), "utf8").replace(/\r\n?/g, "\n");
+    const nativeTimerAuthoritySha256 = sha256(nativeTimerAuthorityJson);
+    const sourceRepo = requiredEnvironmentPath("HARDENED_SOURCE_REPO", "directory");
+    const targetRepo = requiredEnvironmentPath("HARDENED_TARGET_REPO", "directory");
+    assert.equal(git(sourceRepo, "rev-parse", "HEAD"), EXPECTED_SOURCE_HEAD);
+    assert.equal(git(sourceRepo, "hash-object", requiredEnvironmentPath("HARDENED_SOURCE_CAPABILITY_CENSUS")), EXPECTED_SOURCE_BLOB);
+    assert.equal(git(targetRepo, "rev-parse", "HEAD"), EXPECTED_TARGET_HEAD);
+    assert.equal(git(targetRepo, "hash-object", requiredEnvironmentPath("HARDENED_TARGET_CAPABILITIES")), EXPECTED_TARGET_BLOB);
+    assert.equal(sha256(sourceCensusJson), EXPECTED_SOURCE_SHA256);
+    assert.equal(sha256(targetCapabilitiesJson), EXPECTED_TARGET_SHA256);
+    assertMaintainedArrayReadEvidence(sourceRepo);
+    const receiverEvidenceRoot = path.join(sourceRepo,
+        "as3-to-layaair-porting-kit/tests/native-runtime/avm2-function-receiver");
+    const receiverProvenance = JSON.parse(fs.readFileSync(
+        path.join(receiverEvidenceRoot, "pepper-flash-26.json"), "utf8"));
+    const receiverGolden = fs.readFileSync(path.join(receiverEvidenceRoot, "pepper-flash-26.txt"), "utf8")
+        .replace(/\r\n?/g, "\n");
+    assert.equal(receiverProvenance.oracle, "Pepper Flash 26.0.0.131");
+    assert.equal(sha256(receiverGolden), receiverProvenance.result_sha256);
+    assert.equal(sha256(fs.readFileSync(path.join(receiverEvidenceRoot, "FunctionReceiverDefinition.as"), "utf8")
+        .replace(/\r\n?/g, "\n")), receiverProvenance.fixture_sources["FunctionReceiverDefinition.as"]);
+    assert.match(receiverGolden, /ordinary\.call\.global=call-global:caller-global/);
+    assert.match(receiverGolden, /ordinary\.callproplex=callproplex:definition-global/);
+    assert.match(receiverGolden, /methodClosure\.call\.global=call-global:method-owner/);
+    const mappingJson = api.canonicalMappingJson(mappingDocument());
+    const authority = api.loadCapabilityAuthority({
+        sourceCensusJson,
+        sourceCensusSha256: EXPECTED_SOURCE_SHA256,
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256);
+
+    const program = adapt(api, buildTree(), authority);
+    assert.ok(Object.isFrozen(authority));
+    assert.ok(Object.isFrozen(authority.typeMappingsBySource));
+    assert.ok(Object.isFrozen(authority.intrinsicTypesBySource));
+    assert.ok(Object.isFrozen(program));
+    assert.ok(Object.isFrozen(program.declaration.members));
+    assertErrorCode(
+        () => adapt(api, buildTree(), { ...authority }),
+        "HARDENED_CAPABILITY_AUTHORITY_INSTANCE",
+    );
+    assert.equal(program.schema, "as3-semantic-ir@1");
+    assert.equal(program.packageName, "lobby.ui");
+    assert.equal(program.outputModulePath, "lobby/ui/Demo.ts");
+    assert.equal(program.sourceCapabilitySha256, EXPECTED_SOURCE_SHA256);
+    assert.equal(program.targetCapabilitySha256, EXPECTED_TARGET_SHA256);
+    assert.equal(program.nativeTimerAuthoritySha256, nativeTimerAuthoritySha256);
+    const fields = program.declaration.members.filter((member) => member.kind === "field");
+    assert.deepEqual(fields.map((field) => field.name), ["a", "b"]);
+    assert.equal(fields[0].sharedDeclarationNodeId, fields[1].sharedDeclarationNodeId);
+    assert.notEqual(fields[0].sourceNodeId, fields[1].sourceNodeId);
+    assert.equal(fields[0].readonly, false);
+
+    const mappedTimerRuntime = mappedSpriteRuntimeAuthority(api);
+    const timerNames = ["clearInterval", "clearTimeout", "getTimer", "setInterval", "setTimeout"];
+    for (const kind of ["field", "getter", "setter", "method"]) {
+        const mappedShadowAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+            targetCapabilitiesJson, nativeTimerAuthorityJson,
+            timerNames.map(name => mappedTimerSpecification(name, kind)));
+        for (const name of timerNames) {
+            assertErrorCode(() => adaptMappedTimer(api, mappedShadowAuthority, mappedTimerRuntime, name),
+                "HARDENED_NATIVE_TIMER_INHERITED_SHADOW");
+        }
+    }
+    const mappedTerminalAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+        targetCapabilitiesJson, nativeTimerAuthorityJson,
+        timerNames.map(name => mappedTimerSpecification(name, "method")));
+    for (const name of timerNames) {
+        assertErrorCode(() => adaptLocal(api, mappedTerminalAuthority, {
+            nativeTimerName: name, runtimeReferenceAuthority: mappedTimerRuntime,
+            mutateMemberAuthority(entries) {
+                const base = entries.find(entry => entry.qname === "lobby.base.Base");
+                base.declaration.baseQNames = ["flash.display.Sprite"];
+            },
+        }), "HARDENED_NATIVE_TIMER_INHERITED_SHADOW");
+    }
+    for (const visibility of ["protected", "internal", "private"]) {
+        const mappedVisibilityAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+            targetCapabilitiesJson, nativeTimerAuthorityJson,
+            timerNames.map(name => mappedTimerSpecification(name, "method", visibility)));
+        for (const name of timerNames) {
+            if (visibility === "internal") {
+                assertErrorCode(() => adaptMappedTimer(api, mappedVisibilityAuthority, mappedTimerRuntime, name),
+                    "HARDENED_NATIVE_TIMER_MAPPED_BASE_VISIBILITY");
+            } else if (visibility === "private") {
+                assertErrorCode(() => adaptMappedTimer(api, mappedVisibilityAuthority, mappedTimerRuntime, name),
+                    "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+            } else {
+                assertErrorCode(() => adaptMappedTimer(api, mappedVisibilityAuthority, mappedTimerRuntime, name),
+                    "HARDENED_NATIVE_TIMER_INHERITED_SHADOW");
+            }
+        }
+    }
+    const heldSpecification = mappedTimerSpecification("setTimeout", "method");
+    heldSpecification.sourceSignature = "custom function setTimeout(closure:Function, delay:Number) : uint";
+    const mappedHeldAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+        targetCapabilitiesJson, nativeTimerAuthorityJson, [heldSpecification]);
+    assertErrorCode(() => adaptMappedTimer(api, mappedHeldAuthority, mappedTimerRuntime, "setTimeout"),
+        "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+    const mappedAmbiguousAuthority = capabilityAuthorityWithMappedTimerMembers(api, sourceCensusJson,
+        targetCapabilitiesJson, nativeTimerAuthorityJson, [
+            mappedTimerSpecification("setTimeout", "getter", "public"),
+            mappedTimerSpecification("setTimeout", "setter", "protected"),
+        ]);
+    assertErrorCode(() => adaptMappedTimer(api, mappedAmbiguousAuthority, mappedTimerRuntime, "setTimeout"),
+        "HARDENED_NATIVE_TIMER_MAPPED_BASE_AMBIGUOUS");
+    const unmappedTimerAuthority = capabilityAuthorityWithUnmappedTimerMembers(api, sourceCensusJson,
+        targetCapabilitiesJson, nativeTimerAuthorityJson,
+        timerNames.map(name => mappedTimerSpecification(name, "method")));
+    for (const name of timerNames) {
+        assertErrorCode(() => adaptMappedTimer(api, unmappedTimerAuthority, mappedTimerRuntime, name),
+            "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+        assertErrorCode(() => adaptLocal(api, unmappedTimerAuthority, {
+            nativeTimerName: name, runtimeReferenceAuthority: mappedTimerRuntime,
+            mutateMemberAuthority(entries) {
+                const base = entries.find(entry => entry.qname === "lobby.base.Base");
+                base.declaration.baseQNames = ["flash.display.Sprite"];
+            },
+        }), "HARDENED_NATIVE_TIMER_MAPPED_BASE_HELD");
+    }
+    const cyclicDocument = { schema: "laya-flash-runtime-type-predicates@1", hashMode: "canonical-lf-utf8",
+        types: ["CycleA", "CycleB"].map((name, index) => ({
+            sourceQName: `flash.display.${name}`, targetCapabilityId: "api.flash.display",
+            targetModule: `src/layaAir/flash/display/${name}.ts`, constructorExport: name,
+            constructorSignature: `typeof ${name}`, constructSignatures: [`new (): ${name}`],
+            predicateExport: `is${name}`, predicateSignature: `(value: unknown) => value is ${name}`,
+            heritageClosure: [`flash.display.Cycle${index === 0 ? "B" : "A"}`], moduleSha256: "2".repeat(64),
+        })) };
+    const cyclicJson = JSON.stringify(cyclicDocument);
+    const cyclicLock = JSON.stringify({ schema: "bleach-as3-runtime-type-authority-lock@1",
+        predicateAuthorityCanonicalLfSha256: sha256(cyclicJson), predicateAuthorityEntryCount: 2 });
+    assertErrorCode(() => api.loadMappedRuntimeTypeAuthority(cyclicLock, cyclicJson,
+        ["flash.display.CycleA", "flash.display.CycleB"], sha256), "HARDENED_TYPE_AUTHORITY_HERITAGE");
+
+    const localBaseProgram = adaptLocal(api, authority);
+    assert.equal(localBaseProgram.imports[0].authorityKind, "local");
+    assert.equal(localBaseProgram.imports[0].localNodeId, "0000000000000001");
+    assert.equal(localBaseProgram.imports[0].targetModule, "../base/Base");
+    const localBaseOutput = api.emitSemanticProgram(localBaseProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localBaseOutput.code, /import \{ Base \} from "\.\.\/base\/Base";/);
+    assert.match(localBaseOutput.code, /export class Demo extends Base/);
+    const localOverrideProgram = adaptLocal(api, authority, { localOverride: true });
+    const localOverrideOutput = api.emitSemanticProgram(localOverrideProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localOverrideOutput.code,
+        /protected override run\(value: __as3Vector<number> \| null\): string \| null/);
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalOverride: true }),
+        "HARDENED_LOCAL_MEMBER_SIGNATURE");
+    assertErrorCode(() => adaptLocal(api, authority, { localOverride: true, withoutMemberAuthority: true }),
+        "HARDENED_LOCAL_MEMBER_AUTHORITY");
+    const localSuperArgumentOutput = api.emitSemanticProgram(adaptLocal(api, authority, { superArgument: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localSuperArgumentOutput.code,
+        /const __as3PreparedConstruction = __as3PrepareConstruction\(new\.target, Demo, __as3ConstructionProof\);[\s\S]*super\(__as3Int\(1\), \.\.\.__as3PreparedConstruction\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { superArgument: true, badSuperArgument: true }),
+        "HARDENED_LOCAL_CONSTRUCTOR_TYPE");
+    const localNewOutput = api.emitSemanticProgram(adaptLocal(api, authority, { localNew: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localNewOutput.code, /private created: Base \| null;/);
+    assert.match(localNewOutput.code, /this\.created = new Base\(__as3Int\(1\)\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalNew: true }),
+        "HARDENED_LOCAL_CONSTRUCTOR_TYPE");
+    const inheritedCallOutput = api.emitSemanticProgram(adaptLocal(api, authority, { inheritedCall: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(inheritedCallOutput.code,
+        /this\.run\(new __as3Vector<number>\(__as3VectorPolicies\.int\)\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { badInheritedCall: true }),
+        "HARDENED_LOCAL_CALL_TYPE");
+    const superMethodOutput = api.emitSemanticProgram(adaptLocal(api, authority, { superMethodCall: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(superMethodOutput.code,
+        /super\.run\(new __as3Vector<number>\(__as3VectorPolicies\.int\)\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { badSuperMethodCall: true }),
+        "HARDENED_LOCAL_CALL_TYPE");
+    assertErrorCode(() => adaptLocal(api, authority, { staticSuperMethodCall: true }),
+        "HARDENED_SUPER_CONTEXT");
+    assertErrorCode(() => adaptLocal(api, authority, { lambdaSuperMethodCall: true }),
+        "HARDENED_SUPER_CONTEXT");
+    assertErrorCode(() => adaptLocal(api, authority, { superMethodField: true }),
+        "HARDENED_SUPER_CONTEXT");
+    const inheritedMembersOutput = api.emitSemanticProgram(adaptLocal(api, authority, { inheritedMembers: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(inheritedMembersOutput.code, /this\.count = __as3Int\(1\);/);
+    assert.match(inheritedMembersOutput.code, /var label: string \| null = this\.title;/);
+    assert.match(inheritedMembersOutput.code, /this\.title = "updated";/);
+    const packageValueOutput = api.emitSemanticProgram(adaptLocal(api, authority, { withPackageSymbols: true }),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(packageValueOutput.code, /import \{ SCore \} from "\.\.\/base\/SCore";/);
+    assert.match(packageValueOutput.code, /var shared: Base \| null = SCore;/);
+    assertErrorCode(() => adaptLocal(api, authority, { withPackageSymbols: true,
+        mutateMemberAuthority: entries => {
+            const base = entries.find(entry => entry.qname === "lobby.base.Base");
+            base.declaration.members.find(member => member.kind === "constructor").parameters[0].optional = false;
+        },
+    }), "HARDENED_LOCAL_PACKAGE_INITIALIZER_ARITY");
+    const namespaceProgram = adaptLocal(api, authority, { withNamespace: true });
+    const localNamespaceOutput = api.emitSemanticProgram(namespaceProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.doesNotMatch(localNamespaceOutput.code, /InternalSpace/);
+    const namespaceOverrideOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { withNamespace: true, localNamespaceOverride: true }),
+    { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(namespaceOverrideOutput.code, /override namespacedRun\(\): void/);
+    assert.doesNotMatch(namespaceOverrideOutput.code, /InternalSpace/);
+    const localStaticOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localStaticCall: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localStaticOutput.code, /return Utility\.describe\(__as3Int\(1\.5\)\);/);
+    const localStaticFieldOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localStaticField: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localStaticFieldOutput.code, /return Utility\.VERSION;/);
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalStaticCall: true }),
+        "HARDENED_LOCAL_CALL_TYPE");
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalStaticWrite: true }),
+        "HARDENED_LOCAL_STATIC_WRITE");
+    assertErrorCode(() => adaptLocal(api, authority, { localStaticCall: true,
+        mutateMemberAuthority: entries => {
+            const utility = entries.find(entry => entry.qname === "lobby.base.Utility");
+            utility.declaration.members.find(member => member.name === "describe").modifiers = ["private", "static"];
+        },
+    }), "HARDENED_LOCAL_STATIC_VISIBILITY");
+    const localInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localInstanceCall: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localInstanceOutput.code, /return this\.worker!\.process\(__as3Int\(1\.5\)\);/);
+    const localInstanceMembersOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localInstanceMembers: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localInstanceMembersOutput.code, /this\.worker!\.label = "ready";/);
+    assert.match(localInstanceMembersOutput.code, /return this\.worker!\.label;/);
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalInstanceCall: true }),
+        "HARDENED_LOCAL_CALL_TYPE");
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalInstanceReadonly: true }),
+        "HARDENED_LOCAL_INSTANCE_WRITE");
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalInstancePrivate: true }),
+        "HARDENED_LOCAL_MEMBER_VISIBILITY");
+    assertErrorCode(() => adaptLocal(api, authority, { badLocalInstanceClosure: true }),
+        "HARDENED_LOCAL_METHOD_CLOSURE");
+    const packageInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { withPackageSymbols: true, packageInstanceCall: true }),
+    { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(packageInstanceOutput.code, /return SCore!\.describe\(__as3Int\(1\.5\)\);/);
+    const ownProtectedOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { ownProtectedInstance: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(ownProtectedOutput.code, /peer!\.ownProtected\(\);/);
+    assertErrorCode(() => adaptLocal(api, authority, { badBareNamespaceInstance: true }),
+        "HARDENED_LOCAL_INSTANCE_MEMBER");
+    const activeNamespaceInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { withNamespace: true, activeNamespaceInstance: true }),
+    { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(activeNamespaceInstanceOutput.code, /other!\.namespacedRun\(\);/);
+    const flashBaseInstanceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { localInstanceFlashBase: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(flashBaseInstanceOutput.code, /this\.worker!\.addEventListener\("ready", function \(\): void/);
+    const multipleFlashBaseOutput = api.emitSemanticProgram(adaptLocal(api, authority, {
+        localInstanceFlashBase: true,
+        mutateMemberAuthority: entries => {
+            entries.find(entry => entry.qname === "lobby.base.Worker").declaration.baseQNames = [
+                "flash.display.Sprite", "flash.events.IEventDispatcher",
+            ];
+        },
+    }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(multipleFlashBaseOutput.code,
+        /this\.worker!\.addEventListener\("ready", function \(\): void/);
+    const multipleBaseOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { multipleLocalBases: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(multipleBaseOutput.code, /return this\.worker!\.describe\(__as3Int\(1\.5\)\);/);
+    const vectorConcatOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { vectorConcatLocal: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorConcatOutput.code, /this\.baseValues!\.concat\(this\.workerValues\);/);
+    for (const parents of [
+        ["lobby.base.Base", "missing.Side"],
+        ["lobby.base.Base", "lobby.base.Worker"],
+    ]) {
+        assertErrorCode(() => adaptLocal(api, authority, {
+            vectorConcatLocal: true,
+            mutateMemberAuthority: entries => {
+                entries.find(entry => entry.qname === "lobby.base.Worker").declaration.baseQNames = parents;
+            },
+        }), "HARDENED_VECTOR_CONCAT_TYPE");
+    }
+    assertErrorCode(() => adaptLocal(api, authority, {
+        localInstanceCall: true,
+        mutateMemberAuthority: entries => {
+            entries.find(entry => entry.qname === "lobby.base.Worker").declaration.baseQNames = [
+                "lobby.base.Worker",
+            ];
+        },
+    }), "HARDENED_LOCAL_MEMBER_CYCLE");
+    const localNormalizedForMembers = flatten(buildLocalBaseTree());
+    const localTypesForMembers = localAuthority(api, localNormalizedForMembers);
+    const localMembers = localMemberAuthority(api, localTypesForMembers);
+    assert.ok(Object.isFrozen(localMembers));
+    assert.ok(Object.isFrozen(localMembers.entries));
+    assert.equal(localMembers.completeCount, 2);
+    assert.equal(localMembers.entriesByIdentity["application\u0000lobby.base.Base"]
+        .declaration.members[1].parameters[0].type, "Vector.<int>");
+    assertErrorCode(() => api.loadLocalMemberAuthority({
+        expectedCompleteCount: 2, expectedDeclarationWorkerSha256: "a".repeat(64), expectedEntryCount: 2,
+        expectedHeldCount: 0, expectedLocalTypeMapSha256: "b".repeat(64),
+        expectedSourceCensusSha256: "c".repeat(64), json: "{}\n", sha256: sha256("{}\n"),
+    }, sha256, localTypesForMembers), "HARDENED_LOCAL_MEMBER_SCHEMA");
+    assertErrorCode(() => localMemberAuthority(api, localTypesForMembers,
+        entries => { entries[0].sourceContentSha256 = "c".repeat(64); }), "HARDENED_LOCAL_MEMBER_ENTRY");
+    const samePackageBaseProgram = adaptLocal(api, authority, { samePackage: true });
+    assert.equal(samePackageBaseProgram.imports[0].sourceQualifiedName, "lobby.ui.Base");
+    assert.equal(samePackageBaseProgram.imports[0].authorityKind, "local");
+    assert.match(api.emitSemanticProgram(samePackageBaseProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" }).code,
+    /import \{ Base \} from "\.\/Base";/);
+    assertErrorCode(() => adaptLocal(api, authority, { samePackage: true, withEdge: false }),
+        "HARDENED_LOCAL_IMPORT_EDGE");
+    const numericSortProgram=adaptLocal(api,authority,{numericSortWorkpack:true});
+    const numericSortMethod=numericSortProgram.declaration.members.find(member=>member.kind==="method"
+        && member.name==="sortWithShadow");
+    assert.equal(numericSortMethod.body[0].expression.arguments[0].kind,"intrinsicConstant");
+    assert.equal(numericSortMethod.body[0].expression.arguments[0].identity,"Array.NUMERIC");
+    assert.match(api.emitSemanticProgram(numericSortProgram,
+        {compiler:ts,expectedTypeScriptVersion:"4.9.5"}).code,/this\.sortValues!\.sort\(16\);/);
+    for(const inherited of [
+        {kind:"field",name:"Array",modifiers:["protected"],namespaceName:null,
+            parameters:[],returnType:null,fieldType:"Object",readonly:false},
+        {kind:"getter",name:"Array",modifiers:["public"],namespaceName:null,
+            parameters:[],returnType:"Object",fieldType:null,readonly:false},
+        {kind:"method",name:"Array",modifiers:["public"],namespaceName:null,
+            parameters:[],returnType:"Object",fieldType:null,readonly:false},
+    ]){
+        assertErrorCode(()=>adaptLocal(api,authority,{numericSortWorkpack:true,
+            mutateMemberAuthority:entries=>entries.find(entry=>entry.qname==="lobby.base.Base")
+                .declaration.members.push(inherited)}),"HARDENED_INTRINSIC_IDENTITY_SHADOW");
+    }
+    for(const bases of [["missing.One"],["missing.One","missing.Two"],["lobby.base.Base"]]){
+        assertErrorCode(()=>adaptLocal(api,authority,{numericSortWorkpack:true,
+            mutateMemberAuthority:entries=>{entries.find(entry=>entry.qname==="lobby.base.Base")
+                .declaration.baseQNames=bases;}}),"HARDENED_INTRINSIC_IDENTITY_AUTHORITY");
+    }
+    assertErrorCode(()=>adaptLocal(api,authority,{numericSortWorkpack:true,
+        mutateMemberAuthority:entries=>{const base=entries.find(entry=>entry.qname==="lobby.base.Base");
+            base.status="held";base.holdCode="HARDENED_TEST_HOLD";base.holdSha256="f".repeat(64);base.declaration=null;}}),
+    "HARDENED_LOCAL_MEMBER_HELD");
+    assertErrorCode(() => adaptLocal(api, authority, { samePackageArrayShadow: true }),
+        "HARDENED_INTRINSIC_IDENTITY_SHADOW");
+    assertErrorCode(() => adaptLocal(api, authority, { importedArrayShadow: true }),
+        "HARDENED_LOCAL_STATIC_MEMBER");
+    assertErrorCode(() => adaptLocal(api, authority, { wildcardArrayShadow: true, wildcardImports: true }),
+        "HARDENED_LOCAL_STATIC_MEMBER");
+    const samePackageInterfaceProgram = adaptLocal(api, authority, { samePackage: true, withInterface: true });
+    assert.deepEqual(samePackageInterfaceProgram.imports.map(item => item.sourceQualifiedName),
+        ["lobby.ui.Base", "lobby.ui.IReady"]);
+    assert.equal(samePackageInterfaceProgram.declaration.implementsTypes[0].runtimeName, "lobby.ui.IReady");
+    const localInterfaceProgram = adaptLocal(api, authority, { withInterface: true });
+    assert.equal(localInterfaceProgram.imports[1].runtimeInterface, true);
+    assert.equal(localInterfaceProgram.declaration.implementsTypes[0].runtimeName, "lobby.base.IReady");
+    const localInterfaceOutput = api.emitSemanticProgram(localInterfaceProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localInterfaceOutput.code, /export class Demo extends Base implements IReady/);
+    assert.match(localInterfaceOutput.code, /const __as3ClassInstances: WeakSet<object> = new WeakSet\(\), __as3ConstructionTargets:/);
+    assert.match(localInterfaceOutput.code, /export function isAS3ClassInstance\(value: unknown\): value is Demo/);
+    assert.doesNotMatch(localInterfaceOutput.code, /#__as3NativeClassBrand/);
+    assert.match(localInterfaceOutput.code, /export function isAS3ConstructionProof/);
+    assert.match(localInterfaceOutput.code, /__as3As\(value, __as3InterfaceType\("lobby\.base\.IReady"\)\)/);
+    const vectorInterfaceOutput = api.emitSemanticProgram(adaptLocal(api, authority,
+        { withInterface: true, vectorInterface: true }), { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorInterfaceOutput.code,
+        /new __as3Vector<IReady \| null>\(__as3VectorReference\("lobby\.base\.IReady", __as3NamedReferenceType\("lobby\.base\.IReady"\)\)\)/);
+    const localWildcardProgram = adaptLocal(api, authority, { withInterface: true, wildcardImports: true });
+    assert.deepEqual(localWildcardProgram.imports.map(item => item.sourceQualifiedName),
+        ["lobby.base.Base", "lobby.base.IReady"]);
+    assert.match(api.emitSemanticProgram(localWildcardProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" }).code,
+    /import \{ Base \} from "\.\.\/base\/Base";/);
+    assertErrorCode(() => adaptLocal(api, authority, { withEdge: false }), "HARDENED_LOCAL_IMPORT_EDGE");
+    assertErrorCode(() => adaptLocal(api, authority, { baseQName: "lobby.base.Other" }), "HARDENED_LOCAL_IMPORT");
+    assertErrorCode(() => adaptLocal(api, authority, { baseKind: "interface" }), "HARDENED_BASE_TYPE");
+    assertErrorCode(() => adaptLocal(api, authority, { currentSourceSha256: "5".repeat(64) }),
+        "HARDENED_LOCAL_SOURCE_AUTHORITY");
+    assertErrorCode(() => adaptLocal(api, authority, { logicalPath: "other/Demo.as" }),
+        "HARDENED_LOCAL_SOURCE_AUTHORITY");
+    assertErrorCode(() => adapt(api, buildTree({ unmappedFlashImport: true }), authority),
+        "HARDENED_FLASH_IMPORT_UNMAPPED");
+
+    const emitted = api.emitSemanticProgram(program, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    const repeated = api.emitSemanticProgram(program, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assertErrorCode(
+        () => api.emitSemanticProgram({ ...program }, { compiler: ts, expectedTypeScriptVersion: "4.9.5" }),
+        "HARDENED_SEMANTIC_IR_INSTANCE",
+    );
+    assert.deepEqual(emitted, repeated);
+    assert.equal(emitted.modulePath, "lobby/ui/Demo.ts");
+    assert.match(emitted.code, /import \{ Sprite \} from "laya\/flash\/display\/Sprite";/);
+    assert.match(emitted.code, /import \{ Event \} from "laya\/flash\/events\/Event";/);
+    assert.match(emitted.code, /private a: number;/);
+    assert.match(emitted.code, /private b: string \| null;/);
+    assert.match(emitted.code, /this\.a = 1;/);
+    assert.match(emitted.code, /this\.b = "x";/);
+    assert.ok(emitted.code.indexOf("__as3PrepareConstruction") < emitted.code.indexOf("this.addEventListener"));
+    assert.match(emitted.code, /this\.onEvent = __as3BindMethod\(this, this\.onEvent\);/);
+    assert.match(emitted.code, /this\.addEventListener\("ready", this\.onEvent\);/);
+    assert.equal((emitted.code.match(/this\.onEvent = __as3BindMethod\(this, this\.onEvent\);/g) || []).length, 1);
+    assert.doesNotMatch(emitted.code, /AVM|ABC|compat|wrapper/i);
+    const wildcardProgram = adapt(api, buildTree({ wildcardImports: true }), authority);
+    assert.ok(wildcardProgram.imports.some(item => item.sourceQualifiedName === "flash.display.Sprite"));
+    assert.ok(wildcardProgram.imports.some(item => item.sourceQualifiedName === "flash.events.Event"));
+    const wildcardOutput = api.emitSemanticProgram(wildcardProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(wildcardOutput.code, /import \{ Sprite \} from "laya\/flash\/display\/Sprite";/);
+    const unusedWildcardProgram = adapt(api, buildTree({ unusedWildcard: true }), authority);
+    assert.deepEqual(unusedWildcardProgram.imports.map(item => item.sourceQualifiedName),
+        ["flash.display.Sprite", "flash.events.Event"]);
+    const implicitObjectProgram = adapt(api, buildTree({ implicitObjectSuper: true }), authority);
+    assert.equal(implicitObjectProgram.declaration.extendsType, null);
+    const implicitObjectOutput = api.emitSemanticProgram(implicitObjectProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(implicitObjectOutput.code, /export class Demo \{/);
+    assert.doesNotMatch(implicitObjectOutput.code, /super\(\)/,
+        "AS3's explicit call to the implicit Object constructor lowers to the native TS class default");
+    const constProgram = adapt(api, buildTree({ constFields: true }), authority);
+    const constFields = constProgram.declaration.members.filter((member) => member.kind === "field");
+    assert.equal(constFields.every((field) => field.readonly), true);
+    const constOutput = api.emitSemanticProgram(constProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(constOutput.code, /private readonly a: number;/);
+    assert.match(constOutput.code, /private readonly b: string \| null;/);
+    assert.match(constOutput.code, /this\.a = 1;/);
+    assert.match(constOutput.code, /this\.b = "x";/);
+    const vectorProgram = adapt(api, buildTree({ vectorWorkpack: true }), authority);
+    const vectorOutput = api.emitSemanticProgram(vectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorOutput.code, /AS3Vector as __as3Vector/);
+    assert.match(vectorOutput.code, /private values: __as3Vector<number> \| null;/);
+    assert.match(vectorOutput.code, /this\.values = new __as3Vector<number>\(__as3VectorPolicies\.int, __as3Uint\(2\), false\);/);
+    assert.match(vectorOutput.code, /this\.values!\[__as3Uint\(0\)\] = __as3Int\(4\);/);
+    assert.match(vectorOutput.code, /this\.values!\.push\(__as3Int\(5\)\);/);
+    assert.match(vectorOutput.code, /var copy: __as3Vector<number> \| null = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
+    const vectorNumericProgram = adapt(api, buildTree({ vectorNumericWorkpack: true }), authority);
+    const vectorNumericOutput = api.emitSemanticProgram(vectorNumericProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorNumericOutput.code,
+        /new __as3Vector<number>\(__as3VectorPolicies\.int, __as3Uint\(1\.5\), false\)/);
+    assert.match(vectorNumericOutput.code, /this\.values!\.slice\(__as3Int\(4294967295\)\);/);
+    const vectorCallbackProgram = adapt(api, buildTree({ vectorCallbackWorkpack: true }), authority);
+    const vectorCallbackOutput = api.emitSemanticProgram(vectorCallbackProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorCallbackOutput.code, /this\.values!\.sort\(this\.compareValues\);/);
+    assert.match(vectorCallbackOutput.code, /this\.values!\.forEach\(this\.visitValue\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badVectorCallback: true }), authority),
+        "HARDENED_VECTOR_CALLBACK_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ staleVectorCallbackProof: true }), authority),
+        "HARDENED_VECTOR_CALLBACK_IDENTITY");
+    const shortVectorProgram = adapt(api, buildTree({ shortVectorWorkpack: true }), authority);
+    const shortVectorOutput = api.emitSemanticProgram(shortVectorProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(shortVectorOutput.code,
+        /var shortValues: __as3Vector<number> \| null = __as3Vector\.from<number>\(__as3VectorPolicies\.int, \[1, 2\]\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badShortVectorShape: true }), authority),
+        "HARDENED_SHORT_VECTOR_SHAPE");
+    const runtimeTypeProgram = adapt(api, buildTree({ runtimeTypeWorkpack: true }), authority);
+    const runtimeTypeOutput = api.emitSemanticProgram(runtimeTypeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(runtimeTypeOutput.code, /as3As as __as3As/);
+    assert.match(runtimeTypeOutput.code, /var cast: Event \| null = __as3As\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
+    assert.match(runtimeTypeOutput.code, /var matches: boolean = __as3Is\(event, __as3ClassType\("flash\.events\.Event", Event\)\);/);
+    assert.match(runtimeTypeOutput.code, /var compatibleInt: number = __as3Int\(__as3As\(1, __as3Types\.int\)\);/);
+    assert.match(runtimeTypeOutput.code, /var castInt: number = __as3Int\(__as3As\(event, __as3Types\.int\)\);/);
+    assert.match(runtimeTypeOutput.code, /var castUint: number = __as3Uint\(__as3As\(event, __as3Types\.uint\)\);/);
+    assert.match(runtimeTypeOutput.code, /var castNumber: number = __as3Number\(__as3As\(event, __as3Types\.Number\)\);/);
+    assert.match(runtimeTypeOutput.code, /var castBoolean: boolean = __as3Boolean\(__as3As\(event, __as3Types\.Boolean\)\);/);
+    assert.match(runtimeTypeOutput.code, /var rawPrimitive: unknown = __as3As\(event, __as3Types\.int\);/);
+    assert.match(runtimeTypeOutput.code, /var matchesInt: boolean = __as3Is\(event, __as3Types\.int\);/);
+    const vectorRuntimeProgram = adapt(api, buildTree({ vectorRuntimeWorkpack: true }), authority);
+    const vectorRuntimeOutput = api.emitSemanticProgram(vectorRuntimeProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorRuntimeOutput.code, /__as3As\(this\.values, __as3VectorType\(__as3VectorPolicies\.int\)\)/);
+    assert.match(vectorRuntimeOutput.code, /__as3Is\(this\.values, __as3VectorType\(__as3VectorPolicies\.int\)\)/);
+    const nestedVectorProgram = adapt(api, buildTree({ nestedVectorWorkpack: true }), authority);
+    const nestedVectorOutput = api.emitSemanticProgram(nestedVectorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(nestedVectorOutput.code,
+        /this\.matrix = new __as3Vector<__as3Vector<number> \| null>\(__as3VectorNested\(__as3VectorPolicies\.int\), __as3Uint\(1\)\);/);
+    const vectorBuiltinReferenceProgram = adapt(api, buildTree({ vectorBuiltinReferenceWorkpack: true }), authority);
+    const vectorBuiltinReferenceOutput = api.emitSemanticProgram(vectorBuiltinReferenceProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(vectorBuiltinReferenceOutput.code,
+        /this\.classes = new __as3Vector<__as3ClassValue \| null>\(__as3VectorPolicies\.class\);/);
+    assert.match(vectorBuiltinReferenceOutput.code,
+        /this\.routines = new __as3Vector<Function \| null>\(__as3VectorPolicies\.function\);/);
+    assert.match(vectorBuiltinReferenceOutput.code,
+        /this\.rows = new __as3Vector<unknown\[] \| null>\(__as3VectorPolicies\.array\);/);
+    const coercionProgram = adapt(api, buildTree({ coercionWorkpack: true }), authority);
+    const coercionOutput = api.emitSemanticProgram(coercionProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(coercionOutput.code, /as3Int as __as3Int/);
+    assert.match(coercionOutput.code, /var signed: number = __as3Int\(4294967295\);/);
+    assert.match(coercionOutput.code, /var unsigned: number = __as3Uint\(-1\);/);
+    assert.match(coercionOutput.code, /var message: string \| null = __as3String\(event\);/);
+    const statementProgram = adapt(api, buildTree({ statementWorkpack: true }), authority);
+    const statementOutput = api.emitSemanticProgram(statementProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(statementOutput.code, /switch \(total\)/);
+    assert.match(statementOutput.code, /case 1:/);
+    assert.match(statementOutput.code, /default:/);
+    assert.match(statementOutput.code, /do \{/);
+    assert.match(statementOutput.code, /while \(active\);/);
+    assert.match(statementOutput.code, /throw "done";/);
+    assertErrorCode(() => adapt(api, buildTree({ duplicateSwitchDefault: true }), authority),
+        "HARDENED_SWITCH_DEFAULT");
+    assertErrorCode(() => adapt(api, buildTree({ continueInSwitch: true }), authority),
+        "HARDENED_LOOP_CONTEXT");
+    const iterationProgram = adapt(api, buildTree({ iterationWorkpack: true }), authority);
+    const iterationOutput = api.emitSemanticProgram(iterationProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(iterationOutput.code, /for \(var i: number = 0; i < 2; i\+\+\)/);
+    assert.match(iterationOutput.code, /for \(var item of this\.values!\)/);
+    const existingForEachProgram = adapt(api, buildTree({ existingForEachWorkpack: true }), authority);
+    const existingForEachOutput = api.emitSemanticProgram(existingForEachProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(existingForEachOutput.code, /var existingItem: number = __as3Int\(0\);/);
+    assert.match(existingForEachOutput.code, /for \(existingItem of this\.values!\)/);
+    assert.doesNotMatch(existingForEachOutput.code, /for \(var existingItem of/);
+    assert.match(iterationOutput.code, /this\.values!\.indexOf\(item\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badForEachType: true }), authority),
+        "HARDENED_ASSIGNMENT_TYPE");
+    const tryProgram = adapt(api, buildTree({ tryWorkpack: true }), authority);
+    const tryOutput = api.emitSemanticProgram(tryProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(tryOutput.code, /try \{/);
+    assert.match(tryOutput.code, /catch \(__as3Caught/);
+    assert.match(tryOutput.code, /instanceof Error/);
+    assert.match(tryOutput.code, /const error: Error = __as3Caught/);
+    assert.match(tryOutput.code, /finally \{/);
+    assertErrorCode(() => adapt(api, buildTree({ badCatchType: true }), authority), "HARDENED_CATCH_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ strayCatch: true }), authority), "HARDENED_TRY_SEQUENCE");
+    const bitwiseProgram = adapt(api, buildTree({ bitwiseWorkpack: true }), authority);
+    const bitwiseOutput = api.emitSemanticProgram(bitwiseProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(bitwiseOutput.code, /var flags: number = 1 \| 2;/);
+    assert.match(bitwiseOutput.code, /var shifted: number = flags >>> 1;/);
+    assert.match(bitwiseOutput.code, /var inverted: number = ~flags;/);
+    const objectProgram = adapt(api, buildTree({ objectWorkpack: true }), authority);
+    const objectOutput = api.emitSemanticProgram(objectProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(objectOutput.code, /var config: unknown = \{ "alpha": 1, "label": "ready" \};/);
+    assertErrorCode(() => adapt(api, buildTree({ objectDuplicate: true }), authority), "HARDENED_OBJECT_NAME");
+    assertErrorCode(() => adapt(api, buildTree({ objectProto: true }), authority), "HARDENED_OBJECT_NAME");
+    const defaultParameterProgram = adapt(api, buildTree({ defaultParameterWorkpack: true }), authority);
+    const defaultParameterOutput = api.emitSemanticProgram(defaultParameterProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(defaultParameterOutput.code, /configure\(enabled: boolean = true\): void/);
+    assert.match(defaultParameterOutput.code, /this\.configure\(\);/);
+    const negativeDefaultProgram = adapt(api, buildTree({ negativeDefaultWorkpack: true }), authority);
+    const negativeDefaultOutput = api.emitSemanticProgram(negativeDefaultProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(negativeDefaultOutput.code, /configureIndex\(index: number = __as3Int\(-1\)\): void/);
+    assertErrorCode(() => adapt(api, buildTree({ badNegativeDefault: true }), authority),
+        "HARDENED_UNARY_NUMBER");
+    const nestedExpressionProgram = adapt(api, buildTree({ nestedExpressionWorkpack: true }), authority);
+    const nestedExpressionOutput = api.emitSemanticProgram(nestedExpressionProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(nestedExpressionOutput.code, /this\.a = 1 \+ 2;/);
+    assert.match(nestedExpressionOutput.code, /__as3Int\(4 - 1\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badNestedExpression: true }), authority), "HARDENED_EXPRESSION_UNSUPPORTED");
+    const labelProgram = adapt(api, buildTree({ labelWorkpack: true }), authority);
+    const labelOutput = api.emitSemanticProgram(labelProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(labelOutput.code, /outer: while \(true\)/);
+    assert.match(labelOutput.code, /break outer;/);
+    assertErrorCode(() => adapt(api, buildTree({ badContinueLabel: true }), authority), "HARDENED_LOOP_LABEL");
+    const interfaceProgram = adapt(api, buildInterfaceTree(), authority);
+    const interfaceOutput = api.emitSemanticProgram(interfaceProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.equal(interfaceProgram.declaration.declarationKind, "interface");
+    assert.match(interfaceOutput.code, /export interface IThing/);
+    assert.doesNotMatch(interfaceOutput.code, /as3DefineInterface|as3RegisterClass/);
+    assert.match(interfaceOutput.code, /run\(value: number, \.\.\.rest: unknown\[\]\): string \| null;/);
+    assert.match(interfaceOutput.code, /get name\(\): string \| null;/);
+    assert.match(interfaceOutput.code, /set name\(value: string \| null\);/);
+    assertErrorCode(() => adapt(api, buildInterfaceTree({ duplicate: true }), authority), "HARDENED_INTERFACE_DUPLICATE");
+    const restParameterProgram = adapt(api, buildTree({ restParameterWorkpack: true }), authority);
+    const restParameterOutput = api.emitSemanticProgram(restParameterProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(restParameterOutput.code, /collect\(prefix: string \| null, \.\.\.values: unknown\[\]\): void/);
+    assert.match(restParameterOutput.code, /this\.collect\("p", 1, "two"\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badRestPosition: true }), authority), "HARDENED_PARAMETER_REST");
+    assertErrorCode(() => adapt(api, buildTree({ namespaceWorkpack: true }), authority),
+        "HARDENED_NAMESPACE_AUTHORITY");
+    assertErrorCode(() => adapt(api, buildTree({ namespaceCollision: true }), authority),
+        "HARDENED_NAMESPACE_AUTHORITY");
+    assertErrorCode(() => adapt(api, buildTree({ namespaceAccessCollision: true }), authority),
+        "HARDENED_NAMESPACE_AUTHORITY");
+    const overrideProgram = adapt(api, buildTree({ overrideWorkpack: true }), authority);
+    const overrideOutput = api.emitSemanticProgram(overrideProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(overrideOutput.code, /public override addEventListener\(type: string \| null, listener: Function \| null, useCapture: boolean = false, priority: number = __as3Int\(0\), useWeakReference: boolean = false\): void/);
+    assertErrorCode(() => adapt(api, buildTree({ fieldModifiers: ["override"] }), authority), "HARDENED_OVERRIDE_TARGET");
+    const forInProgram = adapt(api, buildTree({ forInWorkpack: true }), authority);
+    const forInOutput = api.emitSemanticProgram(forInProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(forInOutput.code, /for \(key in enumerable as object\)/);
+    assertErrorCode(() => adapt(api, buildTree({ badForInKey: true }), authority), "HARDENED_FORIN_KEY");
+    assertErrorCode(() => adapt(api, buildTree({ badForInIterable: true }), authority), "HARDENED_FORIN_ITERABLE");
+    const nullableProgram = adapt(api, buildTree({ nullableWorkpack: true }), authority);
+    const nullableOutput = api.emitSemanticProgram(nullableProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(nullableOutput.code, /this\.maybeSprite = null;/);
+    assert.match(nullableOutput.code, /var maybeEvent: Event \| null = null;/);
+    assert.match(nullableOutput.code, /var isMissing: boolean = maybeEvent === null;/);
+    assert.match(nullableOutput.code, /var selected: Event \| null = true \? maybeEvent : null;/);
+    assert.match(nullableOutput.code, /acceptNullable\(value: Event \| null = null\): void/);
+    assertErrorCode(() => adapt(api, buildTree({ badPrimitiveNull: true }), authority), "HARDENED_ASSIGNMENT_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ badPrimitiveNullDefault: true }), authority), "HARDENED_ASSIGNMENT_TYPE");
+    const lambdaProgram = adapt(api, buildTree({ lambdaWorkpack: true }), authority);
+    const lambdaOutput = api.emitSemanticProgram(lambdaProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(lambdaOutput.code,
+        /var handler: Function \| null = function \(value: number\): number \{[\s\S]*return value \+ offset;[\s\S]*\};/);
+    assert.match(lambdaOutput.code, /var result: number = handler!\(2\);/);
+    assertErrorCode(() => adapt(api, buildTree({ badLambdaThis: true }), authority), "HARDENED_LAMBDA_THIS");
+    assertErrorCode(() => adapt(api, buildTree({ badLambdaArity: true }), authority), "HARDENED_LAMBDA_CALL_ARITY");
+    assertErrorCode(() => adapt(api, buildTree({ badLambdaReturn: true }), authority), "HARDENED_LAMBDA_RETURN_PATH");
+    const dictionaryProgram = adapt(api, buildTree({ dictionaryWorkpack: true }), authority);
+    const dictionaryOutput = api.emitSemanticProgram(dictionaryProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(dictionaryOutput.code,
+        /import \{ AS3Dictionary as Dictionary \} from "@bleach\/as3-runtime\/AS3Dictionary";/);
+    assert.match(dictionaryOutput.code, /this\.dictionary = new Dictionary\(true\);/);
+    assert.match(dictionaryOutput.code, /this\.dictionary!\.set\(key, "value"\);/);
+    assert.match(dictionaryOutput.code, /var found: unknown = this\.dictionary!\.get\(key\);/);
+    assert.match(dictionaryOutput.code, /var removed: boolean = this\.dictionary!\.delete\(key\);/);
+    assert.match(dictionaryOutput.code, /for \(key of this\.dictionary!\.keys\(\)\)/);
+    assertErrorCode(() => adapt(api, buildTree({ badDictionaryConstructor: true }), authority),
+        "HARDENED_DICTIONARY_CONSTRUCTOR");
+    const recordProgram = adaptTreeNodeRecord(api, authority);
+    const recordOutput = api.emitSemanticProgram(recordProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(recordOutput.code,
+        /import \{ AS3OwnRecord as __AS3OwnRecord, as3CreateOwnRecord as __as3CreateOwnRecord, as3OwnRecordGet as __as3OwnRecordGet, as3OwnRecordSet as __as3OwnRecordSet \} from "@bleach\/as3-runtime\/AS3OwnRecord";/);
+    assert.match(recordOutput.code, /protected FData: __AS3OwnRecord<TTreeNode>;/);
+    assert.match(recordOutput.code, /this\.FData = __as3CreateOwnRecord<TTreeNode>\(\);/);
+    assert.match(recordOutput.code, /return __as3OwnRecordGet\(this\.FData, param1\);/);
+    assert.match(recordOutput.code, /__as3OwnRecordSet\(this\.FData, param1, created\);/);
+    assert.doesNotMatch(recordOutput.code, /\bany\b|Object\.prototype|\[[^\]]+\]/);
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { numericKey: true }),
+        "HARDENED_OWN_RECORD_KEY");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { escapeRecord: true }),
+        "HARDENED_OWN_RECORD_ESCAPE");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { badInitializer: true }),
+        "HARDENED_OWN_RECORD_INITIALIZER");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { missingInitializer: true }),
+        "HARDENED_OWN_RECORD_INITIALIZER");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { duplicateInitializer: true }),
+        "HARDENED_OWN_RECORD_INITIALIZER");
+    assertErrorCode(() => adaptTreeNodeRecord(api, authority, { otherClass: true }),
+        "HARDENED_INDEX_TARGET");
+    const dtoAuthorityBytes = fs.readFileSync(path.join(ROOT,
+        "config/big-turntable-inner-dto-authority.json"));
+    assert.equal(sha256(dtoAuthorityBytes), api.BIG_TURN_TABLE_INNER_DTO_AUTHORITY_SHA256);
+    const goldProgram = adaptBigTurnTableInner(api, authority);
+    const goldOutput = api.emitSemanticProgram(goldProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(goldOutput.code,
+        /BigTurnTableInnerConfig as __BigTurnTableInnerConfig/);
+    assert.match(goldOutput.code,
+        /as3BigTurnTableInnerEntry as __as3BigTurnTableInnerEntry/);
+    assert.match(goldOutput.code,
+        /constructor\(param1: __BigTurnTableInnerConfig\)/);
+    assert.match(goldOutput.code, /this\.FIndex = __as3BigTurnTableInnerEntry\(param1, 0\)\.index;/);
+    assert.match(goldOutput.code,
+        /this\.FCost = __as3BigTurnTableInnerEntry\(param1, 0\)\.costChip\[0\]\.value;/);
+    assert.match(goldOutput.code, /this\.FBtnDescription = __as3BigTurnTableInnerEntry\(param1, 0\)\.des;/);
+    assert.match(goldOutput.code,
+        /__as3Vector\.from<number>\(__as3VectorPolicies\.int, __as3BigTurnTableInnerEntry\(param1, 0\)\.flag\)/);
+    assert.doesNotMatch(goldOutput.code,
+        /\bany\b|param1!?\[|Object\.prototype|as3DecodeBigTurnTableInnerConfig/);
+    const luckyProgram = adaptBigTurnTableInner(api, authority, { lucky: true });
+    const luckyOutput = api.emitSemanticProgram(luckyProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(luckyOutput.code, /export class TBigTurnTableLuckyLotteryInner/);
+    assert.match(luckyOutput.code,
+        /constructor\(param1: __BigTurnTableInnerConfig\)/);
+    assert.match(luckyOutput.code,
+        /this\.FCostChip = __as3BigTurnTableInnerEntry\(param1, 0\)\.costChip\[0\]\.value;/);
+    assert.doesNotMatch(luckyOutput.code,
+        /\bany\b|param1!?\[|Object\.prototype|as3DecodeBigTurnTableInnerConfig/);
+    assertErrorCode(() => adaptBigTurnTableInner(api, authority, { otherClass: true }),
+        "HARDENED_INDEX_TARGET");
+    assertErrorCode(() => adaptBigTurnTableInner(api, authority, { dynamicIndex: true }),
+        "HARDENED_BIG_TURN_TABLE_DTO_CONSTRUCTOR");
+    assertErrorCode(() => adaptBigTurnTableInner(api, authority, { extraMember: true }),
+        "HARDENED_MEMBER_TARGET");
+    assertErrorCode(() => adaptBigTurnTableInner(api, authority, { badWrite: true }),
+        "HARDENED_BIG_TURN_TABLE_DTO_WRITE");
+    const byteArrayProgram = adapt(api, buildTree({ byteArrayWorkpack: true }), authority);
+    const byteArrayOutput = api.emitSemanticProgram(byteArrayProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(byteArrayOutput.code,
+        /import \{ AS3ByteArray as ByteArray \} from "@bleach\/as3-runtime\/AS3ByteArray";/);
+    assert.match(byteArrayOutput.code,
+        /import \{ AS3Endian as Endian \} from "@bleach\/as3-runtime\/AS3ByteArray";/);
+    assert.match(byteArrayOutput.code, /this\.bytes = new ByteArray\(\);/);
+    assert.match(byteArrayOutput.code, /this\.bytes!\.endian = Endian\.LITTLE_ENDIAN;/);
+    assert.match(byteArrayOutput.code, /this\.bytes!\.writeInt\(__as3Int\(1\)\);/);
+    assert.match(byteArrayOutput.code, /var decoded: number = this\.bytes!\.readUnsignedInt\(\);/);
+    assert.match(byteArrayOutput.code, /this\.bytes!\[__as3Uint\(1\.5\)\] = __as3Uint\(258\);/);
+    assert.match(byteArrayOutput.code, /var indexed: number = this\.bytes!\[__as3Uint\(1\)\];/);
+    assert.match(byteArrayOutput.code, /this\.bytes!\.writeMultiByte\("mail", ""\);/);
+    assertErrorCode(() => adapt(api, buildTree({ heldByteArrayMember: true }), authority),
+        "HARDENED_INTRINSIC_MEMBER");
+    const arrayProgram = adapt(api, buildTree({ arrayReadWorkpack: true }), authority);
+    const arrayOutput = api.emitSemanticProgram(arrayProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(arrayOutput.code, /as3ArrayRead as __as3ArrayRead/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, 0\)/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, index\)/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, unsignedIndex\)/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, __as3Int\(numberIndex\)\)/);
+    assert.match(arrayOutput.code, /__as3ArrayRead\(items, 4294967294\)/);
+    assert.match(arrayOutput.code, /var count: number = items!\.length;/);
+    assert.doesNotMatch(arrayOutput.code, /\bany\b/);
+    for (const name of ["arrayNegativeLiteral", "arrayFractionalLiteral", "arrayUintMaxLiteral", "arrayNumberIndex"])
+        assert.doesNotThrow(() => adapt(api, buildTree({ [name]: true }), authority));
+    assertErrorCode(() => adapt(api, buildTree({ arrayStringIndex: true }), authority),
+        "HARDENED_ARRAY_INDEX_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ arrayWrite: true }), authority),
+        "HARDENED_ARRAY_INDEX_WRITE");
+    assertErrorCode(() => adapt(api, buildTree({ arrayDelete: true }), authority),
+        "HARDENED_DELETE_TARGET");
+    assertErrorCode(() => adapt(api, buildTree({ objectIndex: true }), authority), "HARDENED_INDEX_TARGET");
+    assertErrorCode(() => adapt(api, buildTree({ displayIndex: true }), authority), "HARDENED_INDEX_TARGET");
+    const compoundProgram = adapt(api, buildTree({ compoundWorkpack: true }), authority);
+    const compoundOutput = api.emitSemanticProgram(compoundProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(compoundOutput.code, /flags = __as3Int\(flags \+ 2\);/);
+    assert.match(compoundOutput.code, /flags = __as3Int\(flags >>> 1\);/);
+    assert.match(compoundOutput.code, /active = active && false;/);
+    assertErrorCode(() => adapt(api, buildTree({ badLogicalCompound: true }), authority), "HARDENED_COMPOUND_TYPE");
+    assertErrorCode(() => adapt(api, buildTree({ badBitwiseType: true }), authority), "HARDENED_BITWISE_TYPE");
+    assertGeneratedRuntimeTypechecks([vectorOutput.code, vectorNumericOutput.code, vectorCallbackOutput.code,
+        shortVectorOutput.code, runtimeTypeOutput.code, vectorRuntimeOutput.code,
+        nestedVectorOutput.code, vectorBuiltinReferenceOutput.code, coercionOutput.code, statementOutput.code, iterationOutput.code,
+        existingForEachOutput.code, tryOutput.code,
+        bitwiseOutput.code, compoundOutput.code, restParameterOutput.code, negativeDefaultOutput.code,
+        nestedExpressionOutput.code,
+        labelOutput.code, interfaceOutput.code, vectorInterfaceOutput.code, localNamespaceOutput.code, overrideOutput.code, forInOutput.code,
+        nullableOutput.code, lambdaOutput.code, dictionaryOutput.code, byteArrayOutput.code,
+        arrayOutput.code, recordOutput.code, goldOutput.code, luckyOutput.code]);
+    const assignedProgram = adapt(api, buildTree({ assignment: true }), authority);
+    const assignedOutput = api.emitSemanticProgram(assignedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(assignedOutput.code, /this\.b = "changed";/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ assignment: true, assignmentValue: "1" }), authority),
+        "HARDENED_ASSIGNMENT_TYPE",
+    );
+    const compoundStringProgram = adapt(api, buildTree({ assignment: true, assignmentOperator: "+=" }), authority);
+    assert.match(api.emitSemanticProgram(compoundStringProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" }).code, /this\.b = this\.b \+ "changed";/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ constFields: true, assignment: true }), authority),
+        "HARDENED_ASSIGNMENT_READONLY",
+    );
+    const constructedProgram = adapt(api, buildTree({ newField: true }), authority);
+    const constructedOutput = api.emitSemanticProgram(constructedProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(constructedOutput.code, /this\.sprite = new Sprite\(\);/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ newField: true, newArguments: [n("LITERAL", "1")] }), authority),
+        "HARDENED_NEW_ARITY",
+    );
+    const accessorProgram = adapt(api, buildTree({ accessors: true, accessorIf: true }), authority);
+    const accessorOutput = api.emitSemanticProgram(accessorProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(accessorOutput.code, /public get value\(\): number/);
+    assert.match(accessorOutput.code, /if \(this\.a > 0\)/);
+    assert.match(accessorOutput.code, /public set value\(input: number\)/);
+    assert.match(accessorOutput.code, /this\.a = input;/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ accessors: true, getterNoReturn: true }), authority),
+        "HARDENED_RETURN_PATH",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ accessors: true, setterType: "String" }), authority),
+        "HARDENED_ACCESSOR_PAIR",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ accessors: true, accessorIf: true, relationOperator: "==" }), authority),
+        "HARDENED_BINARY_OPERATOR",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ nonBooleanIf: true }), authority),
+        "HARDENED_IF_BOOLEAN",
+    );
+    const localProgram = adapt(api, buildTree({ localWorkpack: true }), authority);
+    const localOutput = api.emitSemanticProgram(localProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(localOutput.code, /var total: number = 1 \+ 2;/);
+    assert.match(localOutput.code, /var active: boolean = !\(total === 0\);/);
+    assert.match(localOutput.code, /while \(total > 0\)/);
+    assert.match(localOutput.code, /total = total - 1;/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ localNoInitializer: true }), authority),
+        "HARDENED_LOCAL_INITIALIZER",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localMixedAdd: true }), authority),
+        "HARDENED_BINARY_TYPE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localBadNot: true }), authority),
+        "HARDENED_UNARY_BOOLEAN",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localNonBooleanWhile: true }), authority),
+        "HARDENED_WHILE_BOOLEAN",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localConstWrite: true }), authority),
+        "HARDENED_ASSIGNMENT_READONLY",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localDuplicate: true }), authority),
+        "HARDENED_LOCAL_DUPLICATE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ localParameterCollision: true }), authority),
+        "HARDENED_LOCAL_PARAMETER_COLLISION",
+    );
+    const controlProgram = adapt(api, buildTree({ controlWorkpack: true }), authority);
+    const controlOutput = api.emitSemanticProgram(controlProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(controlOutput.code, /var chosen: number = active \? total : 0;/);
+    assert.match(controlOutput.code, /total--;/);
+    assert.match(controlOutput.code, /continue;/);
+    assert.match(controlOutput.code, /break;/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ conditionalNonBoolean: true }), authority),
+        "HARDENED_CONDITIONAL_BOOLEAN",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ conditionalTypeMismatch: true }), authority),
+        "HARDENED_CONDITIONAL_TYPE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ updateNonNumber: true }), authority),
+        "HARDENED_UPDATE_NUMBER",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ breakOutsideLoop: true }), authority),
+        "HARDENED_LOOP_CONTEXT",
+    );
+    const runnable = ts.transpileModule(emitted.code, {
+        compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },
+    }).outputText;
+    class MockSprite {
+        addEventListener(_type, listener) { this.listener = listener; }
+    }
+    const runtimeModule = { exports: {} };
+    const closureCache = new WeakMap();
+    const bindMethod = (receiver, method) => {
+        let byMethod = closureCache.get(receiver);
+        if (!byMethod) {
+            byMethod = new WeakMap();
+            closureCache.set(receiver, byMethod);
+        }
+        const existing = byMethod.get(method);
+        if (existing) return existing;
+        const closure = method.bind(receiver);
+        byMethod.set(method, closure);
+        byMethod.set(closure, closure);
+        return closure;
+    };
+    assert.match(emitted.code, /as3BindMethod as __as3BindMethod/);
+    assert.doesNotMatch(emitted.code, /\.bind\(this\)/);
+    Function("require", "module", "exports", runnable)(
+        (specifier) => specifier.endsWith("/Sprite") ? { Sprite: MockSprite }
+            : specifier.endsWith("/AS3MethodClosure") ? { as3BindMethod: bindMethod }
+            : specifier.endsWith("/AS3Type") ? {
+                as3PrepareConstruction(){return [];},as3CancelPreparedConstruction(){},as3EnterConstruction(){},
+                as3RejectConstructorArity(){throw new TypeError("arity");},as3InitializeInstanceFields(){},as3AbortConstruction(){},as3CompleteConstruction(){},
+            } : { Event: class Event {} },
+        runtimeModule,
+        runtimeModule.exports,
+    );
+    const instance = new runtimeModule.exports.Demo();
+    const firstClosure = instance.onEvent;
+    assert.equal(instance.listener, firstClosure);
+    assert.equal(instance.onEvent, firstClosure, "AS3 method closure identity must be stable per instance");
+    const listeners = new Set([instance.listener]);
+    assert.equal(listeners.delete(instance.onEvent), true, "the same closure identity must remove a listener");
+
+    assertErrorCode(
+        () => adapt(api, buildTree({ badSuperOrder: true }), authority),
+        "HARDENED_SUPER_CONTEXT",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ unsupportedStatement: true }), authority),
+        "HARDENED_DELETE_SHAPE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ unsupportedChild: true }), authority),
+        "HARDENED_UNSUPPORTED_CHILD",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ returnValue: true }), authority),
+        "HARDENED_RETURN_VOID",
+    );
+    const implicitDerivedOutput = api.emitSemanticProgram(adapt(api, buildTree({ noConstructor: true }), authority),
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.match(implicitDerivedOutput.code, /constructor\(\)/);
+    assert.match(implicitDerivedOutput.code,
+        /const __as3PreparedConstruction = __as3PrepareConstruction\(new\.target, Demo, __as3ConstructionProof\);[\s\S]*super\(\.\.\.__as3PreparedConstruction\);/);
+    assertErrorCode(
+        () => adapt(api, buildTree({ superInMethod: true }), authority),
+        "HARDENED_SUPER_CONTEXT",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ staticMethod: true }), authority),
+        "HARDENED_METHOD_CLOSURE_SCOPE",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ postClassImport: true }), authority),
+        "HARDENED_IMPORT_ORDER",
+    );
+    const extraRoot = flatten(buildTree());
+    extraRoot.ast.extra = true;
+    assertErrorCode(
+        () => api.adaptNormalizedParserAst(extraRoot.ast, authority, extraRoot.sourceText, sha256),
+        "HARDENED_NORMALIZED_AST",
+    );
+    const extraNode = flatten(buildTree());
+    extraNode.ast.nodes[1].extra = true;
+    extraNode.ast.fingerprintSha256 = sha256(JSON.stringify(extraNode.ast.nodes));
+    assertErrorCode(
+        () => api.adaptNormalizedParserAst(extraNode.ast, authority, extraNode.sourceText, sha256),
+        "HARDENED_NORMALIZED_NODE",
+    );
+    const forgedFingerprint = flatten(buildTree());
+    forgedFingerprint.ast.nodes[1].text = "different.package";
+    assertErrorCode(
+        () => api.adaptNormalizedParserAst(forgedFingerprint.ast, authority, forgedFingerprint.sourceText, sha256),
+        "HARDENED_NORMALIZED_AST_HASH",
+    );
+    const forgedSource = flatten(buildTree());
+    assertErrorCode(
+        () => api.adaptNormalizedParserAst(forgedSource.ast, authority, forgedSource.sourceText + "x", sha256),
+        "HARDENED_NORMALIZED_AST_HASH",
+    );
+    for (const badParentId of [["n0"], { value: "n0" }, 0, null]) {
+        const wrongParentType = flatten(buildTree());
+        wrongParentType.ast.nodes[1].parentId = badParentId;
+        wrongParentType.ast.fingerprintSha256 = sha256(JSON.stringify(wrongParentType.ast.nodes));
+        assertErrorCode(
+            () => api.adaptNormalizedParserAst(wrongParentType.ast, authority, wrongParentType.sourceText, sha256),
+            "HARDENED_NORMALIZED_PARENT",
+        );
+    }
+    assertErrorCode(
+        () => adapt(api, buildTree({ fieldModifiers: ["private", "protected"] }), authority),
+        "HARDENED_MODIFIER_ACCESS",
+    );
+    assertErrorCode(
+        () => adapt(api, buildTree({ fieldModifiers: ["static", "public"] }), authority),
+        "HARDENED_MODIFIER_ORDER",
+    );
+    assertErrorCode(
+        () => api.targetModuleSpecifier("src/layaAir/../../game.ts"),
+        "HARDENED_TARGET_MODULE",
+    );
+    assertErrorCode(
+        () => api.targetModuleSpecifier("src/layaAir/_internal/Thing.ts"),
+        "HARDENED_TARGET_MODULE",
+    );
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson,
+        sourceCensusSha256: "0".repeat(64),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256), "HARDENED_SOURCE_CENSUS_HASH");
+    const weakenedIntrinsic = JSON.parse(sourceCensusJson);
+    const dictionaryApi = weakenedIntrinsic.as3SourceCapabilities.apis
+        .find(item => item.qname === "flash.utils.Dictionary");
+    dictionaryApi.roles = dictionaryApi.roles.filter(role => role !== "constructor");
+    const weakenedIntrinsicJson = JSON.stringify(weakenedIntrinsic);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson: weakenedIntrinsicJson,
+        sourceCensusSha256: sha256(weakenedIntrinsicJson),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256), "HARDENED_SOURCE_INTRINSIC");
+    const alteredByteArrayMember = JSON.parse(sourceCensusJson);
+    const bytesAvailable = alteredByteArrayMember.as3SourceCapabilities.memberUses.find(item =>
+        item.receiverType === "flash.utils.ByteArray" && item.member === "bytesAvailable" && item.access === "read");
+    bytesAvailable.signatures[0].returnType = "int";
+    const alteredByteArrayMemberJson = JSON.stringify(alteredByteArrayMember);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson: alteredByteArrayMemberJson,
+        sourceCensusSha256: sha256(alteredByteArrayMemberJson),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256), "HARDENED_SOURCE_INTRINSIC_MEMBER");
+
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson,
+        sourceCensusSha256: EXPECTED_SOURCE_SHA256,
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256: "0".repeat(64),
+    }, sha256), "HARDENED_NATIVE_TIMER_AUTHORITY_HASH");
+    const alteredNativeTimer = JSON.parse(nativeTimerAuthorityJson);
+    alteredNativeTimer.exports.find(item => item.name === "setTimeout").signature = "(closure: Function) => number";
+    const alteredNativeTimerJson = JSON.stringify(alteredNativeTimer);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson,
+        sourceCensusSha256: EXPECTED_SOURCE_SHA256,
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson: alteredNativeTimerJson,
+        nativeTimerAuthoritySha256: sha256(alteredNativeTimerJson),
+    }, sha256), "HARDENED_NATIVE_TIMER_PARITY");
+    const blockedTimerSource = JSON.parse(sourceCensusJson);
+    blockedTimerSource.as3SourceCapabilities.apis.find(item =>
+        item.qname === "flash.utils.setTimeout").classification = "blocking";
+    const blockedTimerSourceJson = JSON.stringify(blockedTimerSource);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson: blockedTimerSourceJson,
+        sourceCensusSha256: sha256(blockedTimerSourceJson),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256), "HARDENED_NATIVE_TIMER_SOURCE");
+    const timerWithoutImportRole = JSON.parse(sourceCensusJson);
+    const timerWithoutImport = timerWithoutImportRole.as3SourceCapabilities.apis.find(item =>
+        item.qname === "flash.utils.clearTimeout");
+    timerWithoutImport.roles = timerWithoutImport.roles.filter(role => role !== "import");
+    const timerWithoutImportRoleJson = JSON.stringify(timerWithoutImportRole);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson: timerWithoutImportRoleJson,
+        sourceCensusSha256: sha256(timerWithoutImportRoleJson),
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson,
+        mappingSha256: sha256(mappingJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256), "HARDENED_NATIVE_TIMER_SOURCE");
+
+    const internal = mappingDocument();
+    internal.mappings.push({
+        sourceQName: "flash.display.Sprite",
+        sourceRoles: ["instance-member"],
+        sourceMember: {
+            access: "call",
+            name: "addEventListener",
+            minArgs: 2,
+            maxArgs: 5,
+            signature: "public native function addEventListener(param1:String, param2:Function, param3:Boolean = false, param4:int = 0, param5:Boolean = false) : void;",
+        },
+        targetCapabilityId: "api.flash.display",
+        targetModule: "src/layaAir/flash/display/Sprite.ts",
+        targetExport: "Sprite",
+        targetKind: "class",
+        targetSignature: "typeof Sprite",
+        targetMember: {
+            name: "_activeHierarchy", kind: "method", scope: "instance",
+            signature: "internal member is never admissible",
+        },
+    });
+    const internalJson = api.canonicalMappingJson(internal);
+    assertErrorCode(() => api.loadCapabilityAuthority({
+        sourceCensusJson,
+        sourceCensusSha256: EXPECTED_SOURCE_SHA256,
+        targetCapabilitiesJson,
+        targetCapabilitiesSha256: EXPECTED_TARGET_SHA256,
+        mappingJson: internalJson,
+        mappingSha256: sha256(internalJson),
+        nativeTimerAuthorityJson,
+        nativeTimerAuthoritySha256,
+    }, sha256), "HARDENED_TARGET_MEMBER_MAPPING");
+
+    fs.rmSync(compiled.output, { recursive: true, force: true });
+    process.stdout.write("semantic IR + structural emitter: PASS\n");
+}
+
+main();
