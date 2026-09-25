@@ -67,7 +67,7 @@ for(const name of names.map(name=>name.split('.').pop())){
   const driver=fs.readFileSync(path.join(__dirname,'driver.ts'),'utf8').replaceAll('ENGINE',modulePath(engine));fs.writeFileSync(path.join(run,'driver.ts'),driver);
   const built=await esbuild.build({entryPoints:[path.join(run,'driver.ts')],bundle:true,write:false,platform:'browser',format:'iife',target:'es2020',metafile:true,loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},logLevel:'warning'});
   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(run,'bundle-'+target+'.js'),code);
-  
+
   const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
   await page.route('http://generated-loader-references.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script>'}));
   await page.goto('http://generated-loader-references.test/');const web=await page.evaluate(async()=>{await globalThis.done;return globalThis.result;});await page.close();
