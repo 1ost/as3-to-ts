@@ -1,0 +1,17 @@
+{
+  "captureScript": "as3-to-layaair-porting-kit/tests/native-runtime/capture_flash_semantics.cjs",
+  "captureScriptSha256": "90b6758802d9d3e04ae999cca0c69e17e9a5effc7a0ca2f487648e4efaf62754",
+  "compiler": "Apache Flex mxmlc 4.16.1",
+  "compilerSha256": "cc07d749e376715e650271a9875289e49d94234902fff5e5fae287c478c8557b",
+  "fixture": "native-timer/RunMain.as",
+  "fixtureSha256": "876ddcab41b0b8adf31fe6c1edb3009cd2c068d1423f8c15fbb1f5f443ce962f",
+  "oracle": "Pepper Flash 26.0.0.131",
+  "pepperPlugin": "game-client/electron_desktop/plugins/pepflashplayer.dll",
+  "pepperPluginSha256": "be8016c4abbb7f2a5abcbd23ac18ba6f535d728ba1c8cfe332a70757b36c1b35",
+  "playerglobal": "Flash Player 26.0",
+  "playerglobalSha256": "0e450154692d044b1758064825e072476421560c43f6a026b12df4cfda82e295",
+  "resultSha256": "b24306a42e96ae791af628f0e2972cef6ce1da02d9644bb25ebf07a8b9749cc2",
+  "schema": "bleach-native-timer-pepper-oracle@1",
+  "swfSha256": "b4850f287db9c150c0739caa8bb1cec3bb9c0c6fd1bec1b5e4890debd18f8306",
+  "swfVersion": 37
+}
