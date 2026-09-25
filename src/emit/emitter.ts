@@ -4059,6 +4059,14 @@ function objectPropertyAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!root||!key||node.kind===NodeKind.DOT&&key.kind!==NodeKind.LITERAL)return null;
     if(root.kind===NodeKind.IDENTIFIER){
         const definition=emitter.findDefInScope(root.text);
+        // Event exposes these getters as AS3 Object, even though the shared
+        // native API deliberately returns unknown. Preserve source dispatch on
+        // their values without granting arbitrary native properties that type.
+        if(emitter.generated&&definition&&!definition.bound&&definition.as3Type
+            &&node.kind===NodeKind.DOT&&['target','currentTarget'].indexOf(key.text)>=0
+            &&emitter.generated.lexical.resolveTypeName(definition.as3Type)==='flash.events.Event'
+            &&emitter.generated.options.plan.nativeBindings.some(b=>b.qname==='flash.events.Event'&&!!b.nativeBaseExport))
+            return {receiver,key,literalKey:key.text};
         if(!definition||definition.bound||['Object','*'].indexOf(definition.as3Type)<0
             ||definition.as3Type==='Object'&&(emitter.references.sourceClass('Object')||emitter.references.sourceInterface('Object')))return null;
     }else if(root.kind===NodeKind.CALL&&root.children[0]
