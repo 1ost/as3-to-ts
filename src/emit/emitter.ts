@@ -1188,6 +1188,15 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 	split.pop();
 	let ns = split.join(".");*/
 	ClassList.addImportToLast(node.text.concat());
+	// This explicit migration routes calls to the runtime, not a replacement
+	// TweenMax Class. Preserve the import's identity for shadowing checks.
+	if (emitter.options.nativeTweenModule !== undefined
+		&& (node.text === 'com.greensock.TweenMax' || node.text === 'com.greensock.TweenLite')) {
+		if (!inline) emitter.catchup(node.start);
+		emitter.declareInScope({name: importedName, sourceImport: node.text});
+		if (!inline) emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+		return;
+	}
 
 	// emit one import statement for each definition found in that namespace
 	if (node.text.indexOf("*") !== -1) {
@@ -4300,7 +4309,10 @@ function emitTweenTo(emitter:Emitter, node:Node):boolean {
 	if (!callee || callee.kind !== NodeKind.DOT || callee.children.length !== 2 || !args) return false;
 	const receiver = callee.children[0], name = callee.children[1];
 	if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || (receiver.text !== 'TweenMax' && receiver.text !== 'TweenLite')
-		|| emitter.findDefInScope(receiver.text) || !name || name.kind !== NodeKind.LITERAL || name.text !== 'to') return false;
+		|| !name || name.kind !== NodeKind.LITERAL || name.text !== 'to') return false;
+	const binding = emitter.findDefInScope(receiver.text);
+	if (binding && (binding.bound || Object.prototype.hasOwnProperty.call(binding, 'as3Type')
+		|| binding.sourceImport !== 'com.greensock.' + receiver.text)) return false;
 	let helper = '__as3_FlashTweenRuntime';
 	while (emitter.source.indexOf(helper) >= 0) helper += '_';
 	emitter.ensureImportIdentifier('FlashTweenRuntime as ' + helper, module, false);
@@ -5518,6 +5530,10 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	}
 
 	let def = emitter.findDefInScope(node.text);
+	if (emitter.options.nativeTweenModule !== undefined && def && !def.bound
+		&& !Object.prototype.hasOwnProperty.call(def, 'as3Type')
+		&& (def.sourceImport === 'com.greensock.TweenMax' || def.sourceImport === 'com.greensock.TweenLite'))
+		throw new Error('AS3_TWEEN_UNSUPPORTED: imported tween Class is only qualified for direct to calls');
     const interfaceValue = emitter.generated && emitter.references && emitter.references.sourceInterface(node.text);
     if (interfaceValue && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def, 'as3Type'))) {
         let method = node.parent;
