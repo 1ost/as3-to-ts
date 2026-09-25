@@ -71,9 +71,9 @@ for(const name of names.map(name=>name.split('.').pop())){
   const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
   await page.route('http://sprite-owner-references.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<script src="/bundle.js"></script>'}));
   await page.goto('http://sprite-owner-references.test/');const web=await page.evaluate(async()=>{await globalThis.done;return globalThis.result;});await page.close();
-  assert.deepEqual(errors,[]);assert.deepEqual(node.rows,expected);assert.deepEqual(web.rows,expected);assert.equal(node.guards,24);assert.equal(web.guards,24);
+  assert.deepEqual(errors,[]);assert.deepEqual(node.rows,expected);assert.deepEqual(web.rows,expected);assert.equal(node.guards,30);assert.equal(web.guards,30);
   results.push({target,node,web,types,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
  fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({scope:'complete generated SpriteOwnerHolder source, two native reference bindings; ContextMenu NativeMenu ancestry remains unqualified; no generated native subclass or full Sprite admission',sourceSha256:hash(text),expected,results,bindingGuards},null,2));
- console.log(JSON.stringify({run,targets:results.map(r=>r.target),rowsPerRuntime:expected.length,guardsPerRuntime:24,bindingGuards,typeErrors:0}));
+ console.log(JSON.stringify({run,targets:results.map(r=>r.target),rowsPerRuntime:expected.length,guardsPerRuntime:30,bindingGuards,typeErrors:0}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

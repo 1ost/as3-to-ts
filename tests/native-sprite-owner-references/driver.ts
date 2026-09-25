@@ -1,4 +1,5 @@
 import 'ENGINE/tests/nativeDisplayProjection/entry';
+import {isFlashContextMenu} from 'ENGINE/src/layaAir/flash/ui/ContextMenu';
 import {Loader} from 'ENGINE/src/layaAir/flash/display/Loader';
 import {EventDispatcherDeclaration} from 'ENGINE/src/layaAir/flash/utils/AS3CanonicalDisplayTypes';
 import {LoaderInfo,LoaderInfoDeclaration,ContextMenu} from 'ENGINE/src/layaAir/flash/utils/AS3CanonicalSpriteOwnerReferences';
@@ -6,7 +7,7 @@ import {nativeSourceClassModule} from './module.js';
 import {createNativeSourceClassLoadingSession} from 'ENGINE/src/layaAir/flash/utils/NativeSourceClassLoadingSession';
 import {ApplicationDomain} from 'ENGINE/src/layaAir/flash/system/ApplicationDomain';
 import {as3SetProperty} from 'ENGINE/src/layaAir/flash/utils/AS3Property';
-import {as3Is,as3As,as3CoerceReference} from 'ENGINE/src/layaAir/flash/utils/AS3Type';
+import {isCanonicalAS3ReferenceImplementation,registerCanonicalAS3ReferenceImplementation,as3Is,as3As,as3CoerceReference} from 'ENGINE/src/layaAir/flash/utils/AS3Type';
 import {getAS3DeclarationType,getAS3SourceBase} from 'ENGINE/src/layaAir/flash/utils/AS3DeclarationType';
 import {describeRegisteredFlashType} from 'ENGINE/src/layaAir/flash/utils/FlashTypeMetadata';
 import {declareAS3ReferenceType} from 'ENGINE/src/layaAir/flash/utils/AS3GeneratedClass';
@@ -19,6 +20,13 @@ import {declareAS3ReferenceType} from 'ENGINE/src/layaAir/flash/utils/AS3Generat
  ['LoaderInfo',LoaderInfo,LoaderInfoDeclaration,new Loader().contentLoaderInfo,new Loader().contentLoaderInfo],
  ['ContextMenu',ContextMenu,ContextMenu,new ContextMenu(),new ContextMenu()]];
  let guards=0;const check=(ok:boolean,label:string)=>{if(!ok)throw Error(label);guards++;};
+ check(isCanonicalAS3ReferenceImplementation(ContextMenu,'flash.ui::ContextMenu'),'exact named proof');
+ check(!isCanonicalAS3ReferenceImplementation(ContextMenu,'ContextMenu'),'wrong qualified name rejected');
+ check(!isCanonicalAS3ReferenceImplementation(class ContextMenu {},'flash.ui::ContextMenu'),'same name constructor rejected');
+ for(const [proof,name] of [[()=>true,'flash.ui::ContextMenu'],[isFlashContextMenu,'wrong'],[isFlashContextMenu,''] ] as const){
+  let rejected=false;try{registerCanonicalAS3ReferenceImplementation(ContextMenu,proof,name);}catch(e){rejected=true;}
+  check(rejected&&isCanonicalAS3ReferenceImplementation(ContextMenu,'flash.ui::ContextMenu'),'registration conflict is atomic');
+ }
  for(const [label,Implementation,token,first,second] of specs){
  if(label==='LoaderInfo')rows.push({id:label+'-base',value:getAS3SourceBase(Implementation)?.name});
  let holder=new Holder();
