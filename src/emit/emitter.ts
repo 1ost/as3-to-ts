@@ -522,7 +522,7 @@ export default class Emitter {
 
 		//if(VERBOSE >= 1) {
 		if ((VERBOSE_MASK & ReportFlags.KEY_POINTS) == ReportFlags.KEY_POINTS) {
-			console.log("emit() â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘â†‘");
+			console.log("emit() Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜Ã¢â€ â€˜");
 		}
 
 		if (this.options.nativeArrayCreationModule !== undefined) {
@@ -3029,6 +3029,7 @@ function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
 function emitNew(emitter:Emitter, node:Node):void {
  if(emitLexicalSpriteConstruction(emitter,node))return;
  if(emitDynamicConstruction(emitter,node))return;
+ if(emitGeneratedVectorLiteral(emitter,node))return;
  if(emitGeneratedVectorConstruction(emitter,node))return;
  if(emitter.generated&&node.children.length===1&&node.children[0].kind===NodeKind.CALL){
   const call=node.children[0],callee=call.children[0],args=call.findChild(NodeKind.ARGUMENTS);
@@ -3053,6 +3054,28 @@ function emitNew(emitter:Emitter, node:Node):void {
 	visitNodes(emitter, node.children);
 	emitter.isNew = false;
 	emitter.emitThisForNextIdent = true;
+}
+
+function emitGeneratedVectorLiteral(emitter:Emitter,node:Node):boolean {
+ const options=emitter.options.nativeVectorTypes||emitter.options.nativeGeneratedDeclarations;
+ const literal=node.children.length===1&&node.children[0];
+ if(!options||!literal||literal.kind!==NodeKind.SHORT_VECTOR)return false;
+ const input=nativeGeneratedDeclarationInputs(options.plan,options.plan.scope);
+ const fail=(reason:string):never=>{throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: '+reason);};
+ if(!input.vectorProviderModule||!emitter.generated)fail('literal requires generated class and Vector provider authority');
+ const owner=emitter.generated.projection.binding.qname,vector=literal.findChild(NodeKind.VECTOR),values=literal.findChild(NodeKind.ARRAY);
+ const spec=vector&&options.plan.vectors.find(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end);
+ if(!spec||spec.identity!=='Vector.<Class>'||input.sources[owner].source!==emitter.source||!values)
+  fail('exact Class literal specialization required');
+ let helper='__as3_literalVector',specialization='__as3_vectorSpec_'+spec.specExport,value='__as3_literalResult';
+ while(emitter.source.indexOf(helper)>=0)helper+='_';while(emitter.source.indexOf(specialization)>=0)specialization+='_';while(emitter.source.indexOf(value)>=0)value+='_';
+ emitter.ensureImportIdentifier('as3VectorCreate as '+helper,vectorProviderModule(input.vectorProviderModule,options.module),false);
+ emitter.ensureImportIdentifier(spec.specExport+' as '+specialization,generatedModule(options.module),false);emitter.nativeSourceHelpers.add(helper);
+ // AIR converts each element before evaluating the following expression. An
+ // eager temporary array would execute effects after a failed Class coercion.
+ emitter.catchup(node.start);emitter.insert('(()=>{const '+value+'='+helper+'('+specialization+');');
+ values.children.forEach(element=>{emitter.insert(value+'.push(');emitter.skipTo(element.start);visitNode(emitter,element);emitter.catchup(element.end);emitter.insert(');');});
+ emitter.insert('return '+value+';})()');emitter.skipTo(node.end);return true;
 }
 
 function emitGeneratedVectorConstruction(emitter:Emitter,node:Node):boolean {
