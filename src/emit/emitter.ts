@@ -1,3 +1,4 @@
+import {intrinsicStringAs} from './native-string-casts';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {emitNativeXML, xmlGlobalProviderModule} from './native-xml';
 import {NativeClassMetadataOptions} from './native-class-metadata';
@@ -741,7 +742,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -3747,14 +3748,6 @@ function emitBuiltinObjectCreation(emitter:Emitter, node:Node):boolean {
 	return true;
 }
 
-function intrinsicStringAs(emitter:Emitter,node:Node):boolean {
-    return !!emitter.references&&!!emitter.options.nativeComputedTypeTestModule&&!!node
-        &&node.kind===NodeKind.RELATION&&node.children.length===3&&node.children[1].text==='as'
-        &&node.lastChild.kind===NodeKind.IDENTIFIER&&node.lastChild.text==='String'
-        &&emitter.references.resolve('String')==='String'&&!emitter.references.sourceClass('String')
-        &&!emitter.references.sourceInterface('String')&&!emitter.findDefInScope('String')
-        &&typeOfBinding(node.lastChild,emitter.source,[])==='builtin';
-}
 function emitJSONParse(emitter:Emitter,node:Node):boolean {
     const module=emitter.options.nativeJSONModule,callee=node.children[0];
     if(module===undefined||emitter.isNew||!callee||callee.kind!==NodeKind.DOT||callee.children.length!==2)return false;
