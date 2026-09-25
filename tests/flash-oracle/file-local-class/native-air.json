@@ -1,0 +1,61 @@
+{
+  "schema": "as3-file-local-native-evidence@1",
+  "status": "native-passed-emission-adapter-pending",
+  "runtime": {
+    "os": "Mac OS 27.0.0",
+    "playerType": "Desktop",
+    "screenDPI": 72,
+    "version": "MAC 51,3,3,2"
+  },
+  "sdkVersion": "51.3.3",
+  "files": {
+    "scenario.json": "2c71642318bae3426ffbfd7690fceb1ea56fa830513bc5a57bc2ff9fa60c61ee",
+    "source/FileLocalRuntimeProbe.as": "a95f0ed46d1ad6b2b3ff17d20749a8939acc521404e2050560cf3f7676aacda5",
+    "source/first/Owner.as": "82dba964febe2aac56f4fd51d35e3e38de2bd5aa2a20da708f62ef3d2b801841",
+    "source/second/Owner.as": "74177b345e5acfde02e9eead3364adc604445c483023a2188850d6d6bec858c4"
+  },
+  "receiptSha256": "b5e1afbf7f333d420a95739e53c8f47337d8db1f455e6adfa2dd370f82887a93",
+  "swfSha256": "eb20259b927abcaf8f227a9c6ab83d911dba34b1bf5d81d2237a3e0475e0aa0f",
+  "nativeCaptureSha256": "c1e7dc421c520c6d908569e6d0fbc4b52f090f7397d87615ab1262e4d7ffbe1b",
+  "captureRuns": 2,
+  "capture": {
+    "runtime": {
+      "playerType": "Desktop",
+      "screenDPI": 72,
+      "version": "MAC 51,3,3,2",
+      "os": "Mac OS 27.0.0"
+    },
+    "state": {
+      "failure": "",
+      "ready": true,
+      "observations": [
+        {
+          "result": [
+            "FilePrivateNS:Owner::Item",
+            "FilePrivateNS:Owner::Item",
+            "FilePrivateNS:Owner::Item",
+            "FilePrivateNS:Owner::Item",
+            true,
+            false,
+            true,
+            false,
+            "[object Item]",
+            "[object Item]",
+            "[class Item]",
+            "[class Item]",
+            "first",
+            "second",
+            "ReferenceError",
+            1069,
+            "Error #1069: Property missing not found on FilePrivateNS:Owner.Item and there is no default value.",
+            "ReferenceError",
+            1065,
+            "Error #1065: Variable Item is not defined."
+          ],
+          "id": "same-basename-private-classes"
+        }
+      ]
+    }
+  },
+  "scope": "Native AIR identity and labels. Compiler semantic admission and full original scheduler comparison remain pending."
+}

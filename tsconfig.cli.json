@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "strictNullChecks": true,
+    "strictPropertyInitialization": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
+  },
+  "include": [
+    "src/command.ts",
+    "src/hardened-cli/cli.ts",
+    "src/hardened-cli/errors.ts",
+    "src/hardened-cli/index.ts",
+    "src/hardened-cli/inputs.ts",
+    "src/hardened-cli/isolated-parser.ts",
+    "src/hardened-cli/options.ts",
+    "src/hardened-cli/publication.ts"
+  ],
+  "exclude": [
+    "src/hardened-cli/parser-worker.ts"
+  ]
+}
