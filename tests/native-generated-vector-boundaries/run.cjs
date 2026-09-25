@@ -41,7 +41,6 @@ for(const body of [
  'public static var queue:Vector.<IOrder>;',
  'public const queue:Vector.<IOrder> = null;',
  'internal var queue:Vector.<IOrder>;',
- 'public function get queue():Vector.<IOrder> {return null;}',
  'public function call(v:Vector.<IOrder>=null):void {}',
  'public function Guard(v:Vector.<IOrder>) {}',
  'public function call():Vector.<IOrder>{return Vector.<IOrder>(null);}',

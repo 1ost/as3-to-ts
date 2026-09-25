@@ -730,8 +730,11 @@ export default class Emitter {
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris,
 			this.options.nativeProxyModule !== undefined, this.options.nativeSourceAncestry);
 		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization,
-            node=>!!(node.parent&&node.parent.kind===NodeKind.DOT&&node.parent.children[0]===node
-                &&lexicalApplicationDomainModule(this,node.parent)));
+            node=>{
+                const value=outerEncapsulatedExpression(node),parent=value.parent;
+                return !!(parent&&parent.kind===NodeKind.DOT&&parent.children[0]===value
+                    &&(lexicalApplicationDomainModule(this,parent)||qualifiedNativeStaticRead(this,parent)));
+            });
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;
 			visitNode(this, filtered);
@@ -5702,9 +5705,46 @@ function emitGeneratedArrayFieldRead(emitter:Emitter, node:Node):boolean {
     emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 
+/** A qualified native receiver is a lexical package name, never a JS object path. */
+function qualifiedNativeStaticRead(emitter:Emitter,node:Node):{module:string;exportName:string} {
+    if(!emitter.generated||!node||node.kind!==NodeKind.DOT||node.children.length!==2
+        ||node.children[1].kind!==NodeKind.LITERAL)return null;
+    let root=unwrapEncapsulatedExpression(node.children[0]);
+    const parts:string[]=[];
+    while(root&&root.kind===NodeKind.DOT&&root.children.length===2&&root.children[1].kind===NodeKind.LITERAL){
+        parts.unshift(root.children[1].text);root=unwrapEncapsulatedExpression(root.children[0]);
+    }
+    if(!root||root.kind!==NodeKind.IDENTIFIER||!parts.length)return null;
+    parts.unshift(root.text);
+    const name=parts.join('.'),input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+    const binding=input.providers&&input.providers[name];
+    if(!binding)return null;
+    const fail=(reason:string):never=>{throw new Error('AS3_QUALIFIED_NATIVE_READ_UNSUPPORTED: '+reason);};
+    if(emitter.findDefInScope(parts[0])||typeOfBinding(root,emitter.source,
+        Object.keys(input.sources).concat(Object.keys(input.providers||{})))!==null)
+        return null;
+    if(binding.nativeInterface||binding.nativeVector||!emitter.options.nativeClassInitialization
+        ||emitter.options.nativeClassInitialization.classes[name]!=='ready')
+        fail('exact ready native class provider required: '+name);
+    const module=xmlGlobalProviderModule(binding.module,emitter.generated.options.module);
+    if(!emitter.options.importModules||emitter.options.importModules[name]!==module)
+        fail('exact native import binding required: '+name);
+    const expression=outerEncapsulatedExpression(node),operation=expression.parent;
+    if(operation&&operation.children[0]===expression&&[NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,
+        NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE,NodeKind.CALL,NodeKind.NEW].indexOf(operation.kind)>=0)
+        fail('native static mutation or invocation requires separate lowering: '+name);
+    return {module:generatedModule(module),exportName:binding.exportName};
+}
+
 function emitDot(emitter:Emitter, node:Node) {
     if (emitGeneratedArrayFieldRead(emitter,node)) return;
     if (emitLexicalApplicationDomain(emitter,node)) return;
+    const nativeRead=qualifiedNativeStaticRead(emitter,node);
+    if(nativeRead){
+        const alias=propertyHelper(emitter,nativeRead.exportName,nativeRead.module);
+        emitter.catchup(node.start);emitter.insert(alias+'.'+node.children[1].text);
+        emitter.skipTo(getEffectiveNodeEnd(node));return;
+    }
     const lookupModule = emitter.options.importModules && emitter.options.importModules['flash.utils.getDefinitionByName'];
     const lookupReceiver = unwrapEncapsulatedExpression(node.children[0]), member = node.children[1];
     if (lookupModule && member && member.text === 'getDefinitionByName' && lookupReceiver && lookupReceiver.kind === NodeKind.DOT) {

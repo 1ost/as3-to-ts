@@ -212,7 +212,9 @@ export class NativeGeneratedClassTraits {
                     if (value.findChild(K.INIT) || result && result.text !== 'void') fail('setter signature');
                     valueType = type(binding.qname,storageType(value));
                 }
-                if(typeof valueType!=='string'&&valueType.vectorExport)fail('Vector accessor storage requires separate authority');
+                // Accessors use the same exact planned specialization as fields.
+                // Callable entry/return conversion owns their Vector coercion;
+                // a getter does not introduce a separately initialized slot.
                 add(Object.assign({},common,{name,kind:'accessor',type:valueType,access:member.kind === K.GET ? 'readonly' : 'writeonly'}) as Member);
             };
             cls.findChild(K.CONTENT).children.forEach(visit);
