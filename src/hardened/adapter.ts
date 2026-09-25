@@ -7227,9 +7227,8 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             onlyKinds(node, ["NAME", "PARAMETER_LIST", "TYPE", "VECTOR"]);
             const name = validateIdentifier(requiredText(one(node, "NAME")!, "interface member name"), one(node, "NAME")!);
             const parameters = parseParameters(one(node, "PARAMETER_LIST")!, placeholder);
-            if (parameters.some(parameter => parameter.defaultValue !== null)) {
-                fail("HARDENED_INTERFACE_DEFAULT", "interface signatures cannot declare default parameter values", node);
-            }
+            if (node.kind !== "FUNCTION" && parameters.some(parameter => parameter.defaultValue !== null))
+                fail("HARDENED_INTERFACE_DEFAULT", "interface accessor signatures cannot declare default parameter values", node);
             const returnType = parseType(oneType(node), placeholder, true);
             if (node.kind === "FUNCTION") {
                 if (names.has(name) || accessors[name]) fail("HARDENED_INTERFACE_DUPLICATE", "interface member is duplicated", node);

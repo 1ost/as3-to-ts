@@ -1581,8 +1581,15 @@ function importNode(item: any, ts: TypeScriptCompilerApi): any {
 
 function interfaceMemberNode(member: SemanticMember, ts: TypeScriptCompilerApi): any {
     if (member.kind === "method") {
+        // AIR uses the implementation's default even when this signature
+        // declares a different one. An interface conveys optionality only.
+        const parameterSignature = (parameter: SemanticParameter): any => ts.factory.createParameterDeclaration(
+            undefined,parameter.rest ? ts.factory.createToken(ts.SyntaxKind.DotDotDotToken) : undefined,
+            parameter.name,parameter.defaultValue === null ? undefined : ts.factory.createToken(ts.SyntaxKind.QuestionToken),
+            parameter.rest ? ts.factory.createArrayTypeNode(typeNode(parameter.type,ts)) : typeNode(parameter.type,ts),
+            undefined);
         return ts.factory.createMethodSignature(undefined, member.name, undefined, undefined,
-            member.parameters.map(parameter => parameterNode(parameter, ts)), typeNode(member.returnType, ts));
+            member.parameters.map(parameterSignature), typeNode(member.returnType, ts));
     }
     if (member.kind === "getter") {
         return ts.factory.createGetAccessorDeclaration(undefined, member.name, [], typeNode(member.returnType, ts), undefined);
