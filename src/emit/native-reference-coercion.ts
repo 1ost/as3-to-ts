@@ -6,7 +6,7 @@ import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeG
 import {generatedModule} from './native-generated-emission';
 
 export const nativeSpriteOwnerReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.display.LoaderInfo','flash.ui.ContextMenu','flash.display.Stage']);
-export const nativeSpriteValueReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.geom.Transform','flash.media.SoundTransform','flash.accessibility.AccessibilityProperties']);
+export const nativeSpriteValueReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.geom.Transform','flash.media.SoundTransform','flash.accessibility.AccessibilityProperties','flash.text.TextSnapshot']);
 export interface NativeReferenceCoercionOptions {
     plan: NativeGeneratedDeclarationPlan;
     module: string;
