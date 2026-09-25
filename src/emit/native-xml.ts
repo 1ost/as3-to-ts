@@ -1,3 +1,4 @@
+import {intrinsicStringAs} from './native-string-casts';
 import Node, {unwrapEncapsulatedExpression, outerEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {generatedModule} from './native-generated-emission';
@@ -92,7 +93,25 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     if(n.kind===K.NEW){
         const target=n.children[0]&&n.children[0].kind===K.CALL?n.children[0].children[0]:n.children[0];
         const global=target&&e.nativeGlobals.resolve(target);
-        if(global&&['XML','XMLList'].indexOf(global.name)>=0)fail('XML construction requires separate qualification');
+        if(global&&['XML','XMLList'].indexOf(global.name)>=0) {
+            if(global.name!=='XML')fail('XMLList construction requires separate qualification');
+            if(!e.generated||!e.references)fail('XML construction requires a generated declaration/reference plan');
+            const input=nativeGeneratedDeclarationInputs(e.generated.options.plan,e.generated.options.plan.scope);
+            const provider=input.providers&&input.providers.XML;
+            if(!provider||provider.exportName!=='XML'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,e.generated.options.module)!==global.module)
+                fail('exact XML constructor global and declaration provider required');
+            const invocation=n.children[0],args=invocation.kind===K.CALL&&invocation.findChild(K.ARGUMENTS);
+            if(!args||args.children.length>1)fail('XML String constructor requires zero or one argument');
+            const value=args.children.length?unwrapEncapsulatedExpression(args.children[0]):null;
+            const binding=value&&value.kind===K.IDENTIFIER&&e.findDefInScope(value.text);
+            if(value&&!(binding&&!binding.bound&&binding.as3Type&&e.references.resolve(binding.as3Type)==='String')
+                &&!(value.kind===K.LITERAL&&/^["']/.test(value.text))&&value.text!=='null'&&!intrinsicStringAs(e,value))
+                fail('XML constructor input requires String binding, literal, null or intrinsic String-as');
+            e.catchup(n.start);e.insert(helper('as3ConstructXMLString')+'(');
+            if(value){e.skipTo(value.start);visit(e,value);e.catchup(value.end);}
+            e.insert(')');e.skipTo(n.end);return true;
+        }
     }
     const selectedAttribute=attribute(n);
     if(selectedAttribute){
