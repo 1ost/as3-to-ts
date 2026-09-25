@@ -3731,6 +3731,14 @@ function emitBuiltinObjectCreation(emitter:Emitter, node:Node):boolean {
 	return true;
 }
 
+function intrinsicStringAs(emitter:Emitter,node:Node):boolean {
+    return !!emitter.references&&!!emitter.options.nativeComputedTypeTestModule&&!!node
+        &&node.kind===NodeKind.RELATION&&node.children.length===3&&node.children[1].text==='as'
+        &&node.lastChild.kind===NodeKind.IDENTIFIER&&node.lastChild.text==='String'
+        &&emitter.references.resolve('String')==='String'&&!emitter.references.sourceClass('String')
+        &&!emitter.references.sourceInterface('String')&&!emitter.findDefInScope('String')
+        &&typeOfBinding(node.lastChild,emitter.source,[])==='builtin';
+}
 function emitJSONParse(emitter:Emitter,node:Node):boolean {
     const module=emitter.options.nativeJSONModule,callee=node.children[0];
     if(module===undefined||emitter.isNew||!callee||callee.kind!==NodeKind.DOT||callee.children.length!==2)return false;
@@ -3744,7 +3752,7 @@ function emitJSONParse(emitter:Emitter,node:Node):boolean {
         throw new Error('AS3_JSON_UNSUPPORTED: source text parse requires one or two arguments');
     const text=unwrapEncapsulatedExpression(args.children[0]);
     const def=text.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(text.text);
-    if(!(def&&def.as3Type==='String')&&!(text.kind===NodeKind.LITERAL&&/^["']/.test(text.text))&&text.text!=='null')
+    if(!(def&&def.as3Type==='String')&&!(text.kind===NodeKind.LITERAL&&/^["']/.test(text.text))&&text.text!=='null'&&!intrinsicStringAs(emitter,text))
         throw new Error('AS3_JSON_UNSUPPORTED: text must have source String binding or literal');
     if(args.children.length===2){
         const reviver=unwrapEncapsulatedExpression(args.children[1]);
@@ -4449,6 +4457,12 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if(intrinsicStringAs(emitter,node)) {
+        const helper=propertyHelper(emitter,'as3As',generatedModule(emitter.options.nativeComputedTypeTestModule));
+        emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+        emitter.insert(',String))');emitter.skipTo(node.end);return;
+    }
     if (emitter.references && node.children.length === 3
         && ['is','as'].indexOf(node.children[1].text) >= 0 && node.lastChild.kind === NodeKind.IDENTIFIER
         && node.lastChild.text === 'Class' && emitter.references.resolve('Class') === 'Class'
