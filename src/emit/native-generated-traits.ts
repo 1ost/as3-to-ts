@@ -11,6 +11,7 @@ interface Trait {
     readonly name: string;
     readonly kind: 'variable' | 'constant' | 'method' | 'accessor';
     readonly type?: TraitType;
+    readonly access?: 'readonly' | 'writeonly' | 'readwrite';
 }
 interface Member extends Trait {
     declaredBy: string;
@@ -259,7 +260,8 @@ export class NativeGeneratedClassTraits {
             });
             return result;
         };
-        const traits = (items: Member[]): Trait[] => items.map(item => Object.assign({name:item.name,kind:item.kind},item.type === undefined ? {} : {type:item.type}));
+        const traits = (items: Member[]): Trait[] => items.map(item => Object.assign({name:item.name,kind:item.kind},
+            item.type === undefined ? {} : {type:item.type},item.kind === 'accessor' ? {access:item.access} : {}));
         this.metadata = frozen({name:reflected(owner),base:this.binding.base ? reflected(this.binding.base) : 'Object',
             isDynamic:surface.dynamic,isFinal:surface.final,instance:members(surface.instance),statics:members(surface.statics)});
         this.instanceConstants = frozen(surface.instance.filter(item=>item.kind==='constant').map(item=>({name:item.name,literal:item.constantLiteral})));
@@ -274,7 +276,8 @@ export class NativeGeneratedClassTraits {
         if (![domain,array].every(value => /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value))) fail('compiler reference expression');
         if (this.inheritInstanceLayout && (!base || !/^[A-Za-z_$][\w$]*$/.test(base))) fail('compiler base expression');
         const emit = (traits: ReadonlyArray<Trait>): string => '[' + traits.map(trait => {
-            const fields = 'name:' + JSON.stringify(trait.name) + ',kind:' + JSON.stringify(trait.kind);
+            const fields = 'name:' + JSON.stringify(trait.name) + ',kind:' + JSON.stringify(trait.kind)
+                + (trait.access === undefined ? '' : ',access:' + JSON.stringify(trait.access));
             if (trait.type === undefined) return '{' + fields + '}';
             const type = trait.type === 'Array' ? '{name:"Array",reference:' + array + '}' : typeof trait.type === 'string' ? JSON.stringify(trait.type)
                 : '{name:' + JSON.stringify(trait.type.name) + (trait.type.vectorExport?',vector:':',reference:') + domain + '.' + (trait.type.vectorExport||trait.type.referenceExport) + '}';

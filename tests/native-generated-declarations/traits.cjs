@@ -39,6 +39,10 @@ assert.deepEqual(inherited.metadata.instance.variables,[{name:'value',declaredBy
 assert.deepEqual(inherited.staticTraits,[{name:'counter',kind:'variable',type:'String'}]);
 const access=sourcePlan('public class Base { public function set only(value:String):void {} public function get read():int { return 0; } public static const C:int=1; }');
 assert.deepEqual(access.metadata.instance.accessors.map(t=>t.access),['writeonly','readonly']);
+assert.deepEqual(access.instanceTraits.map(t=>t.access),['writeonly','readonly']);
+assert.equal(storage.instanceTraits.find(t=>t.name==='accessor').access,'readwrite');
+assert.match(access.emitDefinition('domain','Array'),/name:"only",kind:"accessor",access:"writeonly"/);
+assert.match(access.emitDefinition('domain','Array'),/name:"read",kind:"accessor",access:"readonly"/);
 assert.deepEqual(access.metadata.statics.constants,[{name:'C',declaredBy:'spec::Base',type:'int'}]);
 const forward=sourcePlan('public class Base { public var item:Child; }','public class Child extends Base {}');
 assert.equal(forward.instanceTraits[0].type.name,'spec::Child');
