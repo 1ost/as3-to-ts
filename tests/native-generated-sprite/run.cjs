@@ -31,6 +31,9 @@ const project=projection=>projection.instanceTraits.map(trait=>{
         ...(trait.kind==='method'?{parameterCount:metadata.parameterCount}:{})};
 });
 assert.deepEqual(project(base),evidence.traits);
+for(const trait of base.instanceTraits.filter(t=>t.kind==='accessor'))
+    assert.equal(trait.access,evidence.traits.find(t=>t.name===trait.name).access);
+assert.match(base.emitDefinition('domain','Array'),/name:"blendShader",kind:"accessor",access:"writeonly"/);
 assert.deepEqual(project(leaf).slice(0,85),evidence.traits);
 assert.equal(leaf.instanceTraits.length,86);
 assert.equal(base.metadata.base,'flash.display::Sprite');
