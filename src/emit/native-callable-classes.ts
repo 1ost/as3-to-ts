@@ -296,6 +296,20 @@ export class NativeCallableClasses {
         const constructorCompletion = unique('constructorCompletion');
         const superMethods: string[] = [];
         const superMethodNames = new Map<string, string>();
+        const validateOptionalDefault=(owner:string,type:Node,init:Node):void=>{
+            if(type&&type.kind===K.VECTOR)this.fail('optional Vector parameter requires qualification');
+            const raw=this.sourceTexts.get(owner).slice(init.start,init.end).trim(),identity=type&&type.text||'*';
+            const numeric=/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(raw)&&isFinite(Number(raw));
+            if(['int','uint'].indexOf(identity)>=0&&(!numeric||/^[+-]?0[0-9]/.test(raw)||Math.floor(Number(raw))!==Number(raw)
+                ||Number(raw)<(identity==='int'?-2147483648:0)||Number(raw)>(identity==='int'?2147483647:4294967295)))
+                this.fail('generated optional integer default requires in-range literal');
+            if(!(identity==='*'&&(raw==='null'||raw==='undefined'||raw==='true'||raw==='false'||numeric||/^("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(raw))
+                ||identity==='Boolean'&&/^(true|false)$/.test(raw)
+                ||['Number','int','uint'].indexOf(identity)>=0&&numeric
+                ||identity==='String'&&(raw==='null'||/^("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(raw))
+                ||raw==='null'&&['Number','int','uint','Boolean','*'].indexOf(identity)<0))
+                this.fail('generated optional parameter requires qualified literal default');
+        };
         const directSuper = (key: string, supplied: number): string => {
             let owner = this.classes.get(this.own.base), depth = 0, method: Node;
             for (; owner; owner = this.classes.get(owner.base), depth++) {
@@ -317,7 +331,7 @@ export class NativeCallableClasses {
                 || !mods.children.some(mod => mod.text === 'public' || mod.text === 'protected'))
                 this.fail('super method visibility requires separate authority');
             const parameters = method.findChild(K.PARAMETER_LIST).children;
-            let minimum = 0;
+            let minimum = 0, optional = false;
             parameters.forEach(parameter => {
                 if (parameter.findChild(K.REST)) this.fail('super rest method signature');
                 const declaration = parameter.findChild(K.NAME_TYPE_INIT), type = declaration.findChild(K.TYPE);
@@ -325,8 +339,13 @@ export class NativeCallableClasses {
                     const ref=type&&this.generated.options.plan.references.find(r=>r.owner===owner.qname&&r.start===type.start&&r.end===type.end);
                     const qualified=ref&&(ref.kind==='intrinsic'&&['*','int','uint','Number','Boolean','String','Object'].indexOf(ref.identity)>=0
                         ||ref.kind==='declaration'||ref.kind==='interface');
-                    if(!qualified||declaration.findChild(K.INIT))this.fail('generated super signature requires fixed qualified parameters');
-                    minimum++;return;
+                    if(!qualified)this.fail('generated super signature requires qualified parameters');
+                    const init=declaration.findChild(K.INIT);
+                    if(init){validateOptionalDefault(owner.qname,type,init);optional=true;}
+                    else {if(optional)this.fail('required super parameter after optional');minimum++;}
+                    // Pass only authored arguments. The actual source parent owns
+                    // omitted defaults and explicit undefined/reference coercion.
+                    return;
                 }
                 if (!type || type.text !== 'Boolean') this.fail('super parameter coercion requires separately proved signature');
                 const init = declaration.findChild(K.INIT);
@@ -576,17 +595,7 @@ export class NativeCallableClasses {
                         if(!init&&index>=minimum)this.fail('required parameter after optional');
                         let fallback='';
                         if(init){
-                            const raw=this.sourceTexts.get(this.own.qname).slice(init.start,init.end).trim(),identity=type&&type.text||'*';
-                            const numeric=/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(raw)&&isFinite(Number(raw));
-                            if(['int','uint'].indexOf(identity)>=0&&(!numeric||/^[+-]?0[0-9]/.test(raw)||Math.floor(Number(raw))!==Number(raw)
-                                ||Number(raw)<(identity==='int'?-2147483648:0)||Number(raw)>(identity==='int'?2147483647:4294967295)))
-                                this.fail('generated optional integer default requires in-range literal');
-                            if(!(identity==='*'&&(raw==='null'||raw==='undefined'||raw==='true'||raw==='false'||numeric||/^("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(raw))
-                                ||identity==='Boolean'&&/^(true|false)$/.test(raw)
-                                ||['Number','int','uint'].indexOf(identity)>=0&&numeric
-                                ||identity==='String'&&(raw==='null'||/^("(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(raw))
-                                ||raw==='null'&&['Number','int','uint','Boolean','*'].indexOf(identity)<0))
-                                this.fail('generated optional parameter requires qualified literal default');
+                            validateOptionalDefault(this.own.qname,type,init);
                             fallback='arguments.length <= '+index+' ? '+text(member.parameters[index].initializer)+' : ';
                         }
                         if(type&&type.text==='Class'){if(!this.classValueModule)this.fail('Class parameter requires common class provider');return name+'='+fallback+'<any>'+classValue+'.as3CoerceClass('+name+');';}
