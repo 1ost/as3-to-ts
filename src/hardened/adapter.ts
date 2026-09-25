@@ -3098,6 +3098,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     fail("HARDENED_OBJECT_NAME", "quoted object property name must be canonical JSON string source", nameNode);
                 }
                 if (typeof name !== "string") fail("HARDENED_OBJECT_NAME", "object property name must be a string", nameNode);
+            } else if (/^(?:0|[1-9][0-9]*)$/.test(rawName) && Number.isSafeInteger(Number(rawName))) {
+                // AIR newobject coerces an integer literal name to its decimal
+                // property string. Preserve the source spelling only in this
+                // canonical range; other numeric forms require separate proof.
+                name = rawName;
             } else {
                 name = validateIdentifier(rawName, nameNode);
             }
