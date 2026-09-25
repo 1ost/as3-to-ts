@@ -250,6 +250,11 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             });
         }
         if(binding.base){
+            // Direct EventDispatcher generations retain the canonical native
+            // constructor entry and independent event storage across retries.
+            // Other direct native bases still require their own qualification.
+            const dispatcherBase=binding.base==='flash.events.EventDispatcher'
+                &&providers[binding.base]&&providers[binding.base].nativeBase==='EventDispatcher';
             const parent=bindings.find(value=>value.qname===binding.base);
             // A stable source parent may be a root or directly inherit the
             // authenticated Sprite boundary. Failed leaf generations retain
@@ -257,7 +262,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             // initializer retries and other native/multilevel bases remain held.
             const spriteParent=parent&&parent.base==='flash.display.Sprite'
                 && providers[parent.base]&&providers[parent.base].nativeBase==='Sprite';
-            if(!parent||!parent.scriptGlobalExport||(parent.base&&!spriteParent)||data.classScriptSources.indexOf(parent.qname)>=0)
+            if(!dispatcherBase&&(!parent||!parent.scriptGlobalExport||(parent.base&&!spriteParent)||data.classScriptSources.indexOf(parent.qname)>=0))
                 fail('derived Class script requires a non-retrying source root parent');
         }
     });
