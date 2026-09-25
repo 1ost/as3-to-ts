@@ -4010,9 +4010,9 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     }
     return {receiver,key,lexical};
 }
-/** Public paths whose root is a source Object/wildcard local or parameter.
- * Bound fields, method return values and other computed roots need their own
- * source type/visibility proof; do not infer it from TypeScript's any type. */
+/** Public paths rooted in Object/wildcard locals or an intrinsic Object(value)
+ * conversion. Other computed roots need their own source type/visibility proof;
+ * do not infer it from TypeScript's any type. */
 function objectPropertyAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!emitter.options.nativeObjectPropertyModule||!emitter.references||!node
         ||[NodeKind.DOT,NodeKind.ARRAY_ACCESSOR].indexOf(node.kind)<0||node.children.length!==2)return null;
@@ -4022,6 +4022,16 @@ function objectPropertyAccess(emitter:Emitter,node:Node):DictionaryAccess {
         const definition=emitter.findDefInScope(root.text);
         if(!definition||definition.bound||['Object','*'].indexOf(definition.as3Type)<0
             ||definition.as3Type==='Object'&&(emitter.references.sourceClass('Object')||emitter.references.sourceInterface('Object')))return null;
+    }else if(root.kind===NodeKind.CALL&&root.children[0]
+        &&root.children[0].kind===NodeKind.IDENTIFIER&&root.children[0].text==='Object'){
+        const classes=Object.keys(emitter.options.definitionsByNamespace||{}).reduce((all,ns)=>all.concat(
+            emitter.options.definitionsByNamespace[ns].map(name=>(ns?ns+'.':'')+name)),[] as string[]);
+        if(emitter.findDefInScope('Object')||typeOfBinding(root.children[0],emitter.source,classes)!=='builtin')return null;
+        const args=root.findChild(NodeKind.ARGUMENTS);
+        if(!emitter.options.nativeObjectCreationModule||!args||args.children.length!==1)
+            throw new Error('AS3_OBJECT_PROPERTY_UNSUPPORTED: intrinsic Object receiver requires one argument and source Object conversion provider');
+        // Retain the conversion expression: Object(null/undefined) allocates a
+        // fresh object, while primitive and genuine instance values keep identity.
     }else if(!objectPropertyAccess(emitter,root))return null;
     return node.kind===NodeKind.DOT?{receiver,key,literalKey:key.text}:{receiver,key};
 }
