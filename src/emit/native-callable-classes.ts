@@ -323,8 +323,9 @@ export class NativeCallableClasses {
                 const declaration = parameter.findChild(K.NAME_TYPE_INIT), type = declaration.findChild(K.TYPE);
                 if(this.generated) {
                     const ref=type&&this.generated.options.plan.references.find(r=>r.owner===owner.qname&&r.start===type.start&&r.end===type.end);
-                    if(!ref||ref.kind!=='intrinsic'||['*','int','uint','Number','Boolean','String','Object'].indexOf(ref.identity)<0
-                        ||declaration.findChild(K.INIT))this.fail('generated super signature requires fixed qualified scalar parameters');
+                    const qualified=ref&&(ref.kind==='intrinsic'&&['*','int','uint','Number','Boolean','String','Object'].indexOf(ref.identity)>=0
+                        ||ref.kind==='declaration'||ref.kind==='interface');
+                    if(!qualified||declaration.findChild(K.INIT))this.fail('generated super signature requires fixed qualified parameters');
                     minimum++;return;
                 }
                 if (!type || type.text !== 'Boolean') this.fail('super parameter coercion requires separately proved signature');
@@ -498,7 +499,9 @@ export class NativeCallableClasses {
             if (constructor && this.own.base && superCount !== 1) this.fail('missing source-base constructor call');
             let result = source.slice(member.body.getStart(file) + 1, member.body.end - 1);
             const offset = member.body.getStart(file) + 1;
-            edits.sort((a,b) => b.start - a.start).forEach(edit => {
+            // Replace the original token before inserting a wrapper at the same
+            // offset (for example a coerced return of a direct super call).
+            edits.sort((a,b) => b.start - a.start || b.end - a.end).forEach(edit => {
                 result = result.slice(0, edit.start - offset) + edit.value + result.slice(edit.end - offset);
             });
             result = this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;

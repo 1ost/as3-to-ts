@@ -20,9 +20,9 @@ interface Member extends Trait {
     parameterCount?: number;
     override?: boolean;
     final?: boolean;
-    signature?: {parameters: string[]; returns: string};
+    signature?: {parameters: TraitType[]; returns: TraitType};
 }
-interface MethodSignature {name: string; parameters: string[]; returns: string; override: boolean; final: boolean;}
+interface MethodSignature {name: string; parameters: TraitType[]; returns: TraitType; override: boolean; final: boolean;}
 interface LexicalMember {
     readonly owner: string; readonly start: number; readonly end: number;
     readonly visibility: string; readonly static: boolean;
@@ -183,12 +183,13 @@ export class NativeGeneratedClassTraits {
                 }
                 const name = member.findChild(K.NAME).text, params = member.findChild(K.PARAMETER_LIST).children;
                 if (member.kind === K.FUNCTION) {
-                    // Only fixed required intrinsic signatures have selected-parent
-                    // authority. Labels cannot stand in for nominal reference types.
-                    const signatureType=(node:Node,returns=false):string=>{
+                    // Fixed signatures retain exact source declaration/interface
+                    // tokens; labels alone cannot grant selected-parent authority.
+                    const signatureType=(node:Node,returns=false):TraitType=>{
                         if(!node)return '*';
                         if(returns && node.kind===K.TYPE && node.text==='void')return 'void';
                         const ref=plan.references.find(r=>r.owner===binding.qname && r.start===node.start && r.end===node.end);
+                        if(ref && (ref.kind==='declaration'||ref.kind==='interface'))return type(binding.qname,node);
                         return ref && ref.kind==='intrinsic' && ['*','Object','int','uint','Number','Boolean','String','Function'].indexOf(ref.identity)>=0
                             ? ref.identity : undefined;
                     };
@@ -233,7 +234,7 @@ export class NativeGeneratedClassTraits {
                         fail('inherited collision/partial override requires authority: ' + binding.qname + ':' + member.name);
                     if(input.inheritScriptClasses && parent && member.kind==='method'
                         && (!member.signature || !previous.signature || JSON.stringify(member.signature)!==JSON.stringify(previous.signature)))
-                        fail('selected parent override requires matching fixed intrinsic method signature: '+binding.qname+':'+member.name);
+                        fail('selected parent override requires matching fixed method signature: '+binding.qname+':'+member.name);
                     instance[index] = member;
                 } else {
                     if (member.override) fail('override without source public ancestor: ' + binding.qname + ':' + member.name);
@@ -289,9 +290,12 @@ export class NativeGeneratedClassTraits {
             members[kind]=this.metadata.instance[kind].filter((member:any)=>member.declaredBy===this.metadata.name);return members;
         },{})}) : this.metadata;
         const ownNames = this.inheritInstanceLayout ? new Set<string>([].concat(...Object.keys(metadata.instance).map(kind=>metadata.instance[kind])).map((member:any)=>member.name)) : null;
+        const methodType=(value:TraitType):string=>typeof value==='string'?JSON.stringify(value)
+            : '{name:'+JSON.stringify(value.name)+',reference:'+domain+'.'+value.referenceExport+'}';
+        const methods='['+this.instanceMethods.map(method=>'{name:'+JSON.stringify(method.name)+',parameters:['+method.parameters.map(methodType).join(',')+'],returns:'+methodType(method.returns)+',override:'+method.override+',final:'+method.final+'}').join(',')+']';
         return '{' + (this.inheritInstanceLayout ? 'instanceBase:' + base + ',' : '') + 'metadata:' + JSON.stringify(metadata) + ',instanceTraits:' + emit(ownNames ? this.instanceTraits.filter(trait=>ownNames.has(trait.name)) : this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
             + ',instanceConstants:[' + this.instanceConstants.filter(item=>!ownNames || ownNames.has(item.name)).map(item=>'{name:'+JSON.stringify(item.name)+',value:'+item.literal+'}').join(',') + ']'
-            + ',instanceMethods:' + JSON.stringify(this.instanceMethods)
+            + ',instanceMethods:' + methods
             + ',declaration:{type:' + domain + '.' + this.binding.tokenExport + ',publishGeneration:' + domain + '.' + this.binding.publishExport + '}}';
     }
 }
