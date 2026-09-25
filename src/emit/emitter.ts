@@ -2969,7 +2969,8 @@ function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
     emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitter.skipTo(callee.start);
     visitNode(emitter,callee);emitter.catchup(callee.end);emitter.insert(',()=>[');
     args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
-    emitter.insert(']))');emitter.skipTo(node.end);return true;
+    const scriptGlobal=emitter.generated&&emitter.generated.projection.binding.scriptGlobalExport?emitter.generated.lexical.scriptGlobal:null;
+    emitter.insert(']'+(scriptGlobal?','+scriptGlobal:'')+'))');emitter.skipTo(node.end);return true;
 }
 
 function emitNew(emitter:Emitter, node:Node):void {
@@ -2985,7 +2986,8 @@ function emitNew(emitter:Emitter, node:Node):void {
    emitter.ensureImportIdentifier('as3ConstructClass as '+helper,module,false);emitter.nativeSourceHelpers.add(helper);
    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitter.skipTo(callee.start);visitNode(emitter,callee);emitter.catchup(callee.end);
    emitter.insert(',[');args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
-   emitter.insert(']))');emitter.skipTo(node.end);return;
+   const scriptGlobal=emitter.generated.projection.binding.scriptGlobalExport?emitter.generated.lexical.scriptGlobal:null;
+   emitter.insert(']'+(scriptGlobal?','+scriptGlobal:'')+'))');emitter.skipTo(node.end);return;
   }
  }
 

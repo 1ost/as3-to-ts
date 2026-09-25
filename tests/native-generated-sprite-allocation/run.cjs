@@ -24,14 +24,14 @@ const options={customVisitors:[],nativeDynamicPropertyReadsModule:provider("AS3P
  nativeSourceErrorModule:modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts')),nativeDynamicPropertyWritesModule:provider('AS3Property'),nativeComputedTypeTestModule:provider('AS3Type'),nativeDictionaryPropertyModule:provider('AS3Property'),nativeObjectCreationModule:provider("AS3Class"),nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition'),nativeArrayCreationModule:provider('AS3ArrayCreation')};
 
 
-Object.assign(options,{nativeReferenceCoercion:{plan,module:"./declarationDomain",coercionModule:provider("AS3Type")},nativeSignaturePropertyModule:provider("AS3Property")});
+Object.assign(options,{nativeReferenceCoercion:{plan,module:"./declarationDomain",coercionModule:provider("AS3Type")},nativeSignaturePropertyModule:provider("AS3Property"),nativeDynamicConstructionModule:provider('AS3Invocation')});
 
 const session=provider('NativeSourceClassLoadingSession');
 const externalModules=[...new Set([...Object.values(helpers),...['AS3GeneratedClass','AS3ScriptGlobal','AS3LexicalMembers','AS3Property','AS3MethodBinding','AS3Coercion','AS3String','AS3Type','AS3Class','AS3Invocation','AS3Addition','AS3ArrayCreation','NativeSourceClassLoadingSession'].map(provider),applicationDomain,options.nativeSourceErrorModule])];
 const movie=(width,height,file)=>({width,height,sourceSha256:hash(fs.readFileSync(path.join(evidence,file)))});
 const mainMovie=movie(500,375,'evidence/oracle.swf'),childMovie=movie(900,300,'child-build/child.swf');
 const base={plan,emitterOptions:options,externalModules,loadingSessionModule:session};
-const expected=[false,true,true,false,true,false,true,true].map(child=>captured.find(r=>r.id===(child?'main-read-child-created':'main-read-local')).value);
+const expected=[false,true,true,false,true,false,true,false,true,false,true,true,true,false].map(child=>captured.find(r=>r.id===(child?'main-read-child-created':'main-read-local')).value);
 let guards=0;
 const altered=(source,patch={})=>{
  const changed=api.createNativeGeneratedDeclarationPlan({...input,sources:{'host.ParentCallbacks':{source,sourceSha256:hash(source)}}});
@@ -70,5 +70,5 @@ for(const scriptDomainProvider of [undefined]){
   assert.deepEqual(node,expected);assert.deepEqual(web,expected);
   results.push({target,node,web,types:{baseline:baseline.length,current:diagnostics.length,added},inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({scope:'synthetic generated allocation controls against retained AIR projection states; not complete captured child-source admission',sourceSha256:hash(text),expected,results,guards},null,2));console.log(JSON.stringify({run,targets:results.map(r=>r.target),projectedStatesPerRuntime:8,guards,addedTypes:0}));
+ fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({scope:'synthetic generated allocation controls against retained AIR projection states; not complete captured child-source admission',sourceSha256:hash(text),expected,results,guards},null,2));console.log(JSON.stringify({run,targets:results.map(r=>r.target),projectedStatesPerRuntime:expected.length,guards,addedTypes:0}));
 })().catch(e=>{console.error(e);process.exitCode=1;});
