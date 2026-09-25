@@ -74,7 +74,8 @@
     "test:native-signal-dispatch": "node tests/native-generated-reference-constants/run.cjs --dispatch && node tests/native-generated-reference-constants/run.cjs --dispatch --combined",
     "test:native-generated-native-locals": "node tests/native-generated-native-locals/run.cjs && node tests/native-generated-native-locals/run.cjs --combined",
     "test:native-generated-captured-class": "node tests/native-generated-captured-class/run.cjs && node tests/native-generated-captured-class/run.cjs --combined",
-    "test:native-generated-wildcard-forin": "node tests/native-generated-wildcard-forin/run.cjs && node tests/native-generated-wildcard-forin/run.cjs --combined"
+    "test:native-generated-wildcard-forin": "node tests/native-generated-wildcard-forin/run.cjs && node tests/native-generated-wildcard-forin/run.cjs --combined",
+    "test:native-generated-sprite": "node tests/native-generated-sprite/run.cjs"
   },
   "keywords": [
     "actionscript",
