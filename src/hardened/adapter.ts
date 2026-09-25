@@ -3508,9 +3508,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             && [leftType,rightType].some(type => type.sourceName === "Date" && type.emittedName === "AS3Date")
             && [leftType,rightType].some(type => type.sourceName === "String" && type.emittedName === "string" && !type.nullable)
             && [leftType,rightType].every(type => type.sourceName === "Date" || type.sourceName === "String");
+        const dateRelation = ["<","<=",">",">="].includes(operator)
+            && [leftType,rightType].every(type=>type.sourceName==="Date" && type.emittedName==="AS3Date")
+            && context.sourceMemberAuthority !== null;
         if ([leftType,rightType].some(type=>type.sourceName==="Date" && type.emittedName==="AS3Date")
-            && !["===","!=="].includes(operator) && !dateStringAddition)
+            && !["===","!=="].includes(operator) && !dateStringAddition && !dateRelation)
             fail("HARDENED_DATE_COERCION","Date operators outside strict identity need separate native evidence",node);
+        if (dateRelation) return Object.assign(identity(node),{kind:"binary" as const,
+            operator:operator as "<"|"<="|">"|">=",left,right,dateRelation:true as const,
+            resultType:semanticType(node,"Boolean","boolean")});
         if ((operator === "&&" || operator === "||") && context.sourceMemberAuthority !== null) {
             if ([leftType,rightType].some(type => (valuePosition ? ["void","XML","XMLList"] : ["XML","XMLList"]).includes(type.sourceName)))
                 fail("HARDENED_LOGICAL_TYPE", "logical operands require supported AS3 value domains", node);

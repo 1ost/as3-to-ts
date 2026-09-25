@@ -698,6 +698,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
         );
     }
     if (expression.kind === "binary") {
+        if (expression.dateRelation) {
+            if (!["<","<=",">",">="].includes(expression.operator))
+                throw new HardenedSemanticError("HARDENED_EMIT_DATE_RELATION","Date relation requires an ordered operator");
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3DateRelation"),undefined,
+                [expressionNode(expression.left,ts),expressionNode(expression.right,ts),ts.factory.createStringLiteral(expression.operator)]);
+        }
         if (expression.relationCoercion) {
             if (!["<","<=",">",">="].includes(expression.operator))
                 throw new HardenedSemanticError("HARDENED_EMIT_BINARY", "relation conversion requires an ordered operator");
@@ -1955,7 +1961,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
     if (usesNativeDate) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
             ts.factory.createImportSpecifier(false,undefined,ts.factory.createIdentifier("AS3Date")),
-            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DateReceiver"),ts.factory.createIdentifier("__as3DateReceiver"))])),
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DateReceiver"),ts.factory.createIdentifier("__as3DateReceiver")),
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3DateRelation"),ts.factory.createIdentifier("__as3DateRelation"))])),
         ts.factory.createStringLiteral(program.sharedDateModule || "@bleach/as3-runtime/AS3Date"),undefined));
     const reflectionSeen=new WeakSet<object>();
     const hasReflection=(value:unknown):boolean => {
