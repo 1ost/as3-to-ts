@@ -251,10 +251,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         }
         if(binding.base){
             const parent=bindings.find(value=>value.qname===binding.base);
-            // Derived retries are qualified over a stable source root parent.
-            // Keep native ancestry and parent/multi-level initializer retries
-            // outside this admission until their lifecycle is independently proved.
-            if(!parent||!parent.scriptGlobalExport||parent.base||data.classScriptSources.indexOf(parent.qname)>=0)
+            // A stable source parent may be a root or directly inherit the
+            // authenticated Sprite boundary. Failed leaf generations retain
+            // native allocation and source membership across retry. Parent
+            // initializer retries and other native/multilevel bases remain held.
+            const spriteParent=parent&&parent.base==='flash.display.Sprite'
+                && providers[parent.base]&&providers[parent.base].nativeBase==='Sprite';
+            if(!parent||!parent.scriptGlobalExport||(parent.base&&!spriteParent)||data.classScriptSources.indexOf(parent.qname)>=0)
                 fail('derived Class script requires a non-retrying source root parent');
         }
     });

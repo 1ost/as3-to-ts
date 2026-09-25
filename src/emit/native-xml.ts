@@ -103,6 +103,9 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     }
     if(n.kind===K.TYPEOF&&attribute(n.children[0])){emit(n,n.children[0],'as3TypeOf');return true;}
     const stringReceiver=call(n,'toString'),lengthReceiver=call(n,'length');
+    const localNameReceiver=call(n,'localName');
+    if(localNameReceiver&&type(localNameReceiver)==='XML'){emit(n,localNameReceiver,'as3XMLLocalName');return true;}
+    if(stringReceiver&&type(stringReceiver)==='XML'){emit(n,stringReceiver,'as3XMLNodeString');return true;}
     if(stringReceiver&&attribute(stringReceiver)){emit(n,stringReceiver,'as3XMLListString');return true;}
     if(lengthReceiver&&attribute(lengthReceiver)){emit(n,lengthReceiver,'as3XMLListLength');return true;}
     const nameReceiver=stringReceiver&&call(stringReceiver,'name');
