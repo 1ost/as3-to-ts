@@ -1,4 +1,5 @@
 import Node from '../syntax/node';
+import {nativeSpriteTraits} from './native-sprite-traits';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {NativeGeneratedDeclarationPlan, NativeGeneratedDeclarationBinding,
@@ -84,6 +85,18 @@ export class NativeGeneratedClassTraits {
             const instance: Member[] = [['willTrigger',1],['removeEventListener',3],['toString',0],['addEventListener',5],['dispatchEvent',1],['hasEventListener',1]]
                 .map(([name,parameterCount])=>({name,parameterCount,kind:'method',declaredBy} as Member));
             surfaces.set('flash.events.EventDispatcher',{instance,statics:[],dynamic:false,final:false});
+        }
+        if(plan.nativeBindings.some(binding=>binding.qname==='flash.display.Sprite'&&!!binding.nativeBaseExport)) {
+            const instance: Member[]=nativeSpriteTraits.map(trait=>{
+                let type: TraitType=trait.type;
+                if(type && type.indexOf('::')>=0) {
+                    const native=plan.nativeBindings.find(binding=>binding.qname===(type as string).replace('::','.'));
+                    if(!native || native.nativeInterface)fail('native Sprite trait requires explicit reference provider: '+trait.name+':'+type);
+                    type={name:type as string,referenceExport:native.referenceExport};
+                }
+                return Object.assign({},trait,type===undefined?{}:{type}) as Member;
+            });
+            surfaces.set('flash.display.Sprite',{instance,statics:[],dynamic:false,final:false});
         }
         const type = (qname: string, node: Node): TraitType => {
             if (!node) return '*';
@@ -206,6 +219,9 @@ export class NativeGeneratedClassTraits {
             own.instance.forEach(member => {
                 const index = instance.findIndex(item => item.name === member.name), previous = instance[index];
                 if (previous) {
+                    if(inherited && inherited.instance.some(trait=>trait.declaredBy==='flash.display::Sprite')
+                        && nativeSpriteTraits.some(trait=>trait.name===previous.name&&trait.declaredBy===previous.declaredBy))
+                        fail('native Sprite override requires separate signature/dispatch authority: '+member.name);
                     if(previous.declaredBy==='flash.events::Event' && ['clone','toString','formatToString'].indexOf(member.name)<0)
                         fail('native Event override requires separate source authority: '+member.name);
                     if (!member.override || previous.final || previous.kind !== member.kind || member.kind === 'variable' || member.kind === 'constant'
