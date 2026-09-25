@@ -327,6 +327,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 [expressionNode(expression.arguments[0]!, ts), ts.factory.createIdentifier("__as3ReflectionClassIdentity")]);
         if (expression.capabilitySource === "Number" && expression.capabilityMember === "toFixed" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NumberToFixed"),undefined,[expressionNode(expression.callee.target,ts),...expression.arguments.map(argument=>expressionNode(argument,ts))]);
+        if (expression.capabilitySource === "Number" && expression.capabilityMember === "toString" && expression.callee.kind === "member")
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NumberSafeIntegerToString"),undefined,[expressionNode(expression.callee.target,ts)]);
         if (expression.capabilitySource === "String" && expression.capabilityMember === "split" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3StringSplit"),undefined,
                 [expressionNode(expression.callee.target,ts),ts.factory.createArrayLiteralExpression(expression.arguments.map(argument=>expressionNode(argument,ts)))]);
@@ -1755,7 +1757,7 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
 }
 
 function coercionRuntimeImport(ts: TypeScriptCompilerApi): any {
-    const names = ["as3MathRound", "as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorGetStackTrace", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringLastIndexOf", "as3StringSubstring", "as3StringSlice", "as3StringSplit", "as3NumberToFixed", "as3Add", "as3Equals", "as3Relation"].map(exported =>
+    const names = ["as3MathRound", "as3IsNaN", "as3ParseInt", "as3Boolean", "as3Int", "as3Number", "as3String", "as3Uint", "as3Object", "as3ObjectConversion", "as3TraceValue", "as3NumericBinary", "as3StringLength", "as3ErrorToString", "as3ErrorGetStackTrace", "as3ErrorID", "as3StringToLowerCase", "as3StringCharAt", "as3StringLastIndexOf", "as3StringSubstring", "as3StringSlice", "as3StringSplit", "as3NumberSafeIntegerToString", "as3NumberToFixed", "as3Add", "as3Equals", "as3Relation"].map(exported =>
         ts.factory.createImportSpecifier(false, ts.factory.createIdentifier(exported),
             ts.factory.createIdentifier(`__${exported}`)));
     return ts.factory.createImportDeclaration(undefined,
@@ -2008,6 +2010,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         value.kind === "member" && value.capabilitySource === "String" && value.name === "length"
         || value.kind === "member" && value.capabilitySource === "Error" && value.name === "errorID"
         || value.kind === "call" && value.capabilitySource === "Number" && value.capabilityMember === "toFixed"
+        || value.kind === "call" && value.capabilitySource === "Number" && value.capabilityMember === "toString"
         || value.kind === "call" && value.capabilitySource === "Error" && value.capabilityMember === "toString"
         || value.kind === "call" && value.capabilitySource === "Error" && value.capabilityMember === "getStackTrace"
         || value.kind === "call" && value.capabilitySource === "String" && ["toLowerCase","charAt","charCodeAt","split"].includes(value.capabilityMember)

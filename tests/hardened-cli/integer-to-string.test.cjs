@@ -39,7 +39,7 @@ exports.entry=require('./__as3_runtime/ApplicationEntry.generated.js');`,resolve
  }
  assert.deepEqual(...snapshots);
  const negative=path.join(dir,'negative-source');fs.mkdirSync(negative);
- const negatives={ExplicitRadix:'public function run(value:int):String{return value.toString(16);}',NumberReceiver:'public function run(value:Number):String{return value.toString();}',FractionReceiver:'public function run():String{return (1.5).toString();}',UnsafeIntegerReceiver:'public function run():String{return (9007199254740992).toString();}',BoundedRadix:'public function run(value:int):String{return (value+1).toString(16);}'};
+ const negatives={ExplicitRadix:'public function run(value:int):String{return value.toString(16);}',BoundedRadix:'public function run(value:int):String{return (value+1).toString(16);}'};
  for(const [name,body] of Object.entries(negatives))fs.writeFileSync(path.join(negative,name+'.as'),'package {import flash.display.Sprite;import flash.display.DisplayObject;public class '+name+' extends Sprite {'+body+'}}');
  const negativeProfile=path.join(dir,'negative-profile');run('python3',['-B','tools/create-fixture-profile.py','--source',negative,'--entry','ExplicitRadix','--air-sdk',air,'--laya',laya,'--ffdec-jar',ffdec,'--output',negativeProfile]);
  const negativeOut=path.join(dir,'negative-output');run(process.execPath,['bin/as3-frontend','qualify',negative,negativeOut,'--source-census',path.join(negativeProfile,'census.json'),'--target-capabilities',target,'--profile-lock',path.join(negativeProfile,'profile-lock.json')]);

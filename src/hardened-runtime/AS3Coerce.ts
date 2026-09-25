@@ -37,6 +37,13 @@ export function as3String(value?: unknown): string {
     return arguments.length === 0 ? "" : as3NativeString(value);
 }
 
+/** Decimal Number method on runtime-proven safe integers only. */
+export function as3NumberSafeIntegerToString(value:unknown):string {
+    if(typeof value!=="number" || !Number.isSafeInteger(value))
+        throw new AS3ObjectDispatchUnavailable("Number.toString requires an original safe integer receiver");
+    return String(value);
+}
+
 /** AVM Object slots preserve primitive/reference values but normalize undefined. */
 export function as3Object(value: unknown): unknown {
     return value === undefined ? null : value;

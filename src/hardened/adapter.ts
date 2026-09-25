@@ -4728,8 +4728,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         || context.sourceMemberAuthority !== null && ["int","uint"].includes(targetType.sourceName)
                             && targetType.emittedName === "number" && name === "toString"
                         || context.sourceMemberAuthority !== null && targetType.sourceName === "Number"
-                            && targetType.emittedName === "number" && name === "toString"
-                            && safeIntegerBounds(target, context, node) !== null);
+                            && targetType.emittedName === "number" && !targetType.nullable && name === "toString");
                     const functionLength = context.sourceMemberAuthority !== null && valuePosition
                         && targetType.sourceName === "Function" && name === "length";
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
@@ -5131,12 +5130,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const boundedNumber = integerType.sourceName === "Number" && integerType.emittedName === "number"
                 && safeIntegerBounds(callee.target, context, rawCallee) !== null;
             if ((! ["int","uint"].includes(integerType.sourceName) || integerType.emittedName !== "number")
-                && !boundedNumber)
+                && !boundedNumber && !(integerType.sourceName === "Number"
+                    && integerType.emittedName === "number" && !integerType.nullable))
                 fail("HARDENED_INTEGER_STRING_TARGET", "integer toString requires an authenticated primitive receiver", node);
             if (args.length !== 0)
                 fail("HARDENED_INTEGER_STRING_ARITY", "integer toString currently requires its zero-argument decimal form", node);
-            return Object.assign(identity(node), {kind:"coercion" as const,
-                targetType:semanticType(node,"String","string",[],false),argument:callee.target});
+            if (integerType.sourceName === "Number" && !boundedNumber) {
+                capabilitySource="Number";capabilityMember="toString";
+                resultType=semanticType(node,"String","string",[],false);
+            } else {
+                return Object.assign(identity(node), {kind:"coercion" as const,
+                    targetType:semanticType(node,"String","string",[],false),argument:callee.target});
+            }
         } else if (callee.kind === "member" && ["Number","int","uint"].includes(callee.capabilitySource || "")
             && callee.name === "toFixed") {
             if (args.length > 1) fail("HARDENED_NUMBER_ARITY", "Number.toFixed requires zero or one precision argument", node);
