@@ -297,11 +297,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 if(node.kind===K.VECTOR){
                     const construction=node.parent&&node.parent.kind===K.CALL&&node.parent.children[0]===node
                         &&node.parent.parent&&node.parent.parent.kind===K.NEW;
-                    if(!construction&&(!node.parent||[K.NAME_TYPE_INIT,K.FUNCTION,K.GET,K.TYPE].indexOf(node.parent.kind)<0))
+                    const literal=node.parent&&node.parent.kind===K.SHORT_VECTOR&&node.parent.parent&&node.parent.parent.kind===K.NEW;
+                    if(!construction&&!literal&&(!node.parent||[K.NAME_TYPE_INIT,K.FUNCTION,K.GET,K.TYPE].indexOf(node.parent.kind)<0))
                         fail('Vector expression conversion requires separate qualification');
                     const element=node.findChild(K.TYPE);
                     if(!element||node.children.length!==1)fail('nested Vector specialization publication requires qualification');
                     const identity=resolve(owner,element.qualifiedName||element.text);
+                    if(literal&&(identity!=='Class'||classes.has(identity)||providers[identity]))fail('Vector literal requires intrinsic Class element');
                     const contract=interfaces.find(i=>i.qname===identity);
                     const elementClass=bindings.find(b=>b.qname===identity);
                     const elementNative=providers[identity]&&providers[identity].nativeVector;
