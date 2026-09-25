@@ -88,3 +88,76 @@ export function assertMappedNativeDynamicLiteralReadProof(value:unknown,receiver
             "semantic mapped-native dynamic read lacks its exact retained evidence authority");
     }
 }
+
+/** A sealed DisplayObject base can expose a public trait on its runtime subtype. */
+export const MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY=Object.freeze({
+    schema:"as3-mapped-native-display-literal-public-read-authority@1" as const,
+    evidenceRevision:"816c2fda1801103b18bba093fbd014d7d9b9b3c3" as const,
+    nativeEvidenceSha256:"47494e93eb23d4fd5bd2c399fa26f93d96383857c126edb9dea21d5cbbeacdb3" as const,
+    sourceMemberAuthoritySchema:"as3-source-member-authority@2" as const,
+    sourceArtifactSha256:MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY.sourceArtifactSha256,
+    receiverQName:"flash.display.DisplayObject" as const,
+    targetModule:"laya/flash/display/DisplayObject" as const,
+    targetExport:"DisplayObject" as const,
+    runtimeObjectDispatchSourceSha256:MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY.runtimeObjectDispatchSourceSha256,
+    runtimeTypeSourceSha256:MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY.runtimeTypeSourceSha256,
+    runtimeTypeRegistrySourceSha256:MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY.runtimeTypeRegistrySourceSha256,
+});
+
+export interface MappedNativeDisplayLiteralReadProof {
+    readonly schema:"as3-mapped-native-display-literal-public-read@1";
+    readonly receiverQName:typeof MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY.receiverQName;
+    readonly propertyName:string;
+    readonly targetModule:typeof MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY.targetModule;
+    readonly targetExport:typeof MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY.targetExport;
+    readonly sourceArtifactSha256:typeof MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY.sourceArtifactSha256;
+    readonly evidenceRevision:typeof MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY.evidenceRevision;
+}
+
+export function mappedNativeDisplayLiteralReadProof(source:LoadedSourceMemberAuthority,
+    receiverQName:string,propertyName:string,targetModule:string,targetExport:string):MappedNativeDisplayLiteralReadProof {
+    assertLoadedSourceMemberAuthority(source);
+    const authority=MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY;
+    const entry=source.entriesByQName[receiverQName];
+    if(source.schema!==authority.sourceMemberAuthoritySchema
+        ||source.sourceArtifactSha256!==authority.sourceArtifactSha256
+        ||receiverQName!==authority.receiverQName||entry?.qname!==receiverQName||entry.dynamic!==false
+        ||targetModule!==authority.targetModule||targetExport!==authority.targetExport
+        ||!IDENTIFIER.test(propertyName))
+        throw new HardenedSemanticError("HARDENED_MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY",
+            "sealed DisplayObject literal read lacks exact AIR source or Laya mapping authority");
+    const visited=new Set<string>();
+    let current:string|null=receiverQName;
+    while(current!==null) {
+        if(visited.has(current)||visited.size>=1024)
+            throw new HardenedSemanticError("HARDENED_MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY",
+                "sealed DisplayObject source ancestry is cyclic or excessive");
+        visited.add(current);
+        const ancestor:SourceMemberAuthorityEntry|undefined=source.entriesByQName[current];
+        if(!ancestor||ancestor.ownInstanceMemberNames.includes(propertyName))
+            throw new HardenedSemanticError("HARDENED_MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY",
+                "sealed DisplayObject key collides with a native trait or lacks complete ancestry");
+        current=ancestor.baseQName;
+    }
+    return Object.freeze({schema:"as3-mapped-native-display-literal-public-read@1" as const,
+        receiverQName:authority.receiverQName,propertyName,targetModule:authority.targetModule,
+        targetExport:authority.targetExport,sourceArtifactSha256:authority.sourceArtifactSha256,
+        evidenceRevision:authority.evidenceRevision});
+}
+
+export function assertMappedNativeDisplayLiteralReadProof(value:unknown,receiverQName:string,
+    propertyName:string,targetModule:string,targetExport:string):asserts value is MappedNativeDisplayLiteralReadProof {
+    const proof=value as Partial<MappedNativeDisplayLiteralReadProof>|null;
+    const authority=MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY;
+    if(!proof||typeof proof!=="object"||Object.getPrototypeOf(proof)!==Object.prototype
+        ||Object.keys(proof).sort().join("\0")!==["schema","receiverQName","propertyName","targetModule",
+            "targetExport","sourceArtifactSha256","evidenceRevision"].sort().join("\0")
+        ||proof.schema!=="as3-mapped-native-display-literal-public-read@1"
+        ||proof.receiverQName!==authority.receiverQName||proof.receiverQName!==receiverQName
+        ||proof.propertyName!==propertyName||proof.targetModule!==authority.targetModule
+        ||proof.targetModule!==targetModule||proof.targetExport!==authority.targetExport
+        ||proof.targetExport!==targetExport||proof.sourceArtifactSha256!==authority.sourceArtifactSha256
+        ||proof.evidenceRevision!==authority.evidenceRevision)
+        throw new HardenedSemanticError("HARDENED_MAPPED_NATIVE_DISPLAY_LITERAL_READ_AUTHORITY",
+            "semantic sealed DisplayObject read lacks its retained AIR evidence authority");
+}

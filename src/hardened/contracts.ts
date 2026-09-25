@@ -366,13 +366,14 @@ export interface IndexExpression extends SemanticIdentity {
     accessKind: "object" | "vector" | "dictionary" | "byteArray" | "array" | "ownRecord"
         | "bigTurnTableInnerRoot" | "bigTurnTableInnerCost" | "localInterfaceLiteralPublicTrait"
         | "localInterfaceComputedPublicTrait"
-        | "mappedNativeDynamicLiteralPublicTrait";
+        | "mappedNativeDynamicLiteralPublicTrait" | "mappedNativeDisplayLiteralPublicTrait";
     target: SemanticExpression;
     targetNullable: boolean;
     callerQName?: string;
     localInterfaceLiteralRead?: import("./local-interface-literal-read-authority").LocalInterfaceLiteralReadProof;
     localInterfaceComputedRead?: import("./local-interface-computed-read-authority").LocalInterfaceComputedReadProof;
     mappedNativeDynamicLiteralRead?: import("./mapped-native-dynamic-literal-read-authority").MappedNativeDynamicLiteralReadProof;
+    mappedNativeDisplayLiteralRead?: import("./mapped-native-dynamic-literal-read-authority").MappedNativeDisplayLiteralReadProof;
     mappedNativeDynamicLiteralTarget?: import("./mapped-native-dynamic-literal-target-authority").MappedNativeDynamicLiteralTargetProof;
     index: SemanticExpression;
     resultType: SemanticType;

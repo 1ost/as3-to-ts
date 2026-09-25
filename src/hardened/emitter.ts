@@ -15,7 +15,7 @@ import {
 import { assertAdaptedSemanticProgram } from "./adapter";
 import { assertLocalInterfaceLiteralReadProof } from "./local-interface-literal-read-authority";
 import { assertLocalInterfaceComputedReadProof } from "./local-interface-computed-read-authority";
-import { assertMappedNativeDynamicLiteralReadProof } from "./mapped-native-dynamic-literal-read-authority";
+import { assertMappedNativeDynamicLiteralReadProof, assertMappedNativeDisplayLiteralReadProof } from "./mapped-native-dynamic-literal-read-authority";
 import { assertMappedNativeDynamicLiteralTargetProof } from "./mapped-native-dynamic-literal-target-authority";
 import { staticConstant } from "./static-constants";
 
@@ -444,6 +444,23 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             ? ts.factory.createAsExpression(call, typeNode(expression.resultType, ts)) : call;
     }
     if (expression.kind === "index") {
+        if(expression.accessKind==="mappedNativeDisplayLiteralPublicTrait") {
+            if(expression.index.kind!=="literal"||typeof expression.index.value!=="string"
+                ||!expression.callerQName||!expression.mappedNativeDisplayLiteralRead)
+                throw new HardenedSemanticError("HARDENED_EMIT_MAPPED_NATIVE_DISPLAY_LITERAL_READ",
+                    "sealed DisplayObject literal read lacks exact semantic identity");
+            const proof=expression.mappedNativeDisplayLiteralRead;
+            assertMappedNativeDisplayLiteralReadProof(proof,proof.receiverQName,expression.index.value,
+                proof.targetModule,proof.targetExport);
+            const nominalReceiver=ts.factory.createCallExpression(ts.factory.createIdentifier("__as3Cast"),undefined,[
+                expressionNode(expression.target,ts),
+                ts.factory.createCallExpression(ts.factory.createIdentifier("__as3NamedReferenceType"),undefined,
+                    [ts.factory.createStringLiteral(proof.receiverQName)]),
+            ]);
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ObjectRead"),undefined,
+                [nominalReceiver,ts.factory.createStringLiteral(expression.index.value),
+                    ts.factory.createStringLiteral(expression.callerQName)]);
+        }
         if(expression.accessKind==="mappedNativeDynamicLiteralPublicTrait") {
             if(expression.index.kind!=="literal"||typeof expression.index.value!=="string"
                 ||!expression.callerQName||!expression.mappedNativeDynamicLiteralRead) {
@@ -1912,7 +1929,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         value.kind === "objectOperation" || value.kind === "index"
             && (value.accessKind === "object"||value.accessKind === "localInterfaceLiteralPublicTrait"
                 ||value.accessKind === "localInterfaceComputedPublicTrait"
-                ||value.accessKind === "mappedNativeDynamicLiteralPublicTrait")
+                ||value.accessKind === "mappedNativeDynamicLiteralPublicTrait"
+                ||value.accessKind === "mappedNativeDisplayLiteralPublicTrait")
         || Object.values(value).some(usesObjectDispatch));
     if (usesObjectDispatch(program)) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(

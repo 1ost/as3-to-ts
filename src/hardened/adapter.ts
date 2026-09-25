@@ -6,7 +6,7 @@ import {nativeUriComponentAuthoritySha256,nativeDecodeUriComponentAuthoritySha25
 import { hasNativeDateAuthority } from "./native-date-authority";
 import { localInterfaceLiteralReadProof } from "./local-interface-literal-read-authority";
 import { localInterfaceComputedReadProof } from "./local-interface-computed-read-authority";
-import { mappedNativeDynamicLiteralReadProof } from "./mapped-native-dynamic-literal-read-authority";
+import { mappedNativeDynamicLiteralReadProof, mappedNativeDisplayLiteralReadProof } from "./mapped-native-dynamic-literal-read-authority";
 import { mappedNativeDynamicLiteralTargetProof } from "./mapped-native-dynamic-literal-target-authority";
 import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
 import {
@@ -4154,9 +4154,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             &&mappedNativeImport.sourceQualifiedName===ownerType.runtimeName
             &&!(target.kind==="identifier"&&(target.bindingKind==="import"||target.bindingKind==="current-class"));
         if(mappedNativeInstance) {
+            const sealedDisplay=context.sourceMemberAuthority?.entriesByQName[ownerType.runtimeName!]?.dynamic===false
+                &&ownerType.runtimeName==="flash.display.DisplayObject";
             if(context.sourceMemberAuthority===null
                 ||context.sourceMemberAuthority.schema!=="as3-source-member-authority@2"
-                ||context.sourceMemberAuthority.entriesByQName[ownerType.runtimeName!]?.dynamic!==true) {
+                ||context.sourceMemberAuthority.entriesByQName[ownerType.runtimeName!]?.dynamic!==true&&!sealedDisplay) {
                 fail("HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY",
                     "mapped native dynamic read requires exact @2 dynamic-class source member authority",node.children[0]!);
             }
@@ -4168,11 +4170,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_KEY",
                     "mapped native dynamic read requires one literal public identifier key",node.children[1]!);
             }
-            return {...identity(node),kind:"index",accessKind:"mappedNativeDynamicLiteralPublicTrait",target,
-                targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,
-                mappedNativeDynamicLiteralRead:mappedNativeDynamicLiteralReadProof(context.sourceMemberAuthority,
-                    ownerType.runtimeName!,index.value,mappedNativeImport.targetModule,mappedNativeImport.targetExport),
-                resultType:semanticType(node,"*","unknown")};
+            return sealedDisplay
+                ? {...identity(node),kind:"index",accessKind:"mappedNativeDisplayLiteralPublicTrait",target,
+                    targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,
+                    mappedNativeDisplayLiteralRead:mappedNativeDisplayLiteralReadProof(context.sourceMemberAuthority,
+                        ownerType.runtimeName!,index.value,mappedNativeImport.targetModule,mappedNativeImport.targetExport),
+                    resultType:semanticType(node,"*","unknown")}
+                : {...identity(node),kind:"index",accessKind:"mappedNativeDynamicLiteralPublicTrait",target,
+                    targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,
+                    mappedNativeDynamicLiteralRead:mappedNativeDynamicLiteralReadProof(context.sourceMemberAuthority,
+                        ownerType.runtimeName!,index.value,mappedNativeImport.targetModule,mappedNativeImport.targetExport),
+                    resultType:semanticType(node,"*","unknown")};
         }
         const instanceQName=localQNameForType(ownerType,context);
         const instanceType=instanceQName && context.resolveCurrentLocal
@@ -4995,6 +5003,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         if (callee.kind === "index" && (callee.accessKind === "object"
             || callee.accessKind === "mappedNativeDynamicLiteralPublicTrait"
+            || callee.accessKind === "mappedNativeDisplayLiteralPublicTrait"
                 && callee.mappedNativeDynamicLiteralTarget !== undefined)) {
             let operation:"call"|"preparedCall"="call";
             const builtin = callee.index.kind === "literal" && ["hasOwnProperty","toString"].includes(String(callee.index.value));
