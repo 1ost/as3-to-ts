@@ -4076,7 +4076,7 @@ function emitDynamicKey(emitter:Emitter,access:DictionaryAccess):void {
 }
 function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     const module=emitter.options.nativeDynamicPropertyReadsModule;
-    const found=dynamicAccess(emitter,node);if(!found)return false;
+    const found=dynamicAccess(emitter,node)||sourceInterfaceGetterAccess(emitter,node);if(!found)return false;
     if(module===undefined){
         if(isInterfaceCast(emitter,found.receiver))generatedModule(module);
         if(generatedReceiver(emitter,found.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property reads require provider');
@@ -4091,6 +4091,25 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
     emitDynamicKey(emitter,found);emitter.insert('))');emitter.skipTo(node.end);
     return true;
+}
+
+/** Source interface getter reads must preserve source null errors as well as
+ * dispatch. A host property read would instead leak a JavaScript TypeError. */
+function sourceInterfaceGetterAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    if(!emitter.generated||!emitter.references||!node||node.kind!==NodeKind.DOT||node.children.length!==2)return null;
+    const receiver=node.children[0],key=node.children[1];
+    if(receiver.kind!==NodeKind.IDENTIFIER||key.kind!==NodeKind.LITERAL)return null;
+    const definition=emitter.findDefInScope(receiver.text);
+    if(!definition||definition.bound||typeof definition.as3Type!=='string')return null;
+    const token=emitter.references.sourceInterface(definition.as3Type),plan=emitter.generated.options.plan;
+    const contract=plan.interfaces.find(binding=>binding.tokenExport===token);
+    if(!contract)return null;
+    const owners=new Set<string>();
+    const visit=(name:string):void=>{if(owners.has(name))return;owners.add(name);
+        const binding=plan.interfaces.find(value=>value.qname===name);if(binding)binding.bases.forEach(visit);};
+    visit(contract.qname);
+    return plan.interfaceContracts.members.some(member=>owners.has(member.owner)&&member.name===key.text&&member.kind==='get')
+        ?{receiver,key,literalKey:key.text}:null;
 }
 
 function emitDynamicPropertyAddition(emitter:Emitter, target:Node, value:Node):boolean {
