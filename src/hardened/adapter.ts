@@ -7508,26 +7508,35 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                 const count = body.filter(superCall).length;
                 const superIndex = body.findIndex(superCall);
                 const leading = body.slice(0, Math.max(0, superIndex));
-                const stagedBitmap=placeholder.sourceMemberAuthority !== null
-                    && placeholder.baseSourceQName === "flash.display.Bitmap";
+                const call=superIndex < 0 ? null : (body[superIndex] as any).expression;
+                const argumentReceiver=call !== null && !call.nativeDispatcherSelfTarget
+                    && usesConstructionReceiver(call.arguments);
+                const nativeFieldStaging=placeholder.sourceMemberAuthority !== null
+                    && (placeholder.baseSourceQName === "flash.display.Bitmap"
+                        || placeholder.baseSourceQName === "flash.events.Event");
+                // These authenticated native constructors do not inspect subclass
+                // slots or dispatch subclass methods. Their own-slot writes can
+                // therefore be staged until the JS receiver exists after super.
+                const stagedFields=nativeFieldStaging && (placeholder.baseSourceQName === "flash.display.Bitmap"
+                    || leading.some(usesConstructionReceiver)
+                    || argumentReceiver);
                 if (count > 1 || extendsType !== null && count !== 1
                     || leading.some(statement => statement.kind !== "local" && statement.kind !== "empty"
                         && statement.kind !== "expression")) {
                     fail("HARDENED_SUPER_ORDER", "constructor requires one top-level super call and an admitted leading sequence", node);
                 }
-                if (stagedBitmap) {
-                    const call=(body[superIndex] as any).expression;
+                if (stagedFields) {
                     const fields=Object.values(placeholder.fields).filter(field=>!field.modifiers.includes("static"));
-                    if (!onlyOwnPreSuperFields(leading,placeholder) || !onlyOwnPreSuperFields(call.arguments,placeholder)
+                    if (!onlyOwnPreSuperFields(leading,placeholder) || !onlyOwnPreSuperFields(call?.arguments ?? [],placeholder)
                         || fields.some(field=>field.embeddedBitmap || !onlyOwnPreSuperFields(field.initializer,placeholder)))
-                        fail("HARDENED_SUPER_FIELD_RECEIVER", "Bitmap pre-super code may use own field slots but cannot expose this or call receiver methods/accessors",node);
-                } else if (leading.some(usesConstructionReceiver)) {
-                    fail("HARDENED_SUPER_LOCAL_RECEIVER", "local initialization before super cannot access the construction receiver", node);
+                        fail("HARDENED_SUPER_FIELD_RECEIVER", "native pre-super code may use own field slots but cannot expose this or call receiver methods/accessors",node);
+                } else if (leading.some(usesConstructionReceiver) || argumentReceiver) {
+                    fail("HARDENED_SUPER_LOCAL_RECEIVER", "pre-super code cannot access the construction receiver outside a qualified native own-slot bridge", node);
                 }
                 if (extendsType === null && count === 1) body = body.filter(statement => !superCall(statement));
                 const constructor: SemanticConstructor = Object.assign(identity(node), {
                     kind: "constructor" as "constructor", modifiers: header.modifiers,
-                    parameters: header.parameters, body, ...(stagedBitmap ? {preSuperFieldState:true as const} : {}),
+                    parameters: header.parameters, body, ...(stagedFields ? {preSuperFieldState:true as const} : {}),
                 });
                 members.push(constructor);
             } else if (header.accessor === "getter") {
@@ -7578,7 +7587,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         for (const field of members) {
             if (field.kind === "field" && !field.modifiers.includes("static")
                 && (field.embeddedBitmap || !onlyOwnPreSuperFields(field.initializer,placeholder)))
-                fail("HARDENED_SUPER_FIELD_RECEIVER", "Bitmap field initializers cannot expose the construction receiver",classNode);
+                fail("HARDENED_SUPER_FIELD_RECEIVER", "staged native field initializers cannot expose the construction receiver",classNode);
         }
     }
     assertNoLocalAncestryFieldCollision(placeholder, members, classNode);

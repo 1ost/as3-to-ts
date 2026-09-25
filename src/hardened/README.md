@@ -92,7 +92,7 @@ and admission. Original Error construction retains its existing argument bounds.
 Ordinary TypeScript Laya consumers do not need this compiler runtime.
 
 
-### Own fields before native Bitmap construction
+### Own fields before native Bitmap or Event construction
 
 The authenticated Bitmap boundary admits its original SDK constructor arguments.
 For a direct Bitmap subclass, the compiler evaluates declared field defaults and
@@ -111,6 +111,14 @@ lexical receiver closures, unsupported control flow and embedded instance fields
 remain held. Final field initializers are checked after every declaration has
 been parsed, including fields declared after the constructor. Existing local-base
 constructor-local ordering and proof cancellation remain unchanged.
+
+The same own-slot staging is admitted for a direct canonical `flash.events.Event`
+subclass when its constructor actually uses the receiver before `super(...)`.
+The Event base validates and initializes private native state without reading
+subclass slots or invoking subclass methods. A class such as the original
+`BaseEvent` can therefore assign its own data field at the source point, then
+install that staged value after native Event construction. This does not admit
+local-base constructor receiver calls or inherited field writes.
 
 The native private-slot fixture also proves null/literal-String conditional
 branches and the String slot passed to Bitmap: null must reach the native #2007

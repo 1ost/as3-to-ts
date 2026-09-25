@@ -30,6 +30,12 @@ test('receiver-free expressions retain AIR order before a local base constructor
  fs.writeFileSync(path.join(source,'BadThis.as'),`package {
  public class BadThis extends Base { public var value:int; public function BadThis() { this.value=1; super(); } }
 }\n`);
+ fs.writeFileSync(path.join(source,'ArgBase.as'),`package {
+ public class ArgBase { public function ArgBase(value:int) {} }
+ }\n`);
+ fs.writeFileSync(path.join(source,'BadArg.as'),`package {
+ public class BadArg extends ArgBase { public var value:int; public function BadArg() { super(this.value); } }
+ }\n`);
  const run=(command,args)=>{const result=cp.spawnSync(command,args,{cwd:root,encoding:'utf8',timeout:120000});
   assert.equal(result.status,0,result.stdout+result.stderr);return result;};
  run('python3',['-B','tools/create-fixture-profile.py','--source',source,'--entry','Good',
@@ -42,6 +48,7 @@ test('receiver-free expressions retain AIR order before a local base constructor
  const rows=JSON.parse(fs.readFileSync(path.join(qualified,'manifest.json'),'utf8')).files;
  assert.equal(rows.find(row=>row.sourcePath==='Good.as').status,'admitted');
  assert.equal(rows.find(row=>row.sourcePath==='BadThis.as').code,'HARDENED_SUPER_LOCAL_RECEIVER');
+ assert.equal(rows.find(row=>row.sourcePath==='BadArg.as').code,'HARDENED_SUPER_LOCAL_RECEIVER');
 
  const good=path.join(dir,'good');fs.mkdirSync(good);
  for(const name of ['Base.as','State.as','Good.as'])fs.copyFileSync(path.join(source,name),path.join(good,name));
