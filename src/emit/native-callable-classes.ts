@@ -1,4 +1,4 @@
-import {nativeSpriteValueReferenceNames} from './native-reference-coercion';
+import {nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {generatedMethodCompletes} from './native-generated-completions';
 import {NativeLexicalMembers} from './native-lexical-members';
 import {lowerNativeSourceOperations} from './native-source-operations';
@@ -27,7 +27,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false, private spriteOwnerReferences=false) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -158,7 +158,8 @@ export class NativeCallableClasses {
                         :sourceReference.kind==='interface'&&generated.options.plan.interfaces.find(binding=>binding.qname===sourceReference.identity));
                     const nativeReference=sourceReference&&sourceReference.kind==='native'
                         &&(accessibilityReference&&sourceReference.identity==='flash.accessibility.AccessibilityImplementation'
-                            ||spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(sourceReference.identity)>=0)
+                            ||spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(sourceReference.identity)>=0
+                            ||spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(sourceReference.identity)>=0)
                         &&generated.options.plan.nativeBindings.find(binding=>binding.qname===sourceReference.identity);
                     const reference=sourceDeclaration?{identity:sourceDeclaration.qname,exported:sourceDeclaration.tokenExport}
                         :nativeReference?{identity:nativeReference.qname,exported:nativeReference.referenceExport}:undefined;
@@ -596,6 +597,7 @@ export class NativeCallableClasses {
                         &&!(this.textFormatReference&&reference.identity==='flash.text.TextFormat')
                         &&!(this.accessibilityReference&&reference.identity==='flash.accessibility.AccessibilityImplementation')
                         &&!(this.spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(reference.identity)>=0)
+                        &&!(this.spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(reference.identity)>=0)
                         &&!(this.interactiveReference&&reference.identity==='flash.display.InteractiveObject')
                         &&!this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&binding.nativeInterface)
                         &&!(reference.identity==='flash.media.ID3Info'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity))
