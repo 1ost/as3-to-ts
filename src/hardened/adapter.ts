@@ -4804,6 +4804,27 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_DATE_COERCION","Date primitive conversion requires separate native evidence",node);
             return Object.assign(identity(node), { kind: "coercion" as "coercion", targetType, argument });
         }
+        if (context.stringRangeProvider && context.sourceMemberAuthority !== null
+            && rawCallee.kind === "DOT" && rawCallee.children.length === 2
+            && rawCallee.children[1]!.text === "apply"
+            && rawCallee.children[0]!.kind === "DOT" && rawCallee.children[0]!.children.length === 2
+            && rawCallee.children[0]!.children[1]!.text === "fromCharCode") {
+            const stringClass=parseExpression(rawCallee.children[0]!.children[0]!,context,true);
+            if (stringClass.kind === "identifier" && stringClass.bindingKind === "builtin-class"
+                && stringClass.name === "String") {
+                const inputs=node.children[1]!.children;
+                if (inputs.length !== 2)
+                    fail("HARDENED_STRING_FROM_CHAR_CODES_ARITY","String.fromCharCode.apply requires null and one Array",node);
+                const receiver=parseExpression(inputs[0]!,context,true);
+                const codes=parseExpression(inputs[1]!,context,true);
+                if (receiver.kind !== "literal" || receiver.value !== null
+                    || assignmentType(codes,context,inputs[1]!).sourceName !== "Array")
+                    fail("HARDENED_STRING_FROM_CHAR_CODES_ARGUMENT","String.fromCharCode.apply requires null and a proven Array",node);
+                return {...identity(node),kind:"call",callee:stringClass,calleeNullable:false,
+                    arguments:[codes],capabilitySource:"String",capabilityMember:"fromCharCode.apply",
+                    sharedStringFromCharCodes:true,resultType:semanticType(node,"String","string",[],false)};
+            }
+        }
         if (rawCallee.kind === "DOT" && rawCallee.children.length === 2 && rawCallee.children[1]!.text === "call") {
             const target=parseExpression(rawCallee.children[0]!,context,true);
             if (assignmentType(target,context,rawCallee).sourceName === "Function") {

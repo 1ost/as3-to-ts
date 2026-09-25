@@ -304,6 +304,7 @@ export interface CallExpression extends SemanticIdentity {
     immediateLambdaCall?: true;
     kind: "call";
     sharedStringRange?: true;
+    sharedStringFromCharCodes?: true;
     sharedArraySort?: true;
     sharedArraySortOnPair?: true;
     sharedArraySome?: true;

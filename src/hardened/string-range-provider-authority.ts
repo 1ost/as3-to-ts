@@ -8,6 +8,9 @@ const TARGETS = ["CharAt","Slice","Substring"].map(name=>({module:MODULE,export:
     signature:"(value: unknown, args: unknown[], coerce?: (value: unknown) => number) => string"})).concat([{
     module:MODULE,export:"sourceStringCharCodeAt",
     signature:"(value: unknown, args: unknown[], coerce?: (value: unknown) => number) => number",
+},{
+    module:MODULE,export:"sourceStringFromCharCodes",
+    signature:"(codes: unknown) => string",
 }]);
 const verified = new WeakMap<object,{targetHash:string;sourceHash:string}>();
 const hash = (text:string):string => createHash("sha256").update(text).digest("hex");

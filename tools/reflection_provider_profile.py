@@ -187,7 +187,9 @@ STRING_RANGE_TARGETS = tuple(("src/layaAir/flash/utils/AS3StringIntrinsics.ts", 
     "(value: unknown, args: unknown[], coerce?: (value: unknown) => number) => string")
     for name in ("CharAt", "Slice", "Substring")) + ((
         "src/layaAir/flash/utils/AS3StringIntrinsics.ts", "sourceStringCharCodeAt",
-        "(value: unknown, args: unknown[], coerce?: (value: unknown) => number) => number"),)
+        "(value: unknown, args: unknown[], coerce?: (value: unknown) => number) => number"), (
+        "src/layaAir/flash/utils/AS3StringIntrinsics.ts", "sourceStringFromCharCodes",
+        "(codes: unknown) => string"),)
 
 def inspect_string_range_provider_inputs(laya_root):
     return _inspect(laya_root, STRING_RANGE_TARGETS, "as3-string-range-provider-target@1")[1]

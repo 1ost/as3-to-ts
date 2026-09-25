@@ -301,6 +301,12 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             undefined, [ts.factory.createThis(),method]) : method;
     }
     if (expression.kind === "call") {
+        if (expression.sharedStringFromCharCodes) {
+            if (expression.arguments.length !== 1)
+                throw new HardenedSemanticError("HARDENED_EMIT_STRING_FROM_CHAR_CODES","String.fromCharCode.apply requires one Array");
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__sharedStringFromCharCodes"),undefined,
+                [expressionNode(expression.arguments[0]!,ts)]);
+        }
         if (expression.capabilitySource === "flash.net.navigateToURL"
             && expression.capabilityMember === "<call>"
             && expression.callee.kind === "identifier"
@@ -1961,7 +1967,7 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3ArraySortOn"),ts.factory.createIdentifier("__sharedArraySortOn"))])),
         ts.factory.createStringLiteral(program.sharedArraySortModule),undefined));
     if (program.sharedStringRangeModule) imports.push(ts.factory.createImportDeclaration(undefined,
-        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(["CharAt","CharCodeAt","Slice","Substring"].map(name=>
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(["CharAt","CharCodeAt","Slice","Substring","FromCharCodes"].map(name=>
             ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("sourceString"+name),ts.factory.createIdentifier("__sharedString"+name))))),
         ts.factory.createStringLiteral(program.sharedStringRangeModule),undefined));
     if (usesNativeDate) imports.push(ts.factory.createImportDeclaration(undefined,
