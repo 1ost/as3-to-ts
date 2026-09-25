@@ -28,7 +28,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         const consumer = nativeGeneratedConsumerResolver(options.plan, source);
@@ -182,6 +182,7 @@ export class NativeReferenceCoercion {
                 && ((nativeDisplayObject && this.resolve(node.lastChild.text)==='flash.display.DisplayObject')
                     || (nativeMovieClip && this.resolve(node.lastChild.text)==='flash.display.MovieClip')
                     || (nativeTextFormat && this.resolve(node.lastChild.text)==='flash.text.TextFormat')
+                    || (nativeAccessibility && this.resolve(node.lastChild.text)==='flash.accessibility.AccessibilityImplementation')
                     || (nativeInteractiveObject && this.resolve(node.lastChild.text)==='flash.display.InteractiveObject'));
             const byteArrayTest = nativeByteArray && generated && node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
