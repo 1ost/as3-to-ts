@@ -6,7 +6,7 @@ module.exports=(api,input,config,hash)=>{
   ['rest','...values','',/super rest method signature/],
   ['integer-default','v:int=2147483648','',/optional integer default/],
   ['expression-default','v:Object=new Object()','',/optional parameter requires qualified literal/],
-  ['required-after-optional','a:int=1,b:int','',/required parameter after optional|super parameter after optional/],
+  ['required-after-optional','a:int=1,b:int','',/required (?:method )?parameter after optional|super parameter after optional/],
  ];
  for(const [id,parameters,args,error] of cases){
   const raw={'supercheck.Base':'package supercheck {public class Base {public function Base(){super();} public function take('+parameters+'):void {}}}',
