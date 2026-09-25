@@ -10,6 +10,8 @@ export interface NativeSourceClassModuleInput {
     externalModules: ReadonlyArray<string>;
     loadingSessionModule: string;
     target: 'ES5' | 'ES2015';
+    /** Retained source movie header, supplied by the build's authenticated input. */
+    sourceMovie?: {readonly width:number; readonly height:number; readonly sourceSha256:string};
 }
 export interface NativeSourceClassModuleArtifact {
     /** Native ESM JavaScript. All function bodies are compiled at build time. */
@@ -28,6 +30,17 @@ function specifier(value: string): string {
 
 /** Emit a complete cohort from its genuine source plan; arbitrary generated text is not input authority. */
 export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput): NativeSourceClassModuleArtifact {
+    let movie:{width:number;height:number;sourceSha256:string};
+    if(input.sourceMovie!==undefined) {
+        const record=input.sourceMovie;
+        if(!record||typeof record!=='object'||Object.keys(record).length!==3)fail('authored movie record');
+        const field=(key:string):any=>{const d=Object.getOwnPropertyDescriptor(record,key);if(!d||!('value' in d))fail('authored movie own data fields');return d.value;};
+        const width=field('width'),height=field('height'),sourceSha256=field('sourceSha256');
+        if(typeof width!=='number'||!isFinite(width)||width<=0||width>0x7fffffff
+            ||typeof height!=='number'||!isFinite(height)||height<=0||height>0x7fffffff
+            ||typeof sourceSha256!=='string'||!/^[a-f0-9]{64}$/.test(sourceSha256))fail('authored movie dimensions or source hash');
+        movie={width,height,sourceSha256};
+    }
     const plan = input.plan, planned = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
     if (!planned.inheritScriptClasses || !planned.scriptDomainProvider || !planned.scriptGlobalProviderModule
         || !(plan.bindings.length + plan.interfaces.length) || plan.bindings.some(b => !b.scriptGlobalExport)
@@ -137,7 +150,7 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
             .concat(plan.interfaces.map(b => '    {name:'+JSON.stringify(b.qname)+',declaration:headers['+JSON.stringify(b.tokenExport)
                 +'],resolve:()=>headers['+JSON.stringify(b.tokenExport)+']}')).join(',\n'),
         '  ];', '}',
-        'export const nativeSourceClassModule = ' + providerName(session) + '.createNativeSourceClassModule(async () => bindNativeSourceClasses);');
+        'export const nativeSourceClassModule = ' + providerName(session) + '.createNativeSourceClassModule(async () => bindNativeSourceClasses'+(movie?','+JSON.stringify(movie):'')+');');
     return Object.freeze({moduleSource: lines.join('\n') + '\n',
         declarationSource: 'import {NativeSourceClassFactory, NativeSourceClassModule} from ' + JSON.stringify(session) + ';\n'
             + 'export declare const bindNativeSourceClasses: NativeSourceClassFactory;\nexport declare const nativeSourceClassModule: NativeSourceClassModule;\n',

@@ -2977,6 +2977,7 @@ function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
 }
 
 function emitNew(emitter:Emitter, node:Node):void {
+ if(emitLexicalSpriteConstruction(emitter,node))return;
  if(emitDynamicConstruction(emitter,node))return;
  if(emitGeneratedVectorConstruction(emitter,node))return;
  if(emitter.generated&&node.children.length===1&&node.children[0].kind===NodeKind.CALL){
@@ -3399,6 +3400,36 @@ function emitLocalFunctionIntrinsic(emitter:Emitter,node:Node):boolean {
     emitter.insert(','+JSON.stringify(member.text)+',()=>[');
     args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
     emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
+/** Native Sprite allocations retain the defining script's movie, including
+ * callbacks invoked by another movie. Zero-argument construction is the
+ * qualified canonical form; other display constructors remain separate work. */
+function emitLexicalSpriteConstruction(emitter:Emitter,node:Node):boolean {
+ if(!emitter.generated||node.children.length!==1)return false;
+ const call=node.children[0],callee=call.kind===NodeKind.CALL&&call.children[0];
+ if(!callee||callee.kind!==NodeKind.IDENTIFIER)return false;
+ const binding=emitter.findDefInScope(callee.text);
+ if(binding&&(binding.bound||Object.prototype.hasOwnProperty.call(binding,'as3Type')))return false;
+ if(emitter.generated.lexical.resolveTypeName(callee.text)!=='flash.display.Sprite')return false;
+ const input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+ const provider=input.providers&&input.providers['flash.display.Sprite'];
+ const fail=(reason:string):never=>{throw new Error('AS3_SPRITE_ALLOCATION_UNSUPPORTED: '+reason);};
+ if(!provider||provider.exportName!=='Sprite'||!emitter.options.importModules
+     ||emitter.options.importModules['flash.display.Sprite']!==xmlGlobalProviderModule(provider.module,emitter.generated.options.module))
+  fail('exact native Sprite provider required');
+ const args=call.findChild(NodeKind.ARGUMENTS);
+ if(!args||args.children.length)fail('only canonical zero-argument construction is qualified');
+ if(!input.scriptDomainProvider||!input.scriptGlobalProviderModule||!emitter.generated.projection.binding.scriptGlobalExport)
+  fail('defining script requires an explicit cohort domain');
+ const module=generatedModule(xmlGlobalProviderModule(input.scriptGlobalProviderModule,emitter.generated.options.module));
+ const helper=propertyHelper(emitter,'withAS3ScriptAllocationContext',module);
+ emitter.catchup(node.start);emitter.insert(helper+'('+emitter.generated.lexical.scriptGlobal+',()=>');
+ const wasNew=emitter.isNew,wasThis=emitter.emitThisForNextIdent;
+ emitter.isNew=true;emitter.emitThisForNextIdent=false;
+ visitNodes(emitter,node.children);emitter.catchup(node.end);emitter.insert(')');
+ emitter.isNew=wasNew;emitter.emitThisForNextIdent=wasThis;
+ return true;
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
