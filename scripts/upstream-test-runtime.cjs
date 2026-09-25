@@ -1,9 +1,11 @@
 // The incoming tests use the TypeScript JavaScript API, which is no longer
 // exported by the native TypeScript 7 CLI used for the hardened build.
 const Module = require('node:module');
+const compilerTypeScriptPath = require('node:path').resolve(__dirname, '../node_modules/typescript');
 const original = Module._resolveFilename;
 Module._resolveFilename = function(request, parent, ...rest) {
-  return original.call(this, request === 'typescript' ? 'typescript-native' : request, parent, ...rest);
+  return original.call(this, request === 'typescript' || request === compilerTypeScriptPath
+    ? require.resolve('typescript-native') : request, parent, ...rest);
 };
 
 const preload = "--require " + JSON.stringify(__filename);

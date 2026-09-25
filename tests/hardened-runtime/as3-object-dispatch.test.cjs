@@ -184,6 +184,11 @@ test("authenticated mapped-native dynamic reads consult one own descriptor befor
  assert.throws(()=>r.as3ObjectRead(hidden,"hidden","ExternalDynamicClassProbe"),
   {name:"AS3ObjectDispatchUnavailable"},"an inaccessible generated trait must not become a public dynamic slot");
  assert.equal(r.as3ObjectRead(hidden,"hidden","DynamicSource"),"private");
+ assert.throws(()=>r.as3ObjectWrite(hidden,"hidden","overwrite","ExternalDynamicClassProbe"),
+  {name:"AS3ObjectDispatchUnavailable"},"public dynamic writes must not overwrite private source storage");
+ assert.throws(()=>r.as3ObjectDelete(hidden,"hidden","ExternalDynamicClassProbe"),
+  {name:"AS3ObjectDispatchUnavailable"},"public dynamic deletion must not remove private source storage");
+ assert.equal(r.as3ObjectRead(hidden,"hidden","DynamicSource"),"private");
  for(const value of [null,undefined])assert.throws(()=>r.as3ObjectRead(value,"lock"),
   error=>error.name==="TypeError"&&error.errorID===(value===null?1009:1010));
 });
@@ -212,6 +217,34 @@ test("dynamic calls admit source lambdas without admitting unknown host function
  assert.throws(()=>r.as3ObjectCall({run:function(){}},"run",[7]),{name:"AS3ObjectDispatchUnavailable"});
 });
 
+test("computed String-key calls snapshot the selected source function before argument effects",()=>{
+ const {as3SourceLambda}=require(path.join(out,"hardened-runtime/AS3Function.js"));
+ const rows=golden("dynamic-call-arguments").filter(row=>row.id.startsWith("computed-"));
+ for(const row of rows) {
+  const mode=Number(row.id.slice("computed-".length)),events=[],result=[];
+  let target;
+  const source=(body)=>as3SourceLambda(function(value){const text=r.as3NativeString(value);return body(text);});
+  const object=(value)=>as3ObjectLiteral(value===undefined?[]:[["run",value]]);
+  target=object(source(value=>{events.push("body");return value;}));
+  if(mode===2)target=null;
+  if(mode===3)target=object(7);
+  if(mode===4)target=object();
+  if(mode===6)target=object(source(()=>{events.push("throw");throw new Error("body");}));
+  const receiver=()=>{events.push("receiver");return target;};
+  const propertyName=()=>{events.push("name");if(mode===8)throw new Error("name");return mode===7?"missing":"run";};
+  const argument=()=>{
+   events.push("argument");
+   if(mode===1)target.run=source(value=>{events.push("replacement");return value;});
+   if(mode===5)throw new Error("argument");
+   return as3ObjectLiteral([["toString",as3SourceLambda(function(){events.push("coerce");return "value";})]]);
+  };
+  try {const invoke=r.as3PrepareObjectCall(receiver(),propertyName(),null);result.push(invoke([argument()]));}
+  catch(error){result.push(error.name,error.errorID??0);}
+  result.push(events.join("|"));
+  assert.deepEqual(result,row.result,row.id);
+ }
+});
+
 test("Function slots preserve native identity, null normalization and rejected-store behavior",()=>{
  const {as3FunctionSlot}=require(path.join(out,"hardened-runtime/AS3Function.js"));
  const dir=path.join(process.env.HARDENED_FIXTURE_LAYA,"tests/nativeFlashOracle/function-slot");
@@ -228,4 +261,21 @@ test("Function slots preserve native identity, null normalization and rejected-s
   assert.deepEqual(result,retained.capture.state.observations.find(row=>row.id==='slot-'+mode).result);
  }
  for(const value of [1n,Symbol('host')])assert.throws(()=>as3FunctionSlot(value),{name:"AS3FunctionOperationUnavailable"});
+});
+
+
+test("associative Array reads preserve own data and reject host accessors and inherited members",()=>{
+ const value=[];value.label="named";value["01"]="leading-zero";value.self=value;
+ assert.equal(r.as3ObjectRead(value,"label"),"named");
+ assert.equal(r.as3ObjectRead(value,"01"),"leading-zero");
+ assert.equal(r.as3ObjectRead(value,"self"),value);
+ assert.equal(r.as3ObjectRead(value,"absent"),undefined);
+ assert.equal(r.as3ObjectRead(value,"length"),0);
+ let reads=0;Object.defineProperty(value,"hostGetter",{get(){reads++;return 7;}});
+ assert.throws(()=>r.as3ObjectRead(value,"hostGetter"),{name:"AS3ArrayOperationUnavailable"});
+ assert.equal(reads,0);
+ for(const key of ["push","toString","__proto__"])
+  assert.throws(()=>r.as3ObjectRead(value,key),{name:"AS3ArrayOperationUnavailable"});
+ class UnprovenArray extends Array {}
+ assert.throws(()=>r.as3ObjectRead(new UnprovenArray(),"label"),{name:"AS3ObjectDispatchUnavailable"});
 });

@@ -292,10 +292,19 @@ export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: st
     }
     const initializer = initializerNode === undefined ? undefined
         : classInitializer(initializerNode, name, members, one(declaration, "CONTENT")!);
-    const imports = content.children.filter(child => child.kind === "IMPORT")
-        .concat(declaration.kind === "CLASS" ? one(declaration, "CONTENT")!.children.filter(child => child.kind === "IMPORT") : [])
-        .map(child => requiredText(child, "import"));
-    if (new Set(imports).size !== imports.length) fail("HARDENED_LOCAL_DECLARATION_IMPORT", "import is duplicated", content);
+    const packageImports = content.children.filter(child => child.kind === "IMPORT")
+        .map(child => requiredText(child, "package import"));
+    const classImports = declaration.kind === "CLASS" ? one(declaration, "CONTENT")!.children
+        .filter(child => child.kind === "IMPORT").map(child => requiredText(child, "class include import")) : [];
+    if (new Set(packageImports).size !== packageImports.length
+        || new Set(classImports).size !== classImports.length) {
+        fail("HARDENED_LOCAL_DECLARATION_IMPORT", "import is duplicated within one declaration scope", content);
+    }
+    // AIR accepts an include fragment inside a class that repeats an exact
+    // package-scope import. The authenticated include expander retains both
+    // nodes, while declaration identity needs only the one equal QName.
+    const packageImportSet = new Set(packageImports);
+    const imports = packageImports.concat(classImports.filter(qname => !packageImportSet.has(qname)));
     let packageInitializer: LocalDeclarationExtract["packageInitializer"] = null;
     if (declaration.kind === "CONST_LIST") {
         const declarator = declaration.children.filter(child => child.kind === "NAME_TYPE_INIT")[0]!;

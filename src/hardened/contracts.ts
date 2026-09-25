@@ -15,6 +15,7 @@ export interface NormalizedParserNode {
 }
 
 export interface NormalizedParserAst {
+    compileDefinitionsSha256?: string;
     includeExpansion?: import("./source-includes").IncludeExpansion;
     schema: "authored-ui-as3-flat-ast@1";
     sourceSha256: string;
@@ -72,6 +73,18 @@ export interface ByteArrayNativeTarget {
 
 export interface CapabilityAuthorityInput {
     byteArrayNative?: ByteArrayNativeTarget;
+    stringRangeProvider?: import("./string-range-provider-authority").StringRangeProviderTarget;
+    arraySortProvider?: import("./array-sort-provider-authority").ArraySortProviderTarget;
+    arraySomeProvider?: import("./array-some-provider-authority").ArraySomeProviderTarget;
+    errorStackProvider?: import("./error-stack-provider-authority").ErrorStackProviderTarget;
+    mathFloorProvider?: import("./math-floor-provider-authority").MathFloorProviderTarget;
+    objectConstructorProvider?: import("./object-constructor-provider-authority").ObjectConstructorProviderTarget;
+    objectHasOwnPropertyProvider?: import("./object-has-own-provider-authority").ObjectHasOwnPropertyProviderTarget;
+    typeErrorProvider?: import("./type-error-provider-authority").TypeErrorProviderTarget;
+    jsonDefinitionProvider?: import("./json-definition-provider-authority").JSONDefinitionProviderTarget;
+    byteArrayAMF3?: import("./bytearray-amf3-authority").ByteArrayAMF3Target;
+    dateProvider?: import("./date-provider-authority").DateProviderTarget;
+    stringPatternProvider?: import("./string-pattern-provider-authority").StringPatternProviderTarget;
     sourceCensusJson: string;
     sourceCensusSha256: string;
     targetCapabilitiesJson: string;
@@ -86,6 +99,18 @@ export interface CapabilityAuthorityInput {
 
 export interface LoadedCapabilityAuthority {
     byteArrayNative?: ByteArrayNativeTarget;
+    stringRangeProvider?: import("./string-range-provider-authority").StringRangeProviderTarget;
+    arraySortProvider?: import("./array-sort-provider-authority").ArraySortProviderTarget;
+    arraySomeProvider?: import("./array-some-provider-authority").ArraySomeProviderTarget;
+    errorStackProvider?: import("./error-stack-provider-authority").ErrorStackProviderTarget;
+    mathFloorProvider?: import("./math-floor-provider-authority").MathFloorProviderTarget;
+    objectConstructorProvider?: import("./object-constructor-provider-authority").ObjectConstructorProviderTarget;
+    objectHasOwnPropertyProvider?: import("./object-has-own-provider-authority").ObjectHasOwnPropertyProviderTarget;
+    typeErrorProvider?: import("./type-error-provider-authority").TypeErrorProviderTarget;
+    jsonDefinitionProvider?: import("./json-definition-provider-authority").JSONDefinitionProviderTarget;
+    byteArrayAMF3?: import("./bytearray-amf3-authority").ByteArrayAMF3Target;
+    dateProvider?: import("./date-provider-authority").DateProviderTarget;
+    stringPatternProvider?: import("./string-pattern-provider-authority").StringPatternProviderTarget;
     sourceCensusSha256: string;
     targetCapabilitiesSha256: string;
     mappingSha256: string;
@@ -170,8 +195,9 @@ export interface UndefinedExpression extends SemanticIdentity {
 
 export interface IntrinsicConstantExpression extends SemanticIdentity {
     kind: "intrinsicConstant";
-    identity: "Array.NUMERIC" | "Array.DESCENDING";
-    value: 16 | 2;
+    identity: "Array.NUMERIC" | "Array.DESCENDING"
+        | "int.MIN_VALUE" | "int.MAX_VALUE" | "uint.MIN_VALUE" | "uint.MAX_VALUE" | "Number.MAX_VALUE";
+    value: -2147483648 | 2147483647 | 0 | 4294967295 | 16 | 2 | 1.7976931348623157e+308;
 }
 
 export interface ParseIntegerExpression extends SemanticIdentity {
@@ -191,15 +217,23 @@ export interface EncodeUriComponentExpression extends SemanticIdentity {
     authoritySha256: string;
 }
 
+export interface DecodeUriComponentExpression extends SemanticIdentity {
+    kind: "decodeUriComponent";
+    argument: SemanticExpression;
+    authoritySha256: string;
+}
+
 export interface MathExpression extends SemanticIdentity {
     kind: "math";
-    member: "PI" | "min" | "max" | "round" | "abs" | "ceil";
+    member: "PI" | "min" | "max" | "round" | "abs" | "ceil" | "floor" | "pow" | "random";
     arguments: SemanticExpression[] | null;
 }
 
 export interface RegExpCallExpression extends SemanticIdentity {
+    sharedPatternModule?: string;
+    callbackReplacement?: true;
     kind: "regexpCall";
-    operation: "test" | "replace";
+    operation: "test" | "replace" | "replaceValue";
     pattern: string;
     arguments: SemanticExpression[];
     resultType: SemanticType;
@@ -260,12 +294,19 @@ export interface MethodClosureExpression extends SemanticIdentity {
     kind: "methodClosure";
     staticTarget?: SemanticExpression;
     inherited?: true;
+    superMethod?: true;
     methodName: string;
 }
 
 export interface CallExpression extends SemanticIdentity {
+    /** Exact authenticated EventDispatcher super(this): the canonical base selects itself for null. */
+    nativeDispatcherSelfTarget?: true;
     immediateLambdaCall?: true;
     kind: "call";
+    sharedStringRange?: true;
+    sharedArraySort?: true;
+    sharedArraySome?: true;
+    sharedErrorStack?: true;
     callee: SemanticExpression;
     calleeNullable: boolean;
     packageFunctionCall?: true;
@@ -282,7 +323,13 @@ export interface CallableSelfExpression extends SemanticIdentity {
     methodName: string | null;
 }
 
+export interface ArgumentReadExpression extends SemanticIdentity {
+    kind: "argumentRead";
+    index: number | null;
+    resultType: SemanticType;
+}
 export interface LambdaExpression extends SemanticIdentity {
+    sourceArguments?: true;
     kind: "lambda";
     parameters: SemanticParameter[];
     returnType: SemanticType;
@@ -315,12 +362,15 @@ export interface IndexExpression extends SemanticIdentity {
     kind: "index";
     accessKind: "object" | "vector" | "dictionary" | "byteArray" | "array" | "ownRecord"
         | "bigTurnTableInnerRoot" | "bigTurnTableInnerCost" | "localInterfaceLiteralPublicTrait"
+        | "localInterfaceComputedPublicTrait"
         | "mappedNativeDynamicLiteralPublicTrait";
     target: SemanticExpression;
     targetNullable: boolean;
     callerQName?: string;
     localInterfaceLiteralRead?: import("./local-interface-literal-read-authority").LocalInterfaceLiteralReadProof;
+    localInterfaceComputedRead?: import("./local-interface-computed-read-authority").LocalInterfaceComputedReadProof;
     mappedNativeDynamicLiteralRead?: import("./mapped-native-dynamic-literal-read-authority").MappedNativeDynamicLiteralReadProof;
+    mappedNativeDynamicLiteralTarget?: import("./mapped-native-dynamic-literal-target-authority").MappedNativeDynamicLiteralTargetProof;
     index: SemanticExpression;
     resultType: SemanticType;
 }
@@ -332,13 +382,28 @@ export interface DictionaryHasExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
+export interface ArrayHasExpression extends SemanticIdentity {
+    kind: "arrayHas";
+    target: SemanticExpression;
+    index: SemanticExpression;
+    resultType: SemanticType;
+}
+
 export interface ObjectOperationExpression extends SemanticIdentity {
     kind: "objectOperation";
-    operation: "has" | "call" | "functionAccessorCall";
+    operation: "has" | "call" | "preparedCall" | "functionAccessorCall";
     target: SemanticExpression;
     index: SemanticExpression;
     arguments: SemanticExpression[];
     callerQName: string;
+    mappedNativeDynamicLiteralTarget?: import("./mapped-native-dynamic-literal-target-authority").MappedNativeDynamicLiteralTargetProof;
+    resultType: SemanticType;
+}
+
+export interface NativeHasOwnPropertyExpression extends SemanticIdentity {
+    kind: "nativeHasOwnProperty";
+    target: SemanticExpression;
+    key: SemanticExpression;
     resultType: SemanticType;
 }
 
@@ -505,6 +570,8 @@ export interface AssignmentExpression extends SemanticIdentity {
 
 export interface NewExpression extends SemanticIdentity {
     nativeArray?: true;
+    nativeObject?: true;
+    nativeTypeError?: true;
     initializationSelf?: boolean;
     kind: "new";
     sourceType: SemanticType;
@@ -571,7 +638,7 @@ export interface ReflectionExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = CallableSelfExpression | ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | EncodeUriComponentExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ObjectOperationExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = ArgumentReadExpression | CallableSelfExpression | ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | EncodeUriComponentExpression | DecodeUriComponentExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ArrayHasExpression | ObjectOperationExpression | NativeHasOwnPropertyExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |
@@ -711,6 +778,8 @@ export interface SemanticField extends SemanticIdentity {
     kind: "field";
     sharedDeclarationNodeId: string;
     name: string;
+    /** Owner-qualified storage identity for AS3 private instance namespaces. */
+    storageName?: string;
     modifiers: SemanticModifier[];
     namespaceName: string | null;
     readonly: boolean;
@@ -837,6 +906,16 @@ export interface SemanticProgram extends SemanticIdentity {
     outputModulePath: string;
     imports: SemanticImport[];
     declaration: SemanticDeclaration;
+    sharedStringRangeModule?: string;
+    sharedArraySortModule?: string;
+    sharedArraySomeModule?: string;
+    sharedErrorStackModule?: string;
+    sharedErrorTypeModule?: string;
+    sharedMathFloorModule?: string;
+    sharedObjectConstructorModule?: string;
+    sharedObjectHasOwnPropertyModule?: string;
+    sharedTypeErrorModule?: string;
+    sharedDateModule?: string;
     fileLocalScope?: AS3FileLocalClassScope;
     fileLocalPrograms?: SemanticProgram[];
     sourceCapabilitySha256: string;

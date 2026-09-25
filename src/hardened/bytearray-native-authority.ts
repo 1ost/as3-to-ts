@@ -6,6 +6,8 @@ import { HardenedSemanticError, type ByteArrayNativeTarget } from "./contracts";
 const MAX_AUTHORITY_BYTES = 64 * 1024 * 1024;
 const SHA256 = /^[0-9a-f]{64}$/;
 const VERIFIED_TARGETS = new WeakMap<object, string>();
+const READ_OBJECT_TARGETS = new WeakSet<object>();
+const WRITE_OBJECT_TARGETS = new WeakSet<object>();
 class ProofError extends HardenedSemanticError {
     constructor(message: string, _exitCode: number) { super("HARDENED_BYTEARRAY_NATIVE_AUTHORITY", message); }
 }
@@ -13,6 +15,16 @@ export function assertByteArrayNativeTarget(value: ByteArrayNativeTarget, target
     if (!value || VERIFIED_TARGETS.get(value) !== sha256(targetJson)) {
         throw new ProofError("native ByteArray authority requires genuine verified source and target evidence", 6);
     }
+}
+export function assertByteArrayReadObjectSource(value: ByteArrayNativeTarget, targetJson: string): void {
+    assertByteArrayNativeTarget(value,targetJson);
+    if (!READ_OBJECT_TARGETS.has(value))
+        throw new ProofError("native ByteArray readObject requires its exact retained SDK declaration",6);
+}
+export function assertByteArrayWriteObjectSource(value: ByteArrayNativeTarget, targetJson: string): void {
+    assertByteArrayNativeTarget(value,targetJson);
+    if (!WRITE_OBJECT_TARGETS.has(value))
+        throw new ProofError("native ByteArray writeObject requires its exact retained SDK declaration",6);
 }
 function sha256(bytes: string): string {
     return createHash("sha256").update(bytes, "utf8").digest("hex");
@@ -140,7 +152,7 @@ export function loadByteArrayNativeTarget(profileRoot:string, proofJson:string, 
         || canonical(row.constructors)!==canonical(proof.targetConstructors)
         || !Array.isArray(row.members) || !Array.isArray(proof.targetMembers))
         throw new ProofError("native ByteArray target constructor is not authenticated",6);
-    const expected = {buffer:["get","ArrayBuffer"],position:["get+set","number"],endian:["get+set","string"],uncompress:["method","() => void"]};
+    const expected = {buffer:["get","ArrayBuffer"],position:["get+set","number"],endian:["get+set","string"],uncompress:["method","(algorithm?: string) => void"]};
     if (proof.targetMembers.length!==4) throw new ProofError("native ByteArray target member set differs",6);
     for (const [name,[kind,signature]] of Object.entries(expected)) {
         const members=row.members.filter((member:any)=>member.name===name);
@@ -167,5 +179,21 @@ export function loadByteArrayNativeTarget(profileRoot:string, proofJson:string, 
     if (canonical(inputs)!==canonical(expectedInputs)) throw new ProofError("native ByteArray transitive source closure differs",6);
     const verified = Object.freeze({targetModule:proof.targetModule,targetExport:proof.targetExport,sourceSignature:signature}) as ByteArrayNativeTarget;
     VERIFIED_TARGETS.set(verified, sha256(targetJson));
+    const reads=nativeClass.members.filter((member:any)=>member.name==="readObject" && member.access==="call");
+    const writes=nativeClass.members.filter((member:any)=>member.name==="writeObject" && member.access==="call");
+    if (proof.sourceArtifactSha256==="e0f81fdb2029d2bb16e6987c8d85d4eba5eedfa3a23ed6e7f780bf6eb67b0546"
+        && proof.sourceDeclarationSha256==="7d0c0fcac328b1dae3d3e4d11a9a579e81d10f5c0e4d260c53648936def2ad83"
+        && declaration.split(/\r?\n/).filter(line=>line.trim()==="public native function readObject() : *;").length===1
+        && reads.length===1 && reads[0].signature==="public function readObject() : *"
+        && reads[0].nativeSignature==="public native function readObject() : *;"
+        && reads[0].scope==="instance" && reads[0].type==="*" && reads[0].minArgs===0 && reads[0].maxArgs===0)
+        READ_OBJECT_TARGETS.add(verified);
+    if (proof.sourceArtifactSha256==="e0f81fdb2029d2bb16e6987c8d85d4eba5eedfa3a23ed6e7f780bf6eb67b0546"
+        && proof.sourceDeclarationSha256==="7d0c0fcac328b1dae3d3e4d11a9a579e81d10f5c0e4d260c53648936def2ad83"
+        && declaration.split(/\r?\n/).filter(line=>line.trim()==="public native function writeObject(param1:*) : void;").length===1
+        && writes.length===1 && writes[0].signature==="public function writeObject(param1:*) : void"
+        && writes[0].nativeSignature==="public native function writeObject(param1:*) : void;"
+        && writes[0].scope==="instance" && writes[0].type==="void" && writes[0].minArgs===1 && writes[0].maxArgs===1)
+        WRITE_OBJECT_TARGETS.add(verified);
     return verified;
 }

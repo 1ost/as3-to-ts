@@ -15,9 +15,15 @@ test('XML source leaves authenticate declarations without executable XML admissi
    assert.deepEqual(api.normalizeParserAst(api.parse('Markup.as',source),source,sha),ast);
    const declaration=api.extractLocalDeclaration(ast,source,sha,'Markup.as');assert.equal(declaration.members.find(m=>m.name==='setBase').returnType,'void');
    assert.throws(()=>api.adaptNormalizedParserAst(ast,authority,source,sha),e=>e.name==='HardenedSemanticError'&&/XML_LITERAL/.test(e.message));
-   const changed=source.replace('miniStar','otherStar');assert.throws(()=>api.extractLocalDeclaration(ast,changed,sha,'Markup.as'));
-   const tree=api.parse('Markup.as',source);function corrupt(n){if(n.text===literal)n.text='<root/>';for(const c of n.children||[])corrupt(c);}corrupt(tree);
-   assert.throws(()=>api.normalizeParserAst(tree,source,sha),e=>e.name==='ParserNormalizationError');
-  }
+  const changed=source.replace('miniStar','otherStar');assert.throws(()=>api.extractLocalDeclaration(ast,changed,sha,'Markup.as'));
+  const tree=api.parse('Markup.as',source);function corrupt(n){if(n.text===literal)n.text='<root/>';for(const c of n.children||[])corrupt(c);}corrupt(tree);
+  assert.throws(()=>api.normalizeParserAst(tree,source,sha),e=>e.name==='ParserNormalizationError');
+ }
+  const descendantSource='package p {\n public class ReflectionHolder {\n public static function inspect(value:XML):String {\n var properties:XMLList = value..accessor.(@access != "writeonly") + value..variable;\n return "";\n }\n }\n}\n';
+  const descendantAst=api.normalizeParserAst(api.parse('ReflectionHolder.as',descendantSource),descendantSource,sha);
+  assert.equal(descendantAst.nodes.filter(n=>n.kind==='E4X_DESCENDANT').length,2);
+  const descendantDeclaration=api.extractLocalDeclaration(descendantAst,descendantSource,sha,'ReflectionHolder.as');
+  assert.equal(descendantDeclaration.members.find(m=>m.name==='inspect').returnType,'String');
+  assert.throws(()=>api.adaptNormalizedParserAst(descendantAst,authority,descendantSource,sha),e=>e.name==='HardenedSemanticError');
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

@@ -1,11 +1,13 @@
 import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
+import { projectCompileDefinitions } from "../hardened/compile-definitions";
 import parse from "../parse/index";
 import { normalizeParserAst, normalizeIncludedSource } from "../hardened/parser-normalizer";
 import { createHash } from "node:crypto";
 import { errorMessage } from "./errors";
 
 interface ParserRequest {
+    compileDefinitions?: import("../hardened/compile-definitions").CompileDefinitions;
     includeEdges?: import("../hardened/source-includes").IncludeEdge[];
     includeRootPath?: string;
     includeFragments?: import("../hardened/source-includes").IncludeSource[];
@@ -77,10 +79,14 @@ process.once("message", (message: unknown) => {
     try {
         const hash = (bytes:string):string => createHash("sha256").update(bytes, "utf8").digest("hex");
         const hasIncludes = message.includeFragments !== undefined;
-        const ast = message.format === "normalized"
+        let ast = message.format === "normalized"
             ? hasIncludes ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments!, hash, message.includeEdges)
                 : normalizeParserAst(parse(message.sourcePath,message.content),message.content,hash)
             : parse(message.sourcePath,message.content);
+        if (message.compileDefinitions) {
+            if (message.format !== "normalized") throw new Error("HARDENED_COMPILE_DEFINITIONS: normalized parser required");
+            ast = projectCompileDefinitions(ast as import("../hardened/contracts").NormalizedParserAst, message.compileDefinitions, hash, message.content);
+        }
         const json = `${JSON.stringify(ast, null, 2)}\n`;
         const byteLength = Buffer.byteLength(json, "utf8");
         if (byteLength > message.maxAstBytes) {

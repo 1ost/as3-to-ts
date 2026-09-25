@@ -117,6 +117,36 @@ export function as3ErrorToString(value:unknown):string {
     return as3String(value);
 }
 
+function errorDataSlot(value:Error,name:"name"|"message"):unknown {
+    for(let current:object|null=value;current;current=Object.getPrototypeOf(current)) {
+        const descriptor=Object.getOwnPropertyDescriptor(current,name);
+        if(!descriptor) continue;
+        if(!("value" in descriptor))
+            throw new AS3ObjectDispatchUnavailable(`Error.${name} requires source data storage`);
+        return descriptor.value;
+    }
+    throw new AS3ObjectDispatchUnavailable(`Error.${name} source field is absent`);
+}
+
+/** AIR Error.getStackTrace uses live wildcard name/message values while keeping
+ * the frames captured at allocation. Laya owns those host frames; this wrapper
+ * authenticates the source receiver and supplies the exact source first line.
+ */
+export function as3ErrorGetStackTrace(value:unknown,
+    source:(value:Error,firstLine:string)=>string):string {
+    primitiveReceiver(value);
+    if(!(value instanceof Error) || typeof source!=="function"
+        || Object.prototype.hasOwnProperty.call(value,"getStackTrace"))
+        throw new AS3ObjectDispatchUnavailable("Error.getStackTrace requires a native Error and shared provider");
+    const name=errorDataSlot(value,"name"),message=errorDataSlot(value,"message");
+    const firstLine=message==="" ? as3NativeString(name)
+        : as3NativeString(as3NativeAdd(as3NativeAdd(name,": "),message));
+    const result=source(value,firstLine);
+    if(typeof result!=="string")
+        throw new AS3ObjectDispatchUnavailable("Error.getStackTrace provider must return a String");
+    return result;
+}
+
 
 /** AIR uses single UTF-16-unit lowercase mappings, without contextual or expanding casing. */
 export function as3StringToLowerCase(value:unknown):string {

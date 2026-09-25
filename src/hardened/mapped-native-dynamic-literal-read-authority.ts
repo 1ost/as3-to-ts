@@ -1,5 +1,6 @@
 import { HardenedSemanticError } from "./contracts";
-import {assertLoadedSourceMemberAuthority,type LoadedSourceMemberAuthority} from "./source-member-authority";
+import {assertLoadedSourceMemberAuthority,type LoadedSourceMemberAuthority,
+    type SourceMemberAuthorityEntry} from "./source-member-authority";
 
 export const MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY=Object.freeze({
     schema:"as3-mapped-native-dynamic-literal-public-read-authority@1" as const,
@@ -11,12 +12,12 @@ export const MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY=Object.freeze({
     sourceMemberAuthoritySchema:"as3-source-member-authority@2" as const,
     sourceArtifactSha256:"e0f81fdb2029d2bb16e6987c8d85d4eba5eedfa3a23ed6e7f780bf6eb67b0546" as const,
     runtimeObjectDispatchSourcePath:"src/hardened-runtime/AS3ObjectDispatch.ts" as const,
-    runtimeObjectDispatchSourceSha256:"e4ce2347b69067c9dd23b7a6d0b95e53b68fa8fd83b0c20ff2f42378938ef289" as const,
+    runtimeObjectDispatchSourceSha256:"7f67aa0d296c794d9803144957634d1418b0d35c65a4fefbabe7a68f709332e5" as const,
     runtimeTypeSourcePath:"src/hardened-runtime/AS3Type.ts" as const,
     runtimeTypeSourceSha256:"02f2acb486155e4718075f749cd45056c39175cb58c6c8aaf001af30b7104f60" as const,
     runtimeTypeRegistrySourcePath:"src/hardened-runtime/internal/AS3TypeRegistry.ts" as const,
     runtimeTypeRegistrySourceSha256:"524fe980ec5afc2573cb6a048efdc1bc6da50274073edd99cb65a09bf642b71d" as const,
-    authoritySha256:"fd3d489ce6c58fd08c1f3335aea33b34c66466bf784797e88881e4c3edca550d" as const,
+    authoritySha256:"0a19ddde27207a384b306924426ed44d7ab2375c61cf0526719f5b54e6b6a075" as const,
 });
 
 export interface MappedNativeDynamicLiteralReadProof {
@@ -46,6 +47,21 @@ export function mappedNativeDynamicLiteralReadProof(source:LoadedSourceMemberAut
         ||targetModule.includes("..")||!IDENTIFIER.test(targetExport)) {
         throw new HardenedSemanticError("HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY",
             "mapped native dynamic literal read lacks its exact source, mapping, or dynamic-class authority");
+    }
+    const visited=new Set<string>();
+    let current:string|null=receiverQName;
+    while(current!==null) {
+        if(visited.has(current)||visited.size>=1024) throw new HardenedSemanticError(
+            "HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY",
+            "mapped native dynamic literal read has cyclic or excessive source ancestry");
+        visited.add(current);
+        const ancestor:SourceMemberAuthorityEntry|undefined=source.entriesByQName[current];
+        if(!ancestor) throw new HardenedSemanticError("HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY",
+            "mapped native dynamic literal read has incomplete source ancestry");
+        if(ancestor.ownInstanceMemberNames.includes(propertyName)) throw new HardenedSemanticError(
+            "HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_READ_AUTHORITY",
+            "mapped native dynamic literal read collides with an authenticated native member");
+        current=ancestor.baseQName;
     }
     return Object.freeze({schema:"as3-mapped-native-dynamic-literal-public-read@1" as const,
         receiverQName,propertyName,targetModule,targetExport,

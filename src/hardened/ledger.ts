@@ -1,3 +1,15 @@
+import {assertByteArrayAMF3Target} from "./bytearray-amf3-authority";
+import {assertStringRangeProviderTarget} from "./string-range-provider-authority";
+import {assertJSONDefinitionProviderTarget} from "./json-definition-provider-authority";
+import {assertTypeErrorProviderTarget} from "./type-error-provider-authority";
+import {assertMathFloorProviderTarget} from "./math-floor-provider-authority";
+import {assertObjectConstructorProviderTarget} from "./object-constructor-provider-authority";
+import {assertObjectHasOwnPropertyProviderTarget} from "./object-has-own-provider-authority";
+import {assertArraySortProviderTarget} from "./array-sort-provider-authority";
+import {assertArraySomeProviderTarget} from "./array-some-provider-authority";
+import {assertErrorStackProviderTarget} from "./error-stack-provider-authority";
+import {assertDateProviderTarget} from "./date-provider-authority";
+import {assertStringPatternProviderTarget} from "./string-pattern-provider-authority";
 import { assertByteArrayNativeTarget } from "./bytearray-native-authority";
 import {
     CapabilityAuthorityInput,
@@ -106,8 +118,14 @@ const INTRINSIC_MEMBERS: readonly IntrinsicMemberDefinition[] = [
         parameterTypes: [], returnType: "uint", sourceSignature: "public native function get bytesAvailable() : uint;" },
     { sourceQName: "flash.utils.ByteArray", name: "clear", access: "call", minArgs: 0, maxArgs: 0,
         parameterTypes: [], returnType: "void", sourceSignature: "public native function clear() : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "endian", access: "read", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "String", sourceSignature: "public native function get endian() : String;" },
     { sourceQName: "flash.utils.ByteArray", name: "endian", access: "write", minArgs: 1, maxArgs: 1,
         parameterTypes: ["String"], returnType: "void", sourceSignature: "public native function set endian(param1:String) : void;" },
+    { sourceQName: "flash.utils.ByteArray", name: "objectEncoding", access: "read", minArgs: 0, maxArgs: 0,
+        parameterTypes: [], returnType: "uint", sourceSignature: "public native function get objectEncoding() : uint;" },
+    { sourceQName: "flash.utils.ByteArray", name: "objectEncoding", access: "write", minArgs: 1, maxArgs: 1,
+        parameterTypes: ["uint"], returnType: "void", sourceSignature: "public native function set objectEncoding(param1:uint) : void;" },
     { sourceQName: "flash.utils.ByteArray", name: "length", access: "read", minArgs: 0, maxArgs: 0,
         parameterTypes: [], returnType: "uint", sourceSignature: "public native function get length() : uint;" },
     { sourceQName: "flash.utils.ByteArray", name: "length", access: "write", minArgs: 1, maxArgs: 1,
@@ -417,7 +435,7 @@ function targetTypeDescriptor(type: string): TargetTypeDescriptor | null {
 const NON_NULLABLE_SOURCE_TYPES = new Set(["number", "boolean", "int", "uint", "void"]);
 const BITMAP_QNAMES = new Set(["flash.display.Bitmap", "flash.display.BitmapData", "flash.display.BitmapDataChannel"]);
 const BITMAP_SOURCE_QNAMES = new Set([...BITMAP_QNAMES, "flash.display.PixelSnapping"]);
-const TEXT_FILTER_QNAMES = new Set(["flash.text.TextField", "flash.text.TextFormat", "flash.filters.BitmapFilter",
+const TEXT_FILTER_QNAMES = new Set(["flash.text.TextField", "flash.text.TextFormat", "flash.text.StyleSheet", "flash.filters.BitmapFilter",
     "flash.filters.BlurFilter", "flash.filters.ColorMatrixFilter", "flash.filters.DropShadowFilter", "flash.filters.GlowFilter"]);
 const TEXT_CONSTANT_VALUES: { [qname: string]: { [name: string]: string } } = Object.freeze({
     "flash.text.AntiAliasType": Object.freeze({ ADVANCED: "advanced" }),
@@ -444,7 +462,7 @@ const TEXT_FILTER_ALLOWED_MEMBERS: { [qname: string]: Set<string> } = Object.fre
     "flash.text.TextFormat": new Set(["TextFormat"]),
 });
 const TEXT_FIELD_PROPERTIES = new Set(["defaultTextFormat", "selectable", "embedFonts", "antiAliasType", "autoSize",
-    "wordWrap", "multiline", "text", "htmlText", "textWidth", "width", "height"]);
+    "wordWrap", "multiline", "text", "htmlText", "textWidth", "textHeight", "width", "height"]);
 const EXACT_TEXT_FIELD_MEMBERS = new Set(["appendText", "getCharBoundaries", "getCharIndexAtPoint", "getLineLength",
     "getLineOffset", "getTextFormat", "replaceText", "setTextFormat"]);
 
@@ -550,12 +568,90 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
                 "ColorMatrixFilter requires its native constructor or matrix value boundary");
         return;
     }
+    if (mapping.sourceQName === "flash.display.Sprite"
+        && (mapping.sourceMember.name === "startDrag" || mapping.sourceMember.name === "stopDrag")) {
+        const source = mapping.sourceMember, target = mapping.targetMember;
+        const start = source.name === "startDrag";
+        const sourceSignature = start
+            ? "public function startDrag(param1:Boolean = false, param2:flash.geom.Rectangle = null) : void"
+            : "public function stopDrag() : void";
+        const targetSignature = start
+            ? "{ (lockCenter?: boolean, bounds?: FlashRectangle | null): void; (area?: LayaRectangle, hasInertia?: boolean, elasticDistance?: number, elasticBackTime?: number, data?: any, ratio?: number): void; }"
+            : "() => void";
+        if (mapping.targetCapabilityId !== "api.flash.display"
+            || mapping.targetModule !== "src/layaAir/flash/display/Sprite.ts" || mapping.targetExport !== "Sprite"
+            || mapping.targetKind !== "class" || mapping.targetSignature !== "typeof Sprite"
+            || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "instance-member"
+            || source.access !== "call" || source.minArgs !== 0 || source.maxArgs !== (start ? 2 : 0)
+            || source.signature !== sourceSignature || target.name !== source.name || target.kind !== "method"
+            || target.scope !== "instance" || target.signature !== targetSignature) {
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
+                "Sprite drag requires the exact source-shaped pointer bridge boundary");
+        }
+        return;
+    }
     const bitmap = BITMAP_QNAMES.has(mapping.sourceQName);
     const allowedBitmapMembers = BITMAP_ALLOWED_MEMBERS[mapping.sourceQName];
+    if (mapping.sourceQName === "flash.display.BitmapData" && mapping.sourceMember.name === "encode") {
+        const source = mapping.sourceMember, target = mapping.targetMember;
+        if (mapping.targetCapabilityId !== "api.flash.display"
+            || mapping.targetModule !== "src/layaAir/flash/display/BitmapData.ts" || mapping.targetExport !== "BitmapData"
+            || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "instance-member"
+            || source.access !== "call" || source.minArgs !== 2 || source.maxArgs !== 3
+            || !/^public function encode\([A-Za-z_$][A-Za-z0-9_$]*:flash\.geom\.Rectangle, [A-Za-z_$][A-Za-z0-9_$]*:Object, [A-Za-z_$][A-Za-z0-9_$]*:flash\.utils\.ByteArray = null\) : flash\.utils\.ByteArray$/.test(source.signature)
+            || target.signature !== "(rect: Rectangle, compressor: object, byteArray?: ByteArray | null) => ByteArray")
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR", "BitmapData.encode requires its exact PNG bridge boundary");
+        return;
+    }
     if (mapping.sourceQName === "flash.display.PixelSnapping" || (bitmap
         && (!allowedBitmapMembers || !allowedBitmapMembers.has(mapping.sourceMember.name)))) {
         throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR",
             "bitmap member is outside the exact CPU behavioral allowlist");
+    }
+    if (mapping.sourceQName === "flash.text.StyleSheet") {
+        const signatures: {[name: string]: [string, string, number]} = {
+            StyleSheet: ["constructor", "new (): StyleSheet", 0],
+            parseCSS: ["method", "(CSSText: string) => void", 1],
+            clear: ["method", "() => void", 0],
+            getStyle: ["method", "(styleName: string) => object", 1],
+            setStyle: ["method", "(styleName: string, styleObject: object | null) => void", 2],
+            transform: ["method", "(formatObject: object) => TextFormat", 1],
+            styleNames: ["get", "string[]", 0],
+        };
+        const sourceSignatures: {[name: string]: RegExp} = {
+            StyleSheet: /^public function StyleSheet\(\)$/,
+            parseCSS: /^public function parseCSS\([A-Za-z_$][A-Za-z0-9_$]*:String\) : void$/,
+            clear: /^public function clear\(\) : void$/,
+            getStyle: /^public function getStyle\([A-Za-z_$][A-Za-z0-9_$]*:String\) : Object$/,
+            setStyle: /^public function setStyle\([A-Za-z_$][A-Za-z0-9_$]*:String, [A-Za-z_$][A-Za-z0-9_$]*:Object\) : void$/,
+            transform: /^public function transform\([A-Za-z_$][A-Za-z0-9_$]*:Object\) : flash\.text\.TextFormat$/,
+            styleNames: /^public function get styleNames\(\) : Array$/,
+        };
+        const expected = signatures[mapping.sourceMember.name], constructor = mapping.sourceMember.name === "StyleSheet";
+        const access = mapping.sourceMember.name === "styleNames" ? "read" : "call";
+        if (!expected || !sourceSignatures[mapping.sourceMember.name]?.test(mapping.sourceMember.signature)
+            || mapping.targetKind !== "class" || mapping.targetSignature !== "typeof StyleSheet"
+            || mapping.targetCapabilityId !== "api.flash.text"
+            || mapping.targetModule !== "src/layaAir/flash/text/StyleSheet.ts" || mapping.targetExport !== "StyleSheet"
+            || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== (constructor ? "constructor" : "instance-member")
+            || mapping.sourceMember.access !== access || mapping.sourceMember.minArgs !== expected[2] || mapping.sourceMember.maxArgs !== expected[2]
+            || mapping.targetMember.name !== mapping.sourceMember.name || mapping.targetMember.kind !== expected[0]
+            || mapping.targetMember.signature !== expected[1])
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR", "StyleSheet requires its exact shared data API boundary");
+        return;
+    }
+    if (mapping.sourceQName === "flash.text.TextField" && mapping.sourceMember.name === "styleSheet") {
+        const write = mapping.sourceMember.access === "write";
+        const source = write ? /^public function set styleSheet\([A-Za-z_$][A-Za-z0-9_$]*:flash\.text\.StyleSheet\) : void$/
+            : /^public function get styleSheet\(\) : flash\.text\.StyleSheet$/;
+        if (mapping.targetCapabilityId !== "api.flash.text" || mapping.targetModule !== "src/layaAir/flash/text/TextField.ts"
+            || mapping.targetExport !== "TextField" || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "instance-member"
+            || (!write && mapping.sourceMember.access !== "read") || !source.test(mapping.sourceMember.signature)
+            || mapping.sourceMember.minArgs !== (write ? 1 : 0) || mapping.sourceMember.maxArgs !== (write ? 1 : 0)
+            || mapping.targetMember.name !== "styleSheet" || mapping.targetMember.kind !== "get+set"
+            || !["StyleSheet", "StyleSheet | null"].includes(mapping.targetMember.signature))
+            throw new HardenedSemanticError("HARDENED_CAPABILITY_MEMBER_BEHAVIOR", "TextField.styleSheet requires the canonical StyleSheet property");
+        return;
     }
     if (TEXT_FILTER_QNAMES.has(mapping.sourceQName)) {
         const allowed = TEXT_FILTER_ALLOWED_MEMBERS[mapping.sourceQName];
@@ -581,6 +677,25 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
             && !!chromeSignature && chromeSignature.test(mapping.sourceMember.signature)
             && mapping.targetMember.name === mapping.sourceMember.name && mapping.targetMember.kind === "get+set"
             && mapping.targetMember.scope === "instance" && mapping.targetMember.signature === chromeType[1];
+        const inputControlTypes: {[name: string]: [string, string]} = {
+            displayAsPassword: ["Boolean", "boolean"], maxChars: ["int", "number"], restrict: ["String", "string"],
+        };
+        const inputControlType = inputControlTypes[mapping.sourceMember.name];
+        const inputControlWrite = mapping.sourceMember.access === "write";
+        const inputControlSignature = inputControlType && (inputControlWrite
+            ? new RegExp("^public function set " + mapping.sourceMember.name + "\\([A-Za-z_$][A-Za-z0-9_$]*:" + inputControlType[0] + "\\) : void$")
+            : new RegExp("^public function get " + mapping.sourceMember.name + "\\(\\) : " + inputControlType[0] + "$"));
+        const inputControlProperty = !!inputControlType && mapping.sourceQName === "flash.text.TextField"
+            && mapping.sourceRoles.length === 1 && mapping.sourceRoles[0] === "instance-member"
+            && mapping.targetCapabilityId === "api.flash.text"
+            && mapping.targetModule === "src/layaAir/flash/text/TextField.ts" && mapping.targetExport === "TextField"
+            && mapping.targetKind === "class" && mapping.targetSignature === "typeof TextField"
+            && (inputControlWrite || mapping.sourceMember.access === "read")
+            && mapping.sourceMember.minArgs === (inputControlWrite ? 1 : 0)
+            && mapping.sourceMember.maxArgs === (inputControlWrite ? 1 : 0)
+            && !!inputControlSignature && inputControlSignature.test(mapping.sourceMember.signature)
+            && mapping.targetMember.name === mapping.sourceMember.name && mapping.targetMember.kind === "get+set"
+            && mapping.targetMember.scope === "instance" && mapping.targetMember.signature === inputControlType[1];
         const mouseWheelWrite = mapping.sourceMember.access === "write";
         const mouseWheelSignature = mouseWheelWrite
             ? /^public function set mouseWheelEnabled\([A-Za-z_$][A-Za-z0-9_$]*:Boolean\) : void$/
@@ -620,7 +735,7 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
             && mappedPropertyType(mapping.sourceMember.signature,mapping.sourceMember.access)
                 === (expectedFormatType === "string" ? "string" : expectedFormatType === "number[]" ? "Array" : "Object")
             && [expectedFormatType,expectedFormatType+" | null","null | "+expectedFormatType].includes(formatSignature!);
-        if (!textProperty && !textChromeProperty && !mouseWheelProperty && !leadingProperty && !formatProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
+        if (!textProperty && !textChromeProperty && !inputControlProperty && !mouseWheelProperty && !leadingProperty && !formatProperty && (!allowed || !allowed.has(mapping.sourceMember.name) || mapping.sourceMember.access !== "call"
             || (mapping.sourceQName === "flash.text.TextField" ? mapping.sourceMember.name === "TextField"
                 ? mapping.sourceRoles[0] !== "constructor" : mapping.sourceRoles[0] !== "instance-member"
                 : mapping.sourceRoles[0] !== "constructor" || mapping.sourceMember.name !== mapping.targetExport))) {
@@ -721,6 +836,14 @@ function assertMappedMemberCompatibility(mapping: CapabilityMapping): void {
 
 function exactOwnedSourceMetadata(mapping: CapabilityMapping, use: { [key: string]: unknown },
     signature: { [key: string]: unknown }): boolean {
+    if (mapping.sourceQName === "flash.display.Sprite"
+        && (mapping.sourceMember?.name === "startDrag" || mapping.sourceMember?.name === "stopDrag")) {
+        const start = mapping.sourceMember.name === "startDrag";
+        return use.classification === "layaair-flash-api-bridge" && use.argumentCount === 0
+            && use.receiverType === mapping.sourceQName && signature.declaredBy === mapping.sourceQName
+            && signature.kind === "method" && signature.static === false && signature.returnType === "void"
+            && signature.minArgs === 0 && signature.maxArgs === (start ? 2 : 0);
+    }
     if (mapping.sourceQName === "flash.display.DisplayObject" && mapping.sourceMember?.name === "scrollRect") {
         const read=mapping.sourceMember.access === "read";
         return use.classification === "layaair-flash-api-bridge" && use.argumentCount === null
@@ -760,7 +883,9 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
     const apis = section.apis.filter((value: unknown) => isObject(value) && value.qname === mapping.sourceQName);
     const exactScrollRect=mapping.sourceQName === "flash.display.DisplayObject"
         && mapping.sourceMember?.name === "scrollRect";
-    const strictSource=STRICT_SOURCE_QNAMES.has(mapping.sourceQName) || exactScrollRect;
+    const exactSpriteDrag=mapping.sourceQName === "flash.display.Sprite"
+        && (mapping.sourceMember?.name === "startDrag" || mapping.sourceMember?.name === "stopDrag");
+    const strictSource=STRICT_SOURCE_QNAMES.has(mapping.sourceQName) || exactScrollRect || exactSpriteDrag;
     if (strictSource && apis.length !== 1) {
         throw new HardenedSemanticError("HARDENED_SOURCE_CAPABILITY",
             "owned source API identity is absent or ambiguous", null);
@@ -785,9 +910,22 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
         || mapping.targetKind !== "function" || mapping.targetExport !== "getDefinitionByName"
         || mapping.targetModule !== "src/layaAir/flash/utils/DefinitionRegistry.ts"
         || mapping.targetCapabilityId !== "api.flash.utils"
-        || mapping.targetSignature !== "(name: string) => NativeDefinition")) {
+        || mapping.targetSignature !== "(name: unknown) => NativeDefinition")) {
         throw new HardenedSemanticError("HARDENED_REFLECTION_AUTHORITY",
             "Definition lookup requires its exact SDK native signature and shared target");
+    }
+    if (mapping.sourceQName === "flash.net.navigateToURL" && (!isObject(api)
+        || JSON.stringify(api.signatures) !== JSON.stringify([
+            "public native function navigateToURL(param1:URLRequest, param2:String = null) : void;",
+        ]) || !Array.isArray(api.roles) || !api.roles.includes("package-function")
+        || !mapping.sourceRoles.includes("package-function")
+        || mapping.sourceMember !== null || mapping.targetMember !== null
+        || mapping.targetKind !== "function" || mapping.targetExport !== "navigateToURL"
+        || mapping.targetModule !== "src/layaAir/flash/net/URLRequest.ts"
+        || mapping.targetCapabilityId !== "api.flash.net"
+        || mapping.targetSignature !== "(request: URLRequest, target: string) => void")) {
+        throw new HardenedSemanticError("HARDENED_NAVIGATION_AUTHORITY",
+            "navigateToURL requires its exact SDK signature and shared LayaAir target");
     }
     if (mapping.sourceQName === "trace" && (!isObject(api)
         || JSON.stringify(api.signatures) !== JSON.stringify(["public native function trace(... rest) : void;"])
@@ -816,10 +954,10 @@ function findSourceApi(source: { [key: string]: unknown }, mapping: CapabilityMa
             && value.qname === mapping.sourceQName && value.member === mapping.sourceMember!.name
             && value.access === mapping.sourceMember!.access
             && mapping.sourceRoles.length === 1 && value.context === mapping.sourceRoles[0]);
-        if (exactScrollRect && (uses.length !== 1 || !Array.isArray(uses[0]!.signatures)
+        if ((exactScrollRect || exactSpriteDrag) && (uses.length !== 1 || !Array.isArray(uses[0]!.signatures)
             || (uses[0]!.signatures as unknown[]).length !== 1)) {
             throw new HardenedSemanticError("HARDENED_SOURCE_MEMBER_CAPABILITY",
-                "scrollRect source member evidence is absent or ambiguous");
+                "exact source member evidence is absent or ambiguous");
         }
         if (strictSource) {
             if (TEXT_CONSTANT_QNAMES.has(mapping.sourceQName) && uses.length !== 1) {
@@ -912,16 +1050,19 @@ function intrinsicMemberKey(sourceQName: string, access: string, name: string): 
 
 function intrinsicMembers(source: { [key: string]: unknown },
     intrinsicTypesBySource: LoadedCapabilityAuthority["intrinsicTypesBySource"],
-    applicationProfile: boolean, byteArrayNative?: LoadedCapabilityAuthority["byteArrayNative"]): LoadedCapabilityAuthority["intrinsicMembersByKey"] {
+    applicationProfile: boolean, byteArrayNative?: LoadedCapabilityAuthority["byteArrayNative"], byteArrayAMF3?: LoadedCapabilityAuthority["byteArrayAMF3"]): LoadedCapabilityAuthority["intrinsicMembersByKey"] {
     const section = source.as3SourceCapabilities;
     if (!isObject(section) || !Array.isArray(section.memberUses)) {
         throw new HardenedSemanticError("HARDENED_SOURCE_CENSUS_SCHEMA", "source census lacks intrinsic member authority");
     }
     const result: LoadedCapabilityAuthority["intrinsicMembersByKey"] = Object.create(null);
-    const definitions = byteArrayNative ? [...INTRINSIC_MEMBERS, {
+    const definitions: readonly IntrinsicMemberDefinition[] = [...(byteArrayNative ? [...INTRINSIC_MEMBERS, {
         sourceQName:"flash.utils.ByteArray",name:"uncompress",access:"call" as const,
-        minArgs:0,maxArgs:0,parameterTypes:[],returnType:"void",sourceSignature:byteArrayNative.sourceSignature,
-    }] : INTRINSIC_MEMBERS;
+        minArgs:0,maxArgs:1,parameterTypes:["String"],returnType:"void",sourceSignature:byteArrayNative.sourceSignature,
+    }] : INTRINSIC_MEMBERS), ...(byteArrayAMF3 ? [{sourceQName:"flash.utils.ByteArray",name:"readObject",access:"call" as const,
+        minArgs:0,maxArgs:0,parameterTypes:[],returnType:"*",sourceSignature:"public native function readObject() : *;"},
+    {sourceQName:"flash.utils.ByteArray",name:"writeObject",access:"call" as const,
+        minArgs:1,maxArgs:1,parameterTypes:["*"],returnType:"void",sourceSignature:"public native function writeObject(param1:*) : void;"}] : [])];
     definitions.forEach(definition => {
         if (!intrinsicTypesBySource[definition.sourceQName]) return;
         const uses = (section.memberUses as unknown[]).filter((value: unknown) => isObject(value)
@@ -1014,7 +1155,9 @@ function findTargetCapability(target: { [key: string]: unknown }, mapping: Capab
         throw new HardenedSemanticError("HARDENED_TARGET_CAPABILITIES_SCHEMA", "target Laya capability document has the wrong schema");
     }
     const strict = STRICT_SOURCE_QNAMES.has(mapping.sourceQName)
-        || mapping.sourceQName === "flash.display.DisplayObject" && mapping.sourceMember?.name === "scrollRect";
+        || mapping.sourceQName === "flash.display.DisplayObject" && mapping.sourceMember?.name === "scrollRect"
+        || mapping.sourceQName === "flash.display.Sprite"
+            && (mapping.sourceMember?.name === "startDrag" || mapping.sourceMember?.name === "stopDrag");
     const capabilities = target.capabilities.filter((value: unknown) => isObject(value)
         && value.id === mapping.targetCapabilityId);
     if (capabilities.length !== 1) {
@@ -1113,6 +1256,20 @@ export function selectCapabilityCandidates(sourceJson: string, targetJson: strin
 
 export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256: Sha256Function): LoadedCapabilityAuthority {
     if (input.byteArrayNative !== undefined) assertByteArrayNativeTarget(input.byteArrayNative, input.targetCapabilitiesJson);
+    if (input.stringRangeProvider !== undefined) assertStringRangeProviderTarget(input.stringRangeProvider,input.targetCapabilitiesJson);
+    if (input.jsonDefinitionProvider !== undefined) assertJSONDefinitionProviderTarget(input.jsonDefinitionProvider,input.targetCapabilitiesJson);
+    if (input.typeErrorProvider !== undefined) assertTypeErrorProviderTarget(input.typeErrorProvider,input.targetCapabilitiesJson);
+    if (input.mathFloorProvider !== undefined) assertMathFloorProviderTarget(input.mathFloorProvider,input.targetCapabilitiesJson);
+    if (input.objectConstructorProvider !== undefined)
+        assertObjectConstructorProviderTarget(input.objectConstructorProvider,input.targetCapabilitiesJson);
+    if (input.objectHasOwnPropertyProvider !== undefined)
+        assertObjectHasOwnPropertyProviderTarget(input.objectHasOwnPropertyProvider,input.targetCapabilitiesJson);
+    if (input.arraySortProvider !== undefined) assertArraySortProviderTarget(input.arraySortProvider,input.targetCapabilitiesJson);
+    if (input.arraySomeProvider !== undefined) assertArraySomeProviderTarget(input.arraySomeProvider,input.targetCapabilitiesJson);
+    if (input.errorStackProvider !== undefined) assertErrorStackProviderTarget(input.errorStackProvider,input.targetCapabilitiesJson);
+    if (input.byteArrayAMF3 !== undefined) assertByteArrayAMF3Target(input.byteArrayAMF3,input.targetCapabilitiesJson,input.byteArrayNative);
+    if (input.dateProvider !== undefined) assertDateProviderTarget(input.dateProvider,input.targetCapabilitiesJson);
+    if (input.stringPatternProvider !== undefined) assertStringPatternProviderTarget(input.stringPatternProvider,input.targetCapabilitiesJson);
     const runtimePackage = input.runtimePackage || "@bleach/as3-runtime";
     const applicationProfile = input.applicationProfile === true;
     if (!/^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/.test(runtimePackage)) {
@@ -1169,7 +1326,19 @@ export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256:
         memberMappingsByKey,
         intrinsicTypesBySource,
         ...(input.byteArrayNative ? {byteArrayNative:input.byteArrayNative} : {}),
-        intrinsicMembersByKey: intrinsicMembers(source, intrinsicTypesBySource, applicationProfile, input.byteArrayNative),
+        ...(input.stringRangeProvider ? {stringRangeProvider:input.stringRangeProvider} : {}),
+        ...(input.arraySortProvider ? {arraySortProvider:input.arraySortProvider} : {}),
+        ...(input.arraySomeProvider ? {arraySomeProvider:input.arraySomeProvider} : {}),
+        ...(input.errorStackProvider ? {errorStackProvider:input.errorStackProvider} : {}),
+        ...(input.mathFloorProvider ? {mathFloorProvider:input.mathFloorProvider} : {}),
+        ...(input.objectConstructorProvider ? {objectConstructorProvider:input.objectConstructorProvider} : {}),
+        ...(input.objectHasOwnPropertyProvider ? {objectHasOwnPropertyProvider:input.objectHasOwnPropertyProvider} : {}),
+        ...(input.typeErrorProvider ? {typeErrorProvider:input.typeErrorProvider} : {}),
+        ...(input.jsonDefinitionProvider ? {jsonDefinitionProvider:input.jsonDefinitionProvider} : {}),
+        ...(input.byteArrayAMF3 ? {byteArrayAMF3:input.byteArrayAMF3} : {}),
+        ...(input.dateProvider ? {dateProvider:input.dateProvider} : {}),
+        ...(input.stringPatternProvider ? {stringPatternProvider:input.stringPatternProvider} : {}),
+        intrinsicMembersByKey: intrinsicMembers(source, intrinsicTypesBySource, applicationProfile, input.byteArrayNative, input.byteArrayAMF3),
         nativeTimerFunctionsBySource: nativeTimerFunctions(source, nativeTimerAuthority, runtimePackage, applicationProfile),
     });
     LOADED_AUTHORITIES.add(authority);

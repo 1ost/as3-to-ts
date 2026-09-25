@@ -267,4 +267,38 @@ public class Base {
             target['signature'] = signature
             self.assertEqual(api.map_native_members(*args), ([], []), signature)
 
+    def test_flash_sprite_start_drag_requires_the_exact_aliased_overload(self):
+        native = dict(name='startDrag', access='call', scope='instance', constructor=False,
+            signature='public function startDrag(param1:Boolean = false, param2:flash.geom.Rectangle = null) : void',
+            nativeSignature='public native function startDrag(param1:Boolean = false, param2:Rectangle = null) : void;',
+            minArgs=0, maxArgs=2, type='void', declaredBy='flash.display.Sprite', parameters=[
+                {'name':'param1','type':'Boolean','optional':True,'default':'false','rest':False},
+                {'name':'param2','type':'flash.geom.Rectangle','optional':True,'default':'null','rest':False},
+            ])
+        classes = {'flash.display.Sprite': {'base':None, 'members':[native]}}
+        target = dict(name='startDrag', scope='instance', kind='method',
+            signature=('{ (lockCenter?: boolean, bounds?: FlashRectangle | null): void; '
+                '(area?: LayaRectangle, hasInertia?: boolean, elasticDistance?: number, elasticBackTime?: number, '
+                'data?: any, ratio?: number): void; }'))
+        row = dict(module='src/layaAir/flash/display/Sprite.ts', export='Sprite', kind='class',
+            signature='typeof Sprite', members=[target])
+        args = ('flash.display.Sprite', ['instance-member'], row, 'api.flash.display', classes, {'startDrag'})
+        mappings, uses = api.map_native_members(*args)
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(mappings[0]['sourceMember']['maxArgs'], 2)
+        self.assertEqual(mappings[0]['targetMember']['signature'], target['signature'])
+        self.assertEqual(uses[0]['signatures'][0]['declaredBy'], 'flash.display.Sprite')
+        for owner, key, value in [
+            (row, 'module', 'src/layaAir/laya/display/Sprite.ts'),
+            (row, 'signature', 'typeof LayaSprite'),
+            (target, 'signature', target['signature'].replace('FlashRectangle', 'Rectangle')),
+            (native, 'nativeSignature', native['nativeSignature'].replace('native ', '')),
+            (native, 'signature', native['signature'].replace('flash.geom.Rectangle', 'Object')),
+            (native, 'maxArgs', 6),
+        ]:
+            original = owner[key]
+            owner[key] = value
+            self.assertEqual(api.map_native_members(*args), ([], []), (key, value))
+            owner[key] = original
+
 if __name__ == '__main__': unittest.main()

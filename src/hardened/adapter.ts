@@ -1,9 +1,13 @@
+import { hasNativeRegExpAuthority } from "./native-regexp-authority";
+import {admitsStringPatternLiteral} from "./string-pattern-provider-authority";
 import { verifyIncludeExpansion } from "./source-includes";
 import { hasNativeDescribeTypeAuthority } from "./native-describe-type-authority";
-import {nativeUriComponentAuthoritySha256} from "./native-uri-component-authority";
+import {nativeUriComponentAuthoritySha256,nativeDecodeUriComponentAuthoritySha256} from "./native-uri-component-authority";
 import { hasNativeDateAuthority } from "./native-date-authority";
 import { localInterfaceLiteralReadProof } from "./local-interface-literal-read-authority";
+import { localInterfaceComputedReadProof } from "./local-interface-computed-read-authority";
 import { mappedNativeDynamicLiteralReadProof } from "./mapped-native-dynamic-literal-read-authority";
+import { mappedNativeDynamicLiteralTargetProof } from "./mapped-native-dynamic-literal-target-authority";
 import {lowerAS3RegExpLiteral} from "../hardened-runtime/internal/AS3RegExpPattern";
 import {
     CallExpression,
@@ -90,6 +94,17 @@ interface LocalHeader {
 interface SignatureTypeProof { ownerQName: string; member: LocalDeclarationMember; receiverQName?: string; }
 
 interface AdapterContext {
+    declaredMemberNames?: ReadonlySet<string>;
+    stringRangeProvider?: LoadedCapabilityAuthority["stringRangeProvider"];
+    arraySortProvider?: LoadedCapabilityAuthority["arraySortProvider"];
+    arraySomeProvider?: LoadedCapabilityAuthority["arraySomeProvider"];
+    errorStackProvider?: LoadedCapabilityAuthority["errorStackProvider"];
+    mathFloorProvider?: LoadedCapabilityAuthority["mathFloorProvider"];
+    objectConstructorProvider?: LoadedCapabilityAuthority["objectConstructorProvider"];
+    objectHasOwnPropertyProvider?: LoadedCapabilityAuthority["objectHasOwnPropertyProvider"];
+    typeErrorProvider?: LoadedCapabilityAuthority["typeErrorProvider"];
+    dateProvider?: LoadedCapabilityAuthority["dateProvider"];
+    stringPatternProvider?: LoadedCapabilityAuthority["stringPatternProvider"];
     packageFunction?: true;
     fileCompilation?: FileLocalCompilation;
     className: string;
@@ -190,9 +205,10 @@ function identity(node: TreeNode): SemanticIdentity {
 }
 
 export function buildTree(ast: NormalizedParserAst, sourceText: string, sha256: Sha256Function): TreeNode {
-    if (!isObject(ast) || !exactKeys(ast, ["fingerprintSha256", "nodes", "schema", "sourceSha256"].concat(ast.includeExpansion ? ["includeExpansion"] : []))
+    if (!isObject(ast) || !exactKeys(ast, ["fingerprintSha256", "nodes", "schema", "sourceSha256"].concat(ast.includeExpansion ? ["includeExpansion"] : [], ast.compileDefinitionsSha256 !== undefined ? ["compileDefinitionsSha256"] : []))
         || ast.schema !== "authored-ui-as3-flat-ast@1" || typeof sourceText !== "string"
         || typeof sha256 !== "function" || !SHA256.test(ast.sourceSha256)
+        || (ast.compileDefinitionsSha256 !== undefined && !SHA256.test(ast.compileDefinitionsSha256))
         || !SHA256.test(ast.fingerprintSha256) || !Array.isArray(ast.nodes) || ast.nodes.length === 0) {
         throw new HardenedSemanticError("HARDENED_NORMALIZED_AST", "normalized parser AST has the wrong boundary shape");
     }
@@ -264,6 +280,11 @@ function requiredText(node: TreeNode, label: string): string {
     return node.text;
 }
 
+function containsIdentifier(node: TreeNode, name: string): boolean {
+    return node.kind === "IDENTIFIER" && node.text === name
+        || node.children.some((child) => containsIdentifier(child, name));
+}
+
 function validateIdentifier(value: string, node: TreeNode): string {
     if (!IDENTIFIER.test(value) || RESERVED.has(value)) {
         fail("HARDENED_IDENTIFIER", "source identifier is not a valid TypeScript identity", node);
@@ -276,6 +297,12 @@ function validateIdentifier(value: string, node: TreeNode): string {
         fail("HARDENED_IDENTIFIER", "source identifier collides with an authenticated AS3 emitter binding", node);
     }
     return value;
+}
+
+function privateInstanceFieldStorageName(ownerQName: string, sourceName: string): string {
+    const owner = ownerQName.split("").map((character) =>
+        character.charCodeAt(0).toString(16).padStart(4, "0")).join("");
+    return `__as3PrivateField_${owner}_${sourceName}`;
 }
 
 function parseModifiers(owner: TreeNode, classLevel: boolean, arrayDynamic:boolean = false): SemanticModifier[] {
@@ -745,12 +772,17 @@ function signatureTypeImport(typeName:string, proof:SignatureTypeProof | undefin
     return item;
 }
 
-function flashSemanticImport(authority: LoadedCapabilityAuthority, qname: string, node: TreeNode): SemanticImport {
+function flashSemanticImport(authority: LoadedCapabilityAuthority, qname: string, node: TreeNode,
+    runtimeKinds: ReadonlyMap<string, RuntimeAuthoritySource["kind"]> = new Map()): SemanticImport {
         const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
         const mapping = mappingForRole(authority, qname, "import", node);
+        const mappedInterfaceToken = mapping.targetKind === "const"
+            && mapping.targetSignature === `import("repo:/src/layaAir/flash/utils/AS3Type").AS3Interface<${mapping.targetExport}>`;
         return Object.assign(identity(node), {
             authorityKind: "flash" as "flash", localNodeId: null,
-            runtimeConstructible: mapping.targetKind === "class", runtimeInterface: mapping.targetKind === "interface",
+            runtimeConstructible: mapping.targetKind === "class",
+            runtimeInterface: mapping.targetKind === "interface"
+                || runtimeKinds.get(qname) === "interface" && mappedInterfaceToken,
             localValueType: null, compileTimeNamespace: false,
             sourceQualifiedName: qname, sourceLocalName: localName,
             targetModule: targetModuleSpecifier(mapping.targetModule), targetExport: mapping.targetExport,
@@ -759,7 +791,8 @@ function flashSemanticImport(authority: LoadedCapabilityAuthority, qname: string
 
 function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
     localAuthority: LoadedLocalTypeAuthority | undefined, resolveCurrentLocal: (() => CurrentLocalType) | null,
-    localMemberAuthority: LoadedLocalMemberAuthority | null, sourceMembers?: LoadedSourceMemberAuthority): {
+    localMemberAuthority: LoadedLocalMemberAuthority | null, sourceMembers?: LoadedSourceMemberAuthority,
+    runtimeKinds: ReadonlyMap<string, RuntimeAuthoritySource["kind"]> = new Map()): {
     imports: SemanticImport[];
     importsByLocal: { [name: string]: SemanticImport };
 } {
@@ -774,7 +807,8 @@ function parseImports(content: TreeNode, authority: LoadedCapabilityAuthority,
         imports.push(item);
         importsByLocal[item.sourceLocalName] = item;
     };
-    const flashImport = (qname: string, node: TreeNode): SemanticImport => flashSemanticImport(authority, qname, node);
+    const flashImport = (qname: string, node: TreeNode): SemanticImport =>
+        flashSemanticImport(authority, qname, node, runtimeKinds);
     const intrinsicImport = (qname: string, node: TreeNode): SemanticImport => {
         const localName = validateIdentifier(qname.slice(qname.lastIndexOf(".") + 1), node);
         const mapping = authority.intrinsicTypesBySource[qname];
@@ -934,7 +968,7 @@ function referenceParents(qname: string, context: AdapterContext): readonly stri
 function provenReferenceSubtype(source: SemanticType, target: SemanticType, context: AdapterContext): boolean {
     if (sameUnderlyingType(source, target)) return true;
     if (target.sourceName === "Array" && target.emittedName === "Array" && isArrayType(source,context)) return true;
-    if (context.sourceMemberAuthority !== null && ["ArgumentError","RangeError","SecurityError"].includes(source.sourceName)
+    if (context.sourceMemberAuthority !== null && ["ArgumentError","RangeError","SecurityError","URIError"].includes(source.sourceName)
         && source.emittedName === "__AS3"+source.sourceName && source.runtimeName === source.sourceName
         && target.sourceName === "Error" && target.emittedName === "Error") return true;
     if (source.runtimeName === null || target.runtimeName === null || source.typeArguments.length !== 0
@@ -965,13 +999,17 @@ function provenReferenceSubtype(source: SemanticType, target: SemanticType, cont
     return containsTarget;
 }
 
-function runtimeReferenceParents(sources: readonly RuntimeAuthoritySource[] | undefined): ReadonlyMap<string, readonly string[]> {
-    const result = new Map<string, readonly string[]>();
-    if (sources === undefined) return result;
+function runtimeReferenceMaps(sources: readonly RuntimeAuthoritySource[] | undefined): {
+    readonly parentsByQName: ReadonlyMap<string, readonly string[]>;
+    readonly kindsByQName: ReadonlyMap<string, RuntimeAuthoritySource["kind"]>;
+} {
+    const parentsByQName = new Map<string, readonly string[]>();
+    const kindsByQName = new Map<string, RuntimeAuthoritySource["kind"]>();
+    if (sources === undefined) return {parentsByQName, kindsByQName};
     assertAuthenticatedRuntimeAuthoritySources(sources);
     sources.forEach(source => {
         if (!source || typeof source !== "object" || typeof source.qname !== "string" || source.qname.length === 0
-            || result.has(source.qname)) {
+            || parentsByQName.has(source.qname) || kindsByQName.has(source.qname)) {
             throw new HardenedSemanticError("HARDENED_VECTOR_REFERENCE_AUTHORITY", "runtime reference authority contains an invalid or duplicate identity");
         }
         const baseNames = source.kind === "interface" ? source.bases : source.base === null ? [] : [source.base];
@@ -985,9 +1023,10 @@ function runtimeReferenceParents(sources: readonly RuntimeAuthoritySource[] | un
         if (new Set(parents).size !== parents.length) {
             throw new HardenedSemanticError("HARDENED_VECTOR_REFERENCE_AUTHORITY", `runtime reference authority ${source.qname} repeats a parent`);
         }
-        result.set(source.qname, Object.freeze(parents));
+        parentsByQName.set(source.qname, Object.freeze(parents));
+        kindsByQName.set(source.qname, source.kind);
     });
-    return result;
+    return {parentsByQName, kindsByQName};
 }
 
 function nativeArrayBase(context: AdapterContext): boolean {
@@ -996,6 +1035,48 @@ function nativeArrayBase(context: AdapterContext): boolean {
     assertLoadedSourceMemberAuthority(source);
     const entry = source.entriesByQName.Array;
     return !!entry && entry.baseQName === "Object" && entry.ownInstanceMemberNames.includes("length");
+}
+
+function nativeObjectHasOwnProperty(context: AdapterContext): boolean {
+    const source = context.sourceMemberAuthority;
+    if (!source) return false;
+    assertLoadedSourceMemberAuthority(source);
+    const entry = source.entriesByQName.Object;
+    return !!entry && entry.baseQName === null && entry.ownInstanceMemberNames.includes("hasOwnProperty");
+}
+
+function nativeObjectConstructor(context: AdapterContext): boolean {
+    const source = context.sourceMemberAuthority;
+    if (!source || !context.objectConstructorProvider) return false;
+    assertLoadedSourceMemberAuthority(source);
+    const entry = source.entriesByQName.Object;
+    return source.schema === "as3-source-member-authority@2" && !!entry
+        && entry.baseQName === null && entry.dynamic === true
+        && ["hasOwnProperty","isPrototypeOf","propertyIsEnumerable"].every(name =>
+            entry.ownInstanceMemberNames.includes(name));
+}
+
+function nativeHasOwnPropertyOwner(context: AdapterContext, startQName: string): string | null {
+    const source = context.sourceMemberAuthority;
+    if (!source || !nativeObjectHasOwnProperty(context)) return null;
+    const visited = new Set<string>();
+    let current: string | null = startQName;
+    while (current !== null) {
+        if (visited.has(current) || visited.size >= 1024) return null;
+        visited.add(current);
+        const entry: import("./source-member-authority").SourceMemberAuthorityEntry | undefined =
+            source.entriesByQName[current];
+        if (!entry) return null;
+        if (entry.ownInstanceMemberNames.includes("hasOwnProperty")) return current;
+        current = entry.baseQName;
+    }
+    return null;
+}
+
+function nativeFlashObjectHasOwnProperty(context: AdapterContext, qnames: readonly string[]): boolean {
+    if (!context.objectHasOwnPropertyProvider || qnames.length === 0) return false;
+    const owners=qnames.map(qname=>nativeHasOwnPropertyOwner(context,qname));
+    return owners.includes("Object") && owners.every(owner=>owner === null || owner === "Object");
 }
 
 function isArrayType(type: SemanticType, context?: AdapterContext): boolean {
@@ -1165,6 +1246,47 @@ function isDictionaryType(type: SemanticType): boolean {
     return type.sourceName === "Dictionary" && type.emittedName === "Dictionary";
 }
 
+function hasRegExpProvider(context: AdapterContext): boolean {
+    return hasNativeRegExpAuthority(context.sourceMemberAuthority) && !!context.stringPatternProvider?.regExpModule;
+}
+function isRegExpType(type: SemanticType): boolean { return type.sourceName === "RegExp" && type.emittedName === "AS3RegExp"; }
+
+function regExpConstructorFlags(argument: SemanticExpression | undefined): string | null {
+    if (argument === undefined) return "";
+    if (argument.kind !== "literal") return null;
+    if (argument.value === null || argument.value === "") return "";
+    return argument.value === "g" ? "g" : null;
+}
+
+function admittedRegExpConstructorPattern(pattern: SemanticExpression | undefined, flags: string,
+    context: AdapterContext, node: TreeNode): boolean {
+    if (pattern === undefined) return true;
+    const type = assignmentType(pattern, context, node);
+    if (isRegExpType(type)) return flags === "";
+    if (pattern.kind === "literal" && typeof pattern.value === "string") {
+        if (pattern.value === "") return true;
+        const literal = `/${pattern.value.replace(/\//g, "\\/")}/${flags}`;
+        return admitsStringPatternLiteral(context.stringPatternProvider!, literal);
+    }
+    // A decimal inserted between escaped braces cannot alter the provider's
+    // grammar. This covers indexed replacement placeholders such as \{12\}
+    // without admitting an arbitrary run-time pattern String.
+    const parts: SemanticExpression[] = [];
+    const flatten = (expression: SemanticExpression): void => {
+        if (expression.kind === "binary" && expression.operator === "+"
+            && expression.resultType.sourceName === "String") {
+            flatten(expression.left);
+            flatten(expression.right);
+        } else parts.push(expression);
+    };
+    flatten(pattern);
+    if (parts.length !== 3 || parts[0]!.kind !== "literal" || parts[0]!.value !== "\\{"
+        || parts[2]!.kind !== "literal" || parts[2]!.value !== "\\}") return false;
+    const decimal = assignmentType(parts[1]!, context, node);
+    return !decimal.nullable && decimal.emittedName === "number"
+        && (decimal.sourceName === "int" || decimal.sourceName === "uint");
+}
+
 function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean): SemanticType {
     if (node.kind === "VECTOR") {
         if (node.children.length !== 1 || (node.children[0]!.kind !== "TYPE" && node.children[0]!.kind !== "VECTOR")) {
@@ -1174,7 +1296,7 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
         const primitivePolicy = ["int", "uint", "Number", "Boolean", "String", "Object", "Array", "Class", "Function"]
             .includes(element.sourceName);
         const imported = context.importsByLocal[element.sourceName];
-        if (!primitivePolicy && element.sourceName !== context.className && element.emittedName !== "AS3Vector"
+        if (!primitivePolicy && !(isRegExpType(element) && hasRegExpProvider(context)) && element.sourceName !== context.className && element.emittedName !== "AS3Vector"
             && (!imported || (!imported.runtimeConstructible && !imported.runtimeInterface))) {
             fail("HARDENED_VECTOR_ELEMENT_RUNTIME",
                 "Vector reference element requires a proven runtime class or interface identity", node.children[0]!);
@@ -1188,6 +1310,9 @@ function parseType(node: TreeNode, context: AdapterContext, allowVoid: boolean):
     if (sourceName === "void" && !allowVoid) {
         fail("HARDENED_VOID_TYPE", "void is not valid in this type position", node);
     }
+    if (sourceName === "RegExp" && context.className !== "RegExp" && !context.importsByLocal.RegExp
+        && !context.resolveImportedType("RegExp", null, node) && hasRegExpProvider(context))
+        return semanticType(node,"RegExp","AS3RegExp",[],undefined,"RegExp");
     if (sourceName === "Date" && context.className !== "Date" && !context.importsByLocal.Date
         && !context.resolveImportedType("Date", null, node) && hasNativeDateAuthority(context.sourceMemberAuthority))
         return semanticType(node,"Date","AS3Date",[],undefined,"Date");
@@ -1257,7 +1382,28 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
                 fail("HARDENED_PARAMETER_DEFAULT", "default parameter must be one admitted scalar literal", init);
             }
             const rawDefault = init.children[0]!;
-            if (rawDefault.kind === "MINUS") {
+            const nativeConstant = rawDefault.kind === "IDENTIFIER"
+                && ["NaN", "Infinity", "undefined"].includes(rawDefault.text || "");
+            const negativeInfinity = rawDefault.kind === "MINUS" && rawDefault.children.length === 1
+                && rawDefault.children[0]!.kind === "IDENTIFIER" && rawDefault.children[0]!.text === "Infinity";
+            if (nativeConstant || negativeInfinity) {
+                const constantNode = negativeInfinity ? rawDefault.children[0]! : rawDefault;
+                if (context.declaredMemberNames?.has(constantNode.text!))
+                    fail("HARDENED_PARAMETER_DEFAULT", "default native constant is shadowed by a class member", rawDefault);
+                // Resolve the source binding before admitting a native constant.
+                // A field, import or inherited member with this spelling is not
+                // evidence of the global value encoded by an ABC default slot.
+                const constant = parseExpression(constantNode, context, true);
+                const proven = constant.kind === "undefined" || constant.kind === "binary"
+                    && constant.operator === "/" && constant.left.kind === "literal"
+                    && constant.left.value === (constantNode.text === "NaN" ? 0 : 1)
+                    && constant.right.kind === "literal" && constant.right.value === 0;
+                if (!proven) fail("HARDENED_PARAMETER_DEFAULT", "default requires an unshadowed native constant", rawDefault);
+                defaultValue = negativeInfinity
+                    ? {...identity(rawDefault), kind:"unary", operator:"-", operand:constant,
+                        resultType:semanticType(rawDefault,"Number","number")}
+                    : constant;
+            } else if (rawDefault.kind === "MINUS") {
                 if (rawDefault.children.length !== 1 || rawDefault.children[0]!.kind !== "LITERAL") {
                     fail("HARDENED_PARAMETER_DEFAULT", "negative default requires exactly one numeric literal", rawDefault);
                 }
@@ -1270,7 +1416,7 @@ function parseParameters(list: TreeNode, context: AdapterContext): SemanticParam
                 defaultValue = parseLiteral(rawDefault.kind === "IDENTIFIER"
                     ? Object.assign({}, rawDefault, { kind: "LITERAL" }) : rawDefault);
             }
-            if (defaultValue.kind !== "literal" && defaultValue.kind !== "unary") {
+            if (!nativeConstant && !negativeInfinity && defaultValue.kind !== "literal" && defaultValue.kind !== "unary") {
                 fail("HARDENED_PARAMETER_DEFAULT", "default parameter must normalize to one scalar literal", init);
             }
             defaultValue = adaptAssignmentValue(parameterType, defaultValue, context, init.children[0]!);
@@ -1294,7 +1440,7 @@ function canonicalizeAdmittedStringLiteral(text: string): string {
     for (let index = 1; index < text.length - 1; index++) {
         const current = text[index]!;
         if (current !== "\\") {
-            canonical += current;
+            canonical += text[0] === "\'" && current === '"' ? '\\"' : current;
             continue;
         }
         const escaped = text[index + 1];
@@ -1325,7 +1471,7 @@ function parseLiteral(node: TreeNode): SemanticExpression {
         if (!Number.isFinite(value)) {
             fail("HARDENED_LITERAL_NUMBER", "numeric literal is outside the finite subset", node);
         }
-    } else if (text.startsWith('"') && text.endsWith('"')) {
+    } else if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
         try {
             value = JSON.parse(canonicalizeAdmittedStringLiteral(text));
         } catch (_error) {
@@ -1353,6 +1499,11 @@ function authoritySemanticType(typeName: string, context: AdapterContext, node: 
     if (typeName.startsWith("Vector.<") && typeName.endsWith(">")) {
         const element = authoritySemanticType(typeName.slice("Vector.<".length, -1), context, node, signature);
         return semanticType(node, `Vector.<${element.sourceName}>`, "AS3Vector", [element]);
+    }
+    if(typeName === "RegExp" && hasRegExpProvider(context)) {
+        if(context.className === "RegExp" || context.importsByLocal.RegExp || context.resolveImportedType("RegExp",null,node))
+            fail("HARDENED_REGEXP_TYPE_SHADOW","Native RegExp signature conflicts with a lexical class binding",node);
+        return semanticType(node,"RegExp","AS3RegExp",[],undefined,"RegExp");
     }
     if(typeName === "Date" && hasNativeDateAuthority(context.sourceMemberAuthority)) {
         if(context.className === "Date" || context.importsByLocal.Date || context.resolveImportedType("Date",null,node))
@@ -1749,8 +1900,8 @@ function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: r
     }
     assertLoadedLocalMemberAuthority(context.localMemberAuthority);
     const seen = new Map<string, { owner: string; name: string; field: boolean }>();
-    const record = (owner: string, name: string, field: boolean): void => {
-        const identity = name.toLowerCase();
+    const record = (owner: string, name: string, field: boolean, privateField: boolean): void => {
+        const identity = privateField ? privateInstanceFieldStorageName(owner, name) : name;
         const existing = seen.get(identity);
         if (existing !== undefined && existing.owner !== owner && (existing.field || field)) {
             fail("HARDENED_LOCAL_FIELD_ANCESTRY",
@@ -1762,7 +1913,8 @@ function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: r
     };
     members.forEach(member => {
         if (member.kind !== "constructor" && !member.modifiers.includes("static")) {
-            record(context.classQualifiedName, member.name, member.kind === "field");
+            record(context.classQualifiedName, member.name, member.kind === "field",
+                member.kind === "field" && member.modifiers.includes("private"));
         }
     });
     const moduleName = context.resolveCurrentLocal().entry.module;
@@ -1770,7 +1922,7 @@ function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: r
     let current: string | null = context.baseLocalQName;
     while (current !== null && !current.startsWith("flash.")) {
         if (current === "Array" && nativeArrayBase(context)) {
-            context.sourceMemberAuthority!.entriesByQName.Array!.ownInstanceMemberNames.forEach(name=>record("Array",name,false));
+            context.sourceMemberAuthority!.entriesByQName.Array!.ownInstanceMemberNames.forEach(name=>record("Array",name,false,false));
             break;
         }
         if (visited.has(current) || visited.size >= 1024) {
@@ -1784,7 +1936,8 @@ function assertNoLocalAncestryFieldCollision(context: AdapterContext, members: r
         }
         entry.declaration.members.filter(member => member.kind !== "constructor"
             && member.modifiers.indexOf("static") < 0)
-            .forEach(member => record(current!, member.name, member.kind === "field"));
+            .forEach(member => record(current!, member.name, member.kind === "field",
+                member.kind === "field" && member.modifiers.includes("private")));
         if (entry.declaration.baseQNames.length > 1) {
             fail("HARDENED_LOCAL_FIELD_ANCESTRY", `local field ancestor ${current} has ambiguous bases`, node);
         }
@@ -1834,7 +1987,8 @@ function localQNameForExpression(expression: SemanticExpression, context: Adapte
 }
 
 function localInstanceNamedMembers(context: AdapterContext, qname: string, name: string,
-    node: TreeNode, access?: "read" | "write"): { members: LocalDeclarationMember[]; ownerQName: string | null; terminalFlashQNames: string[] } {
+    node: TreeNode, access?: "read" | "write"): { members: LocalDeclarationMember[]; ownerQName: string | null;
+        terminalFlashQNames: string[]; implicitObjectRoot: boolean } {
     if (context.localMemberAuthority === null || context.resolveCurrentLocal === null) {
         fail("HARDENED_LOCAL_MEMBER_AUTHORITY", "local receiver requires the loaded member authority", node);
     }
@@ -1895,11 +2049,14 @@ function localInstanceNamedMembers(context: AdapterContext, qname: string, name:
                 "local receiver member is inherited from multiple declarations at the same depth", node);
         }
         if (matches.length === 1) {
-            return { ...matches[0]!, terminalFlashQNames: [] };
+            return { ...matches[0]!, terminalFlashQNames: [], implicitObjectRoot: false };
         }
         frontier = next;
     }
-    return { members: [], ownerQName: null, terminalFlashQNames: [...terminalFlash].sort() };
+    const implicitObjectRoots = [...entries.values()].filter(entry => entry.typeKind === "class"
+        && entry.declaration!.baseQNames.length === 0);
+    return { members: [], ownerQName: null, terminalFlashQNames: [...terminalFlash].sort(),
+        implicitObjectRoot: terminalFlash.size === 0 && implicitObjectRoots.length === 1 };
 }
 
 function terminalFlashMemberMapping(context: AdapterContext, qnames: readonly string[], access: string,
@@ -1959,7 +2116,7 @@ function localConstructor(context: AdapterContext, qname: string, node: TreeNode
 }
 
 function assertLocalCallArguments(member: LocalDeclarationMember | null, argumentsList: SemanticExpression[],
-    argumentNodes: TreeNode[], context: AdapterContext, node: TreeNode): void {
+    argumentNodes: TreeNode[], context: AdapterContext, node: TreeNode, ownerQName: string): void {
     if (member === null) {
         if (argumentsList.length !== 0) {
             fail("HARDENED_LOCAL_CONSTRUCTOR_ARITY", "implicit local constructor accepts no arguments", node);
@@ -1977,7 +2134,8 @@ function assertLocalCallArguments(member: LocalDeclarationMember | null, argumen
             fail("HARDENED_LOCAL_CONSTRUCTOR_TYPE",
                 `local constructor argument ${index} does not match its authenticated type`, argumentNodes[index] || node);
         }
-        const expected = authoritySemanticType(parameter.type, context, argumentNodes[index]!);
+        const expected = authoritySemanticType(parameter.type, context, argumentNodes[index]!,
+            { ownerQName, member });
         try {
             argumentsList[index] = adaptAssignmentValue(expected, argument, context, argumentNodes[index]!);
         } catch (error) {
@@ -2000,32 +2158,46 @@ function assertLocalMethodCall(member: LocalDeclarationMember, argumentsList: Se
     argumentsList.forEach((argument, index) => {
         const parameter = member.parameters[Math.min(index, member.parameters.length - 1)];
         if (!parameter || (!parameter.rest && index >= member.parameters.length)) {
+            const span = (argumentNodes[index] || node).span;
+            const location = span === null ? "" : ` at source offsets ${span.start}:${span.end}`;
+            const owner = ownerQName ? `${ownerQName}.` : "";
             fail("HARDENED_LOCAL_CALL_TYPE",
-                `inherited local method argument ${index} does not match its authenticated type`, argumentNodes[index] || node);
+                `inherited local method ${owner}${member.name} argument ${index}${location} has no authenticated parameter`, argumentNodes[index] || node);
         }
         const expected = authoritySemanticType(parameter.type, context, argumentNodes[index]!, ownerQName ? {ownerQName,member,...(receiverQName ? {receiverQName} : {})} : undefined);
         try {
             argumentsList[index] = adaptAssignmentValue(expected, argument, context, argumentNodes[index]!);
         } catch (error) {
             if (error instanceof HardenedSemanticError) {
+                const span = (argumentNodes[index] || node).span;
+                const location = span === null ? "" : ` at source offsets ${span.start}:${span.end}`;
+                const owner = ownerQName ? `${ownerQName}.` : "";
                 fail("HARDENED_LOCAL_CALL_TYPE",
-                    `inherited local method argument ${index} does not match its authenticated type`, argumentNodes[index] || node);
+                    `inherited local method ${owner}${member.name} argument ${index}${location} does not match authenticated type ${parameter.type}`, argumentNodes[index] || node);
             }
             throw error;
         }
     });
 }
 
-function implicitThisMember(node: TreeNode, name: string, capabilitySource: string | null = null): SemanticExpression {
+function assertImplicitInstanceScope(node: TreeNode, context: AdapterContext): void {
+    if (context.currentCallable?.modifiers.includes("static"))
+        fail("HARDENED_INSTANCE_MEMBER_SCOPE", "implicit instance member requires an instance callable", node);
+}
+
+function implicitThisMember(node: TreeNode, context: AdapterContext, name: string,
+    capabilitySource: string | null = null, targetName?: string): SemanticExpression {
+    assertImplicitInstanceScope(node, context);
     const target = Object.assign(identity(node), { kind: "this" as "this" });
     return Object.assign(identity(node), {
         kind: "member" as "member", target, targetNullable: false, name, capabilitySource,
+        ...(targetName ? {targetName} : {}),
     });
 }
 
 /** Implicit inherited reads retain the instance captured at lambda creation. */
 function inheritedLexicalMember(node:TreeNode,context:AdapterContext,name:string,capabilitySource:string):SemanticExpression {
-    if(context.lambdaDepth===0) return implicitThisMember(node,name,capabilitySource);
+    if(context.lambdaDepth===0) return implicitThisMember(node,context,name,capabilitySource);
     if(context.sourceMemberAuthority===null || !context.currentCallable
         || context.currentCallable.modifiers.includes("static"))
         fail("HARDENED_LAMBDA_THIS","implicit inherited capture requires an authenticated instance scope",node);
@@ -2069,6 +2241,18 @@ function dynamicObjectType(type:SemanticType, context:AdapterContext):boolean {
     return context.sourceMemberAuthority !== null && type.emittedName === "unknown"
         && (type.sourceName === "Object" || type.sourceName === "*");
 }
+function authenticatedLocalObjectReceiver(target:SemanticExpression,type:SemanticType,context:AdapterContext):boolean {
+    const qname=localQNameForType(type,context);
+    const binding=target.kind === "this"
+        || target.kind === "identifier" && ["local","parameter"].includes(target.bindingKind);
+    if(!qname || !binding || context.sourceMemberAuthority===null || !context.resolveCurrentLocal
+        || isArrayType(type,context)) return false;
+    const moduleName=context.resolveCurrentLocal().entry.module;
+    const localType=contextLocalType(context,moduleName,qname);
+    const declaration=contextLocalMember(context,moduleName,qname);
+    return localType?.typeKind==="class" && declaration?.status==="complete"
+        && declaration.declaration!==null;
+}
 function assertObjectKey(type:SemanticType,node:TreeNode):void {
     if (!["String","int","uint","Number","Boolean","null","undefined","*","Object","Array","Function"].includes(type.sourceName))
         fail("HARDENED_OBJECT_KEY", "dynamic Object key type requires native String-conversion authority", node);
@@ -2104,7 +2288,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         const inherited = localInheritedMember(context, expression.name, expression.superField ? "field" : "getter", null, node);
         if (inherited.member && inherited.ownerQName === expression.capabilitySource) {
             assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
-            return authoritySemanticType(expression.superField ? inherited.member.fieldType! : inherited.member.returnType!, context, node);
+            return authoritySemanticType(expression.superField ? inherited.member.fieldType! : inherited.member.returnType!, context, node,
+                {ownerQName: inherited.ownerQName, member: inherited.member, receiverQName: context.classQualifiedName});
         }
     }
     if (expression.kind === "member" && expression.target.kind === "this") {
@@ -2115,7 +2300,8 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "callableSelf") return semanticType(node,"Function","Function",[],false);
     if (expression.kind === "globalFunction" || expression.kind === "identifier" && expression.bindingKind === "package-function")
         return semanticType(node,"Function","Function",[],false);
-    if (expression.kind === "reflection" || expression.kind === "functionApply" || expression.kind === "regexpCall") return expression.resultType;
+    if (expression.kind === "argumentRead" || expression.kind === "reflection" || expression.kind === "functionApply"
+        || expression.kind === "regexpCall" || expression.kind === "nativeHasOwnProperty") return expression.resultType;
 
     if (expression.kind === "member" && (expression.target.kind === "super" || expression.target.kind === "this")
         && expression.capabilitySource !== null && context.mappingsBySource[expression.capabilitySource]) {
@@ -2124,10 +2310,12 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     }
     if (expression.kind === "undefined") return semanticType(node, "*", "unknown");
     if (expression.kind === "numericPredicate") return semanticType(node,"Boolean","boolean",[],false);
-    if (expression.kind === "encodeUriComponent") return semanticType(node,"String","string",[],false);
+    if (expression.kind === "encodeUriComponent" || expression.kind === "decodeUriComponent") return semanticType(node,"String","string",[],false);
     if (expression.kind === "math" || expression.kind === "parseInteger") return semanticType(node, "Number", "number", [], false, "Number");
     if (expression.kind === "globalCall") return semanticType(node, "void", "void", [], false);
-    if (expression.kind === "intrinsicConstant") return semanticType(node, "uint", "number");
+    if (expression.kind === "intrinsicConstant") return semanticType(node,
+        expression.identity.startsWith("int.") ? "int"
+            : expression.identity.startsWith("uint.") ? "uint" : "Number","number");
     if (expression.kind === "this") return semanticType(node, context.className, context.className, [], false, context.classQualifiedName);
     if (expression.kind === "identifier" && (expression.bindingKind === "builtin-class" || expression.bindingKind === "interface-class"))
         return semanticType(node, "Class", "__as3ClassValue", [], false);
@@ -2161,11 +2349,15 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         const readable = inherited.members.find(member => member.kind === "getter" || member.kind === "field");
         if (readable && inherited.ownerQName === expression.capabilitySource) {
             assertInheritedVisibility(readable, inherited.ownerQName, context, node);
-            return authoritySemanticType(readable.kind === "field" ? readable.fieldType! : readable.returnType!, context, node);
+            return authoritySemanticType(readable.kind === "field" ? readable.fieldType! : readable.returnType!, context, node,
+                {ownerQName: inherited.ownerQName, member: readable, receiverQName: context.classQualifiedName});
         }
     }
+    if (expression.kind === "member" && expression.capabilitySource === "RegExp" && hasRegExpProvider(context)
+        && context.stringPatternProvider?.regExpMembers && ["source","global"].includes(expression.name))
+        return expression.name === "source" ? semanticType(node,"String","string",[],false) : semanticType(node,"Boolean","boolean");
     if (expression.kind === "member" && expression.capabilitySource === "Date"
-        && ["minutes","time","timezoneOffset"].includes(expression.name)
+        && ["minutes","time","timezoneOffset",...(context.dateProvider?["hours","seconds","milliseconds","fullYear","month","date","day"]:[])].includes(expression.name)
         && hasNativeDateAuthority(context.sourceMemberAuthority)) return semanticType(node,"Number","number");
     if (expression.kind === "member") {
         if (expression.capabilitySource === "Function" && expression.name === "length")
@@ -2299,7 +2491,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     if (expression.kind === "parenthesized" || expression.kind === "nonNull") {
         return expression.resultType;
     }
-    if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index" || expression.kind === "objectOperation" || expression.kind === "dictionaryHas") {
+    if (expression.kind === "conditional" || expression.kind === "update" || expression.kind === "index" || expression.kind === "objectOperation" || expression.kind === "dictionaryHas" || expression.kind === "arrayHas") {
         return expression.resultType;
     }
     if (expression.kind === "delete") return expression.resultType;
@@ -2313,9 +2505,49 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
     fail("HARDENED_ASSIGNMENT_TYPE", "assignment value type is not statically proven in the admitted subset", node);
 }
 
+type SafeIntegerBounds = Readonly<{ minimum: number; maximum: number }>;
+
+/**
+ * Prove the complete receiver interval before lowering Number.toString through
+ * the shared String conversion. AIR and JavaScript agree on decimal formatting
+ * for every safe integer, while their shortest formatting differs for some
+ * fractional and extreme Number values.
+ */
+function safeIntegerBounds(expression: SemanticExpression, context: AdapterContext,
+    node: TreeNode): SafeIntegerBounds | null {
+    if (expression.kind === "parenthesized" || expression.kind === "nonNull")
+        return safeIntegerBounds(expression.expression, context, node);
+    if (expression.kind === "literal" && typeof expression.value === "number"
+        && Number.isSafeInteger(expression.value))
+        return {minimum: expression.value, maximum: expression.value};
+    if (expression.kind === "unary" && expression.operator === "-") {
+        const operand = safeIntegerBounds(expression.operand, context, node);
+        if (operand === null) return null;
+        const minimum = -operand.maximum, maximum = -operand.minimum;
+        return Number.isSafeInteger(minimum) && Number.isSafeInteger(maximum)
+            ? {minimum, maximum} : null;
+    }
+    if (expression.kind === "binary" && (expression.operator === "+" || expression.operator === "-")
+        && !expression.additionCoercion && !expression.numericCoercion) {
+        const left = safeIntegerBounds(expression.left, context, node);
+        const right = safeIntegerBounds(expression.right, context, node);
+        if (left === null || right === null) return null;
+        const minimum = expression.operator === "+" ? left.minimum + right.minimum : left.minimum - right.maximum;
+        const maximum = expression.operator === "+" ? left.maximum + right.maximum : left.maximum - right.minimum;
+        return Number.isSafeInteger(minimum) && Number.isSafeInteger(maximum)
+            ? {minimum, maximum} : null;
+    }
+    const type = assignmentType(expression, context, node);
+    if (type.emittedName !== "number" || type.nullable) return null;
+    if (type.sourceName === "int") return {minimum: -2147483648, maximum: 2147483647};
+    if (type.sourceName === "uint") return {minimum: 0, maximum: 4294967295};
+    return null;
+}
+
 function assignmentTargetType(expression: SemanticExpression, context: AdapterContext, node: TreeNode): SemanticType {
     if(expression.kind==="member" && expression.capabilitySource==="Date"
-        && ["minutes","time"].includes(expression.name) && hasNativeDateAuthority(context.sourceMemberAuthority))
+        && ["minutes","time",...(context.dateProvider?["hours","seconds","milliseconds","date"]:[])].includes(expression.name)
+        && hasNativeDateAuthority(context.sourceMemberAuthority))
         return semanticType(node,"Number","number");
     if (expression.kind === "member" && expression.target.kind === "super" && context.baseLocalQName !== null
         && expression.capabilitySource !== null && !context.mappingsBySource[expression.capabilitySource]) {
@@ -2487,6 +2719,7 @@ function assertAssignmentCompatible(target: SemanticType, value: SemanticType, n
 }
 
 function referenceCoercionForType(type: SemanticType, context: AdapterContext): ReferenceCoercion | null {
+    if(isRegExpType(type) && hasRegExpProvider(context)) return {targetKind:"class",runtimeName:"RegExp"};
     if(type.sourceName==="Date" && type.emittedName==="AS3Date" && hasNativeDateAuthority(context.sourceMemberAuthority))
         return {targetKind:"class",runtimeName:"Date"};
     if (type.sourceName === context.className)
@@ -2519,6 +2752,9 @@ function adaptAssignmentValue(target: SemanticType, expression: SemanticExpressi
         return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
     if (context.sourceMemberAuthority !== null && value.sourceName === "*"
         && ["String","Number","int","uint","Function"].includes(target.sourceName))
+        return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
+    if (context.sourceMemberAuthority !== null && target.sourceName === "Number"
+        && ["null", "undefined"].includes(value.sourceName))
         return Object.assign(identity(node), {kind:"coercion" as const,slot:true as const,targetType:target,argument:expression});
     if (target.sourceName === "Object" && target.emittedName === "unknown" && value.sourceName === "*") {
         return Object.assign(identity(node), {kind: "coercion" as "coercion", targetType: target, argument: expression});
@@ -2580,6 +2816,52 @@ function builtinMathMember(node: TreeNode, context: AdapterContext): string | nu
 function parseExpression(node: TreeNode, context: AdapterContext, valuePosition: boolean,
     allowSuperCall: boolean = false, allowMethodClosure: boolean = true,
     allowAssignment: boolean = false): SemanticExpression {
+    if (context.sourceMemberAuthority && context.lambdaDepth > 0 && valuePosition
+        && !context.locals.arguments && !context.parameters.arguments && !context.fields.arguments
+        && !context.methods.arguments && !context.accessors.arguments && !context.importsByLocal.arguments
+        && (node.kind === "ARRAY_ACCESSOR" || node.kind === "DOT") && node.children.length === 2
+        && node.children[0]!.kind === "IDENTIFIER" && node.children[0]!.text === "arguments") {
+        const key=node.children[1]!;
+        if (node.kind === "DOT" && key.text === "length" || node.kind === "ARRAY_ACCESSOR" && key.kind === "LITERAL" && /^[0-9]+$/.test(key.text || "")) {
+            assertNoInheritedLocalValueShadow(context,"arguments",node.children[0]!);
+            const index=node.kind === "DOT" ? null : Number(key.text);
+            if (index !== null && (!Number.isSafeInteger(index) || index > 0xfffffffe)) fail("HARDENED_ARGUMENTS_INDEX","Arguments index is outside the captured range",key);
+            return {...identity(node),kind:"argumentRead",index,resultType:index === null
+                ? semanticType(node,"uint","number",[],false) : semanticType(node,"*","unknown")};
+        }
+    }
+    if (node.kind === "LITERAL" && node.text?.startsWith("/") && hasRegExpProvider(context)) {
+        if (!admitsStringPatternLiteral(context.stringPatternProvider!,node.text))
+            fail("HARDENED_REGEXP_GRAMMAR","RegExp literal is outside the verified engine grammar",node);
+        const end=node.text.lastIndexOf("/");
+        return {...identity(node),kind:"new",sourceType:semanticType(node,"RegExp","AS3RegExp",[],false,"RegExp"),
+            arguments:[node.text.slice(1,end),node.text.slice(end+1)].map(value=>({...identity(node),kind:"literal" as const,value}))};
+    }
+    if (hasRegExpProvider(context) && node.kind === "CALL" && node.children.length === 2
+        && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "DOT") {
+        const callee=node.children[0]!, args=node.children[1]!.children;
+        if (callee.children.length===2 && callee.children[1]!.text==="replace" && args.length===2
+            // Preserve the separately verified fused literal operations when
+            // their grammar is outside the first-class shared RegExp provider.
+            && !(args[0]!.kind === "LITERAL" && args[0]!.text?.startsWith("/")
+                && !admitsStringPatternLiteral(context.stringPatternProvider!,args[0]!.text))) {
+            const receiver=parseExpression(callee.children[0]!,context,true);
+            if (assignmentType(receiver,context,callee.children[0]!).sourceName==="String") {
+                const pattern=parseExpression(args[0]!,context,true);
+                if (isRegExpType(assignmentType(pattern,context,args[0]!))) {
+                    const replacement=parseExpression(args[1]!,context,true);
+                    const replacementType=assignmentType(replacement,context,args[1]!).sourceName;
+                    if (!["*","Object","Array","Boolean","Function","Number","RegExp","String","int","null","uint","undefined"].includes(replacementType))
+                        fail("HARDENED_REGEXP_REPLACEMENT","Typed RegExp replacement requires a proven source-coercible value",args[1]!);
+                    const dynamicReplacement=["*","Object","Function"].includes(replacementType);
+                    return {...identity(node),kind:"regexpCall",operation:"replaceValue",pattern:"",
+                        sharedPatternModule:targetModuleSpecifier(context.stringPatternProvider!.regExpModule!),
+                        ...(dynamicReplacement ? {callbackReplacement:true as const} : {}),
+                        arguments:[receiver,pattern,replacement],resultType:semanticType(node,"String","string",[],false)};
+                }
+            }
+        }
+    }
     if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length === 2
         && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "DOT") {
         const callee=node.children[0]!, args=node.children[1]!.children;
@@ -2587,7 +2869,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const operation=callee.children[1]!.text, receiver=callee.children[0]!;
             const rawPattern=operation==="test" ? receiver : operation==="replace" ? args[0] : undefined;
             if(rawPattern?.kind==="LITERAL" && rawPattern.text?.startsWith("/")) {
-                try {lowerAS3RegExpLiteral(rawPattern.text);} catch {fail("HARDENED_REGEXP_GRAMMAR","RegExp literal uses unsupported native grammar or flags",rawPattern);}
+                let sharedPatternModule:string|undefined;
+                try {lowerAS3RegExpLiteral(rawPattern.text);} catch {
+                    if(operation==="replace" && context.stringPatternProvider
+                        && admitsStringPatternLiteral(context.stringPatternProvider,rawPattern.text))
+                        sharedPatternModule=targetModuleSpecifier(context.stringPatternProvider.module);
+                    else fail("HARDENED_REGEXP_GRAMMAR","RegExp literal uses unsupported native grammar or flags",rawPattern);
+                }
                 const boundedCharacterClass=rawPattern.text==="/^[A-Za-z0-9._-]{1,64}$/";
                 if(boundedCharacterClass && operation!=="test")
                     fail("HARDENED_REGEXP_GRAMMAR","bounded character-class evidence admits only RegExp.test",node);
@@ -2598,10 +2886,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 const inputType=assignmentType(values[values.length-1]!,context,node);
                 if(inputType.sourceName==="void" || operation==="replace" && inputType.sourceName==="Function")
                     fail("HARDENED_REGEXP_ARGUMENT","RegExp argument behavior is unsupported",node);
+                if(sharedPatternModule && inputType.sourceName!=="String")
+                    fail("HARDENED_REGEXP_ARGUMENT","Shared string-pattern replacement requires a proven String replacement",node);
                 if(boundedCharacterClass && inputType.sourceName!=="String")
                     fail("HARDENED_REGEXP_ARGUMENT","bounded character-class test requires a proven String argument",node);
                 return Object.assign(identity(node),{kind:"regexpCall" as const,operation:operation as "test"|"replace",
-                    pattern:rawPattern.text,arguments:values,
+                    pattern:rawPattern.text,arguments:values,...(sharedPatternModule ? {sharedPatternModule} : {}),
                     resultType:semanticType(node,operation==="test"?"Boolean":"String",operation==="test"?"boolean":"string",[],false)});
             }
         }
@@ -2658,6 +2948,27 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 argument, context, argumentNodes[index]!);
         });
         return Object.assign(identity(node), {kind: "parseInteger" as "parseInteger", arguments: args});
+    }
+    if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length === 2
+        && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "IDENTIFIER"
+        && node.children[0]!.text === "decodeURIComponent" && context.className !== "decodeURIComponent"
+        && !context.locals.decodeURIComponent && !context.parameters.decodeURIComponent
+        && !context.fields.decodeURIComponent && !context.methods.decodeURIComponent
+        && !context.accessors.decodeURIComponent && !context.importsByLocal.decodeURIComponent
+        && !context.resolveImportedType("decodeURIComponent",null,node)) {
+        assertNoInheritedNativeFunctionShadow(context,"decodeURIComponent",node);
+        const authoritySha256=nativeDecodeUriComponentAuthoritySha256(context.sourceMemberAuthority);
+        if(authoritySha256===null) fail("HARDENED_IDENTIFIER_SCOPE",
+            "decodeURIComponent lacks authenticated package-global URI authority",node);
+        const argumentNodes=node.children[1]!.children;
+        if(argumentNodes.length!==1) fail("HARDENED_URI_COMPONENT_ARITY",
+            "authenticated decodeURIComponent requires exactly one argument",node);
+        const argument=parseExpression(argumentNodes[0]!,context,true);
+        const argumentType=assignmentType(argument,context,argumentNodes[0]!);
+        if(argumentType.sourceName!=="String"||argumentType.emittedName!=="string")
+            fail("HARDENED_URI_COMPONENT_ARGUMENT",
+                "authenticated decodeURIComponent requires one statically proven String argument",argumentNodes[0]!);
+        return Object.assign(identity(node),{kind:"decodeUriComponent" as const,argument,authoritySha256});
     }
     if (context.sourceMemberAuthority !== null && node.kind === "CALL" && node.children.length === 2
         && node.children[1]!.kind === "ARGUMENTS" && node.children[0]!.kind === "IDENTIFIER"
@@ -2719,16 +3030,32 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
     if (node.kind === "CALL" && node.children.length === 2 && node.children[1]!.kind === "ARGUMENTS") {
         const member = builtinMathMember(node.children[0]!, context);
         if (member !== null) {
-            if (member !== "min" && member !== "max" && member !== "round" && member !== "abs" && member !== "ceil") fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
-            if ((member === "round" || member === "abs" || member === "ceil") && node.children[1]!.children.length !== 1)
+            if (member !== "min" && member !== "max" && member !== "round" && member !== "abs"
+                && member !== "ceil" && member !== "pow"
+                && !(member === "floor" && context.mathFloorProvider)
+                && !(member === "random" && context.mathFloorProvider))
+                fail("HARDENED_MATH_MEMBER", "Math method is outside the proven numeric subset", node);
+            if (member === "random" && node.children[1]!.children.length !== 0)
+                fail("HARDENED_MATH_ARITY", "Math.random requires exactly zero arguments", node);
+            if ((member === "round" || member === "abs" || member === "ceil" || member === "floor") && node.children[1]!.children.length !== 1)
                 fail("HARDENED_MATH_ARITY", `Math.${member} requires exactly one proven numeric argument`, node);
+            if (member === "pow" && node.children[1]!.children.length !== 2)
+                fail("HARDENED_MATH_ARITY", "Math.pow requires exactly two proven integer arguments", node);
             const args = node.children[1]!.children.map(child => parseExpression(child, context, true));
             args.forEach((argument, index) => {
                 const type=assignmentType(argument, context, node.children[1]!.children[index]!);
-                if (!["Number", "int", "uint"].includes(type.sourceName) || member === "ceil" && type.nullable)
+                if (!["Number", "int", "uint"].includes(type.sourceName) || (member === "ceil" || member === "floor") && type.nullable)
                     fail("HARDENED_MATH_ARGUMENT", "Math arguments require proven numeric values", node.children[1]!.children[index]!);
+                const safeIntegerLiteral = argument.kind === "literal"
+                    && typeof argument.value === "number" && Number.isSafeInteger(argument.value);
+                if (member === "pow" && !["int", "uint"].includes(type.sourceName) && !safeIntegerLiteral)
+                    fail("HARDENED_MATH_ARGUMENT",
+                        "Math.pow requires statically proven integer operands or safe integer literals in the admitted subset",
+                        node.children[1]!.children[index]!);
             });
-            return Object.assign(identity(node), {kind: "math" as "math", member: member as "min" | "max" | "round" | "abs" | "ceil", arguments: args});
+            return Object.assign(identity(node), {kind: "math" as "math",
+                member: member as "min" | "max" | "round" | "abs" | "ceil" | "floor" | "pow" | "random",
+                arguments: args});
         }
         const rawMath=node.children[0]!;
         if(rawMath.kind==="DOT" && rawMath.children.length===2 && rawMath.children[0]!.kind==="IDENTIFIER"
@@ -2796,11 +3123,33 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             fail("HARDENED_NEW_SHAPE", "constructor expression must contain exactly one direct call", node);
         }
         const call = node.children[0]!;
-        if (call.children.length !== 2 || (call.children[0]!.kind !== "IDENTIFIER" && call.children[0]!.kind !== "VECTOR")
-            || call.children[1]!.kind !== "ARGUMENTS") {
+        if (call.children.length !== 2 || call.children[1]!.kind !== "ARGUMENTS") {
             fail("HARDENED_NEW_TARGET", "constructor target must be one local or double-pinned imported class", call);
         }
-        const nameNode = call.children[0]!;
+        let nameNode = call.children[0]!;
+        if (nameNode.kind !== "IDENTIFIER" && nameNode.kind !== "VECTOR") {
+            if (context.sourceMemberAuthority === null)
+                fail("HARDENED_NEW_TARGET", "computed constructor requires authenticated source Class authority", call);
+            const constructorValue=parseExpression(nameNode,context,true);
+            if(constructorValue.kind==="identifier"
+                && (constructorValue.bindingKind==="current-class" || constructorValue.bindingKind==="import")) {
+                nameNode=Object.assign({},nameNode,{kind:"IDENTIFIER",text:constructorValue.name,children:[]});
+            } else {
+            const cast=constructorValue.kind==="parenthesized" ? constructorValue.expression : null;
+            const args=call.children[1]!.children.map(child=>parseExpression(child,context,true));
+            if (cast?.kind!=="runtimeType" || cast.operator!=="as" || cast.targetKind!=="primitive"
+                || cast.runtimeName!=="Class" || cast.targetType.sourceName!=="Class"
+                || assignmentType(constructorValue,context,nameNode).sourceName!=="Class") {
+                fail("HARDENED_NEW_DYNAMIC_TYPE",
+                    "computed construction requires one exact parenthesized as-Class expression",nameNode);
+            }
+            if(args.length!==0)
+                fail("HARDENED_NEW_DYNAMIC_ARGUMENT",
+                    "computed as-Class construction is limited to the native-proved zero-argument form",call);
+            return Object.assign(identity(node),{kind:"new" as const,dynamicClass:true as const,
+                sourceType:semanticType(node,"*","unknown"),constructorValue,arguments:args});
+            }
+        }
         if (nameNode.kind === "VECTOR") {
             const sourceType = parseType(nameNode, context, false);
             const args = call.children[1]!.children.map(child => parseExpression(child, context, true));
@@ -2841,6 +3190,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_ARRAY_CONSTRUCTOR_ARGUMENT", "Array constructor arguments must produce values",call);
             return Object.assign(identity(node),{kind:"new" as const,nativeArray:true as const,sourceType:semanticType(node,"Array","Array",[],false,"Array"),arguments:args});
         }
+        if (name === "Object" && context.className !== name && !context.locals[name]
+            && !context.parameters[name] && !context.fields[name] && !context.methods[name]
+            && !context.accessors[name] && !context.importsByLocal[name]
+            && !context.resolveImportedType(name,null,nameNode) && nativeObjectConstructor(context)) {
+            assertNoInheritedNativeFunctionShadow(context,name,nameNode);
+            if (args.length !== 0)
+                fail("HARDENED_OBJECT_CONSTRUCTOR_ARITY",
+                    "shared Object construction is limited to the native-proved zero-argument form",call);
+            return Object.assign(identity(node),{kind:"new" as const,nativeObject:true as const,
+                sourceType:semanticType(node,"Object","unknown",[],false,"Object"),arguments:args});
+        }
         if (name === "Error" && context.sourceMemberAuthority !== null && context.className !== "Error"
             && !context.locals.Error && !context.parameters.Error && !context.fields.Error && !context.methods.Error
             && !context.accessors.Error && !context.importsByLocal.Error && !context.resolveImportedType("Error",null,nameNode)) {
@@ -2850,6 +3210,22 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 return type.sourceName !== "String" || type.nullable;
             })) fail("HARDENED_ERROR_CONSTRUCTOR", "Error construction requires zero arguments or one proven non-null String",call);
             return Object.assign(identity(node),{kind:"new" as const,sourceType:semanticType(node,"Error","Error",[],false),arguments:args});
+        }
+        if (name === "TypeError" && context.typeErrorProvider
+            && context.sourceMemberAuthority?.sourceArtifactSha256 === "e0f81fdb2029d2bb16e6987c8d85d4eba5eedfa3a23ed6e7f780bf6eb67b0546"
+            && context.sourceMemberAuthority.entriesByQName.TypeError?.baseQName === "Error"
+            && context.className !== name && !context.locals[name] && !context.parameters[name]
+            && !context.fields[name] && !context.methods[name] && !context.accessors[name]
+            && !context.importsByLocal[name] && !context.resolveImportedType(name,null,nameNode)) {
+            assertNoInheritedNativeFunctionShadow(context,name,nameNode);
+            if (args.length > 1 || args.some(argument => {
+                const type=assignmentType(argument,context,call);
+                return type.sourceName !== "String" || type.nullable;
+            })) fail("HARDENED_TYPE_ERROR_CONSTRUCTOR", "TypeError bridge requires zero arguments or one proven non-null String",call);
+            // The admitted value view is the Error base; TypeError Class values,
+            // subclassing and typed catches remain separately unqualified.
+            return Object.assign(identity(node),{kind:"new" as const,nativeTypeError:true as const,
+                sourceType:semanticType(node,"Error","Error",[],false),arguments:args});
         }
         if (name === "ArgumentError" && context.sourceMemberAuthority !== null && context.className !== name
             && !context.locals[name] && !context.parameters[name] && !context.fields[name] && !context.methods[name]
@@ -2877,6 +3253,23 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             return Object.assign(identity(node),{kind:"new" as const,
                 sourceType:semanticType(node,name,"__AS3"+name,[],false,name),arguments:args});
+        }
+        if (name === "RegExp" && context.className !== name && !context.locals[name] && !context.parameters[name]
+            && !context.fields[name] && !context.methods[name] && !context.accessors[name] && !context.importsByLocal[name]
+            && !context.resolveImportedType(name, null, nameNode) && hasRegExpProvider(context)) {
+            assertNoInheritedNativeFunctionShadow(context, name, nameNode, "HARDENED_REGEXP", "RegExp");
+            if (args.length > 2)
+                fail("HARDENED_REGEXP_CONSTRUCTOR_ARITY", "RegExp construction admits at most two arguments", call);
+            const flags = regExpConstructorFlags(args[1]);
+            if (flags === null)
+                fail("HARDENED_REGEXP_CONSTRUCTOR_FLAGS", "RegExp construction admits only a literal empty or global flag", call);
+            if (!admittedRegExpConstructorPattern(args[0], flags, context,
+                call.children[1]!.children[0] || call)) {
+                fail("HARDENED_REGEXP_CONSTRUCTOR_PATTERN",
+                    "RegExp construction requires a verified literal, copy, or escaped decimal placeholder pattern", call);
+            }
+            return Object.assign(identity(node), {kind:"new" as const,
+                sourceType:semanticType(node,"RegExp","AS3RegExp",[],false,"RegExp"),arguments:args});
         }
         if (name === "Date" && context.className !== name && !context.locals[name] && !context.parameters[name]
             && !context.fields[name] && !context.methods[name] && !context.accessors[name] && !context.importsByLocal[name]
@@ -2966,7 +3359,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                             "local constructor is not visible from the current source package", call);
                     }
                 }
-                assertLocalCallArguments(constructorMember, args, call.children[1]!.children, context, call);
+                assertLocalCallArguments(constructorMember, args, call.children[1]!.children, context, call,
+                    imported.sourceQualifiedName);
                 sourceType = semanticType(nameNode, name, name, [], undefined, imported.sourceQualifiedName);
                 return Object.assign(identity(node), { kind: "new" as "new", sourceType, arguments: args });
             }
@@ -3000,6 +3394,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             targetType = parseType(rawTarget, context, false);
         } else if (rawTarget.kind === "IDENTIFIER") {
             targetType = parseType(Object.assign({}, rawTarget, { kind: "TYPE" }), context, false);
+        } else if (rawTarget.kind === "DOT") {
+            // Reuse the exact imported-package/class binding path, including
+            // its source graph edge and lexical-shadow checks. A dotted value
+            // expression must never become a type merely by matching a name.
+            const target = parseExpression(rawTarget, context, true);
+            if (target.kind !== "identifier" || !(target.bindingKind === "current-class"
+                || target.bindingKind === "import" && context.importsByLocal[target.name]?.runtimeConstructible))
+                fail("HARDENED_RUNTIME_TYPE_TARGET", "qualified runtime type requires an authenticated class binding", rawTarget);
+            targetType = parseType(Object.assign({}, rawTarget,
+                {kind:"TYPE",text:target.name,children:[]}),context,false);
         } else {
             fail("HARDENED_RUNTIME_TYPE_TARGET", "runtime type target must be a named class, primitive, or Vector", rawTarget);
         }
@@ -3018,6 +3422,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             targetKind = "vector";
         } else if (runtimePrimitives.has(targetType.sourceName)) {
             targetKind = "primitive";
+        } else if (targetType.sourceName === "Error" && targetType.emittedName === "Error"
+            && context.errorStackProvider !== undefined && context.sourceMemberAuthority?.entriesByQName.Error?.baseQName === "Object") {
+            targetKind="class";runtimeName="Error";
         } else if (targetType.sourceName === "Date" && targetType.emittedName === "AS3Date"
             && hasNativeDateAuthority(context.sourceMemberAuthority)) {
             targetKind="class";runtimeName="Date";
@@ -3076,7 +3483,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 return Object.assign(identity(node), {kind:"dictionaryHas" as const,target,index,
                     resultType:semanticType(node,"Boolean","boolean")});
             }
-            if (!dynamicObjectType(targetType,context))
+            if (targetType.sourceName === "Array" && targetType.emittedName === "Array") {
+                assertObjectKey(assignmentType(index,context,node),node);
+                return Object.assign(identity(node), {kind:"arrayHas" as const,target,index,
+                    resultType:semanticType(node,"Boolean","boolean")});
+            }
+            if (!dynamicObjectType(targetType,context)
+                && !authenticatedLocalObjectReceiver(target,targetType,context))
                 fail("HARDENED_OBJECT_IN", "in requires an authenticated Object or intrinsic Dictionary target", node);
             assertObjectKey(assignmentType(index,context,node),node);
             return Object.assign(identity(node), {kind:"objectOperation" as const,operation:"has" as const,
@@ -3090,8 +3503,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const right = parseExpression(node.children[2]!, context, true);
         const leftType = assignmentType(left, context, node.children[0]!);
         const rightType = assignmentType(right, context, node.children[2]!);
+        const dateStringAddition = operator === "+"
+            && [leftType,rightType].some(type => type.sourceName === "Date" && type.emittedName === "AS3Date")
+            && [leftType,rightType].some(type => type.sourceName === "String" && type.emittedName === "string" && !type.nullable)
+            && [leftType,rightType].every(type => type.sourceName === "Date" || type.sourceName === "String");
         if ([leftType,rightType].some(type=>type.sourceName==="Date" && type.emittedName==="AS3Date")
-            && !["===","!=="].includes(operator))
+            && !["===","!=="].includes(operator) && !dateStringAddition)
             fail("HARDENED_DATE_COERCION","Date operators outside strict identity need separate native evidence",node);
         if ((operator === "&&" || operator === "||") && context.sourceMemberAuthority !== null) {
             if ([leftType,rightType].some(type => (valuePosition ? ["void","XML","XMLList"] : ["XML","XMLList"]).includes(type.sourceName)))
@@ -3118,7 +3535,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         }
         if (operator === "+" && context.sourceMemberAuthority !== null
             && [leftType,rightType].every(type => !["void","XML","XMLList"].includes(type.sourceName))
-            && [leftType,rightType].some(type => ["*","Object","Array","Function"].includes(type.sourceName))) {
+            && ([leftType,rightType].some(type => ["*","Object","Array","Function"].includes(type.sourceName))
+                || dateStringAddition
+                || [leftType,rightType].some(type => type.sourceName === "String" && type.nullable)
+                    && [leftType,rightType].every(type => ["String","Number","int","uint","Boolean","null","undefined"].includes(type.sourceName)))) {
             const stringResult = [leftType,rightType].some(type => type.sourceName === "String"
                 && type.emittedName === "string" && !type.nullable);
             return Object.assign(identity(node), {kind:"binary" as const,operator:"+" as const,
@@ -3205,24 +3625,6 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 resultType: semanticType(node, "String", "string", [], false),
             });
         };
-        // The parser nests an unparenthesized equality beneath TYPEOF. Restore
-        // unary precedence for both loose and strict comparisons; an explicit
-        // parenthesized operand remains ENCAPSULATED and must not be rotated.
-        if (rawOperand.kind === "EQUALITY" && rawOperand.children.length === 3
-            && rawOperand.children[1]!.kind === "OP"
-            && ["==", "!=", "===", "!=="].includes(requiredText(rawOperand.children[1]!, "typeof comparison operator"))) {
-            const left = typeofExpression(rawOperand.children[0]!);
-            const right = parseExpression(rawOperand.children[2]!, context, true);
-            const rightType = assignmentType(right, context, rawOperand.children[2]!);
-            if (rightType.sourceName !== "String" || rightType.emittedName !== "string") {
-                fail("HARDENED_TYPEOF_COMPARISON", "typeof comparison requires an exact String value", rawOperand);
-            }
-            return Object.assign(identity(node), {
-                kind: "binary" as "binary",
-                operator: requiredText(rawOperand.children[1]!, "typeof comparison operator") as "==" | "!=" | "===" | "!==",
-                left, right, resultType: semanticType(node, "Boolean", "boolean", [], false),
-            });
-        }
         return typeofExpression(rawOperand);
     }
     if (node.kind === "PLUS" || node.kind === "MINUS" || node.kind === "NOT" || node.kind === "B_NOT") {
@@ -3283,15 +3685,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             && [trueType,falseType].some(type=>type.sourceName === "*")
             && [trueType,falseType].every(type=>!["void","XML","XMLList","Namespace","QName"].includes(type.sourceName));
         const numericBranches = [trueType, falseType].every(type => ["Number", "int", "uint"].includes(type.sourceName));
+        const heterogeneousScalarBranches = context.sourceMemberAuthority !== null && !numericBranches
+            && !sameUnderlyingType(trueType, falseType)
+            && [trueType, falseType].every(type => ["Boolean", "Number", "String", "int", "uint"].includes(type.sourceName));
         const referenceBranch = context.sourceMemberAuthority !== null && !numericBranches && !trueNull && !falseNull
             && !sameUnderlyingType(trueType,falseType)
             ? provenReferenceSubtype(trueType,falseType,context) ? falseType
                 : provenReferenceSubtype(falseType,trueType,context) ? trueType : null
             : null;
-        if (!sameUnderlyingType(trueType, falseType) && !numericBranches && !trueNull && !falseNull && referenceBranch === null && !dynamicBranch) {
-            fail("HARDENED_CONDITIONAL_TYPE", "conditional branches require the exact same proven source type", node);
+        if (!sameUnderlyingType(trueType, falseType) && !numericBranches && !trueNull && !falseNull
+            && referenceBranch === null && !dynamicBranch && !heterogeneousScalarBranches) {
+            const location = node.span === null ? "" : ` at source offsets ${node.span.start}:${node.span.end}`;
+            fail("HARDENED_CONDITIONAL_TYPE",
+                `conditional branches ${trueType.sourceName}/${trueType.emittedName} and ${falseType.sourceName}/${falseType.emittedName}${location} require the exact same proven source type`, node);
         }
-        const resultType = dynamicBranch ? semanticType(node,"*","unknown")
+        const resultType = dynamicBranch || heterogeneousScalarBranches ? semanticType(node,"*","unknown")
             : numericBranches ? semanticType(node, "Number", "number")
             : referenceBranch ? withNullability(referenceBranch,trueType.nullable || falseType.nullable)
             : trueNull ? falseType : withNullability(trueType, trueType.nullable || falseType.nullable);
@@ -3328,11 +3736,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             resultType,
         });
     }
-    if (node.kind === "LAMBDA") {
+    if (node.kind === "LAMBDA" || node.kind === "FUNCTION") {
         onlyKinds(node, ["BLOCK", "PARAMETER_LIST", "TYPE", "VECTOR"]);
+        const sourceName = node.kind === "FUNCTION"
+            ? validateIdentifier(requiredText(node, "named function expression"), node)
+            : null;
         const parameters = parseParameters(one(node, "PARAMETER_LIST")!, context);
         const returnType = parseType(oneType(node), context, true);
         const block = one(node, "BLOCK")!;
+        if (sourceName !== null && containsIdentifier(block, sourceName)) {
+            fail("HARDENED_NAMED_LAMBDA_SELF",
+                "named function expression self references require separate source recursion authority", node);
+        }
         const priorParameters = context.parameters;
         const priorLocals = context.locals;
         const priorLoopDepth = context.loopDepth;
@@ -3362,8 +3777,11 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (returnType.sourceName !== "void" && !statementsAlwaysReturn(statements)) {
             fail("HARDENED_LAMBDA_RETURN_PATH", "non-void lambda must return a proven value on every admitted path", node);
         }
+        const ownsArguments=(value:any):boolean => !!value && typeof value === "object" && value.kind !== "lambda"
+            && (value.kind === "argumentRead" || Object.values(value).some(ownsArguments));
         return Object.assign(identity(node), {
             kind: "lambda" as "lambda", parameters, returnType, statements,
+            ...(ownsArguments(statements) ? {sourceArguments:true as const} : {}),
             selfName: "__as3LambdaSelf" + (context.lambdaDepth + 1),
             ...(context.lexicalThisUses > priorLexicalThisUses ? { lexicalReceiver: {
                 name: "__as3LexicalReceiver" + (context.lambdaDepth + 1),
@@ -3451,7 +3869,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 bindingKind: "import" as "import", bindingSourceQualifiedName: imported.sourceQualifiedName });
         }
         if (context.fields[name]) {
-            if (context.fields[name]!.modifiers.indexOf("static") >= 0) {
+            const field = context.fields[name]!;
+            if (field.modifiers.indexOf("static") >= 0) {
                 return currentClassMember(node, context, name);
             }
             if (isTreeNodeContext(context) && name === "FData" && context.ownRecordTargetDepth === 0) {
@@ -3465,9 +3884,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 return Object.assign(identity(node), { kind: "member" as const,
                     target: Object.assign(identity(node), { kind: "this" as const,
                         lexicalName: "__as3LexicalReceiver" + context.lambdaDepth }),
-                    targetNullable: false, name, capabilitySource: null });
+                    targetNullable: false, name, ...(field.storageName ? {targetName:field.storageName} : {}),
+                    capabilitySource: null });
             }
-            return implicitThisMember(node, name);
+            return implicitThisMember(node, context, name, null, field.storageName);
         }
         if (context.accessors[name]) {
             const accessor = context.accessors[name]!;
@@ -3483,8 +3903,19 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
                 return currentClassMember(node, context, name);
             }
-            if (context.lambdaDepth > 0) fail("HARDENED_LAMBDA_THIS", "implicit this in anonymous functions remains held", node);
-            return implicitThisMember(node, name);
+            if (context.lambdaDepth > 0) {
+                if (!valuePosition || context.sourceMemberAuthority === null || !context.currentCallable
+                    || context.currentCallable.modifiers.includes("static")) {
+                    fail("HARDENED_LAMBDA_THIS",
+                        "implicit accessor capture requires an authenticated readable instance scope", node);
+                }
+                context.lexicalThisUses++;
+                return Object.assign(identity(node), { kind: "member" as const,
+                    target: Object.assign(identity(node), { kind: "this" as const,
+                        lexicalName: "__as3LexicalReceiver" + context.lambdaDepth }),
+                    targetNullable: false, name, capabilitySource: null });
+            }
+            return implicitThisMember(node, context, name);
         }
         if (context.methods[name]) {
             const method = context.methods[name]!;
@@ -3502,6 +3933,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                         lexicalName: "__as3LexicalReceiver" + context.lambdaDepth }),
                     targetNullable: false, name, capabilitySource: null });
             }
+            assertImplicitInstanceScope(node, context);
             if (valuePosition) {
                 if (!allowMethodClosure) {
                     fail("HARDENED_METHOD_CLOSURE_INITIALIZER", "method closures in field initializers are not admitted before per-instance binding", node);
@@ -3514,7 +3946,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (method.constructor) {
                 fail("HARDENED_METHOD_INSTANCE_SCOPE", "constructor or static method cannot be resolved through implicit this", node);
             }
-            return implicitThisMember(node, name);
+            return implicitThisMember(node, context, name);
         }
         if (context.baseLocalQName !== null) {
             const inherited = localInheritedNamedMembers(context, name, node);
@@ -3530,7 +3962,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (methods.length === 1) {
                     if(context.lambdaDepth>0) fail("HARDENED_LAMBDA_THIS","inherited method capture requires separate native closure evidence",node);
                     if (valuePosition) return inheritedMethodValue(node,context,name,allowMethodClosure);
-                    return implicitThisMember(node, name, inherited.ownerQName);
+                    return implicitThisMember(node, context, name, inherited.ownerQName);
                 }
                 if ((valuePosition && !readable) || (!valuePosition && !readable && !writable)) {
                     fail("HARDENED_ACCESSOR_WRITE_ONLY", "inherited accessor cannot be used in this value position", node);
@@ -3591,9 +4023,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         if (target.kind !== "identifier" && target.kind !== "member" && target.kind !== "index") {
             fail("HARDENED_ASSIGNMENT_TARGET", "assignment target is not a writable lvalue", node.children[0]!);
         }
-        if (context.sourceMemberAuthority !== null && operator === "=" && target.kind === "member"
+        const arrayLengthStorage = context.sourceMemberAuthority !== null && target.kind === "member"
             && target.capabilitySource === "Array" && target.name === "length"
-            && isArrayType(assignmentType(target.target,context,node.children[0]!),context)) {
+            && isArrayType(assignmentType(target.target,context,node.children[0]!),context);
+        if (arrayLengthStorage && operator === "=") {
             const value=parseExpression(node.children[2]!,context,true);
             // Validate the uint storage conversion without moving it before the native null check.
             adaptAssignmentValue(semanticType(node,"uint","number"),value,context,node.children[2]!);
@@ -3601,7 +4034,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 arrayLengthStorage:true as const,target,value,
                 ...(consumed ? {resultType:assignmentType(value,context,node.children[2]!)} : {})});
         }
-        const targetType = assignmentTargetType(target, context, node.children[0]!);
+        if (arrayLengthStorage && operator !== "+=") {
+            fail("HARDENED_ARRAY_LENGTH_COMPOUND",
+                "Array.length compound assignment requires retained operator evidence",node.children[1]!);
+        }
+        const targetType = arrayLengthStorage ? semanticType(node,"uint","number")
+            : assignmentTargetType(target, context, node.children[0]!);
         let value = parseExpression(node.children[2]!, context, true);
         const valueType = assignmentType(value, context, node.children[2]!);
         let input = value;
@@ -3628,7 +4066,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 && type.emittedName === "number";
             const nativeAdd = binaryOperator === "+" && context.sourceMemberAuthority !== null
                 && [targetType,valueType].every(type => !["void","XML","XMLList"].includes(type.sourceName))
-                && [targetType,valueType].some(type => ["*","Object","Array","Function"].includes(type.sourceName));
+                && ([targetType,valueType].some(type => ["*","Object","Array","Function"].includes(type.sourceName))
+                    || [targetType,valueType].some(type => type.sourceName === "String" && type.nullable)
+                        && [targetType,valueType].every(type => ["String","Number","int","uint","Boolean","null","undefined"].includes(type.sourceName)));
             const stringAdd = binaryOperator === "+" && targetType.sourceName === "String"
                 && valueType.sourceName === "String";
             const logical = (binaryOperator === "&&" || binaryOperator === "||")
@@ -3673,6 +4113,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             kind: "assignment" as "assignment", operator: "=" as "=", target, value: consumed ? input : value,
             ...(shortCircuit ? {shortCircuit} : {}),
             ...(deferCompoundStore ? {deferCompoundStore} : {}),
+            ...(arrayLengthStorage ? {arrayLengthStorage:true as const} : {}),
             ...(consumed ? {resultType: assignmentType(input, context, node), ...(storageCoercion ? {storageCoercion} : {})} : {}),
         });
     }
@@ -3723,17 +4164,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 resultType:semanticType(node,"*","unknown")};
         }
         const instanceQName=localQNameForType(ownerType,context);
-        const instanceBinding=target.kind === "this" || target.kind === "identifier" && ["local","parameter"].includes(target.bindingKind);
         const instanceType=instanceQName && context.resolveCurrentLocal
             ? contextLocalType(context,context.resolveCurrentLocal().entry.module,instanceQName) : undefined;
         const instanceDeclaration=instanceQName && context.resolveCurrentLocal
             ? contextLocalMember(context,context.resolveCurrentLocal().entry.module,instanceQName) : undefined;
-        const typedInstance=context.sourceMemberAuthority !== null && instanceBinding && !isArrayType(ownerType,context)
-            && instanceType?.typeKind === "class" && instanceDeclaration?.status === "complete" && instanceDeclaration.declaration !== null;
+        const typedInstance=authenticatedLocalObjectReceiver(target,ownerType,context);
         if (typedInstance) {
             const index=parseExpression(node.children[1]!,context,true);
-            if (assignmentType(index,context,node.children[1]!).sourceName !== "String")
-                fail("HARDENED_LOCAL_INSTANCE_KEY","typed local instance indexing requires an evidenced String key",node.children[1]!);
+            // The existing Object dispatcher owns native key conversion and
+            // lexical member visibility for this authenticated source receiver.
+            assertObjectKey(assignmentType(index,context,node.children[1]!),node.children[1]!);
             return {...identity(node),kind:"index",accessKind:"object",target,targetNullable:ownerType.nullable,
                 index,callerQName:context.classQualifiedName,resultType:semanticType(node,"*","unknown")};
         }
@@ -3749,15 +4189,28 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if(!valuePosition) fail("HARDENED_LOCAL_INTERFACE_LITERAL_READ_CONTEXT",
                 "local interface literal property authority is read-only and value-position-only",node);
             const index=parseExpression(node.children[1]!,context,true);
-            if(index.kind!=="literal"||typeof index.value!=="string"
-                ||validateIdentifier(index.value,node.children[1]!)!==index.value) {
-                fail("HARDENED_LOCAL_INTERFACE_LITERAL_READ_KEY",
-                    "local interface public-trait read requires one literal public identifier key",node.children[1]!);
+            if(index.kind==="literal"&&typeof index.value==="string"
+                &&validateIdentifier(index.value,node.children[1]!)===index.value) {
+                return {...identity(node),kind:"index",accessKind:"localInterfaceLiteralPublicTrait",target,
+                    targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,
+                    localInterfaceLiteralRead:localInterfaceLiteralReadProof(instanceQName!,index.value),
+                    resultType:semanticType(node,"*","unknown")};
             }
-            return {...identity(node),kind:"index",accessKind:"localInterfaceLiteralPublicTrait",target,
-                targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,
-                localInterfaceLiteralRead:localInterfaceLiteralReadProof(instanceQName!,index.value),
-                resultType:semanticType(node,"*","unknown")};
+            if(index.kind==="identifier"&&(index.bindingKind==="local"||index.bindingKind==="parameter")) {
+                const keyType=assignmentType(index,context,node.children[1]!);
+                if(keyType.sourceName==="String"&&keyType.emittedName==="string"
+                    &&keyType.typeArguments.length===0) {
+                    return {...identity(node),kind:"index",accessKind:"localInterfaceComputedPublicTrait",target,
+                        targetNullable:ownerType.nullable,index,callerQName:context.classQualifiedName,
+                        localInterfaceComputedRead:localInterfaceComputedReadProof(instanceQName!,index.name,index.bindingKind),
+                        resultType:semanticType(node,"*","unknown")};
+                }
+            }
+            {
+                fail("HARDENED_LOCAL_INTERFACE_LITERAL_READ_KEY",
+                    "local interface public-trait read requires one literal public identifier or one local String binding key",
+                    node.children[1]!);
+            }
         }
         if (dynamicObjectType(ownerType,context)) {
             const index = parseExpression(node.children[1]!,context,true);
@@ -3845,7 +4298,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             // AIR binds an imported package before a same-spelled local or
             // parameter. The retained package import and exact class edge are
             // required; the class index alone never reinterprets a value chain.
-            if (target?.importable && target.typeKind === "class" && importedPackage) {
+            if (target?.importable && target.typeKind === "class"
+                && (qname === context.classQualifiedName || importedPackage)) {
                 if (context.className === root || context.fields[root] || context.methods[root]
                     || context.accessors[root] || context.importsByLocal[root] || context.namespaceNames[root])
                     fail("HARDENED_QUALIFIED_PACKAGE_SHADOW","qualified package conflicts with an unevidenced lexical declaration",node);
@@ -3945,6 +4399,45 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 });
             }
         }
+        if (node.children[0]!.kind === "IDENTIFIER" && (node.children[0]!.text === "int" || node.children[0]!.text === "uint"
+                || node.children[0]!.text === "Number" && name === "MAX_VALUE"
+                    && context.sourceMemberAuthority?.sourceArtifactSha256 === "e0f81fdb2029d2bb16e6987c8d85d4eba5eedfa3a23ed6e7f780bf6eb67b0546")
+            && (name === "MIN_VALUE" || name === "MAX_VALUE")) {
+            const root=node.children[0]!.text!;
+            const intrinsicValues={
+                "int.MIN_VALUE":-2147483648,
+                "int.MAX_VALUE":2147483647,
+                "uint.MIN_VALUE":0,
+                "uint.MAX_VALUE":4294967295,
+                "Number.MAX_VALUE":1.7976931348623157e+308,
+            } as const;
+            const intrinsicIdentity=`${root}.${name}` as keyof typeof intrinsicValues;
+            if (context.className !== root && context.locals[root] === undefined && context.parameters[root] === undefined
+                && context.fields[root] === undefined && context.methods[root] === undefined
+                && context.accessors[root] === undefined && context.importsByLocal[root] === undefined) {
+                if (context.resolveCurrentLocal === null || context.localTypeAuthority === null) {
+                    fail("HARDENED_INTRINSIC_IDENTITY_AUTHORITY",
+                        `${intrinsicIdentity} requires authenticated local authority proving no lexical or package type shadow`,
+                        node.children[0]!);
+                }
+                assertNoInheritedLocalValueShadow(context,root,node.children[0]!);
+                const current=context.resolveCurrentLocal();
+                const packageSeparator=context.classQualifiedName.lastIndexOf(".");
+                const intrinsicQName=packageSeparator < 0 ? root
+                    : `${context.classQualifiedName.slice(0,packageSeparator)}.${root}`;
+                if (contextLocalType(context,current.entry.module,intrinsicQName)) {
+                    fail("HARDENED_INTRINSIC_IDENTITY_SHADOW",
+                        `${intrinsicIdentity} is shadowed by an authenticated same-package declaration`,node.children[0]!);
+                }
+                if (context.resolveImportedType(root,null,node.children[0]!) === null) {
+                    return Object.assign(identity(node),{
+                        kind:"intrinsicConstant" as const,
+                        identity:intrinsicIdentity,
+                        value:intrinsicValues[intrinsicIdentity],
+                    });
+                }
+            }
+        }
         let target: SemanticExpression;
         let superOwnerQName: string | null = null;
         let superField = false;
@@ -3959,7 +4452,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 : localInheritedMember(context, name, "method", null, node);
             if (inherited?.member && inherited.ownerQName) {
                 assertInheritedVisibility(inherited.member, inherited.ownerQName, context, node);
-                if (valuePosition) fail("HARDENED_LOCAL_METHOD_CLOSURE", "super method closures remain held", node);
+                if (valuePosition) {
+                    if (!allowMethodClosure) {
+                        fail("HARDENED_METHOD_CLOSURE_INITIALIZER",
+                            "super method closures are not admitted before per-instance binding", node);
+                    }
+                    return Object.assign(identity(node), {
+                        kind: "methodClosure" as const, methodName: name, superMethod: true as const,
+                    });
+                }
                 superOwnerQName = inherited.ownerQName;
             } else {
                 const accessor = context.baseLocalQName === null ? null
@@ -4011,7 +4512,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             return Object.assign(identity(node), { kind: "methodClosure" as "methodClosure", methodName: name });
         }
-        if (target.kind !== "super" && ["length","push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty"].includes(name)) {
+        if (target.kind !== "super" && ["length","push","pop","shift","unshift","concat","join","reverse","sortOn","sort","splice","hasOwnProperty"].includes(name)) {
             const arrayType = assignmentType(target,context,node);
             if (isArrayType(arrayType,context) && arrayType.sourceName !== "Array") {
                 const qname = arrayType.runtimeName!;
@@ -4029,9 +4530,16 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             && context.importsByLocal[target.name]?.localValueType === null;
         if (target.kind !== "super" && target.kind !== "this" && !staticImportReceiver) {
             const dateType=assignmentType(target,context,node);
+            if (dateType.sourceName === "RegExp" && dateType.emittedName === "AS3RegExp" && hasRegExpProvider(context)
+                && context.stringPatternProvider?.regExpMembers) {
+                const property=valuePosition && ["source","global"].includes(name);
+                const method=!valuePosition && name === "test";
+                if (property || method)
+                    return Object.assign(identity(node),{kind:"member" as const,target,name,targetNullable:dateType.nullable,capabilitySource:"RegExp"});
+            }
             if(dateType.sourceName==="Date" && dateType.emittedName==="AS3Date" && hasNativeDateAuthority(context.sourceMemberAuthority)) {
-                const method=["valueOf","getTime","setTime","setHours"].includes(name);
-                const property=["minutes","time","timezoneOffset"].includes(name);
+                const method=["valueOf","getTime","setTime","setHours",...(context.dateProvider?["getHours","getDay"]:[])].includes(name);
+                const property=["minutes","time","timezoneOffset",...(context.dateProvider?["hours","seconds","milliseconds","fullYear","month","date","day"]:[])].includes(name);
                 if(!method && !property || valuePosition && method)
                     fail("HARDENED_DATE_MEMBER","Date member or method closure is outside the evidenced subset",node);
                 return Object.assign(identity(node),{kind:"member" as const,target,name,targetNullable:dateType.nullable,capabilitySource:"Date"});
@@ -4044,6 +4552,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             // The exact local inherited method was resolved above before the
             // otherwise-context-free SuperExpression entered semantic IR.
         } else if (target.kind === "this") {
+            const ownField = context.fields[name];
+            if (ownField?.storageName) targetName = ownField.storageName;
             if (context.methods[name] && (context.methods[name].constructor
                 || context.methods[name].modifiers.indexOf("static") >= 0)) {
                 fail("HARDENED_METHOD_INSTANCE_SCOPE", "constructor or static method cannot be resolved through this", node);
@@ -4099,7 +4609,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 const mapping = memberMapping(context, imported.sourceQualifiedName, "read", name, node)
                     || (!valuePosition ? memberMapping(context, imported.sourceQualifiedName, "call", name, node) : null);
                 if (mapping === null || mapping.targetMember === null || mapping.targetMember.scope !== "static") {
-                    fail("HARDENED_STATIC_MEMBER", "Flash static access requires an exact authenticated member", node);
+                    const span=node.span===null?"":` at source offsets ${node.span.start}:${node.span.end}`;
+                    fail("HARDENED_STATIC_MEMBER", `Flash static access ${imported.sourceQualifiedName}.${name}${span} requires an exact authenticated member`, node);
                 }
                 capabilitySource = imported.sourceQualifiedName;
             }
@@ -4129,21 +4640,40 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const intrinsicSource = intrinsicSourceForType(targetType, context);
             const flashSource = mappedFlashQNameForType(targetType, context);
             if (flashSource !== null) {
-                const accesses = valuePosition ? ["read"] : ["call", "write", "read"];
-                const mappings = accesses.map(access => memberMapping(context, flashSource, access, name, node))
-                    .filter((mapping): mapping is CapabilityMapping => mapping !== null);
-                if (mappings.length === 0) {
-                    fail("HARDENED_MEMBER_TARGET", `Flash receiver ${flashSource}.${name} lacks an exact bridge mapping`, node);
+                if (!valuePosition && name === "hasOwnProperty"
+                    && nativeFlashObjectHasOwnProperty(context,[flashSource])) {
+                    capabilitySource = "Object";
+                } else {
+                    const accesses = valuePosition ? ["read"] : ["call", "write", "read"];
+                    const mappings = accesses.map(access => memberMapping(context, flashSource, access, name, node))
+                        .filter((mapping): mapping is CapabilityMapping => mapping !== null);
+                    if (mappings.length === 0) {
+                        const imported=context.importsByLocal[targetType.sourceName];
+                        const mappedDynamic=context.sourceMemberAuthority!==null&&targetType.typeArguments.length===0
+                            &&targetType.runtimeName===flashSource&&imported?.authorityKind==="flash"
+                            &&imported.runtimeConstructible&&!imported.runtimeInterface&&imported.localValueType===null
+                            &&imported.sourceQualifiedName===flashSource;
+                        if(!mappedDynamic) fail("HARDENED_MEMBER_TARGET",
+                            `Flash receiver ${flashSource}.${name} lacks an exact bridge mapping`,node);
+                        const index=Object.assign(identity(node.children[1]!),{kind:"literal" as const,value:name});
+                        return {...identity(node),kind:"index",accessKind:"mappedNativeDynamicLiteralPublicTrait",
+                            target,targetNullable:targetType.nullable,index,callerQName:context.classQualifiedName,
+                            ...(valuePosition?{mappedNativeDynamicLiteralRead:mappedNativeDynamicLiteralReadProof(
+                                context.sourceMemberAuthority!,flashSource,name,imported.targetModule,imported.targetExport)}
+                                :{mappedNativeDynamicLiteralTarget:mappedNativeDynamicLiteralTargetProof(
+                                    context.sourceMemberAuthority!,flashSource,name,imported.targetModule,imported.targetExport)}),
+                            resultType:semanticType(node,"*","unknown")};
+                    }
+                    const names = new Set(mappings.map(mapping => mapping.targetMember!.name));
+                    if (names.size !== 1) fail("HARDENED_MEMBER_TARGET", "Flash accessor mappings disagree on their bridge target", node);
+                    targetName = mappings[0]!.targetMember!.name;
+                    capabilitySource = flashSource;
                 }
-                const names = new Set(mappings.map(mapping => mapping.targetMember!.name));
-                if (names.size !== 1) fail("HARDENED_MEMBER_TARGET", "Flash accessor mappings disagree on their bridge target", node);
-                targetName = mappings[0]!.targetMember!.name;
-                capabilitySource = flashSource;
             } else if (intrinsicSource !== null) {
                 if (intrinsicMember(context, intrinsicSource, "read", name) === null
                     && intrinsicMember(context, intrinsicSource, "write", name) === null
                     && intrinsicMember(context, intrinsicSource, "call", name) === null) {
-                    fail("HARDENED_INTRINSIC_MEMBER", "intrinsic member is not source-census authenticated or remains held", node);
+                    fail("HARDENED_INTRINSIC_MEMBER", `intrinsic member ${intrinsicSource}.${name} is not source-census authenticated or remains held`, node);
                 }
                 capabilitySource = intrinsicSource;
             } else {
@@ -4151,25 +4681,36 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (receiverQName !== null) {
                     const lookup = localInstanceNamedMembers(context, receiverQName, name, node);
                     if (lookup.members.length === 0 || lookup.ownerQName === null) {
-                        if (lookup.terminalFlashQNames.length === 0) {
+                        if (!valuePosition && name === "hasOwnProperty" && lookup.implicitObjectRoot
+                            && nativeObjectHasOwnProperty(context)) {
+                            capabilitySource = "Object";
+                        } else if (!valuePosition && name === "hasOwnProperty"
+                            && nativeFlashObjectHasOwnProperty(context,lookup.terminalFlashQNames)) {
+                            capabilitySource = "Object";
+                        } else if (lookup.terminalFlashQNames.length === 0) {
+                            const span = node.span === null ? "" : ` at source offsets ${node.span.start}:${node.span.end}`;
                             fail("HARDENED_LOCAL_INSTANCE_MEMBER",
-                                "local receiver member lacks an authenticated declaration", node);
+                                `local receiver ${receiverQName}.${name}${span} lacks an authenticated declaration`, node);
+                        } else {
+                            const accesses = valuePosition ? ["read"] : ["call","write","read"];
+                            const mappings = accesses.map(access => terminalFlashMemberMapping(context,
+                                lookup.terminalFlashQNames,access,name,node)).filter((mapping): mapping is CapabilityMapping => mapping !== null);
+                            if (mappings.length === 0) {
+                                fail("HARDENED_MEMBER_UNMAPPED",
+                                    `terminal Flash receiver ${lookup.terminalFlashQNames.join("|")}.${name} on ${receiverQName} lacks an exact bridge mapping`, node);
+                            }
+                            if (new Set(mappings.map(mapping => mapping.targetMember!.name)).size !== 1
+                                || new Set(mappings.map(mapping => mapping.sourceQName)).size !== 1)
+                                fail("HARDENED_MEMBER_TARGET","Inherited Flash accessor mappings disagree on their bridge target",node);
+                            targetName = mappings[0]!.targetMember!.name;
+                            capabilitySource = mappings[0]!.sourceQName;
                         }
-                        const accesses = valuePosition ? ["read"] : ["call","write","read"];
-                        const mappings = accesses.map(access => terminalFlashMemberMapping(context,
-                            lookup.terminalFlashQNames,access,name,node)).filter((mapping): mapping is CapabilityMapping => mapping !== null);
-                        if (mappings.length === 0) {
-                            fail("HARDENED_MEMBER_UNMAPPED",
-                                `terminal Flash receiver ${lookup.terminalFlashQNames.join("|")}.${name} on ${receiverQName} lacks an exact bridge mapping`, node);
-                        }
-                        if (new Set(mappings.map(mapping => mapping.targetMember!.name)).size !== 1
-                            || new Set(mappings.map(mapping => mapping.sourceQName)).size !== 1)
-                            fail("HARDENED_MEMBER_TARGET","Inherited Flash accessor mappings disagree on their bridge target",node);
-                        targetName = mappings[0]!.targetMember!.name;
-                        capabilitySource = mappings[0]!.sourceQName;
                     } else {
                         lookup.members.forEach(member =>
                             assertLocalReceiverVisibility(member, lookup.ownerQName!, receiverQName, context, node));
+                        const privateField = lookup.members.find(member => member.kind === "field"
+                            && member.modifiers.includes("private"));
+                        if (privateField) targetName = privateInstanceFieldStorageName(lookup.ownerQName, name);
                         if (valuePosition && lookup.members.some(member => member.kind === "method")) {
                             fail("HARDENED_LOCAL_METHOD_CLOSURE",
                                 "local receiver method closures remain held until stable identity is proven", node);
@@ -4180,18 +4721,24 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     const errorRead = valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
                         && (targetType.runtimeName === null || targetType.runtimeName === "Error") && ["message","name","errorID"].includes(name);
                     const errorMethod = !valuePosition && targetType.sourceName === "Error" && targetType.emittedName === "Error"
-                        && (targetType.runtimeName === null || targetType.runtimeName === "Error") && name === "toString";
+                        && (targetType.runtimeName === null || targetType.runtimeName === "Error")
+                        && (name === "toString" || name === "getStackTrace" && context.errorStackProvider !== undefined);
                     const numberMethod = !valuePosition && (["Number","int","uint"].includes(targetType.sourceName) && name === "toFixed"
                         || context.sourceMemberAuthority !== null && ["int","uint"].includes(targetType.sourceName)
-                            && targetType.emittedName === "number" && name === "toString");
+                            && targetType.emittedName === "number" && name === "toString"
+                        || context.sourceMemberAuthority !== null && targetType.sourceName === "Number"
+                            && targetType.emittedName === "number" && name === "toString"
+                            && safeIntegerBounds(target, context, node) !== null);
                     const functionLength = context.sourceMemberAuthority !== null && valuePosition
                         && targetType.sourceName === "Function" && name === "length";
                     const stringLength = valuePosition && targetType.sourceName === "String" && name === "length";
                     const arrayLength = isArrayType(targetType,context) && name === "length";
                     const arrayMethod = context.sourceMemberAuthority !== null && isArrayType(targetType,context)
-                        && !valuePosition && (["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty"].includes(name)
-                            || ["indexOf","filter"].includes(name) && targetType.sourceName === "Array");
+                        && !valuePosition && (["push","pop","shift","unshift","concat","join","reverse","toString","sortOn","sort","splice","hasOwnProperty"].includes(name)
+                            || (["indexOf","filter"].includes(name) || name === "some" && context.arraySomeProvider !== undefined)
+                                && targetType.sourceName === "Array");
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && (["indexOf", "substr", "toLowerCase", "charAt"].includes(name)
+                        || name === "charCodeAt" && context.stringRangeProvider !== undefined
                         || context.sourceMemberAuthority !== null && ["split","lastIndexOf","substring","slice"].includes(name));
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !functionLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
@@ -4226,7 +4773,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             const exactInnerFlags = sourceType !== null && isBigTurnTableInnerContext(context)
                 && sourceType.sourceName === BIG_TURN_TABLE_INNER_FLAGS
                 && vectorType.typeArguments[0]?.sourceName === "int";
-            if (!exactInnerFlags && source.kind !== "array" && vectorElement(sourceType!) === null) {
+            const provenArray = context.sourceMemberAuthority !== null && sourceType !== null && isArrayType(sourceType,context);
+            if (!exactInnerFlags && !provenArray && source.kind !== "array" && vectorElement(sourceType!) === null) {
                 fail("HARDENED_VECTOR_CONVERSION_SOURCE", "Vector conversion requires an Array literal or proven Vector", node);
             }
             return Object.assign(identity(node), { kind: "vectorConversion" as "vectorConversion", vectorType, source });
@@ -4265,8 +4813,8 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (args.length !== 2) fail("HARDENED_FUNCTION_APPLY_ARITY", "Function.apply requires retained receiver and argument-array inputs", node);
                 const receiver=parseExpression(args[0]!,context,true), argumentsArray=parseExpression(args[1]!,context,true);
                 const arrayType=assignmentType(argumentsArray,context,args[1]!);
-                if (!["Array","null","undefined"].includes(arrayType.sourceName))
-                    fail("HARDENED_FUNCTION_APPLY_ARGUMENTS", "Function.apply requires an Array or null argument list", node);
+                if (!["Array","null","undefined","*","Object"].includes(arrayType.sourceName))
+                    fail("HARDENED_FUNCTION_APPLY_ARGUMENTS", "Function.apply requires an Array, null, or dynamically checked argument list", node);
                 return Object.assign(identity(node), {kind:"functionApply" as const,target,receiver,argumentsArray,
                     resultType:target.kind === "globalFunction" ? semanticType(node,"void","void") : semanticType(node,"*","unknown")});
             }
@@ -4296,8 +4844,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (rawCallee.kind === "IDENTIFIER" && typeof rawCallee.text === "string"
                 && !context.parameters[rawCallee.text] && !context.importsByLocal[rawCallee.text]
                 && !context.locals[rawCallee.text] && !context.fields[rawCallee.text] && !context.methods[rawCallee.text]
-                && !context.accessors[rawCallee.text] && context.baseSourceQName !== null) {
-                const mapping = memberMapping(context, context.baseSourceQName, "call", rawCallee.text, rawCallee);
+                && !context.accessors[rawCallee.text]
+                && (context.baseLocalQName !== null || context.baseSourceQName !== null)) {
+                const mapping = flashBaseMemberMapping(context, "call", rawCallee.text, rawCallee);
                 callee = mapping === null ? parseExpression(rawCallee, context, false)
                     : inheritedLexicalMember(rawCallee, context, rawCallee.text, mapping.sourceQName);
             } else {
@@ -4342,6 +4891,25 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 argumentsArray:Object.assign(identity(node),{kind:"array" as const,elements:args}),
                 resultType:semanticType(node,"*","unknown")});
         }
+        const currentStaticField = callee.kind === "member" ? context.fields[callee.name] : undefined;
+        if (context.sourceMemberAuthority !== null && callee.kind === "member"
+            && callee.target.kind === "identifier" && rawCallee.kind === "IDENTIFIER"
+            && callee.target.bindingKind === "current-class"
+            && callee.target.bindingSourceQualifiedName === context.classQualifiedName
+            && callee.capabilitySource === context.classQualifiedName
+            && context.lambdaDepth === 0 && context.currentCallable?.modifiers.includes("static")
+            && currentStaticField?.type.sourceName === "Function"
+            && currentStaticField.modifiers.includes("static") && currentStaticField.namespaceName === null) {
+            for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
+                fail("HARDENED_FUNCTION_ARGUMENT", "static Function field arguments must produce values", node);
+            // An unqualified static field call captures the Function value
+            // before evaluating its arguments and invokes that retained value
+            // with the native null receiver.
+            return Object.assign(identity(node), {kind:"functionApply" as const,invocation:"direct" as const,target:callee,
+                receiver:Object.assign(identity(node),{kind:"literal" as const,value:null}),
+                argumentsArray:Object.assign(identity(node),{kind:"array" as const,elements:args}),
+                resultType:semanticType(node,"*","unknown")});
+        }
         const functionGetter = callee.kind === "member" ? context.accessors[callee.name]?.getter : undefined;
         if (context.sourceMemberAuthority !== null && callee.kind === "member" && callee.target.kind === "this"
             && rawCallee.kind !== "IDENTIFIER" && context.lambdaDepth === 0
@@ -4358,9 +4926,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 arguments:args,callerQName:context.classQualifiedName,
                 resultType:semanticType(node,"*","unknown")});
         }
-        if (context.sourceMemberAuthority !== null && callee.kind === "identifier"
-            && (callee.bindingKind === "parameter" || callee.bindingKind === "local")
-            && !context.locals[callee.name]?.lambdaSignature
+        const castFunctionValue = immediateLambda.kind === "runtimeType"
+            && immediateLambda.operator === "as" && immediateLambda.targetKind === "primitive"
+            && immediateLambda.targetType.sourceName === "Function";
+        if (context.sourceMemberAuthority !== null
+            && (castFunctionValue || callee.kind === "identifier"
+                && (callee.bindingKind === "parameter" || callee.bindingKind === "local")
+                && !context.locals[callee.name]?.lambdaSignature)
             && assignmentType(callee,context,rawCallee).sourceName === "Function") {
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
                 fail("HARDENED_FUNCTION_ARGUMENT", "direct Function arguments must produce values", node);
@@ -4389,7 +4961,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 }
             }
         }
-        if (callee.kind === "index" && callee.accessKind === "object") {
+        if (callee.kind === "index" && (callee.accessKind === "object"
+            || callee.accessKind === "mappedNativeDynamicLiteralPublicTrait"
+                && callee.mappedNativeDynamicLiteralTarget !== undefined)) {
+            let operation:"call"|"preparedCall"="call";
             const builtin = callee.index.kind === "literal" && ["hasOwnProperty","toString"].includes(String(callee.index.value));
             if (builtin) {
                 const expected = (callee.index as Extract<SemanticExpression,{kind:"literal"}>).value === "hasOwnProperty" ? 1 : 0;
@@ -4406,19 +4981,61 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else if (callee.index.kind === "literal" && ["lastIndexOf","substring","slice"].includes(String(callee.index.value))) {
                 fail("HARDENED_OBJECT_CALL_TARGET", "String range/search calls require an authenticated primitive String receiver", node);
             } else if (callee.index.kind !== "literal" || typeof callee.index.value !== "string") {
-                fail("HARDENED_OBJECT_CALL_TARGET", "computed dynamic calls require retained native evaluation evidence", node);
+                const keyType=assignmentType(callee.index,context,rawCallee);
+                if (keyType.sourceName !== "String" || keyType.emittedName !== "string")
+                    fail("HARDENED_OBJECT_CALL_TARGET", "computed dynamic calls require an authenticated String key", node);
+                operation="preparedCall";
             }
             if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
                 fail("HARDENED_OBJECT_CALL_ARGUMENT", "Dynamic call arguments must produce values", node);
-            return Object.assign(identity(node),{kind:"objectOperation" as const,operation:"call" as const,
+            return Object.assign(identity(node),{kind:"objectOperation" as const,operation,
                 target:callee.target,index:callee.index,arguments:args,callerQName:context.classQualifiedName,
+                ...(callee.mappedNativeDynamicLiteralTarget
+                    ?{mappedNativeDynamicLiteralTarget:callee.mappedNativeDynamicLiteralTarget}:{}),
                 resultType:semanticType(node,"*","unknown")});
+        }
+        if (callee.kind === "member" && callee.capabilitySource === "Object"
+            && callee.name === "hasOwnProperty") {
+            const receiverQName = localQNameForExpression(callee.target, context, rawCallee);
+            let sharedNative=false;
+            if (receiverQName !== null) {
+                const lookup = localInstanceNamedMembers(context, receiverQName, callee.name, rawCallee);
+                if (lookup.members.length !== 0 || !nativeObjectHasOwnProperty(context)) {
+                    fail("HARDENED_OBJECT_CALL_TARGET", "local receiver does not prove the native Object.hasOwnProperty root", rawCallee);
+                }
+                if (lookup.implicitObjectRoot) {
+                    sharedNative=false;
+                } else if (nativeFlashObjectHasOwnProperty(context,lookup.terminalFlashQNames)) {
+                    sharedNative=true;
+                } else {
+                    fail("HARDENED_OBJECT_CALL_TARGET", "local receiver does not prove an admitted Object.hasOwnProperty root", rawCallee);
+                }
+            } else {
+                const receiverType=assignmentType(callee.target,context,rawCallee);
+                const flashQName=mappedFlashQNameForType(receiverType,context);
+                if (flashQName === null || !nativeFlashObjectHasOwnProperty(context,[flashQName])) {
+                    fail("HARDENED_OBJECT_CALL_TARGET", "Object.hasOwnProperty bridge requires an authenticated local or mapped Flash receiver", rawCallee);
+                }
+                sharedNative=true;
+            }
+            if (args.length !== 1) {
+                fail("HARDENED_OBJECT_CALL_ARITY", "Object.hasOwnProperty requires exactly one key", node);
+            }
+            assertObjectKey(assignmentType(args[0]!, context, node.children[1]!.children[0]!),
+                node.children[1]!.children[0]!);
+            if (sharedNative) return Object.assign(identity(node), {kind:"nativeHasOwnProperty" as const,
+                target:callee.target,key:args[0]!,resultType:semanticType(node,"Boolean","boolean")});
+            return Object.assign(identity(node), { kind: "objectOperation" as const, operation: "call" as const,
+                target: callee.target, index: Object.assign(identity(rawCallee), { kind: "literal" as const,
+                    value: "hasOwnProperty" }), arguments: args, callerQName: context.classQualifiedName,
+                resultType: semanticType(node, "Boolean", "boolean") });
         }
         let capabilitySource: string | null = null;
         let capabilityMember: string | null = null;
         let resultType: SemanticType | null = null;
         let calleeNullable = false;
         let packageFunctionCall: true | undefined;
+        let nativeDispatcherSelfTarget: true | undefined;
         if (callee.kind === "super") {
             if (context.baseLocalQName !== null) {
                 const constructorMember = localConstructor(context, context.baseLocalQName, node);
@@ -4433,27 +5050,46 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                             "local base constructor is not visible to the derived class", node);
                     }
                 }
-                assertLocalCallArguments(constructorMember, args, node.children[1]!.children, context, node);
+                assertLocalCallArguments(constructorMember, args, node.children[1]!.children, context, node,
+                    context.baseLocalQName);
             } else if (context.baseSourceQName === "Array" && nativeArrayBase(context)) {
                 if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
                     fail("HARDENED_ARRAY_ARGUMENT","Array constructor arguments must produce values",node);
             } else if (context.sourceMemberAuthority !== null && context.baseSourceQName !== null
                 && ["flash.display.Bitmap","flash.events.Event","flash.events.ErrorEvent","flash.events.EventDispatcher"].includes(context.baseSourceQName)) {
-                if (context.baseSourceQName === "flash.events.EventDispatcher" && args.some(usesConstructionReceiver))
+                const dispatcherSelf = context.baseSourceQName === "flash.events.EventDispatcher"
+                    && args.length === 1 && args[0]!.kind === "this";
+                if (context.baseSourceQName === "flash.events.EventDispatcher" && !dispatcherSelf && args.some(usesConstructionReceiver))
                     fail("HARDENED_SUPER_CONSTRUCTION_RECEIVER", "EventDispatcher super arguments cannot expose the receiver before construction", node);
                 const constructorName=context.baseSourceQName.slice(context.baseSourceQName.lastIndexOf(".")+1);
                 const mapping=memberMapping(context,context.baseSourceQName,"call",constructorName,node);
                 if (!mapping || mapping.sourceRoles.length !== 1 || mapping.sourceRoles[0] !== "constructor"
                     || mapping.targetMember?.kind !== "constructor" || mapping.targetMember.scope !== "static")
                     fail("HARDENED_SUPER_CONSTRUCTOR_AUTHORITY", "Flash super requires its exact authenticated native and target constructor",node);
-                adaptMappedCall(mapping,args,node.children[1]!.children,context,node);
+                if (dispatcherSelf) {
+                    // This exact receiver is necessarily the authenticated
+                    // EventDispatcher subclass under construction. Native AIR
+                    // retains it as the same self target selected by null.
+                    // Validate that target contract without a general-purpose
+                    // structural interface coercion or an escaping JS receiver.
+                    const signature = authenticatedSourceMemberSignature(mapping,node);
+                    if (mapping.targetModule !== "src/layaAir/flash/events/EventDispatcherCore.ts"
+                        || mapping.targetExport !== "EventDispatcher"
+                        || signature.parameterTypes.length !== 1
+                        || signature.parameterTypes[0] !== "flash.events.IEventDispatcher"
+                        || mapping.targetMember.signature !== "new (target?: IEventDispatcher | null): EventDispatcher")
+                        fail("HARDENED_SUPER_CONSTRUCTOR_AUTHORITY", "Self target requires the canonical EventDispatcher target contract",node);
+                    adaptMappedCall(mapping,[Object.assign(identity(node.children[1]!.children[0]!),
+                        {kind:"literal" as const,value:null,raw:"null"})],node.children[1]!.children,context,node);
+                    nativeDispatcherSelfTarget = true;
+                } else adaptMappedCall(mapping,args,node.children[1]!.children,context,node);
             } else if (args.length !== 0) {
                 fail("HARDENED_SUPER_ARITY", "Flash base constructor arguments remain outside the typed bridge subset", node);
             }
         } else if (callee.kind === "member" && callee.capabilitySource === "Date"
             && hasNativeDateAuthority(context.sourceMemberAuthority)) {
             const arity=callee.name==="setTime"?1:callee.name==="setHours"?3
-                : ["valueOf","getTime"].includes(callee.name)?0:null;
+                : ["valueOf","getTime",...(context.dateProvider?["getHours","getDay"]:[])].includes(callee.name)?0:null;
             if(arity===null || args.length!==arity)
                 fail("HARDENED_DATE_CALL","Date call does not match an evidenced exact method arity",node);
             if(args.some((argument,index)=>{
@@ -4483,9 +5119,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 capabilityMember = mapping.sourceMember!.name;
             }
         } else if (context.sourceMemberAuthority !== null && callee.kind === "member"
-            && ["int","uint"].includes(callee.capabilitySource || "") && callee.name === "toString") {
+            && ["int","uint","Number"].includes(callee.capabilitySource || "") && callee.name === "toString") {
             const integerType = assignmentType(callee.target, context, rawCallee);
-            if (!["int","uint"].includes(integerType.sourceName) || integerType.emittedName !== "number")
+            const boundedNumber = integerType.sourceName === "Number" && integerType.emittedName === "number"
+                && safeIntegerBounds(callee.target, context, rawCallee) !== null;
+            if ((! ["int","uint"].includes(integerType.sourceName) || integerType.emittedName !== "number")
+                && !boundedNumber)
                 fail("HARDENED_INTEGER_STRING_TARGET", "integer toString requires an authenticated primitive receiver", node);
             if (args.length !== 0)
                 fail("HARDENED_INTEGER_STRING_ARITY", "integer toString currently requires its zero-argument decimal form", node);
@@ -4498,6 +5137,19 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && callee.capabilitySource === "Error" && callee.name === "toString") {
             if (args.length !== 0) fail("HARDENED_ERROR_CALL_ARITY", "Error.toString requires its retained zero-argument call", node);
             capabilitySource="Error";capabilityMember="toString";resultType=semanticType(node,"String","string");
+        } else if (callee.kind === "member" && callee.capabilitySource === "Error" && callee.name === "getStackTrace") {
+            if (!context.errorStackProvider)
+                fail("HARDENED_ERROR_STACK", "Error.getStackTrace requires its authenticated shared provider",node);
+            if (args.length !== 0)
+                fail("HARDENED_ERROR_CALL_ARITY", "Error.getStackTrace requires its native zero-argument call",node);
+            capabilitySource="Error";capabilityMember="getStackTrace";resultType=semanticType(node,"String","string");
+        } else if (callee.kind === "member" && callee.capabilitySource === "RegExp" && callee.name === "test"
+            && context.stringPatternProvider?.regExpMembers) {
+            if (args.length > 1)
+                fail("HARDENED_REGEXP_ARITY", "RegExp.test requires zero or one argument",node);
+            if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
+                fail("HARDENED_REGEXP_ARGUMENT", "RegExp.test arguments must produce source values",node);
+            capabilitySource="RegExp";capabilityMember="test";resultType=semanticType(node,"Boolean","boolean",[],false);
         } else if (callee.kind === "member" && callee.capabilitySource === "String"
             && assignmentType(callee.target, context, rawCallee).sourceName === "String"
             && (!["lastIndexOf","substring","slice"].includes(callee.name) || context.sourceMemberAuthority !== null)) {
@@ -4510,6 +5162,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else if (callee.name === "charAt") {
                 if (args.length > 1) fail("HARDENED_STRING_ARITY", "String.charAt requires zero or one index argument", node);
                 capabilitySource="String"; capabilityMember="charAt";
+            } else if (callee.name === "charCodeAt" && context.stringRangeProvider) {
+                if (args.length > 1) fail("HARDENED_STRING_ARITY", "String.charCodeAt requires zero or one index argument", node);
+                capabilitySource="String"; capabilityMember="charCodeAt";
             } else if (["lastIndexOf","substring","slice"].includes(callee.name)) {
                 if (args.length > 2) fail("HARDENED_STRING_ARITY", `String.${callee.name} requires zero, one or two arguments`, node);
                 capabilitySource="String"; capabilityMember=callee.name;
@@ -4521,6 +5176,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     if (type.sourceName === "void") fail("HARDENED_STRING_ARGUMENT", "String.split requires value arguments", node);
                     return;
                 }
+                if (context.stringRangeProvider && ["charAt","charCodeAt","substring","slice"].includes(callee.name)) {
+                    if (type.sourceName === "void") fail("HARDENED_STRING_ARGUMENT","String range arguments must be source values",node);
+                    return;
+                }
                 const newRangeSearch=["lastIndexOf","substring","slice"].includes(callee.name);
                 const search=["indexOf","lastIndexOf"].includes(callee.name) && index===0;
                 const allowed=search ? newRangeSearch ? ["String","null"] : ["String"]
@@ -4530,6 +5189,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             });
             resultType = callee.name === "split" ? semanticType(node,"Array","Array",[],false)
                 : ["indexOf","lastIndexOf"].includes(callee.name) ? semanticType(node, "int", "number")
+                : callee.name === "charCodeAt" ? semanticType(node,"Number","number")
                 : semanticType(node, "String", "string", [], false);
         } else if (callee.kind === "identifier" && (callee.bindingKind === "package-function"
             || context.importsByLocal[callee.name]?.localFunction)) {
@@ -4562,7 +5222,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             if (!context.sourceMemberAuthority || !mapping || mapping.targetKind !== "function"
                 || mapping.targetExport !== "getDefinitionByName"
                 || mapping.targetModule !== "src/layaAir/flash/utils/DefinitionRegistry.ts"
-                || mapping.targetSignature !== "(name: string) => NativeDefinition")
+                || mapping.targetSignature !== "(name: unknown) => NativeDefinition")
                 fail("HARDENED_REFLECTION_AUTHORITY", "native definition lookup lacks its shared target and source authority", node);
             if (args.length !== 1)
                 fail("HARDENED_REFLECTION_ARITY", "getDefinitionByName requires exactly one original name", node);
@@ -4584,6 +5244,21 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             capabilitySource = mapping.sourceQName; capabilityMember = "<call>";
             resultType = semanticType(node, "String", "string");
         } else if (callee.kind === "identifier" && callee.bindingKind === "import"
+            && callee.bindingSourceQualifiedName === "flash.net.navigateToURL") {
+            const mapping = context.mappingsBySource[callee.bindingSourceQualifiedName];
+            if (!mapping || mapping.targetKind !== "function"
+                || mapping.targetModule !== "src/layaAir/flash/net/URLRequest.ts"
+                || mapping.targetExport !== "navigateToURL"
+                || mapping.targetSignature !== "(request: URLRequest, target: string) => void")
+                fail("HARDENED_NAVIGATION_AUTHORITY", "Flash navigation lacks its authenticated shared target", node);
+            if (args.length !== 2
+                || mappedFlashQNameForType(assignmentType(args[0]!, context, node.children[1]!.children[0]!), context)
+                    !== "flash.net.URLRequest"
+                || args[1]!.kind !== "literal" || args[1]!.value !== "_blank")
+                fail("HARDENED_NAVIGATION_ARGUMENT", "Flash navigation requires a URLRequest and the retained _blank target", node);
+            capabilitySource = mapping.sourceQName; capabilityMember = "<call>";
+            resultType = semanticType(node, "void", "void");
+        } else if (callee.kind === "identifier" && callee.bindingKind === "import"
             && context.importsByLocal[callee.name]?.authorityKind === "native-timer-function"
             && callee.bindingSourceQualifiedName === context.importsByLocal[callee.name]!.sourceQualifiedName) {
             const imported = context.importsByLocal[callee.name]!;
@@ -4604,17 +5279,24 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         } else if (callee.kind === "member" && context.sourceMemberAuthority !== null
             && callee.capabilitySource === "Array" && isArrayType(assignmentType(callee.target,context,rawCallee),context)) {
             const name = callee.name;
-            if (!["push","pop","shift","unshift","concat","join","sortOn","sort","splice","hasOwnProperty","indexOf","filter"].includes(name)
-                || (["pop","shift"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1)
-                || (["indexOf","filter"].includes(name) && (args.length < 1 || args.length > 2)))
+            if (!["push","pop","shift","unshift","concat","join","reverse","toString","sortOn","sort","splice","hasOwnProperty","indexOf","filter","some"].includes(name)
+                || (["pop","shift","reverse","toString"].includes(name) && args.length !== 0) || (name === "join" && args.length > 1)
+                || (["indexOf","filter","some"].includes(name) && (args.length < 1 || args.length > 2)))
                 fail("HARDENED_ARRAY_CALL", "Array mutation call has an unsupported method or arity", node);
             for (const argument of args) if (assignmentType(argument,context,node).sourceName === "void")
                 fail("HARDENED_ARRAY_ARGUMENT", "Array mutation arguments must produce values", node);
+            if (name === "some" && (!context.arraySomeProvider
+                || assignmentType(callee.target,context,rawCallee).sourceName !== "Array"))
+                fail("HARDENED_ARRAY_SOME", "Array.some requires its authenticated shared provider and native Array receiver",node);
             if (name === "hasOwnProperty" && (args.length !== 1
                 || assignmentType(args[0]!,context,node).sourceName !== "String" || assignmentType(args[0]!,context,node).nullable))
                 fail("HARDENED_ARRAY_OWNERSHIP", "Array ownership requires one non-null String key", node);
             if (name === "indexOf" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
                 fail("HARDENED_ARRAY_INDEX_OF", "Array subclass indexOf requires native dispatch evidence", node);
+            if (name === "toString" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
+                fail("HARDENED_ARRAY_TO_STRING", "Array subclass toString requires native dispatch evidence", node);
+            if (name === "reverse" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
+                fail("HARDENED_ARRAY_REVERSE", "Array subclass reverse requires native dispatch evidence", node);
             if (name === "filter" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
                 fail("HARDENED_ARRAY_FILTER", "Array subclass filter requires native dispatch evidence", node);
             if (name === "splice" && assignmentType(callee.target,context,rawCallee).sourceName !== "Array")
@@ -4635,12 +5317,15 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (name === "sortOn" && (args.length !== 2 || assignmentType(args[0]!,context,node).sourceName !== "String"
                     || ![16,18].includes(flags(args[1]!)!)))
                     fail("HARDENED_ARRAY_SORT_ON", "Array.sortOn requires one String field and proven NUMERIC with optional DESCENDING", node);
-                if (name === "sort" && (args.length !== 1 || ![16,18].includes(flags(args[0]!)!)))
+                if (name === "sort" && !(context.arraySortProvider && args.length === 1
+                    && assignmentType(args[0]!,context,node).sourceName === "Function"
+                    && !assignmentType(args[0]!,context,node).nullable)
+                    && (args.length !== 1 || ![16,18].includes(flags(args[0]!)!)))
                     fail("HARDENED_ARRAY_SORT", "Array.sort requires proven NUMERIC with optional DESCENDING", node);
             }
             capabilitySource = "Array";
             capabilityMember = name;
-            resultType = name === "indexOf" ? semanticType(node,"int","number") : name === "hasOwnProperty" ? semanticType(node,"Boolean","boolean") : name === "join" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "filter" || name === "sortOn" || name === "sort" || name === "splice" ? semanticType(node,"Array","Array",[],name === "splice")
+            resultType = name === "indexOf" ? semanticType(node,"int","number") : name === "hasOwnProperty" || name === "some" ? semanticType(node,"Boolean","boolean") : name === "join" || name === "toString" ? semanticType(node,"String","string",[],false) : name === "concat" || name === "filter" || name === "reverse" || name === "sortOn" || name === "sort" || name === "splice" ? semanticType(node,"Array","Array",[],name === "splice")
                 : name === "push" || name === "unshift"
                 ? semanticType(node,"uint","number") : semanticType(node,"*","unknown");
         } else if (callee.kind === "member" && callee.target.kind === "this" && context.methods[callee.name]) {
@@ -4858,7 +5543,17 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const result: CallExpression = Object.assign(identity(node), {
             kind: "call" as "call", callee, calleeNullable, arguments: args,
             ...(packageFunctionCall ? {packageFunctionCall} : {}),
+            ...(nativeDispatcherSelfTarget ? {nativeDispatcherSelfTarget} : {}),
             capabilitySource, capabilityMember, resultType,
+            ...(context.arraySomeProvider && capabilitySource === "Array" && capabilityMember === "some"
+                ? {sharedArraySome:true as const} : {}),
+            ...(context.errorStackProvider && capabilitySource === "Error" && capabilityMember === "getStackTrace"
+                ? {sharedErrorStack:true as const} : {}),
+            ...(context.arraySortProvider && capabilitySource === "Array" && capabilityMember === "sort"
+                && args.length === 1 && assignmentType(args[0]!,context,node).sourceName === "Function"
+                ? {sharedArraySort:true as const} : {}),
+            ...(context.stringRangeProvider && capabilitySource === "String" && ["charAt","charCodeAt","substring","slice"].includes(capabilityMember || "")
+                ? {sharedStringRange:true as const} : {}),
         });
         return result;
     }
@@ -4871,7 +5566,7 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
             if (node.children.length !== 0) fail("HARDENED_EMPTY_STATEMENT", "Empty statement cannot contain executable children", node);
             return Object.assign(identity(node), {kind: "empty" as "empty"});
         }
-        if (node.kind === "CALL" || node.kind === "ASSIGN" || node.kind === "DELETE" || node.kind === "AND" || node.kind === "OR" || node.kind === "PRE_INC"
+        if (node.kind === "CALL" || node.kind === "NEW" || node.kind === "ASSIGN" || node.kind === "DELETE" || node.kind === "AND" || node.kind === "OR" || node.kind === "PRE_INC"
             || node.kind === "PRE_DEC" || node.kind === "POST_INC" || node.kind === "POST_DEC") {
             return Object.assign(identity(node), {
                 kind: "expression" as "expression",
@@ -4879,8 +5574,10 @@ function parseStatementNode(node: TreeNode, context: AdapterContext, constructor
                     allowSuperCall, true, node.kind === "ASSIGN"),
             });
         }
-        if (node.kind === "DOT" && context.sourceMemberAuthority !== null) {
-            // A discarded property value still performs its read and any getter effects.
+        if ((node.kind === "DOT" || node.kind === "IDENTIFIER") && context.sourceMemberAuthority !== null) {
+            // Discarding a value still evaluates its read. An unqualified name
+            // can bind a getter too; ordinary lexical resolution preserves local
+            // shadowing, static initialization, visibility and inherited owners.
             const expression = parseExpression(node, context, true);
             assignmentType(expression, context, node);
             return Object.assign(identity(node), {kind:"expression" as const, expression});
@@ -5478,8 +6175,7 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
         if (node.kind !== "TRY") {
             statements.push(parseStatementNode(node, context, constructor, derived, expectedReturn,
                 allowLeadingSuper && constructor && statements.every(statement => statement.kind === "local" || statement.kind === "empty"
-                    || context.sourceMemberAuthority !== null && context.baseSourceQName === "flash.display.Bitmap"
-                    && statement.kind === "expression" && !superCall(statement))));
+                    || context.sourceMemberAuthority !== null && statement.kind === "expression" && !superCall(statement))));
             continue;
         }
         if (node.children.length !== 1 || node.children[0]!.kind !== "BLOCK") {
@@ -5504,12 +6200,19 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
             const typeNode = one(catchNode, "TYPE")!;
             const catchBlock = one(catchNode, "BLOCK")!;
             const name = validateIdentifier(requiredText(nameNode, "catch binding"), nameNode);
-            const type = withNullability(parseType(typeNode, context, false), false);
+            const sourceURIError = typeNode.text === "URIError" && context.className !== "URIError"
+                && !context.importsByLocal.URIError && !context.resolveImportedType("URIError",null,typeNode)
+                && nativeDecodeUriComponentAuthoritySha256(context.sourceMemberAuthority)!==null;
+            const type = withNullability(sourceURIError
+                ? semanticType(typeNode,"URIError","Error",[],false,"URIError")
+                : parseType(typeNode, context, false), false);
             const wildcardCatch = context.sourceMemberAuthority !== null
                 && type.sourceName === "*" && type.emittedName === "unknown";
             const securityCatch = type.sourceName === "SecurityError" && type.emittedName === "__AS3SecurityError"
                 && context.sourceMemberAuthority?.entriesByQName.SecurityError?.baseQName === "Error";
-            if (!wildcardCatch && !securityCatch && (type.sourceName !== "Error" || type.emittedName !== "Error")) {
+            const uriCatch = type.sourceName === "URIError" && type.emittedName === "Error"
+                && nativeDecodeUriComponentAuthoritySha256(context.sourceMemberAuthority)!==null;
+            if (!wildcardCatch && !securityCatch && !uriCatch && (type.sourceName !== "Error" || type.emittedName !== "Error")) {
                 fail("HARDENED_CATCH_TYPE", "catch requires canonical Error or an authenticated wildcard type", typeNode);
             }
             const temporaryName = `__as3Caught${catchNode.id.slice(1)}`;
@@ -5759,6 +6462,8 @@ function parseField(list: TreeNode, context: AdapterContext, readonly: boolean, 
             kind: "field" as "field",
             sharedDeclarationNodeId: list.id,
             name,
+            ...(modifiers.includes("private") && !modifiers.includes("static")
+                ? {storageName:privateInstanceFieldStorageName(context.classQualifiedName,name)} : {}),
             modifiers: modifiers.slice(),
             namespaceName: memberModifiers.namespaceName,
             readonly,
@@ -5987,6 +6692,16 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         intrinsicTypesBySource: authority.intrinsicTypesBySource,
         intrinsicMembersByKey: authority.intrinsicMembersByKey,
         nativeTimerFunctionsBySource: authority.nativeTimerFunctionsBySource,
+        stringRangeProvider: authority.stringRangeProvider,
+        arraySortProvider: authority.arraySortProvider,
+        arraySomeProvider: authority.arraySomeProvider,
+        errorStackProvider: authority.errorStackProvider,
+        mathFloorProvider: authority.mathFloorProvider,
+        objectConstructorProvider: authority.objectConstructorProvider,
+        objectHasOwnPropertyProvider: authority.objectHasOwnPropertyProvider,
+        typeErrorProvider: authority.typeErrorProvider,
+        dateProvider: authority.dateProvider,
+        stringPatternProvider: authority.stringPatternProvider,
         baseSourceQName: null, baseLocalQName: null,
         localTypeAuthority: localAuthority, localMemberAuthority, resolveCurrentLocal,
         fields: Object.create(null), methods: Object.create(null),
@@ -6026,6 +6741,16 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         targetCapabilitySha256: authority.targetCapabilitiesSha256,
         capabilityMappingSha256: authority.mappingSha256,
         nativeTimerAuthoritySha256: authority.nativeTimerAuthoritySha256,
+        ...(authority.stringRangeProvider ? {sharedStringRangeModule:targetModuleSpecifier(authority.stringRangeProvider.module)} : {}),
+        ...(authority.arraySortProvider ? {sharedArraySortModule:targetModuleSpecifier(authority.arraySortProvider.module)} : {}),
+        ...(authority.arraySomeProvider ? {sharedArraySomeModule:targetModuleSpecifier(authority.arraySomeProvider.module)} : {}),
+        ...(authority.errorStackProvider ? {sharedErrorStackModule:targetModuleSpecifier(authority.errorStackProvider.module)} : {}),
+        ...(authority.errorStackProvider ? {sharedErrorTypeModule:targetModuleSpecifier(authority.errorStackProvider.typeModule)} : {}),
+        ...(authority.mathFloorProvider ? {sharedMathFloorModule:targetModuleSpecifier(authority.mathFloorProvider.module)} : {}),
+        ...(authority.objectConstructorProvider ? {sharedObjectConstructorModule:targetModuleSpecifier(authority.objectConstructorProvider.module)} : {}),
+        ...(authority.objectHasOwnPropertyProvider ? {sharedObjectHasOwnPropertyModule:targetModuleSpecifier(authority.objectHasOwnPropertyProvider.module)} : {}),
+        ...(authority.typeErrorProvider ? {sharedTypeErrorModule:targetModuleSpecifier(authority.typeErrorProvider.module)} : {}),
+        ...(authority.dateProvider ? {sharedDateModule:targetModuleSpecifier(authority.dateProvider.module)} : {}),
     });
     deepFreeze(program);
     ADAPTED_PROGRAMS.add(program);
@@ -6261,10 +6986,11 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
     if (localMemberAuthority !== undefined && localAuthority === undefined) {
         fail("HARDENED_LOCAL_MEMBER_AUTHORITY_INSTANCE", "local member authority requires its local type authority", classNode);
     }
+    const runtimeReferences = runtimeReferenceMaps(runtimeReferenceAuthority);
     const lexicalContent = {...content, children: content.children.concat(
         classContentForNamespaces.children.filter(child => child.kind === "IMPORT"))};
     const parsedImports = parseImports(lexicalContent, authority, localAuthority, resolveCurrentLocal,
-        localMemberAuthority || null, sourceMemberAuthority);
+        localMemberAuthority || null, sourceMemberAuthority, runtimeReferences.kindsByQName);
     namespaceUseNodes.forEach((node) => {
         onlyKinds(node, []);
         const name = validateNamespaceIdentifier(requiredText(node, "namespace directive"), node);
@@ -6315,17 +7041,27 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             return existing;
         }
         if (authority.typeMappingsBySource[sourceName] && authority.typeMappingsBySource[sourceName]!.targetKind !== "function") {
-            const item = flashSemanticImport(authority, sourceName, node);
-            if (expectedKind !== null && authority.typeMappingsBySource[sourceName]!.targetKind !== expectedKind) return null;
+            const item = flashSemanticImport(authority, sourceName, node, runtimeReferences.kindsByQName);
+            if (expectedKind === "class" && !item.runtimeConstructible
+                || expectedKind === "interface" && !item.runtimeInterface) return null;
             parsedImports.imports.push(item);
             parsedImports.importsByLocal[localName] = item;
             return item;
         }
         if (!localAuthority || !resolveCurrentLocal) return null;
-        const qname = sourceName.indexOf(".") >= 0 ? sourceName
+        let qname = sourceName.indexOf(".") >= 0 ? sourceName
             : packageName === "" ? sourceName : `${packageName}.${sourceName}`;
-        const candidates = (["application", "bootstrap"] as const).map(module =>
+        let candidates = (["application", "bootstrap"] as const).map(module =>
             localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry);
+        // AVM2 also exposes default-package types to code inside a named
+        // package. Keep same-package and explicit-import precedence above,
+        // then admit the root binding only when the authenticated graph owns
+        // that exact QName.
+        if (candidates.length === 0 && !sourceName.includes(".") && packageName !== "") {
+            qname = sourceName;
+            candidates = (["application", "bootstrap"] as const).map(module =>
+                localAuthority.entriesByIdentity[`${module}\u0000${qname}`]).filter((entry): entry is LocalTypeMapping => !!entry);
+        }
         if (candidates.length === 0) return null;
         const current = resolveCurrentLocal();
         const target = crossRootLocalType(localAuthority,current.entry.module,qname);
@@ -6333,7 +7069,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             || (expectedKind !== null && target.typeKind !== expectedKind)) return null;
         if (current.entry.prerequisites.indexOf(target.nodeId) < 0) {
             fail("HARDENED_LOCAL_IMPORT_EDGE",
-                "same-package type lacks an authenticated dependency edge: " + qname, node);
+                "implicit local type lacks an authenticated dependency edge: " + qname, node);
         }
         const item = localSemanticImport(target, current, node, localAuthority, localMemberAuthority || null);
         parsedImports.imports.push(item);
@@ -6352,12 +7088,22 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         intrinsicTypesBySource: authority.intrinsicTypesBySource,
         intrinsicMembersByKey: authority.intrinsicMembersByKey,
         nativeTimerFunctionsBySource: authority.nativeTimerFunctionsBySource,
+        stringRangeProvider: authority.stringRangeProvider,
+        arraySortProvider: authority.arraySortProvider,
+        arraySomeProvider: authority.arraySomeProvider,
+        errorStackProvider: authority.errorStackProvider,
+        mathFloorProvider: authority.mathFloorProvider,
+        objectConstructorProvider: authority.objectConstructorProvider,
+        objectHasOwnPropertyProvider: authority.objectHasOwnPropertyProvider,
+        typeErrorProvider: authority.typeErrorProvider,
+        dateProvider: authority.dateProvider,
+        stringPatternProvider: authority.stringPatternProvider,
         baseSourceQName: null,
         baseLocalQName: null,
         localTypeAuthority: localAuthority || null,
         localMemberAuthority: localMemberAuthority || null,
         resolveCurrentLocal,
-        runtimeReferenceParentsByQName: runtimeReferenceParents(runtimeReferenceAuthority),
+        runtimeReferenceParentsByQName: runtimeReferences.parentsByQName,
         sourceMemberAuthority: sourceMemberAuthority || null,
         currentInterfaceQNames: [],
         fields: Object.create(null),
@@ -6461,6 +7207,16 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
             targetCapabilitySha256: authority.targetCapabilitiesSha256,
             capabilityMappingSha256: authority.mappingSha256,
             nativeTimerAuthoritySha256: authority.nativeTimerAuthoritySha256,
+        ...(authority.stringRangeProvider ? {sharedStringRangeModule:targetModuleSpecifier(authority.stringRangeProvider.module)} : {}),
+        ...(authority.arraySortProvider ? {sharedArraySortModule:targetModuleSpecifier(authority.arraySortProvider.module)} : {}),
+        ...(authority.arraySomeProvider ? {sharedArraySomeModule:targetModuleSpecifier(authority.arraySomeProvider.module)} : {}),
+        ...(authority.errorStackProvider ? {sharedErrorStackModule:targetModuleSpecifier(authority.errorStackProvider.module)} : {}),
+        ...(authority.errorStackProvider ? {sharedErrorTypeModule:targetModuleSpecifier(authority.errorStackProvider.typeModule)} : {}),
+        ...(authority.mathFloorProvider ? {sharedMathFloorModule:targetModuleSpecifier(authority.mathFloorProvider.module)} : {}),
+        ...(authority.objectConstructorProvider ? {sharedObjectConstructorModule:targetModuleSpecifier(authority.objectConstructorProvider.module)} : {}),
+        ...(authority.objectHasOwnPropertyProvider ? {sharedObjectHasOwnPropertyModule:targetModuleSpecifier(authority.objectHasOwnPropertyProvider.module)} : {}),
+        ...(authority.typeErrorProvider ? {sharedTypeErrorModule:targetModuleSpecifier(authority.typeErrorProvider.module)} : {}),
+        ...(authority.dateProvider ? {sharedDateModule:targetModuleSpecifier(authority.dateProvider.module)} : {}),
         });
         deepFreeze(program);
         ADAPTED_PROGRAMS.add(program);
@@ -6522,6 +7278,12 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
     }
     placeholder.currentInterfaceQNames = Object.freeze(implementsTypes.map(item => item.runtimeName));
     const classContent = one(classNode, "CONTENT")!;
+    // Parameter defaults are resolved while callable headers are collected,
+    // before fields and later methods have entered their semantic tables.
+    placeholder.declaredMemberNames = new Set(classContent.children.flatMap(node =>
+        node.kind === "VAR_LIST" || node.kind === "CONST_LIST"
+            ? node.children.filter(child => child.kind === "NAME_TYPE_INIT").map(child => one(child,"NAME")!.text!)
+            : ["FUNCTION", "GET", "SET"].includes(node.kind) ? [one(node,"NAME")!.text!] : []));
     const functionNodes = classContent.children.filter((child) =>
         child.kind === "FUNCTION" || child.kind === "GET" || child.kind === "SET");
     functionNodes.forEach((node) => {
@@ -6632,7 +7394,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                     && placeholder.baseSourceQName === "flash.display.Bitmap";
                 if (count > 1 || extendsType !== null && count !== 1
                     || leading.some(statement => statement.kind !== "local" && statement.kind !== "empty"
-                        && !(stagedBitmap && statement.kind === "expression"))) {
+                        && statement.kind !== "expression")) {
                     fail("HARDENED_SUPER_ORDER", "constructor requires one top-level super call and an admitted leading sequence", node);
                 }
                 if (stagedBitmap) {
@@ -6708,7 +7470,8 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
     const declaration: SemanticClass = Object.assign(identity(classNode), {
         declarationKind: "class" as "class", name: className,
         modifiers: parseModifiers(classNode, true,
-            isArrayType(semanticType(classNode,className,className,[],false,placeholder.classQualifiedName),placeholder)),
+            placeholder.sourceMemberAuthority !== null && localDeclaration(placeholder,placeholder.classQualifiedName,classNode).status === "complete"
+            || isArrayType(semanticType(classNode,className,className,[],false,placeholder.classQualifiedName),placeholder)),
         extendsType,
         interfaceExtendsTypes: [],
         implementsTypes,
@@ -6730,6 +7493,16 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         targetCapabilitySha256: authority.targetCapabilitiesSha256,
         capabilityMappingSha256: authority.mappingSha256,
         nativeTimerAuthoritySha256: authority.nativeTimerAuthoritySha256,
+        ...(authority.stringRangeProvider ? {sharedStringRangeModule:targetModuleSpecifier(authority.stringRangeProvider.module)} : {}),
+        ...(authority.arraySortProvider ? {sharedArraySortModule:targetModuleSpecifier(authority.arraySortProvider.module)} : {}),
+        ...(authority.arraySomeProvider ? {sharedArraySomeModule:targetModuleSpecifier(authority.arraySomeProvider.module)} : {}),
+        ...(authority.errorStackProvider ? {sharedErrorStackModule:targetModuleSpecifier(authority.errorStackProvider.module)} : {}),
+        ...(authority.errorStackProvider ? {sharedErrorTypeModule:targetModuleSpecifier(authority.errorStackProvider.typeModule)} : {}),
+        ...(authority.mathFloorProvider ? {sharedMathFloorModule:targetModuleSpecifier(authority.mathFloorProvider.module)} : {}),
+        ...(authority.objectConstructorProvider ? {sharedObjectConstructorModule:targetModuleSpecifier(authority.objectConstructorProvider.module)} : {}),
+        ...(authority.objectHasOwnPropertyProvider ? {sharedObjectHasOwnPropertyModule:targetModuleSpecifier(authority.objectHasOwnPropertyProvider.module)} : {}),
+        ...(authority.typeErrorProvider ? {sharedTypeErrorModule:targetModuleSpecifier(authority.typeErrorProvider.module)} : {}),
+        ...(authority.dateProvider ? {sharedDateModule:targetModuleSpecifier(authority.dateProvider.module)} : {}),
     });
     deepFreeze(program);
     ADAPTED_PROGRAMS.add(program);

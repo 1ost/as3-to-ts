@@ -1289,7 +1289,8 @@ function emitInterface(emitter:Emitter, node:Node):void {
 			visitNode(emitter, node.findChild(NodeKind.META_LIST));
 			emitter.catchup(node.start);
 			let type = node.findChild(NodeKind.TYPE) || node.children[2];
-			if (node.kind === NodeKind.TYPE && node.text === "function") {
+			if (node.kind === NodeKind.FUNCTION
+				|| node.kind === NodeKind.TYPE && node.text === "function") {
 				emitter.skip(Keywords.FUNCTION.length + 1);
 				//visitNode(emitter, node.findChild(NodeKind.PARAMETER_LIST));
 				let parametersListNode = node.findChild(NodeKind.PARAMETER_LIST);

@@ -13,6 +13,14 @@ function sha256(bytes) {
     return crypto.createHash("sha256").update(bytes, "utf8").digest("hex");
 }
 
+function canonical(value) {
+    if (value === null || typeof value === "boolean" || typeof value === "number" || typeof value === "string") {
+        return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(",")}}`;
+}
+
 function compileFocusedSources() {
     const output = fs.mkdtempSync(path.join(os.tmpdir(), "parser-normalizer-"));
     const entries = [
@@ -23,6 +31,8 @@ function compileFocusedSources() {
         "src/hardened/type-authority.ts",
         "src/hardened/source-member-authority.ts",
         "src/hardened/local-declarations.ts",
+        "src/hardened/local-types.ts",
+        "src/hardened/local-members.ts",
         "src/hardened/ledger.ts",
         "src/hardened/contracts.ts",
         "src/hardened-runtime/AS3Coerce.ts",
@@ -69,8 +79,62 @@ function compileFocusedSources() {
         typeAuthority: require(path.join(output, "hardened/type-authority.js")),
         sourceMembers: require(path.join(output, "hardened/source-member-authority.js")),
         localDeclarations: require(path.join(output, "hardened/local-declarations.js")),
+        localTypes: require(path.join(output, "hardened/local-types.js")),
+        localMembers: require(path.join(output, "hardened/local-members.js")),
         ledger: require(path.join(output, "hardened/ledger.js")),
     };
+}
+
+function inheritedSignatureAuthorities(api, source, options = {}) {
+    const ids = { base: "0000000000000001", probe: "0000000000000002",
+        worker: "0000000000000007", value: "0000000000000009" };
+    const hashes = { base: "1".repeat(64), probe: sha256(source), worker: "7".repeat(64), value: "9".repeat(64) };
+    const entries = [
+        { qname: "api.Base", nodeId: ids.base, typeKind: "class", prerequisites: options.ownerEdge === false ? [] : [ids.value], sourceContentSha256: hashes.base },
+        { qname: "api.IValue", nodeId: ids.value, typeKind: "interface", prerequisites: [], sourceContentSha256: hashes.value },
+        { qname: "api.Worker", nodeId: ids.worker, typeKind: "class", prerequisites: [ids.value], sourceContentSha256: hashes.worker },
+        { qname: "game.Probe", nodeId: ids.probe, typeKind: "class", prerequisites: options.receiverEdge === false ? [ids.worker] : [ids.base, ids.worker], sourceContentSha256: hashes.probe },
+    ].map((entry, index) => ({
+        componentId: `scc-${String(index + 1).padStart(5, "0")}`,
+        importable: true,
+        module: "application",
+        graphSourceSha256: String(index + 1).repeat(64),
+        sourcePath: `game-client/tapplication_main/src/${entry.qname.replaceAll(".", "/")}.as`,
+        targetPath: `game-client/layaair/src/application/${entry.qname.replaceAll(".", "/")}.ts`,
+        topologicalLevel: 0,
+        ...entry,
+    }));
+    const graphRaw = "a".repeat(64), graphSemantic = "b".repeat(64), sourceManifest = "c".repeat(64);
+    const typeDocument = { dependencyGraphRawSha256: graphRaw, dependencyGraphSemanticSha256: graphSemantic,
+        entries, entryCount: entries.length, schema: "bleach-local-as3-type-map@2", sourceManifestSha256: sourceManifest };
+    const typeJson = `${canonical(typeDocument)}\n`;
+    const types = api.localTypes.loadLocalTypeAuthority({ json: typeJson, sha256: sha256(typeJson),
+        expectedEntryCount: entries.length, expectedDependencyGraphRawSha256: graphRaw,
+        expectedDependencyGraphSemanticSha256: graphSemantic, expectedSourceManifestSha256: sourceManifest }, sha256);
+    const member = (name, parameters, returnType) => ({ kind: "method", name, modifiers: ["public"],
+        namespaceName: null, parameters, returnType, fieldType: null, readonly: false });
+    const constructor = name => ({ kind: "constructor", name, modifiers: ["public"], namespaceName: null,
+        parameters: [], returnType: null, fieldType: null, readonly: false });
+    const declarations = {
+        "api.Base": { baseQNames: [], interfaceQNames: [], members: [
+            member("accept", [{ name: "proxy", type: "api.IValue", optional: false, rest: false }], "void")], packageInitializer: null },
+        "api.IValue": { baseQNames: [], interfaceQNames: [], members: [], packageInitializer: null },
+        "api.Worker": { baseQNames: [], interfaceQNames: ["api.IValue"], members: [constructor("Worker")], packageInitializer: null },
+        "game.Probe": { baseQNames: ["api.Base"], interfaceQNames: [], members: [member("run", [], "void")], packageInitializer: null },
+    };
+    const memberEntries = entries.map(entry => ({ declaration: declarations[entry.qname], holdCode: null,
+        holdSha256: null, module: entry.module, nodeId: entry.nodeId, qname: entry.qname,
+        sourceContentSha256: entry.sourceContentSha256, status: "complete", typeKind: entry.typeKind }));
+    const typeMapSha = sha256(typeJson), workerSha = "d".repeat(64), censusSha = "e".repeat(64);
+    const memberDocument = { completeCount: memberEntries.length, declarationWorkerSha256: workerSha,
+        entries: memberEntries, entryCount: memberEntries.length, heldCount: 0,
+        localTypeMapSha256: typeMapSha, schema: "bleach-local-as3-member-map@2", sourceCensusSha256: censusSha };
+    const memberJson = `${canonical(memberDocument)}\n`;
+    const members = api.localMembers.loadLocalMemberAuthority({ json: memberJson, sha256: sha256(memberJson),
+        expectedEntryCount: memberEntries.length, expectedCompleteCount: memberEntries.length, expectedHeldCount: 0,
+        expectedLocalTypeMapSha256: typeMapSha, expectedDeclarationWorkerSha256: workerSha,
+        expectedSourceCensusSha256: censusSha }, sha256, types);
+    return { types, members };
 }
 
 function authority(api, includeTrace = false) {
@@ -308,6 +372,28 @@ const built = compileFocusedSources();
 try {
 
     {
+        const source = "package game { import api.Base; import api.Worker; public class Probe extends Base { public function run():void { accept(new Worker()); } } }";
+        const normalized = built.normalizer.normalizeParserAst(built.parse("game/Probe.as", source), source, sha256);
+        const adapt = options => {
+            const local = inheritedSignatureAuthorities(built, source, options);
+            return built.adapter.adaptNormalizedParserAst(normalized, authority(built.ledger), source, sha256,
+                local.types, "game/Probe.as", local.members);
+        };
+        const semantic = adapt({});
+        const output = built.emitter.emitSemanticProgram(semantic, {
+            compiler: require("typescript-4-9"), expectedTypeScriptVersion: "4.9.5", sha256,
+        }).code;
+        assert.match(output, /import \{ IValue as __as3Signature[0-9]+ \} from "\.\.\/api\/IValue";/);
+        assert.match(output, /this\.accept\(new \(__as3InitializeClass\(Worker, false\)\)\(\)\);/);
+        assert.throws(() => adapt({ ownerEdge: false }),
+            error => error?.code === "HARDENED_SIGNATURE_TYPE_EDGE",
+            "the inherited member owner must directly depend on its signature type");
+        assert.throws(() => adapt({ receiverEdge: false }),
+            error => error?.code === "HARDENED_LOCAL_IMPORT_EDGE",
+            "the current receiver must retain its authenticated base edge");
+    }
+
+    {
         for (const literal of ["/[，、]/g", "/x/gim", "/x/", String.raw`/a\/b/gi`]) {
             const source=`package p { public class RegexSpan { public var a:RegExp=${literal}; public var b:RegExp=${literal}; } }`;
             const normalized=built.normalizer.normalizeParserAst(built.parse("RegexSpan.as",source),source,sha256);
@@ -358,6 +444,18 @@ try {
         assert.equal(ast.nodes.find(node => node.id === created.parentId).kind, kind);
         assert.equal(ast.nodes.find(node => node.parentId === created.id).kind, "CALL");
         assert.equal(text.slice(created.span.start, created.span.end), "new Sprite()");
+    }
+    {
+        const text = "package p { import flash.display.Sprite; public class C { public function run():void { new Sprite(); } } }";
+        const ast = built.normalizer.normalizeParserAst(built.parse("C.as", text), text, sha256);
+        const semantic = built.adapter.adaptNormalizedParserAst(ast, authority(built.ledger), text, sha256);
+        const statement = semantic.declaration.members.find(member => member.name === "run").body[0];
+        assert.equal(statement.kind, "expression");
+        assert.equal(statement.expression.kind, "new");
+        const output = built.emitter.emitSemanticProgram(semantic, {
+            compiler: require("typescript-4-9"), expectedTypeScriptVersion: "4.9.5", sha256,
+        }).code;
+        assert.match(output, /new \(__as3InitializeClass\(Sprite, false\)\)\(\);/);
     }
     const source = [
         "package lobby.ui {",
@@ -1499,7 +1597,8 @@ try {
                 source, sha256, undefined, undefined, undefined, undefined, sourceMemberAuthority);
             const code = built.emitter.emitSemanticProgram(semantic,
                 {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"}).code;
-            assert.ok(code.includes(`typeof item ${operator} "object"`), code);
+            assert.ok(operator.length === 3 ? code.includes(`typeof item ${operator} "object"`)
+                : code.includes('__as3Equals(typeof item, "object")'), code);
             assert.doesNotMatch(code, /typeof __as3Equals/);
         }
     }

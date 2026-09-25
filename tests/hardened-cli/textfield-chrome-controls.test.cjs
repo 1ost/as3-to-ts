@@ -1,13 +1,46 @@
 'use strict';
 const fs=require('fs'),path=require('path'),cp=require('child_process'),os=require('os'),crypto=require('crypto'),assert=require('assert/strict'),test=require('node:test');
 const root=path.resolve(__dirname,'../..'),laya=process.env.FROZEN_LAYA_ROOT||process.env.HARDENED_FIXTURE_LAYA,air=process.env.HARDENED_FIXTURE_AIR_SDK,ffdec=process.env.HARDENED_FIXTURE_FFDEC,sha=b=>crypto.createHash('sha256').update(b).digest('hex');
-test('generated TextField chrome controls match native29 including setter rejection',{skip:!laya&&!air&&!ffdec},t=>{
- assert.ok(laya&&air&&ffdec);const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'textfield-chrome-')));let completed=false;t.after(()=>{if(completed)fs.rmSync(dir,{recursive:true,force:true});else console.error('Retained TextField chrome evidence: '+dir);});
- const fixture=process.env.HARDENED_TEXTFIELD_CHROME_FIXTURE_SOURCE||path.join(laya,'tests/nativeFlashOracle/textfield-chrome-core'),native=JSON.parse(fs.readFileSync(path.join(fixture,'native-air.json')));
- const entry='TextFieldChromeProbe';
- assert.equal(native.invocation.mode,'direct-fixture');assert.deepEqual(native.invocation.constructorArgs,[]);
+const versions=Object.freeze({
+ '411b8420e5e318d5e9667a6e43e4ebcebd92caa18fd3cf975ca6e4076060c0cc':Object.freeze({id:'core29',observations:29,
+  nativeAir:'341a648f832f72f20bdc111ef4c5ff1e6868818f258558851542e804a1d9b857',
+  receipt:'286503a0c40988e69337e630224b73e8e1b8a57c1e548b1866c7796719880418',
+  capture:'c0551f8db2604385254ab408bbeaee8bbad389d27503a42b3a3f73b6f4ba7a28'}),
+ 'e244a6f370933ad54bace3ca73091adccee93ac6d55d04a83b433d38b22275d8':Object.freeze({id:'controls33',observations:33,
+  nativeAir:'ab9df89215412c67780c569cb8a89020aadd44e66ea687a514f453f62733429b',
+  receipt:'c3de40023baf373efaa3cff731e479d81ac27ac2a25fe8b304031f33907b5ed8',
+  capture:'5319931f2c5a28b47ec033e774670a6709d3f9cbe99fd266e313bdef1964f12f'}),
+});
+const entry='TextFieldChromeProbe',sourceName=entry+'.as';
+function retainedFixture(fixture,nativeOverride){
+ const nativeBytes=fs.readFileSync(path.join(fixture,'native-air.json')),native=nativeOverride||JSON.parse(nativeBytes);
+ assert.deepEqual(Object.keys(native.sourceFiles),[sourceName]);
+ const sourceBytes=fs.readFileSync(path.join(fixture,sourceName)),sourceSha=sha(sourceBytes),version=versions[sourceSha];
+ assert.ok(version,'unrecognized retained TextField chrome source identity');
+ assert.equal(native.sourceFiles[sourceName],sourceSha);assert.equal(sha(nativeBytes),version.nativeAir);
+ const receiptBytes=fs.readFileSync(path.join(fixture,'receipt.json'));
+ const captureBytes=fs.readFileSync(path.join(fixture,'capture.json'));
+ const repeatBytes=fs.readFileSync(path.join(fixture,'capture-repeat.json'));
+ assert.equal(sha(receiptBytes),version.receipt);assert.equal(native.nativeReceiptSha256,version.receipt);
+ assert.equal(sha(captureBytes),version.capture);assert.equal(sha(repeatBytes),version.capture);assert.equal(native.captureSha256,version.capture);
+ assert.deepEqual(JSON.parse(receiptBytes),native.receipt);assert.deepEqual(JSON.parse(captureBytes),native.capture);assert.deepEqual(JSON.parse(repeatBytes),native.capture);
+ assert.equal(native.invocation.mode,'direct-fixture');assert.equal(native.invocation.entry,entry);assert.deepEqual(native.invocation.constructorArgs,[]);
  assert.equal(native.invocation.hostSha256,native.receipt.artifacts[native.invocation.hostArtifact]);
- assert.equal(native.receipt.capture.identical,true);assert.equal(native.receipt.capture.observationCount,29);
+ assert.equal(native.receipt.capture.status,'passed');assert.equal(native.receipt.capture.identical,true);assert.equal(native.receipt.capture.runs,2);
+ assert.equal(native.receipt.capture.observationCount,version.observations);assert.equal(native.capture.state.observations.length,version.observations);
+ return {native,sourceBytes,version};
+}
+test('retained TextField chrome native29 and clipping33 identities remain distinct',{skip:!laya},()=>{
+ const fixtures=['textfield-chrome-core','textfield-chrome-controls'].map(name=>path.join(laya,'tests/nativeFlashOracle',name));
+ assert.deepEqual(fixtures.map(fixture=>retainedFixture(fixture).version.id),['core29','controls33']);
+ const fixture=process.env.HARDENED_TEXTFIELD_CHROME_FIXTURE_SOURCE;
+ if(fixture)retainedFixture(fixture);
+ const core=retainedFixture(fixtures[0]),wrongCount=structuredClone(core.native);wrongCount.receipt.capture.observationCount=33;
+ assert.throws(()=>retainedFixture(fixtures[0],wrongCount));
+});
+test('generated TextField chrome controls match the selected retained fixture',{skip:!laya||!air||!ffdec},t=>{
+ assert.ok(laya&&air&&ffdec);const dir=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'textfield-chrome-')));let completed=false;t.after(()=>{if(completed)fs.rmSync(dir,{recursive:true,force:true});else console.error('Retained TextField chrome evidence: '+dir);});
+ const fixture=process.env.HARDENED_TEXTFIELD_CHROME_FIXTURE_SOURCE||path.join(laya,'tests/nativeFlashOracle/textfield-chrome-core'),{native}=retainedFixture(fixture);
  const source=path.join(dir,'source'),profile=path.join(dir,'profile'),target=path.join(laya,'docTool/architecture/authored-content-capabilities.json');fs.mkdirSync(source);
  for(const [name,digest] of Object.entries(native.sourceFiles)){const bytes=fs.readFileSync(path.join(fixture,name));assert.equal(sha(bytes),digest);fs.mkdirSync(path.dirname(path.join(source,name)),{recursive:true});fs.writeFileSync(path.join(source,name),bytes);}
  const run=(command,args)=>{const r=cp.spawnSync(command,args,{cwd:root,encoding:'utf8',timeout:180000});fs.appendFileSync(path.join(dir,'commands.log'),JSON.stringify([command,...args])+'\n'+r.stdout+r.stderr);assert.equal(r.status,0,r.stdout+r.stderr);};

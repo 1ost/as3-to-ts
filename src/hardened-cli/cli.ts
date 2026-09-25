@@ -1,7 +1,10 @@
+import { hasNativeRegExpAuthority } from "../hardened/native-regexp-authority";
+import { regExpRuntimeTypeAuthoritySource } from "../hardened/type-authority";
 import {includedSourceOrigins} from "../hardened/source-includes";
 import {loadSourceIncludes} from "./source-includes-authority";
 import { hasNativeDateAuthority } from "../hardened/native-date-authority";
 import { dateRuntimeTypeAuthoritySource } from "../hardened/type-authority";
+import { errorRuntimeTypeAuthoritySource } from "../hardened/type-authority";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { readFileSync, realpathSync, lstatSync } from "node:fs";
@@ -10,6 +13,7 @@ import ts49 = require("typescript-4-9");
 import { CliError, errorMessage } from "./errors";
 import { deriveAuthenticatedSourceClosure, discoverAuthenticatedInputs, discoverAuthenticatedSourcePlan,
     discoverInputs, portableCollisionKey, readInput } from "./inputs";
+import { compileDefinitionsHash } from "../hardened/compile-definitions";
 import { assertParserWorkerSha256, captureParserWorkerSha256, parseIsolated } from "./isolated-parser";
 import { HELP, parseArguments, TOOL_VERSION } from "./options";
 import { assertCompilerProviderAuthorityUnchanged, assertSecondaryAuthorityRequestUnchanged, emitSecondaryAuthorityReceipt,
@@ -136,28 +140,30 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3RegExp.ts": "5b254ea41376aafb0e3381bc7707381be9db9e241c8b514f4d372991fb95a574",
     "AS3Enumeration.ts": "183f10ec17e98fdf37158cc842fd608d449374082ccba5fb5aaa7230d7426bbd",
     "internal/AS3ArraySort.ts": "15a4cc94a7c485c2277343fea40695a80c8934cee925c86e8528ab42ae660fa4",
-    "AS3Array.ts": "fb6c6464bd0efffe442bc01fe04eba32675c0db19ac0343d3834102b642b5a71",
+    "AS3Array.ts": "ab6ba4649b01d37d5607698214d1b41f5f25036a5e6127ba97ddf85f2d363017",
     "AS3BigTurnTableInnerDto.ts": "f7ba5db782eac244b8d4a626afc363081cd510855e818b17ec54a172772b6b91",
-    "AS3ByteArrayNative.ts": "f6188ecdba0cb5180172da9a5533640aec0dc1ac7c0433b8e41aec3e02e744e3",
+    "AS3JSONDefinition.ts": "96d5ab891e3fa946c2d6186fdced2b4f7e2444e7febb03879ff3f16db8cab646",
+    "AS3ByteArrayAMF3.ts": "91b52d70bb96c43641820cfc4ae268f7cb4232a494c68b19ed3bf3afebb7d617",
+    "AS3ByteArrayNative.ts": "121c5e3a0709c3084d01fb3b23fb781b4ebc83d31178928f5f70e67599309839",
     "AS3Date.ts": "0a6e29ead86d639e2bc0e0e8bd64999506db02a94bf00b8b6db2c21d46c99304",
     "AS3URI.ts": "2264c65a2c22fa66d4d14b97b299fe88ba0342f924cc948bf20df159c5cee8bf",
-    "AS3ByteArray.ts": "1cf1a2f0f8abc200585b7b62a66724d0fee0ec03c397d96b769905d5a899e4b5",
+    "AS3ByteArray.ts": "05cbb36473e9e4da1ad4697f1537663d2a2be56c5526a76a3808a0b5110de081",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
     "AS3ClassInitialization.ts": "5b446cdfe43be974455866ca93648b5625edb777938093979e0437aaa8dd501f",
-    "AS3Coerce.ts": "6ab4b745c5f13f945b817eb333a0d8b137c2b4e54a153bd6c4451f1142d03eb7",
+    "AS3Coerce.ts": "3da10553b0cb4eef4eff83030cd9143f49889affcd38a1ccc3f2955048f6af81",
     "AS3Error.ts": "84ef28906a1cf28f600bc36d554af3330b176c4fffa4f47e8f7384919256b134",
     "AS3Embed.ts": "d757c027952372aed3ab06b20bd66de796005e2a32662f877c1913b8dabb5b49",
     "AS3Dictionary.ts": "6093e08ea252cc7926982934da92c1d7785d093880e196c798c67c5f8d7d8f84",
-    "AS3Function.ts": "dcd4c0c60c72fad77cd6543fcda1c5e907e32741f4049779bc1096ef5dbd8812",
+    "AS3Function.ts": "6c6fbac55887dafd777a3592873032b747fe84d87d4c7ce97f3547b07a29c3ba",
     "AS3MethodClosure.ts": "3021c90d64458b0aed10451eb36f87078c33386c43dcb741c3d34919cfdbfa60",
     "internal/AS3FunctionLength.ts": "61c6c06f2f8ebb09f297d11a35ccd53c1e9cb2c75265d050f750b0693ed31ef4",
-    "AS3ObjectDispatch.ts": "e4ce2347b69067c9dd23b7a6d0b95e53b68fa8fd83b0c20ff2f42378938ef289",
+    "AS3ObjectDispatch.ts": "7f67aa0d296c794d9803144957634d1418b0d35c65a4fefbabe7a68f709332e5",
     "AS3Object.ts": "ddfc3a328138622ab836ee48452d37ff6c125fb5e2d655584f470d42472098f9",
     "AS3OwnRecord.ts": "932476a585d576b385b1d402fa9fba851125c2796904aaf733da267b5bcf736e",
     "AS3TimerExecution.ts": "0ab89bfad74309ab98472a750925a557f199bf4844094e009a0751ba5d1294fe",
     "AS3Timer.ts": "639a0e3776611b3fd736305994d709b47af8465509bb9d2de440bc611a985851",
     "AS3Type.ts": "02f2acb486155e4718075f749cd45056c39175cb58c6c8aaf001af30b7104f60",
-    "AS3Vector.ts": "6839a53b9987f70cd975367640d6f0b1deaef1d529e7b85c1ffe2ed0f3dca6ad",
+    "AS3Vector.ts": "885a8640ea5e26b5186d72dd7f29565723502b250fefeb7ca9877e1bee406078",
     "internal/AS3NumberFormat.ts": "c7a2b808bd4bafded492a65acce6041f67601f2e56308fb2724443f8baa58bc4",
     "internal/AS3CaseTable.ts": "ed85937df05d8ba9015e3cd35b8d75ce46e56348547085c0d218426ed0a44fc5",
     "internal/AS3FileLocalIdentity.ts": "9adbd4a9ab454a7d8351982d6da643d6510d2486658305eb0530170651232abb",
@@ -182,17 +188,28 @@ function runtimeEmbeddedCommonJs(code: string, fileName: string): string {
         /^Object\.defineProperty\(exports, "__esModule", \{ value: true \}\);\n/m, "");
 }
 
+function jsonDefinitionFacade(target:{module:string}):string {
+    return `export {isSourceJSONDefinition as isNativeJSONDefinition, callSourceJSONDefinition as callNativeJSONDefinition} from "${targetModuleSpecifier(target.module)}";\n`;
+}
+
+function byteArrayAMF3Facade(target:{module:string;writerModule:string}):string {
+    return `export { readSourceAMF3 as readNativeByteArrayObject } from "${targetModuleSpecifier(target.module)}";\n`
+        + `export { writeSourceAMF3 as writeNativeByteArrayObject } from "${targetModuleSpecifier(target.writerModule)}";\n`;
+}
+
 function runtimeBundleJavaScript(authorityCode: string, includeBigTurnTableDto: boolean,
-    byteArrayNative?: {targetModule:string;targetExport:string},includePrimarySecondaryHost=false): string {
+    byteArrayNative?: {targetModule:string;targetExport:string},byteArrayAMF3?: {module:string;writerModule:string},jsonDefinitionProvider?: {module:string},includePrimarySecondaryHost=false): string {
     const modules = new Map<string, string>();
     runtimeSourceTemplates(includeBigTurnTableDto,includePrimarySecondaryHost).forEach(template => {
         const moduleId = template.path.slice(0, -3) + ".js";
-        const code=template.path==="AS3ByteArrayNative.ts" && byteArrayNative
+        const code=template.path==="AS3JSONDefinition.ts" && jsonDefinitionProvider ? jsonDefinitionFacade(jsonDefinitionProvider)
+            :template.path==="AS3ByteArrayAMF3.ts" && byteArrayAMF3 ? byteArrayAMF3Facade(byteArrayAMF3)
+            : template.path==="AS3ByteArrayNative.ts" && byteArrayNative
             ? `import { ${byteArrayNative.targetExport} as NativeByteArray } from "${targetModuleSpecifier(byteArrayNative.targetModule)}";
-export function uncompressNativeByteArray(state: {bytes:Uint8Array;position:number;endian:string}) {
+export function uncompressNativeByteArray(state: {bytes:Uint8Array;position:number;endian:string}, algorithm?:unknown) {
     const value=new NativeByteArray(state.bytes.slice());
     value.position=state.position;value.endian=state.endian;
-    value.uncompress();
+    if(arguments.length===1)value.uncompress();else value.uncompress(algorithm as string);
     return {bytes:new Uint8Array(value.buffer),position:value.position,endian:value.endian};
 }
 ` : template.code;
@@ -485,7 +502,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                         if (root.sha256!==sha256(source.bytes)) throw new Error("HARDENED_INCLUDE_ROOT_IDENTITY: selected source differs from include authority");
                         if(!includes.inventory.edges.some(edge=>edge.ownerPath===root.path)) return undefined;
                         return {includeRootPath:root.path,includeFragments:includes.fragments,includeEdges:includes.inventory.edges};
-                    })() : undefined));
+                    })() : undefined), transpileAuthority?.compileDefinitions);
             } catch (error) {
                 if (options.operation !== "qualify") throw error;
                 qualificationFiles.push({
@@ -532,6 +549,9 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     }
                 }
                 const normalized = JSON.parse(parsedFile.json) as NormalizedParserAst;
+                const definitions = transpileAuthority!.compileDefinitions;
+                if (normalized.compileDefinitionsSha256 !== (definitions ? compileDefinitionsHash(definitions, sha256) : undefined))
+                    throw new HardenedSemanticError("HARDENED_COMPILE_DEFINITIONS", "parser configuration differs from profile authority");
                 const semantic = adaptNormalizedParserAst(normalized, transpileAuthority!.authority,
                     source.content, value => sha256(value), transpileAuthority!.localTypes, sourceAuthorityPath(file),
                     transpileAuthority!.localMembers, transpileAuthority!.runtimeTypeSources,
@@ -752,8 +772,13 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     && item.sourceQualifiedName === "flash.utils.ByteArray"))) {
                 runtimeAuthoritySources.push(byteArrayRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers,RUNTIME_SOURCE_SHA256["AS3ByteArray.ts"]!));
             }
+            if(hasNativeRegExpAuthority(transpileAuthority!.sourceMembers) && transpileAuthority!.authority.stringPatternProvider?.regExpModule)
+                runtimeAuthoritySources.push(regExpRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers!,transpileAuthority!.authority.stringPatternProvider!));
             if(hasNativeDateAuthority(transpileAuthority!.sourceMembers))
-                runtimeAuthoritySources.push(dateRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers!,RUNTIME_SOURCE_SHA256["AS3Date.ts"]!));
+                runtimeAuthoritySources.push(dateRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers!,RUNTIME_SOURCE_SHA256["AS3Date.ts"]!,transpileAuthority!.authority.dateProvider));
+            if(transpileAuthority!.sourceMembers && transpileAuthority!.authority.errorStackProvider)
+                runtimeAuthoritySources.push(errorRuntimeTypeAuthoritySource(transpileAuthority!.sourceMembers,
+                    transpileAuthority!.authority.errorStackProvider));
             runtimeAuthority = emitRuntimeTypeAuthority(runtimeAuthoritySources, value => sha256(value),
                 transpileAuthority!.reflectionProvider ? {
                     target: transpileAuthority!.reflectionProvider,
@@ -766,7 +791,7 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
             }
             const runtimeAuthorityPath = "__as3_runtime/AS3Authority.generated.js";
             const authorityJavaScript = runtimeBundleJavaScript(runtimeAuthority.code,
-                transpileAuthority!.includeBigTurnTableDto, transpileAuthority!.authority.byteArrayNative);
+                transpileAuthority!.includeBigTurnTableDto, transpileAuthority!.authority.byteArrayNative, transpileAuthority!.authority.byteArrayAMF3, transpileAuthority!.authority.jsonDefinitionProvider);
             const authorityJavaScriptIdentity = {path:"AS3Authority.generated.js",
                 bytes:Buffer.byteLength(authorityJavaScript,"utf8"),sha256:sha256(authorityJavaScript)};
             secondaryExecutableArtifacts.push(authorityJavaScriptIdentity);
@@ -862,8 +887,12 @@ async function execute(argv: readonly string[], io: Io): Promise<number> {
                     const browserRuntimeSources:BrowserEsmSource[]=[...runtimeSourceTemplates(
                         transpileAuthority!.includeBigTurnTableDto,true).map(template=>Object.freeze({
                             path:template.path.slice(0,-3)+".mjs",
-                            code:template.path==="AS3ByteArrayNative.ts"&&transpileAuthority!.authority.byteArrayNative
-                                ?`import { ${transpileAuthority!.authority.byteArrayNative.targetExport} as NativeByteArray } from "${targetModuleSpecifier(transpileAuthority!.authority.byteArrayNative.targetModule)}";\nexport function uncompressNativeByteArray(state: {bytes:Uint8Array;position:number;endian:string}) {\n    const value=new NativeByteArray(state.bytes.slice());\n    value.position=state.position;value.endian=state.endian;\n    value.uncompress();\n    return {bytes:new Uint8Array(value.buffer),position:value.position,endian:value.endian};\n}\n`
+                            code:template.path==="AS3JSONDefinition.ts"&&transpileAuthority!.authority.jsonDefinitionProvider
+                                ?jsonDefinitionFacade(transpileAuthority!.authority.jsonDefinitionProvider)
+                                :template.path==="AS3ByteArrayAMF3.ts"&&transpileAuthority!.authority.byteArrayAMF3
+                                ?byteArrayAMF3Facade(transpileAuthority!.authority.byteArrayAMF3)
+                                :template.path==="AS3ByteArrayNative.ts"&&transpileAuthority!.authority.byteArrayNative
+                                ?`import { ${transpileAuthority!.authority.byteArrayNative.targetExport} as NativeByteArray } from "${targetModuleSpecifier(transpileAuthority!.authority.byteArrayNative.targetModule)}";\nexport function uncompressNativeByteArray(state: {bytes:Uint8Array;position:number;endian:string}, algorithm?:unknown) {\n    const value=new NativeByteArray(state.bytes.slice());\n    value.position=state.position;value.endian=state.endian;\n    if(arguments.length===1)value.uncompress();else value.uncompress(algorithm as string);\n    return {bytes:new Uint8Array(value.buffer),position:value.position,endian:value.endian};\n}\n`
                                 :template.code})),
                         Object.freeze({path:"AS3Authority.generated.mjs",code:browserRuntimeAuthorityCode!}),
                         ...browserApplicationSources.filter(source=>source.sourceModule==="bootstrap")];

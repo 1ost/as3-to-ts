@@ -1,7 +1,7 @@
 import { lookupObjectClass } from "./internal/AS3TypeRegistry";
 import { as3ArraySortOnNumeric, as3ArraySortNumeric } from "./internal/AS3ArraySort";
 import { as3NativeArrayJoin, as3NativeString, as3NativeNumber } from "./AS3ObjectDispatch";
-import { as3FunctionArgument, as3FunctionSlot } from "./AS3Function";
+import { as3FunctionArgument, as3FunctionSlot, as3FunctionInvoke } from "./AS3Function";
 
 import { isAS3MethodClosure } from "./AS3MethodClosure";
 
@@ -216,7 +216,43 @@ function ordinaryArray(value:unknown):unknown[] {
         throw new AS3ArrayOperationUnavailable("Array indexing requires an ordinary or authenticated subclass Array");
     return value;
 }
+
+const ARRAY_INHERITED_MEMBERS = new Map<string, { owner: object; value: unknown }>([
+    ["push", { owner: Array.prototype, value: Array.prototype.push }],
+    ["toString", { owner: Array.prototype, value: Array.prototype.toString }],
+    ["constructor", { owner: Array.prototype, value: Array.prototype.constructor }],
+    ["hasOwnProperty", { owner: Object.prototype, value: Object.prototype.hasOwnProperty }],
+]);
+
+/**
+ * AIR Array `in` checks own dynamic/index slots, `length`, and inherited
+ * built-ins after evaluating both operands but before converting the key.
+ * Only the inherited members observed by the retained native fixture are
+ * admitted; other prototype names remain explicit until separately proven.
+ */
+export function as3ArrayIn(index:unknown,value:unknown):boolean {
+    const array=ordinaryArray(value);
+    if (Object.getPrototypeOf(array) !== Array.prototype)
+        throw new AS3ArrayOperationUnavailable("Array subclass membership requires retained native evidence");
+    if (typeof index === "symbol" || typeof index === "bigint")
+        throw new AS3ArrayOperationUnavailable("Host-only values are not ActionScript Array keys");
+    const key=as3NativeString(index);
+    if (Object.prototype.hasOwnProperty.call(array,key)) return true;
+    const inherited=ARRAY_INHERITED_MEMBERS.get(key);
+    if (inherited) {
+        const descriptor=Object.getOwnPropertyDescriptor(inherited.owner,key);
+        if (!descriptor || !("value" in descriptor) || descriptor.value !== inherited.value)
+            throw new AS3ArrayOperationUnavailable("Array inherited membership requires an unmodified native member");
+        return true;
+    }
+    if (Object.prototype.hasOwnProperty.call(Array.prototype,key)
+        || Object.prototype.hasOwnProperty.call(Object.prototype,key))
+        throw new AS3ArrayOperationUnavailable("Array inherited membership requires retained native evidence");
+    return false;
+}
 /** Holes read as undefined; named numeric properties never change array length. */
+export function as3ArrayRead(value:unknown, index:"length"):number;
+export function as3ArrayRead(value:unknown, index:unknown):unknown;
 export function as3ArrayRead(value:unknown, index:unknown):unknown {
     // Property names use the existing native String conversion, once. Do not
     // collapse "01", negative values, null or named properties through Number.
@@ -270,11 +306,39 @@ export function as3ArrayUpdate(value:unknown,index:number,increment:0 | 1,prefix
     return prefix ? next : prior;
 }
 
+/** Shared sorting owns the algorithm; compiler adapters retain source call/coercion identity. */
+export function as3ArraySortCallback(value: unknown, callback: unknown,
+    sort: (value: unknown, callback: unknown, invoke: (target: unknown, args: unknown[]) => unknown,
+        coerce: (value: unknown) => number) => unknown[]): unknown[] {
+    try { return sort(value, callback, as3FunctionInvoke, as3NativeNumber); }
+    finally { if (Array.isArray(value)) ARRAY_STORAGE.set(value, null); }
+}
+
+/** Source callback slot and bound-method rules; shared Laya owns iteration. */
+export function as3ArraySome(value:unknown, args:unknown[],
+    some:(value:unknown[],callback:Function|null,receiver:unknown,read:(value:unknown,index:number)=>unknown)=>boolean):boolean {
+    const array=ordinaryArray(value);
+    if (!Array.isArray(args) || Object.getPrototypeOf(args) !== Array.prototype
+        || args.length < 1 || args.length > 2 || Object.getPrototypeOf(array) !== Array.prototype
+        || Object.prototype.hasOwnProperty.call(array,"some")
+        || Array.from({length:args.length},(_,index)=>Object.getOwnPropertyDescriptor(args,String(index)))
+            .some(descriptor=>!descriptor || !("value" in descriptor)))
+        throw new AS3ArrayOperationUnavailable("Array.some requires ordinary Array storage and dense source arguments");
+    const callback=as3FunctionSlot(args[0]);
+    const receiver=args.length === 2 ? args[1] : null;
+    if (isAS3MethodClosure(callback) && receiver !== null) {
+        const error=new TypeError("Error #1510: When the callback argument is a method of a class, the optional this argument must be null.");
+        Object.defineProperty(error,"errorID",{value:1510});throw error;
+    }
+    return some(array,callback,receiver,as3ArrayRead);
+}
+
 /** Native push/pop/shift/unshift retain values, identities and uint lengths. */
 export function as3ArrayCall(value:unknown, method:"push" | "unshift", args:unknown[]):number;
 export function as3ArrayCall(value:unknown, method:"pop" | "shift", args:unknown[]):unknown;
 export function as3ArrayCall(value:unknown, method:"concat" | "filter", args:unknown[]):unknown[];
-export function as3ArrayCall(value:unknown, method:"join", args:unknown[]):string;
+export function as3ArrayCall(value:unknown, method:"reverse", args:unknown[]):unknown[];
+export function as3ArrayCall(value:unknown, method:"join" | "toString", args:unknown[]):string;
 export function as3ArrayCall(value:unknown, method:"indexOf", args:unknown[]):number;
 export function as3ArrayCall(value:unknown, method:"sortOn" | "sort", args:unknown[]):unknown[];
 export function as3ArrayCall(value:unknown, method:"splice", args:unknown[]):unknown[] | null;
@@ -329,6 +393,24 @@ export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unkno
             throw new AS3ArrayOperationUnavailable("Overridden Array splice requires native dispatch evidence");
         return spliceArray(array,args);
     }
+    if (method === "reverse") {
+        const array=ordinaryArray(value);
+        if (args.length !== 0 || Object.getPrototypeOf(array) !== Array.prototype
+            || Reflect.get(array,"reverse") !== Array.prototype.reverse
+            || !Object.isExtensible(array) || Object.getOwnPropertySymbols(array).length
+            || [Array.prototype,Object.prototype].some(proto=>Object.getOwnPropertyNames(proto).some(indexProperty)))
+            throw new AS3ArrayOperationUnavailable("Array.reverse requires ordinary extensible storage and its native zero-argument method");
+        for (const key of Object.getOwnPropertyNames(array).filter(indexProperty)) {
+            const slot=Object.getOwnPropertyDescriptor(array,key)!;
+            if (!("value" in slot) || !slot.writable || !slot.enumerable || !slot.configurable)
+                throw new AS3ArrayOperationUnavailable("Array.reverse accessor and fixed slots require native evidence");
+        }
+        const reversed=Reflect.apply(Array.prototype.reverse,array,[]) as unknown[];
+        // The value identity and live slots remain exact; later storage-history
+        // dependent operations must reacquire native evidence after reordering.
+        ARRAY_STORAGE.set(array,null);
+        return reversed;
+    }
     if (method === "sort") {
         const array=ordinaryArray(value);
         if (args.length !== 1) throw new AS3ArrayOperationUnavailable("Array.sort requires numeric options");
@@ -345,16 +427,20 @@ export function as3ArrayCall(value:unknown, method:string, args:unknown[]):unkno
         const error = new TypeError("Error #1009: Cannot access a property or method of a null object reference.");
         Object.defineProperty(error,"errorID",{value:1009}); throw error;
     }
-    if (!Array.isArray(value) || !authenticatedArray(value) || !["push","pop","shift","unshift","concat","join"].includes(method)
+    if (!Array.isArray(value) || !authenticatedArray(value) || !["push","pop","shift","unshift","concat","join","toString"].includes(method)
         || (["pop","shift"].includes(method) && args.length !== 0))
         throw new AS3ArrayOperationUnavailable("Array mutation requires a supported Array receiver, method and arity");
-    const nativeMethod = Array.prototype[method as "push" | "pop" | "shift" | "unshift" | "concat" | "join"];
+    const nativeMethod = Array.prototype[method as "push" | "pop" | "shift" | "unshift" | "concat" | "join" | "toString"];
     if (Reflect.get(value,method) !== nativeMethod)
         throw new AS3ArrayOperationUnavailable("Overridden Array mutation methods require native dispatch evidence");
     if (method === "concat") return concatArrays(value,args);
     if (method === "join") {
         if (args.length > 1) throw new AS3ArrayOperationUnavailable("Array.join accepts at most one separator");
         return as3NativeArrayJoin(value,args[0]);
+    }
+    if (method === "toString") {
+        if (args.length !== 0) throw new AS3ArrayOperationUnavailable("Array.toString accepts no arguments");
+        return as3NativeArrayJoin(value,undefined);
     }
     if ((method === "push" || method === "unshift") && value.length + args.length > 0xffffffff)
         throw new AS3ArrayOperationUnavailable("Array length overflow requires retained native behavior");

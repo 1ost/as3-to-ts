@@ -31,7 +31,7 @@ test('intrinsic uncompress requires exact source/target proof and deterministic 
  fs.writeFileSync(proofPath,baseProof);fs.writeFileSync(lockPath,baseLock);
  const probe=path.join(source,'ByteArrayIntrinsicUncompressProbe.as');fs.writeFileSync(probe,fs.readFileSync(probe,'utf8').replace('bytes.uncompress();','bytes.uncompress("zlib");'));
  fs.rmSync(profile,{recursive:true,force:true});make();run(process.execPath,args('qualify','algorithm'));
- const held=JSON.parse(fs.readFileSync(path.join(dir,'algorithm/manifest.json'))).files[0];assert.equal(held.status,'held');assert.equal(held.code,'HARDENED_INTRINSIC_CALL_ARITY');
+ const admitted=JSON.parse(fs.readFileSync(path.join(dir,'algorithm/manifest.json'))).files[0];assert.equal(admitted.status,'admitted');assert.equal(admitted.code,null);
 });
 
 test('direct capability loader rejects raw or copied native proof objects before admission',()=>{

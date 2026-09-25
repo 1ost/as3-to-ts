@@ -73,7 +73,12 @@ def read_native_declarations(directory):
             if t in declared: return t
             raise ValueError('Unresolved native signature type ' + qname + ': ' + t)
         members = []
-        for match in re.finditer(r'^\s*((?:(?:static|override|final|native)\s+)*public\s+(?:(?:static|override|final|native)\s+)*)function\s+(?:(get|set)\s+)?(\w+)\s*\(([^\n)]*)\)\s*(?::\s*([\w.*<>]+))?', text, re.M):
+        function_modifiers = (r'((?:(?:static|override|final|native)\s+)*public\s+'
+                              r'(?:(?:static|override|final|native)\s+)*)'
+                              if definition[1] == 'class' else
+                              r'((?:(?:public|static|override|final|native)\s+)*)')
+        for match in re.finditer(r'^\s*' + function_modifiers
+                + r'function\s+(?:(get|set)\s+)?(\w+)\s*\(([^\n)]*)\)\s*(?::\s*([\w.*<>]+))?', text, re.M):
             modifiers, accessor, member_name, raw_parameters, return_type = match.groups()
             parameters, required, rest = [], 0, False
             for raw in split_parameters(raw_parameters):
@@ -197,6 +202,15 @@ def native_timer_member_uses(apis, directory):
 def annotate_native_function_signatures(apis, directory):
     """Authenticate the SDK wrapper and its native implementation together."""
     for api in apis:
+        if api['qname'] == 'flash.net.navigateToURL':
+            text = (Path(directory) / 'scripts/flash/net/navigateToURL.as').read_text()
+            match = re.fullmatch(
+                r'\s*package flash\.net\s*\{\s*\[native\("FlashNetScript::navigateToURL"\)\]\s*'
+                r'(public native function navigateToURL\(param1:URLRequest, param2:String = null\) : void;)\s*\}\s*', text)
+            if not match:
+                raise ValueError('navigateToURL differs from the authenticated SDK native signature')
+            api['signatures'] = [match[1]]
+            continue
         if api['qname'] == 'flash.utils.getDefinitionByName':
             text = (Path(directory) / 'scripts/flash/utils/getDefinitionByName.as').read_text()
             match = re.fullmatch(
@@ -319,6 +333,35 @@ def supports_frame_script_pairs(qname, native, row, member):
         and member.get('signature') == '(frame: number, script: FlashFrameScript, ...additional: Array<number | FlashFrameScript>) => void')
 
 
+def supports_flash_sprite_start_drag(qname, native, row, member):
+    """Authenticate the source-shaped overload behind Laya's aliased Rectangle types.
+
+    The authored target deliberately names the two Rectangle classes
+    ``FlashRectangle`` and ``LayaRectangle`` in one overload set.  Generic
+    signature matching cannot infer those import aliases, so keep this bridge
+    closed over the retained AIR declaration and the exact authored target.
+    """
+    return (qname == 'flash.display.Sprite'
+        and row.get('module') == 'src/layaAir/flash/display/Sprite.ts'
+        and row.get('export') == 'Sprite' and row.get('kind') == 'class'
+        and row.get('signature') == 'typeof Sprite'
+        and native.get('name') == 'startDrag' and native.get('access') == 'call'
+        and native.get('declaredBy') == qname and native.get('scope') == 'instance'
+        and native.get('constructor') is False and native.get('minArgs') == 0 and native.get('maxArgs') == 2
+        and native.get('signature') == 'public function startDrag(param1:Boolean = false, param2:flash.geom.Rectangle = null) : void'
+        and native.get('nativeSignature') == 'public native function startDrag(param1:Boolean = false, param2:Rectangle = null) : void;'
+        and native.get('type') == 'void'
+        and native.get('parameters') == [
+            {'name':'param1','type':'Boolean','optional':True,'default':'false','rest':False},
+            {'name':'param2','type':'flash.geom.Rectangle','optional':True,'default':'null','rest':False},
+        ]
+        and member.get('name') == 'startDrag' and member.get('kind') == 'method'
+        and member.get('scope') == 'instance'
+        and member.get('signature') == ('{ (lockCenter?: boolean, bounds?: FlashRectangle | null): void; '
+            '(area?: LayaRectangle, hasInertia?: boolean, elasticDistance?: number, elasticBackTime?: number, '
+            'data?: any, ratio?: number): void; }'))
+
+
 def map_native_members(qname, roles, row, capability_id, classes, used_names):
     mappings, uses = [], []
     for native in native_members(classes, qname):
@@ -336,6 +379,8 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
                 if member['kind'] != ('constructor' if native['constructor'] else 'method'):
                     return False
                 overloads = target_overloads(member['signature']) if not native['constructor'] else []
+                if qname == 'flash.display.Sprite' and native['name'] == 'startDrag':
+                    return supports_flash_sprite_start_drag(qname, native, row, member)
                 if overloads:
                     return sum(overload_matches_native(value, native) for value in overloads) == 1
                 if supports_frame_script_pairs(qname, native, row, member): return True
@@ -400,6 +445,18 @@ def map_native_members(qname, roles, row, capability_id, classes, used_names):
         if qname == 'flash.utils.ByteArray' and native.get('nativeSignature') and native['nativeSignature'] != source_member['signature']:
             uses[-1]['signatures'].append({**uses[-1]['signatures'][0], 'signature': native['nativeSignature']})
     return mappings, uses
+
+
+def native_member_target_qname(qname):
+    """Return the shared implementation surface for an SDK receiver's members.
+
+    IEventDispatcher remains a nominal interface for imports, coercion and
+    runtime identity. Its five SDK operations are implemented by the canonical
+    EventDispatcher bridge, whose exact TypeScript surface is independently
+    authenticated by the authored capability ledger.
+    """
+    return ('flash.events.EventDispatcher'
+            if qname == 'flash.events.IEventDispatcher' else qname)
 
 
 def decompile_sdk(swf, ffdec, output):

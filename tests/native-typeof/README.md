@@ -73,13 +73,11 @@ included. Original SWFs are evidence only, never production execution.
 
 The first receiver-order fixture declared its journal as `Array`. Its complete
 original capture, metadata and identical thirty-two Flash rows remain in
-`original/array-typed-journal`. The source-typed Array property cannot currently
-initialize because compiler trait delivery does not resolve typed-reference
-metadata to native reference tokens; the common provider rejects a bare `Array`
-type string. The runner authenticates that capture and reproduces the hold on
-both source targets. The supported fixture uses a wildcard journal holding an
-Array and was freshly compiled/captured in Flash. This is a test-fixture scope
-decision, not a change to maintained game source or proof of Array-typed fields.
+`original/array-typed-journal`. Shared typed-reference lowering now allows that
+original class to initialize. The runner executes it and compares all thirty-two
+retained rows in Node on both source targets, in addition to the eight existing
+Node/Chromium surfaces. These supplemental results are recorded as `arrayJournal`;
+they no longer assert the historical initialization failure.
 
 `original/unresolved` retains the actual strict Flex compiler rejection of
 `typeof absentName` before SWF generation. The source validator checks original

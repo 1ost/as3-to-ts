@@ -23,6 +23,39 @@ const { AS3_ARRAY_MAX_INDEX, as3ArrayIndex } = require(path.join(OUTPUT, "harden
 
 test.after(() => fs.rmSync(OUTPUT, { recursive: true, force: true }));
 
+test("Array.toString retains native comma conversion and fails closed outside the retained surface", () => {
+    const {as3ArrayCall,as3ArrayLiteral,as3NewArray,as3ArrayWrite,AS3ArrayOperationUnavailable} =
+        require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
+    assert.equal(as3ArrayCall(as3ArrayLiteral([1,2,3]),"toString",[]),"1,2,3");
+    assert.equal(as3ArrayCall(as3ArrayLiteral(["a",null,undefined,3]),"toString",[]),"a,,,3");
+    assert.equal(as3ArrayCall(as3ArrayLiteral([]),"toString",[]),"");
+    const sparse=as3NewArray([4]);as3ArrayWrite(sparse,0,"a");as3ArrayWrite(sparse,3,"z");
+    assert.equal(as3ArrayCall(sparse,"toString",[]),"a,,,z");
+    assert.equal(as3ArrayCall(as3ArrayLiteral([as3ArrayLiteral([1,2]),as3ArrayLiteral(["x",null])]),"toString",[]),"1,2,x,");
+    assert.throws(()=>as3ArrayCall(as3ArrayLiteral([1]),"toString",[0]),AS3ArrayOperationUnavailable);
+    const overridden=as3ArrayLiteral([1]);overridden.toString=()=>"host";
+    assert.throws(()=>as3ArrayCall(overridden,"toString",[]),AS3ArrayOperationUnavailable);
+});
+
+test("Array.reverse retains native identity, values and holes while rejecting unproved dispatch", () => {
+    const {as3ArrayCall,as3ArrayLiteral,as3NewArray,as3ArrayWrite,AS3ArrayOperationUnavailable} =
+        require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
+    const dense=as3ArrayLiteral([1,2,3,4]);
+    assert.equal(as3ArrayCall(dense,"reverse",[]),dense);
+    assert.deepEqual(dense,[4,3,2,1]);
+    const nullish=as3ArrayLiteral(["a",null,undefined,3]);
+    assert.equal(as3ArrayCall(nullish,"reverse",[]),nullish);
+    assert.deepEqual(nullish,[3,undefined,null,"a"]);
+    const sparse=as3NewArray([5]);as3ArrayWrite(sparse,0,"a");as3ArrayWrite(sparse,4,"z");
+    assert.equal(as3ArrayCall(sparse,"reverse",[]),sparse);
+    assert.equal(sparse.length,5);assert.equal(sparse[0],"z");assert.equal(sparse[4],"a");
+    assert.equal(Object.hasOwn(sparse,1),false);
+    assert.throws(()=>as3ArrayCall(as3ArrayLiteral([1]),"reverse",[0]),AS3ArrayOperationUnavailable);
+    const overridden=as3ArrayLiteral([1]);overridden.reverse=()=>overridden;
+    assert.throws(()=>as3ArrayCall(overridden,"reverse",[]),AS3ArrayOperationUnavailable);
+    assert.throws(()=>as3ArrayCall(Object.freeze([1]),"reverse",[]),AS3ArrayOperationUnavailable);
+});
+
 test("dynamic Array deletion preserves holes, length and rejects unproved host slots", () => {
     const {as3ObjectDelete}=require(path.join(OUTPUT,"hardened-runtime/AS3ObjectDispatch.js"));
     const {as3ArrayLiteral}=require(path.join(OUTPUT,"hardened-runtime/AS3Array.js"));
@@ -199,6 +232,39 @@ test('numeric Array access rejects unproved host properties without invoking get
  assert.throws(()=>as3ArrayRead(value,1.5),AS3ArrayOperationUnavailable);
  assert.throws(()=>as3ArrayWrite(value,1.5,8),AS3ArrayOperationUnavailable);
  assert.equal(calls,0);
+});
+
+test('Array in preserves AIR own, inherited, conversion and null-receiver behavior',()=>{
+ const {as3ArrayIn,AS3ArrayOperationUnavailable}=require(path.join(OUTPUT,'hardened-runtime/AS3Array.js'));
+ const dense=['zero','one'];
+ assert.equal(as3ArrayIn(0,dense),true);
+ assert.equal(as3ArrayIn('1',dense),true);
+ assert.equal(as3ArrayIn(2,dense),false);
+ const sparse=new Array(3);sparse[1]='one';
+ assert.equal(as3ArrayIn('0',sparse),false);
+ assert.equal(as3ArrayIn(1,sparse),true);
+ assert.equal(as3ArrayIn('length',sparse),true);
+ dense.reward=9;
+ assert.equal(as3ArrayIn('reward',dense),true);
+ assert.equal(as3ArrayIn('missing',dense),false);
+ delete dense[0];assert.equal(as3ArrayIn(0,dense),false);
+ for(const key of ['push','toString','constructor','hasOwnProperty'])
+  assert.equal(as3ArrayIn(key,dense),true,key);
+ dense[null]='null-key';assert.equal(as3ArrayIn(null,dense),true);
+
+ let events=[];
+ const keyValue=()=>{events.push('key');return '1';};
+ const targetValue=value=>{events.push('target');return value;};
+ assert.equal(as3ArrayIn(keyValue(),targetValue(['zero','one'])),true);
+ assert.deepEqual(events,['key','target']);
+ events=[];
+ const unconverted=()=>{events.push('key');return {toString(){events.push('convert');return '0';}};};
+ assert.throws(()=>as3ArrayIn(unconverted(),targetValue(null)),{name:'TypeError',errorID:1009});
+ assert.deepEqual(events,['key','target']);
+
+ assert.throws(()=>as3ArrayIn('map',dense),AS3ArrayOperationUnavailable);
+ assert.throws(()=>as3ArrayIn('0',new (class extends Array {})()),AS3ArrayOperationUnavailable);
+ assert.throws(()=>as3ArrayIn(Symbol('host'),dense),AS3ArrayOperationUnavailable);
 });
 
 test('typed Array numeric updates retain AIR Number coercion and prefix/postfix results',()=>{

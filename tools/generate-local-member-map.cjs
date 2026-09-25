@@ -16,7 +16,7 @@ const BUILTINS = new Set([
 ]);
 
 const [typeMapArgument, outputArgument, sourceRepositoryArgument, workerArgument,
-    sourceCensusArgument, expectedSourceCensusSha256, sourceIncludesArgument] = process.argv.slice(2);
+    sourceCensusArgument, expectedSourceCensusSha256, sourceIncludesArgument, compileDefinitionsArgument] = process.argv.slice(2);
 if (!typeMapArgument || !outputArgument || !sourceRepositoryArgument || !workerArgument
     || !sourceCensusArgument || !/^[0-9a-f]{64}$/.test(expectedSourceCensusSha256 || "")) {
     process.stderr.write("usage: node tools/generate-local-member-map.cjs <local-type-map> <output> <source-repository> <declaration-worker> <source-census> <expected-source-census-sha256>\n");
@@ -120,6 +120,8 @@ function readSource(entry) {
 
 const sourceIncludes = sourceIncludesArgument ? require("../lib/source-includes.js").loadSourceIncludes(
     readCanonicalFile(sourceIncludesArgument,MAX_MAP_BYTES,"source includes").text) : null;
+const compileDefinitionsFile = compileDefinitionsArgument ? readCanonicalFile(compileDefinitionsArgument,MAX_MAP_BYTES,"compile definitions") : null;
+const compileDefinitions = compileDefinitionsFile ? require("../lib/compile-definitions.js").loadCompileDefinitions(compileDefinitionsFile.text) : null;
 function runWorker(entry, content) {
     let includeEnvelope={};
     if(sourceIncludes) {
@@ -160,7 +162,7 @@ function runWorker(entry, content) {
             resolve(message);
         });
         child.send({
-            ...includeEnvelope,
+            ...includeEnvelope, ...(compileDefinitions ? {compileDefinitions} : {}),
             sourcePath: entry.sourcePath,
             content,
             maxResultBytes: MAX_RESULT_BYTES,
@@ -319,6 +321,7 @@ async function main() {
     const output = {
         schema: applicationProfile ? "as3-application-local-member-map@1" : "bleach-local-as3-member-map@2",
         sourceCensusSha256,
+        ...(compileDefinitionsFile ? {compileDefinitionsSha256:sha256(compileDefinitionsFile.text)} : {}),
         ...(sourceIncludesArgument ? {sourceIncludesSha256:sha256(fs.readFileSync(sourceIncludesArgument))} : {}),
         localTypeMapSha256,
         declarationWorkerSha256: workerSha256,

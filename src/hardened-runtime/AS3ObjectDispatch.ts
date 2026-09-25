@@ -1,3 +1,4 @@
+import {isNativeJSONDefinition,callNativeJSONDefinition} from "./AS3JSONDefinition";
 import { isAS3ReflectionValue, as3ReflectionVariable, as3ReflectionAttribute } from "./AS3Reflection";
 import { as3FunctionArgument, isAS3SourceLambda } from "./AS3Function";
 import { AS3ArgumentError, AS3RangeError, AS3SecurityError } from "./AS3Error";
@@ -134,7 +135,12 @@ export function as3ObjectRead(value:unknown, key:unknown, caller:string | null =
         if (name === "length") return target.length;
         const index=Number(name);
         if (as3NativeString(index) === name) return as3ArrayRead(target,index);
-        return unavailable("Dynamic Array named reads require native member evidence");
+        // AMF3 associative data is an ordinary Array. Named reads on source
+        // subclasses need separate trait/namespace evidence: own JS storage
+        // must never expose an inaccessible declared source field.
+        if (Object.getPrototypeOf(target) !== Array.prototype)
+            return unavailable("Dynamic Array subclass named reads require native member evidence");
+        return as3ArrayRead(target,name);
     }
     const info = describe(target);
     if (info) {
@@ -205,6 +211,8 @@ export function as3ObjectWrite(value:unknown,key:unknown,next:unknown,caller:str
         if (members.some(member => member.kind === "method")) return referenceError(1037,name,info.diagnosticName);
         if (members.length) return referenceError(1074,name,info.diagnosticName);
         if (!dynamicClass(info)) return referenceError(1056,name,info.diagnosticName);
+        if (hasSourceTrait(info,name))
+            return unavailable("Inaccessible generated trait requires separate public dynamic storage");
     }
     Object.defineProperty(target,name,{value:next,writable:true,enumerable:true,configurable:true});
     return next;
@@ -233,6 +241,8 @@ export function as3ObjectDelete(value:unknown,key:unknown,caller:string | null =
     if (Array.isArray(target)) return as3ArrayDelete(target,name);
     const info = describe(target);
     if (info && (!dynamicClass(info) || findTrait(info,name,caller,false).length)) return false;
+    if (info && hasSourceTrait(info,name))
+        return unavailable("Inaccessible generated trait cannot be deleted as public dynamic storage");
     return Reflect.deleteProperty(target,name);
 }
 /** Source Class static calls. Error identities are native-proved; exact diagnostic strings need supplemental evidence. */
@@ -287,7 +297,32 @@ export function as3PrepareClassCall(value:unknown,key:string,caller:string|null=
     return args=>staticClassCall(value,key,args,caller);
 }
 
+function invokeSelectedObjectFunction(value:unknown,name:string,fn:unknown,args:unknown[]):unknown {
+    if (typeof fn !== "function") {
+        const error=new TypeError(`Error #1006: ${name} is not a function.`);
+        Object.defineProperty(error,"errorID",{value:1006}); throw error;
+    }
+    if (name !== "hasOwnProperty" && name !== "toString" && !isAS3MethodClosure(fn) && !isAS3SourceLambda(fn) && ![...BUILTINS.values()].includes(fn))
+        return unavailable("Dynamic function values require authenticated method-closure argument behavior");
+    return Reflect.apply(fn,value,args);
+}
+
+/** Computed Object calls select the member after receiver/key evaluation but
+ * before argument effects. Callability is checked only after arguments have
+ * evaluated, matching AVM2's getproperty/call ordering.
+ */
+export function as3PrepareObjectCall(value:unknown,key:unknown,caller:string|null=null):(args:unknown[])=>unknown {
+    if (typeof key !== "string")
+        return unavailable("Computed Object calls require an authenticated String key value");
+    const fn=as3ObjectRead(value,key,caller);
+    return args=>invokeSelectedObjectFunction(value,key,fn,args);
+}
+
 export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:string | null = null):unknown {
+    if (isNativeJSONDefinition(value)) {
+        if (caller !== null) lookupObjectCaller(caller);
+        return callNativeJSONDefinition(value,keyName(key),args,item=>as3FunctionArgument(item,"String") as string | null);
+    }
     if (isAS3ReflectionValue(value)) {
         if (caller !== null) lookupObjectCaller(caller);
         if (key === "attribute" && args.length === 1) return as3ReflectionAttribute(value,args[0]);
@@ -309,14 +344,7 @@ export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:st
         if (caller !== null) lookupObjectCaller(caller);
         return as3ArrayCall(value,"push",args);
     }
-    const fn = as3ObjectRead(value,name,caller);
-    if (typeof fn !== "function") {
-        const error=new TypeError(`Error #1006: ${name} is not a function.`);
-        Object.defineProperty(error,"errorID",{value:1006}); throw error;
-    }
-    if (name !== "hasOwnProperty" && name !== "toString" && !isAS3MethodClosure(fn) && !isAS3SourceLambda(fn) && ![...BUILTINS.values()].includes(fn))
-        return unavailable("Dynamic function values require authenticated method-closure argument behavior");
-    return Reflect.apply(fn,value,args);
+    return invokeSelectedObjectFunction(value,name,as3ObjectRead(value,name,caller),args);
 }
 
 /** Explicit Function getter call: arguments have evaluated before this lookup. */

@@ -118,11 +118,13 @@ def resolve_fixture_target(qname, target_doc, predicates, laya, proof_inputs):
     # only after TypeScript proves the exact constructor/interface identity.
     kind = 'interface' if authority.get('kind') == 'interface' else 'class'
     candidates = [(cap, row) for cap, row in owned if cap == authority['targetCapabilityId']
-                  and row.get('kind') == kind and row.get('module', '').startswith(namespace)]
+                  and row.get('kind') in (['interface', 'const'] if kind == 'interface' else ['class'])
+                  and row.get('module', '').startswith(namespace)]
     resolver = ROOT / 'tools/resolve-laya-export.cjs'
     request = {'root': str(laya), 'facade': {'module': authority['targetModule'],
                'export': authority['interfaceExport' if kind == 'interface' else 'constructorExport'],
-               'sha256': authority['moduleSha256']}, 'candidates': [row for _, row in candidates]}
+               'sha256': authority['moduleSha256']}, 'candidates': [row for _, row in candidates],
+               'allowMergedInterface': kind == 'interface'}
     result = subprocess.run(['node', str(resolver)], input=json.dumps(request),
                             capture_output=True, text=True, timeout=90)
     if result.returncode:
@@ -172,7 +174,7 @@ def source_members(sdk, output, qnames):
             match = member_pattern.match(line)
             if match and match['name'] != name:
                 classes[current]['ownInstanceMemberNames'].add(match['name'])
-    selected, pending = set(), list(qnames | {'Object', 'Array', 'SecurityError'})
+    selected, pending = set(), list(qnames | {'Object', 'Array', 'SecurityError', 'TypeError', 'JSON'})
     while pending:
         qname = pending.pop()
         if qname in selected:
@@ -237,16 +239,36 @@ def main():
                    help='Exercise signature dependencies in a still strongly connected closed fixture graph')
     p.add_argument('--intrinsic-type', action='append', default=[], choices=['flash.utils.Dictionary', 'flash.utils.ByteArray'],
                    help='Exercise the existing shared compiler intrinsic instead of the optional Laya facade')
-    p.add_argument('--bytearray-native-uncompress', action='store_true', help='Authenticate zero-argument intrinsic decompression through shared Laya')
+    p.add_argument('--bytearray-native-uncompress', action='store_true', help='Authenticate AIR optional-algorithm intrinsic decompression through shared Laya')
+    p.add_argument('--native-regexp-members', action='store_true', help='Authenticate shared RegExp source/global properties and test calls')
+    p.add_argument('--native-regexp', action='store_true', help='Authenticate exact SDK RegExp declarations')
+    p.add_argument('--shared-string-ranges', action='store_true', help='Use authenticated common String index/range operations')
+    p.add_argument('--shared-json-definition', action='store_true', help='Use authenticated shared JSON definition calls')
+    p.add_argument('--shared-type-error', action='store_true', help='Use authenticated shared String TypeError construction')
+    p.add_argument('--shared-math-floor', action='store_true', help='Use authenticated shared numeric Math.floor')
+    p.add_argument('--shared-object-constructor', action='store_true', help='Use authenticated shared zero-argument Object construction')
+    p.add_argument('--shared-object-has-own-property', action='store_true', help='Use authenticated shared Object.hasOwnProperty for mapped Flash receivers')
+    p.add_argument('--shared-array-sort', action='store_true', help='Use authenticated shared Array comparator sorting')
+    p.add_argument('--shared-array-some', action='store_true', help='Use authenticated shared Array some iteration')
+    p.add_argument('--shared-error-stack', action='store_true', help='Use authenticated shared Error stack traces')
+    p.add_argument('--bytearray-amf3-read', action='store_true', help='Bind raw AMF3 reads to the common reader; requires --bytearray-native-uncompress')
+    p.add_argument('--shared-date', action='store_true', help='Use the authenticated common Laya Date provider (requires --native-date)')
     p.add_argument('--native-date', action='store_true', help='Authenticate the shared zero-argument Date intrinsic from exact SDK declarations')
     p.add_argument('--native-describe-type', action='store_true', help='Retain exact SDK describeType proof; requires a separately verified reflection provider')
     p.add_argument('--native-uri-component', action='store_true', help='Authenticate exact one-String encodeURIComponent from retained AIR/browser evidence')
     p.add_argument('--source-includes', action='store_true', help='Authenticate original include fragments separately from source declaration roots')
+    p.add_argument("--compile-definitions", type=Path)
     args = p.parse_args()
+    if args.native_regexp_members and not args.native_regexp:
+        p.error("--native-regexp-members requires --native-regexp")
+    if args.shared_date and not args.native_date:
+        p.error('--shared-date requires --native-date')
     if args.native_describe_type and not args.ffdec_jar:
         p.error('--native-describe-type requires --ffdec-jar')
     if args.native_uri_component and not args.ffdec_jar:
         p.error('--native-uri-component requires --ffdec-jar')
+    if args.native_regexp and not args.ffdec_jar:
+        p.error('--native-regexp requires --ffdec-jar')
     if args.native_date and not args.ffdec_jar:
         p.error('--native-date requires exact SDK decompilation via --ffdec-jar')
     if not re.fullmatch(r'[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*', args.entry):
@@ -339,6 +361,57 @@ def main():
     facade_inputs = {}
     def target_for(q):
         return resolve_fixture_target(q, target_doc, by_qname, laya, facade_inputs)
+    if args.shared_string_ranges:
+        from reflection_provider_profile import produce_string_range_provider_profile
+        range_target = produce_string_range_provider_profile(profile_root=out, laya_root=laya)
+        files['stringRangeProvider'] = out / range_target['file']['path']
+        facade_inputs.update(range_target['generatorInputs'])
+    if args.shared_json_definition:
+        from reflection_provider_profile import produce_json_definition_provider_profile
+        json_target = produce_json_definition_provider_profile(profile_root=out, laya_root=laya)
+        files['jsonDefinitionProvider'] = out / json_target['file']['path']
+        facade_inputs.update(json_target['generatorInputs'])
+    if args.shared_type_error:
+        from reflection_provider_profile import produce_type_error_provider_profile
+        error_target = produce_type_error_provider_profile(profile_root=out, laya_root=laya)
+        files['typeErrorProvider'] = out / error_target['file']['path']
+        facade_inputs.update(error_target['generatorInputs'])
+    if args.shared_math_floor:
+        from reflection_provider_profile import produce_math_floor_provider_profile
+        floor_target = produce_math_floor_provider_profile(profile_root=out, laya_root=laya)
+        files['mathFloorProvider'] = out / floor_target['file']['path']
+        facade_inputs.update(floor_target['generatorInputs'])
+    if args.shared_object_constructor:
+        from reflection_provider_profile import produce_object_constructor_provider_profile
+        constructor_target = produce_object_constructor_provider_profile(profile_root=out, laya_root=laya)
+        files['objectConstructorProvider'] = out / constructor_target['file']['path']
+        facade_inputs.update(constructor_target['generatorInputs'])
+    if args.shared_object_has_own_property:
+        from reflection_provider_profile import produce_object_has_own_provider_profile
+        has_own_target = produce_object_has_own_provider_profile(profile_root=out, laya_root=laya)
+        files['objectHasOwnPropertyProvider'] = out / has_own_target['file']['path']
+        facade_inputs.update(has_own_target['generatorInputs'])
+    if args.shared_array_sort:
+        from reflection_provider_profile import produce_array_sort_provider_profile
+        sort_target = produce_array_sort_provider_profile(profile_root=out, laya_root=laya)
+        files['arraySortProvider'] = out / sort_target['file']['path']
+        facade_inputs.update(sort_target['generatorInputs'])
+    if args.shared_array_some:
+        from reflection_provider_profile import produce_array_some_provider_profile
+        some_target = produce_array_some_provider_profile(profile_root=out, laya_root=laya)
+        files['arraySomeProvider'] = out / some_target['file']['path']
+        facade_inputs.update(some_target['generatorInputs'])
+    if args.shared_error_stack:
+        from reflection_provider_profile import produce_error_stack_provider_profile
+        stack_target = produce_error_stack_provider_profile(profile_root=out, laya_root=laya)
+        files['errorStackProvider'] = out / stack_target['file']['path']
+        facade_inputs.update(stack_target['generatorInputs'])
+    if args.bytearray_amf3_read:
+        if not args.bytearray_native_uncompress: raise ValueError("AMF3 read requires native ByteArray source authority")
+        from reflection_provider_profile import produce_bytearray_amf3_provider_profile
+        amf3_target = produce_bytearray_amf3_provider_profile(profile_root=out, laya_root=laya)
+        files['byteArrayAMF3'] = out / amf3_target['file']['path']
+        facade_inputs.update(amf3_target['generatorInputs'])
     native_api, native_signatures = None, None
     own_names = set(re.findall(r'\b(?:function\s+(?:(?:get|set)\s+)?|var\s+|const\s+)([A-Za-z_$][\w$]*)', text))
     member_text = re.sub(r'\bthis\s*\.\s*([A-Za-z_$][\w$]*)',
@@ -366,6 +439,23 @@ def main():
             source_manifest.update(date_evidence['manifestPins'])
             facade_inputs.update(date_evidence['generatorInputs'])
             files['nativeDate'] = out / date_evidence['file']['path']
+            if args.shared_date:
+                from reflection_provider_profile import produce_date_provider_profile
+                date_target = produce_date_provider_profile(profile_root=out, laya_root=laya)
+                files['dateProvider'] = out / date_target['file']['path']
+                facade_inputs.update(date_target['generatorInputs'])
+        if args.native_regexp:
+            regexp_spec = importlib.util.spec_from_file_location('native_regexp_profile', ROOT / 'tools/native_regexp_profile.py')
+            regexp_helper = importlib.util.module_from_spec(regexp_spec); regexp_spec.loader.exec_module(regexp_helper)
+            regexp_evidence = regexp_helper.produce_native_regexp_profile(profile_root=out, air_sdk=sdk,
+                sdk_declaration=out / 'sdk-source/scripts/RegExp.as', sdk_signatures=out / 'sdk-signatures.json')
+            source_manifest.update(regexp_evidence['manifestPins'])
+            facade_inputs.update(regexp_evidence['generatorInputs'])
+            files['nativeRegExp'] = out / regexp_evidence['file']['path']
+            from reflection_provider_profile import produce_string_pattern_provider_profile
+            regexp_target = produce_string_pattern_provider_profile(profile_root=out, laya_root=laya, regexp=True, members=args.native_regexp_members)
+            files['stringPatternProvider'] = out / regexp_target['file']['path']
+            facade_inputs.update(regexp_target['generatorInputs'])
         if args.native_describe_type:
             describe_spec = importlib.util.spec_from_file_location('native_describe_type_profile', ROOT / 'tools/native_describe_type_profile.py')
             describe_helper = importlib.util.module_from_spec(describe_spec); describe_spec.loader.exec_module(describe_helper)
@@ -408,6 +498,7 @@ def main():
     for q in sorted(set(imports)):
         name = q.rsplit('.', 1)[1]
         roles = ['import']
+        if q == 'flash.net.navigateToURL': roles.append('package-function')
         if re.search(r'\bextends\s+' + name + r'\b', text): roles.append('base-type')
         if (re.search(r'\bnew\s+' + name + r'\s*\(', text)
                 or native_signatures is not None and 'base-type' in roles
@@ -431,8 +522,13 @@ def main():
         mapping_start = len(mappings)
         mappings.append({'sourceQName': q, 'sourceRoles': roles, 'sourceMember': None, 'targetCapabilityId': cap,
             'targetModule': module, 'targetExport': row['export'], 'targetKind': row['kind'], 'targetSignature': row['signature'], 'targetMember': None})
-        properties, uses = (native_api.map_native_members(q, roles, row, cap, native_signatures, used_names)
-                            if native_signatures is not None else primitive_property_mappings(q, roles, row, cap, native_classes))
+        if native_signatures is not None:
+            member_qname = native_api.native_member_target_qname(q)
+            member_cap, member_row = target_for(member_qname) if member_qname != q else (cap, row)
+            properties, uses = native_api.map_native_members(
+                q, roles, member_row, member_cap, native_signatures, used_names)
+        else:
+            properties, uses = primitive_property_mappings(q, roles, row, cap, native_classes)
         mappings.extend(properties)
         member_uses.extend(uses)
         if q in args.intrinsic_type:
@@ -461,10 +557,13 @@ def main():
         mappings = native_api.select_supported_members(mappings, census, target, out)
     files['capabilityMapping'] = write(out / 'mapping.json', {'schema': 'as3-source-to-laya-capability-map@1', 'mappings': mappings})
     if include_inventory_file: files['sourceIncludes'] = include_inventory_file
+    if args.compile_definitions:
+        files['compileDefinitions'] = write(out / 'compile-definitions.json', json.loads(args.compile_definitions.read_text()))
     files['localMemberMap'] = out / 'local-members.json'
     subprocess.run(['node', str(ROOT / 'tools/generate-local-member-map.cjs'), str(files['localTypeMap']),
         str(files['localMemberMap']), str(source.parent), str(ROOT / 'lib/declaration-worker.js'), str(census), sha(census),
-        *([str(include_inventory_file)] if include_inventory_file else [])], check=True)
+        str(include_inventory_file) if include_inventory_file else "",
+        *([str(files["compileDefinitions"])] if args.compile_definitions else [])], check=True)
     timer = json.loads((ROOT / 'config/native-timer-authority.json').read_text())
     timer.update(schema='as3-native-timer-authority@1', module='@laya/as3-runtime/AS3Timer', sourceSha256=sha(ROOT / 'src/hardened-runtime/AS3Timer.ts'))
     files['nativeTimerAuthority'] = write(out / 'timer.json', timer)

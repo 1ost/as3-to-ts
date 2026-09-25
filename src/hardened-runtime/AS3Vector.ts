@@ -51,6 +51,12 @@ function range(message: string): never {
     throw new RangeError(message);
 }
 
+function conversionFailure(message: string): never {
+    const error = new TypeError(message);
+    Object.defineProperty(error, "errorID", {value:1034});
+    throw error;
+}
+
 function requirePolicy<T>(policy: AS3VectorElementPolicy<T>): void {
     if (typeof policy !== "object" || policy === null || !POLICIES.has(policy as object)) {
         throw new TypeError("AS3 Vector requires an authenticated element policy");
@@ -81,7 +87,7 @@ function scalarPolicy<T>(name: string, fallback: T, coerce: (value: unknown) => 
 function referenceScalar<T>(name: string, accept: (value: unknown) => value is T): AS3VectorElementPolicy<T | null> {
     return scalarPolicy<T | null>(name, null, value => {
         if (value === null || value === undefined) return null;
-        if (!accept(value)) throw new TypeError(`AS3 Vector.<${name}> rejected an incompatible value`);
+        if (!accept(value)) conversionFailure(`AS3 Vector.<${name}> rejected an incompatible value`);
         return value;
     });
 }
@@ -113,7 +119,7 @@ export function as3VectorReference<T extends object>(name: string,
         coerce(value: unknown): T | null {
             if (value === null || value === undefined) return null;
             if (!as3Is(value, referenceType)) {
-                throw new TypeError(`AS3 Vector.<${referenceType.name}> rejected an incompatible value`);
+                conversionFailure(`AS3 Vector.<${referenceType.name}> rejected an incompatible value`);
             }
             return value;
         },
@@ -226,7 +232,7 @@ export class AS3Vector<T> implements Iterable<T> {
         const sourceState = (typeof source === "object" || typeof source === "function") && source !== null
             ? VECTOR_STATES.get(source as object) : undefined;
         if (!Array.isArray(source) && !sourceState) {
-            throw new TypeError("AS3 Vector conversion requires an Array or authenticated AS3 Vector");
+            conversionFailure("AS3 Vector conversion requires an Array or authenticated AS3 Vector");
         }
         const arraySource = Array.isArray(source) ? source : null;
         const count = arraySource === null ? sourceState!.values.length : lengthValue(arraySource.length);
@@ -325,7 +331,9 @@ export class AS3Vector<T> implements Iterable<T> {
         return state.values.lastIndexOf(state.policy.coerce(searchElement), Number(fromIndex) >> 0);
     }
 
-    public join(separator: string = ","): string { return stateOf(this).values.join(separator); }
+    public join(separator: string = ","): string {
+        return stateOf(this).values.map(value => value === null ? "null" : value === undefined ? "undefined" : value).join(separator);
+    }
     public reverse(): AS3Vector<T> { stateOf(this).values.reverse(); return this; }
 
     public sort(sortBehavior?: unknown): AS3Vector<T> {
@@ -413,7 +421,11 @@ export class AS3Vector<T> implements Iterable<T> {
 
     private _assertResize(nextLength: number): void {
         lengthValue(nextLength);
-        if (stateOf(this).fixed && nextLength !== this.length) range("AS3 fixed Vector length cannot change");
+        if (stateOf(this).fixed && nextLength !== this.length) {
+            const error = new RangeError("AS3 fixed Vector length cannot change");
+            Object.defineProperty(error, "errorID", {value:1126});
+            throw error;
+        }
     }
 
     private _relativeIndex(value: number): number {

@@ -52,12 +52,24 @@ function symbol(file, exported) {
 }
 const expected = symbol(facade, request.facade.export);
 if (!expected) throw new Error("Missing facade export");
+// A source interface may share its export with a nominal runtime const. Keep
+// the capability's real const kind; prove its type declaration on that same
+// symbol rather than inventing a second interface obligation or a class value.
+function mergedInterface(row) {
+    if (request.allowMergedInterface !== true || row.kind !== "const") return false;
+    const declarations = expected.declarations || [];
+    const interfaces = declarations.filter(ts.isInterfaceDeclaration);
+    const values = declarations.filter(ts.isVariableDeclaration);
+    return interfaces.length === 1 && values.length === 1
+        && declarations.every(declaration => path.resolve(declaration.getSourceFile().fileName) === row.file)
+        && (values[0].parent.flags & ts.NodeFlags.Const) !== 0;
+}
 const matches = candidates.map((row, index) => ({ row, index, symbol: symbol(row.file, row.export) }))
     .filter(row => row.symbol === expected && expected.declarations?.some(declaration =>
         path.resolve(declaration.getSourceFile().fileName) === row.row.file
         && (row.row.kind === "class" ? ts.isClassDeclaration(declaration)
             : row.row.kind === "interface" ? ts.isInterfaceDeclaration(declaration)
-            : row.row.kind === "function" ? ts.isFunctionDeclaration(declaration) : false)));
+            : row.row.kind === "function" ? ts.isFunctionDeclaration(declaration) : mergedInterface(row.row))));
 if (matches.length !== 1) throw new Error("No unique defining obligation for facade export");
 if (matches[0].row.kind === "function") {
     const declarations = expected.declarations.filter(ts.isFunctionDeclaration);
@@ -67,5 +79,13 @@ if (matches[0].row.kind === "function") {
     const signature = checker.signatureToString(signatures[0], declarations[0],
         ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.WriteArrowStyleSignature);
     if (signature !== matches[0].row.signature) throw new Error("Function obligation signature differs from source");
+}
+if (request.validateConstructors) {
+    const row=matches[0].row, declaration=expected.declarations.find(ts.isClassDeclaration);
+    if (row.kind!=="class" || !declaration) throw Error("Class constructor proof requires a class");
+    const signatures=checker.getTypeOfSymbolAtLocation(expected,declaration).getConstructSignatures()
+        .map(signature=>"new " + checker.signatureToString(signature,declaration,ts.TypeFormatFlags.NoTruncation));
+    if (JSON.stringify(signatures)!==JSON.stringify(row.constructors))
+        throw Error("Constructor obligation differs from source: " + JSON.stringify(signatures));
 }
 process.stdout.write(JSON.stringify({ index: matches[0].index, inputs }) + "\n");

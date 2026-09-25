@@ -112,9 +112,15 @@ function invokeFunction(target:unknown, receiver:unknown, argumentsArray:unknown
         const error=new TypeError(`Error #${id}: ${id === 1009 ? "Cannot access a property or method of a null object reference." : "A term is undefined and has no properties."}`);
         Object.defineProperty(error,"errorID",{value:id}); throw error;
     }
-    if (typeof target !== "function" || Reflect.get(target,method) !== Function.prototype[method]
-        || argumentsArray != null && !Array.isArray(argumentsArray))
+    if (typeof target !== "function" || Reflect.get(target,method) !== Function.prototype[method])
         throw new AS3FunctionOperationUnavailable(`Function.${method} needs a callable and a native Array or null argument list`);
+    if (argumentsArray != null && !Array.isArray(argumentsArray)) {
+        if (method === "apply") {
+            const error=new TypeError("Error #1116: second argument to Function.prototype.apply must be an array.");
+            Object.defineProperty(error,"errorID",{value:1116});throw error;
+        }
+        throw new AS3FunctionOperationUnavailable("Function.call requires its retained argument Array");
+    }
     return Reflect.apply(target,receiver,argumentsArray == null ? [] : argumentsArray as unknown[]);
 }
 

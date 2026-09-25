@@ -1,3 +1,17 @@
+import {loadByteArrayAMF3Target} from "../hardened/bytearray-amf3-authority";
+import { verifyNativeRegExpAuthority } from "../hardened/native-regexp-authority";
+import {loadCompileDefinitions} from "../hardened/compile-definitions";
+import {loadJSONDefinitionProviderTarget} from "../hardened/json-definition-provider-authority";
+import {loadTypeErrorProviderTarget} from "../hardened/type-error-provider-authority";
+import {loadMathFloorProviderTarget} from "../hardened/math-floor-provider-authority";
+import {loadObjectConstructorProviderTarget} from "../hardened/object-constructor-provider-authority";
+import {loadObjectHasOwnPropertyProviderTarget} from "../hardened/object-has-own-provider-authority";
+import {loadArraySortProviderTarget} from "../hardened/array-sort-provider-authority";
+import {loadArraySomeProviderTarget} from "../hardened/array-some-provider-authority";
+import {loadErrorStackProviderTarget} from "../hardened/error-stack-provider-authority";
+import {loadStringRangeProviderTarget} from "../hardened/string-range-provider-authority";
+import {loadDateProviderTarget} from "../hardened/date-provider-authority";
+import {loadStringPatternProviderTarget} from "../hardened/string-pattern-provider-authority";
 import {loadSourceIncludes} from "./source-includes-authority";
 import { verifyNativeDescribeTypeAuthority } from "../hardened/native-describe-type-authority";
 import {verifyNativeUriComponentAuthority} from "../hardened/native-uri-component-authority";
@@ -52,6 +66,7 @@ const COMPILED_AUTHORITY_LOCK = Object.freeze({
 });
 
 export interface TranspileAuthority {
+    compileDefinitions?: import("../hardened/compile-definitions").CompileDefinitions;
     applicationStart?: import("../hardened/contracts").ApplicationStartContract;
     sourceIncludes?: ReturnType<typeof loadSourceIncludes>;
     reflectionProvider?: ReflectionProviderTarget;
@@ -332,11 +347,25 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             "localMemberMap", "localTypeMap", "nativeTimerAuthority", "runtimeTypeAuthorityLock",
             "runtimeTypePredicates", "sourceManifest", "sourceMemberAuthority"].concat(
                 Object.prototype.hasOwnProperty.call(profile.files,"byteArrayNative") ? ["byteArrayNative"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"nativeRegExp") ? ["nativeRegExp"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"stringRangeProvider") ? ["stringRangeProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"arraySortProvider") ? ["arraySortProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"arraySomeProvider") ? ["arraySomeProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"errorStackProvider") ? ["errorStackProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"mathFloorProvider") ? ["mathFloorProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"objectConstructorProvider") ? ["objectConstructorProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"objectHasOwnPropertyProvider") ? ["objectHasOwnPropertyProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"typeErrorProvider") ? ["typeErrorProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"jsonDefinitionProvider") ? ["jsonDefinitionProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"byteArrayAMF3") ? ["byteArrayAMF3"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"dateProvider") ? ["dateProvider"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeDate") ? ["nativeDate"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"sourceIncludes") ? ["sourceIncludes"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"compileDefinitions") ? ["compileDefinitions"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeDescribeType") ? ["nativeDescribeType"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeUriComponent") ? ["nativeUriComponent"] : [],
-                Object.prototype.hasOwnProperty.call(profile.files,"reflectionProvider") ? ["reflectionProvider"] : []))
+                Object.prototype.hasOwnProperty.call(profile.files,"reflectionProvider") ? ["reflectionProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"stringPatternProvider") ? ["stringPatternProvider"] : []))
         || !exactKeys(profile.counts, ["localMembersComplete", "localMembersHeld", "localTypes", "mappedMembers", "mappedTypes", "sourceMemberTypes"])
         || !Array.isArray(profile.runtimePredicateQNames)
         || profile.runtimePredicateQNames.some(value => typeof value !== "string")) {
@@ -347,7 +376,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const profileRoot = dirname(resolve(profileLockPath));
     const files = profile.files as unknown as {
         capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
-        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; sourceIncludes?: ProfileFile; nativeDescribeType?: ProfileFile; nativeUriComponent?: ProfileFile; reflectionProvider?: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; dateProvider?: ProfileFile; stringRangeProvider?: ProfileFile; arraySortProvider?: ProfileFile; arraySomeProvider?: ProfileFile; errorStackProvider?: ProfileFile; mathFloorProvider?: ProfileFile; objectConstructorProvider?: ProfileFile; objectHasOwnPropertyProvider?: ProfileFile; typeErrorProvider?: ProfileFile; jsonDefinitionProvider?: ProfileFile; byteArrayAMF3?: ProfileFile; nativeRegExp?: ProfileFile; sourceIncludes?: ProfileFile; compileDefinitions?: ProfileFile; nativeDescribeType?: ProfileFile; nativeUriComponent?: ProfileFile; reflectionProvider?: ProfileFile; stringPatternProvider?: ProfileFile;
         runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
         sourceMemberAuthority: ProfileFile;
     };
@@ -360,6 +389,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const nativeTimerAuthorityJson = profileFile(profileRoot, files.nativeTimerAuthority, "profile native timer authority");
     const runtimeTypeLockJson = profileFile(profileRoot, files.runtimeTypeAuthorityLock, "profile runtime type lock");
     const runtimeTypePredicatesJson = profileFile(profileRoot, files.runtimeTypePredicates, "profile runtime type predicates");
+    const compileDefinitions = files.compileDefinitions ? loadCompileDefinitions(profileFile(profileRoot,files.compileDefinitions,"compile definitions")) : undefined;
     const sourceIncludes = files.sourceIncludes ? loadSourceIncludes(profileFile(profileRoot,files.sourceIncludes,"source includes")) : undefined;
     const sourceManifestJson = profileFile(profileRoot, files.sourceManifest, "profile source manifest");
     const sourceMemberAuthorityJson = profileFile(profileRoot, files.sourceMemberAuthority,
@@ -394,6 +424,31 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             profileFile(profileRoot,files.byteArrayNative,"native ByteArray proof"),targetCapabilitiesPath,
             targetCapabilitiesJson,sourceMemberAuthorityJson,
             profileFile(profileRoot,files.sourceManifest,"source manifest")) : undefined;
+        const stringRangeProvider=files.stringRangeProvider ? loadStringRangeProviderTarget(
+            profileFile(profileRoot,files.stringRangeProvider,"String range provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
+        const jsonDefinitionProvider=files.jsonDefinitionProvider ? loadJSONDefinitionProviderTarget(
+            profileFile(profileRoot,files.jsonDefinitionProvider,"JSON definition provider proof"),targetCapabilitiesPath,targetCapabilitiesJson,sourceMemberAuthorityJson) : undefined;
+        const typeErrorProvider=files.typeErrorProvider ? loadTypeErrorProviderTarget(
+            profileFile(profileRoot,files.typeErrorProvider,"TypeError provider proof"),targetCapabilitiesPath,targetCapabilitiesJson,sourceMemberAuthorityJson) : undefined;
+        const mathFloorProvider=files.mathFloorProvider ? loadMathFloorProviderTarget(
+            profileFile(profileRoot,files.mathFloorProvider,"Math floor provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
+        const objectConstructorProvider=files.objectConstructorProvider ? loadObjectConstructorProviderTarget(
+            profileFile(profileRoot,files.objectConstructorProvider,"Object constructor provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
+        const objectHasOwnPropertyProvider=files.objectHasOwnPropertyProvider ? loadObjectHasOwnPropertyProviderTarget(
+            profileFile(profileRoot,files.objectHasOwnPropertyProvider,"Object hasOwnProperty provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
+        const arraySortProvider=files.arraySortProvider ? loadArraySortProviderTarget(
+            profileFile(profileRoot,files.arraySortProvider,"Array sort provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
+        const arraySomeProvider=files.arraySomeProvider ? loadArraySomeProviderTarget(
+            profileFile(profileRoot,files.arraySomeProvider,"Array some provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
+        const errorStackProvider=files.errorStackProvider ? loadErrorStackProviderTarget(
+            profileFile(profileRoot,files.errorStackProvider,"Error stack provider proof"),targetCapabilitiesPath,targetCapabilitiesJson,sourceMemberAuthorityJson) : undefined;
+        const byteArrayAMF3=files.byteArrayAMF3 ? loadByteArrayAMF3Target(
+            profileFile(profileRoot,files.byteArrayAMF3,"ByteArray AMF3 provider proof"),targetCapabilitiesPath,targetCapabilitiesJson,byteArrayNative) : undefined;
+        const dateProvider=files.dateProvider ? loadDateProviderTarget(
+            profileFile(profileRoot,files.dateProvider,"Date provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
+        if (dateProvider && !files.nativeDate) throw new CliError("Date provider requires native SDK Date proof",6);
+        const stringPatternProvider=files.stringPatternProvider ? loadStringPatternProviderTarget(
+            profileFile(profileRoot,files.stringPatternProvider,"String pattern provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
         const authority = loadCapabilityAuthority({
             sourceCensusJson, sourceCensusSha256: profile.sourceCensusSha256 as string,
             targetCapabilitiesJson, targetCapabilitiesSha256: profile.targetCapabilitiesSha256 as string,
@@ -401,6 +456,18 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             nativeTimerAuthorityJson, nativeTimerAuthoritySha256: files.nativeTimerAuthority.sha256,
             runtimePackage: profile.runtimePackage as string, applicationProfile: true,
             ...(byteArrayNative ? { byteArrayNative } : {}),
+            ...(stringRangeProvider ? {stringRangeProvider} : {}),
+            ...(arraySortProvider ? {arraySortProvider} : {}),
+            ...(arraySomeProvider ? {arraySomeProvider} : {}),
+            ...(errorStackProvider ? {errorStackProvider} : {}),
+            ...(mathFloorProvider ? {mathFloorProvider} : {}),
+            ...(objectConstructorProvider ? {objectConstructorProvider} : {}),
+            ...(objectHasOwnPropertyProvider ? {objectHasOwnPropertyProvider} : {}),
+            ...(typeErrorProvider ? {typeErrorProvider} : {}),
+            ...(jsonDefinitionProvider ? {jsonDefinitionProvider} : {}),
+            ...(byteArrayAMF3 ? {byteArrayAMF3} : {}),
+            ...(dateProvider ? {dateProvider} : {}),
+            ...(stringPatternProvider ? {stringPatternProvider} : {}),
         }, sha256);
         const localTypes = loadLocalTypeAuthority({
             json: localTypeJson, sha256: files.localTypeMap.sha256,
@@ -420,6 +487,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             expectedSourceCensusSha256: profile.sourceCensusSha256 as string,
             expectedSchema: "as3-application-local-member-map@1",
             ...(files.sourceIncludes ? {expectedSourceIncludesSha256:files.sourceIncludes.sha256} : {}),
+            ...(files.compileDefinitions ? {expectedCompileDefinitionsSha256:files.compileDefinitions.sha256} : {}),
         }, sha256, localTypes);
         if (Object.keys(authority.typeMappingsBySource).length !== counts.mappedTypes
             || Object.keys(authority.memberMappingsByKey).length !== counts.mappedMembers) {
@@ -429,6 +497,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             profile.runtimePredicateQNames as string[], sha256);
         const sourceMembers = loadSourceMemberAuthority(sourceMemberAuthorityJson,
             files.sourceMemberAuthority.sha256, sha256);
+        if(files.nativeRegExp) verifyNativeRegExpAuthority(sourceMembers,profileRoot,
+            profileFile(profileRoot,files.nativeRegExp,"native RegExp proof"),sourceManifestJson);
         if(files.nativeDate) verifyNativeDateAuthority(sourceMembers,profileRoot,
             profileFile(profileRoot,files.nativeDate,"native Date proof"),sourceManifestJson);
         if (files.nativeDescribeType) {
@@ -438,7 +508,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
                 sourceManifestJson, reflectionProvider, targetCapabilitiesJson);
         }
         if(files.nativeUriComponent) verifyNativeUriComponentAuthority(sourceMembers,profileRoot,
-            profileFile(profileRoot,files.nativeUriComponent,"native URI component proof"),sourceManifestJson);
+            profileFile(profileRoot,files.nativeUriComponent,"native URI component proof"),sourceManifestJson,targetCapabilitiesJson);
         if (Object.keys(sourceMembers.entriesByQName).length !== counts.sourceMemberTypes) {
             throw new CliError("application source member count differs from the profile lock", 6);
         }
@@ -453,6 +523,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             capabilityMappingSha256: files.capabilityMapping.sha256,
             runtimeTypeSources: withNativeObjectMemberCensus(runtimeTypeSources, sourceMembers), sourceMembers,
             ...(sourceIncludes ? {sourceIncludes} : {}),
+            ...(compileDefinitions ? {compileDefinitions} : {}),
             nativeTimerAuthoritySha256: files.nativeTimerAuthority.sha256,
             runtimePackage: profile.runtimePackage as string, profileSha256: sha256(profileJson),
             applicationId: profile.applicationId as string, includeBigTurnTableDto: false,

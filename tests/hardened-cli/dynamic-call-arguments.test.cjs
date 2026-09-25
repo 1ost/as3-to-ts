@@ -25,6 +25,7 @@ test("dynamic calls preserve original source and deterministic emission",t=>{
   const code=fs.readFileSync(path.join(dir,output,'__as3_runtime/application/DynamicCallArgumentsProbe.ts'),'utf8');
   assert.match(code,/__as3SourceLambda\(/);
   assert.match(code,/__as3ObjectCall\(/);
+  assert.match(code,/__as3PrepareObjectCall\(/);
   snapshots.push([rows,code]);
  }
  assert.deepEqual(snapshots[0],snapshots[1]);

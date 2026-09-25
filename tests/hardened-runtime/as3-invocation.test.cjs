@@ -53,6 +53,15 @@ test('Function field receiver dispatch matches the retained native-only dynamic-
  const result=[fn.as3FunctionFieldInvoke(owner,'callback',[]),fn.as3FunctionInvoke(owner.callback,[]),fn.as3FunctionInvoke(local,[]),fn.as3FunctionCall(owner.callback,null,[]),fn.as3FunctionCall(owner.callback,owner,[])];
  assert.deepEqual(result,golden.capture.state.observations[0].result);
 });
+test('Function.apply dynamically checks its argument list with AIR error 1116',{skip:!process.env.HARDENED_FIXTURE_LAYA},()=>{
+ const p=path.join(process.env.HARDENED_FIXTURE_LAYA,'tests/nativeFlashOracle/dynamic-function-apply-arguments');
+ const golden=JSON.parse(fs.readFileSync(path.join(p,'native-air.json'),'utf8')).capture.state.observations;
+ const target=(...values)=>values.length+':'+values.map(value=>value===undefined?'undefined':String(value)).join('|');
+ const capture=value=>{try{return fn.as3FunctionApply(target,null,value);}catch(error){return error.name+'|'+error.errorID+'|'+error.message;}};
+ const sparse=[];sparse.length=3;sparse[1]='m';
+ const values={array:[3,'x'],null:null,undefined:undefined,sparse,object:{},string:'xy','array-like':{0:'a',1:'b',length:2}};
+ assert.deepEqual(Object.entries(values).map(([id,value])=>({result:capture(value),id})),golden);
+});
 test('instance method arity rejects excess arguments and permits rest slots',()=>{
  fn.as3CheckMethodArity('Probe','rest',5,0,null);fn.as3CheckMethodArity('Probe','optional',1,0,1);
  assert.throws(()=>fn.as3CheckMethodArity('Probe','optional',2,0,1),{name:'ArgumentError',errorID:1063,message:'Error #1063: Argument count mismatch on Probe/optional(). Expected 0, got 2.'});

@@ -73,7 +73,7 @@ export function parsePrimaryExpression(parser:AS3Parser):Node {
         result = createNode(NodeKind.XML_LITERAL, {tok: parser.tok});
     } else if (parser.tok.isNumeric || /('|")/.test(parser.tok.text[0])) {
         result = createNode(NodeKind.LITERAL, {tok: parser.tok});
-    } else if (!/^[A-Za-z_$][\w$]*$/.test(parser.tok.text)) {
+    } else if (!/^(?:[A-Za-z_$][\w$]*|@[A-Za-z_$][\w$]*)$/.test(parser.tok.text)) {
         throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', 'a primary expression', 'expression');
     } else {
         result = createNode(NodeKind.IDENTIFIER, {tok: parser.tok});
@@ -113,7 +113,8 @@ function parseNewExpression(parser:AS3Parser):Node {
     let target = parsePrimaryExpression(parser);
     while (true) {
         skipExpressionComments(parser);
-        if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_DOT) || tokIs(parser, Operators.DOUBLE_COLUMN))
+        if (tokIs(parser, Operators.DOT) || tokIs(parser, Operators.DOUBLE_DOT)
+            || tokIs(parser, Operators.DOUBLE_COLUMN))
             target = parseDot(parser, target);
         else if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET))
             target = parseArrayAccessor(parser, target);
@@ -387,7 +388,9 @@ function parseUnaryExpressionNotPlusMinus(parser:AS3Parser):Node {
         result = createNode(NodeKind.VOID, {start: index, end: expr.end}, expr);
     } else if (tokIs(parser, Keywords.TYPEOF)) {
         nextToken(parser, true);
-        let expr = parseExpression(parser);
+        // typeof has unary precedence; trailing addition/comparison belongs
+        // to the surrounding expression. Parentheses remain an operand.
+        let expr = parseUnaryExpression(parser);
         result = createNode(NodeKind.TYPEOF, {start: index, end: expr.end}, expr);
     } else if (tokIs(parser, '!') || tokIs(parser, 'not')) {
         nextToken(parser, true);

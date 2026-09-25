@@ -1,4 +1,5 @@
 import { uncompressNativeByteArray } from "./AS3ByteArrayNative";
+import { readNativeByteArrayObject, writeNativeByteArrayObject } from "./AS3ByteArrayAMF3";
 import { as3BindMethod } from "./AS3MethodClosure";
 
 export class AS3Endian {
@@ -64,8 +65,8 @@ export function configureAS3SystemCodePageEncoder(encoder: AS3SystemCodePageEnco
 
 /**
  * Native TypeScript implementation of the source-visible Flash ByteArray binary subset.
- * AMF object serialization remains held. Synchronous uncompress delegates only
- * through a target-proof-bound shared native operation; it contains no decoder.
+ * AMF3 reads/writes and synchronous uncompress delegate through independently
+ * authenticated shared providers; this intrinsic contains no AMF codec.
  */
 export class AS3ByteArray {
     [index: number]: number;
@@ -73,6 +74,7 @@ export class AS3ByteArray {
     private _length: number = 0;
     private _position: number = 0;
     private _littleEndian: boolean = false;
+    private _objectEncoding: number = 3;
     private readonly _closures = new Map<PropertyKey, Function>();
 
     public constructor() {
@@ -124,6 +126,21 @@ export class AS3ByteArray {
         this._littleEndian = value === AS3Endian.LITTLE_ENDIAN;
     }
 
+    public get objectEncoding(): number {
+        return this._objectEncoding;
+    }
+
+    public set objectEncoding(value: number) {
+        const encoding = Number(value) >>> 0;
+        if (encoding !== 0 && encoding !== 3) {
+            const error = new Error("Error #2008: Parameter objectEncoding must be one of the accepted values.");
+            error.name = "ArgumentError";
+            Object.defineProperty(error, "errorID", { value: 2008 });
+            throw error;
+        }
+        this._objectEncoding = encoding;
+    }
+
     public get length(): number {
         return this._length;
     }
@@ -162,11 +179,42 @@ export class AS3ByteArray {
         return result;
     }
 
-    public uncompress(): void {
+    public readObject(): unknown {
         if (!isAS3ByteArray(this)) throw new TypeError("Native ByteArray operation requires its allocation identity");
-        if (arguments.length !== 0) throw new TypeError("ByteArray.uncompress admits no algorithm arguments");
-        const state = uncompressNativeByteArray({bytes:new Uint8Array(this.toArrayBuffer()),
-            position:this._position,endian:this.endian});
+        if (arguments.length !== 0) throw new TypeError("ByteArray.readObject admits no arguments");
+        return readNativeByteArrayObject(new Uint8Array(this.toArrayBuffer()), this._position,
+            bytes => AS3ByteArray.fromArrayBuffer(bytes), position => {
+                if (!Number.isInteger(position) || position < 0 || position > 0xffffffff)
+                    throw new RangeError("Native AMF3 cursor exceeds its authenticated state boundary");
+                this._position = position;
+            });
+    }
+
+    public writeObject(value: unknown): void {
+        if (!isAS3ByteArray(this)) throw new TypeError("Native ByteArray operation requires its allocation identity");
+        if (arguments.length !== 1) throw new TypeError("ByteArray.writeObject requires exactly one argument");
+        if (this._objectEncoding !== 3)
+            throw new Error("ByteArray.writeObject supports only authenticated AMF3 objectEncoding 3");
+        const payload = writeNativeByteArrayObject(value, candidate => isAS3ByteArray(candidate)
+            ? new Uint8Array(candidate.toArrayBuffer()) : null);
+        if (!(payload instanceof Uint8Array)) throw new TypeError("Native AMF3 writer must return Uint8Array");
+        const end = this._position + payload.byteLength;
+        if (!Number.isSafeInteger(end) || end > MAX_BYTEARRAY_LENGTH)
+            throw new RangeError("ByteArray.writeObject exceeds the native ByteArray resource limit");
+        this._ensureCapacity(end);
+        this._bytes.set(payload, this._position);
+        this._position = end;
+        this._length = Math.max(this._length, end);
+    }
+
+    public uncompress(algorithm: string = "zlib"): void {
+        if (!isAS3ByteArray(this)) throw new TypeError("Native ByteArray operation requires its allocation identity");
+        if (arguments.length > 1) throw new TypeError("ByteArray.uncompress admits at most one algorithm argument");
+        const input={bytes:new Uint8Array(this.toArrayBuffer()),position:this._position,endian:this.endian};
+        // Preserve omission separately from explicit undefined; the authenticated Laya bridge owns AIR String coercion.
+        const state = arguments.length === 0
+            ? uncompressNativeByteArray(input)
+            : uncompressNativeByteArray(input, arguments[0]);
         if (!(state.bytes instanceof Uint8Array) || state.bytes.byteLength > MAX_BYTEARRAY_LENGTH
             || !Number.isInteger(state.position) || state.position < 0 || state.position > 0xffffffff
             || (state.endian !== AS3Endian.BIG_ENDIAN && state.endian !== AS3Endian.LITTLE_ENDIAN))

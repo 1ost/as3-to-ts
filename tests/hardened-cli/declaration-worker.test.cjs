@@ -85,13 +85,14 @@ test("declaration worker authenticates package constants and namespaces", async 
         kind: "field", name: "SCore", modifiers: ["public"], namespaceName: null,
         parameters: [], returnType: null, fieldType: "TCore", readonly: true,
     }]);
-    const namespace = await run(request("package p { public namespace InternalSpace; }"));
-    assert.equal(namespace.ok, true);
+    const namespace = await run(request("package p { public namespace InternalSpace = \"p:InternalSpace\"; }"));
+    assert.equal(namespace.ok, true, namespace.error);
     const namespaceValue = JSON.parse(namespace.json);
     assert.equal(namespaceValue.declarationKind, "package");
     assert.equal(namespaceValue.qualifiedName, "p.InternalSpace");
     assert.equal(namespaceValue.members[0].kind, "namespace");
     assert.deepEqual(namespaceValue.members[0].modifiers, ["public"]);
+    assert.equal(namespaceValue.members[0].namespaceUri, "p:InternalSpace");
 });
 
 test("declaration worker fails closed on unsupported package declarations and output caps", async () => {

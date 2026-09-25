@@ -118,7 +118,7 @@ test("exact nested local-interface literal reads emit one nominal object-read an
     assert.throws(()=>direct.run({extraGetter:"forged"}),error=>error.name==="TypeError"&&error.errorID===1034);
 });
 
-test("computed, mutation, invocation, static, and incomplete-interface variants remain held",
+test("non-String computed, mutation, invocation, static, and incomplete-interface variants remain held",
     {skip:!(AIR&&LAYA&&FFDEC)},t=>{
     const temporary=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),"local-interface-read-hostile-")));
     t.after(()=>fs.rmSync(temporary,{recursive:true,force:true}));
@@ -146,8 +146,8 @@ test("computed, mutation, invocation, static, and incomplete-interface variants 
         "--profile-lock",path.join(profile,"profile-lock.json")]);
     const rows=JSON.parse(fs.readFileSync(path.join(output,"manifest.json"),"utf8")).files;
     assert.equal(rows.find(row=>row.sourcePath==="Good.as").status,"admitted");
+    assert.equal(rows.find(row=>row.sourcePath==="Computed.as").status,"admitted");
     for(const [name,codes] of Object.entries({
-        "Computed.as":["HARDENED_LOCAL_INTERFACE_LITERAL_READ_KEY"],
         "Write.as":["HARDENED_LOCAL_INTERFACE_LITERAL_READ_CONTEXT"],
         "DeleteRead.as":["HARDENED_LOCAL_INTERFACE_LITERAL_READ_CONTEXT"],
         "CallRead.as":["HARDENED_LOCAL_INTERFACE_LITERAL_READ_CONTEXT"],

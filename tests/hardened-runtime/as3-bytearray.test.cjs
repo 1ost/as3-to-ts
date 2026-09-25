@@ -39,6 +39,13 @@ test("ByteArray rejects foreign Reflect receivers without poisoning closures or 
 test("ByteArray preserves Flash endian, integer, floating point, and Boolean semantics", () => {
     const bytes = new AS3ByteArray();
     assert.equal(bytes.endian, AS3Endian.BIG_ENDIAN);
+    assert.equal(bytes.objectEncoding, 3);
+    bytes.objectEncoding = 0;
+    assert.equal(bytes.objectEncoding, 0);
+    bytes.objectEncoding = 3;
+    assert.throws(() => { bytes.objectEncoding = 1; }, error => error.name === "ArgumentError"
+        && error.errorID === 2008 && /objectEncoding/.test(error.message));
+    assert.equal(bytes.objectEncoding, 3);
     bytes.writeInt(-2);
     bytes.writeUnsignedInt(0xfedcba98);
     bytes.writeShort(-3);
@@ -152,9 +159,12 @@ test("host ArrayBuffer seams copy bytes without exposing mutable storage", () =>
     const exported = new Uint8Array(bytes.toArrayBuffer());
     exported[1] = 8;
     assert.deepEqual([...new Uint8Array(bytes.toArrayBuffer())], [1, 2, 3]);
-    assert.equal("readObject" in bytes, false);
-    assert.equal("writeObject" in bytes, false);
-    assert.equal("uncompress" in bytes, false);
+    assert.equal("readObject" in bytes, true);
+    assert.equal("writeObject" in bytes, true);
+    assert.equal("uncompress" in bytes, true);
+    const before=bytes.toArrayBuffer();
+    assert.throws(()=>bytes.writeObject({value:1}),/authenticated shared AMF3 target/);
+    assert.deepEqual(bytes.toArrayBuffer(),before,"missing provider cannot partially mutate bytes");
 });
 
 test("ByteArray rejects hostile allocation ranges before allocating or mutating content", () => {

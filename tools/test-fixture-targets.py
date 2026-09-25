@@ -70,6 +70,27 @@ class FixtureTargetsTest(unittest.TestCase):
         self.replace_facade('export type { EventDispatcher } from "./Core";')
         self.assertEqual(self.resolve()[1]['kind'], 'interface')
 
+    def test_merged_interface_const_retains_actual_obligation_kind(self):
+        self.setup_facade(kind='interface')
+        self.put('Core.ts', 'export interface EventDispatcher {}\nexport const EventDispatcher = {};')
+        self.row.update(kind='const', sha256=self.digest(self.core))
+        self.assertEqual(self.resolve()[1], self.row)
+        self.assertIn(str(self.root / self.core), self.proof)
+
+    def test_plain_const_is_not_an_interface(self):
+        self.setup_facade(kind='interface')
+        self.put('Core.ts', 'export const EventDispatcher = {};')
+        self.row.update(kind='const', sha256=self.digest(self.core))
+        with self.assertRaisesRegex(ValueError, 'No unique defining obligation'):
+            self.resolve()
+
+    def test_merged_interface_mutable_value_is_not_a_const(self):
+        self.setup_facade(kind='interface')
+        self.put('Core.ts', 'export interface EventDispatcher {}\nexport let EventDispatcher = {};')
+        self.row.update(kind='const', sha256=self.digest(self.core))
+        with self.assertRaisesRegex(ValueError, 'No unique defining obligation'):
+            self.resolve()
+
     def test_same_name_without_same_class_is_rejected(self):
         self.setup_facade()
         self.replace_facade('export class EventDispatcher {}')

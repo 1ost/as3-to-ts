@@ -407,10 +407,10 @@ test("constructor arity proof rejects an arguments parameter shadow",t=>{
 
 test("local field authority rejects inherited slot aliases and base-method collisions",t=>{
     const cases=[
-        ["case-folded fields","package cycle { public class Base { protected var Slot:int; public function Base() {} } }\n",
-            "package cycle { public class Derived extends Base { private var slot:int; } }\n",
+        ["exact fields","package cycle { public class Base { protected var Slot:int; public function Base() {} } }\n",
+            "package cycle { public class Derived extends Base { public var Slot:int; } }\n",
             member("field","Slot",{modifiers:["protected"],fieldType:"int"}),
-            member("field","slot",{modifiers:["private"],fieldType:"int"})],
+            member("field","Slot",{modifiers:["public"],fieldType:"int"})],
         ["base method and derived field","package cycle { public class Base { public function Base() {} public function slot():void {} } }\n",
             "package cycle { public class Derived extends Base { public var slot:int; } }\n",
             member("method","slot",{returnType:"void"}),member("field","slot",{fieldType:"int"})],

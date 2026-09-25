@@ -1,3 +1,7 @@
+import {dateProviderSource} from "./date-provider-authority";
+import {errorTypeProviderSource, type ErrorStackProviderTarget} from "./error-stack-provider-authority";
+import { hasNativeRegExpAuthority } from "./native-regexp-authority";
+import { regExpProviderSource, type StringPatternProviderTarget } from "./string-pattern-provider-authority";
 import { assertReflectionProviderTarget, type ReflectionProviderTarget } from "./reflection-provider-authority";
 import { targetModuleSpecifier } from "./ledger";
 import { hasNativeDateAuthority } from "./native-date-authority";
@@ -277,7 +281,7 @@ export function localRuntimeTypeAuthoritySource(program: SemanticProgram, module
     const fields: RuntimeAuthorityClassSource["fields"] = Object.freeze(program.declaration.members
         .filter((member): member is SemanticField => member.kind === "field"
             && !member.modifiers.includes("static") && member.implicitDefault !== "constructor-owned")
-        .map(member => Object.freeze({ name: member.name,
+        .map(member => Object.freeze({ name: member.storageName ?? member.name,
             policy: member.implicitDefault as Exclude<SemanticField["implicitDefault"], "constructor-owned" | null> })));
     // Source declaration order is deterministic; native sibling trait order is not promised.
     // A missing type authority suppresses the entire descriptor, never a partial field set.
@@ -966,10 +970,36 @@ export function emitRuntimeApplicationEntry(modulePaths: readonly string[],
 }
 
 /** A single intrinsic Date identity is registered only after exact SDK verification. */
-export function dateRuntimeTypeAuthoritySource(source: LoadedSourceMemberAuthority, runtimeSha256:string): RuntimeAuthorityClassSource {
+export function dateRuntimeTypeAuthoritySource(source: LoadedSourceMemberAuthority, runtimeSha256:string, provider?: import("./date-provider-authority").DateProviderTarget): RuntimeAuthorityClassSource {
     if(!hasNativeDateAuthority(source) || !/^[a-f0-9]{64}$/.test(runtimeSha256))
         throw new HardenedSemanticError("HARDENED_DATE_AUTHORITY","Date runtime requires verified SDK and runtime hashes");
-    return authenticatedSource({kind:"class",qname:"Date",base:null,interfaces:[],sourceSha256:runtimeSha256,
-        definitionSafe:true,module:"./AS3Date",constructorExport:"AS3Date",predicateExport:"isAS3Date",
+    const shared=provider?dateProviderSource(provider):null;
+    return authenticatedSource({kind:"class",qname:"Date",base:null,interfaces:[],sourceSha256:shared?.sha256 || runtimeSha256,
+        definitionSafe:true,module:shared?targetModuleSpecifier(shared.module):"./AS3Date",constructorExport:"AS3Date",predicateExport:shared?"isFlashDate":"isAS3Date",
+        constructionTargetExport:null,constructionProofExport:null,fields:[],evaluationOrder:null});
+}
+
+/** The global Error name uses the private source allocation predicate, never host Error ancestry. */
+export function errorRuntimeTypeAuthoritySource(source:LoadedSourceMemberAuthority,
+    provider:ErrorStackProviderTarget):RuntimeAuthorityClassSource {
+    assertLoadedSourceMemberAuthority(source);
+    const row=source.entriesByQName.Error;
+    if (source.sourceArtifactSha256!=="e0f81fdb2029d2bb16e6987c8d85d4eba5eedfa3a23ed6e7f780bf6eb67b0546"
+        || !row || row.baseQName!=="Object" || row.dynamic!==true
+        || !row.ownInstanceMemberNames.includes("getStackTrace"))
+        throw new HardenedSemanticError("HARDENED_ERROR_TYPE_AUTHORITY",
+            "Error runtime identity requires the exact SDK declaration");
+    const target=errorTypeProviderSource(provider);
+    return authenticatedSource({kind:"class",qname:"Error",base:null,interfaces:[],sourceSha256:target.sha256,
+        definitionSafe:true,module:targetModuleSpecifier(target.module),constructorExport:"AS3Error",
+        predicateExport:"isAS3ErrorRuntimeType",constructionTargetExport:null,constructionProofExport:null,
+        fields:[],evaluationOrder:null});
+}
+
+export function regExpRuntimeTypeAuthoritySource(source:LoadedSourceMemberAuthority, provider:StringPatternProviderTarget):RuntimeAuthorityClassSource {
+    if (!hasNativeRegExpAuthority(source)) throw new HardenedSemanticError("HARDENED_REGEXP_AUTHORITY","RegExp requires verified SDK declarations");
+    const target=regExpProviderSource(provider);
+    return authenticatedSource({kind:"class",qname:"RegExp",base:null,interfaces:[],sourceSha256:target.sha256,
+        definitionSafe:true,module:targetModuleSpecifier(target.module),constructorExport:"AS3RegExp",predicateExport:"isAS3RegExp",
         constructionTargetExport:null,constructionProofExport:null,fields:[],evaluationOrder:null});
 }

@@ -8,12 +8,12 @@ export const LOCAL_INTERFACE_LITERAL_READ_AUTHORITY = Object.freeze({
     browserPinSha256: "45bc73c2940432aab50ad6f916c15c848cc19bae6ff4cc75c5cd0443ac7aa44e" as const,
     browserRunnerSha256: "dec6252f3824601efd50de115e957ad53284450d6187dd560098d6422e5147f3" as const,
     runtimeObjectDispatchSourcePath: "src/hardened-runtime/AS3ObjectDispatch.ts" as const,
-    runtimeObjectDispatchSourceSha256: "e4ce2347b69067c9dd23b7a6d0b95e53b68fa8fd83b0c20ff2f42378938ef289" as const,
+    runtimeObjectDispatchSourceSha256: "065dd75c26c6d5cb1160f02d2ae10370e03eccb294b33416e4abd852ecc8aba7" as const,
     runtimeTypeSourcePath: "src/hardened-runtime/AS3Type.ts" as const,
     runtimeTypeSourceSha256: "02f2acb486155e4718075f749cd45056c39175cb58c6c8aaf001af30b7104f60" as const,
     runtimeTypeRegistrySourcePath: "src/hardened-runtime/internal/AS3TypeRegistry.ts" as const,
     runtimeTypeRegistrySourceSha256: "524fe980ec5afc2573cb6a048efdc1bc6da50274073edd99cb65a09bf642b71d" as const,
-    authoritySha256: "972d6b460b6d17018cd063010a90e592c4935e1d665bffff199ab2afd6827525" as const,
+    authoritySha256: "20cd880e77e3779c95e18ff472fa4946bb6d14ad37b0dadecd1c97c397819929" as const,
 });
 
 export interface LocalInterfaceLiteralReadProof {

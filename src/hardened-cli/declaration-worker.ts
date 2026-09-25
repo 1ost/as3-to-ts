@@ -1,12 +1,14 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { projectCompileDefinitions } from "../hardened/compile-definitions";
 import parse from "../parse/index";
 import { normalizeParserAst, normalizeIncludedSource } from "../hardened/parser-normalizer";
 import { extractLocalDeclaration } from "../hardened/local-declarations";
 import { errorMessage } from "./errors";
 
 interface DeclarationRequest {
+    compileDefinitions?: import("../hardened/compile-definitions").CompileDefinitions;
     includeEdges?: import("../hardened/source-includes").IncludeEdge[];
     includeRootPath?: string;
     includeFragments?: import("../hardened/source-includes").IncludeSource[];
@@ -37,7 +39,7 @@ const sha256 = (bytes: string): string => createHash("sha256").update(bytes, "ut
 function isRequest(value: unknown): value is DeclarationRequest {
     if (!value || typeof value !== "object") return false;
     const candidate = value as Record<string, unknown>;
-    const keys = Object.keys(candidate).sort();
+    const keys = Object.keys(candidate).filter(key => key !== "compileDefinitions").sort();
     return (keys.join("|") === "content|maxResultBytes|sourcePath|workerSha256"
         || keys.join("|") === "content|includeEdges|includeFragments|includeRootPath|maxResultBytes|sourcePath|workerSha256"
         && typeof candidate.includeRootPath === "string" && Array.isArray(candidate.includeFragments))
@@ -75,8 +77,9 @@ process.once("message", (message: unknown) => {
     }
     try {
         const hasIncludes = message.includeFragments !== undefined;
-        const normalized = hasIncludes ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments!, sha256, message.includeEdges)
+        let normalized = hasIncludes ? normalizeIncludedSource(message.includeRootPath!, message.content, message.includeFragments!, sha256, message.includeEdges)
             : normalizeParserAst(parse(message.sourcePath, message.content), message.content, sha256);
+        if (message.compileDefinitions) normalized = projectCompileDefinitions(normalized, message.compileDefinitions, sha256, message.content);
         const result = extractLocalDeclaration(normalized, message.content, sha256, message.sourcePath);
         const json = `${JSON.stringify(result)}\n`;
         const byteLength = Buffer.byteLength(json, "utf8");

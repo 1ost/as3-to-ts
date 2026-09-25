@@ -6,6 +6,7 @@ import { CliError, errorMessage } from "./errors";
 import type { Limits } from "./options";
 
 interface ParserRequest {
+    compileDefinitions?: import("../hardened/compile-definitions").CompileDefinitions;
     includeEdges?: import("../hardened/source-includes").IncludeEdge[];
     includeRootPath?: string;
     includeFragments?: import("../hardened/source-includes").IncludeSource[];
@@ -82,6 +83,7 @@ export function parseIsolated(
     format: "legacy" | "normalized" = "legacy",
     workerSha256: string = captureParserWorkerSha256(),
     includes?: {includeEdges:import("../hardened/source-includes").IncludeEdge[];includeRootPath:string;includeFragments:import("../hardened/source-includes").IncludeSource[]},
+    compileDefinitions?: import("../hardened/compile-definitions").CompileDefinitions,
 ): Promise<ParserSuccess> {
     assertParserWorkerSha256(workerSha256);
     return new Promise((resolve, reject) => {
@@ -160,7 +162,7 @@ export function parseIsolated(
         });
 
         const request: ParserRequest = {
-            ...includes, sourcePath, content, maxAstBytes: limits.maxAstBytes, format, workerSha256 };
+            ...includes, ...(compileDefinitions ? {compileDefinitions} : {}), sourcePath, content, maxAstBytes: limits.maxAstBytes, format, workerSha256 };
         child.send(request, error => {
             if (error) {
                 fail(new CliError(`cannot send source to parser process: ${errorMessage(error)}`, 70));

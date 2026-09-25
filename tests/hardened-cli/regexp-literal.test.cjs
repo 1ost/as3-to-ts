@@ -20,7 +20,7 @@ test('RegExp source-bound fixtures preserve contracts and deterministic output',
   fs.writeFileSync(path.join(source,name+'.as'),bytes);hashes.set(name+'.as',sha(bytes));
  }
  const run=(command,args)=>{const r=cp.spawnSync(command,args,{cwd:root,encoding:'utf8',timeout:120000});assert.equal(r.status,0,r.stdout+r.stderr);};
- const make=()=>run('python3',['-B','tools/create-fixture-profile.py','--source',source,'--entry','RegExpConfigPatternsProbe','--air-sdk',air,'--laya',laya,'--ffdec-jar',ffdec,'--output',profile]);
+ const make=(shared=false)=>run('python3',['-B','tools/create-fixture-profile.py','--source',source,'--entry','RegExpConfigPatternsProbe','--air-sdk',air,'--laya',laya,'--ffdec-jar',ffdec,'--output',profile,...(shared?['--native-regexp']:[])]);
  const compile=(op,out)=>run(process.execPath,['bin/as3-frontend',op,source,path.join(dir,out),'--source-census',path.join(profile,'census.json'),'--target-capabilities',path.join(laya,'docTool/architecture/authored-content-capabilities.json'),'--profile-lock',path.join(profile,'profile-lock.json')]);
  make();const snapshots=[];
  for(const out of ['first','second']){
@@ -64,6 +64,13 @@ test('RegExp source-bound fixtures preserve contracts and deterministic output',
   snapshots.push([rows,codes]);
  }
  assert.deepEqual(snapshots[0],snapshots[1]);for(const [file,hash] of hashes)assert.equal(sha(fs.readFileSync(path.join(source,file))),hash);
+ // Enabling first-class RegExp must retain the already evidenced fused
+ // lookahead/alternation operation used by the original AP Config source.
+ fs.rmSync(profile,{recursive:true,force:true});make(true);compile('transpile','with-shared-provider');
+ const sharedRows=JSON.parse(fs.readFileSync(path.join(dir,'with-shared-provider/manifest.json'))).files;
+ assert.equal(sharedRows.length,3);
+ for(const [file,hash] of hashes)assert.equal(sharedRows.find(row=>row.sourcePath===file)?.sourceSha256,hash);
+ assert.match(fs.readFileSync(path.join(dir,'with-shared-provider/__as3_runtime/application/RegExpConfigPatternsProbe.ts'),'utf8'),/__as3RegExpReplaceReceiver/);
  const negatives={Flag:'/a/g',Capture:'/(a)/',Wildcard:'/a./',Backreference:'/(a)\\1/',Negated:' /[^a]/',Quantifier:'/a+/',Lookbehind:'/(?<=a)b/',
   Bound63:'/^[A-Za-z0-9._-]{1,63}$/',BoundZero:'/^[A-Za-z0-9._-]{0,64}$/',Bound65:'/^[A-Za-z0-9._-]{1,65}$/',
   BoundOpen:'/^[A-Za-z0-9._-]{1,}$/',BoundMissing:'/^[A-Za-z0-9._-]{,64}$/',BoundLazy:'/^[A-Za-z0-9._-]{1,64}?$/',

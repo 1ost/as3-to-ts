@@ -115,13 +115,25 @@ const TARGETS = Object.freeze([
 
 /** Optional shared TS provider proof; deliberately makes no native QName admission. */
 export function loadReflectionProviderTarget(proofJson: string, targetPath: string, targetJson: string): ReflectionProviderTarget {
+    verifySharedProviderTarget(proofJson,targetPath,targetJson,"as3-reflection-provider-target@1",TARGETS,
+        ["src/layaAir/flash/events/UnsupportedFlashFeatureError.ts"]);
+    const verified=Object.freeze({metadataModule:TARGETS[0]!.module,metadataExport:TARGETS[0]!.export,
+        describeModule:TARGETS[1]!.module,describeExport:TARGETS[1]!.export});
+    VERIFIED_TARGETS.set(verified,sha256(targetJson));
+    return verified;
+}
+
+/** Reusable closed provider/export/transitive-source verifier; callers retain their own unforgeable handles. */
+export function verifySharedProviderTarget(proofJson: string, targetPath: string, targetJson: string,
+    schema: string, TARGETS: readonly {module:string;export:string;signature:string;constructors?:readonly string[]}[],
+    requiredModules: readonly string[] = [], targetCapabilityId = "api.flash.utils"): void {
     const proof = parseProfileDocument(proofJson, "reflection provider proof");
     const target = parseProfileDocument(targetJson, "target capabilities");
     if (`${canonical(proof)}\n` !== proofJson
         || !exactKeys(proof,["schema","targetCapabilitiesSha256","targetCapabilityId","targets","targetSources"])
-        || proof.schema !== "as3-reflection-provider-target@1"
+        || proof.schema !== schema
         || proof.targetCapabilitiesSha256 !== sha256(targetJson)
-        || proof.targetCapabilityId !== "api.flash.utils"
+        || proof.targetCapabilityId !== targetCapabilityId
         || !Array.isArray(proof.targets) || proof.targets.length !== TARGETS.length
         || !proof.targetSources || typeof proof.targetSources !== "object" || Array.isArray(proof.targetSources)
         || !Array.isArray(target.capabilities))
@@ -134,7 +146,7 @@ export function loadReflectionProviderTarget(proofJson: string, targetPath: stri
         throw new ProofError("reflection capability is not a TypeScript obligation",6);
     const targetRoot = realpathSync.native(resolve(dirname(targetPath), "../.."));
     const sources = proof.targetSources as Record<string,unknown>;
-    for (const module of [...TARGETS.map(row=>row.module),"src/layaAir/flash/events/UnsupportedFlashFeatureError.ts"])
+    for (const module of [...TARGETS.map(row=>row.module),...requiredModules])
         if (!Object.prototype.hasOwnProperty.call(sources,module)) throw new ProofError("reflection source closure is incomplete",6);
     for (const [path,hash] of Object.entries(sources)) {
         if (!path.startsWith("src/layaAir/") || typeof hash !== "string" || !SHA256.test(hash))
@@ -153,14 +165,15 @@ export function loadReflectionProviderTarget(proofJson: string, targetPath: stri
             && (row as Record<string,unknown>).module===item.module && (row as Record<string,unknown>).export===item.export);
         if (rows.length!==1) throw new ProofError("reflection export obligation must be unique",6);
         const row=rows[0] as Record<string,unknown>;
-        if (row.kind!=="function" || row.signature!==item.signature || row.sha256!==item.sha256)
+        if (row.kind!==(expected.constructors ? "class" : "function") || row.signature!==item.signature || row.sha256!==item.sha256
+            || expected.constructors && JSON.stringify(row.constructors)!==JSON.stringify(expected.constructors))
             throw new ProofError("reflection export obligation differs",6);
         const bytes=profileFile(targetRoot,{path:expected.module,sha256:sources[expected.module] as string},"reflection export source");
         if (sha256(bytes.replace(/\r\n?/g,"\n"))!==item.sha256)
             throw new ProofError("reflection export source differs from ledger",6);
         const resolver=resolve(__dirname,"../tools/resolve-laya-export.cjs");
         const result=spawnSync(process.execPath,[resolver],{encoding:"utf8",timeout:90000,maxBuffer:8*1024*1024,
-            input:JSON.stringify({root:targetRoot,facade:{module:item.module,export:item.export,sha256:item.sha256},candidates:[row]})});
+            input:JSON.stringify({root:targetRoot,facade:{module:item.module,export:item.export,sha256:item.sha256},candidates:[row],validateConstructors:!!expected.constructors})});
         if (result.status!==0) throw new ProofError("reflection export/closure resolution failed: "+result.stderr,6);
         const resolved=JSON.parse(result.stdout) as {index:number;inputs:Record<string,string>};
         if(resolved.index!==0 || !resolved.inputs || typeof resolved.inputs!=="object") throw new ProofError("reflection resolver output is invalid",6);
@@ -172,8 +185,4 @@ export function loadReflectionProviderTarget(proofJson: string, targetPath: stri
     const expectedInputs=Object.fromEntries(Object.entries(sources).map(([path,hash])=>[resolve(targetRoot,path),hash]));
     // Canonical JSON accepts plain records; retain the null-prototype collection internally.
     if(canonical({...observedInputs})!==canonical(expectedInputs)) throw new ProofError("reflection transitive source closure differs",6);
-    const verified=Object.freeze({metadataModule:TARGETS[0]!.module,metadataExport:TARGETS[0]!.export,
-        describeModule:TARGETS[1]!.module,describeExport:TARGETS[1]!.export});
-    VERIFIED_TARGETS.set(verified,sha256(targetJson));
-    return verified;
 }

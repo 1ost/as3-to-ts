@@ -53,6 +53,12 @@ export function verifyNativeDateAuthority(source: LoadedSourceMemberAuthority, p
         || !exactPublicMember("read","time","public function get time() : Number","Number",0,0)
         || !exactPublicMember("write","time","public function set time(value:Number) : *","Number",1,1)
         || !exactPublicMember("read","timezoneOffset","public function get timezoneOffset() : Number","Number",0,0)) reject();
+    for (const name of ["fullYear","month","date","day","hours","seconds"])
+        if (!exactPublicMember("read",name,`public function get ${name}() : Number`,"Number",0,0)) reject();
+    for (const name of ["hours","seconds","milliseconds"]) {
+        if (!exactPublicMember("read",name,`public function get ${name}() : Number`,"Number",0,0)
+            || !exactPublicMember("write",name,`public function set ${name}(value:Number) : *`,"Number",1,1)) reject();
+    }
     const text=readFileSync(file,"utf8");
     if(sha(text)!==proof.declarationSha256) reject();
     const lines=text.split(/\r?\n/).map(line=>line.trim());
@@ -60,6 +66,10 @@ export function verifyNativeDateAuthority(source: LoadedSourceMemberAuthority, p
         "private native function _setTime(param1:Number) : Number;","AS3 function setTime(t:* = undefined) : Number",
         "private native function _setHours(... rest) : Number;",
         "AS3 function setHours(hour:* = undefined, min:* = undefined, sec:* = undefined, ms:* = undefined) : Number",
+        "AS3 native function getHours() : Number;","AS3 native function getDay() : Number;","AS3 native function getSeconds() : Number;",
+        "public function get hours() : Number","public function set hours(value:Number) : *",
+        "public function get seconds() : Number","public function set seconds(value:Number) : *",
+        "public function get milliseconds() : Number","public function set milliseconds(value:Number) : *",
         "AS3 native function getMinutes() : Number;","AS3 native function getTimezoneOffset() : Number;",
         "public function get minutes() : Number","public function set minutes(value:Number) : *",
         "public function get time() : Number","public function set time(value:Number) : *",

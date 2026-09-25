@@ -25,11 +25,11 @@ test("fixed-name dynamic push is deterministic without admitting arbitrary compu
   assert.match(code,/__as3ObjectCall/);assert.doesNotMatch(code,/as Array|as unknown\[\]/);snapshots.push([rows,code]);
  }
  assert.deepEqual(snapshots[0],snapshots[1]);
- for(const [name,body] of Object.entries({Computed:'value[key](7);',Unproved:'value.other(7);'}))
-  fs.writeFileSync(path.join(source,name+'.as'),`package {public class ${name} {public function run(value:*,key:String):void {${body}}}}`);
+ for(const [name,body] of Object.entries({Computed:'value[key](7);'}))
+  fs.writeFileSync(path.join(source,name+'.as'),`package {public class ${name} {public function run(value:*,key:Object):void {${body}}}}`);
  fs.writeFileSync(path.join(source,'MappedDictionary.as'),'package {import flash.utils.Dictionary; public class MappedDictionary {public function run():void {var dict:Dictionary=new Dictionary();var value:*;for each(value in dict){}}}}');
  fs.rmSync(profile,{recursive:true,force:true});makeProfile();compile("qualify","negative");
  const rows=JSON.parse(fs.readFileSync(path.join(dir,"negative/manifest.json"))).files;
- for(const name of ["Computed.as","Unproved.as"]){const row=rows.find(x=>x.sourcePath===name);assert.equal(row.status,"held");assert.equal(row.code,"HARDENED_OBJECT_CALL_TARGET");}
+ {const row=rows.find(x=>x.sourcePath==="Computed.as");assert.equal(row.status,"held","Computed.as");assert.equal(row.code,"HARDENED_OBJECT_CALL_TARGET","Computed.as");}
  assert.equal(rows.find(x=>x.sourcePath==='MappedDictionary.as').code,'HARDENED_FOREACH_DICTIONARY_AUTHORITY');
 });

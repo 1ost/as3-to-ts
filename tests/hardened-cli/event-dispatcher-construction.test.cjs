@@ -21,7 +21,7 @@ test('EventDispatcher subclass forwards authenticated target without exposing pr
   snapshots.push([rows,codes]);
  }
  assert.deepEqual(snapshots[0],snapshots[1]);
- const negative={Receiver:['','super(this);','HARDENED_SUPER_CONSTRUCTION_RECEIVER'],Extra:['','super(null,null);','HARDENED_CAPABILITY_CALL_ARITY'],Wrong:['','super(1);','HARDENED_CAPABILITY_CALL_TYPE']};
+ const negative={Receiver:['','super(this as EventDispatcher);','HARDENED_SUPER_CONSTRUCTION_RECEIVER'],Extra:['','super(null,null);','HARDENED_CAPABILITY_CALL_ARITY'],Wrong:['','super(1);','HARDENED_CAPABILITY_CALL_TYPE']};
  for(const [name,[parameters,body]] of Object.entries(negative))fs.writeFileSync(path.join(source,name+'.as'),`package {import flash.events.EventDispatcher;public class ${name} extends EventDispatcher {public function ${name}(${parameters}){${body}}}}`);
  fs.rmSync(profile,{recursive:true,force:true});make();compile('qualify','negative');const rows=JSON.parse(fs.readFileSync(path.join(dir,'negative/manifest.json'))).files;
  for(const [name,[,,code]] of Object.entries(negative)){const row=rows.find(r=>r.sourcePath===name+'.as');assert.equal(row?.status,'held',JSON.stringify(row));assert.equal(row.code,code,JSON.stringify(row));}

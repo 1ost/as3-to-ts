@@ -14,10 +14,14 @@ test('missing native capability fails without modifying an allocated receiver',a
  assert.throws(()=>AS3ByteArray.prototype.uncompress.call(Object.create(AS3ByteArray.prototype)),/allocation identity/);
 });
 test('native result commits atomically to the same indexed allocation',async()=>{
- const {AS3ByteArray,isAS3ByteArray}=await load('success','export function uncompressNativeByteArray(state){state.bytes[0]=99;return {bytes:new Uint8Array([7,8,9]),position:0,endian:state.endian};}');
+ const calls=[];globalThis.__byteArrayAlgorithms=calls;
+ const {AS3ByteArray,isAS3ByteArray}=await load('success','export function uncompressNativeByteArray(state,algorithm){globalThis.__byteArrayAlgorithms.push({count:arguments.length,algorithm});state.bytes[0]=99;return {bytes:new Uint8Array([7,8,9]),position:0,endian:state.endian};}');
  const b=AS3ByteArray.fromArrayBuffer(new Uint8Array([1,2]));const alias=b;b.position=12;b.endian='littleEndian';
  assert.equal(b.uncompress(),undefined);assert.equal(alias,b);assert.equal(isAS3ByteArray(b),true);assert.equal(alias[0],7);assert.equal(b.length,3);assert.equal(b.position,0);assert.equal(b.endian,'littleEndian');
- assert.throws(()=>b.uncompress('zlib'),/no algorithm arguments/);
+ assert.equal(b.uncompress('deflate'),undefined);assert.equal(b.uncompress(undefined),undefined);
+ assert.deepEqual(calls,[{count:1,algorithm:undefined},{count:2,algorithm:'deflate'},{count:2,algorithm:undefined}]);
+ assert.throws(()=>b.uncompress('zlib','extra'),/at most one algorithm argument/);
+ delete globalThis.__byteArrayAlgorithms;
 });
 test('target failure and invalid return preserve bytes and metadata',async()=>{
  for(const [name,body] of [['throw','state.bytes[0]=99;throw new Error("native2058");'],['invalid','return {bytes:new Uint8Array([9]),position:-1,endian:state.endian};']]){

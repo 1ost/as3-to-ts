@@ -14,6 +14,7 @@ import { assertLoadedLocalTypeAuthority } from "./local-types";
 
 export interface LocalMemberAuthorityInput {
     expectedSourceIncludesSha256?: string;
+    expectedCompileDefinitionsSha256?: string;
     json: string;
     sha256: string;
     expectedEntryCount: number;
@@ -246,7 +247,7 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
     const inputKeys = [
         "expectedCompleteCount", "expectedDeclarationWorkerSha256", "expectedEntryCount", "expectedHeldCount",
         "expectedLocalTypeMapSha256", "expectedSourceCensusSha256", "json", "sha256",
-    ].concat(profiled ? ["expectedSchema"] : [], input.expectedSourceIncludesSha256 !== undefined ? ["expectedSourceIncludesSha256"] : []);
+    ].concat(profiled ? ["expectedSchema"] : [], input.expectedSourceIncludesSha256 !== undefined ? ["expectedSourceIncludesSha256"] : [], input.expectedCompileDefinitionsSha256 !== undefined ? ["expectedCompileDefinitionsSha256"] : []);
     if (!object(input) || !exactKeys(input as unknown as Record<string, unknown>, inputKeys)
         || typeof input.json !== "string" || typeof input.sha256 !== "string" || !SHA256.test(input.sha256)
         || sha256(input.json) !== input.sha256) {
@@ -259,7 +260,7 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
     if (!object(document) || !exactKeys(document, [
         "completeCount", "declarationWorkerSha256", "entries", "entryCount", "heldCount", "localTypeMapSha256",
         "schema", "sourceCensusSha256",
-    ].concat(input.expectedSourceIncludesSha256 !== undefined ? ["sourceIncludesSha256"] : [])) || document.schema !== (profiled ? input.expectedSchema : "bleach-local-as3-member-map@2")
+    ].concat(input.expectedSourceIncludesSha256 !== undefined ? ["sourceIncludesSha256"] : [], input.expectedCompileDefinitionsSha256 !== undefined ? ["compileDefinitionsSha256"] : [])) || document.schema !== (profiled ? input.expectedSchema : "bleach-local-as3-member-map@2")
         || !Array.isArray(document.entries)
         || document.entryCount !== input.expectedEntryCount || document.entries.length !== input.expectedEntryCount
         || document.completeCount !== input.expectedCompleteCount || document.heldCount !== input.expectedHeldCount
@@ -267,6 +268,7 @@ export function loadLocalMemberAuthority(input: LocalMemberAuthorityInput, sha25
         || document.localTypeMapSha256 !== input.expectedLocalTypeMapSha256
         || document.declarationWorkerSha256 !== input.expectedDeclarationWorkerSha256
         || (input.expectedSourceIncludesSha256 !== undefined && (!SHA256.test(input.expectedSourceIncludesSha256) || document.sourceIncludesSha256 !== input.expectedSourceIncludesSha256))
+        || (input.expectedCompileDefinitionsSha256 !== undefined && (!SHA256.test(input.expectedCompileDefinitionsSha256) || document.compileDefinitionsSha256 !== input.expectedCompileDefinitionsSha256))
         || document.sourceCensusSha256 !== input.expectedSourceCensusSha256
         || `${canonical(document)}\n` !== input.json) {
         fail("HARDENED_LOCAL_MEMBER_SCHEMA", "local member authority schema, pins, counts, or canonical bytes are invalid");
