@@ -1,5 +1,6 @@
 import {assertByteArrayAMF3Target} from "./bytearray-amf3-authority";
 import {assertStringRangeProviderTarget} from "./string-range-provider-authority";
+import {assertXMLStaticLiteralProviderTarget} from "./xml-static-literal-provider-authority";
 import {assertJSONDefinitionProviderTarget} from "./json-definition-provider-authority";
 import {assertTypeErrorProviderTarget} from "./type-error-provider-authority";
 import {assertMathFloorProviderTarget} from "./math-floor-provider-authority";
@@ -1256,6 +1257,8 @@ export function selectCapabilityCandidates(sourceJson: string, targetJson: strin
 
 export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256: Sha256Function): LoadedCapabilityAuthority {
     if (input.byteArrayNative !== undefined) assertByteArrayNativeTarget(input.byteArrayNative, input.targetCapabilitiesJson);
+    if (input.xmlStaticLiteralProvider !== undefined)
+        assertXMLStaticLiteralProviderTarget(input.xmlStaticLiteralProvider, input.targetCapabilitiesJson);
     if (input.stringRangeProvider !== undefined) assertStringRangeProviderTarget(input.stringRangeProvider,input.targetCapabilitiesJson);
     if (input.jsonDefinitionProvider !== undefined) assertJSONDefinitionProviderTarget(input.jsonDefinitionProvider,input.targetCapabilitiesJson);
     if (input.typeErrorProvider !== undefined) assertTypeErrorProviderTarget(input.typeErrorProvider,input.targetCapabilitiesJson);
@@ -1326,6 +1329,7 @@ export function loadCapabilityAuthority(input: CapabilityAuthorityInput, sha256:
         memberMappingsByKey,
         intrinsicTypesBySource,
         ...(input.byteArrayNative ? {byteArrayNative:input.byteArrayNative} : {}),
+        ...(input.xmlStaticLiteralProvider ? {xmlStaticLiteralProvider:input.xmlStaticLiteralProvider} : {}),
         ...(input.stringRangeProvider ? {stringRangeProvider:input.stringRangeProvider} : {}),
         ...(input.arraySortProvider ? {arraySortProvider:input.arraySortProvider} : {}),
         ...(input.arraySomeProvider ? {arraySomeProvider:input.arraySomeProvider} : {}),

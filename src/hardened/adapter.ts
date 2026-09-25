@@ -96,6 +96,7 @@ interface SignatureTypeProof { ownerQName: string; member: LocalDeclarationMembe
 interface AdapterContext {
     declaredMemberNames?: ReadonlySet<string>;
     stringRangeProvider?: LoadedCapabilityAuthority["stringRangeProvider"];
+    xmlStaticLiteralProvider?: LoadedCapabilityAuthority["xmlStaticLiteralProvider"];
     arraySortProvider?: LoadedCapabilityAuthority["arraySortProvider"];
     arraySomeProvider?: LoadedCapabilityAuthority["arraySomeProvider"];
     errorStackProvider?: LoadedCapabilityAuthority["errorStackProvider"];
@@ -2310,6 +2311,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         if (mapping !== null) return mappedMemberType(mapping, "read", context, node);
     }
     if (expression.kind === "undefined") return semanticType(node, "*", "unknown");
+    if (expression.kind === "xmlStaticLiteral") return semanticType(node, "XML", "unknown", [], false);
     if (expression.kind === "numericPredicate") return semanticType(node,"Boolean","boolean",[],false);
     if (expression.kind === "encodeUriComponent" || expression.kind === "decodeUriComponent") return semanticType(node,"String","string",[],false);
     if (expression.kind === "math" || expression.kind === "parseInteger") return semanticType(node, "Number", "number", [], false, "Number");
@@ -2814,9 +2816,41 @@ function builtinMathMember(node: TreeNode, context: AdapterContext): string | nu
     return requiredText(node.children[1]!, "Math member");
 }
 
+function admittedStaticXMLLiteralSource(source: string): boolean {
+    if (source.length > 65536 || !source.startsWith("<")) return false;
+    let inTag = false;
+    let quote: "'" | '"' | null = null;
+    for (const character of source) {
+        if (quote !== null) {
+            // A quoted closing brace occurs in AP's literal ':}' icon label.
+            // Any opening brace remains a hold, including quoted interpolation.
+            if (character === "{") return false;
+            if (character === quote) quote = null;
+        } else if (character === "<") {
+            inTag = true;
+        } else if (character === ">") {
+            inTag = false;
+        } else if (inTag && (character === "'" || character === '"')) {
+            quote = character;
+        } else if (character === "{" || character === "}") {
+            return false;
+        }
+    }
+    return quote === null && !inTag;
+}
+
 function parseExpression(node: TreeNode, context: AdapterContext, valuePosition: boolean,
     allowSuperCall: boolean = false, allowMethodClosure: boolean = true,
     allowAssignment: boolean = false): SemanticExpression {
+    if (node.kind === "XML_LITERAL") {
+        if (!context.xmlStaticLiteralProvider)
+            fail("HARDENED_EXPRESSION_UNSUPPORTED", "normalized expression kind is unsupported: XML_LITERAL", node);
+        const source = node.text;
+        if (node.children.length !== 0 || typeof source !== "string" || !admittedStaticXMLLiteralSource(source))
+            fail("HARDENED_XML_STATIC_LITERAL_DYNAMIC", "XML_LITERAL requires a bounded static source leaf without interpolation", node);
+        return {...identity(node), kind: "xmlStaticLiteral", source,
+            targetModule: targetModuleSpecifier(context.xmlStaticLiteralProvider.module)};
+    }
     if (context.sourceMemberAuthority && context.lambdaDepth > 0 && valuePosition
         && !context.locals.arguments && !context.parameters.arguments && !context.fields.arguments
         && !context.methods.arguments && !context.accessors.arguments && !context.importsByLocal.arguments
@@ -6773,6 +6807,7 @@ function adaptPackageFieldProgram(root: TreeNode, ast: NormalizedParserAst,
         intrinsicMembersByKey: authority.intrinsicMembersByKey,
         nativeTimerFunctionsBySource: authority.nativeTimerFunctionsBySource,
         stringRangeProvider: authority.stringRangeProvider,
+        xmlStaticLiteralProvider: authority.xmlStaticLiteralProvider,
         arraySortProvider: authority.arraySortProvider,
         arraySomeProvider: authority.arraySomeProvider,
         errorStackProvider: authority.errorStackProvider,
@@ -7169,6 +7204,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
         intrinsicMembersByKey: authority.intrinsicMembersByKey,
         nativeTimerFunctionsBySource: authority.nativeTimerFunctionsBySource,
         stringRangeProvider: authority.stringRangeProvider,
+        xmlStaticLiteralProvider: authority.xmlStaticLiteralProvider,
         arraySortProvider: authority.arraySortProvider,
         arraySomeProvider: authority.arraySomeProvider,
         errorStackProvider: authority.errorStackProvider,

@@ -243,6 +243,7 @@ def main():
     p.add_argument('--native-regexp-members', action='store_true', help='Authenticate shared RegExp source/global properties and test calls')
     p.add_argument('--native-regexp', action='store_true', help='Authenticate exact SDK RegExp declarations')
     p.add_argument('--shared-string-ranges', action='store_true', help='Use authenticated common String index/range operations')
+    p.add_argument('--shared-static-xml', action='store_true', help='Use the authenticated shared static XML literal bridge')
     p.add_argument('--shared-json-definition', action='store_true', help='Use authenticated shared JSON definition calls')
     p.add_argument('--shared-type-error', action='store_true', help='Use authenticated shared String TypeError construction')
     p.add_argument('--shared-math-floor', action='store_true', help='Use authenticated shared numeric Math.floor')
@@ -366,6 +367,11 @@ def main():
         range_target = produce_string_range_provider_profile(profile_root=out, laya_root=laya)
         files['stringRangeProvider'] = out / range_target['file']['path']
         facade_inputs.update(range_target['generatorInputs'])
+    if args.shared_static_xml:
+        from reflection_provider_profile import produce_xml_static_literal_provider_profile
+        xml_target = produce_xml_static_literal_provider_profile(profile_root=out, laya_root=laya)
+        files['xmlStaticLiteralProvider'] = out / xml_target['file']['path']
+        facade_inputs.update(xml_target['generatorInputs'])
     if args.shared_json_definition:
         from reflection_provider_profile import produce_json_definition_provider_profile
         json_target = produce_json_definition_provider_profile(profile_root=out, laya_root=laya)

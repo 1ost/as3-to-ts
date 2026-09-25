@@ -126,7 +126,8 @@ export function loadReflectionProviderTarget(proofJson: string, targetPath: stri
 /** Reusable closed provider/export/transitive-source verifier; callers retain their own unforgeable handles. */
 export function verifySharedProviderTarget(proofJson: string, targetPath: string, targetJson: string,
     schema: string, TARGETS: readonly {module:string;export:string;signature:string;constructors?:readonly string[]}[],
-    requiredModules: readonly string[] = [], targetCapabilityId = "api.flash.utils"): void {
+    requiredModules: readonly string[] = [], targetCapabilityId = "api.flash.utils",
+    additionalSourcePaths: readonly string[] = []): void {
     const proof = parseProfileDocument(proofJson, "reflection provider proof");
     const target = parseProfileDocument(targetJson, "target capabilities");
     if (`${canonical(proof)}\n` !== proofJson
@@ -149,7 +150,8 @@ export function verifySharedProviderTarget(proofJson: string, targetPath: string
     for (const module of [...TARGETS.map(row=>row.module),...requiredModules])
         if (!Object.prototype.hasOwnProperty.call(sources,module)) throw new ProofError("reflection source closure is incomplete",6);
     for (const [path,hash] of Object.entries(sources)) {
-        if (!path.startsWith("src/layaAir/") || typeof hash !== "string" || !SHA256.test(hash))
+        if (!(path.startsWith("src/layaAir/") || additionalSourcePaths.includes(path))
+            || typeof hash !== "string" || !SHA256.test(hash))
             throw new ProofError("reflection source identity is invalid",6);
         profileFile(targetRoot,{path,sha256:hash},"reflection target source");
     }

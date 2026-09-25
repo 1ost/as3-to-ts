@@ -73,6 +73,7 @@ export interface ByteArrayNativeTarget {
 
 export interface CapabilityAuthorityInput {
     byteArrayNative?: ByteArrayNativeTarget;
+    xmlStaticLiteralProvider?: import("./xml-static-literal-provider-authority").XMLStaticLiteralProviderTarget;
     stringRangeProvider?: import("./string-range-provider-authority").StringRangeProviderTarget;
     arraySortProvider?: import("./array-sort-provider-authority").ArraySortProviderTarget;
     arraySomeProvider?: import("./array-some-provider-authority").ArraySomeProviderTarget;
@@ -99,6 +100,7 @@ export interface CapabilityAuthorityInput {
 
 export interface LoadedCapabilityAuthority {
     byteArrayNative?: ByteArrayNativeTarget;
+    xmlStaticLiteralProvider?: import("./xml-static-literal-provider-authority").XMLStaticLiteralProviderTarget;
     stringRangeProvider?: import("./string-range-provider-authority").StringRangeProviderTarget;
     arraySortProvider?: import("./array-sort-provider-authority").ArraySortProviderTarget;
     arraySomeProvider?: import("./array-some-provider-authority").ArraySomeProviderTarget;
@@ -187,6 +189,12 @@ export type SemanticLiteralValue = string | number | boolean | null;
 export interface LiteralExpression extends SemanticIdentity {
     kind: "literal";
     value: SemanticLiteralValue;
+}
+
+export interface XMLStaticLiteralExpression extends SemanticIdentity {
+    kind: "xmlStaticLiteral";
+    source: string;
+    targetModule: string;
 }
 
 export interface UndefinedExpression extends SemanticIdentity {
@@ -643,7 +651,7 @@ export interface ReflectionExpression extends SemanticIdentity {
     resultType: SemanticType;
 }
 
-export type SemanticExpression = ArgumentReadExpression | CallableSelfExpression | ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | EncodeUriComponentExpression | DecodeUriComponentExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ArrayHasExpression | ObjectOperationExpression | NativeHasOwnPropertyExpression | LiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
+export type SemanticExpression = ArgumentReadExpression | CallableSelfExpression | ReflectionExpression | RegExpCallExpression | NumericPredicateExpression | EncodeUriComponentExpression | DecodeUriComponentExpression | ParseIntegerExpression | GlobalFunctionExpression | FunctionApplyExpression | DictionaryHasExpression | ArrayHasExpression | ObjectOperationExpression | NativeHasOwnPropertyExpression | LiteralExpression | XMLStaticLiteralExpression | UndefinedExpression | IntrinsicConstantExpression | MathExpression | GlobalCallExpression | IdentifierExpression | ThisExpression |
     SuperExpression | MemberExpression | MethodClosureExpression | LambdaExpression | CallExpression | AssignmentExpression |
     NewExpression | BinaryExpression | UnaryExpression | ParenthesizedExpression | NonNullExpression |
     ConditionalExpression | UpdateExpression | DeleteExpression | ArrayExpression | ObjectExpression | OwnRecordExpression | IndexExpression | VectorConversionExpression |

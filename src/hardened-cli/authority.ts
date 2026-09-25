@@ -10,6 +10,7 @@ import {loadArraySortProviderTarget} from "../hardened/array-sort-provider-autho
 import {loadArraySomeProviderTarget} from "../hardened/array-some-provider-authority";
 import {loadErrorStackProviderTarget} from "../hardened/error-stack-provider-authority";
 import {loadStringRangeProviderTarget} from "../hardened/string-range-provider-authority";
+import {loadXMLStaticLiteralProviderTarget} from "../hardened/xml-static-literal-provider-authority";
 import {loadDateProviderTarget} from "../hardened/date-provider-authority";
 import {loadStringPatternProviderTarget} from "../hardened/string-pattern-provider-authority";
 import {loadSourceIncludes} from "./source-includes-authority";
@@ -349,6 +350,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
                 Object.prototype.hasOwnProperty.call(profile.files,"byteArrayNative") ? ["byteArrayNative"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"nativeRegExp") ? ["nativeRegExp"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"stringRangeProvider") ? ["stringRangeProvider"] : [],
+                Object.prototype.hasOwnProperty.call(profile.files,"xmlStaticLiteralProvider") ? ["xmlStaticLiteralProvider"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"arraySortProvider") ? ["arraySortProvider"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"arraySomeProvider") ? ["arraySomeProvider"] : [],
                 Object.prototype.hasOwnProperty.call(profile.files,"errorStackProvider") ? ["errorStackProvider"] : [],
@@ -376,7 +378,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
     const profileRoot = dirname(resolve(profileLockPath));
     const files = profile.files as unknown as {
         capabilityMapping: ProfileFile; dependencyGraphRaw: ProfileFile; dependencyGraphSemantic: ProfileFile;
-        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; dateProvider?: ProfileFile; stringRangeProvider?: ProfileFile; arraySortProvider?: ProfileFile; arraySomeProvider?: ProfileFile; errorStackProvider?: ProfileFile; mathFloorProvider?: ProfileFile; objectConstructorProvider?: ProfileFile; objectHasOwnPropertyProvider?: ProfileFile; typeErrorProvider?: ProfileFile; jsonDefinitionProvider?: ProfileFile; byteArrayAMF3?: ProfileFile; nativeRegExp?: ProfileFile; sourceIncludes?: ProfileFile; compileDefinitions?: ProfileFile; nativeDescribeType?: ProfileFile; nativeUriComponent?: ProfileFile; reflectionProvider?: ProfileFile; stringPatternProvider?: ProfileFile;
+        localTypeMap: ProfileFile; localMemberMap: ProfileFile; nativeTimerAuthority: ProfileFile; byteArrayNative?: ProfileFile; nativeDate?: ProfileFile; dateProvider?: ProfileFile; stringRangeProvider?: ProfileFile; xmlStaticLiteralProvider?: ProfileFile; arraySortProvider?: ProfileFile; arraySomeProvider?: ProfileFile; errorStackProvider?: ProfileFile; mathFloorProvider?: ProfileFile; objectConstructorProvider?: ProfileFile; objectHasOwnPropertyProvider?: ProfileFile; typeErrorProvider?: ProfileFile; jsonDefinitionProvider?: ProfileFile; byteArrayAMF3?: ProfileFile; nativeRegExp?: ProfileFile; sourceIncludes?: ProfileFile; compileDefinitions?: ProfileFile; nativeDescribeType?: ProfileFile; nativeUriComponent?: ProfileFile; reflectionProvider?: ProfileFile; stringPatternProvider?: ProfileFile;
         runtimeTypeAuthorityLock: ProfileFile; runtimeTypePredicates: ProfileFile; sourceManifest: ProfileFile;
         sourceMemberAuthority: ProfileFile;
     };
@@ -426,6 +428,8 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             profileFile(profileRoot,files.sourceManifest,"source manifest")) : undefined;
         const stringRangeProvider=files.stringRangeProvider ? loadStringRangeProviderTarget(
             profileFile(profileRoot,files.stringRangeProvider,"String range provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
+        const xmlStaticLiteralProvider=files.xmlStaticLiteralProvider ? loadXMLStaticLiteralProviderTarget(
+            profileFile(profileRoot,files.xmlStaticLiteralProvider,"XML static literal provider proof"),targetCapabilitiesPath,targetCapabilitiesJson) : undefined;
         const jsonDefinitionProvider=files.jsonDefinitionProvider ? loadJSONDefinitionProviderTarget(
             profileFile(profileRoot,files.jsonDefinitionProvider,"JSON definition provider proof"),targetCapabilitiesPath,targetCapabilitiesJson,sourceMemberAuthorityJson) : undefined;
         const typeErrorProvider=files.typeErrorProvider ? loadTypeErrorProviderTarget(
@@ -457,6 +461,7 @@ function loadApplicationTranspileAuthority(sourceCensusPath: string, targetCapab
             runtimePackage: profile.runtimePackage as string, applicationProfile: true,
             ...(byteArrayNative ? { byteArrayNative } : {}),
             ...(stringRangeProvider ? {stringRangeProvider} : {}),
+            ...(xmlStaticLiteralProvider ? {xmlStaticLiteralProvider} : {}),
             ...(arraySortProvider ? {arraySortProvider} : {}),
             ...(arraySomeProvider ? {arraySomeProvider} : {}),
             ...(errorStackProvider ? {errorStackProvider} : {}),

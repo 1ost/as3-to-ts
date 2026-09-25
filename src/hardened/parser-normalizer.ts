@@ -10,7 +10,7 @@ const SHA256 = /^[0-9a-f]{64}$/;
 
 // Closed structural vocabulary consumed by declaration extraction and adapter.ts.
 // XML_LITERAL is retained as an exact source leaf for declaration authentication;
-// its execution remains a semantic hold in adapter.ts. Other expansion still
+// only static literals with a verified shared provider can execute in adapter.ts. Other expansion still
 // requires an explicit structural and semantic admission decision.
 const ADMITTED_KINDS = new Set([
     "ADD", "AND", "ARGUMENTS", "ARRAY", "ARRAY_ACCESSOR", "AS", "ASSIGN", "B_AND", "B_NOT", "B_OR", "B_XOR", "BLOCK", "BREAK", "CALL", "CLASS", "COMPILATION_UNIT", "CONDITION", "CONDITIONAL", "CONST_LIST", "CONTENT", "CONTINUE", "DELETE", "DOT",

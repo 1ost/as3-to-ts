@@ -171,6 +171,9 @@ function initializeClassNode(value: any, self: boolean, ts: TypeScriptCompilerAp
 }
 
 function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerApi): any {
+    if (expression.kind === "xmlStaticLiteral") return ts.factory.createCallExpression(
+        ts.factory.createIdentifier("__as3XMLStaticLiteral"), undefined,
+        [ts.factory.createStringLiteral(expression.source)]);
     if (expression.kind === "reflection") {
         const name={describe:"as3DescribeTypeStatic",variable:"as3ReflectionVariable",staticRead:"as3ReflectionStaticRead"}[expression.operation];
         return ts.factory.createCallExpression(ts.factory.createIdentifier("__"+name),undefined,
@@ -2132,6 +2135,18 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
             ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("sourceRegExpReplaceWithInvoker"),ts.factory.createIdentifier("__as3SourceRegExpReplaceWithInvoker"))] : [
             ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("compileSourceStringPattern"),ts.factory.createIdentifier("__as3CompileSourceStringPattern")),
             ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("sourceStringReplace"),ts.factory.createIdentifier("__as3SourceStringReplace"))])),
+        ts.factory.createStringLiteral(module),undefined));
+    const xmlStaticLiteralModules=new Set<string>();
+    const collectXMLStaticLiteralModules=(value:any):void=>{
+        if (!value || typeof value!=="object") return;
+        if (value.kind==="xmlStaticLiteral") xmlStaticLiteralModules.add(value.targetModule);
+        Object.values(value).forEach(collectXMLStaticLiteralModules);
+    };
+    collectXMLStaticLiteralModules(program);
+    for (const module of xmlStaticLiteralModules) imports.push(ts.factory.createImportDeclaration(undefined,
+        ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3XMLStaticLiteral"),
+                ts.factory.createIdentifier("__as3XMLStaticLiteral"))])),
         ts.factory.createStringLiteral(module),undefined));
     if (programUsesArrayIndex(program)) imports.push(arrayRuntimeImport(ts));
     if (programHasKind(program, "ownRecord")) {

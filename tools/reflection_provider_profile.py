@@ -119,6 +119,29 @@ def produce_reflection_provider_profile(*, profile_root, laya_root):
             "manifestPins": {}, "generatorInputs": inputs}
 
 
+XML_STATIC_LITERAL_TARGETS = (("src/layaAir/flash/utils/AS3XML.ts", "as3XMLStaticLiteral",
+                               "(source: string) => XML"),)
+
+
+def inspect_xml_static_literal_provider_inputs(laya_root):
+    return _inspect(laya_root, XML_STATIC_LITERAL_TARGETS,
+                    "as3-xml-static-literal-provider-target@1")[1]
+
+
+def produce_xml_static_literal_provider_profile(*, profile_root, laya_root):
+    root = Path(profile_root).resolve(strict=True)
+    proof, inputs = _inspect(laya_root, XML_STATIC_LITERAL_TARGETS,
+                             "as3-xml-static-literal-provider-target@1")
+    destination = root / "xml-static-literal-provider.json"
+    data = canonical(proof)
+    with destination.open("xb") as stream:
+        stream.write(data)
+    if any(sha(Path(name)) != digest for name, digest in inputs.items()):
+        raise ValueError("XML static literal provider inputs changed during publication")
+    return {"file": {"path": destination.name, "sha256": hashlib.sha256(data).hexdigest()},
+            "manifestPins": {}, "generatorInputs": inputs}
+
+
 STRING_PATTERN_TARGETS = (
     ("src/layaAir/flash/utils/AS3StringIntrinsics.ts", "compileSourceStringPattern",
      "(source: string, flags?: string) => SourceStringPattern"),
