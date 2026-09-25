@@ -160,6 +160,8 @@ export interface EmitterOptions {
     nativeTextFormatReferenceModule?: string;
     nativeInteractiveObjectReferenceModule?: string;
     nativeByteArrayReferenceModule?: string;
+    /** Closed AccessibilityImplementation nominal reference provider; no subclass admission. */
+    nativeAccessibilityReferenceModule?: string;
 	/** Builtin AS3 global names and their authenticated common modules. */
 	nativeGlobalModules?:{[name:string]:string};
 	/** Authenticated common flash.utils.Proxy module. */
@@ -430,6 +432,16 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules[qname]!==module)
                 throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: exact native display provider binding required');
         }
+        if (this.options.nativeAccessibilityReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeAccessibilityReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_ACCESSIBILITY_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const provider=inputs.providers&&inputs.providers['flash.accessibility.AccessibilityImplementation'];
+            if(!provider||provider.exportName!=='AccessibilityImplementation'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                ||!this.options.importModules||this.options.importModules['flash.accessibility.AccessibilityImplementation']!==module)
+                throw new Error('AS3_ACCESSIBILITY_REFERENCE_UNSUPPORTED: exact native provider binding required');
+        }
         if (this.options.nativeByteArrayReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeByteArrayReferenceModule);
             if(!this.generated||!this.options.nativeReferenceCoercion)
@@ -463,7 +475,7 @@ export default class Emitter {
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
                 this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
                 this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : [],
-                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined);
+                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -681,7 +693,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -4401,6 +4413,7 @@ function emitRelation(emitter:Emitter, node:Node):void {
         &&((emitter.options.nativeDisplayObjectReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.DisplayObject')
           ||(emitter.options.nativeMovieClipReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.MovieClip')
           ||(emitter.options.nativeTextFormatReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.text.TextFormat')
+          ||(emitter.options.nativeAccessibilityReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.accessibility.AccessibilityImplementation')
           ||(emitter.options.nativeInteractiveObjectReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.InteractiveObject'))) {
         const target=node.lastChild,definition=emitter.findDefInScope(target.text);
         if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
