@@ -18,7 +18,9 @@ interface Member extends Trait {
     parameterCount?: number;
     override?: boolean;
     final?: boolean;
+    signature?: {parameters: string[]; returns: string};
 }
+interface MethodSignature {name: string; parameters: string[]; returns: string; override: boolean; final: boolean;}
 interface LexicalMember {
     readonly owner: string; readonly start: number; readonly end: number;
     readonly visibility: string; readonly static: boolean;
@@ -51,6 +53,8 @@ export class NativeGeneratedClassTraits {
     public readonly staticTraits: ReadonlyArray<Trait>;
     public readonly instanceConstants: ReadonlyArray<{name: string; literal: string}>;
     public readonly lexicalMembers: ReadonlyArray<LexicalMember>;
+    public readonly inheritInstanceLayout: boolean;
+    public readonly instanceMethods: ReadonlyArray<MethodSignature>;
 
     constructor(plan: NativeGeneratedDeclarationPlan, scope: string, owner: string, source: string) {
         nativeGeneratedDeclarationSource(plan, scope, owner, source);
@@ -165,7 +169,23 @@ export class NativeGeneratedClassTraits {
                 }
                 const name = member.findChild(K.NAME).text, params = member.findChild(K.PARAMETER_LIST).children;
                 if (member.kind === K.FUNCTION) {
-                    add(Object.assign({},common,{name,kind:'method',parameterCount:params.filter(p=>!p.findChild(K.REST)).length}) as Member);
+                    // Only fixed required intrinsic signatures have selected-parent
+                    // authority. Labels cannot stand in for nominal reference types.
+                    const signatureType=(node:Node,returns=false):string=>{
+                        if(!node)return '*';
+                        if(returns && node.kind===K.TYPE && node.text==='void')return 'void';
+                        const ref=plan.references.find(r=>r.owner===binding.qname && r.start===node.start && r.end===node.end);
+                        return ref && ref.kind==='intrinsic' && ['*','Object','int','uint','Number','Boolean','String','Function'].indexOf(ref.identity)>=0
+                            ? ref.identity : undefined;
+                    };
+                    const parameters=params.map(p=>{
+                        const value=p.findChild(K.NAME_TYPE_INIT);
+                        return !p.findChild(K.REST) && value && !value.findChild(K.INIT)
+                            ? signatureType(value.findChild(K.VECTOR)||value.findChild(K.TYPE)) : undefined;
+                    });
+                    const returns=signatureType(member.findChild(K.VECTOR)||member.findChild(K.TYPE),true);
+                    const signature=returns!==undefined && parameters.every(p=>p!==undefined) ? {parameters,returns} : undefined;
+                    add(Object.assign({},common,{name,kind:'method',parameterCount:params.filter(p=>!p.findChild(K.REST)).length,signature}) as Member);
                     return;
                 }
                 let valueType: TraitType;
@@ -192,6 +212,9 @@ export class NativeGeneratedClassTraits {
                         || member.kind === 'accessor' && (previous.access !== member.access || JSON.stringify(previous.type) !== JSON.stringify(member.type))
                         || member.kind === 'method' && previous.parameterCount !== member.parameterCount)
                         fail('inherited collision/partial override requires authority: ' + binding.qname + ':' + member.name);
+                    if(input.inheritScriptClasses && parent && member.kind==='method'
+                        && (!member.signature || !previous.signature || JSON.stringify(member.signature)!==JSON.stringify(previous.signature)))
+                        fail('selected parent override requires matching fixed intrinsic method signature: '+binding.qname+':'+member.name);
                     instance[index] = member;
                 } else {
                     if (member.override) fail('override without source public ancestor: ' + binding.qname + ':' + member.name);
@@ -202,6 +225,13 @@ export class NativeGeneratedClassTraits {
         };
         build(this.binding);
         const surface = surfaces.get(owner);
+        this.inheritInstanceLayout = !!input.inheritScriptClasses && !!this.binding.base
+            && plan.bindings.some(binding=>binding.qname===this.binding.base);
+        if(this.inheritInstanceLayout && surface.instance.some(item=>item.declaredBy===reflected(owner) && item.override && item.kind!=='method'))
+            fail('selected parent accessor override requires separate authority');
+        this.instanceMethods=frozen(surface.instance.filter(item=>item.kind==='method' && item.declaredBy===reflected(owner)
+            && !!item.signature && (!item.override || this.inheritInstanceLayout)).map(item=>({name:item.name,
+                parameters:item.signature.parameters,returns:item.signature.returns,override:!!item.override,final:!!item.final})));
         const members = (items: Member[]): any => {
             const result: any = {variables:[],constants:[],methods:[],accessors:[]};
             items.forEach(item => {
@@ -224,8 +254,9 @@ export class NativeGeneratedClassTraits {
     }
 
     /** Domain is a compiler-created import alias; Array is a captured intrinsic. */
-    public emitDefinition(domain: string, array: string): string {
+    public emitDefinition(domain: string, array: string, base?: string): string {
         if (![domain,array].every(value => /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value))) fail('compiler reference expression');
+        if (this.inheritInstanceLayout && (!base || !/^[A-Za-z_$][\w$]*$/.test(base))) fail('compiler base expression');
         const emit = (traits: ReadonlyArray<Trait>): string => '[' + traits.map(trait => {
             const fields = 'name:' + JSON.stringify(trait.name) + ',kind:' + JSON.stringify(trait.kind);
             if (trait.type === undefined) return '{' + fields + '}';
@@ -233,8 +264,13 @@ export class NativeGeneratedClassTraits {
                 : '{name:' + JSON.stringify(trait.type.name) + (trait.type.vectorExport?',vector:':',reference:') + domain + '.' + (trait.type.vectorExport||trait.type.referenceExport) + '}';
             return '{' + fields + ',type:' + type + '}';
         }).join(',') + ']';
-        return '{metadata:' + JSON.stringify(this.metadata) + ',instanceTraits:' + emit(this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
-            + ',instanceConstants:[' + this.instanceConstants.map(item=>'{name:'+JSON.stringify(item.name)+',value:'+item.literal+'}').join(',') + ']'
+        const metadata = this.inheritInstanceLayout ? Object.assign({},this.metadata,{instance:Object.keys(this.metadata.instance).reduce((members:any,kind)=>{
+            members[kind]=this.metadata.instance[kind].filter((member:any)=>member.declaredBy===this.metadata.name);return members;
+        },{})}) : this.metadata;
+        const ownNames = this.inheritInstanceLayout ? new Set<string>([].concat(...Object.keys(metadata.instance).map(kind=>metadata.instance[kind])).map((member:any)=>member.name)) : null;
+        return '{' + (this.inheritInstanceLayout ? 'instanceBase:' + base + ',' : '') + 'metadata:' + JSON.stringify(metadata) + ',instanceTraits:' + emit(ownNames ? this.instanceTraits.filter(trait=>ownNames.has(trait.name)) : this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
+            + ',instanceConstants:[' + this.instanceConstants.filter(item=>!ownNames || ownNames.has(item.name)).map(item=>'{name:'+JSON.stringify(item.name)+',value:'+item.literal+'}').join(',') + ']'
+            + ',instanceMethods:' + JSON.stringify(this.instanceMethods)
             + ',declaration:{type:' + domain + '.' + this.binding.tokenExport + ',publishGeneration:' + domain + '.' + this.binding.publishExport + '}}';
     }
 }

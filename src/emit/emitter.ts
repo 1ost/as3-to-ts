@@ -325,6 +325,7 @@ function filterAST(node:Node):Node {
 
 
 export default class Emitter {
+    sourcePackage: string = '';
     generated: NativeGeneratedEmission;
     generatedReceiverTraits = new Map<string,NativeGeneratedClassTraits>();
     references: NativeReferenceCoercion;
@@ -667,7 +668,9 @@ export default class Emitter {
         }
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris,
 			this.options.nativeProxyModule !== undefined, this.options.nativeSourceAncestry);
-		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization);
+		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization,
+            node=>!!(node.parent&&node.parent.kind===NodeKind.DOT&&node.parent.children[0]===node
+                &&lexicalApplicationDomainModule(this,node.parent)));
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;
 			visitNode(this, filtered);
@@ -860,6 +863,12 @@ export default class Emitter {
 		if (
 			this.source.indexOf(`class ${ identifier } `) === -1 && !isGloballyAvailable && !this.findDefInScope(identifier)
 		) {
+			// Same-package implicit imports must use the authenticated QName mapping too.
+			if (checkGlobals && from === `./${identifier}` && this.options.importModules) {
+				const qname = this.generated ? this.generated.lexical.resolveTypeName(identifier)
+                    : (this.sourcePackage ? this.sourcePackage + '.' : '') + identifier;
+				if (this.options.importModules[qname]) from = generatedModule(this.options.importModules[qname]);
+			}
 			this.headOutput += `import { ${ identifier } } from "${ from }";\n`;
 			this.declareInScope({name: identifier});
 		}
@@ -893,6 +902,7 @@ export default class Emitter {
 
 function emitPackage(emitter:Emitter, node:Node):void {
 	let packageName = node.findChild(NodeKind.NAME);
+    emitter.sourcePackage = packageName ? packageName.text : '';
 	let content = node.findChild(NodeKind.CONTENT);
 
 	if (content){
@@ -1452,7 +1462,12 @@ function emitFunction(emitter:Emitter, node:Node):void {
   const parameters=node.findChild(NodeKind.PARAMETER_LIST),body=node.findChild(NodeKind.BLOCK);
   emitter.withScope(getFunctionDeclarations(emitter,node),()=>{
    parameters.children.forEach((p,index)=>{if(index)emitter.insert(',');emitter.skipTo(p.start);visitNode(emitter,p);emitter.catchup(p.end);});
-   emitter.insert('):any ');emitter.skipTo(body.start);visitNode(emitter,body);emitter.catchup(body.end);
+   emitter.insert('):any ');emitter.skipTo(body.start);visitNode(emitter,body);
+   if(anonymous.returned==='Object'){
+    // AIR coerces an implicit undefined completion to null for Object returns.
+    emitter.catchup(body.end-1);emitter.insert('\nreturn null;\n');
+   }
+   emitter.catchup(body.end);
   });
   emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');emitter.skipTo(node.end);return;
  }
@@ -3369,7 +3384,24 @@ function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(']))');emitter.skipTo(node.end);return true;
 }
 
+function emitLocalFunctionIntrinsic(emitter:Emitter,node:Node):boolean {
+    const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
+    if(!emitter.generated||!emitter.typedLocalPlan||!callee||callee.kind!==NodeKind.DOT||!args)return false;
+    const receiver=unwrapEncapsulatedExpression(callee.children[0]),member=callee.children[1];
+    if(!member||['call','apply'].indexOf(member.text)<0||!emitter.typedLocalPlan.functionLocal(receiver,emitter))return false;
+    if(emitter.isNew)throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: Function intrinsic construction');
+    // Capture the Function before argument effects; resolve its intrinsic only
+    // afterwards, preserving AIR null errors and declaration-global receivers.
+    const helper=propertyHelper(emitter,'as3CallNamedProperty',emitter.generated.propertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+    emitter.skipTo(receiver.start);visitNode(emitter,receiver);emitter.catchup(receiver.end);
+    emitter.insert(','+JSON.stringify(member.text)+',()=>[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 function emitCall(emitter:Emitter, node:Node):void {
+    if(emitLocalFunctionIntrinsic(emitter,node))return;
     const pattern=emitter.generated&&emitter.generated.options.plan.patternLocals.find(p=>p.owner===emitter.generated.lexical.owner&&p.calls.indexOf(node.start)>=0);
     if(pattern){
         const helper=propertyHelper(emitter,'sourcePatternTest',nativePatternModule(emitter));
@@ -3829,6 +3861,9 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
         return null;
     }
     const generated=generatedReceiver(emitter,receiver),definition=emitter.findDefInScope(receiver.text);
+    if(internal&&!generated&&node.kind===NodeKind.DOT&&key.kind===NodeKind.LITERAL
+        &&definition&&!definition.bound&&['Object','*','Class'].indexOf(definition.as3Type)>=0)
+        return {receiver,key,literalKey:key.text,lexical:true};
     if(node.kind===NodeKind.ARRAY_ACCESSOR&&emitter.generated&&emitter.classFactory
         &&receiver.text===emitter.generated.lexical.owner.split('.').pop()
         &&(!definition||!Object.prototype.hasOwnProperty.call(definition,'as3Type'))
@@ -3993,7 +4028,7 @@ function emitDynamicPropertyAssignment(emitter:Emitter, target:Node, value:Node)
 
 function emitInternalDynamicCall(emitter:Emitter,node:Node):boolean {
     if(!emitter.generated||!nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope).lexicalProviderModule
-        ||node.children[0].kind!==NodeKind.ARRAY_ACCESSOR)return false;
+        ||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.children[0].kind)<0)return false;
     const access=dynamicAccess(emitter,node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);
     if(!access||!access.lexical||access.ownStatic||!args)return false;
     const helper=dynamicHelper(emitter,access,'Call',emitter.options.nativeDynamicPropertyReadsModule);
@@ -4893,6 +4928,14 @@ function emitReferenceReturn(emitter:Emitter, node:Node):void {
     // The legacy parser also represents `throw expression` as RETURN.
     // A thrown value never passes through the method's return type coercion.
     if (emitter.source.slice(node.start,node.start + 6) !== 'return') {visitNodes(emitter,node.children); return;}
+    let owner=node.parent;
+    while(owner&&[NodeKind.FUNCTION,NodeKind.LAMBDA,NodeKind.GET,NodeKind.SET].indexOf(owner.kind)<0)owner=owner.parent;
+    const anonymous=owner&&emitter.generated&&emitter.generated.lexical.anonymousFunctions.find(fn=>fn.start===owner.start&&fn.end===owner.end);
+    if(anonymous&&anonymous.returned==='Object'){
+        const expression=node.children[0],parts=signatureBuiltinCoercionParts(emitter,'Object');
+        emitter.catchup(getExpressionStart(expression));emitter.insert(parts[0]);
+        visitNode(emitter,expression);emitter.catchup(getEffectiveNodeEnd(expression));emitter.insert(parts[1]);return;
+    }
     if (!signature || !signature.returned && !signature.builtinReturn) {visitNodes(emitter,node.children); return;}
     const expression = node.children[0], parts = signature.returned
         ? referenceCoercionParts(emitter,{exported:signature.returned}) : signatureBuiltinCoercionParts(emitter,signature.builtinReturn);
@@ -5285,6 +5328,22 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	}
 
 	let def = emitter.findDefInScope(node.text);
+    const interfaceValue = emitter.generated && emitter.references && emitter.references.sourceInterface(node.text);
+    if (interfaceValue && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def, 'as3Type'))) {
+        let method = node.parent;
+        while (method && [NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET].indexOf(method.kind) < 0) method = method.parent;
+        const expression = outerEncapsulatedExpression(node), parent = expression.parent;
+        if (!method || parent && (parent.kind === NodeKind.DOT && parent.children[0] === expression
+            || parent.kind === NodeKind.ARRAY_ACCESSOR && parent.children[0] === expression
+            || parent.kind === NodeKind.CALL && parent.children[0] === expression
+            || parent.kind === NodeKind.ASSIGN && parent.children[0] === expression
+            || [NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE].indexOf(parent.kind) >= 0))
+            throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: interface Class value requires a method value expression');
+        let token = '__as3_interface_value_' + interfaceValue;
+        while (emitter.source.indexOf(token) >= 0) token += '_';
+        emitter.ensureImportIdentifier(interfaceValue + ' as ' + token, emitter.references.options.module, false);
+        emitter.nativeSourceHelpers.add(token);emitter.insert(token);emitter.skipTo(node.end);return;
+    }
     if (emitter.references && !emitter.classInitializers.enabled
         && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def,'as3Type'))
         && emitter.references.sourceClass(node.text)) {
@@ -5420,7 +5479,74 @@ function emitConsumerLiteralConstant(emitter:Emitter,node:Node):boolean {
     return true;
 }
 
+/** currentDomain belongs to the defining script, independently of receiver/caller. */
+function lexicalApplicationDomainModule(emitter:Emitter,node:Node):string {
+    if (!emitter.generated || !node.children[1] || node.children[1].text !== 'currentDomain') return null;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]);
+    const parts=(value:Node):string[]=>{
+        value=unwrapEncapsulatedExpression(value);
+        if(value.kind===NodeKind.IDENTIFIER||value.kind===NodeKind.LITERAL)return [value.text];
+        if(value.kind===NodeKind.DOT&&value.children.length===2){
+            const left=parts(value.children[0]),right=value.children[1];
+            if(left&&right.kind===NodeKind.LITERAL)return left.concat([right.text]);
+        }
+        return null;
+    };
+    const names=parts(receiver);
+    if(!names)return null;
+    const spelling=names.join('.'),qualified=names.length>1;
+    if(qualified?spelling!=='flash.system.ApplicationDomain'
+        :emitter.generated.lexical.resolveTypeName(spelling)!=='flash.system.ApplicationDomain')return null;
+    let root=receiver;while(root.kind===NodeKind.DOT)root=unwrapEncapsulatedExpression(root.children[0]);
+    const input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+    const binding=emitter.findDefInScope(names[0]);
+    const sourceBinding=typeOfBinding(root,emitter.source,Object.keys(input.sources).concat(Object.keys(input.providers||{})));
+    if(binding&&(qualified||binding.bound||Object.prototype.hasOwnProperty.call(binding,'as3Type'))
+        ||sourceBinding==='lexical'||qualified&&sourceBinding==='class')return null;
+    const provider=input.providers&&input.providers['flash.system.ApplicationDomain'];
+    const fail=(reason:string):never=>{throw new Error('AS3_APPLICATION_DOMAIN_UNSUPPORTED: '+reason);};
+    if(!provider||provider.exportName!=='ApplicationDomain'||provider.nativeBase||provider.nativeInterface||provider.nativeVector
+        ||!emitter.options.importModules||emitter.options.importModules['flash.system.ApplicationDomain']!==xmlGlobalProviderModule(provider.module,emitter.generated.options.module))
+        fail('exact native ApplicationDomain provider required');
+    if(!input.scriptDomainProvider||!input.scriptGlobalProviderModule||!emitter.generated.projection.binding.scriptGlobalExport)
+        fail('defining script requires an explicit cohort domain');
+    const expression=outerEncapsulatedExpression(node),operation=expression.parent;
+    if(operation&&operation.children[0]===expression&&[NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE,NodeKind.CALL,NodeKind.NEW].indexOf(operation.kind)>=0)
+        fail('currentDomain mutation or invocation requires separate authority');
+    return generatedModule(xmlGlobalProviderModule(input.scriptGlobalProviderModule,emitter.generated.options.module));
+}
+function emitLexicalApplicationDomain(emitter:Emitter,node:Node):boolean {
+    const module=lexicalApplicationDomainModule(emitter,node);
+    if(!module)return false;
+    const helper=propertyHelper(emitter,'getAS3ScriptApplicationDomain',module);
+    emitter.catchup(node.start);emitter.insert(helper+'('+emitter.generated.lexical.scriptGlobal+')');emitter.skipTo(node.end);
+    return true;
+}
+
+/** Read an authenticated public Array field through the source property provider.
+ * Direct JS indexing/length leaks host TypeErrors when the field is null. */
+function emitGeneratedArrayFieldRead(emitter:Emitter, node:Node):boolean {
+    if(!emitter.generated || !node || node.children.length!==2)return false;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),key=node.children[1];
+    if(!receiver || receiver.kind!==NodeKind.DOT || receiver.children.length!==2
+        ||receiver.children[0].kind!==NodeKind.IDENTIFIER||receiver.children[0].text!=='this'
+        ||receiver.children[1].kind!==NodeKind.LITERAL)return false;
+    const field=emitter.generated.projection.instanceTraits.find(t=>t.name===receiver.children[1].text);
+    if(!field||field.kind!=='variable'||field.type!=='Array')return false;
+    if(node.kind===NodeKind.DOT&&(key.kind!==NodeKind.LITERAL||key.text!=='length'))return false;
+    const outer=outerEncapsulatedExpression(node),parent=outer&&outer.parent;
+    // Writes, updates and calls retain their existing separate lowering paths.
+    if(parent&&(parent.children[0]===outer&&[NodeKind.ASSIGN,NodeKind.CALL].indexOf(parent.kind)>=0
+        ||[NodeKind.DELETE,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC].indexOf(parent.kind)>=0))return false;
+    const helper=propertyHelper(emitter,'as3GetProperty',emitter.generated.propertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+    emitPropertyKey(emitter,node.kind===NodeKind.DOT?{receiver:node.children[0],key,literalKey:key.text}:{receiver:node.children[0],key});
+    emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 function emitDot(emitter:Emitter, node:Node) {
+    if (emitGeneratedArrayFieldRead(emitter,node)) return;
+    if (emitLexicalApplicationDomain(emitter,node)) return;
     const lookupModule = emitter.options.importModules && emitter.options.importModules['flash.utils.getDefinitionByName'];
     const lookupReceiver = unwrapEncapsulatedExpression(node.children[0]), member = node.children[1];
     if (lookupModule && member && member.text === 'getDefinitionByName' && lookupReceiver && lookupReceiver.kind === NodeKind.DOT) {
@@ -5495,6 +5621,7 @@ function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
 }
 
 function emitArrayAccessor(emitter:Emitter, node:Node):void {
+	if (emitGeneratedArrayFieldRead(emitter,node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
     if (emitDynamicPropertyRead(emitter,node)) return;
     if (emitObjectPropertyRead(emitter,node)) return;

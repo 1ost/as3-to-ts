@@ -26,8 +26,8 @@ export class NativeGeneratedLexical {
     readonly typedLocals: NativeTypedLocals;
     readonly nestedFunctions: NestedLocalFunction[] = [];
     readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
-    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [];
-    private readonly resolveTypeName:(name:string)=>string;
+    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[];returned?:string}[] = [];
+    readonly resolveTypeName:(name:string)=>string;
     private readonly internalContents=new Map<string,Node>();
     private internalContent(owner:string):Node {
         if(!this.internalContents.has(owner)){
@@ -40,7 +40,9 @@ export class NativeGeneratedLexical {
     private internalMethod(owner:string,member:Node):boolean {
         if(member.kind!==K.FUNCTION||modifiers(member).indexOf('static')>=0)return false;
         const parameters=member.findChild(K.PARAMETER_LIST).children,returned=member.findChild(K.TYPE);
-        if(parameters.length!==1||!returned||['Boolean','void'].indexOf(returned.text)<0)return false;
+        if(!returned||['Boolean','void'].indexOf(returned.text)<0)return false;
+        if(parameters.length===0)return returned.text==='void';
+        if(parameters.length!==1)return false;
         const value=parameters[0].findChild(K.NAME_TYPE_INIT),type=value&&value.findChild(K.TYPE);
         if(!type||value.findChild(K.INIT)||parameters[0].findChild(K.REST))return false;
         return this.plan.references.some(r=>r.owner===owner&&r.start===type.start&&r.end===type.end
@@ -83,7 +85,7 @@ export class NativeGeneratedLexical {
                 if(inherited&&isStatic&&(!constant&&!inheritedPrimitives||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
-                    fail('internal instance method requires one authenticated interface parameter and Boolean/void return');
+                    fail('internal instance method requires zero parameters and void return or one authenticated interface parameter and Boolean/void return');
                 const internalGetter=visibility==='internal'&&!isStatic&&member.kind===K.GET
                     &&member.findChild(K.TYPE)&&member.findChild(K.TYPE).text==='Boolean'
                     &&member.findChild(K.PARAMETER_LIST).children.length===0;
@@ -159,11 +161,13 @@ export class NativeGeneratedLexical {
                     if(!value||value.findChild(K.INIT)||value.findChild(K.VECTOR)||type&&type.text!=='*')fail('anonymous callable requires wildcard parameters');
                     return value.findChild(K.NAME).text;
                 });
-                const returned=node.findChild(K.TYPE);if(returned&&['*','void'].indexOf(returned.text)<0)fail('anonymous typed return held');
+                const returned=node.findChild(K.TYPE),returnType=returned&&this.resolveTypeName(returned.text);
+                if(returned&&['*','void','Object'].indexOf(returnType)<0)fail('anonymous typed return held');
                 const outerNames:string[]=[];
                 const outer=(n:Node):void=>{if(n.kind===K.LAMBDA||n.kind===K.FUNCTION&&n!==method)return;if(n.kind===K.NAME_TYPE_INIT)outerNames.push(n.findChild(K.NAME).text);n.children.forEach(outer);};outer(method);
                 const inspect=(n:Node):void=>{
                     forInTarget(n);
+                    if(returnType==='Object'&&n.kind===K.RETURN&&!n.children.length)fail('anonymous typed bare return held');
                     if(n.kind===K.DOT&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='this')fail('anonymous receiver property access held');
                     if([K.LAMBDA,K.FUNCTION,K.TRY].indexOf(n.kind)>=0)fail('nested anonymous callable body held');
                     if(n.kind===K.IDENTIFIER&&['super','arguments'].concat(memberNames).indexOf(n.text)>=0)fail('anonymous callable receiver/member lookup held');
@@ -173,7 +177,7 @@ export class NativeGeneratedLexical {
                     });
                     n.children.forEach(inspect);
                 };inspect(node.findChild(K.BLOCK));
-                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:method.start,name:fresh('anonymous'),parameters});
+                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:method.start,name:fresh('anonymous'),parameters,returned:returnType});
                 return;
             }
             if(node.kind===K.FUNCTION&&node.parent!==content){
@@ -342,7 +346,7 @@ export class NativeGeneratedLexical {
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
             +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
             +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
-        return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?domain+'.'+parent.lexicalExport+'.get('+base+')':native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
+        return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?(nativeGeneratedDeclarationInputs(this.plan,this.plan.scope).inheritScriptClasses?this.provider+'.getAS3InheritedLexicalBase('+base+')':domain+'.'+parent.lexicalExport+'.get('+base+')'):native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
             +this.traits.filter(t=>t.static&&t.owner!==this.owner).map(t=>'const '+t.key+'='+base+';\n').join('')
             +this.traits.map(t=>'const '+t.access+'='+this.provider+'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(t.name)+','+JSON.stringify(t.visibility)+','+t.static+');').join('\n')
@@ -418,9 +422,10 @@ export class NativeGeneratedLexical {
                 }
                 if(!lexicalName)return null;
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
-                // Object-typed locals address the public property, even when the
-                // current class has a private member with the same spelling.
-                if(receiver.text!=='this'&&binding&&!binding.bound&&binding.as3Type==='Object')return null;
+                // Dynamic receivers use runtime namespace lookup, even when
+                // this class declares an internal/private namesake.
+                if(receiver.text!=='this'&&binding&&!binding.bound&&(binding.as3Type==='Object'
+                    ||binding.as3Type==='*'&&inputPackageEnabled(this.plan)))return null;
                 if(receiver.text===this.owner.split('.').pop()&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type')))isStatic=true;
                 else if(receiver.text!=='this'&&(!binding||[this.owner,this.owner.split('.').pop()].indexOf(binding.as3Type)<0))fail('lexical receiver requires exact source type');
             } else isStatic=staticContext||!this.traits.some(t=>t.name===name&&!t.static);
@@ -434,9 +439,9 @@ export class NativeGeneratedLexical {
         else if(node.kind===K.CALL){target=node.children[0];operation='call';args=node.children[1];}
         else if([K.PRE_INC,K.POST_INC,K.PRE_DEC,K.POST_DEC].indexOf(node.kind)>=0) {
             const found=resolve(node.children[0]);if(!found)return false;
-            if(!found.trait||found.trait.kind!=='variable'||found.trait.static||['private','protected'].indexOf(found.trait.visibility)<0
+            if(!found.trait||found.trait.kind!=='variable'||found.trait.static||['private','protected','internal'].indexOf(found.trait.visibility)<0
                 ||!found.trait.type||['int','uint','Number'].indexOf(found.trait.type.text)<0)
-                fail('lexical numeric update requires private or protected instance numeric variable');
+                fail('lexical numeric update requires qualified instance numeric variable');
             const delta=node.kind===K.PRE_INC||node.kind===K.POST_INC?'+1':'-1';
             const prefix=node.kind===K.PRE_INC||node.kind===K.PRE_DEC;
             // Storage conversion happens in the provider; the prefix expression

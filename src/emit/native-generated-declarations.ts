@@ -13,12 +13,18 @@ export interface NativeGeneratedDeclarationInput {
     vectorProviderModule?: string;
     /** Optional explicit script-global provider for generated lexical calls. */
     scriptGlobalProviderModule?: string;
+    /** Explicit cohort-owned AS3ScriptDomain, allocated by the native loader/bootstrap. */
+    scriptDomainProvider?: {module: string; exportName: string};
+    /** Resolve inherited source Class/type identity before allocating local declarations. */
+    inheritScriptClasses?: true;
     /** Explicit provider for sealed package-internal lexical membership. */
     lexicalProviderModule?: string;
     /** Common String intrinsics for proven nonescaping RegExp literal locals. */
     patternProviderModule?: string;
     /** Explicit class subset; omission selects all planned source classes. */
     scriptGlobalSources?: ReadonlyArray<string>;
+    /** Explicit single-Class script units whose failed initializer globals are retained. */
+    classScriptSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
     providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher'; nativeInterface?: true; nativeVector?: true}};
 }
@@ -99,15 +105,28 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptGlobalSources', 'lexicalProviderModule', 'patternProviderModule', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'inheritScriptClasses', 'scriptGlobalSources', 'classScriptSources', 'lexicalProviderModule', 'patternProviderModule', 'sources', 'providers']);
     moduleName(data.providerModule);
     if (data.patternProviderModule !== undefined) moduleName(data.patternProviderModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
     if (data.lexicalProviderModule !== undefined) moduleName(data.lexicalProviderModule);
     if (data.vectorProviderModule !== undefined) moduleName(data.vectorProviderModule);
     if (data.scriptGlobalProviderModule !== undefined) moduleName(data.scriptGlobalProviderModule);
+    if (data.scriptDomainProvider !== undefined) {
+        if (!data.scriptGlobalProviderModule || !table(data.scriptDomainProvider)) fail('script domain requires explicit global provider');
+        fields(data.scriptDomainProvider, ['module', 'exportName']);
+        moduleName(data.scriptDomainProvider.module);
+        if (typeof data.scriptDomainProvider.exportName !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(data.scriptDomainProvider.exportName)) fail('script domain export identifier');
+    }
+    if (data.inheritScriptClasses !== undefined && (data.inheritScriptClasses !== true || !data.scriptDomainProvider
+        || !data.scriptGlobalProviderModule))
+        fail('inherited Classes require explicit script cohort');
     if(data.scriptGlobalSources!==undefined&&(!data.scriptGlobalProviderModule||!Array.isArray(data.scriptGlobalSources)
         ||new Set(data.scriptGlobalSources).size!==data.scriptGlobalSources.length))fail('script global source selection requires unique names and provider');
+    if(data.classScriptSources!==undefined&&(!data.scriptGlobalProviderModule||!data.scriptDomainProvider||data.lexicalProviderModule&&!data.inheritScriptClasses
+        ||!Array.isArray(data.classScriptSources)||!data.classScriptSources.length
+        ||new Set(data.classScriptSources).size!==data.classScriptSources.length))
+        fail('Class script selection requires unique names, explicit script domain and inherited internal membership');
     if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
     if (data.providers !== undefined && !table(data.providers)) fail('provider table required');
     const providers = data.providers || {}, names = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
@@ -210,11 +229,43 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     });
     if(data.scriptGlobalSources&&data.scriptGlobalSources.some(name=>!bindings.some(binding=>binding.qname===name)))
         fail('script global source must be a planned class');
+    if(data.inheritScriptClasses && bindings.some(binding=>!binding.scriptGlobalExport))
+        fail('inherited Class selection requires all class script globals');
+    if(data.classScriptSources)data.classScriptSources.forEach(name=>{
+        const binding=bindings.find(value=>value.qname===name);
+        if(!binding||!binding.scriptGlobalExport)fail('Class script selection requires a planned class with script global');
+        // Root Class generations retain their package capability and independent
+        // lexical storage across initializer failures. Derived internal retries
+        // still need separate evidence for ancestry and trait enrollment.
+        if(data.lexicalProviderModule&&binding.base){
+            const pkg=name.slice(0,name.lastIndexOf('.'));
+            classes.forEach((cls,qname)=>{
+                if(qname.slice(0,qname.lastIndexOf('.'))!==pkg)return;
+                if(cls.findChild(K.CONTENT).children.some(member=>{
+                    if([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0)return false;
+                    const mods=member.findChild(K.MOD_LIST);
+                    return !mods||!mods.children.some(mod=>['public','private','protected'].indexOf(mod.text)>=0);
+                }))fail('Class script retries with internal declarations in their package require qualification');
+            });
+        }
+        if(binding.base){
+            const parent=bindings.find(value=>value.qname===binding.base);
+            // Derived retries are qualified over a stable source root parent.
+            // Keep native ancestry and parent/multi-level initializer retries
+            // outside this admission until their lifecycle is independently proved.
+            if(!parent||!parent.scriptGlobalExport||parent.base||data.classScriptSources.indexOf(parent.qname)>=0)
+                fail('derived Class script requires a non-retrying source root parent');
+        }
+    });
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
-    if(data.scriptGlobalProviderModule)lines.push('import {createAS3ScriptDomain,instantiateAS3ScriptUnit} from '+JSON.stringify(data.scriptGlobalProviderModule)+';',
-        'const __scriptDomain=createAS3ScriptDomain();');
-    if (interfaces.length) lines.push('import {defineAS3Interface,registerAS3Class} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
+    if(data.scriptGlobalProviderModule) {
+        lines.push('import {instantiateAS3ScriptUnit'+(data.classScriptSources?',instantiateAS3ClassScriptUnit':'')+(data.inheritScriptClasses?',selectAS3ScriptDomainClass,selectAS3ScriptDomainType':'')+(data.scriptDomainProvider?'':',createAS3ScriptDomain')+'} from '+JSON.stringify(data.scriptGlobalProviderModule)+';');
+        lines.push(data.scriptDomainProvider
+            ? 'import {'+data.scriptDomainProvider.exportName+' as __scriptDomain} from '+JSON.stringify(data.scriptDomainProvider.module)+';'
+            : 'const __scriptDomain=createAS3ScriptDomain();');
+    }
+    if (interfaces.length) lines.push('import {defineAS3Interface,registerAS3Class'+(data.inheritScriptClasses?',isAS3Interface':'')+'} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     if (nativeNames.some(name => providers[name].nativeInterface))
         lines.push('import {isAS3Interface as __isNativeInterface} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     const emittedInterfaces = new Set<string>(), activeInterfaces = new Set<string>();
@@ -224,8 +275,11 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         activeInterfaces.add(binding.qname);
         const parents = binding.bases.map(name => interfaces.find(value => value.qname === name));
         parents.forEach(addInterface);
-        lines.push('export const ' + binding.tokenExport + '=defineAS3Interface<unknown>('
-            + JSON.stringify(binding.qname.replace(/\.([^.]*)$/, '::$1')) + ',[' + parents.map(value => value.tokenExport).join(',') + ']);');
+        const name = JSON.stringify(binding.qname.replace(/\.([^.]*)$/, '::$1'));
+        const create = 'defineAS3Interface<unknown>('+name+',['+parents.map(value => value.tokenExport).join(',')+'])';
+        lines.push('export const ' + binding.tokenExport + '=' + (data.inheritScriptClasses
+            ? '(()=>{const selected=selectAS3ScriptDomainType(__scriptDomain,'+name+');if(selected){if(!isAS3Interface(selected.declaration))throw new TypeError("Inherited definition is not an interface");return selected.declaration;}return '+create+';})()'
+            : create) + ';');
         activeInterfaces.delete(binding.qname); emittedInterfaces.add(binding.qname);
     };
     interfaces.forEach(addInterface);
@@ -292,33 +346,43 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if (parent) add(parent);
         const authority = '__authority_' + binding.tokenExport;
         const name = binding.qname.replace(/\.([^.]*)$/, '::$1');
-        lines.push('const ' + authority + '=declareAS3ReferenceType<unknown>(' + JSON.stringify(name)
+        const selection = '__inherited_' + binding.tokenExport;
+        if(data.inheritScriptClasses) lines.push('const '+selection+'=selectAS3ScriptDomainClass(__scriptDomain,'+JSON.stringify(name)+');');
+        lines.push('const ' + authority + '='+(data.inheritScriptClasses?selection+'?null:':'')+'declareAS3ReferenceType<unknown>(' + JSON.stringify(name)
             + (parent ? ',' + parent.tokenExport : nativeParent ? ',' + nativeParent.declarationExport : '') + ');');
-        lines.push('export const ' + binding.tokenExport + '=' + authority + '.type;');
+        lines.push('export const ' + binding.tokenExport + '='+(data.inheritScriptClasses?selection+'?'+selection+'.declaration:':'') + authority + '.type;');
         if(binding.interfaces.length) {
             const tokens=binding.interfaces.map(name=>interfaces.find(value=>value.qname===name).tokenExport);
-            lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{const generation='+authority+'.publishGeneration(constructor);'
+            lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{'+(data.inheritScriptClasses?'if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");':'')+'const generation='+authority+'.publishGeneration(constructor);'
                 +'registerAS3Class(constructor,['+tokens.join(',')+']);return generation;};');
-        } else lines.push('export const ' + binding.publishExport + '=' + authority + '.publishGeneration;');
+        } else lines.push('export const ' + binding.publishExport + '=' + (data.inheritScriptClasses
+            ? '(constructor:Function)=>{if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");return '+authority+'.publishGeneration(constructor);}'
+            : authority + '.publishGeneration') + ';');
         // Opaque common-engine scopes indexed by exact native generation. These
         // compiler exports never become properties of the source Class value.
         lines.push('export const ' + binding.lexicalExport + '=new WeakMap<Function,any>();');
         if(binding.scriptGlobalExport) {
             const split=binding.qname.lastIndexOf('.'),local=binding.qname.slice(split+1),uri=split<0?'':binding.qname.slice(0,split);
             const declaration={sourceId:binding.qname,sourceSha256:sourceHashes[binding.qname],bindings:[{name:local,uri,kind:'constant',type:name}]};
-            lines.push('export const '+binding.scriptGlobalExport+'=(value:Function)=>instantiateAS3ScriptUnit(__scriptDomain,'+JSON.stringify(declaration)
-                +',()=>[{name:'+JSON.stringify(local)+',uri:'+JSON.stringify(uri)+',value}]).global;');
+            const instantiate=data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0?'instantiateAS3ClassScriptUnit':'instantiateAS3ScriptUnit';
+            lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>'+(data.inheritScriptClasses?selection+'?'+selection+'.resolve() as T:':'')+instantiate+'(__scriptDomain,'+JSON.stringify(declaration)
+                +',context=>[{name:'+JSON.stringify(local)+',uri:'+JSON.stringify(uri)+',value:factory(context.global)}])'
+                +'.export('+JSON.stringify(local)+','+JSON.stringify(uri)+') as T;');
         }
         active.delete(binding.qname); emitted.add(binding.qname);
     };
     bindings.forEach(add);
     lines.push(...vectorLines);
     if(data.lexicalProviderModule){
-        lines.push('import {declareAS3InternalPackage} from '+JSON.stringify(data.lexicalProviderModule)+';');
+        const membership=data.inheritScriptClasses?'bindAS3InternalPackage':'declareAS3InternalPackage';
+        lines.push('import {'+membership+'} from '+JSON.stringify(data.lexicalProviderModule)+';');
         const packages=new Map<string,string[]>();
         bindings.forEach(binding=>{const split=binding.qname.lastIndexOf('.'),pkg=split<0?'':binding.qname.slice(0,split);
             if(!packages.has(pkg))packages.set(pkg,[]);packages.get(pkg).push(binding.tokenExport);});
-        packages.forEach(tokens=>lines.push('declareAS3InternalPackage(['+tokens.join(',')+']);'));
+        packages.forEach((tokens,pkg)=>{
+            if(data.inheritScriptClasses&&!pkg)fail('inherited internal membership requires named source packages');
+            lines.push(membership+'(['+tokens.join(',')+']);');
+        });
     }
     const interfaceContracts=projectNativeGeneratedInterfaceContracts(classes,bindings,interfaces,resolve,
         name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0);

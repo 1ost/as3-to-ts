@@ -362,6 +362,8 @@ export class NativeCallableClasses {
         let ctor: any, constructorReturns = 0;
         const body = (member: any, constructor: boolean, returnType?: string): string => {
             if (!member.body) this.fail('bodyless member');
+            const returnPrefix = '<any>'+(returnType==='"Class"'?classValue+'.as3CoerceClass(':generatedProperty+'.coerceAS3PropertyValue(');
+            const returnSuffix = returnType==='"Class"'?')':','+returnType+')';
             const edits: {start: number; end: number; value: string}[] = [];
             let superCount = 0;
             const deferred=new Map<any,{label:string;value:string;pending:string}>();
@@ -378,7 +380,7 @@ export class NativeCallableClasses {
                 if(!entry){
                     const id=deferred.size;entry={label:unique('returnRegion'+id),value:unique('returnValue'+id),pending:unique('returnPending'+id)};deferred.set(outer,entry);
                     edits.push({start:outer.getStart(file),end:outer.getStart(file),value:'{let '+entry.value+':any;let '+entry.pending+'=false;'+entry.label+':'});
-                    edits.push({start:outer.end,end:outer.end,value:';if('+entry.pending+')return <any>'+generatedProperty+'.coerceAS3PropertyValue('+entry.value+','+returnType+');}'});
+                    edits.push({start:outer.end,end:outer.end,value:';if('+entry.pending+')return '+returnPrefix+entry.value+returnSuffix+';}'});
                 }
                 // A finalizer may throw and an enclosing catch may resume normally.
                 // Such a catch cancels this pending return. Catches inside the
@@ -448,8 +450,8 @@ export class NativeCallableClasses {
                     }
                     // Insert around the original return expression. Walk its children
                     // normally, retaining nested compiler-helper return ownership.
-                    edits.push({start:node.expression.getStart(file),end:node.expression.getStart(file),value:'<any>'+generatedProperty+'.coerceAS3PropertyValue('});
-                    edits.push({start:node.expression.end,end:node.expression.end,value:','+returnType+')'});
+                    edits.push({start:node.expression.getStart(file),end:node.expression.getStart(file),value:returnPrefix});
+                    edits.push({start:node.expression.end,end:node.expression.end,value:returnSuffix});
                 }
                 if (node.kind === S.ReturnStatement && constructor && !nestedFunction) {
                     if (node.expression) this.fail('constructor return value');
@@ -597,7 +599,10 @@ export class NativeCallableClasses {
                     inspect(sourceBody);
                     if(!generatedMethodCompletes(sourceBody))
                         this.fail('generated typed fallthrough completion requires separate qualification');
-                    returnType=this.generated.lexical.typeExpression(returns,this.own.qname,domainImport,intrinsic+'.array');
+                    if(returns.text==='Class') {
+                        if(!this.classValueModule)this.fail('Class return requires common class provider');
+                        returnType='"Class"';
+                    } else returnType=this.generated.lexical.typeExpression(returns,this.own.qname,domainImport,intrinsic+'.array');
                 }
             }
             const functionValue = 'function(this: ' + receiver + (member.parameters.length ? ', ' : '') + params(member, false)
@@ -620,7 +625,12 @@ export class NativeCallableClasses {
                     + (member.kind === S.GetAccessor ? 'get' : 'set') + ': ' + functionValue + ', configurable:true, enumerable:false}));');
             } else this.fail('unrecognized complete class member');
         });
-        if (!ctor && this.own.base) this.fail('synthesized derived constructor needs source arity authority');
+        if (!ctor && this.own.base) {
+            const parent=this.classes.get(this.own.base),root=this.sourceRoots.get(this.own.base);
+            if(!this.generated||!parent||parent.base||!root||root.findChild(K.CONTENT).children.some(member=>
+                member.kind===K.FUNCTION&&member.findChild(K.NAME).text===parent.name))
+                this.fail('synthesized derived constructor requires source root with implicit constructor');
+        }
         const chainFields: {name: string; value: string}[] = [];
         for (let current = this.own; current; current = this.classes.get(current.base)) chainFields.push(...current.fields);
         const memberNames = new Set<string>(), instanceMethods: string[] = [];
@@ -644,7 +654,8 @@ export class NativeCallableClasses {
         const ancestry = cls.heritageClauses && cls.heritageClauses.find((clause:any)=>clause.token===S.ExtendsKeyword);
         const base = ancestry ? 'const ' + baseName + ' = ' + intrinsic + '.constructorIdentity(' + (directNativeBase ? nativeBaseClass : text(ancestry.types[0].expression)) + ');\n' : '';
         const sourceBaseName = this.own.base && (directNativeBase ? nativeBaseClass : this.classes.get(this.own.base).name);
-        const constructorBody = ctor ? body(ctor, true) : '';
+        const constructorBody = ctor ? body(ctor, true) : this.own.base
+            ? intrinsic+'.expectBase(this,'+identity+','+baseName+');'+intrinsic+'.apply('+baseName+',this,[]);' : '';
         const tail = ctor && ctor.body.statements[ctor.body.statements.length - 1];
         const completion = !constructorReturns && tail && tail.kind === S.ThrowStatement ? '' : succeeded + ' = true;';
         const completedBody = constructorReturns ? constructorCompletion + ': {\n' + constructorBody + '\n}' : constructorBody;
@@ -703,17 +714,31 @@ export class NativeCallableClasses {
                     + (this.own.usesArguments ? 'Infinity' : this.own.parameters.length) + ', coerceArguments: (values:any) => values});\n' : '')
             + (this.generated ? '\n' + intrinsic + '.defineProperty(' + name + ', "prototype", {writable:false});\n'
                 + 'const ' + generation + ' = ' + provider + '.registerAS3GeneratedClass(' + identity + ','
-                + this.generated.projection.emitDefinition(domainImport,intrinsic + '.array') + ');\n'
+                + this.generated.projection.emitDefinition(domainImport,intrinsic + '.array',baseName) + ');\n'
                 + this.generated.lexical.publication(identity,baseName,domainImport,intrinsic) + '\n'
                 + Object.keys(this.generated.uintOrInitializers.variables).map(key=>generatedProperty+'.as3SetProperty('+name+','+JSON.stringify(key)+','+this.generated.uintOrInitializers.variables[key]+');\n').join('')
                 + (this.classValueModule ? classValue+'.registerAS3Constructor('+identity+', {minimum:'+required+',maximum:'+(this.own.usesArguments||this.own.rest?'Infinity':this.own.parameters.length)+',coerceArguments:(values:any)=>values});\n' : '')
-                + (this.generated.projection.binding.scriptGlobalExport ? 'const '+this.generated.lexical.scriptGlobal+'='+domainImport+'.'+this.generated.projection.binding.scriptGlobalExport+'('+name+');\n' : '') : '');
+                : '');
         const surface = 'export interface ' + name + (sourceBaseName ? ' extends ' + sourceBaseName : '')
             + ' {\n' + instanceTypes.join('\n') + '\n}\ninterface ' + constructorType
             + ' extends ' + functionType + ' {new(' + (ctor ? params(ctor, true) : '') + '): ' + name + '; prototype: ' + name + ';\n'
             + staticTypes.join('\n') + '\n}';
         const replacements = [{start: cls.getStart(file), end: cls.end, value: replacement},
             {start: alias.getStart(file), end: alias.end, value: surface}];
+        if (this.generated && this.generated.projection.binding.scriptGlobalExport) {
+            // The defining global must exist throughout Class creation, including
+            // registration and callbacks. Publish the Class only after the whole
+            // lazy factory succeeds; the selected common provider owns failed
+            // unit lifetime (retained for explicit single-Class script units).
+            const body = cls.parent;
+            if (body.kind !== S.Block || body.parent.kind !== S.ArrowFunction
+                || !body.statements.length || body.statements[body.statements.length - 1].kind !== S.ReturnStatement)
+                this.fail('lazy script factory body required for publication');
+            replacements.push({start: body.getStart(file) + 1, end: body.getStart(file) + 1,
+                value: '\nreturn ' + domainImport + '.' + this.generated.projection.binding.scriptGlobalExport
+                    + '((' + this.generated.lexical.scriptGlobal + ':object)=>{\n'});
+            replacements.push({start: body.end - 1, end: body.end - 1, value: '\n});\n'});
+        }
         if (this.metadata) {
             const statements = cls.parent.statements;
             if (!statements) this.fail('lazy native factory body required for publication');
