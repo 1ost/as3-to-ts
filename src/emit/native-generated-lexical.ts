@@ -138,10 +138,10 @@ export class NativeGeneratedLexical {
             if(!target||target.kind!==K.IDENTIFIER)fail('for-in requires an existing wildcard slot');
             for(let scope=node.parent;scope;scope=scope.parent){
                 if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===target.text)fail('catch-shadow for-in target held');
-                if(scope.kind!==K.FUNCTION&&scope.kind!==K.LAMBDA)continue;
+                if([K.FUNCTION,K.LAMBDA,K.GET,K.SET].indexOf(scope.kind)<0)continue;
                 const declarations:Node[]=[];
                 scope.findChild(K.PARAMETER_LIST).children.forEach(p=>{const d=p.findChild(K.NAME_TYPE_INIT);if(d)declarations.push(d);});
-                const collect=(n:Node):void=>{if(n.kind===K.FUNCTION||n.kind===K.LAMBDA)return;if([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(n.kind)>=0)declarations.push(...n.findChildren(K.NAME_TYPE_INIT));n.children.forEach(collect);};collect(scope.findChild(K.BLOCK));
+                const collect=(n:Node):void=>{if([K.FUNCTION,K.LAMBDA,K.GET,K.SET].indexOf(n.kind)>=0)return;if([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(n.kind)>=0)declarations.push(...n.findChildren(K.NAME_TYPE_INIT));n.children.forEach(collect);};collect(scope.findChild(K.BLOCK));
                 const slot=declarations.find(d=>d.findChild(K.NAME).text===target.text);
                 if(slot){if(slot.findChild(K.TYPE)&&['*','String','Object'].indexOf(slot.findChild(K.TYPE).text)<0)fail('typed for-in target held');return;}
             }

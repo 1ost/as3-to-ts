@@ -1593,7 +1593,7 @@ function emitForIn(emitter:Emitter, node:Node):void {
   const target=node.children[0].children[0],receiver=node.children[1].children[0],body=node.children[2];
   const binding=target&&target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
   if(!binding||binding.bound||['*','String','Object'].indexOf(binding.as3Type)<0)throw new Error('AS3_ENUMERATION_UNSUPPORTED: generated for-in requires a declared wildcard, String or Object target');
-  for(let scope=node.parent;scope&&scope.kind!==NodeKind.FUNCTION&&scope.kind!==NodeKind.LAMBDA;scope=scope.parent)
+  for(let scope=node.parent;scope&&[NodeKind.FUNCTION,NodeKind.LAMBDA,NodeKind.GET,NodeKind.SET].indexOf(scope.kind)<0;scope=scope.parent)
    if(scope.kind===NodeKind.CATCH&&scope.findChild(NodeKind.NAME).text===target.text)throw new Error('AS3_ENUMERATION_UNSUPPORTED: catch-shadow loop target held');
   if(!emitter.options.nativeEnumeration)throw new Error('AS3_ENUMERATION_UNSUPPORTED: explicit common enumeration providers required');
   const helper=dictionaryEnumerationHelper(emitter,'as3EnumerableKeys');
