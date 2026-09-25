@@ -4979,8 +4979,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 // receiver is not statically rewritten into an Array cast.
                 if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
                     fail("HARDENED_OBJECT_CALL_ARGUMENT", "Dynamic push arguments must produce values", node);
-            } else if (callee.index.kind === "literal" && ["lastIndexOf","substring","slice"].includes(String(callee.index.value))) {
+            } else if (callee.index.kind === "literal" && ["lastIndexOf","substring"].includes(String(callee.index.value))) {
                 fail("HARDENED_OBJECT_CALL_TARGET", "String range/search calls require an authenticated primitive String receiver", node);
+            } else if (callee.index.kind === "literal" && callee.index.value === "slice") {
+                if (context.sourceMemberAuthority === null || callee.target.kind !== "index"
+                    || callee.target.accessKind !== "array"
+                    || assignmentType(callee.target.target,context,rawCallee).sourceName !== "Array")
+                    fail("HARDENED_OBJECT_CALL_TARGET", "Dynamic slice requires an indexed native Array receiver", node);
+                if (args.length > 2) fail("HARDENED_STRING_ARITY", "Dynamic slice requires zero, one or two arguments", node);
             } else if (callee.index.kind !== "literal" || typeof callee.index.value !== "string") {
                 const keyType=assignmentType(callee.index,context,rawCallee);
                 if (keyType.sourceName !== "String" || keyType.emittedName !== "string")

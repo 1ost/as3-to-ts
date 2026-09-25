@@ -2,7 +2,7 @@ import {isNativeJSONDefinition,callNativeJSONDefinition} from "./AS3JSONDefiniti
 import { isAS3ReflectionValue, as3ReflectionVariable, as3ReflectionAttribute } from "./AS3Reflection";
 import { as3FunctionArgument, isAS3SourceLambda } from "./AS3Function";
 import { AS3ArgumentError, AS3RangeError, AS3SecurityError } from "./AS3Error";
-import { as3StringSplit } from "./AS3Coerce";
+import { as3StringSlice, as3StringSplit } from "./AS3Coerce";
 import { as3ArrayCall, as3ArrayDelete, as3ArrayRead, as3ArrayWrite, as3ArrayLengthWrite } from "./AS3Array";
 import { as3DecimalMagnitude } from "./internal/AS3NumberFormat";
 import { AS3Types, testType, lookupStaticCallClass, lookupObjectClass, lookupObjectCaller, lookupObjectCallerPackage, lookupStringClassName, lookupNamedReferenceType, castReference, AS3ObjectTraits } from "./internal/AS3TypeRegistry";
@@ -332,9 +332,15 @@ export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:st
         if (caller !== null) lookupObjectCaller(caller);
         return as3StringSplit(value,args);
     }
+    if (key === "slice" && typeof value === "string") {
+        if (caller !== null) lookupObjectCaller(caller);
+        return as3StringSlice(value,args);
+    }
+    if (key === "slice" && Array.isArray(value))
+        return unavailable("Dynamic Array.slice requires separate native Array evidence");
     // Fixed-name push calls are admitted independently of computed dispatch.
     // Native primitives fail only after the caller has evaluated all arguments.
-    if (key === "push" && ["string","number","boolean"].includes(typeof value)) {
+    if ((key === "push" || key === "slice") && ["string","number","boolean"].includes(typeof value)) {
         const error=new TypeError("Error #1006: value is not a function.");
         Object.defineProperty(error,"errorID",{value:1006}); throw error;
     }

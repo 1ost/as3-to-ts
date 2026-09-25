@@ -21,12 +21,12 @@ export const MAPPED_NATIVE_DYNAMIC_LITERAL_TARGET_AUTHORITY=Object.freeze({
     sourceMemberAuthoritySchema:"as3-source-member-authority@2" as const,
     sourceArtifactSha256:"e0f81fdb2029d2bb16e6987c8d85d4eba5eedfa3a23ed6e7f780bf6eb67b0546" as const,
     runtimeObjectDispatchSourcePath:"src/hardened-runtime/AS3ObjectDispatch.ts" as const,
-    runtimeObjectDispatchSourceSha256:"7f67aa0d296c794d9803144957634d1418b0d35c65a4fefbabe7a68f709332e5" as const,
+    runtimeObjectDispatchSourceSha256:"01e8faaf81e92c138ff8d5028c9ebd65c4509690731d59c08cddd2baa98a77ab" as const,
     runtimeTypeSourcePath:"src/hardened-runtime/AS3Type.ts" as const,
     runtimeTypeSourceSha256:"02f2acb486155e4718075f749cd45056c39175cb58c6c8aaf001af30b7104f60" as const,
     runtimeTypeRegistrySourcePath:"src/hardened-runtime/internal/AS3TypeRegistry.ts" as const,
     runtimeTypeRegistrySourceSha256:"524fe980ec5afc2573cb6a048efdc1bc6da50274073edd99cb65a09bf642b71d" as const,
-    authoritySha256:"b6af1e9cd646dce3982ad5490c4fc2f10fdb0c79a638f3bdc580f5bb38a4afec" as const,
+    authoritySha256:"248130bee69312b6285a41a29da50d097a5abb3b23f43ece4ba5fcc5a30f0801" as const,
 });
 
 export interface MappedNativeDynamicLiteralTargetProof {
