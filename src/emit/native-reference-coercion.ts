@@ -5,7 +5,7 @@ import K from '../syntax/nodeKind';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
 import {generatedModule} from './native-generated-emission';
 
-export const nativeSpriteOwnerReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.display.LoaderInfo','flash.ui.ContextMenu']);
+export const nativeSpriteOwnerReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.display.LoaderInfo','flash.ui.ContextMenu','flash.display.Stage']);
 export const nativeSpriteValueReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.geom.Transform','flash.media.SoundTransform','flash.accessibility.AccessibilityProperties']);
 export interface NativeReferenceCoercionOptions {
     plan: NativeGeneratedDeclarationPlan;

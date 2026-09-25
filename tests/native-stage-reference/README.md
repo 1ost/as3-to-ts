@@ -1,0 +1,5 @@
+# Generated Stage references
+
+Run `npm run tsc`, then `node tests/native-stage-reference/run.cjs` with the isolated engine. Complete unchanged StageHolder.as matches 31 AIR observations through the production module factory in ES5/ES2015 Node/Chromium under CSP, with zero generated/provider type errors. There are 22 runtime guards and seven binding guards. Stage uses the explicit `nativeSpriteOwnerReferenceModule` binding; every selected provider/import must agree. Shadowed type operands and native subclassing remain rejected.
+
+The provider grants only nominal reference storage/coercion through the existing engine-issued Stage view. No source Class, ancestry token or constructor is invented. Runtime guards reject raw Laya Stage objects and forged/proxy views, check atomic named registration, retain one stable Stage identity and preserve it through display attach/detach. No full Sprite/BaseModule inheritance or client startup is claimed. Report: `.cache/native-stage-reference/run-yekyMq/report.json`.
