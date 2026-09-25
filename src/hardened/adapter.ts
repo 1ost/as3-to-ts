@@ -4798,7 +4798,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                                 && targetType.sourceName === "Array");
                     const stringMethod = targetType.sourceName === "String" && !valuePosition && (["indexOf", "substr", "toLowerCase", "charAt"].includes(name)
                         || name === "charCodeAt" && context.stringRangeProvider !== undefined
-                        || context.sourceMemberAuthority !== null && ["split","lastIndexOf","substring","slice","replace"].includes(name));
+                        || context.sourceMemberAuthority !== null && ["split","lastIndexOf","substring","slice","replace","toString"].includes(name));
                     if (!numberMethod && !errorRead && !errorMethod && !stringLength && !functionLength && !arrayLength && !arrayMethod && !stringMethod && (vectorElement(targetType) === null
                         || (name !== "length" && name !== "fixed" && !VECTOR_METHODS.has(name)))) {
                         fail("HARDENED_MEMBER_TARGET", `member ${targetType.sourceName}.${name} on ${target.kind} is outside the admitted subset`, node);
@@ -5255,6 +5255,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             } else if (callee.name === "toLowerCase") {
                 if (args.length !== 0) fail("HARDENED_STRING_ARITY", "String.toLowerCase requires its native zero-argument call", node);
                 capabilitySource="String"; capabilityMember="toLowerCase";
+            } else if (callee.name === "toString") {
+                if (args.length !== 0) fail("HARDENED_STRING_ARITY", "String.toString requires its native zero-argument call", node);
+                capabilitySource="String"; capabilityMember="toString";
             } else if (callee.name === "charAt") {
                 if (args.length > 1) fail("HARDENED_STRING_ARITY", "String.charAt requires zero or one index argument", node);
                 capabilitySource="String"; capabilityMember="charAt";
