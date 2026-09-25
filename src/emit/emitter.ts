@@ -163,7 +163,7 @@ export interface EmitterOptions {
     nativeByteArrayReferenceModule?: string;
     /** Closed AccessibilityImplementation nominal reference provider; no subclass admission. */
     nativeAccessibilityReferenceModule?: string;
-    /** Closed Transform, SoundTransform and AccessibilityProperties references. */
+    /** Closed Transform, SoundTransform, AccessibilityProperties and TextSnapshot references. */
     nativeSpriteValueReferenceModule?: string;
     nativeSpriteOwnerReferenceModule?: string;
 	/** Builtin AS3 global names and their authenticated common modules. */
