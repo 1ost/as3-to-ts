@@ -1,3 +1,4 @@
+import {nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {generatedMethodCompletes} from './native-generated-completions';
 import {NativeLexicalMembers} from './native-lexical-members';
 import {lowerNativeSourceOperations} from './native-source-operations';
@@ -26,7 +27,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false, private spriteOwnerReferences=false) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -76,12 +77,16 @@ export class NativeCallableClasses {
                 node.children.forEach(aliasScan);
             };
             aliasScan(cls);
+            const isClassAlias = (node:Node, name:string):boolean => {
+                const local = this.capturedType(node,name);
+                return local === undefined ? classAliases.has(name) : local === 'Class';
+            };
             const callScan = (node: Node): void => {
                 const receiver = node.children[0] && unwrapEncapsulatedExpression(node.children[0]);
-                if (node.kind === K.DOT && receiver && classAliases.has(receiver.text)
+                if (node.kind === K.DOT && receiver && isClassAlias(node,receiver.text)
                     && ['call', 'apply', 'bind', 'prototype'].indexOf(node.children[1].text) >= 0)
                     this.fail('direct callable-constructor invocation/prototype manipulation');
-                if (node.kind === K.CALL && node.children[0] && classAliases.has(node.children[0].text)
+                if (node.kind === K.CALL && node.children[0] && isClassAlias(node,node.children[0].text)
                     && !Object.keys(options).some(key => key.split('.').pop() === node.children[0].text)
                     && !(generated&&classValueModule&&node.parent&&node.parent.kind===K.NEW&&this.isCapturedClass(node,node.children[0].text)))
                     this.fail('dynamic Class invocation requires exact constructor authority');
@@ -151,7 +156,13 @@ export class NativeCallableClasses {
                     const sourceDeclaration=sourceReference&&(sourceReference.kind==='declaration'
                         ?generated.options.plan.bindings.find(binding=>binding.qname===sourceReference.identity)
                         :sourceReference.kind==='interface'&&generated.options.plan.interfaces.find(binding=>binding.qname===sourceReference.identity));
-                    const reference=sourceDeclaration?{identity:sourceDeclaration.qname,exported:sourceDeclaration.tokenExport}:undefined;
+                    const nativeReference=sourceReference&&sourceReference.kind==='native'
+                        &&(accessibilityReference&&sourceReference.identity==='flash.accessibility.AccessibilityImplementation'
+                            ||spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(sourceReference.identity)>=0
+                            ||spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(sourceReference.identity)>=0)
+                        &&generated.options.plan.nativeBindings.find(binding=>binding.qname===sourceReference.identity);
+                    const reference=sourceDeclaration?{identity:sourceDeclaration.qname,exported:sourceDeclaration.tokenExport}
+                        :nativeReference?{identity:nativeReference.qname,exported:nativeReference.referenceExport}:undefined;
                     const sourceType = reference ? reference.identity : nativeSourceTypeIdentity(type, qname, imports);
                     const selfReference = !!metadata && sourceType === qname;
                     if (!selfReference && !reference && !(generated&&['Function','Array'].indexOf(sourceType)>=0) && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
@@ -231,8 +242,12 @@ export class NativeCallableClasses {
 
     /** Find the source slot, stopping at each function or catch shadow. */
     private isCapturedClass(node: Node, name: string): boolean {
+        return this.capturedType(node,name)==='Class';
+    }
+    /** Undefined means absent; an untyped local still shadows aliases elsewhere. */
+    private capturedType(node: Node, name: string): string | undefined {
         for(let scope=node.parent;scope;scope=scope.parent){
-            if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===name)return false;
+            if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===name)return scope.findChild(K.TYPE)?scope.findChild(K.TYPE).text:'*';
             if(scope.kind!==K.FUNCTION&&scope.kind!==K.LAMBDA)continue;
             const declarations:Node[]=[];
             scope.findChild(K.PARAMETER_LIST).children.forEach(p=>{const d=p.findChild(K.NAME_TYPE_INIT);if(d)declarations.push(d);});
@@ -242,9 +257,9 @@ export class NativeCallableClasses {
                 value.children.forEach(collect);
             };collect(scope.findChild(K.BLOCK));
             const binding=declarations.find(d=>d.findChild(K.NAME).text===name);
-            if(binding)return !!binding.findChild(K.TYPE)&&binding.findChild(K.TYPE).text==='Class';
+            if(binding)return binding.findChild(K.TYPE)?binding.findChild(K.TYPE).text:'*';
         }
-        return false;
+        return undefined;
     }
 
     public lower(source: string): string {
@@ -580,6 +595,9 @@ export class NativeCallableClasses {
                         &&!(this.byteArrayReference&&reference.identity==='flash.utils.ByteArray')
                         &&!(this.movieClipReference&&reference.identity==='flash.display.MovieClip')
                         &&!(this.textFormatReference&&reference.identity==='flash.text.TextFormat')
+                        &&!(this.accessibilityReference&&reference.identity==='flash.accessibility.AccessibilityImplementation')
+                        &&!(this.spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(reference.identity)>=0)
+                        &&!(this.spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(reference.identity)>=0)
                         &&!(this.interactiveReference&&reference.identity==='flash.display.InteractiveObject')
                         &&!this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&binding.nativeInterface)
                         &&!(reference.identity==='flash.media.ID3Info'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity))

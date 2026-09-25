@@ -1,0 +1,42 @@
+# Generated Sprite allocation context
+
+Run `npm run tsc`, then `node tests/native-generated-sprite-allocation/run.cjs`.
+Requires the isolated Laya engine with script movie allocation context support.
+
+The complete synthetic Allocator.as control emits through the production native
+source module factory on ES5 and ES2015. The real loading session instantiates
+two cohorts with retained movie headers. Node and Chromium (CSP `script-src
+'self'`) compare eighteen allocation projection states against the authenticated
+main/child states in the engine's perspective-projection-loaded AIR packet.
+Instance/static methods, crossed calls, anonymous callbacks and retained callbacks
+after retirement retain their defining movie. Captured Class and dynamic Object
+construction forward the new-expression's script global to the common provider;
+ordinary non-display construction continues to work. Generated/provider type checking
+adds no diagnostics against the native Sprite graph.
+
+This is generated allocation integration, not an unchanged whole AIR subject
+comparison. The complete captured ProjectionChild subclass still needs canonical
+Sprite ancestry/trait admission. Qualified constructor spellings,
+other display classes, nonzero Sprite arguments and
+generated Sprite subclass allocation remain separate requirements. Shadowed Class
+variables do not acquire the direct Sprite lowering. Missing movie authority
+fails at the runtime allocation boundary rather than guessing the main viewport.
+
+The module factory accepts an optional `sourceMovie` record containing authored
+width/height and source SHA-256; build callers must authenticate those inputs.
+Existing non-display cohorts need no movie record. The emitted module binds it
+to the loading session before async preparation, with no runtime SWF execution.
+
+The separate native construction-origin oracle proves that an outer subclass
+instance uses the new-expression caller's movie, while a nested field allocation
+uses its field script's movie. The engine compares those complete pairs; this
+compiler fixture compares canonical Sprite allocation states. The existing
+captured-Class (22 AIR rows) and dynamic-construction (31 AIR rows) regressions
+pass on both targets/runtimes with zero type errors.
+
+The callable pre-scan resolves a parameter or local in its enclosing function
+before considering Class aliases from other methods. Same-named Class and Object
+parameters, Object locals and captured Object parameters now construct through
+their respective providers. Fifteen guards retain unsupported Class invocation,
+call/apply/bind/prototype and missing dynamic-provider/reference rejection alongside the
+existing movie/provider checks. This does not qualify every alias-resolution case.

@@ -1,3 +1,4 @@
+import {nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {emitNativeXML, xmlGlobalProviderModule} from './native-xml';
 import {NativeClassMetadataOptions} from './native-class-metadata';
 import {nativeGeneratedDeclarationInputs} from './native-generated-declarations';
@@ -160,6 +161,11 @@ export interface EmitterOptions {
     nativeTextFormatReferenceModule?: string;
     nativeInteractiveObjectReferenceModule?: string;
     nativeByteArrayReferenceModule?: string;
+    /** Closed AccessibilityImplementation nominal reference provider; no subclass admission. */
+    nativeAccessibilityReferenceModule?: string;
+    /** Closed Transform, SoundTransform, AccessibilityProperties and TextSnapshot references. */
+    nativeSpriteValueReferenceModule?: string;
+    nativeSpriteOwnerReferenceModule?: string;
 	/** Builtin AS3 global names and their authenticated common modules. */
 	nativeGlobalModules?:{[name:string]:string};
 	/** Authenticated common flash.utils.Proxy module. */
@@ -430,6 +436,44 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules[qname]!==module)
                 throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: exact native display provider binding required');
         }
+        if (this.options.nativeSpriteValueReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeSpriteValueReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_SPRITE_VALUE_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const names=nativeSpriteValueReferenceNames.filter(name=>inputs.providers&&inputs.providers[name]);
+            if(!names.length)throw new Error('AS3_SPRITE_VALUE_REFERENCE_UNSUPPORTED: native value provider required');
+            for(const name of names){
+                const provider=inputs.providers[name];
+                if(provider.exportName!==name.split('.').pop()||provider.nativeBase||provider.nativeInterface
+                    ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                    ||!this.options.importModules||this.options.importModules[name]!==module)
+                    throw new Error('AS3_SPRITE_VALUE_REFERENCE_UNSUPPORTED: exact native provider binding required');
+            }
+        }
+        if (this.options.nativeSpriteOwnerReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeSpriteOwnerReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_SPRITE_OWNER_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const names=nativeSpriteOwnerReferenceNames.filter(name=>inputs.providers&&inputs.providers[name]);
+            if(!names.length)throw new Error('AS3_SPRITE_OWNER_REFERENCE_UNSUPPORTED: native value provider required');
+            for(const name of names){
+                const provider=inputs.providers[name];
+                if(provider.exportName!==name.split('.').pop()||provider.nativeBase||provider.nativeInterface
+                    ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                    ||!this.options.importModules||this.options.importModules[name]!==module)
+                    throw new Error('AS3_SPRITE_OWNER_REFERENCE_UNSUPPORTED: exact native provider binding required');
+            }
+        }
+        if (this.options.nativeAccessibilityReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeAccessibilityReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_ACCESSIBILITY_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const provider=inputs.providers&&inputs.providers['flash.accessibility.AccessibilityImplementation'];
+            if(!provider||provider.exportName!=='AccessibilityImplementation'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                ||!this.options.importModules||this.options.importModules['flash.accessibility.AccessibilityImplementation']!==module)
+                throw new Error('AS3_ACCESSIBILITY_REFERENCE_UNSUPPORTED: exact native provider binding required');
+        }
         if (this.options.nativeByteArrayReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeByteArrayReferenceModule);
             if(!this.generated||!this.options.nativeReferenceCoercion)
@@ -463,7 +507,7 @@ export default class Emitter {
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
                 this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
                 this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : [],
-                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined);
+                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -681,7 +725,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -2954,12 +2998,17 @@ function emitShortVector(emitter:Emitter, node:Node):void {
 
 
 function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
-    if (!emitter.references || node.children.length !== 1) return false;
+    if ((!emitter.references && !emitter.generated) || node.children.length !== 1) return false;
     const call=node.children[0];
     const callee=call.kind===NodeKind.CALL?call.children[0]:call;
     const args=call.kind===NodeKind.CALL?call.findChild(NodeKind.ARGUMENTS):undefined;
     const target=unwrapEncapsulatedExpression(callee);
     const binding=target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
+    if (!emitter.references) {
+        if (binding && !binding.bound && ['Object','Function','*'].indexOf(binding.as3Type)>=0)
+            throw new Error('AS3_DYNAMIC_CONSTRUCTION_UNSUPPORTED: explicit reference authority required');
+        return false;
+    }
     const classCast=target.kind===NodeKind.RELATION && target.children.length===3
         && target.children[1].text==='as' && target.lastChild.kind===NodeKind.IDENTIFIER
         && target.lastChild.text==='Class' && emitter.references.resolve('Class')==='Class'
@@ -2972,10 +3021,12 @@ function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
     emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitter.skipTo(callee.start);
     visitNode(emitter,callee);emitter.catchup(callee.end);emitter.insert(',()=>[');
     args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
-    emitter.insert(']))');emitter.skipTo(node.end);return true;
+    const scriptGlobal=emitter.generated&&emitter.generated.projection.binding.scriptGlobalExport?emitter.generated.lexical.scriptGlobal:null;
+    emitter.insert(']'+(scriptGlobal?','+scriptGlobal:'')+'))');emitter.skipTo(node.end);return true;
 }
 
 function emitNew(emitter:Emitter, node:Node):void {
+ if(emitLexicalSpriteConstruction(emitter,node))return;
  if(emitDynamicConstruction(emitter,node))return;
  if(emitGeneratedVectorConstruction(emitter,node))return;
  if(emitter.generated&&node.children.length===1&&node.children[0].kind===NodeKind.CALL){
@@ -2987,7 +3038,8 @@ function emitNew(emitter:Emitter, node:Node):void {
    emitter.ensureImportIdentifier('as3ConstructClass as '+helper,module,false);emitter.nativeSourceHelpers.add(helper);
    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitter.skipTo(callee.start);visitNode(emitter,callee);emitter.catchup(callee.end);
    emitter.insert(',[');args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
-   emitter.insert(']))');emitter.skipTo(node.end);return;
+   const scriptGlobal=emitter.generated.projection.binding.scriptGlobalExport?emitter.generated.lexical.scriptGlobal:null;
+   emitter.insert(']'+(scriptGlobal?','+scriptGlobal:'')+'))');emitter.skipTo(node.end);return;
   }
  }
 
@@ -3398,6 +3450,36 @@ function emitLocalFunctionIntrinsic(emitter:Emitter,node:Node):boolean {
     emitter.insert(','+JSON.stringify(member.text)+',()=>[');
     args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
     emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
+/** Native Sprite allocations retain the defining script's movie, including
+ * callbacks invoked by another movie. Zero-argument construction is the
+ * qualified canonical form; other display constructors remain separate work. */
+function emitLexicalSpriteConstruction(emitter:Emitter,node:Node):boolean {
+ if(!emitter.generated||node.children.length!==1)return false;
+ const call=node.children[0],callee=call.kind===NodeKind.CALL&&call.children[0];
+ if(!callee||callee.kind!==NodeKind.IDENTIFIER)return false;
+ const binding=emitter.findDefInScope(callee.text);
+ if(binding&&(binding.bound||Object.prototype.hasOwnProperty.call(binding,'as3Type')))return false;
+ if(emitter.generated.lexical.resolveTypeName(callee.text)!=='flash.display.Sprite')return false;
+ const input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+ const provider=input.providers&&input.providers['flash.display.Sprite'];
+ const fail=(reason:string):never=>{throw new Error('AS3_SPRITE_ALLOCATION_UNSUPPORTED: '+reason);};
+ if(!provider||provider.exportName!=='Sprite'||!emitter.options.importModules
+     ||emitter.options.importModules['flash.display.Sprite']!==xmlGlobalProviderModule(provider.module,emitter.generated.options.module))
+  fail('exact native Sprite provider required');
+ const args=call.findChild(NodeKind.ARGUMENTS);
+ if(!args||args.children.length)fail('only canonical zero-argument construction is qualified');
+ if(!input.scriptDomainProvider||!input.scriptGlobalProviderModule||!emitter.generated.projection.binding.scriptGlobalExport)
+  fail('defining script requires an explicit cohort domain');
+ const module=generatedModule(xmlGlobalProviderModule(input.scriptGlobalProviderModule,emitter.generated.options.module));
+ const helper=propertyHelper(emitter,'withAS3ScriptAllocationContext',module);
+ emitter.catchup(node.start);emitter.insert(helper+'('+emitter.generated.lexical.scriptGlobal+',()=>');
+ const wasNew=emitter.isNew,wasThis=emitter.emitThisForNextIdent;
+ emitter.isNew=true;emitter.emitThisForNextIdent=false;
+ visitNodes(emitter,node.children);emitter.catchup(node.end);emitter.insert(')');
+ emitter.isNew=wasNew;emitter.emitThisForNextIdent=wasThis;
+ return true;
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
@@ -4366,6 +4448,9 @@ function emitRelation(emitter:Emitter, node:Node):void {
         &&((emitter.options.nativeDisplayObjectReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.DisplayObject')
           ||(emitter.options.nativeMovieClipReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.MovieClip')
           ||(emitter.options.nativeTextFormatReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.text.TextFormat')
+          ||(emitter.options.nativeAccessibilityReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.accessibility.AccessibilityImplementation')
+          ||(emitter.options.nativeSpriteValueReferenceModule!==undefined&&nativeSpriteValueReferenceNames.indexOf(emitter.references.resolve(node.lastChild.text))>=0)
+          ||(emitter.options.nativeSpriteOwnerReferenceModule!==undefined&&nativeSpriteOwnerReferenceNames.indexOf(emitter.references.resolve(node.lastChild.text))>=0)
           ||(emitter.options.nativeInteractiveObjectReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.InteractiveObject'))) {
         const target=node.lastChild,definition=emitter.findDefInScope(target.text);
         if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))

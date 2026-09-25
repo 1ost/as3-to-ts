@@ -1,0 +1,7 @@
+# Generated Sprite owner references
+
+Run `npm run tsc` then `node tests/native-sprite-owner-references/run.cjs` with the isolated engine. The unchanged complete SpriteOwnerHolder source passes 63 captured AIR observations on ES5/ES2015 in Node/Chromium with CSP prohibiting runtime compilation, zero generated/provider type errors, 30 runtime guards and ten binding guards. Coverage includes typed constructor parameters, fields, getters, methods/returns, is/as, nullish input and invalid references. The flag `nativeSpriteOwnerReferenceModule` must agree with every selected provider and import; shadowed operands and native subclassing remain held.
+
+LoaderInfo has an authenticated EventDispatcher declaration base. ContextMenu is a nominal reference only: AIR reports NativeMenu ancestry, which the bridge does not implement. The ContextMenu-base observation is explicitly excluded; no declaration token/reflection/ancestry is invented. The complete subject is still emitted without editing it. This does not qualify full Sprite or BaseModule inheritance. See engine `tests/nativeSpriteOwnerReferences/README.md` for provider boundaries.
+
+Six runtime controls also require exact private constructor/name registration and reject proof/name conflicts atomically. The shared class registrar queries this registry without importing ContextMenu or renderer dependencies. Latest owner report: `.cache/native-sprite-owner-references/run-IBdQCl/report.json`.
