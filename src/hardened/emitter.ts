@@ -360,6 +360,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
                 ts.factory.createCallExpression(ts.factory.createIdentifier("__as3RegExpReceiver"),undefined,
                     [expressionNode(expression.callee.target,ts)]),"test"),undefined,
                 expression.arguments.map(argument=>expressionNode(argument,ts)));
+        if (expression.sharedArraySortOnPair && expression.capabilitySource === "Array"
+            && expression.capabilityMember === "sortOn" && expression.callee.kind === "member"
+            && expression.arguments.length === 2)
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__sharedArraySortOn"),undefined,
+                [expressionNode(expression.callee.target,ts),...expression.arguments.map(argument=>expressionNode(argument,ts))]);
         if (expression.capabilitySource === "Array" && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArrayCall"),undefined,[
                 expressionNode(expression.callee.target,ts),ts.factory.createStringLiteral(expression.capabilityMember!),
@@ -1952,7 +1957,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
         ts.factory.createStringLiteral(program.sharedArraySomeModule),undefined));
     if (program.sharedArraySortModule) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports([
-            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("sourceArraySortCallback"),ts.factory.createIdentifier("__sharedArraySortCallback"))])),
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("sourceArraySortCallback"),ts.factory.createIdentifier("__sharedArraySortCallback")),
+            ts.factory.createImportSpecifier(false,ts.factory.createIdentifier("as3ArraySortOn"),ts.factory.createIdentifier("__sharedArraySortOn"))])),
         ts.factory.createStringLiteral(program.sharedArraySortModule),undefined));
     if (program.sharedStringRangeModule) imports.push(ts.factory.createImportDeclaration(undefined,
         ts.factory.createImportClause(false,undefined,ts.factory.createNamedImports(["CharAt","CharCodeAt","Slice","Substring"].map(name=>

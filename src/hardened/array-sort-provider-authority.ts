@@ -5,7 +5,9 @@ import {verifySharedProviderTarget} from "./reflection-provider-authority";
 export interface ArraySortProviderTarget { readonly module: string; }
 const MODULE = "src/layaAir/flash/utils/AS3ArraySort.ts";
 const TARGETS = [{module:MODULE,export:"sourceArraySortCallback",
-    signature:"(value: unknown, callback: unknown, invoke: (target: unknown, args: unknown[]) => unknown, coerce: (value: unknown) => number) => unknown[]"}];
+    signature:"(value: unknown, callback: unknown, invoke: (target: unknown, args: unknown[]) => unknown, coerce: (value: unknown) => number) => unknown[]"},
+    {module:MODULE,export:"as3ArraySortOn",
+    signature:"<T>(values: T[], fieldName: unknown, options?: unknown, ..._ignored: unknown[]) => T[] | number[] | 0"}];
 const verified = new WeakMap<object,{targetHash:string;sourceHash:string}>();
 const hash = (text:string):string => createHash("sha256").update(text).digest("hex");
 function fail(message:string):never { throw new HardenedSemanticError("HARDENED_STRING_RANGE_PROVIDER_AUTHORITY",message); }

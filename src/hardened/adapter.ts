@@ -5340,9 +5340,14 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                     }
                     return null;
                 };
-                if (name === "sortOn" && (args.length !== 2 || assignmentType(args[0]!,context,node).sourceName !== "String"
+                const sortOnPair = name === "sortOn" && context.arraySortProvider && args.length === 2
+                    && args[0]!.kind === "array" && args[0]!.elements.length === 2
+                    && args[0]!.elements.every(field => field.kind === "literal" && typeof field.value === "string")
+                    && args[1]!.kind === "array" && args[1]!.elements.length === 2
+                    && args[1]!.elements.every(option => flags(option) === 16);
+                if (name === "sortOn" && !sortOnPair && (args.length !== 2 || assignmentType(args[0]!,context,node).sourceName !== "String"
                     || ![16,18].includes(flags(args[1]!)!)))
-                    fail("HARDENED_ARRAY_SORT_ON", "Array.sortOn requires one String field and proven NUMERIC with optional DESCENDING", node);
+                    fail("HARDENED_ARRAY_SORT_ON", "Array.sortOn requires one String field with numeric options or two literal fields with proven NUMERIC options", node);
                 if (name === "sort" && !(context.arraySortProvider && args.length === 1
                     && assignmentType(args[0]!,context,node).sourceName === "Function"
                     && !assignmentType(args[0]!,context,node).nullable)
@@ -5578,6 +5583,9 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             ...(context.arraySortProvider && capabilitySource === "Array" && capabilityMember === "sort"
                 && args.length === 1 && assignmentType(args[0]!,context,node).sourceName === "Function"
                 ? {sharedArraySort:true as const} : {}),
+            ...(context.arraySortProvider && capabilitySource === "Array" && capabilityMember === "sortOn"
+                && args.length === 2 && args[0]!.kind === "array" && args[1]!.kind === "array"
+                ? {sharedArraySortOnPair:true as const} : {}),
             ...(context.stringRangeProvider && capabilitySource === "String" && ["charAt","charCodeAt","substring","slice"].includes(capabilityMember || "")
                 ? {sharedStringRange:true as const} : {}),
         });

@@ -305,6 +305,7 @@ export interface CallExpression extends SemanticIdentity {
     kind: "call";
     sharedStringRange?: true;
     sharedArraySort?: true;
+    sharedArraySortOnPair?: true;
     sharedArraySome?: true;
     sharedErrorStack?: true;
     callee: SemanticExpression;

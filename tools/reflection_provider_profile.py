@@ -207,7 +207,9 @@ def produce_string_range_provider_profile(*, profile_root, laya_root):
 REGEXP_MEMBER_TARGETS = REGEXP_TARGETS + (("src/layaAir/flash/utils/AS3RegExp.ts", "as3RegExpReceiver", "(value: unknown) => AS3RegExp"),)
 
 ARRAY_SORT_TARGETS = (("src/layaAir/flash/utils/AS3ArraySort.ts", "sourceArraySortCallback",
-    "(value: unknown, callback: unknown, invoke: (target: unknown, args: unknown[]) => unknown, coerce: (value: unknown) => number) => unknown[]"),)
+    "(value: unknown, callback: unknown, invoke: (target: unknown, args: unknown[]) => unknown, coerce: (value: unknown) => number) => unknown[]"),
+    ("src/layaAir/flash/utils/AS3ArraySort.ts", "as3ArraySortOn",
+    "<T>(values: T[], fieldName: unknown, options?: unknown, ..._ignored: unknown[]) => T[] | number[] | 0"))
 
 def inspect_array_sort_provider_inputs(laya_root):
     return _inspect(laya_root, ARRAY_SORT_TARGETS, "as3-array-sort-provider-target@1")[1]
