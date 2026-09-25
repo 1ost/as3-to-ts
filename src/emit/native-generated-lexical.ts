@@ -455,6 +455,24 @@ export class NativeGeneratedLexical {
         }
         else if(node.kind===K.DELETE){if(resolve(node.children[0]))fail('lexical update/delete lowering required');return false;}
         if(node.kind===K.IDENTIFIER&&node.parent&&node.parent.kind===K.DOT&&node.parent.children[1]===node)return false;
+        if(operation==='call'&&target.kind===K.DOT&&target.children[1].kind===K.LITERAL) {
+            const inner=target.children[0],slot=resolve(inner);
+            const ref=slot&&slot.trait&&slot.trait.type&&this.plan.references.find(r=>r.owner===slot.trait.owner
+                &&r.start===slot.trait.type.start&&r.end===slot.trait.type.end);
+            if(slot&&slot.trait&&slot.trait.kind==='variable'&&ref&&ref.kind==='intrinsic'&&ref.identity==='Object') {
+                // Resolve the field through its authenticated lexical capability.
+                // Source dot-call arguments precede the final method lookup;
+                // host lookup would also lose the AS3 namespace methods.
+                let helper='__as3_generated_callNamedProperty';while(emitter.source.indexOf(helper)>=0)helper+='_';
+                emitter.ensureImportIdentifier('as3CallNamedProperty as '+helper,emitter.generated.propertyModule,false);
+                emitter.nativeSourceHelpers.add(helper);
+                emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+                emitter.skipTo(inner.start);visit(emitter,inner);emitter.catchup(inner.end);
+                emitter.insert(','+JSON.stringify(target.children[1].text)+',()=>[');
+                args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                emitter.insert(']))');emitter.skipTo(node.end);return true;
+            }
+        }
         if(target.kind===K.DOT&&target.children[1]&&['call','apply'].indexOf(target.children[1].text)>=0) {
             const inner=target.children[0],slot=resolve(inner);
             if(slot&&(slot.nativeMethod||slot.trait&&slot.trait.kind==='variable')) {
