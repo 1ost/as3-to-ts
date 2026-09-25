@@ -6,7 +6,7 @@ Requires the isolated Laya engine with script movie allocation context support.
 The complete synthetic Allocator.as control emits through the production native
 source module factory on ES5 and ES2015. The real loading session instantiates
 two cohorts with retained movie headers. Node and Chromium (CSP `script-src
-'self'`) compare fourteen allocation projection states against the authenticated
+'self'`) compare eighteen allocation projection states against the authenticated
 main/child states in the engine's perspective-projection-loaded AIR packet.
 Instance/static methods, crossed calls, anonymous callbacks and retained callbacks
 after retirement retain their defining movie. Captured Class and dynamic Object
@@ -34,6 +34,9 @@ compiler fixture compares canonical Sprite allocation states. The existing
 captured-Class (22 AIR rows) and dynamic-construction (31 AIR rows) regressions
 pass on both targets/runtimes with zero type errors.
 
-Known separate hold: a Class-typed parameter in one method can make the callable
-pre-scan misclassify an Object-typed parameter of the same name in another method.
-The fixture uses distinct names until that scope-resolution defect is fixed.
+The callable pre-scan resolves a parameter or local in its enclosing function
+before considering Class aliases from other methods. Same-named Class and Object
+parameters, Object locals and captured Object parameters now construct through
+their respective providers. Fifteen guards retain unsupported Class invocation,
+call/apply/bind/prototype and missing dynamic-provider/reference rejection alongside the
+existing movie/provider checks. This does not qualify every alias-resolution case.

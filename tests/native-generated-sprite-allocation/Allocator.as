@@ -6,6 +6,8 @@ package host {
   public function callback():Function { return function():* { return new Sprite(); }; }
   public function invoke(fn:Function):* { return fn(); }
   public function captured(type:Class):* { return new type(); }
-  public function dynamicConstruct(value:Object):* { return new value(); }
+  public function dynamicConstruct(type:Object):* { return new type(); }
+  public function localConstruct(value:Object):* { var type:Object=value; return new type(); }
+  public function dynamicCallback(type:Object):Function { return function():* { return new type(); }; }
  }
 }

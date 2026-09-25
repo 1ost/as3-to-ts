@@ -76,12 +76,16 @@ export class NativeCallableClasses {
                 node.children.forEach(aliasScan);
             };
             aliasScan(cls);
+            const isClassAlias = (node:Node, name:string):boolean => {
+                const local = this.capturedType(node,name);
+                return local === undefined ? classAliases.has(name) : local === 'Class';
+            };
             const callScan = (node: Node): void => {
                 const receiver = node.children[0] && unwrapEncapsulatedExpression(node.children[0]);
-                if (node.kind === K.DOT && receiver && classAliases.has(receiver.text)
+                if (node.kind === K.DOT && receiver && isClassAlias(node,receiver.text)
                     && ['call', 'apply', 'bind', 'prototype'].indexOf(node.children[1].text) >= 0)
                     this.fail('direct callable-constructor invocation/prototype manipulation');
-                if (node.kind === K.CALL && node.children[0] && classAliases.has(node.children[0].text)
+                if (node.kind === K.CALL && node.children[0] && isClassAlias(node,node.children[0].text)
                     && !Object.keys(options).some(key => key.split('.').pop() === node.children[0].text)
                     && !(generated&&classValueModule&&node.parent&&node.parent.kind===K.NEW&&this.isCapturedClass(node,node.children[0].text)))
                     this.fail('dynamic Class invocation requires exact constructor authority');
@@ -231,8 +235,12 @@ export class NativeCallableClasses {
 
     /** Find the source slot, stopping at each function or catch shadow. */
     private isCapturedClass(node: Node, name: string): boolean {
+        return this.capturedType(node,name)==='Class';
+    }
+    /** Undefined means absent; an untyped local still shadows aliases elsewhere. */
+    private capturedType(node: Node, name: string): string | undefined {
         for(let scope=node.parent;scope;scope=scope.parent){
-            if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===name)return false;
+            if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===name)return scope.findChild(K.TYPE)?scope.findChild(K.TYPE).text:'*';
             if(scope.kind!==K.FUNCTION&&scope.kind!==K.LAMBDA)continue;
             const declarations:Node[]=[];
             scope.findChild(K.PARAMETER_LIST).children.forEach(p=>{const d=p.findChild(K.NAME_TYPE_INIT);if(d)declarations.push(d);});
@@ -242,9 +250,9 @@ export class NativeCallableClasses {
                 value.children.forEach(collect);
             };collect(scope.findChild(K.BLOCK));
             const binding=declarations.find(d=>d.findChild(K.NAME).text===name);
-            if(binding)return !!binding.findChild(K.TYPE)&&binding.findChild(K.TYPE).text==='Class';
+            if(binding)return binding.findChild(K.TYPE)?binding.findChild(K.TYPE).text:'*';
         }
-        return false;
+        return undefined;
     }
 
     public lower(source: string): string {

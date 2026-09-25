@@ -2951,12 +2951,17 @@ function emitShortVector(emitter:Emitter, node:Node):void {
 
 
 function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
-    if (!emitter.references || node.children.length !== 1) return false;
+    if ((!emitter.references && !emitter.generated) || node.children.length !== 1) return false;
     const call=node.children[0];
     const callee=call.kind===NodeKind.CALL?call.children[0]:call;
     const args=call.kind===NodeKind.CALL?call.findChild(NodeKind.ARGUMENTS):undefined;
     const target=unwrapEncapsulatedExpression(callee);
     const binding=target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
+    if (!emitter.references) {
+        if (binding && !binding.bound && ['Object','Function','*'].indexOf(binding.as3Type)>=0)
+            throw new Error('AS3_DYNAMIC_CONSTRUCTION_UNSUPPORTED: explicit reference authority required');
+        return false;
+    }
     const classCast=target.kind===NodeKind.RELATION && target.children.length===3
         && target.children[1].text==='as' && target.lastChild.kind===NodeKind.IDENTIFIER
         && target.lastChild.text==='Class' && emitter.references.resolve('Class')==='Class'

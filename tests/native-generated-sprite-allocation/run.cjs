@@ -31,7 +31,7 @@ const externalModules=[...new Set([...Object.values(helpers),...['AS3GeneratedCl
 const movie=(width,height,file)=>({width,height,sourceSha256:hash(fs.readFileSync(path.join(evidence,file)))});
 const mainMovie=movie(500,375,'evidence/oracle.swf'),childMovie=movie(900,300,'child-build/child.swf');
 const base={plan,emitterOptions:options,externalModules,loadingSessionModule:session};
-const expected=[false,true,true,false,true,false,true,false,true,false,true,true,true,false].map(child=>captured.find(r=>r.id===(child?'main-read-child-created':'main-read-local')).value);
+const expected=[false,true,true,false,true,false,true,false,true,false,true,false,true,false,true,true,true,false].map(child=>captured.find(r=>r.id===(child?'main-read-child-created':'main-read-local')).value);
 let guards=0;
 const altered=(source,patch={})=>{
  const changed=api.createNativeGeneratedDeclarationPlan({...input,sources:{'host.ParentCallbacks':{source,sourceSha256:hash(source)}}});
@@ -41,6 +41,12 @@ assert.throws(()=>altered(text.replace('new Sprite()','new Sprite(1)')),/AS3_SPR
 assert.throws(()=>altered(text,{importModules:{...options.importModules,'flash.display.Sprite':'./wrong'}}),/AS3_SPRITE_ALLOCATION_UNSUPPORTED/);guards++;
 const shadow='package host { public class ParentCallbacks { public function make(Sprite:Class):* { return new Sprite(); } } }';
 assert.ok(!altered(shadow).includes('withAS3ScriptAllocationContext'));guards++;
+for(const expression of ['type()', 'type.call(null)', 'type.apply(null,[])', 'type.bind(null)', 'type.prototype']){
+ const invalid='package host { public class ParentCallbacks { public function bad(type:Class):* { return '+expression+'; } public function other(type:Object):* { return new type(); } } }';
+ assert.throws(()=>altered(invalid),/AS3_[A-Z_]+UNSUPPORTED/);guards++;
+}
+assert.throws(()=>altered(text,{nativeDynamicConstructionModule:undefined}),/AS3_[A-Z_]+UNSUPPORTED/);guards++;
+assert.throws(()=>altered(text,{nativeReferenceCoercion:undefined}),/AS3_DYNAMIC_CONSTRUCTION_UNSUPPORTED/);guards++;
 for(const bad of [{...childMovie,width:0},{...childMovie,height:Infinity},{...childMovie,sourceSha256:'bad'},Object.defineProperty({...childMovie},'width',{get(){throw new Error('getter invoked');}})]){
  assert.throws(()=>api.emitNativeSourceClassModule({...base,target:'ES2015',sourceMovie:bad}),/AS3_SOURCE_CLASS_MODULE_UNSUPPORTED/);guards++;
 }
