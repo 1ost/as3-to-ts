@@ -3561,7 +3561,7 @@ function emitCall(emitter:Emitter, node:Node):void {
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
     if (emitJSONParse(emitter,node)) return;
-	if (emitStringReplace(emitter, node)) return;
+	if (emitStringPatternCall(emitter, node)) return;
 	if (emitReflectionQuery(emitter, node)) return;
 	if (emitReflectionXML(emitter, node)) return;
 	if (emitDirectToString(emitter, node)) return;
@@ -3809,20 +3809,23 @@ function nativePatternModule(emitter:Emitter):string {
     return generatedModule(module);
 }
 
-function emitStringReplace(emitter:Emitter, node:Node):boolean {
+function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
     const module = emitter.options.nativeStringIntrinsicsModule;
     if (module === undefined || emitter.isNew) return false;
     const callee = node.children[0];
-    if (!callee || callee.kind !== NodeKind.DOT || ['replace','match'].indexOf(callee.children[1].text)<0) return false;
-    const method=callee.children[1].text, replacing=method==='replace';
+    if (!callee || callee.kind !== NodeKind.DOT || ['replace','match','split'].indexOf(callee.children[1].text)<0) return false;
+    const method=callee.children[1].text, replacing=method==='replace', splitting=method==='split';
+    const args = node.findChild(NodeKind.ARGUMENTS);
+    // Ordinary String delimiters retain their separate dispatch path. This
+    // source-pattern provider admits literal RegExp delimiters without limits.
+    if(splitting&&(!args||!args.children[0]||args.children[0].kind!==NodeKind.LITERAL||!/^\/[\s\S]+\/[a-z]*$/.test(args.children[0].text)))return false;
     const receiver = unwrapEncapsulatedExpression(callee.children[0]);
     if (receiver.kind !== NodeKind.IDENTIFIER) return false;
     const binding = emitter.findDefInScope(receiver.text);
     if (!binding || binding.bound || binding.as3Type !== 'String') return false;
     if (!emitter.references || emitter.references.resolve('String') !== 'String')
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
-    generatedModule(module);
-    const args = node.findChild(NodeKind.ARGUMENTS);
+    if(splitting)nativePatternModule(emitter);else generatedModule(module);
     if (!args || args.children.length !== (replacing?2:1))
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: '+method+' requires exactly '+(replacing?'two':'one')+' authored arguments');
     // The legacy regex token end excludes flags; its exact text includes them.
@@ -3845,7 +3848,7 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
         match = pattern.kind === NodeKind.LITERAL && /^\/([\s\S]+)\/([a-z]*)$/.exec(raw);
         if (!match) throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace pattern requires a qualified literal');
     }
-    const replace = propertyHelper(emitter,replacing?'sourceStringReplace':'sourceStringMatch',module);
+    const replace = propertyHelper(emitter,replacing?'sourceStringReplace':splitting?'sourceStringSplit':'sourceStringMatch',module);
     const compile = propertyHelper(emitter,construction?'constructSourceStringReplacePattern':'compileSourceStringPattern',module);
     emitter.catchup(node.start); emitter.insert(replace + '(');
     emitter.skipTo(callee.children[0].start); visitNode(emitter,callee.children[0]);
