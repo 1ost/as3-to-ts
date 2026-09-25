@@ -2311,7 +2311,7 @@ function assignmentType(expression: SemanticExpression, context: AdapterContext,
         if (mapping !== null) return mappedMemberType(mapping, "read", context, node);
     }
     if (expression.kind === "undefined") return semanticType(node, "*", "unknown");
-    if (expression.kind === "xmlStaticLiteral") return semanticType(node, "XML", "unknown", [], false);
+    if (expression.kind === "xmlStaticLiteral") return semanticType(node, "XML", "XML", [], false);
     if (expression.kind === "numericPredicate") return semanticType(node,"Boolean","boolean",[],false);
     if (expression.kind === "encodeUriComponent" || expression.kind === "decodeUriComponent") return semanticType(node,"String","string",[],false);
     if (expression.kind === "math" || expression.kind === "parseInteger") return semanticType(node, "Number", "number", [], false, "Number");
