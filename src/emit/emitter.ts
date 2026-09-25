@@ -1152,14 +1152,17 @@ function referencedWildcardDefinitions(node:Node, namespace:string, definitions:
 }
 
 function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
+    const importStart = node.importKeywordStart === undefined ? node.start : node.importKeywordStart;
+    const importNameEnd = node.importKeywordStart === undefined ? node.end + Keywords.IMPORT.length + 1 : node.end;
+    const importStatementEnd = emitter.source[importNameEnd] === ';' ? importNameEnd + 1 : importNameEnd;
 	// A same-file source Class owns its name ahead of an imported declaration.
 	// AS3 imports are lexical declarations, not eager JavaScript module effects.
 	const importedName = node.text.split('.').pop();
 	if (emitter.options.nativeCallableClasses && importedName !== '*'
 		&& node.parent && node.parent.findChildren(NodeKind.CLASS)
 			.some(declaration => declaration.findChild(NodeKind.NAME).text === importedName)) {
-		emitter.catchup(node.start);
-		emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+		emitter.catchup(importStart);
+		emitter.skipTo(importNameEnd);
 		return;
 	}
 	let statement = Keywords.IMPORT + " ";
@@ -1175,9 +1178,9 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 		let definitions = emitter.options.definitionsByNamespace[ns];
 		// Flush the source prefix (including the preceding import's semicolon)
 		// before inserting bindings for this wildcard.
-		emitter.catchup(node.start);
+		emitter.catchup(importStart);
 
-		let skipTo = node.end + Keywords.IMPORT.length + 2;
+		let skipTo = importStatementEnd;
 
 		if (definitions && definitions.length > 0) {
 			if (emitter.options.nativeReferencedWildcardImports)
@@ -1191,7 +1194,7 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 				emitter.insert(";\n");
 			})
 
-			skipTo = node.end + Keywords.IMPORT.length + 2;
+			skipTo = importStatementEnd;
 			}
 
 		} else {
@@ -1228,7 +1231,7 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 	// }
 
 	if (emitter.options.useNamespaces) {
-		if (!inline) emitter.catchup(node.start);
+		if (!inline) emitter.catchup(importStart);
 		emitter.insert(statement);
 
 		let split = node.text.split('.');
@@ -1243,14 +1246,14 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 			emitter.skip(text.length + diff + statement.length);
 
 		} else {
-			if (!inline) emitter.catchup(node.end + statement.length);
+			if (!inline) emitter.catchup(importNameEnd);
 		}
 
 		emitter.declareInScope({name, sourceImport: node.text});
 
 	} else {
 
-		if (!inline) emitter.catchup(node.start);
+		if (!inline) emitter.catchup(importStart);
 		emitter.insert(Keywords.IMPORT + " ");
 
 		let split = text.split(".");
@@ -1259,7 +1262,7 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 			if (typeof mappedModule !== 'string' || !mappedModule.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(mappedModule))
 				throw new Error('AS3_IMPORT_MODULE_UNSUPPORTED: invalid authenticated module for ' + node.text);
 			emitter.insert(`{ ${ name } } from "${ mappedModule }"`);
-			if (!inline) emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+			if (!inline) emitter.skipTo(importNameEnd);
 			emitter.declareInScope({name, sourceImport: node.text});
 			return;
 		}
@@ -1277,7 +1280,7 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 
 		text = `{ ${ name } } from "${ getRelativePath(currentModule.split("."), text.split(".")) }"`;
 		emitter.insert(text);
-		if (!inline) emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+		if (!inline) emitter.skipTo(importNameEnd);
 		emitter.declareInScope({name, sourceImport: node.text});
 	}
 }
@@ -1330,7 +1333,8 @@ function emitInterface(emitter:Emitter, node:Node):void {
 			visitNode(emitter, node.findChild(NodeKind.META_LIST));
 			emitter.catchup(node.start);
 			let type = node.findChild(NodeKind.TYPE) || node.children[2];
-			if (node.kind === NodeKind.TYPE && node.text === "function") {
+			if (node.kind === NodeKind.FUNCTION
+				|| node.kind === NodeKind.TYPE && node.text === "function") {
 				emitter.skip(Keywords.FUNCTION.length + 1);
 				//visitNode(emitter, node.findChild(NodeKind.PARAMETER_LIST));
 				let parametersListNode = node.findChild(NodeKind.PARAMETER_LIST);
