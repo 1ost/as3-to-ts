@@ -530,6 +530,26 @@ export class NativeGeneratedLexical {
             if(operation==='set'){emitter.insert(',');emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);}
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
+        if(operation==='set'&&node.children[1].text==='+=') {
+            const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
+            if(found.trait.kind!=='variable'||found.trait.visibility!=='private'||!ref||ref.kind!=='intrinsic'||ref.identity!=='String')
+                fail('lexical addition requires qualified private String variable');
+            const module=emitter.options.nativeTypedLocalAdditionModule;
+            if(typeof module!=='string'||!module.trim()||/[\x00-\x1f'"\\]/.test(module))fail('lexical addition provider required');
+            const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
+            const add=unique('__as3_lexical_add'),receiver=unique('__as3_lexical_target'),previous=unique('__as3_lexical_previous'),value=unique('__as3_lexical_value');
+            emitter.ensureImportIdentifier('as3Add as '+add,module,false);emitter.nativeSourceHelpers.add(add);
+            // Retain receiver and old value before RHS effects. Addition performs
+            // AS3 primitive conversion; lexical storage coerces the field while
+            // returning the unconverted expression result (null += 1 yields 1).
+            emitter.catchup(node.start);emitter.insert('(<any>(()=>{const '+receiver+':any=');
+            if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
+            else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):'this');
+            emitter.insert(';const '+previous+':any='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+');const '+value+':any='+add+'('+previous+',');
+            emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);
+            emitter.insert(');return '+this.provider+'.as3SetLexicalMember('+receiver+','+found.trait.access+','+value+');})())');
+            emitter.skipTo(node.end);return true;
+        }
         if(operation==='set'&&(node.children[1].text!=='='||found.trait.kind!=='variable'))fail('lexical assignment kind');
         if(operation==='call'&&found.trait.kind==='accessor')fail('internal getter invocation held');
         const fieldCall=operation==='call'&&found.trait.kind==='variable';
