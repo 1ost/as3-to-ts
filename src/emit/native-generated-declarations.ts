@@ -26,7 +26,7 @@ export interface NativeGeneratedDeclarationInput {
     /** Explicit single-Class script units whose failed initializer globals are retained. */
     classScriptSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
-    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher'; nativeInterface?: true; nativeVector?: true}};
+    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher' | 'Sprite'; nativeInterface?: true; nativeVector?: true}};
 }
 export interface NativeGeneratedDeclarationBinding {
     readonly qname: string;
@@ -145,8 +145,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             fail('native interface requires explicit interface provider and cannot be a native Class base');
         if(provider.nativeBase !== undefined && !((provider.nativeBase === 'Event' && name === 'flash.events.Event' && provider.exportName === 'Event')
             || (provider.nativeBase === 'Error' && name === 'Error' && provider.exportName === 'Error')
-            || (provider.nativeBase === 'EventDispatcher' && name === 'flash.events.EventDispatcher' && provider.exportName === 'EventDispatcher')))
-            fail('native base requires the exact supported Event, Error or EventDispatcher provider');
+            || (provider.nativeBase === 'EventDispatcher' && name === 'flash.events.EventDispatcher' && provider.exportName === 'EventDispatcher')
+            || (provider.nativeBase === 'Sprite' && name === 'flash.display.Sprite' && provider.exportName === 'Sprite')))
+            fail('native base requires the exact supported Event, Error, EventDispatcher or Sprite provider');
         moduleName(provider.module);
         if (!/^[A-Za-z_$][\w$]*$/.test(provider.exportName)) fail('provider export name');
     });
@@ -198,7 +199,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 if (!interfaces.some(binding => binding.qname === name)) fail('interface declaration authority required: ' + owner + ':' + name);
             });
             const baseNode = cls.findChild(K.EXTENDS), base = baseNode ? resolve(owner, baseNode.qualifiedName || baseNode.text) : 'Object';
-            if (base !== 'Object' && (!data.sources[base] || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher')))
+            if (base !== 'Object' && (!data.sources[base] || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite')))
                 fail('base requires a planned source declaration: ' + owner + ':' + base);
             bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
                 tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length,
@@ -327,6 +328,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         }
         lines.push('export {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';');
         if(provider.nativeBase) {
+            if(provider.nativeBase==='Sprite')lines.push('import {requireGeneratedFlashSpriteSurface as __requireSpriteSurface} from '+JSON.stringify(provider.module)+';',
+                '__requireSpriteSurface();');
             const declarationExport='nativeType'+index,nativeBaseExport='nativeEntry'+index;
             lines.push('import {'+provider.nativeBase+'Declaration as '+declarationExport+'} from '+JSON.stringify(provider.module)+';');
             lines.push('export {'+declarationExport+'};');

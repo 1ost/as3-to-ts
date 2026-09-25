@@ -88,6 +88,7 @@
     "test:native-generated-native-locals": "node --require ./scripts/upstream-test-runtime.cjs tests/native-generated-native-locals/run.cjs && node --require ./scripts/upstream-test-runtime.cjs tests/native-generated-native-locals/run.cjs --combined",
     "test:native-generated-captured-class": "node --require ./scripts/upstream-test-runtime.cjs tests/native-generated-captured-class/run.cjs && node --require ./scripts/upstream-test-runtime.cjs tests/native-generated-captured-class/run.cjs --combined",
     "test:native-generated-wildcard-forin": "node --require ./scripts/upstream-test-runtime.cjs tests/native-generated-wildcard-forin/run.cjs && node --require ./scripts/upstream-test-runtime.cjs tests/native-generated-wildcard-forin/run.cjs --combined",
+    "test:native-generated-sprite": "node --require ./scripts/upstream-test-runtime.cjs tests/native-generated-sprite/run.cjs",
     "test:upstream": "npm run test:simple && npm run test:compound && npm run test:int-uint-assignment && npm run test:native-namespaces && npm run test:native-constructors",
     "build:upstream": "node scripts/build-upstream.cjs"
   },
