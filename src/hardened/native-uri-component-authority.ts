@@ -11,8 +11,8 @@ const RUNTIME_SOURCE="2264c65a2c22fa66d4d14b97b299fe88ba0342f924cc948bf20df159c5
 const DECODE_DECLARATION="fb3c28c303631a83e412a2f00f2e33563a116b76e6551316cb42593edb55cb90";
 const DECODE_ERROR_DECLARATION="8e0caed79bcb9712343ad85d3932cdae9c80334219715fb1828eafa8ad94187e";
 const DECODE_RUNTIME="2f5a8b644405350d04a72c768270d0fd7a29323b5642e2ff5b1e0b5e5b052f02";
-// Requalified with the additive TextSnapshot error factory in LayaAir.
-const DECODE_ERROR="0a8f190ab8aa1184038fc1f42e3d3f25651e14d7733f75c0e8f5f2a652251919";
+// Requalified with the additive TextSnapshot and display-coordinate error factories in LayaAir.
+const DECODE_ERROR="46394f6863d753f0ceb7d9eccb5564c2bc43a9ba04a3f96816e7d6f02e0d5776";
 const DECODE_EVIDENCE=Object.freeze({
     "DecodeURIComponentProbe.as":"3cd30573a0805ebccd8163866ce92ac1a13ff0ae1f6c7e245fd1ceb386c2979d",
     "scenario.json":"dcd1432cfba7a7ec47c762bf52e35bdd7e33a01acee31c152f817309d224d8ec",
