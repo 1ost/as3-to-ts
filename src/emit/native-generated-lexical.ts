@@ -388,6 +388,14 @@ export class NativeGeneratedLexical {
                         ? this.plan.bindings.filter(b=>b.qname===this.resolveTypeName(receiver.text)) : [];
                     const identity=identities.length===1?identities[0]:knownClass.length===1?knownClass[0].qname:undefined;
                     const statics=!!identity&&knownClass.some(b=>b.qname===identity);
+                    // A private spelling in this class does not capture an
+                    // explicitly qualified public static of another source class.
+                    if(lexicalName&&statics&&identity!==this.owner){
+                        const cacheKey='static:'+identity;
+                        if(!this.foreignPublicMembers.has(cacheKey))this.foreignPublicMembers.set(cacheKey,
+                            new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,input.sources[identity].source).staticTraits);
+                        if(this.foreignPublicMembers.get(cacheKey).some(member=>member.name===name))return null;
+                    }
                     let inaccessible=false;
                     for(let current=identity;current;current=this.plan.bindings.find(b=>b.qname===current).base){
                         if(!input.sources[current]||input.sources[current].referenceOnly)break;
@@ -421,6 +429,10 @@ export class NativeGeneratedLexical {
                     if(member)return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method'};
                 }
                 if(!lexicalName)return null;
+                // A rest parameter is an intrinsic Array. Its members remain
+                // Array members even when the declaring class has a namesake.
+                if(receiver.kind===K.IDENTIFIER&&binding&&!binding.bound&&binding.as3Type==='Array'
+                    &&this.resolveTypeName('Array')==='Array')return null;
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
                 // Dynamic receivers use runtime namespace lookup, even when
                 // this class declares an internal/private namesake.

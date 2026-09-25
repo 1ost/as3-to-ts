@@ -1479,7 +1479,7 @@ function getFunctionDeclarations(emitter:Emitter, node:Node):Declaration[] {
 				};
 			}
 			let rest = param.findChild(NodeKind.REST);
-			return {name: rest.text};
+			return {name: rest.text, as3Type: 'Array'};
 		});
 	}
 	let block = node.findChild(NodeKind.BLOCK);
