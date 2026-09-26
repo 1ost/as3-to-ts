@@ -295,6 +295,11 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
     if (expression.kind === "methodClosure") {
         if (expression.staticTarget) return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindStaticMethod"),
             undefined, [expressionNode(expression.staticTarget,ts),ts.factory.createStringLiteral(expression.methodName)]);
+        if (expression.preSuperReceiver) {
+            const preview=ts.factory.createIdentifier(expression.preSuperReceiver);
+            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindMethod"),undefined,
+                [preview,ts.factory.createPropertyAccessExpression(preview,expression.methodName)]);
+        }
         const method = ts.factory.createPropertyAccessExpression(
             expression.superMethod ? ts.factory.createSuper() : ts.factory.createThis(), expression.methodName);
         // A base constructor can call a virtual method before the derived
@@ -1433,6 +1438,8 @@ function stagedConstructorValue<T>(value:T, receiver="__as3PreSuperFields"):T {
     if (value === null || typeof value !== "object") return value;
     if (Array.isArray(value)) return value.map(item=>stagedConstructorValue(item,receiver)) as T;
     const record=value as {[key:string]:unknown};
+    if (record.kind === "methodClosure" && receiver === "__as3PreSuperReceiver")
+        return {...record,preSuperReceiver:receiver} as T;
     if (record.kind === "this") return {...record,kind:"identifier",name:receiver,
         bindingKind:"local",bindingSourceQualifiedName:null} as T;
     return Object.fromEntries(Object.entries(record).map(([key,child])=>[key,stagedConstructorValue(child,receiver)])) as T;

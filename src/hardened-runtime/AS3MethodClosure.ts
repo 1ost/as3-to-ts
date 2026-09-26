@@ -1,4 +1,5 @@
 import { copyFunctionLength } from "./internal/AS3FunctionLength";
+import { preSuperMethodClosureOwner, resolvePreSuperMethodClosureReceiver } from "./internal/AS3TypeRegistry";
 
 const METHOD_CLOSURES = new WeakMap<object, WeakMap<Function, Function>>();
 const METHOD_CLOSURE_BRANDS = new WeakSet<Function>();
@@ -18,14 +19,16 @@ export function as3BindMethod<TArguments extends unknown[], TResult>(receiver: o
         || typeof method !== "function") {
         throw new TypeError("AS3 method closure binding requires a receiver and callable method");
     }
-    let closures = METHOD_CLOSURES.get(receiver);
+    const owner = preSuperMethodClosureOwner(receiver);
+    let closures = METHOD_CLOSURES.get(owner);
     if (!closures) {
         closures = new WeakMap<Function, Function>();
-        METHOD_CLOSURES.set(receiver, closures);
+        METHOD_CLOSURES.set(owner, closures);
     }
     const cached = closures.get(method);
     if (cached) return cached as (...args: TArguments) => TResult;
-    const closure = ((...args: TArguments): TResult => Reflect.apply(method, receiver, args));
+    const closure = ((...args: TArguments): TResult => Reflect.apply(method,
+        resolvePreSuperMethodClosureReceiver(owner), args));
     copyFunctionLength(method,closure);
     METHOD_CLOSURE_BRANDS.add(closure);
     closures.set(method, closure);

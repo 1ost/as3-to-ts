@@ -6303,8 +6303,8 @@ function parseBlock(block: TreeNode, context: AdapterContext, constructor: boole
         const node = block.children[statementIndex]!;
         if (node.kind !== "TRY") {
             statements.push(parseStatementNode(node, context, constructor, derived, expectedReturn,
-                allowLeadingSuper && constructor && statements.every(statement => statement.kind === "local" || statement.kind === "empty"
-                    || context.sourceMemberAuthority !== null && statement.kind === "expression" && !superCall(statement))));
+                allowLeadingSuper && constructor && statements.every(statement => preSuperLeadingStatement(statement,
+                    context.sourceMemberAuthority !== null))));
             continue;
         }
         if (node.children.length !== 1 || node.children[0]!.kind !== "BLOCK") {
@@ -6714,6 +6714,7 @@ function usesConstructionReceiver(value: unknown): boolean {
     if (Array.isArray(value)) return value.some(usesConstructionReceiver);
     const item = value as { [key: string]: unknown };
     return item.kind === "this" || item.kind === "super"
+        || item.kind === "methodClosure" && item.staticTarget === undefined
         || item.kind === "lambda" && item.lexicalReceiver !== undefined
         || Object.values(item).some(usesConstructionReceiver);
 }
@@ -6742,6 +6743,20 @@ function localPreSuperReceiverMethods(values: readonly unknown[], context: Adapt
         if (value === null || typeof value !== "object") return true;
         if (Array.isArray(value)) return value.every(visit);
         const item = value as {[key: string]: any};
+        if (item.kind === "methodClosure") {
+            if (item.staticTarget || item.inherited || item.superMethod) return false;
+            const name = item.methodName as string;
+            const method = members.find(member => member.kind === "method" && member.name === name
+                && !member.modifiers.includes("static") && member.namespaceName === null) as SemanticMethod | undefined;
+            if (!method || active.has(name)) return false;
+            required.add(name);
+            if (checked.has(name)) return true;
+            active.add(name);
+            const safe = visit(method.body);
+            active.delete(name);
+            if (safe) checked.add(name);
+            return safe;
+        }
         if (item.kind === "call" && item.callee?.kind === "member"
             && item.callee.target?.kind === "this") {
             const name = item.callee.name as string;
@@ -6763,11 +6778,22 @@ function localPreSuperReceiverMethods(values: readonly unknown[], context: Adapt
                 : localInheritedMember(context,item.name,"field",null,node).member;
             return inherited !== null && inherited !== undefined && !inherited.modifiers.includes("static");
         }
-        if (item.kind === "this" || item.kind === "super" || item.kind === "methodClosure"
+        if (item.kind === "this" || item.kind === "super"
             || item.kind === "lambda" && item.lexicalReceiver !== undefined) return false;
         return Object.values(item).every(visit);
     };
     return values.every(visit) ? [...required].sort() : null;
+}
+
+function preSuperLeadingStatement(statement: SemanticStatement, sourceAuthority: boolean,
+    nested: boolean = false): boolean {
+    if (statement.kind === "local") return !nested;
+    if (statement.kind === "empty") return true;
+    if (!sourceAuthority) return false;
+    if (statement.kind === "expression") return !superCall(statement);
+    if (statement.kind === "if") return statement.thenStatements.every(child => preSuperLeadingStatement(child,true,true))
+        && (statement.elseStatements === null || statement.elseStatements.every(child => preSuperLeadingStatement(child,true,true)));
+    return false;
 }
 
 function superCall(statement: SemanticStatement): boolean {
@@ -7571,8 +7597,8 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                     || leading.some(usesConstructionReceiver)
                     || argumentReceiver);
                 if (count > 1 || extendsType !== null && count !== 1
-                    || leading.some(statement => statement.kind !== "local" && statement.kind !== "empty"
-                        && statement.kind !== "expression")) {
+                    || leading.some(statement => !preSuperLeadingStatement(statement,
+                        placeholder.sourceMemberAuthority !== null))) {
                     fail("HARDENED_SUPER_ORDER", "constructor requires one top-level super call and an admitted leading sequence", node);
                 }
                 if (stagedFields) {

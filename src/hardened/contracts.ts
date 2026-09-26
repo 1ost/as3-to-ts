@@ -300,6 +300,8 @@ export interface MemberExpression extends SemanticIdentity {
 
 export interface MethodClosureExpression extends SemanticIdentity {
     kind: "methodClosure";
+    /** Compiler-generated preview name only after authenticated pre-super analysis. */
+    preSuperReceiver?: string;
     staticTarget?: SemanticExpression;
     inherited?: true;
     superMethod?: true;

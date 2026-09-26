@@ -208,6 +208,16 @@ interface PreparedConstructionFrame {
 const PREPARED_CONSTRUCTION_FRAMES: PreparedConstructionFrame[] = [];
 const AUTHENTIC_CONSTRUCTION_FRAMES = new WeakSet<object>();
 const PRE_SUPER_RECEIVERS = new WeakMap<object, object>();
+/** Only a consumed construction frame can join a preview with its allocated receiver. */
+const PRE_SUPER_FINAL_RECEIVERS = new WeakMap<object, object>();
+
+export function preSuperMethodClosureOwner(receiver: object): object {
+    return PRE_SUPER_RECEIVERS.get(receiver) ?? receiver;
+}
+
+export function resolvePreSuperMethodClosureReceiver(receiver: object): object {
+    return PRE_SUPER_FINAL_RECEIVERS.get(receiver) ?? receiver;
+}
 
 function adjustSecondaryMutation(owner:SecondaryOwner,surface:AS3SecondaryMutationSurface,delta:1|-1):void {
     const next=owner.mutations[surface]+delta;
@@ -667,7 +677,7 @@ export function initializeInstanceFields(value: object, newTarget: RuntimeConstr
                     {value: descriptor.value, writable: true, enumerable: true, configurable: true});
             }
         }));
-        PRE_SUPER_RECEIVERS.delete(value);
+        PRE_SUPER_FINAL_RECEIVERS.set(preview, value);
     }
     INITIALIZED_INSTANCE_FIELDS.add(value);
     const secondaryOwner = SECONDARY_CONSTRUCTOR_OWNERS.get(newTarget);
