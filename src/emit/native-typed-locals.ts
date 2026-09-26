@@ -2,7 +2,7 @@ import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {nativeSourceTypeIdentity} from './native-source-type';
 
-interface Local {name: string; type: string; reference?: string; parameter?: boolean;}
+interface Local {name: string; type: string; reference?: string; parameter?: boolean; tweenHandle?: boolean;}
 interface OuterCapture {name: string; reference: string; read: string; write: string;}
 interface Method {node: Node; name: string; static: boolean; locals: Local[]; wildcards: string[]; outerCaptures: OuterCapture[];}
 export interface NestedLocalFunction {start:number;end:number;name:string;methodStart:number;parameters:string[];returned?:string;}
@@ -10,7 +10,7 @@ export interface NestedLocalFunction {start:number;end:number;name:string;method
 export class NativeTypedLocals {
     private methods: Method[] = [];
     private memberNames: string[] = [];
-    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false, private nested: NestedLocalFunction[] = [], private anonymous: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [], private patternLocal?: (type:Node)=>boolean) {
+    constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false, private nested: NestedLocalFunction[] = [], private anonymous: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [], private patternLocal?: (type:Node)=>boolean, private tweenLocal?: (type:Node)=>boolean) {
         owner.findChild(K.CONTENT).children.forEach(member=>{
             if([K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0)
                 member.findChildren(K.NAME_TYPE_INIT).forEach(d=>this.memberNames.push(d.findChild(K.NAME).text));
@@ -48,7 +48,8 @@ export class NativeTypedLocals {
                 if ([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(value.kind)>=0) value.findChildren(K.NAME_TYPE_INIT).forEach(decl=>{
                     const annotation=decl.findChild(K.VECTOR)||decl.findChild(K.TYPE),reference=referenceFor && referenceFor(annotation);
                     if(annotation&&this.patternLocal&&this.patternLocal(annotation))return;
-                    const type=reference || nativeSourceTypeIdentity(annotation,qname,imports),name=decl.findChild(K.NAME).text;
+                    const tweenHandle=!!annotation&&!!this.tweenLocal&&this.tweenLocal(annotation);
+                    const type=tweenHandle?'com.greensock.TweenMax':reference || nativeSourceTypeIdentity(annotation,qname,imports),name=decl.findChild(K.NAME).text;
                     const other=declared.find(local=>local.name===name);
                     if(other&&other.type!==type&&(type!=='*'||other.type!=='*'))this.fail('conflicting local declaration types');
                     if(!other)declared.push({name,type});
@@ -59,13 +60,13 @@ export class NativeTypedLocals {
                         return;
                     }
                     if(value.kind===K.CONST_LIST||value.kind===K.CONST)this.fail('typed local const held');
-                    if(!reference&&!(this.matchSourceSpans&&type==='Function')&&['Number','int','uint','Boolean','String','Object','Array','Class'].indexOf(type)<0)this.fail('foreign local reference identity held');
+                    if(!tweenHandle&&!reference&&!(this.matchSourceSpans&&type==='Function')&&['Number','int','uint','Boolean','String','Object','Array','Class'].indexOf(type)<0)this.fail('foreign local reference identity held');
                     if(parameters.indexOf(name)>=0)this.fail('typed local/parameter redeclaration held');
                     const previous=locals.find(local=>local.name===name);
                     if(previous&&previous.type!==type)this.fail('conflicting local declaration types');
                     for(let parent=value.parent;parent&&parent!==node;parent=parent.parent)
                         if(parent.kind===K.CATCH&&parent.findChild(K.NAME).text===name)this.fail('typed local/catch redeclaration held');
-                    if(!previous)locals.push({name,type,reference});
+                    if(!previous)locals.push({name,type,reference,tweenHandle});
                 });
                 value.children.forEach(collect);
             };
@@ -174,7 +175,7 @@ export class NativeTypedLocals {
         const binding=emitter.findDefInScope(name);
         return !!binding&&!binding.bound&&binding.as3Type!=='*';
     }
-    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string, vectorCoerce?:(identity:string,value:string)=>string, propertyProvider?:string): string {
+    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string, vectorCoerce?:(identity:string,value:string)=>string, propertyProvider?:string, tweenCoerce?:(value:string)=>string): string {
         const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic&&m.node.kind===kind);
         if(!method||!method.locals.length&&!method.outerCaptures.length&&!this.nested.some(fn=>fn.methodStart===method.node.start&&!!fn.returned))return source;
         const ts=require('typescript-4-9'),S=ts.SyntaxKind,file=ts.createSourceFile('TypedLocals.ts',source,ts.ScriptTarget.Latest,true);
@@ -193,7 +194,7 @@ export class NativeTypedLocals {
             if(!referenceToken)this.fail('foreign local requires exact declaration-domain output');
             return referenceToken(local.reference);
         };
-        const coerce=(local:Local,value:string):string=>local.type==='Function'?(propertyProvider?propertyProvider+'.coerceAS3PropertyValue('+value+',"Function")':this.fail('Function local requires common property provider')):local.reference&&local.reference.indexOf('Vector.<')===0?(vectorCoerce?vectorCoerce(local.reference,value):this.fail('Vector local coercion requires provider')):local.type==='Class'?(classProvider?classProvider+'.as3CoerceClass('+value+')':this.fail('Class local requires common class provider')):local.reference?provider+'.as3CoerceReference('+value+','+reference(local)+')':local.type==='Boolean'?'!!('+value+')':local.type==='String'?stringProvider+'.as3CoerceString('+value+')'
+        const coerce=(local:Local,value:string):string=>local.tweenHandle?(tweenCoerce?tweenCoerce(value):this.fail('migration handle provider required')):local.type==='Function'?(propertyProvider?propertyProvider+'.coerceAS3PropertyValue('+value+',"Function")':this.fail('Function local requires common property provider')):local.reference&&local.reference.indexOf('Vector.<')===0?(vectorCoerce?vectorCoerce(local.reference,value):this.fail('Vector local coercion requires provider')):local.type==='Class'?(classProvider?classProvider+'.as3CoerceClass('+value+')':this.fail('Class local requires common class provider')):local.reference?provider+'.as3CoerceReference('+value+','+reference(local)+')':local.type==='Boolean'?'!!('+value+')':local.type==='String'?stringProvider+'.as3CoerceString('+value+')'
             :local.type==='Array'?provider+'.as3CoerceReference('+value+','+array+')'
             :coercionProvider+'.as3Coerce'+(local.type==='int'?'Int':local.type==='uint'?'Uint':local.type)+'('+value+')';
         const write=(local:Local,value:string):string=>{const rhs=unique('typedRaw');return '(()=>{const '+rhs+': any='+value+';'+local.name+'='+coerce(local,rhs)+';return '+rhs+';})()';};
@@ -210,7 +211,7 @@ export class NativeTypedLocals {
             if(node.kind===S.BinaryExpression){const local=resolve(node.left),op=node.operatorToken.kind;
                 if(local&&op===S.EqualsToken)return write(local,render(node.right));
                 if(local&&op>=S.FirstCompoundAssignment&&op<=S.LastCompoundAssignment){
-                    if(local.reference||local.parameter||['Class','Function'].indexOf(local.type)>=0)this.fail('reference local compound operation held');
+                    if(local.tweenHandle||local.reference||local.parameter||['Class','Function'].indexOf(local.type)>=0)this.fail('reference local compound operation held');
                     const operator=raw(node.operatorToken).slice(0,-1),old=unique('typedOld'),rhs=unique('typedRhs'),value=unique('typedValue');
                     if(operator==='&&'||operator==='||')this.fail('typed logical assignment held');
                     const arithmetic=operator==='+'?additionProvider+'.as3Add('+old+','+rhs+')':coercionProvider+'.as3CoerceNumber('+old+')'+operator+coercionProvider+'.as3CoerceNumber('+rhs+')';

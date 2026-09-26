@@ -22,6 +22,8 @@ export interface NativeGeneratedDeclarationInput {
     lexicalProviderModule?: string;
     /** Common String intrinsics for proven nonescaping RegExp literal locals. */
     patternProviderModule?: string;
+    /** Explicit GreenSock migration storage provider; never a source Class token. */
+    tweenHandleProviderModule?: string;
     /** Explicit class subset; omission selects all planned source classes. */
     scriptGlobalSources?: ReadonlyArray<string>;
     /** Explicit single-Class script units whose failed initializer globals are retained. */
@@ -48,7 +50,7 @@ export interface NativeGeneratedReference {
     readonly start: number;
     readonly end: number;
     readonly sourceName: string;
-    readonly kind: 'intrinsic' | 'declaration' | 'interface' | 'native' | 'pattern-local' | 'unresolved';
+    readonly kind: 'intrinsic' | 'declaration' | 'interface' | 'native' | 'pattern-local' | 'tween-handle-local' | 'unresolved';
     readonly identity: string;
 }
 export interface NativeGeneratedDeclarationPlan {
@@ -106,9 +108,10 @@ function hash(source: string): string {return require('crypto').createHash('sha2
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'inheritScriptClasses', 'scriptGlobalSources', 'classScriptSources', 'lexicalProviderModule', 'patternProviderModule', 'sources', 'providers']);
+    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'inheritScriptClasses', 'scriptGlobalSources', 'classScriptSources', 'lexicalProviderModule', 'patternProviderModule', 'tweenHandleProviderModule', 'sources', 'providers']);
     moduleName(data.providerModule);
     if (data.patternProviderModule !== undefined) moduleName(data.patternProviderModule);
+    if (data.tweenHandleProviderModule !== undefined) moduleName(data.tweenHandleProviderModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
     if (data.lexicalProviderModule !== undefined) moduleName(data.lexicalProviderModule);
     if (data.vectorProviderModule !== undefined) moduleName(data.vectorProviderModule);
@@ -174,6 +177,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     });
     const resolve = (owner: string, spelling: string): string => sourceResolver(roots.get(owner), owner,
         name => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0)(spelling);
+    if (data.tweenHandleProviderModule && (classes.has('com.greensock.TweenMax') || providers['com.greensock.TweenMax']))
+        fail('TweenMax migration cannot also declare or bind its source Class');
     const bindings: NativeGeneratedDeclarationBinding[] = [], references: NativeGeneratedReference[] = [];
     const interfaces: NativeGeneratedInterfaceBinding[] = [];
     names.forEach(owner => {
@@ -220,10 +225,20 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             // 'function'; only its actual return/parameter children are types.
             if (node.kind === K.TYPE && node.text !== 'function') {
                 const spelling = node.qualifiedName || node.text || '*', identity = resolve(owner, spelling);
+                let tweenLocal = false;
+                if (data.tweenHandleProviderModule && identity === 'com.greensock.TweenMax'
+                    && !providers[identity] && !classes.has(identity) && node.parent && node.parent.kind === K.NAME_TYPE_INIT
+                    && node.parent.parent && [K.VAR_LIST,K.VAR].indexOf(node.parent.parent.kind) >= 0) {
+                    let member = node.parent.parent;
+                    while (member && [K.FUNCTION,K.GET,K.SET].indexOf(member.kind) < 0) member = member.parent;
+                    tweenLocal = !!member && member.parent === classes.get(owner).findChild(K.CONTENT)
+                        && member.findChild(K.NAME).text !== classes.get(owner).findChild(K.NAME).text;
+                }
                 const kind: NativeGeneratedReference['kind'] = builtins.indexOf(identity) >= 0 ? 'intrinsic' : bindings.some(binding => binding.qname === identity)
                     ? 'declaration' : interfaces.some(binding => binding.qname === identity) ? 'interface'
                     : nativeNames.indexOf(identity) >= 0 ? 'native'
-                    : patternLocals.some(p=>p.owner===owner&&p.typeStart===node.start&&p.typeEnd===node.end) ? 'pattern-local' : 'unresolved';
+                    : patternLocals.some(p=>p.owner===owner&&p.typeStart===node.start&&p.typeEnd===node.end) ? 'pattern-local'
+                    : tweenLocal ? 'tween-handle-local' : 'unresolved';
                 references.push(Object.freeze({owner, start: node.start, end: node.end, sourceName: spelling, kind, identity}));
             }
             node.children.forEach(walk);
@@ -270,6 +285,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     });
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
+    if (references.some(ref => ref.kind === 'tween-handle-local')) lines.push(
+        'import {coerceFlashTweenMaxHandle as __tweenHandleCoerce} from ' + JSON.stringify(data.tweenHandleProviderModule) + ';',
+        'export const coerceTweenMaxHandle=__tweenHandleCoerce;');
     if(data.scriptGlobalProviderModule) {
         lines.push('import {instantiateAS3ScriptUnit'+(data.classScriptSources?',instantiateAS3ClassScriptUnit':'')+(data.inheritScriptClasses?',selectAS3ScriptDomainClass,selectAS3ScriptDomainType':'')+(data.scriptDomainProvider?'':',createAS3ScriptDomain')+'} from '+JSON.stringify(data.scriptGlobalProviderModule)+';');
         lines.push(data.scriptDomainProvider
