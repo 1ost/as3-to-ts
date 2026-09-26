@@ -11,7 +11,9 @@ containing all three declarations. The child must reuse the selected parent
 Class and its registered layout/signatures. Supported public method contracts
 contain fixed required intrinsic parameter types, return type and override/final
 modifiers. The engine verifies these against the actual selected parent before
-publishing the child. Accessor, optional/rest/reference and namespace override
+publishing the child. Source reference signatures are now qualified separately
+by `native-generated-reference-overrides`; optional parameters are qualified by
+`native-generated-optional-overrides`. Accessor, rest/native-reference and namespace override
 extensions remain held. Ordinary methods without such a contract remain usable
 through their existing providers, but cannot grant selected override authority.
 
