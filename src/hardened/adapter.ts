@@ -6745,6 +6745,26 @@ function onlyOwnPreSuperFields(value: unknown, context: AdapterContext): boolean
     return Object.values(item).every(child=>onlyOwnPreSuperFields(child,context));
 }
 
+/** A local dispatcher field may execute its own registration override before the owner calls super. */
+function localEventDispatcherSubtype(type: SemanticType, context: AdapterContext): boolean {
+    const moduleName=context.resolveCurrentLocal?.().entry.module;
+    if (!moduleName || !type.runtimeName) return false;
+    const seen=new Set<string>();
+    let qname:string|null=type.runtimeName;
+    while (qname !== null) {
+        if (qname === "flash.events.EventDispatcher") return true;
+        if (seen.has(qname) || seen.size >= 1024) return false;
+        seen.add(qname);
+        const native:{baseQName:string|null}|undefined=context.sourceMemberAuthority?.entriesByQName[qname];
+        if (native) {qname=native.baseQName;continue;}
+        const local=contextLocalMember(context,moduleName,qname);
+        if (!local || local.status!=="complete" || !local.declaration
+            || local.declaration.baseQNames.length!==1) return false;
+        qname=local.declaration.baseQNames[0]!;
+    }
+    return false;
+}
+
 /** Prove that a temporary source receiver stays within local data slots and audited methods. */
 function localPreSuperReceiverMethods(values: readonly unknown[], context: AdapterContext,
     members: readonly SemanticMember[], node: TreeNode): string[] | null {
@@ -6770,8 +6790,7 @@ function localPreSuperReceiverMethods(values: readonly unknown[], context: Adapt
         if (value === null || typeof value !== "object") return true;
         if (Array.isArray(value)) return value.every(visit);
         const item = value as {[key: string]: any};
-        if (item.kind === "call" && item.capabilitySource === "flash.events.EventDispatcher"
-            && item.capabilityMember === "addEventListener"
+        if (item.kind === "call" && item.callee?.name === "addEventListener"
             && item.callee?.kind === "member" && item.callee.target?.kind === "member"
             && item.callee.target.target?.kind === "this"
             && item.arguments?.[1]?.kind === "methodClosure") {
@@ -6780,16 +6799,23 @@ function localPreSuperReceiverMethods(values: readonly unknown[], context: Adapt
             const method = members.find(member=>member.kind === "method"
                 && member.name === callback.methodName && !member.modifiers.includes("static")
                 && member.namespaceName === null);
-            // Only the canonical Flash dispatcher field has the mapped registration
-            // path. Guard the closure itself if a host nevertheless
-            // dispatches before the source base constructor completes.
+            const directNative=item.capabilitySource === "flash.events.EventDispatcher"
+                && item.capabilityMember === "addEventListener";
+            const localDispatcher=item.capabilitySource === null && item.capabilityMember === null
+                && item.callee.capabilitySource !== null
+                && item.callee.capabilitySource !== "flash.events.EventDispatcher"
+                && field && localEventDispatcherSubtype(field.type,context);
+            // The fully constructed field receiver may run a local registration
+            // override. Its callback is guarded until the owner completes super;
+            // synchronous invocation fails closed rather than using a preview.
             if (!field || field.modifiers.includes("static") || field.namespaceName !== null
-                || mappedFlashQNameForType(field.type,context) !== "flash.events.EventDispatcher"
-                || field.initializer?.kind !== "new" || field.initializer.arguments.length !== 0
-                || mappedFlashQNameForType(field.initializer.sourceType,context) !== "flash.events.EventDispatcher"
-                || values.some(value=>writesField(value,item.callee.target.name))
-                || members.some(member=>member.kind === "method"
-                    && writesField(member.body,item.callee.target.name))
+                || !(directNative || localDispatcher)
+                || directNative && (mappedFlashQNameForType(field.type,context) !== "flash.events.EventDispatcher"
+                    || field.initializer?.kind !== "new" || field.initializer.arguments.length !== 0
+                    || mappedFlashQNameForType(field.initializer.sourceType,context) !== "flash.events.EventDispatcher"
+                    || values.some(value=>writesField(value,item.callee.target.name))
+                    || members.some(member=>member.kind === "method"
+                        && writesField(member.body,item.callee.target.name)))
                 || callback.staticTarget || callback.inherited || callback.superMethod || !method)
                 return false;
             if (!visit(item.callee) || !item.arguments.every((arg:unknown,index:number)=>index === 1 || visit(arg)))
