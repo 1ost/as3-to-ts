@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {buildSync}=require('esbuild');
-test('authenticated intrinsic Date retains zeroarg, numeric epoch and six-component calendar relationships',t=>{
+test('authenticated intrinsic Date retains zeroarg, numeric epoch and bounded calendar relationships',t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'date-runtime-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const bundle=path.join(dir,'date.cjs');
  buildSync({entryPoints:[path.resolve(__dirname,'../../src/hardened-runtime/AS3Date.ts')],outfile:bundle,bundle:true,platform:'node',format:'cjs',logLevel:'silent'});
  const {AS3Date,isAS3Date,as3DateReceiver}=require(bundle);const before=Date.now(),first=new AS3Date(),second=new AS3Date(),after=Date.now();
@@ -22,7 +22,8 @@ test('authenticated intrinsic Date retains zeroarg, numeric epoch and six-compon
  for(const args of [[NaN,0,1,0,0,0],[2026,NaN,1,0,0,0],[2026,0,NaN,0,0,0],[2026,0,1,NaN,0,0],[2026,0,1,0,NaN,0],[2026,0,1,0,0,NaN],
    [Infinity,0,1,0,0,0],[-Infinity,0,1,0,0,0],[2026,Infinity,1,0,0,0],[2026,0,1,0,0,-Infinity]])assert.ok(Number.isNaN(make(...args).getTime()));
  assert.ok(same(make(2026,-1,1,0,0,0),make(2025,11,1,0,0,0)));assert.ok(same(make(2026,0,0,0,0,0),make(2025,11,31,0,0,0)));assert.ok(same(make(2026,0,1,-1,0,0),make(2025,11,31,23,0,0)));
-	 for(const args of [[2026,0],[2026,0,1],[2026,0,1,0],[2026,0,1,0,0],[2026,0,1,0,0,0,0]])assert.throws(()=>new AS3Date(...args),TypeError);
+	 for(const args of [[2026,6,15,4],[2024,1,29,23],[99,11,31,25],[-1,0,1,-1]])assert.ok(same(make(...args),make(...args,0,0)));
+	 for(const args of [[2026,0],[2026,0,1],[2026,0,1,0,0],[2026,0,1,0,0,0,0],["2026",0,1,4]])assert.throws(()=>new AS3Date(...args),TypeError);
 	 for(const value of ["0",true,null,undefined,{},new Date(),Symbol("epoch")])assert.throws(()=>new AS3Date(value),TypeError);
  for(const args of [[2026,0,1,0,0,true],[2026,0,1,0,0,null],[2026,0,1,0,0,undefined],[2026,0,1,0,0,{}]])assert.throws(()=>new AS3Date(...args),TypeError);
  for(const args of [["2026",7,"7",10,"20",30],["","","","","",""],["+2026","-1","+1","-1","+0","+0"],["2026.9",2.9,"3.9",4.9,"5.9",6.9]]){

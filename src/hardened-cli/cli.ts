@@ -145,7 +145,7 @@ const RUNTIME_SOURCE_SHA256: Readonly<Record<string, string>> = Object.freeze({
     "AS3JSONDefinition.ts": "96d5ab891e3fa946c2d6186fdced2b4f7e2444e7febb03879ff3f16db8cab646",
     "AS3ByteArrayAMF3.ts": "91b52d70bb96c43641820cfc4ae268f7cb4232a494c68b19ed3bf3afebb7d617",
     "AS3ByteArrayNative.ts": "121c5e3a0709c3084d01fb3b23fb781b4ebc83d31178928f5f70e67599309839",
-    "AS3Date.ts": "0a6e29ead86d639e2bc0e0e8bd64999506db02a94bf00b8b6db2c21d46c99304",
+    "AS3Date.ts": "297f63a3b075f82ca6a12efc553f15449490e00e942f0baec01a26fd78de4fc1",
     "AS3URI.ts": "2264c65a2c22fa66d4d14b97b299fe88ba0342f924cc948bf20df159c5cee8bf",
     "AS3ByteArray.ts": "05cbb36473e9e4da1ad4697f1537663d2a2be56c5526a76a3808a0b5110de081",
     "internal/AS3ParseInteger.ts": "fbd902c2c77311d87f0052689743be280a38d2e919c827673cf0f7e55206db95",
