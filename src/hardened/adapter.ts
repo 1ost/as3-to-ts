@@ -6739,10 +6739,53 @@ function localPreSuperReceiverMethods(values: readonly unknown[], context: Adapt
     const required = new Set<string>();
     const checked = new Set<string>();
     const active = new Set<string>();
+    const referencesField = (value:unknown,name:string):boolean => {
+        if (value === null || typeof value !== "object") return false;
+        if (Array.isArray(value)) return value.some(child=>referencesField(child,name));
+        const item=value as {[key:string]:any};
+        if (item.kind === "member" && item.target?.kind === "this" && item.name === name) return true;
+        return Object.values(item).some(child=>referencesField(child,name));
+    };
+    const writesField = (value:unknown,name:string):boolean => {
+        if (value === null || typeof value !== "object") return false;
+        if (Array.isArray(value)) return value.some(child=>writesField(child,name));
+        const item=value as {[key:string]:any};
+        if (["assignment","update","delete"].includes(item.kind)
+            && referencesField(item.target,name)) return true;
+        return Object.values(item).some(child=>writesField(child,name));
+    };
     const visit = (value: unknown): boolean => {
         if (value === null || typeof value !== "object") return true;
         if (Array.isArray(value)) return value.every(visit);
         const item = value as {[key: string]: any};
+        if (item.kind === "call" && item.capabilitySource === "flash.events.EventDispatcher"
+            && item.capabilityMember === "addEventListener"
+            && item.callee?.kind === "member" && item.callee.target?.kind === "member"
+            && item.callee.target.target?.kind === "this"
+            && item.arguments?.[1]?.kind === "methodClosure") {
+            const field = context.fields[item.callee.target.name];
+            const callback = item.arguments[1] as {[key:string]:any};
+            const method = members.find(member=>member.kind === "method"
+                && member.name === callback.methodName && !member.modifiers.includes("static")
+                && member.namespaceName === null);
+            // Only the canonical Flash dispatcher field has the mapped registration
+            // path. Guard the closure itself if a host nevertheless
+            // dispatches before the source base constructor completes.
+            if (!field || field.modifiers.includes("static") || field.namespaceName !== null
+                || mappedFlashQNameForType(field.type,context) !== "flash.events.EventDispatcher"
+                || field.initializer?.kind !== "new" || field.initializer.arguments.length !== 0
+                || mappedFlashQNameForType(field.initializer.sourceType,context) !== "flash.events.EventDispatcher"
+                || values.some(value=>writesField(value,item.callee.target.name))
+                || members.some(member=>member.kind === "method"
+                    && writesField(member.body,item.callee.target.name))
+                || callback.staticTarget || callback.inherited || callback.superMethod || !method)
+                return false;
+            if (!visit(item.callee) || !item.arguments.every((arg:unknown,index:number)=>index === 1 || visit(arg)))
+                return false;
+            callback.preSuperDeferred = true;
+            required.add(callback.methodName);
+            return true;
+        }
         if (item.kind === "methodClosure") {
             if (item.staticTarget || item.inherited || item.superMethod) return false;
             const name = item.methodName as string;

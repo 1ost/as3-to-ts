@@ -302,6 +302,8 @@ export interface MethodClosureExpression extends SemanticIdentity {
     kind: "methodClosure";
     /** Compiler-generated preview name only after authenticated pre-super analysis. */
     preSuperReceiver?: string;
+    /** Registered with an exact Flash dispatcher; invocation is guarded until base construction. */
+    preSuperDeferred?: true;
     staticTarget?: SemanticExpression;
     inherited?: true;
     superMethod?: true;

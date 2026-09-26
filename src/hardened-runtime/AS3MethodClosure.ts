@@ -3,6 +3,7 @@ import { preSuperMethodClosureOwner, resolvePreSuperMethodClosureReceiver } from
 
 const METHOD_CLOSURES = new WeakMap<object, WeakMap<Function, Function>>();
 const METHOD_CLOSURE_BRANDS = new WeakSet<Function>();
+const DEFERRED_PRE_SUPER_CLOSURES = new WeakSet<Function>();
 
 export function isAS3MethodClosure(value: unknown): value is Function {
     return typeof value === "function" && METHOD_CLOSURE_BRANDS.has(value);
@@ -27,12 +28,24 @@ export function as3BindMethod<TArguments extends unknown[], TResult>(receiver: o
     }
     const cached = closures.get(method);
     if (cached) return cached as (...args: TArguments) => TResult;
-    const closure = ((...args: TArguments): TResult => Reflect.apply(method,
-        resolvePreSuperMethodClosureReceiver(owner), args));
+    const closure = ((...args: TArguments): TResult => {
+        const target = resolvePreSuperMethodClosureReceiver(owner);
+        if (DEFERRED_PRE_SUPER_CLOSURES.has(closure) && target === owner)
+            throw new TypeError("Deferred pre-super listener invoked before base construction");
+        return Reflect.apply(method,target,args);
+    });
     copyFunctionLength(method,closure);
     METHOD_CLOSURE_BRANDS.add(closure);
     closures.set(method, closure);
     closures.set(closure, closure);
+    return closure;
+}
+
+/** A registered listener may retain identity early, but cannot run before super. */
+export function as3BindDeferredPreSuperMethod<TArguments extends unknown[], TResult>(receiver: object,
+    method: (...args: TArguments) => TResult): (...args: TArguments) => TResult {
+    const closure = as3BindMethod(receiver,method);
+    DEFERRED_PRE_SUPER_CLOSURES.add(closure);
     return closure;
 }
 

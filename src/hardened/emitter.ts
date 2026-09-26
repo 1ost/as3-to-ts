@@ -297,7 +297,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             undefined, [expressionNode(expression.staticTarget,ts),ts.factory.createStringLiteral(expression.methodName)]);
         if (expression.preSuperReceiver) {
             const preview=ts.factory.createIdentifier(expression.preSuperReceiver);
-            return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindMethod"),undefined,
+            return ts.factory.createCallExpression(ts.factory.createIdentifier(
+                expression.preSuperDeferred ? "__as3BindDeferredPreSuperMethod" : "__as3BindMethod"),undefined,
                 [preview,ts.factory.createPropertyAccessExpression(preview,expression.methodName)]);
         }
         const method = ts.factory.createPropertyAccessExpression(
@@ -1840,6 +1841,8 @@ function methodClosureRuntimeImport(ts: TypeScriptCompilerApi): any {
         ts.factory.createImportClause(false, undefined, ts.factory.createNamedImports([
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3BindMethod"),
                 ts.factory.createIdentifier("__as3BindMethod")),
+            ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3BindDeferredPreSuperMethod"),
+                ts.factory.createIdentifier("__as3BindDeferredPreSuperMethod")),
             ts.factory.createImportSpecifier(false, ts.factory.createIdentifier("as3BindStaticMethod"),
                 ts.factory.createIdentifier("__as3BindStaticMethod")),
         ])),
