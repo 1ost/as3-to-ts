@@ -225,7 +225,7 @@ export class NativeGeneratedLexical {
                 if(typedLocals&&type&&type.text!=='*'){
                     const vector=type.kind===K.VECTOR&&plan.vectors.find(v=>v.owner===owner&&v.start===type.start&&v.end===type.end);
                     const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
-                    if(!vector&&(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'&&ref.kind!=='native'&&ref.kind!=='pattern-local')))fail('typed local source reference lowering required');
+                    if(!vector&&(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'&&ref.kind!=='native'&&ref.kind!=='pattern-local'&&ref.kind!=='tween-handle-local')))fail('typed local source reference lowering required');
                 }
                 if(this.traits.some(t=>t.name===value.findChild(K.NAME).text))fail('local/lexical declaration-order lookup required');
             });
@@ -258,7 +258,8 @@ export class NativeGeneratedLexical {
             if(vector)return vector.identity;
             const ref=node&&plan.references.find(r=>r.owner===owner&&r.start===node.start&&r.end===node.end);
             return ref&&(ref.kind==='interface'||ref.kind==='declaration'||ref.kind==='native')?ref.identity:undefined;
-        },true,this.nestedFunctions,this.anonymousFunctions,node=>plan.patternLocals.some(p=>p.owner===owner&&p.typeStart===node.start&&p.typeEnd===node.end));
+        },true,this.nestedFunctions,this.anonymousFunctions,node=>plan.patternLocals.some(p=>p.owner===owner&&p.typeStart===node.start&&p.typeEnd===node.end),
+            node=>plan.references.some(r=>r.owner===owner&&r.start===node.start&&r.end===node.end&&r.kind==='tween-handle-local'));
     }
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}
     constantValue(trait:Trait):string {

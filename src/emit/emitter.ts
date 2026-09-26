@@ -2921,6 +2921,15 @@ function emitDeclaration(emitter:Emitter, node:Node):void {
 
 
 function emitType(emitter:Emitter, node:Node):void {
+	const tweenLocal = emitter.generated && emitter.generated.options.plan.references.some(r =>
+		r.owner === emitter.generated.lexical.owner && r.start === node.start && r.end === node.end && r.kind === 'tween-handle-local');
+	if (tweenLocal) {
+		const input = nativeGeneratedDeclarationInputs(emitter.generated.options.plan, emitter.generated.options.plan.scope);
+		if (!emitter.options.nativeTypedLocals || !emitter.options.nativeTweenModule
+			|| emitter.options.nativeTweenModule !== xmlGlobalProviderModule(input.tweenHandleProviderModule, emitter.generated.options.module))
+			throw new Error('AS3_TWEEN_UNSUPPORTED: exact planned migration provider and typed locals required');
+		emitter.catchup(node.start);emitter.insert('any');emitter.skipTo(node.end);return;
+	}
 	// Don't emit type on 'constructor' functions.
 	if (node.parent.kind === NodeKind.FUNCTION) {
 		let name = node.parent.findChild(NodeKind.NAME);

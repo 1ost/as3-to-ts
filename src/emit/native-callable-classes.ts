@@ -582,7 +582,7 @@ export class NativeCallableClasses {
                     const vector=this.generated.options.plan.vectors.find(v=>v.identity===identity);
                     if(!vector)this.fail('unplanned Vector local identity');
                     return generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(vector.name)+',vector:'+domainImport+'.'+vector.specExport+'})';
-                }:undefined,this.generated?generatedProperty:undefined);
+                }:undefined,this.generated?generatedProperty:undefined,this.generated?value=>domainImport+'.coerceTweenMaxHandle('+value+')':undefined);
             return result;
         };
         const accessorTypes = new Set<string>();
