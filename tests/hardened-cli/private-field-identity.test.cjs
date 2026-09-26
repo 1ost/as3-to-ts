@@ -44,8 +44,8 @@ test('private fields retain owner-qualified AS3 identity across inheritance',asy
  const middleRow=manifest.files.find(row=>row.sourcePath==='PrivateFieldMiddle.as');
  const baseCode=fs.readFileSync(path.join(output,baseRow.typescriptPath),'utf8');
  const middleCode=fs.readFileSync(path.join(output,middleRow.typescriptPath),'utf8');
- const baseStorage=/private (__as3PrivateField_[A-Za-z0-9_$]+_slot): number/.exec(baseCode)?.[1];
- const middleStorage=/private (__as3PrivateField_[A-Za-z0-9_$]+_slot): number/.exec(middleCode)?.[1];
+ const baseStorage=/private declare (__as3PrivateField_[A-Za-z0-9_$]+_slot): number/.exec(baseCode)?.[1];
+ const middleStorage=/private declare (__as3PrivateField_[A-Za-z0-9_$]+_slot): number/.exec(middleCode)?.[1];
  assert.ok(baseStorage,baseCode);assert.ok(middleStorage,middleCode);assert.notEqual(baseStorage,middleStorage);
  assert.match(baseCode,new RegExp(`this\\.${baseStorage} = __as3Int\\(1\\)`));
  assert.match(middleCode,new RegExp(`this\\.${middleStorage} = __as3Int\\(2\\)`));

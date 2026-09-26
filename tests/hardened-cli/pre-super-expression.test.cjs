@@ -20,7 +20,7 @@ test('receiver-free expressions retain AIR order before a local base constructor
   public function Base() { State.value=State.value*10+2; }
  }
 }\n`);
- fs.writeFileSync(path.join(source,'State.as'),`package { public final class State { public static var value:int=0; } }\n`);
+ fs.writeFileSync(path.join(source,'State.as'),`package { public final class State { public static var value:int=0; public static var self:Object; } }\n`);
  fs.writeFileSync(path.join(source,'Good.as'),`package {
  public final class Good extends Base {
   public function Good() { State.value=State.value*10+1; super(); State.value=State.value*10+3; }
@@ -36,6 +36,15 @@ test('receiver-free expressions retain AIR order before a local base constructor
  fs.writeFileSync(path.join(source,'BadArg.as'),`package {
  public class BadArg extends ArgBase { public var value:int; public function BadArg() { super(this.value); } }
  }\n`);
+ fs.writeFileSync(path.join(source,'BadEscape.as'),`package {
+ public class BadEscape extends Base { public function BadEscape() { State.self=this; super(); } }
+ }\n`);
+ fs.writeFileSync(path.join(source,'BadGetter.as'),`package {
+ public class BadGetter extends ArgBase {
+  public function BadGetter() { super(this.current); }
+  public function get current():int { return State.value; }
+ }
+ }\n`);
  const run=(command,args)=>{const result=cp.spawnSync(command,args,{cwd:root,encoding:'utf8',timeout:120000});
   assert.equal(result.status,0,result.stdout+result.stderr);return result;};
  run('python3',['-B','tools/create-fixture-profile.py','--source',source,'--entry','Good',
@@ -47,8 +56,10 @@ test('receiver-free expressions retain AIR order before a local base constructor
  run(process.execPath,['bin/as3-frontend','qualify',...args(qualified)]);
  const rows=JSON.parse(fs.readFileSync(path.join(qualified,'manifest.json'),'utf8')).files;
  assert.equal(rows.find(row=>row.sourcePath==='Good.as').status,'admitted');
- assert.equal(rows.find(row=>row.sourcePath==='BadThis.as').code,'HARDENED_SUPER_LOCAL_RECEIVER');
- assert.equal(rows.find(row=>row.sourcePath==='BadArg.as').code,'HARDENED_SUPER_LOCAL_RECEIVER');
+ assert.equal(rows.find(row=>row.sourcePath==='BadThis.as').status,'admitted');
+ assert.equal(rows.find(row=>row.sourcePath==='BadArg.as').status,'admitted');
+ assert.equal(rows.find(row=>row.sourcePath==='BadEscape.as').code,'HARDENED_SUPER_LOCAL_RECEIVER');
+ assert.equal(rows.find(row=>row.sourcePath==='BadGetter.as').code,'HARDENED_SUPER_LOCAL_RECEIVER');
 
  const good=path.join(dir,'good');fs.mkdirSync(good);
  for(const name of ['Base.as','State.as','Good.as'])fs.copyFileSync(path.join(source,name),path.join(good,name));

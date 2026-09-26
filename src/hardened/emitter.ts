@@ -1242,6 +1242,10 @@ function memberNode(member: SemanticMember, ts: TypeScriptCompilerApi, classQNam
         const modifiers = modifierTokens(member.modifiers, ts);
         if (member.readonly) modifiers.push(ts.factory.createModifier(ts.SyntaxKind.ReadonlyKeyword));
         const isStatic = member.modifiers.includes("static");
+        // Authenticated AS3 slot initialization owns instance fields. A runtime JS
+        // class field declaration would run after super() and erase staged values.
+        if (!isStatic && !member.embeddedBitmap)
+            modifiers.push(ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword));
         return ts.factory.createPropertyDeclaration(
             modifiers, fieldStorageName(member), undefined, typeNode(member.type, ts),
             member.embeddedBitmap ? ts.factory.createIdentifier(member.embeddedBitmap.className) : isStatic
@@ -1424,13 +1428,13 @@ function packageFunctionNode(program:SemanticProgram, ts:TypeScriptCompilerApi):
 }
 
 /** Replace only receiver references already proved to be non-escaping own-slot accesses. */
-function stagedConstructorValue<T>(value:T):T {
+function stagedConstructorValue<T>(value:T, receiver="__as3PreSuperFields"):T {
     if (value === null || typeof value !== "object") return value;
-    if (Array.isArray(value)) return value.map(stagedConstructorValue) as T;
+    if (Array.isArray(value)) return value.map(item=>stagedConstructorValue(item,receiver)) as T;
     const record=value as {[key:string]:unknown};
-    if (record.kind === "this") return {...record,kind:"identifier",name:"__as3PreSuperFields",
+    if (record.kind === "this") return {...record,kind:"identifier",name:receiver,
         bindingKind:"local",bindingSourceQualifiedName:null} as T;
-    return Object.fromEntries(Object.entries(record).map(([key,child])=>[key,stagedConstructorValue(child)])) as T;
+    return Object.fromEntries(Object.entries(record).map(([key,child])=>[key,stagedConstructorValue(child,receiver)])) as T;
 }
 
 function classConstructorNode(program: SemanticProgram, member: SemanticConstructor | null,
@@ -1444,10 +1448,13 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
     const superIndex = member?.body.findIndex(statement => statement.kind === "expression"
         && statement.expression.kind === "call" && statement.expression.callee.kind === "super") ?? -1;
     const staged=member?.preSuperFieldState === true;
+    const receiverMode=member?.preSuperReceiverState === true;
+    const preSuperReceiverName="__as3PreSuperReceiver";
     const instanceFields=classDeclaration.members.filter((item):item is SemanticField=>item.kind === "field"
         && !item.modifiers.includes("static"));
     const original = member === null ? [] : member.body.map((statement,index) => statementNode(
-        staged && index <= superIndex ? stagedConstructorValue(statement) : statement, ts));
+        (staged || receiverMode) && index <= superIndex
+            ? stagedConstructorValue(statement,receiverMode ? preSuperReceiverName : "__as3PreSuperFields") : statement, ts));
     const stagedFieldSetup:any[]=staged ? [ts.factory.createVariableStatement(undefined,
         ts.factory.createVariableDeclarationList([ts.factory.createVariableDeclaration("__as3PreSuperFields",undefined,
             ts.factory.createTypeLiteralNode(instanceFields.map(field=>ts.factory.createPropertySignature(undefined,
@@ -1457,6 +1464,23 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
         ...instanceFields.filter(field=>field.initializer !== null).map(field=>ts.factory.createExpressionStatement(
             ts.factory.createAssignment(ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3PreSuperFields"),fieldStorageName(field)),
                 expressionNode(stagedConstructorValue(field.initializer!),ts))))] : [];
+    const receiverSetup:any[]=receiverMode ? [
+        ts.factory.createVariableStatement(undefined,ts.factory.createVariableDeclarationList([
+            ts.factory.createVariableDeclaration("__as3PreSuperFrame",undefined,undefined,
+                ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BeginPreSuperReceiver"),undefined,
+                    [newTargetExpression(ts),ts.factory.createIdentifier(className),
+                        ts.factory.createIdentifier("__as3ConstructionProof"),
+                        ts.factory.createIdentifier("__as3PreSuperMethodProofs")]))],ts.NodeFlags.Const)),
+        ts.factory.createVariableStatement(undefined,ts.factory.createVariableDeclarationList([
+            ts.factory.createVariableDeclaration(preSuperReceiverName,undefined,undefined,
+                ts.factory.createAsExpression(ts.factory.createPropertyAccessExpression(
+                    ts.factory.createIdentifier("__as3PreSuperFrame"),"receiver"),
+                    ts.factory.createTypeReferenceNode(className)))],ts.NodeFlags.Const)),
+    ] : [];
+    const receiverFieldSetup:any[]=receiverMode ? instanceFields.filter(field=>field.initializer !== null)
+        .map(field=>ts.factory.createExpressionStatement(ts.factory.createAssignment(
+            ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(preSuperReceiverName),fieldStorageName(field)),
+            expressionNode(stagedConstructorValue(field.initializer!,preSuperReceiverName),ts)))) : [];
     // Keep local side effects and failures before preparing the base constructor call.
     const leadingLocals = superIndex < 0 ? [] : original.splice(0, superIndex);
     const originalSuperStatement = superIndex >= 0 ? original.shift()! : derived && member === null
@@ -1467,9 +1491,10 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
         const originalCall = originalSuperStatement.expression;
         prepareStatement = ts.factory.createVariableStatement(undefined, ts.factory.createVariableDeclarationList([
             ts.factory.createVariableDeclaration("__as3PreparedConstruction", undefined, undefined,
-                ts.factory.createCallExpression(ts.factory.createIdentifier("__as3PrepareConstruction"), undefined,
-                    [newTargetExpression(ts), ts.factory.createIdentifier(className),
-                        ts.factory.createIdentifier("__as3ConstructionProof")]))], ts.NodeFlags.Const));
+                receiverMode ? ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3PreSuperFrame"),"prepared")
+                    : ts.factory.createCallExpression(ts.factory.createIdentifier("__as3PrepareConstruction"), undefined,
+                        [newTargetExpression(ts), ts.factory.createIdentifier(className),
+                            ts.factory.createIdentifier("__as3ConstructionProof")]))], ts.NodeFlags.Const));
         const prepared = ts.factory.createSpreadElement(ts.factory.createIdentifier("__as3PreparedConstruction"));
         const authenticatedSuper = ts.factory.createExpressionStatement(ts.factory.createCallExpression(
             originalCall.expression, originalCall.typeArguments, [...(classDeclaration.extendsType?.runtimeName === "Array"
@@ -1480,8 +1505,11 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
         ts.factory.createExpressionStatement(ts.factory.createCallExpression(
             ts.factory.createIdentifier("__as3CancelPreparedConstruction"), undefined,
             [newTargetExpression(ts), ts.factory.createIdentifier("__as3ConstructionProof"),
-                ts.factory.createIdentifier("__as3PreparedConstruction")])));
-        superStatement = ts.factory.createTryStatement(ts.factory.createBlock([authenticatedSuper], true),
+                receiverMode ? ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3PreSuperFrame"),"prepared")
+                    : ts.factory.createIdentifier("__as3PreparedConstruction")])));
+        superStatement = ts.factory.createTryStatement(ts.factory.createBlock(
+            receiverMode ? [...receiverFieldSetup,...leadingLocals,prepareStatement,authenticatedSuper]
+                : [authenticatedSuper], true),
             ts.factory.createCatchClause(ts.factory.createVariableDeclaration("__as3SuperError"), ts.factory.createBlock([
                 cancel, ts.factory.createThrowStatement(ts.factory.createIdentifier("__as3SuperError"))], true)), undefined);
     }
@@ -1496,7 +1524,7 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
     ts.factory.createVariableStatement(undefined, ts.factory.createVariableDeclarationList([
         ts.factory.createVariableDeclaration("__as3ConstructionFailed", undefined, undefined, ts.factory.createFalse()),
     ], ts.NodeFlags.Let))];
-    const explicitFields = instanceFields.filter(field => staged || field.initializer !== null).map(field =>
+    const explicitFields = (receiverMode ? [] : instanceFields.filter(field => staged || field.initializer !== null)).map(field =>
         ts.factory.createExpressionStatement(ts.factory.createBinaryExpression(
             ts.factory.createPropertyAccessExpression(ts.factory.createThis(), fieldStorageName(field)),
             ts.factory.createToken(ts.SyntaxKind.EqualsToken), staged
@@ -1556,8 +1584,9 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
     const constructorQName=program.fileLocalScope ? fileLocalClassIdentity(program.fileLocalScope).reflectionName
         : program.packageName ? program.packageName+"."+className : className;
     const body = [ts.factory.createExpressionStatement(initializeClassNode(ts.factory.createIdentifier(className), true, ts)),
-        constructorArityGuard(constructorQName, member, ts), ...constructorSlots, ...stagedFieldSetup, ...leadingLocals,
-        ...(superStatement === null ? [] : [prepareStatement, superStatement])]
+        constructorArityGuard(constructorQName, member, ts), ...constructorSlots, ...stagedFieldSetup, ...receiverSetup,
+        ...(receiverMode ? [] : leadingLocals),
+        ...(superStatement === null ? [] : receiverMode ? [superStatement] : [prepareStatement, superStatement])]
         .concat(prologue, [ts.factory.createTryStatement(
         ts.factory.createBlock(tryBody, true), catchClause, finallyClause)]);
     if (derived && superStatement === null) {
@@ -1785,6 +1814,7 @@ function runtimeTypeImport(ts: TypeScriptCompilerApi, referenceEnumeration: bool
         ["as3RejectConstructorArity", "__as3RejectConstructorArity"],
         ["as3InitializeInstanceFields", "__as3InitializeInstanceFields"],
         ["as3PrepareConstruction", "__as3PrepareConstruction"],
+        ["as3BeginPreSuperReceiver", "__as3BeginPreSuperReceiver"],
         ["as3CancelPreparedConstruction", "__as3CancelPreparedConstruction"],
         ["as3EnterConstruction", "__as3EnterConstruction"],
         ["as3AbortConstruction", "__as3AbortConstruction"],
@@ -2288,6 +2318,20 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                 ts.factory.createIdentifier("value"), ts.factory.createToken(ts.SyntaxKind.EqualsEqualsEqualsToken),
                 ts.factory.createIdentifier("__as3ConstructionProof")))], true)),
     ];
+    const preSuperMethodProofs = constructorMember?.preSuperReceiverState === true ? [
+        ts.factory.createVariableStatement(undefined,ts.factory.createVariableDeclarationList([
+            ts.factory.createVariableDeclaration("__as3PreSuperMethodProofs",undefined,undefined,
+                ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
+                    ts.factory.createIdentifier("Object"),"freeze"),undefined,[ts.factory.createArrayLiteralExpression(
+                    (constructorMember.preSuperReceiverMethods ?? []).map(name=>ts.factory.createArrayLiteralExpression([
+                        ts.factory.createStringLiteral(name),
+                        ts.factory.createPropertyAccessExpression(ts.factory.createNonNullExpression(
+                            ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
+                                ts.factory.createIdentifier("Object"),"getOwnPropertyDescriptor"),undefined,[
+                                ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(program.declaration.name),"prototype"),
+                                ts.factory.createStringLiteral(name)])),"value"),
+                    ])))]))],ts.NodeFlags.Const)),
+    ] : [];
     const embedded = embeddedBitmapDeclarations(program, imports, ts);
     const deferredInitialization = program.declaration.declarationKind === "class" ? [classInitializationNode(program, ts)] : [];
     const privateBinding = fileLocalIdentity ? [ts.factory.createExportDeclaration(undefined, false,
@@ -2301,7 +2345,8 @@ export function emitSemanticProgram(program: SemanticProgram, options: EmitterOp
                         : ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(program.declaration.name),"prototype"),
                     ts.factory.createStringLiteral(member.name),
                     ts.factory.createNumericLiteral((member as SemanticMethod).parameters.filter(parameter=>!parameter.rest).length)])));
-    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration], methodLengths, deferredInitialization, nominalPredicate, privateBinding));
+    const sourceFile = ts.factory.updateSourceFile(empty, imports.concat(embedded, nominalState, [declaration],
+        preSuperMethodProofs, methodLengths, deferredInitialization, nominalPredicate, privateBinding));
     const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
     let code = printer.printFile(sourceFile).replace(/\r\n?/g, "\n");
     code = code.replace(/\n*$/, "\n");

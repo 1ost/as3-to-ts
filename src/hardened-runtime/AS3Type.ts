@@ -13,6 +13,7 @@ import {
     testType,
     initializeInstanceFields,
     prepareConstruction,
+    beginPreSuperReceiver,
     cancelPreparedConstruction,
     enterConstruction,
     abortConstruction,
@@ -95,6 +96,11 @@ export function as3InitializeInstanceFields(value: object, newTarget: RuntimeCon
 export function as3PrepareConstruction(newTarget: unknown, declared: RuntimeConstructor,
     proof: unknown): readonly [] {
     return prepareConstruction(newTarget, declared, proof);
+}
+
+export function as3BeginPreSuperReceiver(newTarget: unknown, declared: RuntimeConstructor,
+    proof: unknown, methods: readonly unknown[]): { readonly receiver: object; readonly prepared: readonly [] } {
+    return beginPreSuperReceiver(newTarget, declared, proof, methods);
 }
 
 export function as3CancelPreparedConstruction(newTarget: unknown, proof: unknown, frame: unknown): void {

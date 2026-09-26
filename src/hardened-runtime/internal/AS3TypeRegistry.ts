@@ -200,11 +200,14 @@ const ACTIVE_CONSTRUCTIONS = new WeakMap<object, RuntimeConstructor>();
 interface PreparedConstructionFrame {
     readonly target: RuntimeConstructor;
     readonly secondaryOwner:SecondaryOwner|null;
+    readonly approvedMethods: Map<string, Set<Function>>;
+    receiver: object | null;
     state: "prepared" | "consumed" | "cancelled";
     [Symbol.iterator](): Iterator<never>;
 }
 const PREPARED_CONSTRUCTION_FRAMES: PreparedConstructionFrame[] = [];
 const AUTHENTIC_CONSTRUCTION_FRAMES = new WeakSet<object>();
+const PRE_SUPER_RECEIVERS = new WeakMap<object, object>();
 
 function adjustSecondaryMutation(owner:SecondaryOwner,surface:AS3SecondaryMutationSurface,delta:1|-1):void {
     const next=owner.mutations[surface]+delta;
@@ -217,6 +220,8 @@ function constructionFrame(target: RuntimeConstructor): PreparedConstructionFram
     const frame: PreparedConstructionFrame = {
         target,
         secondaryOwner,
+        approvedMethods: new Map(),
+        receiver: null,
         state: "prepared",
         [Symbol.iterator](): Iterator<never> {
             return { next(): IteratorResult<never> { return { done: true, value: undefined as never }; } };
@@ -421,6 +426,10 @@ export function prepareConstruction(newTarget: unknown, declared: RuntimeConstru
     }
     const target = newTarget as RuntimeConstructor;
     if (target === declared) {
+        const existing = PREPARED_CONSTRUCTION_FRAMES[PREPARED_CONSTRUCTION_FRAMES.length - 1];
+        if (existing?.target === target && existing.state === "prepared" && existing.receiver !== null) {
+            return existing as unknown as readonly [];
+        }
         const frame = constructionFrame(target);
         PREPARED_CONSTRUCTION_FRAMES.push(frame);
         return frame as unknown as readonly [];
@@ -430,6 +439,101 @@ export function prepareConstruction(newTarget: unknown, declared: RuntimeConstru
         throw new TypeError("AS3 derived construction proof is missing or belongs to another allocation");
     }
     return frame as unknown as readonly [];
+}
+
+type PreSuperMethodProof = readonly [name: string, implementation: unknown];
+
+function resolvedPreSuperMethod(prototype: object, name: string): Function | null {
+    for (let current: object | null = prototype; current !== null; current = Object.getPrototypeOf(current)) {
+        const descriptor = Object.getOwnPropertyDescriptor(current, name);
+        if (descriptor !== undefined) return "value" in descriptor && typeof descriptor.value === "function"
+            ? descriptor.value as Function : null;
+    }
+    return null;
+}
+
+/** A temporary receiver for authenticated, nonescaping local pre-super evaluation. */
+export function beginPreSuperReceiver(newTarget: unknown, declared: RuntimeConstructor,
+    proof: unknown, methods: readonly unknown[]): { readonly receiver: object; readonly prepared: readonly [] } {
+    requireSealed();
+    if (typeof newTarget === "function") requireUsableSecondaryConstructor(newTarget);
+    requireUsableSecondaryConstructor(declared);
+    if (typeof newTarget !== "function" || !CLASS_TOKENS.has(newTarget)
+        || !CLASS_TOKENS.has(declared) || !constructorIsSubtype(newTarget as RuntimeConstructor, declared)
+        || !validConstructionProof(declared, proof) || !Array.isArray(methods)) {
+        throw new TypeError("AS3 pre-super receiver proof is invalid");
+    }
+    const target = newTarget as RuntimeConstructor;
+    const declaredPrototype = Object.getOwnPropertyDescriptor(declared, "prototype")?.value;
+    const targetPrototype = Object.getOwnPropertyDescriptor(target, "prototype")?.value;
+    if (!declaredPrototype || typeof declaredPrototype !== "object"
+        || !targetPrototype || typeof targetPrototype !== "object") {
+        throw new TypeError("AS3 pre-super receiver has no class prototype");
+    }
+    const approved: PreSuperMethodProof[] = [];
+    const names = new Set<string>();
+    for (const item of methods) {
+        if (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string"
+            || item[0].length === 0 || names.has(item[0]) || typeof item[1] !== "function"
+            || Object.getOwnPropertyDescriptor(declaredPrototype, item[0])?.value !== item[1]) {
+            throw new TypeError("AS3 pre-super method proof is invalid");
+        }
+        names.add(item[0]);
+        approved.push(item as unknown as PreSuperMethodProof);
+    }
+    let frame: PreparedConstructionFrame | null = null;
+    if (target !== declared) {
+        const pending = PREPARED_CONSTRUCTION_FRAMES[PREPARED_CONSTRUCTION_FRAMES.length - 1];
+        if (!pending || pending.target !== target || pending.state !== "prepared") {
+            throw new TypeError("AS3 pre-super receiver lacks the target constructor handoff");
+        }
+        frame = pending;
+    }
+    const pinnedMethods = new Map<string, Function>();
+    for (const [name, implementation] of approved) {
+        const existing = frame?.approvedMethods.get(name);
+        const resolved = resolvedPreSuperMethod(targetPrototype, name);
+        if (resolved === null || (resolved !== implementation && !existing?.has(resolved))) {
+            throw new TypeError("AS3 pre-super virtual dispatch is not authenticated");
+        }
+        pinnedMethods.set(name, resolved);
+    }
+    let receiver = frame?.receiver ?? null;
+    if (receiver === null) {
+        receiver = Object.create(targetPrototype) as Record<string, unknown>;
+        const chain: RuntimeConstructor[] = [];
+        for (let current: RuntimeConstructor | null = target; current !== null;
+            current = CLASS_BASES.get(current) ?? null) chain.push(current);
+        chain.reverse().forEach(constructor => CLASS_FIELD_DEFAULTS.get(constructor)?.forEach(field => {
+            const initial = field.policy === "zero" ? 0 : field.policy === "nan" ? 0 / 0
+                : field.policy === "false" ? false : field.policy === "null" ? null : undefined;
+            Object.defineProperty(receiver, field.name,
+                {value: initial, writable: true, enumerable: true, configurable: true});
+        }));
+    }
+    for (const [name, implementation] of pinnedMethods) {
+        const own = Object.getOwnPropertyDescriptor(receiver, name);
+        if (own !== undefined && (!("value" in own) || own.value !== implementation)) {
+            throw new TypeError("AS3 pre-super method collides with a receiver slot");
+        }
+    }
+    for (const [name, implementation] of pinnedMethods) {
+        if (Object.getOwnPropertyDescriptor(receiver, name) === undefined) {
+            // Keep the authenticated virtual target stable across side effects
+            // in later pre-super expressions without exposing the receiver.
+            Object.defineProperty(receiver, name,
+                {value: implementation, writable: false, enumerable: false, configurable: false});
+        }
+    }
+    if (frame === null) frame = constructionFrame(target);
+    frame.receiver = receiver;
+    for (const [name, implementation] of approved) {
+        let set = frame.approvedMethods.get(name);
+        if (set === undefined) { set = new Set(); frame.approvedMethods.set(name, set); }
+        set.add(implementation as Function);
+    }
+    if (target === declared) PREPARED_CONSTRUCTION_FRAMES.push(frame);
+    return {receiver, prepared: frame as unknown as readonly []};
 }
 
 /** Cancels a prepared proof when the target constructor's super call throws before allocation entry. */
@@ -477,6 +581,7 @@ export function enterConstruction(value: object, newTarget: unknown,
     if (frame !== undefined && frame.target === target && frame.state === "prepared") {
         PREPARED_CONSTRUCTION_FRAMES.pop();
         frame.state = "consumed";
+        if (frame.receiver !== null) PRE_SUPER_RECEIVERS.set(value, frame.receiver);
         if (frame.secondaryOwner) {
             frame.secondaryOwner.preparedConstructions -= 1;
             adjustSecondaryMutation(frame.secondaryOwner,"PREPARED_CONSTRUCTION_FRAMES",-1);
@@ -505,6 +610,7 @@ export function abortConstruction(value: object, newTarget: unknown,
         throw new TypeError("AS3 constructor abort is not authenticated");
     }
     ACTIVE_CONSTRUCTIONS.delete(value);
+    PRE_SUPER_RECEIVERS.delete(value);
     const secondaryOwner = SECONDARY_INSTANCE_OWNERS.get(value);
     if (secondaryOwner) {
         secondaryOwner.activeConstructions -= 1;
@@ -523,6 +629,7 @@ export function completeConstruction(value: object, newTarget: unknown,
         throw new TypeError("AS3 constructor completion is not authenticated");
     }
     ACTIVE_CONSTRUCTIONS.delete(value);
+    PRE_SUPER_RECEIVERS.delete(value);
     const secondaryOwner = SECONDARY_INSTANCE_OWNERS.get(value);
     if (secondaryOwner) {
         secondaryOwner.activeConstructions -= 1;
@@ -551,6 +658,17 @@ export function initializeInstanceFields(value: object, newTarget: RuntimeConstr
             : field.policy === "false" ? false : field.policy === "null" ? null : undefined;
         Object.defineProperty(value, field.name, { value: initial, writable: true, enumerable: true, configurable: true });
     }));
+    const preview = PRE_SUPER_RECEIVERS.get(value);
+    if (preview !== undefined) {
+        chain.forEach(constructor => CLASS_FIELD_DEFAULTS.get(constructor)?.forEach(field => {
+            const descriptor = Object.getOwnPropertyDescriptor(preview, field.name);
+            if (descriptor && "value" in descriptor) {
+                Object.defineProperty(value, field.name,
+                    {value: descriptor.value, writable: true, enumerable: true, configurable: true});
+            }
+        }));
+        PRE_SUPER_RECEIVERS.delete(value);
+    }
     INITIALIZED_INSTANCE_FIELDS.add(value);
     const secondaryOwner = SECONDARY_CONSTRUCTOR_OWNERS.get(newTarget);
     if (secondaryOwner) {

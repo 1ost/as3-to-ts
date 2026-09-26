@@ -92,8 +92,8 @@ test("transpiles the double-pinned structural subset deterministically", t => {
     assert.match(firstCode, /import \{ as3BindMethod as __as3BindMethod \} from "@bleach\/as3-runtime\/AS3MethodClosure";/);
     assert.doesNotMatch(firstCode, /\.bind\(this\)/);
     assert.match(firstCode, /this\.label = "changed";/);
-    assert.match(firstCode, /private child: Sprite \| null;/);
-    assert.match(firstCode, /private label: string \| null;/);
+    assert.match(firstCode, /private declare child: Sprite \| null;/);
+    assert.match(firstCode, /private declare label: string \| null;/);
     assert.match(firstCode, /this\.child = new Sprite\(\);/);
     assert.match(firstCode, /this\.label = "ok";/);
     assert.match(firstCode, /public get value\(\): number/);

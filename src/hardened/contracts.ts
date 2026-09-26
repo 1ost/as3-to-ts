@@ -847,6 +847,9 @@ export interface SemanticConstructor extends SemanticIdentity {
     kind: "constructor";
     /** Non-escaping own slots evaluated before a qualified native base constructor. */
     preSuperFieldState?: true;
+    /** Authenticated local receiver and audited virtual methods needed before super. */
+    preSuperReceiverState?: true;
+    preSuperReceiverMethods?: string[];
     modifiers: SemanticModifier[];
     parameters: SemanticParameter[];
     body: SemanticStatement[];

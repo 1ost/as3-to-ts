@@ -6720,6 +6720,44 @@ function onlyOwnPreSuperFields(value: unknown, context: AdapterContext): boolean
     return Object.values(item).every(child=>onlyOwnPreSuperFields(child,context));
 }
 
+/** Prove that a temporary source receiver stays within local data slots and audited methods. */
+function localPreSuperReceiverMethods(values: readonly unknown[], context: AdapterContext,
+    members: readonly SemanticMember[], node: TreeNode): string[] | null {
+    const required = new Set<string>();
+    const checked = new Set<string>();
+    const active = new Set<string>();
+    const visit = (value: unknown): boolean => {
+        if (value === null || typeof value !== "object") return true;
+        if (Array.isArray(value)) return value.every(visit);
+        const item = value as {[key: string]: any};
+        if (item.kind === "call" && item.callee?.kind === "member"
+            && item.callee.target?.kind === "this") {
+            const name = item.callee.name as string;
+            const method = members.find(member => member.kind === "method" && member.name === name
+                && !member.modifiers.includes("static") && member.namespaceName === null) as SemanticMethod | undefined;
+            if (!method || active.has(name) || !visit(item.arguments)) return false;
+            required.add(name);
+            if (checked.has(name)) return true;
+            active.add(name);
+            const safe = visit(method.body);
+            active.delete(name);
+            if (safe) checked.add(name);
+            return safe;
+        }
+        if (item.kind === "member" && item.target?.kind === "this") {
+            const own = context.fields[item.name];
+            if (own) return !own.modifiers.includes("static") && own.namespaceName === null && !own.embeddedBitmap;
+            const inherited = context.baseLocalQName === null ? null
+                : localInheritedMember(context,item.name,"field",null,node).member;
+            return inherited !== null && inherited !== undefined && !inherited.modifiers.includes("static");
+        }
+        if (item.kind === "this" || item.kind === "super" || item.kind === "methodClosure"
+            || item.kind === "lambda" && item.lexicalReceiver !== undefined) return false;
+        return Object.values(item).every(visit);
+    };
+    return values.every(visit) ? [...required].sort() : null;
+}
+
 function superCall(statement: SemanticStatement): boolean {
     return statement.kind === "expression" && statement.expression.kind === "call"
         && statement.expression.callee.kind === "super";
@@ -7531,12 +7569,16 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                         || fields.some(field=>field.embeddedBitmap || !onlyOwnPreSuperFields(field.initializer,placeholder)))
                         fail("HARDENED_SUPER_FIELD_RECEIVER", "native pre-super code may use own field slots but cannot expose this or call receiver methods/accessors",node);
                 } else if (leading.some(usesConstructionReceiver) || argumentReceiver) {
-                    fail("HARDENED_SUPER_LOCAL_RECEIVER", "pre-super code cannot access the construction receiver outside a qualified native own-slot bridge", node);
+                    if (placeholder.sourceMemberAuthority === null || placeholder.baseLocalQName === null
+                        || leading.some(statement => statement.kind === "local"))
+                        fail("HARDENED_SUPER_LOCAL_RECEIVER", "pre-super local receiver needs an authenticated source base and an expression-only leading sequence", node);
                 }
                 if (extendsType === null && count === 1) body = body.filter(statement => !superCall(statement));
                 const constructor: SemanticConstructor = Object.assign(identity(node), {
                     kind: "constructor" as "constructor", modifiers: header.modifiers,
                     parameters: header.parameters, body, ...(stagedFields ? {preSuperFieldState:true as const} : {}),
+                    ...(!stagedFields && (leading.some(usesConstructionReceiver) || argumentReceiver)
+                        ? {preSuperReceiverState:true as const} : {}),
                 });
                 members.push(constructor);
             } else if (header.accessor === "getter") {
@@ -7589,6 +7631,22 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                 && (field.embeddedBitmap || !onlyOwnPreSuperFields(field.initializer,placeholder)))
                 fail("HARDENED_SUPER_FIELD_RECEIVER", "staged native field initializers cannot expose the construction receiver",classNode);
         }
+    }
+    for (const constructor of members.filter((member):member is SemanticConstructor=>member.kind === "constructor"
+        && member.preSuperReceiverState === true)) {
+        const superIndex = constructor.body.findIndex(superCall);
+        const call = (constructor.body[superIndex] as ExpressionStatement).expression as CallExpression;
+        const initializers = members.filter((member):member is SemanticField=>member.kind === "field"
+            && !member.modifiers.includes("static"));
+        if (initializers.some(field=>field.embeddedBitmap))
+            fail("HARDENED_SUPER_LOCAL_RECEIVER", "embedded fields cannot use a temporary source receiver",classNode);
+        const methods = localPreSuperReceiverMethods([
+            ...initializers.map(field=>field.initializer),
+            ...constructor.body.slice(0,superIndex),...call.arguments,
+        ],placeholder,members,classNode);
+        if (methods === null)
+            fail("HARDENED_SUPER_LOCAL_RECEIVER", "pre-super receiver access must stay in local fields and audited virtual methods",classNode);
+        constructor.preSuperReceiverMethods = methods;
     }
     assertNoLocalAncestryFieldCollision(placeholder, members, classNode);
     if (one(classNode,"MOD_LIST",true)?.children.some(modifier=>modifier.text === "final")
