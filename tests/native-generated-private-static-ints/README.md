@@ -16,3 +16,10 @@ instance constants remain held. No source implementation is hand-translated.
 The actual OP2 worker comparison is
 `as3-to-layaair-porting-kit/tests/test_bulk_generated_private_static_ints.mjs`.
 Latest compiler pass: `run-QkpEuL`; worker pass: `run-C6ia66`.
+
+Run `node tests/native-generated-private-static-ints/factories.cjs` for complete
+script-backed factories with selected parent reuse, separate sibling domains and
+retirement. All eleven AIR rows pass on both targets in Node/Chromium under CSP,
+with six factory admission guards and three domain checks (`run-WWX6mA`).
+Private static literals alone do not require the executable Class-script retry
+protocol; the parent's authored `before` initializer still explicitly uses it.
