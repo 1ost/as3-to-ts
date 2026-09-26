@@ -6,9 +6,9 @@ module.exports=(api,input)=>{
  const cases=[
   ['parameter-type','public function parse(v:Object):void {}','override public function parse(v:String):void {}'],
   ['return-type','public function parse(v:Object):Object {return v;}','override public function parse(v:Object):String {return null;}'],
-  ['optional','public function parse(v:Object=null):void {}','override public function parse(v:Object=null):void {}'],
+  ['required-count','public function parse(v:Object):void {}','override public function parse(v:Object=null):void {}'],
   ['rest','public function parse(...values):void {}','override public function parse(...values):void {}'],
-  ['reference','public function parse(v:Base):void {}','override public function parse(v:Base):void {}'],
+  ['reference-mismatch','public function parse(v:Base):void {}','override public function parse(v:Child):void {}'],
   ['accessor','public function get parse():int {return 1;}','override public function get parse():int {return 2;}'],
   ['final','public final function parse(v:Object):void {}','override public function parse(v:Object):void {}'],
   ['missing-modifier','public function parse(v:Object):void {}','public function parse(v:Object):void {}'],

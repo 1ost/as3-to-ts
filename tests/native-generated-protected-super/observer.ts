@@ -1,0 +1,40 @@
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+import {NativeSourceClassModule,createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {as3GetProperty} from '@FLASH@/utils/AS3Property';
+import {as3CallValue} from '@FLASH@/utils/AS3Invocation';
+export async function run(parentModule:NativeSourceClassModule,childModule:NativeSourceClassModule){
+ const rows:{id:string,value:unknown}[]=[],checks:string[]=[];
+ const row=(id:string,value:unknown)=>rows.push({id,value});
+ const check=(id:string,value:boolean)=>{if(!value)throw Error(id);checks.push(id);};
+ const parentSession=createNativeSourceClassLoadingSession({resolve:()=>parentModule,maxModules:1});
+ const root=ApplicationDomain.currentDomain,parent=await parentSession.load('parent',root);
+ const Base=parent.getDefinition('protsuper.Base') as Function;
+ const session=createNativeSourceClassLoadingSession({resolve:()=>childModule,maxModules:2});
+ const loaded=await session.load('child',new ApplicationDomain(root));
+ const Child=loaded.getDefinition('protsuper.Child') as Function,Grandchild=loaded.getDefinition('protsuper.Grandchild') as Function;
+ check('selected parent reused',loaded.getDefinition('protsuper.Base')===Base&&Object.getPrototypeOf(Child.prototype)===Base.prototype);
+ const child=Reflect.construct(Child,[]),grand=Reflect.construct(Grandchild,[]);
+ const call=(target:unknown,name:string,args:unknown[]=[])=>as3CallValue(as3GetProperty(target,name),()=>args);
+ row('omitted',call(child,'omitted'));
+ row('partial',call(child,'partial',[7.9]));
+ row('undefined',call(child,'supplied',[undefined,undefined]));
+ row('null',call(child,'supplied',[null,null]));
+ row('overflow',call(child,'supplied',[2147483648,4294967295]));
+ row('defaults',call(child,'defaults'));
+ const flags=call(child,'explicitUndefined') as any[];flags[2]=isNaN(flags[2])?'NaN':flags[2];
+ row('explicit-undefined',flags);
+ row('explicit-values',call(child,'explicitValues'));
+ row('ordered',call(child,'ordered'));
+ row('transitive',call(grand,'inheritedRange'));
+ row('wildcard',[call(child,'wildcardOmitted'),call(child,'wildcardUndefined')===undefined]);
+ row('references',[call(child,'referenceOmitted')===null,call(child,'referenceSupplied',[undefined])===null,call(child,'referenceSupplied',[child])===child]);
+ try{call(child,'referenceSupplied',[{}]);row('invalid-reference','unexpected');}catch(e:any){row('invalid-reference',[e.name,e.errorID]);}
+ row('child-virtual',call(child,'dispatch',[3,4]));
+ row('grand-virtual',call(grand,'dispatch',[5,6]));
+ row('inherited-direct',call(grand,'omitted'));
+ const sibling=await session.load('sibling',new ApplicationDomain(root));
+ check('sibling class distinct',sibling.getDefinition('protsuper.Child')!==Child);
+ const callback=as3GetProperty(child,'omitted');session.retire();
+ check('retained callback',Array.isArray(as3CallValue(callback,()=>[])));
+ parentSession.retire();return {rows,checks};
+}
