@@ -27,7 +27,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false, private spriteOwnerReferences=false, private loaderReferences=false, private xmlReferences=false) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false, private spriteOwnerReferences=false, private loaderReferences=false, private xmlReferences=false, private pointReference=false) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -369,6 +369,39 @@ export class NativeCallableClasses {
                 + (this.generated?'':parameters.slice(0, supplied).map((_,index) => args + '[' + index + '] = !!' + args + '[' + index + '];').join(''))
                 + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
         };
+        const directSuperAccessor = (key: string, side: 'get'|'set'): string => {
+            if (!this.generated || !this.generated.projection.inheritInstanceLayout)
+                this.fail('super accessor requires selected generated ancestry');
+            let owner = this.classes.get(this.own.base), depth = 0, accessor: Node;
+            for (; owner; owner = this.classes.get(owner.base), depth++) {
+                const candidates = this.sourceRoots.get(owner.qname).findChild(K.CONTENT).children.filter(node =>
+                    node.findChild(K.NAME) && node.findChild(K.NAME).text === key);
+                if (owner.fields.some(field => field.name === key) || candidates.some(node => node.kind !== K.GET && node.kind !== K.SET))
+                    this.fail('super accessor collides with source field or method');
+                accessor = candidates.find(node => node.kind === (side === 'get' ? K.GET : K.SET));
+                if (accessor) break;
+            }
+            if (!accessor) this.fail('super accessor half absent from complete source ancestry');
+            const mods = accessor.findChild(K.MOD_LIST), parameters = accessor.findChild(K.PARAMETER_LIST).children;
+            if (!mods || !mods.children.some(mod => mod.text === 'public') || mods.children.some(mod => mod.text === 'static'))
+                this.fail('super accessor requires public instance authority');
+            const type = side === 'get' ? accessor.findChild(K.TYPE)
+                : parameters.length === 1 && parameters[0].findChild(K.NAME_TYPE_INIT).findChild(K.TYPE);
+            const ref = type && this.generated.options.plan.references.find(r => r.owner === owner.qname && r.start === type.start && r.end === type.end);
+            if (!ref || ref.kind !== 'intrinsic' || ref.identity !== 'Boolean')
+                this.fail('super accessor requires qualified Boolean signature');
+            const identity = side + ':' + key;
+            let capture = superMethodNames.get(identity);
+            if (!capture) {
+                capture = unique('superAccessor' + superMethods.length);
+                let prototype = baseName + '.prototype';
+                for (let index = 0; index < depth; index++) prototype = intrinsic + '.getPrototypeOf(' + prototype + ')';
+                superMethods.push('const ' + capture + ' = ' + intrinsic + '.getOwnPropertyDescriptor('
+                    + prototype + ', ' + JSON.stringify(key) + ')!.' + side + '!;');
+                superMethodNames.set(identity,capture);
+            }
+            return capture;
+        };
         const provider = unique('provider'), declaration = unique('declaration'), generation = unique('generation');
         const localCoercion = unique('localCoercion'), localString = unique('localString'), localAddition = unique('localAddition');
         const generatedProperty = unique('generatedProperty'), localReference = unique('localReference'), classValue=unique('classValue');
@@ -474,6 +507,24 @@ export class NativeCallableClasses {
                     edits.push({start:node.expression.getStart(file),end:node.expression.end,
                         value:directSuper(node.expression.name.text,node.arguments.length)});
                     node.arguments.forEach((argument: any) => walk(argument,false,nestedFunction)); return;
+                }
+                const superProperty = (value: any): boolean => value.kind === S.PropertyAccessExpression && value.expression.kind === S.SuperKeyword;
+                if (node.kind === S.BinaryExpression && superProperty(node.left) || superProperty(node)) {
+                    if (constructor || nestedFunction || insideSuperArguments
+                        || member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword))
+                        this.fail('super accessor requires ordinary instance body');
+                    if (node.kind === S.BinaryExpression) {
+                        if (node.operatorToken.kind !== S.EqualsToken) this.fail('super accessor compound assignment requires authority');
+                        const capture = directSuperAccessor(node.left.name.text,'set'), value = unique('superAccessorValue');
+                        edits.push({start:node.getStart(file),end:node.right.getStart(file),value:'((' + value + ': any): any => {'
+                            + intrinsic + '.apply(' + capture + ',this,[' + value + ']);return ' + value + ';})('});
+                        edits.push({start:node.end,end:node.end,value:')'});
+                        walk(node.right,false,nestedFunction);return;
+                    }
+                    if (node.parent.kind === S.PrefixUnaryExpression && (node.parent.operator === S.PlusPlusToken || node.parent.operator === S.MinusMinusToken) || node.parent.kind === S.PostfixUnaryExpression
+                        || node.parent.kind === S.DeleteExpression) this.fail('super accessor update/delete requires authority');
+                    edits.push({start:node.getStart(file),end:node.end,value:intrinsic + '.apply('
+                        + directSuperAccessor(node.name.text,'get') + ',this,[])'});return;
                 }
                 if (node.kind === S.SuperKeyword) this.fail('super property access requires separate receiver authority');
                 if (node.kind === S.ReturnStatement && returnType && !nestedFunction) {
@@ -616,6 +667,7 @@ export class NativeCallableClasses {
                         &&!(this.interactiveReference&&reference.identity==='flash.display.InteractiveObject')
                         &&!this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&binding.nativeInterface)
                         &&!(reference.identity==='flash.media.ID3Info'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity))
+                        &&!(this.pointReference&&reference.identity==='flash.geom.Point')
                         &&!(this.dateReference&&reference.identity==='Date')
                         // Canonical display allocation proof also authenticates Sprite
                         // returns; other native display families remain separately held.

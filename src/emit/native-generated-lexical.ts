@@ -269,11 +269,11 @@ export class NativeGeneratedLexical {
         const type=trait.type&&trait.type.text;
         if(trait.visibility==='internal'&&trait.static&&type==='uint'&&value&&/^(?:0[xX][0-9a-fA-F]+|0|[1-9]\d*)$/.test(value)
             &&Number(value)<=4294967295)return String(Number(value));
-        if(trait.kind==='constant'&&(trait.visibility==='protected'||trait.visibility==='private'&&trait.static&&type==='String')&&value
+        if(trait.kind==='constant'&&(trait.visibility==='protected'||trait.visibility==='private'&&trait.static&&(type==='String'||type==='int'))&&value
             &&(type==='String'&&/^(?:"(?:[^"\\\r\n]|\\[^\r\n])*"|'(?:[^'\\\r\n]|\\[^\r\n])*')$/.test(value)
-                ||type==='int'&&!trait.static&&/^[+-]?(?:0|[1-9]\d*)$/.test(value)&&Number(value)>=-2147483648&&Number(value)<=2147483647))
+                ||type==='int'&&(!trait.static||trait.visibility==='private')&&/^[+-]?(?:0|[1-9]\d*)$/.test(value)&&Number(value)>=-2147483648&&Number(value)<=2147483647))
             return type==='int'?String(Number(value)):value.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
-        return fail('protected String/instance int or private static String literal constant required');
+        return fail('protected String/instance int or private static String/int literal constant required');
     }
     earlyInstanceValue(trait:Trait):string|undefined {
         if(trait.visibility!=='internal'||trait.static||trait.kind!=='variable')return undefined;
@@ -394,6 +394,21 @@ export class NativeGeneratedLexical {
             if(!lexicalName&&!receiver)return null;
             let method=node;while(method.parent&&method.parent.kind!==K.CONTENT)method=method.parent;
             const staticContext=modifiers(method).indexOf('static')>=0;
+            if(receiver&&receiver.kind===K.IDENTIFIER&&receiver.text==='super'&&lexicalName) {
+                if(staticContext||method.kind!==K.FUNCTION||method.findChild(K.NAME).text===this.owner.split('.').pop())
+                    fail('protected super field requires ordinary instance method');
+                for(let enclosing=node.parent;enclosing&&enclosing!==method;enclosing=enclosing.parent)
+                    if(enclosing.kind===K.FUNCTION||enclosing.kind===K.LAMBDA)fail('nested protected super field access');
+                const trait=this.traits.find(t=>t.name===name&&t.owner!==this.owner&&!t.static&&t.visibility==='protected');
+                const ref=trait&&trait.type&&this.plan.references.find(r=>r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
+                if(!trait||trait.kind!=='variable'||!ref||ref.kind!=='intrinsic'||['Number','int','uint'].indexOf(ref.identity)<0)
+                    fail('protected super field requires inherited numeric variable');
+                // Use the original receiver with a capability resolved from the
+                // selected ancestor. Returning no explicit receiver also keeps
+                // super out of ordinary JS property/assignment evaluation.
+                return {trait:Object.assign({},trait,{access:this.provider+'.resolveAS3LexicalMember('
+                    +this.scope+','+JSON.stringify(name)+',"protected",false,true)'}),receiver:null};
+            }
             const binding=emitter.findDefInScope(receiver?receiver.text:name);
             if(!receiver&&binding&&!binding.bound)return null;
             let isStatic=false;
@@ -412,6 +427,18 @@ export class NativeGeneratedLexical {
                     &&references.every(r=>r.kind==='native')&&['compress','uncompress','deflate','inflate'].indexOf(name)>=0) {
                     if(!emitter.options.nativeByteArrayReferenceModule)fail('native ByteArray method requires exact provider');
                     return {trait:null,receiver,nativeMethod:name};
+                }
+                if(lexicalName&&identities.length===1&&identities[0]==='flash.display.Sprite'
+                    &&references.every(r=>r.kind==='native')&&['startDrag','stopDrag'].indexOf(name)>=0) {
+                    const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
+                    const sprite=input.providers&&input.providers['flash.display.Sprite'];
+                    if(!sprite||sprite.nativeBase!=='Sprite'||sprite.exportName!=='Sprite'
+                        ||!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan)
+                        fail('native Sprite drag method requires authenticated native base/reference plan');
+                    // A namesake in the caller cannot capture a typed Sprite's
+                    // public native method. Reuse source property dispatch so
+                    // arguments precede null failure and reads retain closures.
+                    return {trait:null,receiver,publicName:name,publicMethod:true};
                 }
                 if(inputPackageEnabled(this.plan)) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);

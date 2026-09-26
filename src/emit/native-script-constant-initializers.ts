@@ -25,6 +25,14 @@ export function nativeScriptConstantInitializers(declaration: Node, source: stri
             const type=field.findChild(K.TYPE),init=field.findChild(K.INIT);
             if(type&&type.text==='String'&&init&&/^["']/.test(text(init))&&literal(text(init)))allowed.add(field);
         });
+        // Private static int slots use the same captured early-literal storage
+        // as private String constants. Keep executable/overflow forms held.
+        if(member.kind===K.CONST_LIST&&flags.length===2&&flags.indexOf('private')>=0&&flags.indexOf('static')>=0)
+            member.findChildren(K.NAME_TYPE_INIT).forEach(field=>{
+                const type=field.findChild(K.TYPE),init=field.findChild(K.INIT),value=init&&text(init);
+                if(type&&type.text==='int'&&value&&/^[+-]?(?:0|[1-9]\d*)$/.test(value)
+                    &&Number(value)>=-2147483648&&Number(value)<=2147483647)allowed.add(field);
+            });
         const internalUint=member.kind===K.CONST_LIST&&flags.indexOf('static')>=0
             &&flags.every(flag=>flag==='static'||flag==='internal');
         if(internalUint)member.findChildren(K.NAME_TYPE_INIT).forEach(field=>{
