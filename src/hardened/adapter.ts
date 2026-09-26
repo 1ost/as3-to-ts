@@ -5224,9 +5224,18 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 && !boundedNumber && !(integerType.sourceName === "Number"
                     && integerType.emittedName === "number" && !integerType.nullable))
                 fail("HARDENED_INTEGER_STRING_TARGET", "integer toString requires an authenticated primitive receiver", node);
-            if (args.length !== 0)
-                fail("HARDENED_INTEGER_STRING_ARITY", "integer toString currently requires its zero-argument decimal form", node);
-            if (integerType.sourceName === "Number" && !boundedNumber) {
+            if (args.length > 1)
+                fail("HARDENED_INTEGER_STRING_ARITY", "integer toString accepts at most one radix", node);
+            if (args.length === 1) {
+                const radixType = assignmentType(args[0]!, context, node.children[1]!.children[0]!);
+                if (!["int", "uint"].includes(integerType.sourceName)
+                    || integerType.emittedName !== "number"
+                    || !["int", "uint"].includes(radixType.sourceName)
+                    || radixType.emittedName !== "number")
+                    fail("HARDENED_INTEGER_STRING_ARITY", "radix conversion requires proven int/uint receiver and radix", node);
+                capabilitySource="int";capabilityMember="toStringRadix";
+                resultType=semanticType(node,"String","string",[],false);
+            } else if (integerType.sourceName === "Number" && !boundedNumber) {
                 capabilitySource="Number";capabilityMember="toString";
                 resultType=semanticType(node,"String","string",[],false);
             } else {

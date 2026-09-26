@@ -44,6 +44,18 @@ export function as3NumberSafeIntegerToString(value:unknown):string {
     return String(value);
 }
 
+/** AIR51 int/uint radix conversion, including its RangeError #1003. */
+export function as3IntegerToStringRadix(value:unknown, radix:unknown):string {
+    if(typeof value!=="number" || !Number.isInteger(value)
+        || value < -0x80000000 || value > 0xffffffff
+        || typeof radix!=="number" || !Number.isInteger(radix))
+        throw new AS3ObjectDispatchUnavailable("int/uint.toString requires proven primitive arguments");
+    const base=radix|0;
+    if(base<2 || base>36)
+        throw new AS3RangeError(`Error #1003: The radix argument must be between 2 and 36; got ${base}.`,1003);
+    return value.toString(base);
+}
+
 /** AVM Object slots preserve primitive/reference values but normalize undefined. */
 export function as3Object(value: unknown): unknown {
     return value === undefined ? null : value;
