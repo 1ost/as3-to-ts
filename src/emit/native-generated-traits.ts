@@ -1,3 +1,4 @@
+import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import Node from '../syntax/node';
 import {nativeSpriteTraits} from './native-sprite-traits';
 import K from '../syntax/nodeKind';
@@ -118,10 +119,10 @@ export class NativeGeneratedClassTraits {
                 return reference.identity;
             }
             const binding = (reference.kind === 'declaration' || reference.kind === 'private-declaration') && nativeGeneratedClassDeclaration(plan, reference.identity);
-            const contract = reference.kind === 'interface' && plan.interfaces.find(item => item.qname === reference.identity);
+            const contract = reference.kind === 'interface' && nativeGeneratedInterfaceBindings(plan).find(item => item.qname === reference.identity);
             const native = reference.kind === 'native' && plan.nativeBindings.find(item => item.qname === reference.identity);
             if (!binding && !contract && !native) fail('unresolved source storage type: ' + qname + ':' + reference.sourceName);
-            return {name: binding ? binding.reflectedName : reflected(reference.identity), referenceExport: binding ? binding.tokenExport : contract ? contract.tokenExport : native.referenceExport};
+            return {name: binding ? binding.reflectedName : contract ? contract.reflectedName : reflected(reference.identity), referenceExport: binding ? binding.tokenExport : contract ? contract.tokenExport : native.referenceExport};
         };
         const build = (binding: NativeGeneratedClassDeclaration): void => {
             if (surfaces.has(binding.identity)) return;

@@ -1,3 +1,4 @@
+import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import {nativeNumericProductConstant} from './native-numeric-product-constant';
 import {nativeUintOrConstants} from './native-uint-or-constants';
 import Node, {outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
@@ -228,7 +229,7 @@ export class NativeReferenceCoercion {
     type(name: string): string {
         if (!name) return null;
         const identity = this.resolve(name), plan = this.options.plan;
-        const contract = plan.interfaces.find(binding => binding.qname === identity);
+        const contract = nativeGeneratedInterfaceBindings(plan).find(binding => binding.qname === identity);
         if (contract) {
             // Ordinary method boundaries use the same authenticated nominal token.
             // This does not publish the consumer itself as an interface implementer.
@@ -296,7 +297,7 @@ export class NativeReferenceCoercion {
     }
     sourceInterface(name: string): string {
         const identity = this.resolve(name);
-        const binding = this.options.plan.interfaces.find(item => item.qname === identity);
+        const binding = nativeGeneratedInterfaceBindings(this.options.plan).find(item => item.qname === identity);
         return binding ? binding.tokenExport : this.nativeInterface(name);
     }
     nativeInterface(name: string): string {

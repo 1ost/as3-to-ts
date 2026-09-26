@@ -1,3 +1,4 @@
+import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource} from './native-generated-declarations';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {generatedMethodCompletes} from './native-generated-completions';
@@ -165,7 +166,7 @@ export class NativeCallableClasses {
                     const sourceReference=generated&&type&&generated.options.plan.references.find(ref=>ref.owner===qname&&ref.start===type.start&&ref.end===type.end);
                     const sourceDeclaration=sourceReference&&((sourceReference.kind==='declaration'||sourceReference.kind==='private-declaration')
                         ?{qname:sourceReference.identity,tokenExport:nativeGeneratedClassDeclaration(generated.options.plan,sourceReference.identity).tokenExport}
-                        :sourceReference.kind==='interface'&&generated.options.plan.interfaces.find(binding=>binding.qname===sourceReference.identity));
+                        :sourceReference.kind==='interface'&&nativeGeneratedInterfaceBindings(generated.options.plan).find(binding=>binding.qname===sourceReference.identity));
                     const nativeReference=sourceReference&&sourceReference.kind==='native'
                         &&(accessibilityReference&&sourceReference.identity==='flash.accessibility.AccessibilityImplementation'
                             ||spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(sourceReference.identity)>=0
@@ -429,7 +430,7 @@ export class NativeCallableClasses {
         const directNativeBase=nativeBase&&this.own.base===nativeBase.qname;
         const referenceToken = planned || this.generated ? (qname:string):string => {
             const binding=this.declarationDomain&&this.declarationDomain.bindings.find(value=>value.qname===qname)
-                ||this.generated&&[...this.generated.options.plan.interfaces,...this.generated.options.plan.bindings].find(value=>value.qname===qname);
+                ||this.generated&&[...nativeGeneratedInterfaceBindings(this.generated.options.plan),...this.generated.options.plan.bindings].find(value=>value.qname===qname);
             const helper=this.generated&&this.generated.options.plan.privateBindings.find(value=>value.identity===qname);
             const native=this.generated&&this.generated.options.plan.nativeBindings.find(value=>value.qname===qname);
             if(!binding&&!helper&&!native)this.fail('foreign local declaration is absent from its compiler domain');

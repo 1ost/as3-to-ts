@@ -1,3 +1,4 @@
+import {nativeGeneratedInterfaceBindings, nativeGeneratedDeclarationResolver} from './native-generated-declarations';
 import {intrinsicStringAs} from './native-string-casts';
 import {NativeTweenPlans,NativeTweenSourcePlans,tweenOptionNames} from './native-tween-plans';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
@@ -342,6 +343,7 @@ export default class Emitter {
     tweenPlans:NativeTweenPlans;
     sourcePackage: string = '';
     generated: NativeGeneratedEmission;
+    selectedInterface: {resolve:(name:string)=>string};
     generatedReceiverTraits = new Map<string,NativeGeneratedClassTraits>();
     references: NativeReferenceCoercion;
     nativeGlobals:NativeGlobalModules;
@@ -733,8 +735,16 @@ export default class Emitter {
                 || this.options.useNamespaces)
                 throw new Error('AS3_RELATIONAL_COMPILER_UNSUPPORTED: authenticated lazy callable metadata and lexical source required');
         }
-		const selected = this.generated && this.generated.options.plan.privateBindings.some(b => b.declaration.sourceOwner === this.generated.projection.binding.sourceOwner)
+		let selected = this.generated && (this.generated.options.plan.privateBindings.some(b => b.declaration.sourceOwner === this.generated.projection.binding.sourceOwner)
+            || this.generated.options.plan.privateInterfaces.some(b => b.declaration.sourceOwner === this.generated.projection.binding.sourceOwner))
             ? nativeGeneratedDeclarationNode(this.generated.options.plan, this.generated.projection.binding.identity) : null;
+        const interfaceOptions = this.options.nativeVectorTypes;
+        if (interfaceOptions && interfaceOptions.declarationIdentity !== undefined) {
+            if (this.generated) throw new Error('AS3_INTERFACE_EMISSION_UNSUPPORTED: conflicting declaration selection');
+            this.selectedInterface = nativeGeneratedDeclarationResolver(interfaceOptions.plan, interfaceOptions.declarationIdentity, this.source);
+            selected = nativeGeneratedDeclarationNode(interfaceOptions.plan, interfaceOptions.declarationIdentity);
+            if (selected.kind !== NodeKind.INTERFACE) throw new Error('AS3_INTERFACE_EMISSION_UNSUPPORTED: exact interface declaration required');
+        }
         const filtered = filterAST(selected || ast);
         if(selected)filtered.parent=selected.parent;
         this.nativeGlobals = new NativeGlobalModules(this.source, this.options.nativeGlobalModules,
@@ -963,7 +973,7 @@ export default class Emitter {
 		) {
 			// Same-package implicit imports must use the authenticated QName mapping too.
 			if (checkGlobals && from === `./${identifier}` && this.options.importModules) {
-				const qname = this.generated ? this.generated.lexical.resolveTypeName(identifier)
+				const qname = this.generated ? this.generated.lexical.resolveTypeName(identifier) : this.selectedInterface ? this.selectedInterface.resolve(identifier)
                     : (this.sourcePackage ? this.sourcePackage + '.' : '') + identifier;
 				if (this.options.importModules[qname]) from = generatedModule(this.options.importModules[qname]);
 			}
@@ -1378,6 +1388,10 @@ function getAS3DeclarationType(node:Node):string {
 }
 
 function emitInterface(emitter:Emitter, node:Node):void {
+    const modifiers = node.findChild(NodeKind.MOD_LIST);
+	if (emitter.selectedInterface && (!modifiers || !modifiers.children.length)) {
+        emitter.catchup(node.start); emitter.insert('export ');
+    }
 	emitDeclaration(emitter, node);
 
 	//we'll catchup the other part
@@ -3559,6 +3573,22 @@ function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(']))');emitter.skipTo(node.end);return true;
 }
 
+function emitInterfaceCoercionCall(emitter:Emitter,node:Node):boolean {
+    if (!emitter.generated || !emitter.references) return false;
+    const callee = unwrapEncapsulatedExpression(node.children[0]), args = node.findChild(NodeKind.ARGUMENTS);
+    if (!callee || callee.kind !== NodeKind.IDENTIFIER || !args) return false;
+    const definition = emitter.findDefInScope(callee.text);
+    if (definition && (definition.bound || Object.prototype.hasOwnProperty.call(definition,'as3Type'))) return false;
+    const token = emitter.references.sourceInterface(callee.text);
+    if (!token) return false;
+    if (emitter.isNew || args.children.length !== 1)
+        throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: interface coercion requires one argument and no construction');
+    const parts = referenceCoercionParts(emitter,{exported:token}), argument=args.children[0];
+    emitter.catchup(node.start);emitter.insert(parts[0]);emitter.skipTo(getExpressionStart(argument));
+    visitNode(emitter,argument);emitter.catchup(getEffectiveNodeEnd(argument));
+    emitter.insert(parts[1]);emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 /** Recognize declared method values without granting Function authority to an
  * arbitrary property or a shadowed class/method spelling. Normal member emission
  * still selects the authenticated class or lexical method closure. */
@@ -3670,7 +3700,7 @@ function emitCall(emitter:Emitter, node:Node):void {
         });
         emitter.insert(')');emitter.skipTo(getEffectiveNodeEnd(node));return;
     }
-    if (emitInterfaceReceiverCall(emitter,node)) return;
+    if (emitInterfaceCoercionCall(emitter,node) || emitInterfaceReceiverCall(emitter,node)) return;
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
     if (emitJSONParse(emitter,node)) return;
@@ -4282,11 +4312,11 @@ function sourceInterfaceAccessorAccess(emitter:Emitter,node:Node,kind:'get'|'set
     const definition=emitter.findDefInScope(receiver.text);
     if(!definition||definition.bound||typeof definition.as3Type!=='string')return null;
     const token=emitter.references.sourceInterface(definition.as3Type),plan=emitter.generated.options.plan;
-    const contract=plan.interfaces.find(binding=>binding.tokenExport===token);
+    const contract=nativeGeneratedInterfaceBindings(plan).find(binding=>binding.tokenExport===token);
     if(!contract)return null;
     const owners=new Set<string>();
     const visit=(name:string):void=>{if(owners.has(name))return;owners.add(name);
-        const binding=plan.interfaces.find(value=>value.qname===name);if(binding)binding.bases.forEach(visit);};
+        const binding=nativeGeneratedInterfaceBindings(plan).find(value=>value.qname===name);if(binding)binding.bases.forEach(visit);};
     visit(contract.qname);
     return plan.interfaceContracts.members.some(member=>owners.has(member.owner)&&member.name===key.text&&member.kind===kind)
         ?{receiver,key,literalKey:key.text}:null;

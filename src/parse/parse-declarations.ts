@@ -478,7 +478,7 @@ function parseInterface(parser:AS3Parser, meta:Node[], modifier:Token[]):Node {
     result.end = tok.end;
     result.start = result.children.reduce((index:number, child:Node) => {
         return Math.min(index, child ? child.start : Infinity);
-    }, tok.index);
+    }, result.start);
     return result;
 }
 
