@@ -1,4 +1,5 @@
 import Node from '../syntax/node';
+import {NativeSourceUnit, readNativeSourceUnit, nativeSourceUnitAst} from './native-source-unit';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {NativePatternLocal, nativePatternLocals} from './native-pattern-locals';
@@ -65,7 +66,7 @@ export interface NativeGeneratedDeclarationPlan {
     readonly sourceHashes: {[qname: string]: string};
     readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly nativeInterface?: true; readonly eventBaseExport?: string; readonly nativeBaseExport?: string; readonly declarationExport?: string}>;
 }
-interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan;}
+interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan; units: Map<string, NativeSourceUnit>;}
 const contexts = new WeakMap<object, Context>();
 const builtins = ['*', 'void', 'int', 'uint', 'Number', 'Boolean', 'String', 'Object', 'Array', 'Function', 'Class'];
 function fail(reason: string): never {throw new Error('AS3_GENERATED_DECLARATIONS_UNSUPPORTED: ' + reason);}
@@ -134,7 +135,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
     if (data.providers !== undefined && !table(data.providers)) fail('provider table required');
     const providers = data.providers || {}, names = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
-    const roots = new Map<string, Node>(), classes = new Map<string, Node>();
+    const roots = new Map<string, Node>(), classes = new Map<string, Node>(), units = new Map<string, NativeSourceUnit>();
     const sourceHashes: {[qname: string]: string} = Object.create(null);
     nativeNames.forEach(name => {
         qname(name);
@@ -162,17 +163,14 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             fail('exact source bytes/hash required: ' + name);
         fields(record, ['source', 'sourceSha256', 'referenceOnly']);
         if (record.referenceOnly !== undefined && typeof record.referenceOnly !== 'boolean') fail('referenceOnly must be boolean');
-        const root = parse(name + '.as', record.source); normalize(root);
-        const pkg = root.findChild(K.PACKAGE), content = pkg && pkg.findChild(K.CONTENT);
-        const list = content && content.children.filter(node => node.kind === K.CLASS || node.kind === K.INTERFACE);
-        if (!pkg || !list || list.length !== 1) fail('exactly one package class or interface: ' + name);
-        const prefix = pkg.findChild(K.NAME).text, cls = list[0];
-        if ((prefix ? prefix + '.' : '') + cls.findChild(K.NAME).text !== name) fail('source QName mismatch: ' + name);
-        // Do not silently omit a second file-local class or interface from identity planning.
-        let count = 0;
-        const visit = (node: Node): void => {if (node.kind === K.CLASS || node.kind === K.INTERFACE) count++; node.children.forEach(visit);};
-        visit(root);
-        if (count !== 1) fail('additional source declarations: ' + name);
+        let unit: NativeSourceUnit;
+        try {unit = readNativeSourceUnit(name, record.source, record.sourceSha256);}
+        catch (error) {fail(error.message.replace(/^AS3_SOURCE_UNIT_UNSUPPORTED: /, ''));}
+        const ast = nativeSourceUnitAst(unit), root = ast.root, cls = ast.declarations[0].node;
+        // Source-file identity is now explicit. Do not admit helpers until all
+        // trait, script initialization and emission consumers use that identity.
+        if (unit.declarations.length !== 1) fail('additional source declarations: ' + name);
+        units.set(name, unit);
         roots.set(name, root); classes.set(name, cls); sourceHashes[name] = record.sourceSha256;
     });
     const resolve = (owner: string, spelling: string): string => sourceResolver(roots.get(owner), owner,
@@ -438,8 +436,23 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
         sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),vectors:Object.freeze(vectors),
         nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts});
-    contexts.set(plan, {input: data, plan});
+    contexts.set(plan, {input: data, plan, units});
     return plan;
+}
+
+/** Shared source-file capability; private descriptors are never public QNames. */
+export function nativeGeneratedSourceUnit(plan: NativeGeneratedDeclarationPlan, owner: string): NativeSourceUnit {
+    const context = contexts.get(plan), unit = context && context.units.get(owner);
+    if (!unit) fail('exact planned source-unit capability required');
+    return unit;
+}
+
+/** Detached AST for a planned declaration, preserving its original file scope. */
+export function nativeGeneratedDeclarationNode(plan: NativeGeneratedDeclarationPlan, owner: string): Node {
+    const ast = nativeSourceUnitAst(nativeGeneratedSourceUnit(plan, owner));
+    const selected = ast.declarations.find(item => item.declaration.packageQName === owner);
+    if (!selected) fail('planned declaration owner required');
+    return selected.node;
 }
 
 /** Exact compiler capability plus source-byte check; serialization grants no authority. */

@@ -2,7 +2,7 @@ import {nativeNumericProductConstant} from './native-numeric-product-constant';
 import {nativeUintOrConstants} from './native-uint-or-constants';
 import Node, {outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
-import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 import {generatedModule} from './native-generated-emission';
 
 export const nativeLoaderReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.display.Loader','flash.display.Bitmap','flash.net.URLLoader','flash.media.Sound']);
@@ -239,7 +239,7 @@ export class NativeReferenceCoercion {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope),source=input.sources[identity].source;
         let declaration=this.constantDeclarations.get(identity);
         if(!declaration){
-            declaration=nativeGeneratedConsumerResolver(plan,source).root.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS);
+            declaration=nativeGeneratedDeclarationNode(plan,identity);
             this.constantDeclarations.set(identity,declaration);
         }
         for(const group of declaration.findChild(K.CONTENT).children){
@@ -271,10 +271,9 @@ export class NativeReferenceCoercion {
     publicStaticMethod(name:string,member:string):boolean {
         const identity=this.resolve(name),plan=this.options.plan;
         if(!plan.bindings.some(binding=>binding.qname===identity))return false;
-        const input=nativeGeneratedDeclarationInputs(plan,plan.scope),source=input.sources[identity].source;
         let declaration=this.constantDeclarations.get(identity);
         if(!declaration){
-            declaration=nativeGeneratedConsumerResolver(plan,source).root.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS);
+            declaration=nativeGeneratedDeclarationNode(plan,identity);
             this.constantDeclarations.set(identity,declaration);
         }
         return declaration.findChild(K.CONTENT).children.some(node=>{

@@ -1,9 +1,8 @@
 import Node from '../syntax/node';
 import {nativeSpriteTraits} from './native-sprite-traits';
 import K from '../syntax/nodeKind';
-import parse = require('../parse');
 import {NativeGeneratedDeclarationPlan, NativeGeneratedDeclarationBinding,
-    nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationSource} from './native-generated-declarations';
+    nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 
 interface ReferenceType {readonly name: string; readonly referenceExport?: string; readonly vectorExport?:string;}
 type TraitType = string | ReferenceType;
@@ -128,10 +127,7 @@ export class NativeGeneratedClassTraits {
             if (parent) build(parent);
             const inherited = binding.base && surfaces.get(binding.base);
             if (inherited && inherited.final) fail('source extends final class: ' + binding.qname);
-            const root = parse(binding.qname + '.as', input.sources[binding.qname].source);
-            const clean = (node: Node): void => {node.children = node.children.filter(Boolean); node.children.forEach(clean);};
-            clean(root);
-            const cls = root.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS);
+            const cls = nativeGeneratedDeclarationNode(plan, binding.qname);
             const own: {instance: Member[]; statics: Member[]} = {instance: [], statics: []};
             const visit = (member: Node): void => {
                 const mods = flags(member), isStatic = mods.indexOf('static') >= 0;

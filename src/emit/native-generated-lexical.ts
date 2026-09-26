@@ -1,8 +1,7 @@
 import {NativeTypedLocals, NestedLocalFunction} from './native-typed-locals';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
-import parse = require('../parse');
-import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedConsumerResolver} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 import {NativeGeneratedClassTraits} from './native-generated-traits';
 
 interface Trait {
@@ -31,9 +30,7 @@ export class NativeGeneratedLexical {
     private readonly internalContents=new Map<string,Node>();
     private internalContent(owner:string):Node {
         if(!this.internalContents.has(owner)){
-            const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope),tree=parse(owner+'.as',input.sources[owner].source);
-            const clean=(node:Node):void=>{node.children=node.children.filter(Boolean);node.children.forEach(child=>{child.parent=node;clean(child);});};clean(tree);
-            this.internalContents.set(owner,tree.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS).findChild(K.CONTENT));
+            this.internalContents.set(owner,nativeGeneratedDeclarationNode(this.plan,owner).findChild(K.CONTENT));
         }
         return this.internalContents.get(owner);
     }
@@ -63,9 +60,7 @@ export class NativeGeneratedLexical {
             return [ref?ref.identity:'*',!!(value&&value.findChild(K.INIT)),!!p.findChild(K.REST)];
         }));
         const collect=(name:string, inherited:boolean):void=>{
-            const root=parse(name+'.as',input.sources[name].source);
-            const clean=(node:Node):void=>{node.children=node.children.filter(Boolean);node.children.forEach(child=>{child.parent=node;clean(child);});};clean(root);
-            const cls=root.findChild(K.PACKAGE).findChild(K.CONTENT).findChild(K.CLASS);
+            const cls=nativeGeneratedDeclarationNode(plan,name);
             if(!inherited)(this as any).ownClass=cls;
             cls.findChild(K.CONTENT).children.forEach(member=>{
                 if([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0)return;
