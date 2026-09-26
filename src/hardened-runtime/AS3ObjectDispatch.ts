@@ -309,13 +309,16 @@ function invokeSelectedObjectFunction(value:unknown,name:string,fn:unknown,args:
 
 /** Computed Object calls select the member after receiver/key evaluation but
  * before argument effects. Callability is checked only after arguments have
- * evaluated, matching AVM2's getproperty/call ordering.
+ * evaluated, matching AVM2's getproperty/call ordering. Source int/uint keys
+ * use the same String-hint property naming as Object reads.
  */
 export function as3PrepareObjectCall(value:unknown,key:unknown,caller:string|null=null):(args:unknown[])=>unknown {
-    if (typeof key !== "string")
-        return unavailable("Computed Object calls require an authenticated String key value");
-    const fn=as3ObjectRead(value,key,caller);
-    return args=>invokeSelectedObjectFunction(value,key,fn,args);
+    if (typeof key !== "string" && (typeof key !== "number" || !Number.isInteger(key)
+        || key < -2147483648 || key > 4294967295))
+        return unavailable("Computed Object calls require an authenticated String, int or uint key value");
+    const name=keyName(key);
+    const fn=as3ObjectRead(value,name,caller);
+    return args=>invokeSelectedObjectFunction(value,name,fn,args);
 }
 
 export function as3ObjectCall(value:unknown,key:unknown,args:unknown[],caller:string | null = null):unknown {

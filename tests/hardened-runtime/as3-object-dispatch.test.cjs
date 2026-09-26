@@ -245,6 +245,22 @@ test("computed String-key calls snapshot the selected source function before arg
  }
 });
 
+test("computed int/uint-key calls use Object names and snapshot functions before arguments",()=>{
+ const {as3SourceLambda}=require(path.join(out,"hardened-runtime/AS3Function.js"));
+ const events=[],first=as3SourceLambda(function(value){events.push("first");return value;});
+ const replacement=as3SourceLambda(function(value){events.push("replacement");return value;});
+ const target=as3ObjectLiteral([[-2147483648,first],[2,first],[4294967295,first]]);
+ for(const key of [-2147483648,2,4294967295]) {
+  const invoke=r.as3PrepareObjectCall(target,key);
+  events.push("selected");
+  target[String(key)]=replacement;
+  assert.equal(invoke(["value"]),"value");
+ }
+ assert.deepEqual(events,["selected","first","selected","first","selected","first"]);
+ for(const key of [2.5,-2147483649,4294967296,{}])
+  assert.throws(()=>r.as3PrepareObjectCall(target,key),{name:"AS3ObjectDispatchUnavailable"});
+});
+
 test("Function slots preserve native identity, null normalization and rejected-store behavior",()=>{
  const {as3FunctionSlot}=require(path.join(out,"hardened-runtime/AS3Function.js"));
  const dir=path.join(process.env.HARDENED_FIXTURE_LAYA,"tests/nativeFlashOracle/function-slot");

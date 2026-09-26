@@ -5069,8 +5069,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 if (args.length > 2) fail("HARDENED_STRING_ARITY", "Dynamic slice requires zero, one or two arguments", node);
             } else if (callee.index.kind !== "literal" || typeof callee.index.value !== "string") {
                 const keyType=assignmentType(callee.index,context,rawCallee);
-                if (keyType.sourceName !== "String" || keyType.emittedName !== "string")
-                    fail("HARDENED_OBJECT_CALL_TARGET", "computed dynamic calls require an authenticated String key", node);
+                const stringKey=keyType.sourceName==="String"&&keyType.emittedName==="string";
+                const integralKey=["int","uint"].includes(keyType.sourceName)&&keyType.emittedName==="number";
+                if ((!stringKey&&!integralKey)||keyType.typeArguments.length!==0)
+                    fail("HARDENED_OBJECT_CALL_TARGET", "computed dynamic calls require an authenticated String, int or uint key", node);
                 operation="preparedCall";
             }
             if (args.some(argument=>assignmentType(argument,context,node).sourceName === "void"))
