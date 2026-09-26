@@ -50,6 +50,43 @@ test('local pre-super virtual receiver matches the two-run AIR oracle in Chromiu
   const generated=fs.readFileSync(path.join(output,'__as3_runtime/application/Base.ts'),'utf8');
   assert.match(generated,/protected declare value: number/);
 
+  const localSource=path.join(dir,'local-source'),localProfile=path.join(dir,'local-profile');
+  const localOutput=path.join(dir,'local-output');
+  fs.mkdirSync(localSource);
+  for(const name of ['Application','Root','Base','Log'])
+   fs.copyFileSync(path.join(source,name+'.as'),path.join(localSource,name+'.as'));
+  const childSource=fs.readFileSync(path.join(source,'Child.as'),'utf8');
+  assert.ok(childSource.includes('value = v + 1;'));
+  assert.ok(childSource.includes('Log.rows.push("child-after:" + value);'));
+  fs.writeFileSync(path.join(localSource,'Child.as'),childSource
+   .replace('value = v + 1;', 'var localBefore:int = v + 12;\n   value = v + 1;')
+   .replace('Log.rows.push("child-after:" + value);',
+    'Log.rows.push("child-after:" + value);\n   Log.rows.push("local-after:" + localBefore);'));
+  run('python3',['-B','tools/create-fixture-profile.py','--source',localSource,'--entry','Application',
+   '--air-sdk',air,'--laya',laya,'--ffdec-jar',ffdec,'--output',localProfile]);
+  run(process.execPath,['bin/as3-frontend','transpile',localSource,localOutput,'--source-census',
+   path.join(localProfile,'census.json'),'--target-capabilities',
+   path.join(laya,'docTool/architecture/authored-content-capabilities.json'),
+   '--profile-lock',path.join(localProfile,'profile-lock.json')]);
+  const localRows=JSON.parse(fs.readFileSync(path.join(localOutput,'manifest.json'),'utf8')).files;
+  assert.ok(localRows.every(row=>row.typescriptSha256),JSON.stringify(localRows));
+  const constSource=path.join(dir,'const-source'),constProfile=path.join(dir,'const-profile');
+  fs.mkdirSync(constSource);
+  for(const name of ['Application','Root','Base','Child','Log'])
+   fs.copyFileSync(path.join(localSource,name+'.as'),path.join(constSource,name+'.as'));
+  fs.writeFileSync(path.join(constSource,'Child.as'),
+   fs.readFileSync(path.join(localSource,'Child.as'),'utf8')
+    .replace('var localBefore:int =', 'const localBefore:int ='));
+  run('python3',['-B','tools/create-fixture-profile.py','--source',constSource,'--entry','Application',
+   '--air-sdk',air,'--laya',laya,'--ffdec-jar',ffdec,'--output',constProfile]);
+  const constOutput=path.join(dir,'const-output');
+  run(process.execPath,['bin/as3-frontend','qualify',constSource,constOutput,'--source-census',
+   path.join(constProfile,'census.json'),'--target-capabilities',
+   path.join(laya,'docTool/architecture/authored-content-capabilities.json'),
+   '--profile-lock',path.join(constProfile,'profile-lock.json')]);
+  const constRows=JSON.parse(fs.readFileSync(path.join(constOutput,'manifest.json'),'utf8')).files;
+  assert.equal(constRows.find(row=>row.sourcePath==='Child.as').code,'HARDENED_SUPER_LOCAL_RECEIVER');
+
   const layaSource=path.join(laya,'src/layaAir');
   const runtime=path.join(output,'__as3_runtime');
   const bootstrap=['laya/ModuleDef','laya/ui/ModuleDef','laya/platform/BrowserAdapter',
@@ -79,6 +116,11 @@ globalThis.completion=Laya.init(800,600).then(()=>{
    bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',
    loader:{'.glsl':'text','.fs':'text','.vs':'text','.wgsl':'text'},
    alias:{'laya/flash':path.join(layaSource,'flash')}});
+  const localEntry=entry.replaceAll(runtime,path.join(localOutput,'__as3_runtime'));
+  const localBuilt=await esbuild.build({stdin:{contents:localEntry,resolveDir:root,loader:'js'},
+   bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',
+   loader:{'.glsl':'text','.fs':'text','.vs':'text','.wgsl':'text'},
+   alias:{'laya/flash':path.join(layaSource,'flash')}});
   const {chromium}=require(playwright);
   const browser=await chromium.launch({headless:true,args:['--enable-webgl','--use-gl=swiftshader']});
   try{
@@ -91,5 +133,16 @@ globalThis.completion=Laya.init(800,600).then(()=>{
    await page.evaluate(()=>globalThis.completion);
    assert.deepEqual(await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.observedRows))),evidence.rows);
    assert.equal(await page.evaluate(()=>globalThis.tamperRejected),true);
+   const localPage=await browser.newPage();
+   await localPage.route('http://pre-super-local-var.test/**',route=>route.request().url().endsWith('/bundle.js')
+    ? route.fulfill({contentType:'text/javascript',body:localBuilt.outputFiles[0].text})
+    : route.fulfill({contentType:'text/html',body:'<!doctype html><body><script src="/bundle.js"></script>'}));
+   await localPage.goto('http://pre-super-local-var.test/');
+   await localPage.evaluate(()=>globalThis.completion);
+   const expectedWithLocals=evidence.rows.flatMap(row=>row.startsWith('child-after:')
+    ? [row,'local-after:'+(Number(row.slice('child-after:'.length))+12)] : [row]);
+   assert.deepEqual(await localPage.evaluate(()=>JSON.parse(JSON.stringify(globalThis.observedRows))),
+    expectedWithLocals);
+   assert.equal(await localPage.evaluate(()=>globalThis.tamperRejected),true);
   }finally{await browser.close();}
  });

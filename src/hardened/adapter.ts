@@ -7650,9 +7650,15 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                         || fields.some(field=>field.embeddedBitmap || !onlyOwnPreSuperFields(field.initializer,placeholder)))
                         fail("HARDENED_SUPER_FIELD_RECEIVER", "native pre-super code may use own field slots but cannot expose this or call receiver methods/accessors",node);
                 } else if (leading.some(usesConstructionReceiver) || argumentReceiver) {
+                    // AS3 var declarations remain function-scoped through the
+                    // generated pre-super try block. Const is block-scoped, and
+                    // a local initializer must not capture the temporary receiver.
+                    const unsafeLocal = leading.some(statement => statement.kind === "local"
+                        && statement.declarations.some(local => local.readonly
+                            || usesConstructionReceiver(local.initializer)));
                     if (placeholder.sourceMemberAuthority === null || placeholder.baseLocalQName === null
-                        || leading.some(statement => statement.kind === "local"))
-                        fail("HARDENED_SUPER_LOCAL_RECEIVER", "pre-super local receiver needs an authenticated source base and an expression-only leading sequence", node);
+                        || unsafeLocal)
+                        fail("HARDENED_SUPER_LOCAL_RECEIVER", "pre-super local receiver needs an authenticated source base and receiver-free function-scoped locals", node);
                 }
                 if (extendsType === null && count === 1) body = body.filter(statement => !superCall(statement));
                 const constructor: SemanticConstructor = Object.assign(identity(node), {
