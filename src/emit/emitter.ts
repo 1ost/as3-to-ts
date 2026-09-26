@@ -420,6 +420,8 @@ export default class Emitter {
             this.generated = new NativeGeneratedEmission(this.source,this.options.nativeGeneratedDeclarations,
                 this.options.nativeClassTraitsModule,this.options.nativeClassHelperModules,
                 this.options.nativeLexicalMembersModule,this.options.nativeGeneratedPropertyModule,this.options.nativeTypedLocals === true);
+            if (this.generated.options.plan.privateBindings.length)
+                throw new Error('AS3_GENERATED_EMISSION_UNSUPPORTED: file-private Class emission requires source-unit implementation');
             if(this.generated.projection.metadata.isDynamic) {
                 generatedModule(this.options.nativeDynamicPropertyReadsModule);
                 generatedModule(this.options.nativeDynamicPropertyWritesModule);

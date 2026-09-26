@@ -13,7 +13,7 @@ function initializerEnd(node: Node): number {
     return node.children.reduce((end, child) => Math.max(end, initializerEnd(child)), Math.max(node.start, node.end));
 }
 
-export interface NativeGeneratedEmissionOptions {plan: NativeGeneratedDeclarationPlan; module: string;}
+export interface NativeGeneratedEmissionOptions {plan: NativeGeneratedDeclarationPlan; module: string; declarationIdentity?: string;}
 export interface NativeClassHelperModules {nativeClass: string; callableClass: string;}
 export function generatedModule(value: string): string {
     if (typeof value !== 'string' || !value.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(value))
@@ -34,23 +34,23 @@ export class NativeGeneratedEmission {
         readonly registrar: string, readonly helpers: NativeClassHelperModules,
         readonly lexicalModule: string, readonly propertyModule: string, typedLocals = false) {
         const fail = (reason: string): never => {throw new Error('AS3_GENERATED_EMISSION_UNSUPPORTED: ' + reason);};
-        if (!options || Object.keys(options).some(key => key !== 'plan' && key !== 'module')) fail('exact plan/module configuration required');
+        if (!options || Object.keys(options).some(key => key !== 'plan' && key !== 'module' && key !== 'declarationIdentity')) fail('exact plan/module configuration required');
         generatedModule(options.module); generatedModule(registrar);
         if (!helpers || Object.keys(helpers).some(key => key !== 'nativeClass' && key !== 'callableClass')) fail('explicit native class helpers required');
         generatedModule(helpers.nativeClass); generatedModule(helpers.callableClass);
         generatedModule(lexicalModule); generatedModule(propertyModule);
         const input = nativeGeneratedDeclarationInputs(options.plan, options.plan && options.plan.scope);
-        if (options.plan.privateBindings.length) fail('file-private Class emission requires source-unit implementation');
         const owners = Object.keys(input.sources).filter(name => input.sources[name].source === source);
         if (owners.length !== 1) fail('exact current source bytes required');
-        this.projection = new NativeGeneratedClassTraits(options.plan,input.scope,owners[0],source);
+        const selected=options.declarationIdentity===undefined?owners[0]:options.declarationIdentity;
+        this.projection = new NativeGeneratedClassTraits(options.plan,input.scope,selected,source);
         let ancestor=this.projection.binding;
         while(ancestor.base) {
             const native=options.plan.nativeBindings.find(binding=>binding.qname===ancestor.base&&!!binding.nativeBaseExport);
             if(native){this.nativeBase=native;break;}
             ancestor=nativeGeneratedClassDeclaration(options.plan,ancestor.base);
         }
-        this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source,typedLocals);
+        this.lexical = new NativeGeneratedLexical(options.plan,selected,source,typedLocals);
         this.uintOrInitializers=nativeUintOrConstants(this.lexical.ownClass,source);
         if(this.projection.binding.scriptGlobalExport) {
             // Only explicit Class-script units use the AIR-qualified provider
@@ -102,6 +102,10 @@ export class NativeGeneratedEmission {
         options.plan.bindings.forEach(binding => {
             this.sources[binding.qname] = input.sources[binding.qname].source;
             this.classes[binding.qname] = 'lazy';
+        });
+        options.plan.privateBindings.forEach(binding => {
+            this.sources[binding.identity] = input.sources[binding.declaration.sourceOwner].source;
+            this.classes[binding.identity] = 'lazy';
         });
         options.plan.nativeBindings.forEach(binding => this.classes[binding.qname] = 'ready');
         Object.freeze(this.sources); Object.freeze(this.classes); Object.freeze(this.deferredConstants); Object.freeze(this);
