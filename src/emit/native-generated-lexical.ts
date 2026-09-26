@@ -428,6 +428,18 @@ export class NativeGeneratedLexical {
                     if(!emitter.options.nativeByteArrayReferenceModule)fail('native ByteArray method requires exact provider');
                     return {trait:null,receiver,nativeMethod:name};
                 }
+                if(lexicalName&&identities.length===1&&identities[0]==='flash.display.Sprite'
+                    &&references.every(r=>r.kind==='native')&&['startDrag','stopDrag'].indexOf(name)>=0) {
+                    const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
+                    const sprite=input.providers&&input.providers['flash.display.Sprite'];
+                    if(!sprite||sprite.nativeBase!=='Sprite'||sprite.exportName!=='Sprite'
+                        ||!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan)
+                        fail('native Sprite drag method requires authenticated native base/reference plan');
+                    // A namesake in the caller cannot capture a typed Sprite's
+                    // public native method. Reuse source property dispatch so
+                    // arguments precede null failure and reads retain closures.
+                    return {trait:null,receiver,publicName:name,publicMethod:true};
+                }
                 if(inputPackageEnabled(this.plan)) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                     const knownClass=receiver.kind===K.IDENTIFIER&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type'))

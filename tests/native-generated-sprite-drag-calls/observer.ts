@@ -1,0 +1,46 @@
+import { Laya } from "@ENGINE@/src/layaAir/Laya";
+import "@ENGINE@/src/layaAir/laya/ModuleDef";
+import "@ENGINE@/src/layaAir/laya/platform/BrowserAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/FileSystemAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/FontAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/MediaAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/StorageAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/TextInputAdapter";
+import "@ENGINE@/src/layaAir/laya/device/WebDeviceAdapter";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/RenderModuleData/WebModuleData/WebUnitRenderModuleDataFactory";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/WebGLDriver/RenderDevice/WebGLRenderDeviceFactory";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/WebGLDriver/2DRenderPass/WebGLRender2DProcess";
+
+import {Sprite} from '@FLASH@/utils/AS3GeneratedSpriteConstruction';
+import {Rectangle} from '@FLASH@/geom/Rectangle';
+import {Stage} from '@FLASH@/display/Stage';
+import {as3CallValue, getAS3FunctionLength} from '@FLASH@/utils/AS3Invocation';
+import {as3CallProperty} from '@FLASH@/utils/AS3Property';
+import {NativeSourceClassModule,createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+export async function run(module:NativeSourceClassModule){
+ await Laya.init(160,120);const stage=Stage.fromNative(Laya.stage);
+ const session=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:2});
+ const loaded=await session.load('a',new ApplicationDomain(ApplicationDomain.currentDomain));
+ const Owner=loaded.getDefinition('dragcalls.Owner') as any,c=new Owner(),a=new Sprite(),b=new Sprite(),rows:any[]=[],checks:string[]=[];
+ stage.addChild(a);stage.addChild(b);c.bind(a);
+ const run=(id:string,fn:()=>unknown)=>{let error:any[]=[];try{fn();}catch(e:any){error=[e.name,e.errorID];}rows.push({id,value:[error,c.count()]});};
+ run('parameter',()=>{c.begin(a,true,new Rectangle(0,0,40,40));c.end(a);});
+ run('field',()=>{c.beginField(false,null);c.endField();});
+ const start=c.readStart(),stop=c.readStop();
+ rows.push({id:'closures',value:[start===a.startDrag,stop===a.stopDrag,start===c.readStart(),stop===c.readStop(),getAS3FunctionLength(start),getAS3FunctionLength(stop)]});
+ run('bound',()=>{as3CallProperty(start,'call',()=>[b,true,null]);as3CallProperty(stop,'call',()=>[b]);});
+ run('null-parameter',()=>c.begin(null,false,null));c.bind(null);
+ run('null-field',()=>c.beginField(true,null));
+ run('null-stop-parameter',()=>c.end(null));run('null-stop-field',()=>c.endField());run('null-read',()=>c.readStop());run('own',()=>c.own());
+ c.bind(b);rows.push({id:'rebind',value:[start===c.readStart(),stop===c.readStop(),c.readStop()===b.stopDrag]});
+ run('retained',()=>{as3CallValue(start,()=>[]);as3CallValue(stop,()=>[]);});
+ a.stopDrag();b.stopDrag();stage.removeChild(a);stage.removeChild(b);
+ const check=(id:string,pass:boolean)=>{if(!pass)throw Error(id);checks.push(id);};
+ const sibling=await session.load('b',new ApplicationDomain(ApplicationDomain.currentDomain));const Other=sibling.getDefinition('dragcalls.Owner') as any;
+ check('separate Classes',Other!==Owner);const d=new Other();d.bind(a);check('shared native closure',d.readStop()===stop);
+ let error:any;try{c.bind(Object.create(Sprite.prototype));}catch(e:any){error=[e.name,e.errorID];}check('forged native receiver rejected',JSON.stringify(error)===JSON.stringify(['TypeError',1034]));
+ session.retire();d.bind(a);check('retained source calls',d.readStop()===stop);
+ stage.addChild(a);c.bind(a);globalThis.dragProbe={begin:()=>c.beginField(true,null),end:()=>c.endField(),position:()=>[a.x,a.y]};
+ return {rows,checks};
+}
