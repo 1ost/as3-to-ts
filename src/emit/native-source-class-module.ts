@@ -46,6 +46,7 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
     }
     const plan = input.plan, planned = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
     if (plan.namespaces.length) fail('source namespace value publication requires qualification');
+    if (plan.privateInterfaces.length) fail('file-private interface source module publication requires qualification');
     if (!planned.inheritScriptClasses || !planned.scriptDomainProvider || !planned.scriptGlobalProviderModule
         || !(plan.bindings.length + plan.interfaces.length) || plan.bindings.some(b => !b.scriptGlobalExport)
         || Object.keys(planned.sources).length !== plan.bindings.length + plan.interfaces.length

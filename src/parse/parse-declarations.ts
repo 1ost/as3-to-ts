@@ -422,21 +422,24 @@ function parseInterface(parser:AS3Parser, meta:Node[], modifier:Token[]):Node {
         result.children.push(parser.currentMultiLineComment);
         parser.currentMultiLineComment = null;
     }
-    let name = parseQualifiedName(parser, true);
-    result.children.push(createNode(NodeKind.NAME, {start: parser.tok.index, text: name}));
+    let index = parser.tok.index,
+        name = parseQualifiedName(parser, true);
+    result.children.push(createNode(NodeKind.NAME, {start: index, text: name}));
 
     result.children.push(convertMeta(parser, meta));
     result.children.push(convertModifiers(parser, modifier));
 
     if (tokIs(parser, Keywords.EXTENDS)) {
         nextToken(parser); // extends
+        index = parser.tok.index;
         name = parseQualifiedName(parser, false);
-        result.children.push(createNode(NodeKind.EXTENDS, {start: parser.tok.index, text: name}));
+        result.children.push(createNode(NodeKind.EXTENDS, {start: index, text: name}));
     }
     while (tokIs(parser, Operators.COMMA)) {
         nextToken(parser); // comma
+        index = parser.tok.index;
         name = parseQualifiedName(parser, false);
-        result.children.push(createNode(NodeKind.EXTENDS, {start: parser.tok.index, text: name}));
+        result.children.push(createNode(NodeKind.EXTENDS, {start: index, text: name}));
     }
     consume(parser, Operators.LEFT_CURLY_BRACKET);
     result.children.push(parseInterfaceContent(parser));
@@ -444,7 +447,7 @@ function parseInterface(parser:AS3Parser, meta:Node[], modifier:Token[]):Node {
     result.end = tok.end;
     result.start = result.children.reduce((index:number, child:Node) => {
         return Math.min(index, child ? child.start : Infinity);
-    }, tok.index);
+    }, result.start);
     return result;
 }
 

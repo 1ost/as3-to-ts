@@ -27,3 +27,13 @@ Vector element sites retain their owning helper descriptor. Four guards reject
 forged scopes and unresolved import collisions. The same resolver now serves
 existing generated declaration and reference consumers; private identities remain
 held at emission until per-declaration binding and script publication are ready.
+
+## Interface source spans
+
+`node tests/native-source-unit/interfaces.cjs` authenticates the engine's
+`file-local-interfaces` packet and checks four interface declarations, 77 type
+references and four authority guards. Interface names and comma-separated bases
+must point to their original tokens, and unmodified declarations must include
+the opening `interface` keyword. The test fails on the prior parser, which
+recorded the following token's offset and reduced the declaration start to its
+body. This covers source identity and offsets, not runtime implementation.
