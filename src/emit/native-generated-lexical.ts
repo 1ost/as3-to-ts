@@ -394,6 +394,21 @@ export class NativeGeneratedLexical {
             if(!lexicalName&&!receiver)return null;
             let method=node;while(method.parent&&method.parent.kind!==K.CONTENT)method=method.parent;
             const staticContext=modifiers(method).indexOf('static')>=0;
+            if(receiver&&receiver.kind===K.IDENTIFIER&&receiver.text==='super'&&lexicalName) {
+                if(staticContext||method.kind!==K.FUNCTION||method.findChild(K.NAME).text===this.owner.split('.').pop())
+                    fail('protected super field requires ordinary instance method');
+                for(let enclosing=node.parent;enclosing&&enclosing!==method;enclosing=enclosing.parent)
+                    if(enclosing.kind===K.FUNCTION||enclosing.kind===K.LAMBDA)fail('nested protected super field access');
+                const trait=this.traits.find(t=>t.name===name&&t.owner!==this.owner&&!t.static&&t.visibility==='protected');
+                const ref=trait&&trait.type&&this.plan.references.find(r=>r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
+                if(!trait||trait.kind!=='variable'||!ref||ref.kind!=='intrinsic'||['Number','int','uint'].indexOf(ref.identity)<0)
+                    fail('protected super field requires inherited numeric variable');
+                // Use the original receiver with a capability resolved from the
+                // selected ancestor. Returning no explicit receiver also keeps
+                // super out of ordinary JS property/assignment evaluation.
+                return {trait:Object.assign({},trait,{access:this.provider+'.resolveAS3LexicalMember('
+                    +this.scope+','+JSON.stringify(name)+',"protected",false,true)'}),receiver:null};
+            }
             const binding=emitter.findDefInScope(receiver?receiver.text:name);
             if(!receiver&&binding&&!binding.bound)return null;
             let isStatic=false;
