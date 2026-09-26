@@ -14,9 +14,9 @@ and identical file bytes do not collapse separate declarations.
 Checks cover eight source class records, five selected declarations, private
 constructor parameters/field defaults, the exact child-to-helper base and a
 private self-reference constructor signature. Five guards reject forged source
-or plan inputs, mismatched current source and premature complete module emission.
-The public loading header remains unchanged. Direct emission remains explicitly
-gated until source-unit output and initialization can publish these implementations.
+or plan inputs, mismatched current source and incomplete module configuration.
+Helpers remain absent from public loading entries; internal script publishers
+connect their implementations to the source-unit factory.
 
 These are compiler construction-plan checks, not execution of private helper
 constructors or replay of all 24 Flash observations. Existing complete native

@@ -18,5 +18,5 @@ exact initialization configuration, and the unplanned consumer boundary. The
 ordinary reference-coercion and generated factory suites exercise the emitter's
 new declaration selection on already supported complete native modules.
 
-This qualifies compiler consumers, not private Class execution. Complete helper
-module output and shared source-unit initialization/loading remain gated.
+This test qualifies compiler consumers. The separate module fixture executes
+private Classes and shared source-unit initialization/loading.

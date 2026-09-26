@@ -13,8 +13,8 @@ Checks cover distinct same-named helpers, inherited fields, the child override,
 static separation, private return tokens, emitted declaration references and
 constant byte spans in complete files. Eight guards reject forged source/plan
 access, missing base expressions, final inheritance, mismatched method signatures
-and invalid overrides. Helpers never acquire a public QName or script publisher.
+and invalid overrides. Helpers never acquire a public QName or loading entry.
 
 This verifies compile-time traits. Header runtime tests live in
 `native-generated-private-declarations`; complete helper method/body emission,
-script initialization and loading remain gated and require all 24 Flash rows.
+script initialization and loading run in `native-generated-private-modules`.

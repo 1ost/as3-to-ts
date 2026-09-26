@@ -39,7 +39,7 @@ async function main(){
     nativeReferenceCoercion:{plan,module:'./unused',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')};
    const config={plan,target,emitterOptions:options,externalModules,loadingSessionModule:provider('NativeSourceClassLoadingSession')};
    assert.ok(plan.references.filter(r=>r.kind==='unresolved').every(r=>r.identity==='Error'));
-   
+
    let guards=0;const reject=(fn,re)=>{assert.throws(fn,re);guards++;};
    reject(()=>api.emitNativeSourceClassModule({...config,plan:{...plan}}),/exact planned/);
    if(cohort==='subject')reject(()=>api.emitNativeSourceClassModule({...config,emitterOptions:{...options,nativeEnumeration:undefined}}),/explicit common enumeration/);

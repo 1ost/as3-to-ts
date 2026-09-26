@@ -14,5 +14,6 @@ Five guards reject forged/cross-file source selection and absent namespace
 authority. First now passes typed-local planning including its inline iterator.
 
 The First class remains unchanged. Its inline iterator is covered by the
-separate complete native inline-typed-each fixture. Native source-unit class
-initialization/loading and complete private callable emission remain gated. This is lexical projection validation, not full native Flash replay.
+separate complete native inline-typed-each fixture. This test validates lexical
+projection; the module fixture separately executes private Classes and shared
+source-unit initialization/loading.
