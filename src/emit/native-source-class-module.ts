@@ -2,6 +2,7 @@ import * as ts from 'typescript';
 import parse = require('../parse');
 import {emit, EmitterOptions} from './emitter';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
+import {NativeTweenSourcePlans} from './native-tween-plans';
 
 export interface NativeSourceClassModuleInput {
     plan: NativeGeneratedDeclarationPlan;
@@ -10,6 +11,8 @@ export interface NativeSourceClassModuleInput {
     externalModules: ReadonlyArray<string>;
     loadingSessionModule: string;
     target: 'ES5' | 'ES2015';
+    /** Exact per-source call plans, never shared across unrelated module bodies. */
+    tweenSourcePlans?:{[qname:string]:NativeTweenSourcePlans};
     /** Retained source movie header, supplied by the build's authenticated input. */
     sourceMovie?: {readonly width:number; readonly height:number; readonly sourceSha256:string};
 }
@@ -67,9 +70,17 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
     plan.bindings.forEach((b, i) => {imports[b.qname] = classModules[i];});
     plan.interfaces.forEach((b, i) => {imports[b.qname] = interfaceModules[i];});
     const generated = [{module: declarations, source: plan.moduleSource}];
+    if(input.tweenSourcePlans){
+        if(options.nativeTweenSourcePlans)fail('per-source and global tween plans conflict');
+        Object.keys(input.tweenSourcePlans).forEach(q=>{
+            if(!plan.bindings.some(b=>b.qname===q)||!input.tweenSourcePlans[q]
+                ||input.tweenSourcePlans[q].source!==planned.sources[q].source)fail('tween plan source not in class cohort');
+        });
+    }
     plan.bindings.forEach((binding, i) => {
         const source = planned.sources[binding.qname].source;
         const opts = {...options, customVisitors: [], importModules: imports,
+            ...(input.tweenSourcePlans?{nativeTweenSourcePlans:input.tweenSourcePlans[binding.qname]}:{}),
             nativeGeneratedDeclarations: {plan, module: declarations},
             nativeReferenceCoercion: {...options.nativeReferenceCoercion, plan, module: declarations}} as EmitterOptions;
         generated.push({module: classModules[i], source: emit(parse(binding.qname + '.as', source), source, opts)});

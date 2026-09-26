@@ -33,7 +33,6 @@ const tweenOptions = {
     importModules: { 'migration.FlashTweenRuntime': './FlashTweenRuntime' },
     nativeReflectionQueryModule: undefined,
     nativeTweenModule: './FlashTweenRuntime',
-    nativeTweenSourcePlans: { source: 'fixture', calls: [{ start: 0, end: 1 }] },
 };
 const tweenSource = `package probe {
  public class TweenMigration {

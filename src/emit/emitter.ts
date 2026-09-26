@@ -1,4 +1,5 @@
 import {intrinsicStringAs} from './native-string-casts';
+import {NativeTweenPlans,NativeTweenSourcePlans,tweenOptionNames} from './native-tween-plans';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {emitNativeXML, xmlGlobalProviderModule} from './native-xml';
 import {NativeClassMetadataOptions} from './native-class-metadata';
@@ -210,7 +211,7 @@ export interface EmitterOptions {
 	/** Authenticated modern GSAP migration runtime module. */
 	nativeTweenModule?:string;
 	/** Source-authenticated tween call spans for migration-specific plans. */
-	nativeTweenSourcePlans?:{source:string; calls:ReadonlyArray<{start:number; end:number; callSha256?:string}>};
+	nativeTweenSourcePlans?:NativeTweenSourcePlans;
 	/** Complete source-backed class ancestry for scoped multi-file emission. */
 	nativeSourceAncestry?: NativeSourceAncestryPlan;
 }
@@ -338,6 +339,7 @@ function filterAST(node:Node):Node {
 
 
 export default class Emitter {
+    tweenPlans:NativeTweenPlans;
     sourcePackage: string = '';
     generated: NativeGeneratedEmission;
     generatedReceiverTraits = new Map<string,NativeGeneratedClassTraits>();
@@ -713,6 +715,7 @@ export default class Emitter {
 			if (this.options.nativeDictionaryPropertyModule === undefined)
 				throw new Error('AS3_ENUMERATION_UNSUPPORTED: Dictionary property provider required for values');
 		}
+		this.tweenPlans=new NativeTweenPlans(this.source,ast,this.options.nativeTweenSourcePlans,this.options.nativeTweenModule);
 		if (this.options.nativeTweenModule !== undefined) {
 			const module = this.options.nativeTweenModule;
 			if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
@@ -720,14 +723,6 @@ export default class Emitter {
 			if (this.options.importModules && this.options.importModules['migration.FlashTweenRuntime']
 				&& this.options.importModules['migration.FlashTweenRuntime'] !== module)
 				throw new Error('AS3_TWEEN_UNSUPPORTED: FlashTweenRuntime import binding disagrees with nativeTweenModule');
-			if (this.options.nativeTweenSourcePlans !== undefined) {
-				const plan = this.options.nativeTweenSourcePlans;
-				if (!plan || typeof plan.source !== 'string' || !Array.isArray(plan.calls))
-					throw new Error('AS3_TWEEN_UNSUPPORTED: invalid authenticated source plan');
-				for (const call of plan.calls)
-					if (!call || !Number.isSafeInteger(call.start) || !Number.isSafeInteger(call.end) || call.start < 0 || call.end <= call.start)
-						throw new Error('AS3_TWEEN_UNSUPPORTED: invalid authenticated call span');
-			}
 		}
         if (this.options.nativeRelationalModule !== undefined) {
             const module = this.options.nativeRelationalModule;
@@ -4354,6 +4349,10 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 	const query = receiver.text === 'TweenMax' && name.text === 'getTweensOf';
 	if (name.text !== 'to' && !query) return false;
 	const binding = emitter.findDefInScope(receiver.text);
+	const sourcePlan=emitter.tweenPlans.get(node);
+	if(sourcePlan&&(!binding||binding.bound||Object.prototype.hasOwnProperty.call(binding,'as3Type')
+		||binding.sourceImport!=='com.greensock.TweenMax'||emitter.isNew))
+		throw new Error('AS3_TWEEN_UNSUPPORTED: planned call requires exact imported TweenMax ownership');
 	if (binding && (binding.bound || Object.prototype.hasOwnProperty.call(binding, 'as3Type')
 		|| binding.sourceImport !== 'com.greensock.' + receiver.text)) return false;
 	// Query authority comes from the exact legacy import. Unlike the older to()
@@ -4364,6 +4363,8 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 		throw new Error('AS3_TWEEN_UNSUPPORTED: tween query construction is not qualified');
 	if (query && args.children.length !== 1)
 		throw new Error('AS3_TWEEN_UNSUPPORTED: getTweensOf requires exactly one target argument');
+	if(name.text==='to'&&args.children.length===3&&tweenOptionNames(args.children[2]).indexOf('bezier')>=0&&!sourcePlan)
+		throw new Error('AS3_TWEEN_UNSUPPORTED: Bezier call requires authenticated source plan');
 	let helper = '__as3_FlashTweenRuntime';
 	while (emitter.source.indexOf(helper) >= 0) helper += '_';
 	emitter.ensureImportIdentifier('FlashTweenRuntime as ' + helper, module, false);
@@ -4373,7 +4374,16 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 	emitter.insert(helper + '.current().' + method + '(');
 	if (args.children.length) {
 		emitter.skipTo(args.children[0].start);
-		visitNodes(emitter, args.children);
+		if(sourcePlan){
+			args.children.forEach((arg,index)=>{
+				if(index===2){
+					emitter.catchup(arg.start);
+					emitter.insert('(function(__vars:any){__vars.sourcePlan='+JSON.stringify({kind:'TweenMax',initialization:sourcePlan})+';return __vars;})(');
+				}
+				visitNode(emitter,arg);emitter.catchup(arg.end);
+				if(index===2)emitter.insert(')');
+			});
+		}else visitNodes(emitter, args.children);
 		const close = args.end > args.start && emitter.source.charAt(args.end - 1) === ')' ? args.end - 1 : args.end;
 		emitter.catchup(close);
 	} else {
