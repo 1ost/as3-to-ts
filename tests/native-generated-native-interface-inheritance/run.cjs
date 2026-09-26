@@ -58,7 +58,7 @@ async function main(){
    fs.writeFileSync(path.join(dir,cohort+'-factory.js'),artifact.moduleSource);
    const declaration=path.join(dir,cohort+'-factory.d.ts');fs.writeFileSync(declaration,artifact.declarationSource);files.push(declaration);
    files.push(...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f)));
-   const program=ts.createProgram(files,{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
+   const program=ts.createProgram(files,{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,types:[],lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
    const diagnostics=ts.getPreEmitDiagnostics(program).map(d=>({file:d.file?.fileName,code:d.code,text:ts.flattenDiagnosticMessageText(d.messageText,'\n')}));
    fs.writeFileSync(path.join(dir,cohort+'-types.json'),JSON.stringify(diagnostics,null,2));assert.deepEqual(diagnostics,[]);
    typechecks.push({cohort,diagnostics,inputs:program.getSourceFiles().map(f=>({file:f.fileName,sha256:hash(fs.readFileSync(f.fileName))}))});
@@ -74,9 +74,9 @@ async function main(){
   const page=await browser.newPage();await page.route('http://loaded-generated.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script></body>'}));
   await page.goto('http://loaded-generated.test/');await page.evaluate(()=>globalThis.completion);const web=await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.result)));await page.close();assert.deepEqual(web,node);
   const factoryFile=path.join(dir,'parent/parent-factory.js'),originalFactory=fs.readFileSync(factoryFile,'utf8');
-  const mutation=originalFactory.replace(/(defineAS3Interface(?:<[^>]+>)?\("nativecontract::IParser",\s*)\[[^\]]+\]/,'$1[]');assert.notEqual(mutation,originalFactory);
+  const mutation=originalFactory.replace(/(defineAS3Interface(?:<[^>]+>)?\)?\("nativecontract::IParser",\s*)\[[^\]]+\]/,'$1[]');assert.notEqual(mutation,originalFactory);
   try{fs.writeFileSync(factoryFile,mutation);const changed=await build(),actual=await execute(changed.outputFiles[0].text);assert.notDeepEqual(actual.rows,expected);}finally{fs.writeFileSync(factoryFile,originalFactory);}
-  const hostGetter=originalFactory.replace(/[A-Za-z_$][\w$]*\.as3GetProperty\(value, "key"\)/g,'value.key');assert.notEqual(hostGetter,originalFactory);
+  const hostGetter=originalFactory.replace(/(?:[A-Za-z_$][\w$]*\.as3GetProperty|\(0,\s*[A-Za-z_$][\w$]*\.as3GetProperty\))\(value, "key"\)/g,'value.key');assert.notEqual(hostGetter,originalFactory);
   try{fs.writeFileSync(factoryFile,hostGetter);const changed=await build();await assert.rejects(()=>execute(changed.outputFiles[0].text),/Unsupported source property representation/);}finally{fs.writeFileSync(factoryFile,originalFactory);}
   results.push({target,node,web,typechecks,artifacts,rejectionGuards,mutations:2,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
   console.log(JSON.stringify({target,observations:node.rows.length,typeErrors:0,rejectionGuards,domainChecks:node.domainChecks.length,mutations:2}));
