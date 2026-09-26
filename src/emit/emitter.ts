@@ -1191,6 +1191,15 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 	split.pop();
 	let ns = split.join(".");*/
 	ClassList.addImportToLast(node.text.concat());
+	// This explicit migration routes calls to the runtime, not a replacement
+	// TweenMax Class. Preserve the import's identity for shadowing checks.
+	if (emitter.options.nativeTweenModule !== undefined
+		&& (node.text === 'com.greensock.TweenMax' || node.text === 'com.greensock.TweenLite')) {
+		if (!inline) emitter.catchup(node.start);
+		emitter.declareInScope({name: importedName, sourceImport: node.text});
+		if (!inline) emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+		return;
+	}
 
 	// emit one import statement for each definition found in that namespace
 	if (node.text.indexOf("*") !== -1) {
@@ -1483,7 +1492,7 @@ function getFunctionDeclarations(emitter:Emitter, node:Node):Declaration[] {
 				};
 			}
 			let rest = param.findChild(NodeKind.REST);
-			return {name: rest.text};
+			return {name: rest.text, as3Type: 'Array'};
 		});
 	}
 	let block = node.findChild(NodeKind.BLOCK);
@@ -1597,7 +1606,7 @@ function emitForIn(emitter:Emitter, node:Node):void {
   const target=node.children[0].children[0],receiver=node.children[1].children[0],body=node.children[2];
   const binding=target&&target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
   if(!binding||binding.bound||['*','String','Object'].indexOf(binding.as3Type)<0)throw new Error('AS3_ENUMERATION_UNSUPPORTED: generated for-in requires a declared wildcard, String or Object target');
-  for(let scope=node.parent;scope&&scope.kind!==NodeKind.FUNCTION&&scope.kind!==NodeKind.LAMBDA;scope=scope.parent)
+  for(let scope=node.parent;scope&&[NodeKind.FUNCTION,NodeKind.LAMBDA,NodeKind.GET,NodeKind.SET].indexOf(scope.kind)<0;scope=scope.parent)
    if(scope.kind===NodeKind.CATCH&&scope.findChild(NodeKind.NAME).text===target.text)throw new Error('AS3_ENUMERATION_UNSUPPORTED: catch-shadow loop target held');
   if(!emitter.options.nativeEnumeration)throw new Error('AS3_ENUMERATION_UNSUPPORTED: explicit common enumeration providers required');
   const helper=dictionaryEnumerationHelper(emitter,'as3EnumerableKeys');
@@ -3480,11 +3489,35 @@ function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(']))');emitter.skipTo(node.end);return true;
 }
 
+/** Recognize declared method values without granting Function authority to an
+ * arbitrary property or a shadowed class/method spelling. Normal member emission
+ * still selects the authenticated class or lexical method closure. */
+function generatedMethodValue(emitter:Emitter,node:Node):boolean {
+    const generated=emitter.generated;if(!generated||!node)return false;
+    const method=(traits:ReadonlyArray<{name:string;kind:string}>,name:string)=>traits.some(t=>t.name===name&&t.kind==='method');
+    if(node.kind===NodeKind.IDENTIFIER){
+        if(hasFunctionLocal(emitter,node.text))return false;
+        return method(generated.lexical.traits,node.text)||method(generated.projection.instanceTraits,node.text)||method(generated.projection.staticTraits,node.text);
+    }
+    if(node.kind!==NodeKind.DOT||node.children.length!==2||node.children[1].kind!==NodeKind.LITERAL)return false;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),name=node.children[1].text;
+    if(!receiver||receiver.kind!==NodeKind.IDENTIFIER)return false;
+    const projection=generatedReceiver(emitter,receiver);
+    if(projection)return method(projection.instanceTraits,name)||receiver.text==='this'&&generated.lexical.traits.some(t=>!t.static&&t.kind==='method'&&t.name===name);
+    const definition=emitter.findDefInScope(receiver.text);
+    if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))return false;
+    const qname=generated.lexical.resolveTypeName(receiver.text),plan=generated.options.plan;
+    if(!plan.bindings.some(b=>b.qname===qname)||!generated.sources[qname])return false;
+    let traits=emitter.generatedReceiverTraits.get(qname);
+    if(!traits){traits=new NativeGeneratedClassTraits(plan,plan.scope,qname,generated.sources[qname]);emitter.generatedReceiverTraits.set(qname,traits);}
+    return method(traits.staticTraits,name)||qname===generated.lexical.owner&&generated.lexical.traits.some(t=>t.static&&t.kind==='method'&&t.name===name);
+}
+
 function emitLocalFunctionIntrinsic(emitter:Emitter,node:Node):boolean {
     const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
     if(!emitter.generated||!emitter.typedLocalPlan||!callee||callee.kind!==NodeKind.DOT||!args)return false;
     const receiver=unwrapEncapsulatedExpression(callee.children[0]),member=callee.children[1];
-    if(!member||['call','apply'].indexOf(member.text)<0||!emitter.typedLocalPlan.functionLocal(receiver,emitter))return false;
+    if(!member||['call','apply'].indexOf(member.text)<0||!emitter.typedLocalPlan.functionLocal(receiver,emitter)&&!generatedMethodValue(emitter,receiver))return false;
     if(emitter.isNew)throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: Function intrinsic construction');
     // Capture the Function before argument effects; resolve its intrinsic only
     // afterwards, preserving AIR null errors and declaration-global receivers.
@@ -3541,7 +3574,7 @@ function emitCall(emitter:Emitter, node:Node):void {
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
     if (emitJSONParse(emitter,node)) return;
-	if (emitStringReplace(emitter, node)) return;
+	if (emitStringPatternCall(emitter, node)) return;
 	if (emitReflectionQuery(emitter, node)) return;
 	if (emitReflectionXML(emitter, node)) return;
 	if (emitDirectToString(emitter, node)) return;
@@ -3789,20 +3822,23 @@ function nativePatternModule(emitter:Emitter):string {
     return generatedModule(module);
 }
 
-function emitStringReplace(emitter:Emitter, node:Node):boolean {
+function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
     const module = emitter.options.nativeStringIntrinsicsModule;
     if (module === undefined || emitter.isNew) return false;
     const callee = node.children[0];
-    if (!callee || callee.kind !== NodeKind.DOT || ['replace','match'].indexOf(callee.children[1].text)<0) return false;
-    const method=callee.children[1].text, replacing=method==='replace';
+    if (!callee || callee.kind !== NodeKind.DOT || ['replace','match','split'].indexOf(callee.children[1].text)<0) return false;
+    const method=callee.children[1].text, replacing=method==='replace', splitting=method==='split';
+    const args = node.findChild(NodeKind.ARGUMENTS);
+    // Ordinary String delimiters retain their separate dispatch path. This
+    // source-pattern provider admits literal RegExp delimiters without limits.
+    if(splitting&&(!args||!args.children[0]||args.children[0].kind!==NodeKind.LITERAL||!/^\/[\s\S]+\/[a-z]*$/.test(args.children[0].text)))return false;
     const receiver = unwrapEncapsulatedExpression(callee.children[0]);
     if (receiver.kind !== NodeKind.IDENTIFIER) return false;
     const binding = emitter.findDefInScope(receiver.text);
     if (!binding || binding.bound || binding.as3Type !== 'String') return false;
     if (!emitter.references || emitter.references.resolve('String') !== 'String')
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
-    generatedModule(module);
-    const args = node.findChild(NodeKind.ARGUMENTS);
+    if(splitting)nativePatternModule(emitter);else generatedModule(module);
     if (!args || args.children.length !== (replacing?2:1))
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: '+method+' requires exactly '+(replacing?'two':'one')+' authored arguments');
     // The legacy regex token end excludes flags; its exact text includes them.
@@ -3825,7 +3861,7 @@ function emitStringReplace(emitter:Emitter, node:Node):boolean {
         match = pattern.kind === NodeKind.LITERAL && /^\/([\s\S]+)\/([a-z]*)$/.exec(raw);
         if (!match) throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: replace pattern requires a qualified literal');
     }
-    const replace = propertyHelper(emitter,replacing?'sourceStringReplace':'sourceStringMatch',module);
+    const replace = propertyHelper(emitter,replacing?'sourceStringReplace':splitting?'sourceStringSplit':'sourceStringMatch',module);
     const compile = propertyHelper(emitter,construction?'constructSourceStringReplacePattern':'compileSourceStringPattern',module);
     emitter.catchup(node.start); emitter.insert(replace + '(');
     emitter.skipTo(callee.children[0].start); visitNode(emitter,callee.children[0]);
@@ -4027,6 +4063,14 @@ function objectPropertyAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!root||!key||node.kind===NodeKind.DOT&&key.kind!==NodeKind.LITERAL)return null;
     if(root.kind===NodeKind.IDENTIFIER){
         const definition=emitter.findDefInScope(root.text);
+        // Event exposes these getters as AS3 Object, even though the shared
+        // native API deliberately returns unknown. Preserve source dispatch on
+        // their values without granting arbitrary native properties that type.
+        if(emitter.generated&&definition&&!definition.bound&&definition.as3Type
+            &&node.kind===NodeKind.DOT&&['target','currentTarget'].indexOf(key.text)>=0
+            &&emitter.generated.lexical.resolveTypeName(definition.as3Type)==='flash.events.Event'
+            &&emitter.generated.options.plan.nativeBindings.some(b=>b.qname==='flash.events.Event'&&!!b.nativeBaseExport))
+            return {receiver,key,literalKey:key.text};
         if(!definition||definition.bound||['Object','*'].indexOf(definition.as3Type)<0
             ||definition.as3Type==='Object'&&(emitter.references.sourceClass('Object')||emitter.references.sourceInterface('Object')))return null;
     }else if(root.kind===NodeKind.CALL&&root.children[0]
@@ -4150,15 +4194,17 @@ function emitDynamicPropertyAddition(emitter:Emitter, target:Node, value:Node):b
     const dictionary=dictionaryAccess(emitter,target);
     const access=dictionary||dynamicWriteAccess(emitter,target);
     if(!access)return false;
-    if(access.lexical||access.literalKey!==undefined)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: lexical/dot compound assignment held');
-    const helper=propertyHelper(emitter,'as3AddAssignProperty',dictionary
+    if(access.ownStatic||!access.lexical&&access.literalKey!==undefined)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: own-static/nonlexical dot compound assignment held');
+    const helper=dynamicHelper(emitter,access,'AddAssign',dictionary
         ? emitter.options.nativeDictionaryPropertyModule : emitter.options.nativeDynamicPropertyWritesModule);
     emitter.catchup(target.parent.start);emitter.insert('(<any>'+helper+'(');
+    if(access.lexical)emitter.insert(emitter.generated.lexical.scope+', ');
     const start=emitter.output.length;
     visitNode(emitter,access.receiver);emitter.catchup(access.receiver.end);
     const receiver=emitter.output.slice(start);
     emitter.insert(', ');emitter.skipTo(access.key.start);
-    visitNode(emitter,access.key);emitter.catchup(access.key.end);
+    if(access.literalKey!==undefined){emitter.insert(JSON.stringify(access.literalKey));emitter.skipTo(access.key.end);}
+    else {visitNode(emitter,access.key);emitter.catchup(access.key.end);}
     emitter.insert(', () => (');emitter.skipTo(getExpressionStart(value));
     visitNode(emitter,value);emitter.catchup(getEffectiveNodeEnd(value));
     emitter.insert('), () => '+receiver+'))');emitter.skipTo(getEffectiveNodeEnd(target.parent));
@@ -4275,7 +4321,10 @@ function emitTweenTo(emitter:Emitter, node:Node):boolean {
 	if (!callee || callee.kind !== NodeKind.DOT || callee.children.length !== 2 || !args) return false;
 	const receiver = callee.children[0], name = callee.children[1];
 	if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || (receiver.text !== 'TweenMax' && receiver.text !== 'TweenLite')
-		|| emitter.findDefInScope(receiver.text) || !name || name.kind !== NodeKind.LITERAL || name.text !== 'to') return false;
+		|| !name || name.kind !== NodeKind.LITERAL || name.text !== 'to') return false;
+	const binding = emitter.findDefInScope(receiver.text);
+	if (binding && (binding.bound || Object.prototype.hasOwnProperty.call(binding, 'as3Type')
+		|| binding.sourceImport !== 'com.greensock.' + receiver.text)) return false;
 	let helper = '__as3_FlashTweenRuntime';
 	while (emitter.source.indexOf(helper) >= 0) helper += '_';
 	emitter.ensureImportIdentifier('FlashTweenRuntime as ' + helper, module, false);
@@ -5493,6 +5542,10 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	}
 
 	let def = emitter.findDefInScope(node.text);
+	if (emitter.options.nativeTweenModule !== undefined && def && !def.bound
+		&& !Object.prototype.hasOwnProperty.call(def, 'as3Type')
+		&& (def.sourceImport === 'com.greensock.TweenMax' || def.sourceImport === 'com.greensock.TweenLite'))
+		throw new Error('AS3_TWEEN_UNSUPPORTED: imported tween Class is only qualified for direct to calls');
     const interfaceValue = emitter.generated && emitter.references && emitter.references.sourceInterface(node.text);
     if (interfaceValue && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def, 'as3Type'))) {
         let method = node.parent;
