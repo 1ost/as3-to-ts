@@ -159,6 +159,8 @@ export interface EmitterOptions {
     nativeXMLModule?: string;
     /** Canonical Point reference provider for generated typed returns only. */
     nativePointReferenceModule?: string;
+    /** Canonical TextField reference provider for generated typed returns. */
+    nativeTextFieldReferenceModule?: string;
     nativeDisplayObjectReferenceModule?: string;
     nativeMovieClipReferenceModule?: string;
     nativeTextFormatReferenceModule?: string;
@@ -450,6 +452,16 @@ export default class Emitter {
                 ||xmlGlobalProviderModule(provider.module,reference.module)!==module
                 ||!this.options.importModules||this.options.importModules['flash.geom.Point']!==module)
                 throw new Error('AS3_POINT_REFERENCE_UNSUPPORTED: exact native Point provider binding required');
+        }
+        if (this.options.nativeTextFieldReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeTextFieldReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_TEXTFIELD_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const provider=inputs.providers&&inputs.providers['flash.text.TextField'];
+            if(!provider||provider.exportName!=='TextField'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                ||!this.options.importModules||this.options.importModules['flash.text.TextField']!==module)
+                throw new Error('AS3_TEXTFIELD_REFERENCE_UNSUPPORTED: exact native TextField provider binding required');
         }
         if (this.options.nativeSpriteValueReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeSpriteValueReferenceModule),reference=this.options.nativeReferenceCoercion;
@@ -757,7 +769,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
@@ -3595,7 +3607,7 @@ function emitCall(emitter:Emitter, node:Node):void {
     if (emitBuiltinBooleanCoercion(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
 	if (emitArraySortOn(emitter, node)) return;
-	if (emitTweenTo(emitter, node)) return;
+	if (emitTweenMigrationCall(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
     if (emitInternalDynamicCall(emitter, node)) return;
     if (emitObjectPropertyCall(emitter, node)) return;
@@ -4326,23 +4338,34 @@ function emitArraySortOn(emitter:Emitter, node:Node):boolean {
 	return true;
 }
 
-function emitTweenTo(emitter:Emitter, node:Node):boolean {
+function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 	const module = emitter.options.nativeTweenModule;
 	if (module === undefined || !node || node.kind !== NodeKind.CALL || node.children.length < 2) return false;
 	const callee = node.children[0], args = node.findChild(NodeKind.ARGUMENTS);
 	if (!callee || callee.kind !== NodeKind.DOT || callee.children.length !== 2 || !args) return false;
 	const receiver = callee.children[0], name = callee.children[1];
 	if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || (receiver.text !== 'TweenMax' && receiver.text !== 'TweenLite')
-		|| !name || name.kind !== NodeKind.LITERAL || name.text !== 'to') return false;
+		|| !name || name.kind !== NodeKind.LITERAL) return false;
+	const query = receiver.text === 'TweenMax' && name.text === 'getTweensOf';
+	if (name.text !== 'to' && !query) return false;
 	const binding = emitter.findDefInScope(receiver.text);
 	if (binding && (binding.bound || Object.prototype.hasOwnProperty.call(binding, 'as3Type')
 		|| binding.sourceImport !== 'com.greensock.' + receiver.text)) return false;
+	// Query authority comes from the exact legacy import. Unlike the older to()
+	// migration, an unbound namesake is not sufficient. The optional legacy
+	// onlyActive overload has no corresponding runtime contract.
+	if (query && !binding) return false;
+	if (query && emitter.isNew)
+		throw new Error('AS3_TWEEN_UNSUPPORTED: tween query construction is not qualified');
+	if (query && args.children.length !== 1)
+		throw new Error('AS3_TWEEN_UNSUPPORTED: getTweensOf requires exactly one target argument');
 	let helper = '__as3_FlashTweenRuntime';
 	while (emitter.source.indexOf(helper) >= 0) helper += '_';
 	emitter.ensureImportIdentifier('FlashTweenRuntime as ' + helper, module, false);
 	emitter.nativeSourceHelpers.add(helper);
 	emitter.catchup(node.start);
-	emitter.insert(helper + '.current().to(');
+	const method = receiver.text === 'TweenLite' && name.text === 'to' ? 'toLite' : name.text;
+	emitter.insert(helper + '.current().' + method + '(');
 	if (args.children.length) {
 		emitter.skipTo(args.children[0].start);
 		visitNodes(emitter, args.children);
@@ -5557,7 +5580,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	if (emitter.options.nativeTweenModule !== undefined && def && !def.bound
 		&& !Object.prototype.hasOwnProperty.call(def, 'as3Type')
 		&& (def.sourceImport === 'com.greensock.TweenMax' || def.sourceImport === 'com.greensock.TweenLite'))
-		throw new Error('AS3_TWEEN_UNSUPPORTED: imported tween Class is only qualified for direct to calls');
+		throw new Error('AS3_TWEEN_UNSUPPORTED: imported tween Class operation is not qualified');
     const interfaceValue = emitter.generated && emitter.references && emitter.references.sourceInterface(node.text);
     if (interfaceValue && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def, 'as3Type'))) {
         let method = node.parent;

@@ -428,6 +428,17 @@ export class NativeGeneratedLexical {
                     if(!emitter.options.nativeByteArrayReferenceModule)fail('native ByteArray method requires exact provider');
                     return {trait:null,receiver,nativeMethod:name};
                 }
+                if(identities.length===1&&identities[0]==='flash.text.TextLineMetrics'
+                    &&references.every(r=>r.kind==='native')&&['x','width','height','ascent','descent','leading'].indexOf(name)>=0) {
+                    const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
+                    const metrics=input.providers&&input.providers['flash.text.TextLineMetrics'];
+                    if(!metrics||metrics.exportName!=='TextLineMetrics'||metrics.nativeBase||metrics.nativeInterface
+                        ||!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan)
+                        fail('TextLineMetrics fields require authenticated native reference plan');
+                    // Typed native values use source variable dispatch: reads
+                    // preserve null errors and writes coerce Number storage.
+                    return {trait:null,receiver,publicName:name,publicMethod:false};
+                }
                 if(lexicalName&&identities.length===1&&identities[0]==='flash.display.Sprite'
                     &&references.every(r=>r.kind==='native')&&['startDrag','stopDrag'].indexOf(name)>=0) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
