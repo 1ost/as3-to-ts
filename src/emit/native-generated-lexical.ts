@@ -1,7 +1,7 @@
 import {NativeTypedLocals, NestedLocalFunction} from './native-typed-locals';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
-import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationNode} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationResolver, nativeGeneratedDeclarationNode, NativeGeneratedClassDeclaration, nativeGeneratedClassDeclaration} from './native-generated-declarations';
 import {NativeGeneratedClassTraits} from './native-generated-traits';
 
 interface Trait {
@@ -27,6 +27,15 @@ export class NativeGeneratedLexical {
     readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
     readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[];returned?:string}[] = [];
     readonly resolveTypeName:(name:string)=>string;
+    private readonly declarations: ReadonlyArray<NativeGeneratedClassDeclaration>;
+    private classSource(identity: string): {source: string; sourceSha256: string; referenceOnly?: boolean} {
+        const input = nativeGeneratedDeclarationInputs(this.plan, this.plan.scope);
+        const binding = this.declarations.find(item => item.identity === identity);
+        return input.sources[binding ? binding.sourceOwner : identity];
+    }
+    private packageOf(identity: string): string {
+        return this.plan.privateBindings.some(item => item.identity === identity) ? '' : packageOf(identity);
+    }
     private readonly internalContents=new Map<string,Node>();
     private internalContent(owner:string):Node {
         if(!this.internalContents.has(owner)){
@@ -48,7 +57,8 @@ export class NativeGeneratedLexical {
     private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string;readonly kind:string}>>();
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
-        this.resolveTypeName=nativeGeneratedConsumerResolver(plan,source).resolve;
+        this.declarations=Object.freeze(plan.bindings.map(b=>b.qname).concat(plan.privateBindings.map(b=>b.identity)).map(identity=>nativeGeneratedClassDeclaration(plan,identity)));
+        this.resolveTypeName=nativeGeneratedDeclarationResolver(plan,owner,source).resolve;
         let serial=0;
         const fresh=(label:string):string=>{let value:string;do{value='__as3_generated_'+label+'_'+serial++;}while(source.indexOf(value)>=0);return value;};
         this.provider=fresh('lexicalProvider');this.scope=fresh('lexicalScope');
@@ -69,7 +79,7 @@ export class NativeGeneratedLexical {
                 if(visibility==='internal'){
                     if(!input.lexicalProviderModule)fail('internal namespace storage authority');
                     if(mods.some(mod=>['internal','static'].indexOf(mod)<0 && !(mod==='override' && [K.GET,K.FUNCTION].indexOf(member.kind)>=0)))fail('custom namespace is not package-internal storage');
-                    if(inherited&&packageOf(name)!==packageOf(owner))return;
+                    if(inherited&&this.packageOf(name)!==this.packageOf(owner))return;
                 }
                 const isStatic=mods.indexOf('static')>=0;
                 const constant=member.kind===K.CONST_LIST&&(visibility==='protected'||visibility==='private'&&isStatic||visibility==='internal'&&isStatic);
@@ -77,7 +87,7 @@ export class NativeGeneratedLexical {
                 if(inherited&&visibility==='internal'&&isStatic)return;
                 const inheritedPrimitives=visibility==='protected'&&member.kind===K.VAR_LIST
                     &&member.findChildren(K.NAME_TYPE_INIT).every(node=>node.findChild(K.TYPE)&&['String','Boolean'].indexOf(node.findChild(K.TYPE).text)>=0);
-                if(inherited&&isStatic&&(!constant&&!inheritedPrimitives||name!==plan.bindings.find(b=>b.qname===owner).base))fail('inherited static lexical ownership');
+                if(inherited&&isStatic&&(!constant&&!inheritedPrimitives||name!==this.declarations.find(b=>b.identity===owner).base))fail('inherited static lexical ownership');
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
                     fail('internal instance method requires zero parameters and void return or one authenticated interface parameter and Boolean/void return');
@@ -116,8 +126,8 @@ export class NativeGeneratedLexical {
                     this.traits.push(trait);if(!inherited)this.own.push(trait);
                 });
             });
-            const binding=plan.bindings.find(b=>b.qname===name);
-            if(binding.base&&input.sources[binding.base])collect(binding.base,true);
+            const binding=this.declarations.find(b=>b.identity===name);
+            if(binding.base&&this.classSource(binding.base))collect(binding.base,true);
         };
         collect(owner,false);
         this.own.forEach(trait=>{if(modifiers(trait.node).indexOf('override')>=0&&!overridden.has(trait))fail('protected override has no source ancestor');});
@@ -148,7 +158,7 @@ export class NativeGeneratedLexical {
             if(node.kind===K.LAMBDA){
                 if(node.findChild(K.VECTOR))fail('anonymous Vector return held');
                 let method=node.parent;while(method&&method.parent!==content)method=method.parent;
-                if(!typedLocals||!method||method.kind!==K.FUNCTION||!plan.bindings.find(b=>b.qname===owner).scriptGlobalExport)
+                if(!typedLocals||!method||method.kind!==K.FUNCTION||!this.declarations.find(b=>b.identity===owner).scriptGlobalExport)
                     fail('anonymous source callable requires source script global');
                 for(let p=node.parent;p&&p!==method;p=p.parent)if([K.LAMBDA,K.FUNCTION,K.CATCH].indexOf(p.kind)>=0)fail('nested anonymous callable scope held');
                 const parameters=node.findChild(K.PARAMETER_LIST).children.map(p=>{
@@ -220,7 +230,7 @@ export class NativeGeneratedLexical {
                 if(typedLocals&&type&&type.text!=='*'){
                     const vector=type.kind===K.VECTOR&&plan.vectors.find(v=>v.owner===owner&&v.start===type.start&&v.end===type.end);
                     const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
-                    if(!vector&&(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'&&ref.kind!=='native'&&ref.kind!=='pattern-local'&&ref.kind!=='tween-handle-local')))fail('typed local source reference lowering required');
+                    if(!vector&&(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'&&ref.kind!=='private-declaration'&&ref.kind!=='native'&&ref.kind!=='pattern-local'&&ref.kind!=='tween-handle-local')))fail('typed local source reference lowering required');
                 }
                 if(this.traits.some(t=>t.name===value.findChild(K.NAME).text))fail('local/lexical declaration-order lookup required');
             });
@@ -252,16 +262,15 @@ export class NativeGeneratedLexical {
             const vector=node&&node.kind===K.VECTOR&&plan.vectors.find(v=>v.owner===owner&&v.start===node.start&&v.end===node.end);
             if(vector)return vector.identity;
             const ref=node&&plan.references.find(r=>r.owner===owner&&r.start===node.start&&r.end===node.end);
-            return ref&&(ref.kind==='interface'||ref.kind==='declaration'||ref.kind==='native')?ref.identity:undefined;
+            return ref&&(ref.kind==='interface'||ref.kind==='declaration'||ref.kind==='private-declaration'||ref.kind==='native')?ref.identity:undefined;
         },true,this.nestedFunctions,this.anonymousFunctions,node=>plan.patternLocals.some(p=>p.owner===owner&&p.typeStart===node.start&&p.typeEnd===node.end),
             node=>plan.references.some(r=>r.owner===owner&&r.start===node.start&&r.end===node.end&&r.kind==='tween-handle-local'));
     }
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}
     constantValue(trait:Trait):string {
         const init=trait.node.findChild(K.INIT);
-        const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
-        const value=init&&input.sources[trait.owner].source.slice(init.start,end(init)).trim();
+        const value=init&&this.classSource(trait.owner).source.slice(init.start,end(init)).trim();
         const type=trait.type&&trait.type.text;
         if(trait.visibility==='internal'&&trait.static&&type==='uint'&&value&&/^(?:0[xX][0-9a-fA-F]+|0|[1-9]\d*)$/.test(value)
             &&Number(value)<=4294967295)return String(Number(value));
@@ -274,18 +283,16 @@ export class NativeGeneratedLexical {
     earlyInstanceValue(trait:Trait):string|undefined {
         if(trait.visibility!=='internal'||trait.static||trait.kind!=='variable')return undefined;
         const init=trait.node.findChild(K.INIT);if(!init)return '0';
-        const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
         const end=(node:Node):number=>node.children.reduce((n,child)=>Math.max(n,end(child)),node.end);
-        const value=input.sources[trait.owner].source.slice(init.start,end(init)).trim();
+        const value=this.classSource(trait.owner).source.slice(init.start,end(init)).trim();
         if(/^(?:0[xX][0-9a-fA-F]+|0|[1-9]\d*)$/.test(value)&&Number(value)<=4294967295)return String(Number(value));
         return fail('internal uint field initializer requires qualified literal');
     }
     earlyStaticValue(trait:Trait):string|undefined {
         if(!trait.static||trait.kind!=='variable')return undefined;
         const init=trait.node.findChild(K.INIT);if(!init)return undefined;
-        const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
-        const value=input.sources[trait.owner].source.slice(init.start,end(init)).trim();
+        const value=this.classSource(trait.owner).source.slice(init.start,end(init)).trim();
         if(value==='null')return 'null';
         if(/^[+-]?\d+$/.test(value)&&trait.type&&trait.type.text==='int'&&Number(value)>=-2147483648&&Number(value)<=2147483647)return value;
         if(['protected','private'].indexOf(trait.visibility)>=0&&trait.type&&trait.type.text==='String'
@@ -329,14 +336,14 @@ export class NativeGeneratedLexical {
             if(['*','int','uint','Number','Boolean','String','Object','Function'].indexOf(ref.identity)<0)fail('unsupported lexical intrinsic '+ref.identity);
             return JSON.stringify(ref.identity);
         }
-        const binding=ref.kind==='declaration'&&this.plan.bindings.find(b=>b.qname===ref.identity);
+        const binding=(ref.kind==='declaration'||ref.kind==='private-declaration')&&this.declarations.find(b=>b.identity===ref.identity);
         const contract=ref.kind==='interface'&&this.plan.interfaces.find(b=>b.qname===ref.identity);
         const native=ref.kind==='native'&&this.plan.nativeBindings.find(b=>b.qname===ref.identity);
         if(!binding&&!contract&&!native)fail('unresolved lexical reference '+ref.sourceName);
-        return '{name:'+JSON.stringify(ref.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domain+'.'+(binding?binding.tokenExport:contract?contract.tokenExport:native.referenceExport)+'}';
+        return '{name:'+JSON.stringify(binding?binding.reflectedName:ref.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domain+'.'+(binding?binding.tokenExport:contract?contract.tokenExport:native.referenceExport)+'}';
     }
     publication(name:string,base:string,domain:string,intrinsic:string):string {
-        const own=this.plan.bindings.find(b=>b.qname===this.owner),parent=own.base&&this.plan.bindings.find(b=>b.qname===own.base);
+        const own=this.declarations.find(b=>b.identity===this.owner),parent=own.base&&this.declarations.find(b=>b.identity===own.base);
         const native=own.base&&this.plan.nativeBindings.find(b=>b.qname===own.base&&!!b.nativeBaseExport);
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
@@ -354,17 +361,17 @@ export class NativeGeneratedLexical {
         const callee=node.kind===K.CALL&&node.children[0];
         if(callee&&callee.kind===K.DOT&&callee.children[0].text==='super') {
             const name=callee.children[1].text;
-            let owner=this.plan.bindings.find(b=>b.qname===this.owner).base,member:Node;
-            while(owner&&this.plan.bindings.some(b=>b.qname===owner)) {
+            let owner=this.declarations.find(b=>b.identity===this.owner).base,member:Node;
+            while(owner&&this.declarations.some(b=>b.identity===owner)) {
                 member=this.internalContent(owner).children.find(m=>m.findChild(K.NAME)&&m.findChild(K.NAME).text===name);
                 if(member)break;
-                owner=this.plan.bindings.find(b=>b.qname===owner).base;
+                owner=this.declarations.find(b=>b.identity===owner).base;
             }
             if(member&&modifiers(member).indexOf('protected')>=0) {
                 let method=node.parent;
                 while(method&&method.kind!==K.FUNCTION)method=method.parent;
                 if(!method||method.parent.kind!==K.CONTENT||modifiers(method).indexOf('static')>=0
-                    ||method.findChild(K.NAME).text===this.owner.split('.').pop())
+                    ||method.findChild(K.NAME).text===this.ownClass.findChild(K.NAME).text)
                     fail('protected super requires ordinary instance method');
                 if(member.kind!==K.FUNCTION||modifiers(member).indexOf('static')>=0)
                     fail('protected super requires instance method target');
@@ -391,7 +398,7 @@ export class NativeGeneratedLexical {
             let method=node;while(method.parent&&method.parent.kind!==K.CONTENT)method=method.parent;
             const staticContext=modifiers(method).indexOf('static')>=0;
             if(receiver&&receiver.kind===K.IDENTIFIER&&receiver.text==='super'&&lexicalName) {
-                if(staticContext||method.kind!==K.FUNCTION||method.findChild(K.NAME).text===this.owner.split('.').pop())
+                if(staticContext||method.kind!==K.FUNCTION||method.findChild(K.NAME).text===this.ownClass.findChild(K.NAME).text)
                     fail('protected super field requires ordinary instance method');
                 for(let enclosing=node.parent;enclosing&&enclosing!==method;enclosing=enclosing.parent)
                     if(enclosing.kind===K.FUNCTION||enclosing.kind===K.LAMBDA)fail('nested protected super field access');
@@ -411,25 +418,25 @@ export class NativeGeneratedLexical {
             if(receiver) {
                 // Public members on another authenticated source receiver use
                 // common property dispatch, including source null errors.
-                let references = this.plan.references.filter(r=>r.owner===this.owner&&(r.kind==='declaration'||r.kind==='native')
+                let references = this.plan.references.filter(r=>r.owner===this.owner&&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native')
                     &&receiver.kind===K.IDENTIFIER&&binding&&r.sourceName===binding.as3Type);
                 if(receiver.kind===K.DOT&&receiver.children[0].text==='this') {
                     const field=this.traits.find(t=>t.name===receiver.children[1].text&&!t.static&&t.kind==='variable');
-                    references=field&&field.type?this.plan.references.filter(r=>r.owner===field.owner&&(r.kind==='declaration'||r.kind==='native')
+                    references=field&&field.type?this.plan.references.filter(r=>r.owner===field.owner&&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native')
                         &&r.start===field.type.start&&r.end===field.type.end):[];
                 }
                 if(receiver.kind===K.DOT&&receiver.children[0].kind===K.IDENTIFIER) {
                     const root=receiver.children[0],rootBinding=emitter.findDefInScope(root.text);
                     const owner=(!rootBinding||!Object.prototype.hasOwnProperty.call(rootBinding,'as3Type'))
-                        &&this.plan.bindings.find(b=>b.qname===this.resolveTypeName(root.text));
+                        &&this.declarations.find(b=>b.identity===this.resolveTypeName(root.text));
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
-                    if(owner&&input.sources[owner.qname]&&!input.sources[owner.qname].referenceOnly) {
-                        const getter=this.internalContent(owner.qname).children.find(member=>member.kind===K.GET
+                    if(owner&&this.classSource(owner.identity)&&!this.classSource(owner.identity).referenceOnly) {
+                        const getter=this.internalContent(owner.identity).children.find(member=>member.kind===K.GET
                             &&modifiers(member).indexOf('public')>=0&&modifiers(member).indexOf('static')>=0
                             &&member.findChild(K.NAME).text===receiver.children[1].text
                             &&member.findChild(K.PARAMETER_LIST).children.length===0);
                         const type=getter&&getter.findChild(K.TYPE);
-                        if(type)references=this.plan.references.filter(r=>r.owner===owner.qname&&r.kind==='declaration'
+                        if(type)references=this.plan.references.filter(r=>r.owner===owner.identity&&(r.kind==='declaration'||r.kind==='private-declaration')
                             &&r.start===type.start&&r.end===type.end);
                     }
                     // The source getter's declared result establishes the public
@@ -468,27 +475,27 @@ export class NativeGeneratedLexical {
                 if(inputPackageEnabled(this.plan)) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                     const knownClass=receiver.kind===K.IDENTIFIER&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type'))
-                        ? this.plan.bindings.filter(b=>b.qname===this.resolveTypeName(receiver.text)) : [];
-                    const identity=identities.length===1?identities[0]:knownClass.length===1?knownClass[0].qname:undefined;
-                    const statics=!!identity&&knownClass.some(b=>b.qname===identity);
+                        ? this.declarations.filter(b=>b.identity===this.resolveTypeName(receiver.text)) : [];
+                    const identity=identities.length===1?identities[0]:knownClass.length===1?knownClass[0].identity:undefined;
+                    const statics=!!identity&&knownClass.some(b=>b.identity===identity);
                     // A private spelling in this class does not capture an
                     // explicitly qualified public static of another source class.
                     if(lexicalName&&statics&&identity!==this.owner){
                         const cacheKey='static:'+identity;
                         if(!this.foreignPublicMembers.has(cacheKey))this.foreignPublicMembers.set(cacheKey,
-                            new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,input.sources[identity].source).staticTraits);
+                            new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,this.classSource(identity).source).staticTraits);
                         if(this.foreignPublicMembers.get(cacheKey).some(member=>member.name===name))return null;
                     }
                     let inaccessible=false;
-                    for(let current=identity;current;current=this.plan.bindings.find(b=>b.qname===current).base){
-                        if(!input.sources[current]||input.sources[current].referenceOnly)break;
+                    for(let current=identity;current;current=this.declarations.find(b=>b.identity===current).base){
+                        if(!this.classSource(current)||this.classSource(current).referenceOnly)break;
                         const content=this.internalContent(current);
                         const field=content.children.filter(Boolean).find(m=>[K.VAR_LIST,K.CONST_LIST,K.GET,K.FUNCTION].indexOf(m.kind)>=0
                             &&modifiers(m).every(mod=>['public','private','protected'].indexOf(mod)<0)
                             &&(modifiers(m).indexOf('static')>=0)===statics&&([K.GET,K.FUNCTION].indexOf(m.kind)>=0?m.findChild(K.NAME).text===name:m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===name)));
                         if(!field)continue;
                         if(statics&&current!==identity)fail('inherited internal static lookup requires qualification');
-                        if(packageOf(current)!==packageOf(this.owner)){inaccessible=true;continue;}
+                        if(this.packageOf(current)!==this.packageOf(this.owner)){inaccessible=true;continue;}
                         const value=[K.GET,K.FUNCTION].indexOf(field.kind)>=0?field:field.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===name);
                         const getter=field.kind===K.GET&&!statics&&value.findChild(K.TYPE)&&value.findChild(K.TYPE).text==='Boolean'
                             &&value.findChild(K.PARAMETER_LIST).children.length===0;
@@ -501,11 +508,11 @@ export class NativeGeneratedLexical {
                     }
                     if(inaccessible)fail('internal declaration belongs to another package');
                 }
-                if(identities.length===1&&identities[0]!==this.owner&&this.plan.bindings.some(b=>b.qname===identities[0])) {
+                if(identities.length===1&&identities[0]!==this.owner&&this.declarations.some(b=>b.identity===identities[0])) {
                     const identity=identities[0];
                     if(!this.foreignPublicMembers.has(identity)) {
                         const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
-                        this.foreignPublicMembers.set(identity,new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,input.sources[identity].source).instanceTraits
+                        this.foreignPublicMembers.set(identity,new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,this.classSource(identity).source).instanceTraits
                             .filter(member=>member.kind==='variable'||member.kind==='accessor'||member.kind==='method'));
                     }
                     const member=this.foreignPublicMembers.get(identity).find(member=>member.name===name);
@@ -521,8 +528,8 @@ export class NativeGeneratedLexical {
                 // this class declares an internal/private namesake.
                 if(receiver.text!=='this'&&binding&&!binding.bound&&(binding.as3Type==='Object'
                     ||binding.as3Type==='*'&&inputPackageEnabled(this.plan)))return null;
-                if(receiver.text===this.owner.split('.').pop()&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type')))isStatic=true;
-                else if(receiver.text!=='this'&&(!binding||[this.owner,this.owner.split('.').pop()].indexOf(binding.as3Type)<0))fail('lexical receiver requires exact source type');
+                if(receiver.text===this.ownClass.findChild(K.NAME).text&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type')))isStatic=true;
+                else if(receiver.text!=='this'&&(!binding||[this.owner,this.ownClass.findChild(K.NAME).text].indexOf(binding.as3Type)<0))fail('lexical receiver requires exact source type');
             } else isStatic=staticContext||!this.traits.some(t=>t.name===name&&!t.static);
             const trait=this.traits.find(t=>t.name===name&&t.static===isStatic);
             if(!trait)fail('lexical static/instance ownership');
@@ -609,7 +616,7 @@ export class NativeGeneratedLexical {
             const members=this.internalContent(found.internalOwner).children;
             if(operation==='set'&&members.some(m=>m.kind===K.GET&&m.findChild(K.NAME).text===found.internalName))fail('internal readonly getter assignment');
             if(operation==='set'&&members.some(m=>m.kind===K.CONST_LIST&&m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===found.internalName)))fail('internal constant assignment');
-            const binding=this.plan.bindings.find(b=>b.qname===found.internalOwner);
+            const binding=this.declarations.find(b=>b.identity===found.internalOwner);
             let token='__as3_internalType_'+binding.tokenExport;while(emitter.source.indexOf(token)>=0)token+='_';
             emitter.ensureImportIdentifier(binding.tokenExport+' as '+token,emitter.generated.options.module,false);
             emitter.catchup(node.start);emitter.insert('(<any>'+this.provider+'.'+(operation==='get'?'as3GetInternalMember':operation==='call'?'as3CallInternalMember':'as3SetInternalMember')+'(');
@@ -669,7 +676,7 @@ export class NativeGeneratedLexical {
         if(fieldCall) {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
             if(!ref||ref.kind!=='intrinsic'||ref.identity!=='Function'||found.trait.static)fail('lexical value invocation authority');
-            if(!found.receiver&&!this.plan.bindings.find(b=>b.qname===this.owner).scriptGlobalExport)fail('lexical Function call requires caller script global authority');
+            if(!found.receiver&&!this.declarations.find(b=>b.identity===this.owner).scriptGlobalExport)fail('lexical Function call requires caller script global authority');
         }
         emitter.catchup(node.start);
         if(operation!=='set')emitter.insert('(<any>');

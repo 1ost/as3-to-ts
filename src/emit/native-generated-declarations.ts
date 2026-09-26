@@ -563,6 +563,18 @@ function plannedUnitResolver(unit: NativeSourceUnit, known: (name: string) => bo
     };
 }
 
+/** Resolve one authenticated implementation declaration in its complete source file. */
+export function nativeGeneratedDeclarationResolver(plan: NativeGeneratedDeclarationPlan, owner: string, source: string):
+    {root: Node; owner: string; resolve: (name: string) => string} {
+    nativeGeneratedDeclarationSource(plan, plan && plan.scope, owner, source);
+    const input = nativeGeneratedDeclarationInputs(plan, plan.scope), unit = nativeGeneratedSourceUnit(plan, owner);
+    const helper = plan.privateBindings.find(binding => binding.identity === owner);
+    const descriptor = helper ? helper.declaration : unit.declarations[0];
+    const known = Object.keys(input.sources).concat(Object.keys(input.providers || {}));
+    return {root: nativeSourceUnitAst(unit).root, owner,
+        resolve: plannedUnitResolver(unit, name => known.indexOf(name) >= 0, true, descriptor)};
+}
+
 /** A consumer resolves existing identities; it never adds tokens or publishers. */
 export function nativeGeneratedConsumerResolver(plan: NativeGeneratedDeclarationPlan, source: string):
     {root: Node; owner: string; resolve: (name: string) => string} {
