@@ -8,6 +8,8 @@ const ts = require("typescript-4-9");
 
 const request = JSON.parse(fs.readFileSync(0, "utf8"));
 const root = fs.realpathSync(request.root);
+const modules = path.join(root, "node_modules");
+const moduleRoot = fs.existsSync(modules) ? fs.realpathSync(modules) : null;
 const inputs = {};
 function source(module) {
     if (typeof module !== "string" || !module.startsWith("src/layaAir/flash/")
@@ -36,6 +38,9 @@ const program = ts.createProgram([facade, ...candidates.map(row => row.file)], {
 const checker = program.getTypeChecker();
 for (const file of program.getSourceFiles()) {
     const actual = fs.realpathSync(file.fileName);
+    // Package declarations can live outside a linked worktree. They do not
+    // supply the source export being authenticated, so do not pin them.
+    if (moduleRoot && actual.startsWith(moduleRoot + path.sep) && actual.endsWith(".d.ts")) continue;
     if (!actual.startsWith(root + path.sep)) throw new Error("Export resolution escapes source root");
     fingerprint(actual);
     if (file.parseDiagnostics.length) throw new Error("Invalid bridge source syntax");
