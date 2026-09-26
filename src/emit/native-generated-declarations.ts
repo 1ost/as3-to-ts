@@ -1,9 +1,12 @@
 import Node from '../syntax/node';
+import {NativeGeneratedPrivateDeclarationBinding, planNativePrivateDeclarations, privateDeclarationIdentity} from './native-generated-private-declarations';
+import {NativeSourceUnit, readNativeSourceUnit, nativeSourceUnitAst, nativeSourceUnitNode, NativeSourceUnitDeclaration, nativeSourceUnitResolver, nativeSourceIntrinsicNames} from './native-source-unit';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {NativePatternLocal, nativePatternLocals} from './native-pattern-locals';
 import {NativeGeneratedInterfaceContracts,projectNativeGeneratedInterfaceContracts} from './native-generated-interface-contracts';
 import {nativeGeneratedInterfaceBoundary} from './native-generated-interface-boundaries';
+import {NativeSourceNamespaceBinding, planNativeSourceNamespaces} from './native-source-namespaces';
 
 export interface NativeGeneratedDeclarationInput {
     scope: string;
@@ -50,7 +53,7 @@ export interface NativeGeneratedReference {
     readonly start: number;
     readonly end: number;
     readonly sourceName: string;
-    readonly kind: 'intrinsic' | 'declaration' | 'interface' | 'native' | 'pattern-local' | 'tween-handle-local' | 'unresolved';
+    readonly kind: 'intrinsic' | 'declaration' | 'interface' | 'native' | 'pattern-local' | 'tween-handle-local' | 'private-declaration' | 'unresolved';
     readonly identity: string;
 }
 export interface NativeGeneratedDeclarationPlan {
@@ -58,6 +61,9 @@ export interface NativeGeneratedDeclarationPlan {
     readonly moduleSource: string;
     readonly bindings: ReadonlyArray<NativeGeneratedDeclarationBinding>;
     readonly interfaces: ReadonlyArray<NativeGeneratedInterfaceBinding>;
+    readonly privateBindings: ReadonlyArray<NativeGeneratedPrivateDeclarationBinding>;
+    /** Source-authenticated URI identities; no runtime Namespace/Class publication. */
+    readonly namespaces: ReadonlyArray<NativeSourceNamespaceBinding>;
     readonly interfaceContracts: NativeGeneratedInterfaceContracts;
     readonly references: ReadonlyArray<NativeGeneratedReference>;
     readonly patternLocals: ReadonlyArray<NativePatternLocal>;
@@ -65,9 +71,9 @@ export interface NativeGeneratedDeclarationPlan {
     readonly sourceHashes: {[qname: string]: string};
     readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly nativeInterface?: true; readonly eventBaseExport?: string; readonly nativeBaseExport?: string; readonly declarationExport?: string}>;
 }
-interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan;}
+interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan; units: Map<string, NativeSourceUnit>;}
 const contexts = new WeakMap<object, Context>();
-const builtins = ['*', 'void', 'int', 'uint', 'Number', 'Boolean', 'String', 'Object', 'Array', 'Function', 'Class'];
+const builtins = nativeSourceIntrinsicNames;
 function fail(reason: string): never {throw new Error('AS3_GENERATED_DECLARATIONS_UNSUPPORTED: ' + reason);}
 function moduleName(value: string): string {
     if (typeof value !== 'string' || !value.trim() || /[\x00\r\n]/.test(value)) fail('module specifier');
@@ -133,12 +139,12 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         fail('Class script selection requires unique names, explicit script domain and inherited internal membership');
     if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
     if (data.providers !== undefined && !table(data.providers)) fail('provider table required');
-    const providers = data.providers || {}, names = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
-    const roots = new Map<string, Node>(), classes = new Map<string, Node>();
+    const providers = data.providers || {}, sourceNames = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
+    const roots = new Map<string, Node>(), classes = new Map<string, Node>(), units = new Map<string, NativeSourceUnit>();
     const sourceHashes: {[qname: string]: string} = Object.create(null);
     nativeNames.forEach(name => {
         qname(name);
-        if (names.indexOf(name) >= 0 || builtins.indexOf(name) >= 0) fail('source/provider or builtin collision: ' + name);
+        if (sourceNames.indexOf(name) >= 0 || builtins.indexOf(name) >= 0) fail('source/provider or builtin collision: ' + name);
         const provider = providers[name];
         if (!table(provider)) fail('provider binding required');
         fields(provider, ['module', 'exportName','nativeBase','nativeInterface','nativeVector']);
@@ -155,28 +161,42 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         moduleName(provider.module);
         if (!/^[A-Za-z_$][\w$]*$/.test(provider.exportName)) fail('provider export name');
     });
-    names.forEach(name => {
+    sourceNames.forEach(name => {
         qname(name);
         const record = data.sources[name];
         if (!table(record) || typeof record.source !== 'string' || hash(record.source) !== record.sourceSha256)
             fail('exact source bytes/hash required: ' + name);
         fields(record, ['source', 'sourceSha256', 'referenceOnly']);
         if (record.referenceOnly !== undefined && typeof record.referenceOnly !== 'boolean') fail('referenceOnly must be boolean');
-        const root = parse(name + '.as', record.source); normalize(root);
-        const pkg = root.findChild(K.PACKAGE), content = pkg && pkg.findChild(K.CONTENT);
-        const list = content && content.children.filter(node => node.kind === K.CLASS || node.kind === K.INTERFACE);
-        if (!pkg || !list || list.length !== 1) fail('exactly one package class or interface: ' + name);
-        const prefix = pkg.findChild(K.NAME).text, cls = list[0];
-        if ((prefix ? prefix + '.' : '') + cls.findChild(K.NAME).text !== name) fail('source QName mismatch: ' + name);
-        // Do not silently omit a second file-local class or interface from identity planning.
-        let count = 0;
-        const visit = (node: Node): void => {if (node.kind === K.CLASS || node.kind === K.INTERFACE) count++; node.children.forEach(visit);};
-        visit(root);
-        if (count !== 1) fail('additional source declarations: ' + name);
-        roots.set(name, root); classes.set(name, cls); sourceHashes[name] = record.sourceSha256;
+        let unit: NativeSourceUnit;
+        try {unit = readNativeSourceUnit(name, record.source, record.sourceSha256);}
+        catch (error) {fail(error.message.replace(/^AS3_SOURCE_UNIT_UNSUPPORTED: /, ''));}
+        const ast = nativeSourceUnitAst(unit), root = ast.root, cls = ast.declarations[0] && ast.declarations[0].node;
+        // Private declarations retain this source unit. Implementation admission
+        // remains gated separately from header/type planning.
+        if (record.referenceOnly && unit.declarations.length !== 1) fail('reference-only source cannot supply private Class implementations');
+        if (record.referenceOnly && unit.namespaces.length) fail('reference-only source cannot supply namespace definitions');
+        units.set(name, unit);
+        roots.set(name, root); if (cls) classes.set(name, cls); sourceHashes[name] = record.sourceSha256;
     });
-    const resolve = (owner: string, spelling: string): string => sourceResolver(roots.get(owner), owner,
-        name => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0)(spelling);
+    const namespaces = planNativeSourceNamespaces(units), names = Array.from(classes.keys());
+    namespaces.forEach(binding => {
+        if (nativeNames.indexOf(binding.qname) >= 0 || builtins.indexOf(binding.qname) >= 0)
+            fail('namespace/provider or builtin collision: ' + binding.qname);
+    });
+    const known = (name: string): boolean => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0
+        || namespaces.some(binding => binding.qname === name);
+    const privatePlan = planNativePrivateDeclarations(units, known);
+    const privateBindings = privatePlan.bindings;
+    const resolvers = new Map<string, (spelling: string) => string>();
+    const resolve = (owner: string, spelling: string): string => {
+        if (!resolvers.has(owner)) {
+            const helper = privateBindings.find(binding => binding.identity === owner);
+            const unit = units.get(helper ? helper.declaration.sourceOwner : owner);
+            resolvers.set(owner, plannedUnitResolver(unit, known, true, helper && helper.declaration));
+        }
+        return resolvers.get(owner)(spelling);
+    };
     if (data.tweenHandleProviderModule && (classes.has('com.greensock.TweenMax') || providers['com.greensock.TweenMax']))
         fail('TweenMax migration cannot also declare or bind its source Class');
     const bindings: NativeGeneratedDeclarationBinding[] = [], references: NativeGeneratedReference[] = [];
@@ -195,6 +215,10 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         });
         interfaces.push(Object.freeze({qname: owner, bases: Object.freeze(bases), tokenExport: 'interface' + interfaces.length}));
     });
+    privateBindings.forEach(binding => binding.interfaces.forEach(name => {
+        if (!interfaces.some(item => item.qname === name))
+            fail('file-private implements requires exact source interface: ' + binding.identity + ':' + name);
+    }));
     names.forEach(owner => {
         const cls = classes.get(owner);
         if (cls.kind === K.INTERFACE) return;
@@ -206,7 +230,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 if (!interfaces.some(binding => binding.qname === name)) fail('interface declaration authority required: ' + owner + ':' + name);
             });
             const baseNode = cls.findChild(K.EXTENDS), base = baseNode ? resolve(owner, baseNode.qualifiedName || baseNode.text) : 'Object';
-            if (base !== 'Object' && (!data.sources[base] || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite')))
+            if (base !== 'Object' && (!classes.has(base) || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite')))
                 fail('base requires a planned source declaration: ' + owner + ':' + base);
             bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
                 tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length,
@@ -238,12 +262,23 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                     ? 'declaration' : interfaces.some(binding => binding.qname === identity) ? 'interface'
                     : nativeNames.indexOf(identity) >= 0 ? 'native'
                     : patternLocals.some(p=>p.owner===owner&&p.typeStart===node.start&&p.typeEnd===node.end) ? 'pattern-local'
+                    : privateBindings.some(binding => binding.identity === identity) ? 'private-declaration'
                     : tweenLocal ? 'tween-handle-local' : 'unresolved';
                 references.push(Object.freeze({owner, start: node.start, end: node.end, sourceName: spelling, kind, identity}));
             }
             node.children.forEach(walk);
         };
-        walk(roots.get(owner));
+        walk(classes.get(owner));
+    });
+    privatePlan.references.forEach(reference => {
+        const identity = typeof reference.identity === 'string' ? reference.identity : privateDeclarationIdentity(reference.identity);
+        const kind: NativeGeneratedReference['kind'] = builtins.indexOf(identity) >= 0 ? 'intrinsic'
+            : privateBindings.some(binding => binding.identity === identity) ? 'private-declaration'
+            : bindings.some(binding => binding.qname === identity) ? 'declaration'
+            : interfaces.some(binding => binding.qname === identity) ? 'interface'
+            : nativeNames.indexOf(identity) >= 0 ? 'native' : 'unresolved';
+        references.push(Object.freeze({owner: reference.owner, start: reference.start, end: reference.end,
+            sourceName: reference.spelling, kind, identity}));
     });
     if(data.scriptGlobalSources&&data.scriptGlobalSources.some(name=>!bindings.some(binding=>binding.qname===name)))
         fail('script global source must be a planned class');
@@ -328,7 +363,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     if(data.vectorProviderModule){
         lines.push('import {as3VectorInterfaceSpec,as3VectorPrimitiveSpec,as3VectorDeclarationSpec,as3VectorCanonicalSpec} from '+JSON.stringify(data.vectorProviderModule)+';');
         const exports=new Map<string,string>();
-        names.forEach(owner=>{
+        names.concat(privateBindings.map(binding => binding.identity)).forEach(owner=>{
             const walk=(node:Node):void=>{
                 if(node.kind===K.VECTOR){
                     const construction=node.parent&&node.parent.kind===K.CALL&&node.parent.children[0]===node
@@ -342,19 +377,22 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                     if(literal&&(identity!=='Class'||classes.has(identity)||providers[identity]))fail('Vector literal requires intrinsic Class element');
                     const contract=interfaces.find(i=>i.qname===identity);
                     const elementClass=bindings.find(b=>b.qname===identity);
+                    const elementPrivate=privateBindings.find(b=>b.identity===identity);
                     const elementNative=providers[identity]&&providers[identity].nativeVector;
-                    if(!contract&&!elementClass&&!elementNative&&['*','int','uint','Number','Boolean','String','Object','Function','Class'].indexOf(identity)<0)
+                    if(!contract&&!elementClass&&!elementPrivate&&!elementNative&&['*','int','uint','Number','Boolean','String','Object','Function','Class'].indexOf(identity)<0)
                         fail('Vector element publication requires interface, planned source class or qualified primitive: '+identity);
                     let specExport=exports.get(identity);
                     if(!specExport){
                         specExport='vector'+exports.size;exports.set(identity,specExport);
-                        vectorLines.push('export const '+specExport+'='+(contract?'as3VectorInterfaceSpec('+contract.tokenExport+')':elementClass?'as3VectorDeclarationSpec('+elementClass.tokenExport+')':elementNative?'as3VectorCanonicalSpec('+JSON.stringify(identity.replace(/\.([^.]*)$/,'::$1'))+',__vectorNative'+nativeNames.indexOf(identity)+')':'as3VectorPrimitiveSpec('+JSON.stringify(identity)+')')+';');
+                        vectorLines.push('export const '+specExport+'='+(contract?'as3VectorInterfaceSpec('+contract.tokenExport+')':elementClass?'as3VectorDeclarationSpec('+elementClass.tokenExport+')':elementPrivate?'as3VectorDeclarationSpec('+elementPrivate.tokenExport+')':elementNative?'as3VectorCanonicalSpec('+JSON.stringify(identity.replace(/\.([^.]*)$/,'::$1'))+',__vectorNative'+nativeNames.indexOf(identity)+')':'as3VectorPrimitiveSpec('+JSON.stringify(identity)+')')+';');
                     }
                     vectors.push(Object.freeze({owner,start:node.start,end:node.end,identity:'Vector.<'+identity+'>',
-                        name:'__AS3__.vec::Vector.<'+identity.replace(/\.([^.]*)$/,'::$1')+'>',specExport,...(elementClass?{elementClass:identity}:{}),...(elementNative?{elementNative:identity}:{})}));
+                        name:'__AS3__.vec::Vector.<'+(elementPrivate?elementPrivate.declaration.reflectedName:identity.replace(/\.([^.]*)$/,'::$1'))+'>',specExport,...(elementClass||elementPrivate?{elementClass:identity}:{}),...(elementNative?{elementNative:identity}:{})}));
                 }
                 node.children.forEach(walk);
-            };walk(roots.get(owner));
+            };
+            const helper = privateBindings.find(binding => binding.identity === owner);
+            walk(helper ? nativeSourceUnitNode(units.get(helper.declaration.sourceOwner), helper.declaration) : classes.get(owner));
         });
     }
     const nativeBindings: Array<NativeGeneratedDeclarationPlan['nativeBindings'][number]> = nativeNames.map((name, index) => {
@@ -407,7 +445,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         // Opaque common-engine scopes indexed by exact native generation. These
         // compiler exports never become properties of the source Class value.
         lines.push('export const ' + binding.lexicalExport + '=new WeakMap<Function,any>();');
-        if(binding.scriptGlobalExport) {
+        if(binding.scriptGlobalExport && privateBindings.some(p => p.declaration.sourceOwner === binding.qname)) {
+            lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>'+(data.inheritScriptClasses?selection+'?'+selection+'.resolve() as T:':'')+'__sourceUnit'+bindings.indexOf(binding)+'(0,factory);');
+        } else if(binding.scriptGlobalExport) {
             const split=binding.qname.lastIndexOf('.'),local=binding.qname.slice(split+1),uri=split<0?'':binding.qname.slice(0,split);
             const declaration={sourceId:binding.qname,sourceSha256:sourceHashes[binding.qname],bindings:[{name:local,uri,kind:'constant',type:name}]};
             const instantiate=data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0?'instantiateAS3ClassScriptUnit':'instantiateAS3ScriptUnit';
@@ -418,6 +458,43 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         active.delete(binding.qname); emitted.add(binding.qname);
     };
     bindings.forEach(add);
+    const privateActive = new Set<string>(), privateDone = new Set<string>();
+    const addPrivate = (binding: NativeGeneratedPrivateDeclarationBinding): void => {
+        if (privateDone.has(binding.identity)) return;
+        if (privateActive.has(binding.identity)) fail('cyclic file-private source inheritance: ' + binding.identity);
+        privateActive.add(binding.identity);
+        let baseToken: string;
+        if (binding.base) {
+            if (typeof binding.base !== 'string') {
+                const parent = privateBindings.find(item => item.declaration === binding.base);
+                if (!parent) fail('file-private base is outside its planned source file');
+                addPrivate(parent); baseToken = parent.tokenExport;
+            } else {
+                const parent = bindings.find(item => item.qname === binding.base);
+                if (!parent) fail('file-private base requires a planned source Class: ' + binding.identity);
+                baseToken = parent.tokenExport;
+            }
+        }
+        const authority = '__authority_' + binding.tokenExport;
+        lines.push('const '+authority+'=declareAS3ReferenceType<unknown>('+JSON.stringify(binding.declaration.reflectedName)+(baseToken?','+baseToken:'')+');',
+            'export const '+binding.tokenExport+'='+authority+'.type;');
+        if (binding.interfaces.length) {
+            const tokens = binding.interfaces.map(name => interfaces.find(item => item.qname === name).tokenExport);
+            lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{const generation='+authority+'.publishGeneration(constructor);'
+                +'registerAS3Class(constructor,['+tokens.join(',')+']);return generation;};');
+        } else lines.push('export const '+binding.publishExport+'='+authority+'.publishGeneration;');
+        lines.push('export const '+binding.lexicalExport+'=new WeakMap<Function,any>();');
+        privateActive.delete(binding.identity); privateDone.add(binding.identity);
+    };
+    privateBindings.forEach(addPrivate);
+    bindings.forEach((binding,index) => {
+        const helpers=privateBindings.filter(p=>p.declaration.sourceOwner===binding.qname);
+        if(!helpers.length||!binding.scriptGlobalExport)return;
+        if(data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0)fail('multi-declaration Class script retry requires qualification');
+        lines.push('let __sourceUnit'+index+':<T>(selected:number,factory:(global:object)=>T)=>T;',
+            'export function bindSourceUnit'+index+'(run:typeof __sourceUnit'+index+'):void {if(__sourceUnit'+index+')throw new TypeError("Source unit already bound");__sourceUnit'+index+'=run;}');
+        helpers.forEach((helper,slot)=>lines.push('export const publishPrivateScript'+privateBindings.indexOf(helper)+'=<T>(factory:(global:object)=>T):T=>__sourceUnit'+index+'('+(slot+1)+',factory);'));
+    });
     lines.push(...vectorLines);
     if(data.lexicalProviderModule){
         const membership=data.inheritScriptClasses?'bindAS3InternalPackage':'declareAS3InternalPackage';
@@ -430,22 +507,74 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             lines.push(membership+'(['+tokens.join(',')+']);');
         });
     }
-    const interfaceContracts=projectNativeGeneratedInterfaceContracts(classes,bindings,interfaces,resolve,
-        name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0,
+    const contractNodes = new Map(classes);
+    const contractClasses = bindings.concat(privateBindings.map(binding => {
+        contractNodes.set(binding.identity, nativeSourceUnitNode(units.get(binding.declaration.sourceOwner), binding.declaration));
+        return {...binding, qname: binding.identity, base: typeof binding.base === 'string' || binding.base === null
+            ? binding.base as string | null : privateDeclarationIdentity(binding.base)};
+    }));
+    const interfaceContracts=projectNativeGeneratedInterfaceContracts(contractNodes,contractClasses,interfaces,resolve,
+        name=>builtins.indexOf(name)>=0||contractClasses.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0,
         name=>providers[name]&&providers[name].nativeInterface?nativeGeneratedInterfaceBoundary(name):undefined,
         name=>name==='flash.events.EventDispatcher'&&providers[name]&&providers[name].nativeBase==='EventDispatcher'
             ?nativeGeneratedInterfaceBoundary('flash.events.IEventDispatcher'):undefined);
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
-        sourceHashes: Object.freeze(sourceHashes), bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),vectors:Object.freeze(vectors),
-        nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts});
-    contexts.set(plan, {input: data, plan});
+        sourceHashes: Object.freeze(sourceHashes), privateBindings, bindings: Object.freeze(bindings), interfaces: Object.freeze(interfaces), references: Object.freeze(references),vectors:Object.freeze(vectors),
+        nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts,namespaces});
+    contexts.set(plan, {input: data, plan, units});
     return plan;
+}
+
+/** Shared source-file capability; private descriptors are never public QNames. */
+export function nativeGeneratedSourceUnit(plan: NativeGeneratedDeclarationPlan, owner: string): NativeSourceUnit {
+    const context = contexts.get(plan), helper = context && plan.privateBindings.find(binding => binding.identity === owner);
+    const unit = context && context.units.get(helper ? helper.declaration.sourceOwner : owner);
+    if (!unit) fail('exact planned source-unit capability required');
+    return unit;
+}
+
+/** Detached AST for a planned declaration, preserving its original file scope. */
+export function nativeGeneratedDeclarationNode(plan: NativeGeneratedDeclarationPlan, owner: string): Node {
+    const ast = nativeSourceUnitAst(nativeGeneratedSourceUnit(plan, owner));
+    const helper = plan.privateBindings.find(binding => binding.identity === owner);
+    const selected = ast.declarations.find(item => helper ? item.declaration === helper.declaration : item.declaration.packageQName === owner);
+    if (!selected) fail('planned declaration owner required');
+    return selected.node;
+}
+
+/** Internal class view shared by public and file-private implementation consumers.
+ * identity is an opaque compiler key, never a public loading/registry name. */
+export interface NativeGeneratedClassDeclaration {
+    readonly identity: string;
+    readonly sourceOwner: string;
+    readonly reflectedName: string;
+    readonly base: string | null;
+    readonly tokenExport: string;
+    readonly publishExport: string;
+    readonly lexicalExport: string;
+    readonly scriptGlobalExport?: string;
+    readonly interfaces: ReadonlyArray<string>;
+}
+export function nativeGeneratedClassDeclaration(plan: NativeGeneratedDeclarationPlan, identity: string): NativeGeneratedClassDeclaration {
+    nativeGeneratedSourceUnit(plan, identity);
+    const binding = plan.bindings.find(item => item.qname === identity);
+    if (binding) return Object.freeze({identity, sourceOwner: identity, reflectedName: identity.replace(/\.([^.]*)$/, '::$1'),
+        base: binding.base, tokenExport: binding.tokenExport, publishExport: binding.publishExport,
+        lexicalExport: binding.lexicalExport, scriptGlobalExport: binding.scriptGlobalExport, interfaces: binding.interfaces});
+    const helper = plan.privateBindings.find(item => item.identity === identity);
+    if (!helper) fail('reference-only source cannot publish a class: ' + identity);
+    return Object.freeze({identity, sourceOwner: helper.declaration.sourceOwner, reflectedName: helper.declaration.reflectedName,
+        base: helper.base === null ? null : typeof helper.base === 'string' ? helper.base : privateDeclarationIdentity(helper.base),
+        tokenExport: helper.tokenExport, publishExport: helper.publishExport, lexicalExport: helper.lexicalExport,
+        ...(plan.bindings.some(b=>b.qname===helper.declaration.sourceOwner&&!!b.scriptGlobalExport)?{scriptGlobalExport:'publishPrivateScript'+plan.privateBindings.indexOf(helper)}:{}),
+        interfaces: helper.interfaces});
 }
 
 /** Exact compiler capability plus source-byte check; serialization grants no authority. */
 export function nativeGeneratedDeclarationSource(plan: NativeGeneratedDeclarationPlan, scope: string, owner: string, source: string):
     {readonly source: string; readonly sourceSha256: string; readonly referenceOnly?: boolean} {
-    const context = plan && contexts.get(plan), record = context && context.input.sources[owner];
+    const context = plan && contexts.get(plan), helper = context && plan.privateBindings.find(binding => binding.identity === owner);
+    const record = context && context.input.sources[helper ? helper.declaration.sourceOwner : owner];
     if (!context || scope !== plan.scope || !record || record.source !== source) fail('exact planned scope/source capability required');
     return record;
 }
@@ -457,29 +586,28 @@ export function nativeGeneratedDeclarationInputs(plan: NativeGeneratedDeclaratio
     return context.input;
 }
 
-function sourceResolver(root: Node, owner: string, known: (name: string) => boolean): (spelling: string) => string {
+function plannedUnitResolver(unit: NativeSourceUnit, known: (name: string) => boolean, privateNames = false, consumer?: NativeSourceUnitDeclaration): (spelling: string) => string {
+    const resolve = nativeSourceUnitResolver(unit, consumer || unit.declarations[0], known);
     return (spelling: string): string => {
-        if (spelling.indexOf('.') >= 0) return spelling;
-        const pkg = root.findChild(K.PACKAGE), namespace = pkg.findChild(K.NAME).text;
-        const imports = pkg.findChild(K.CONTENT).findChildren(K.IMPORT).map(node => node.text);
-        const ownName = owner.split('.').pop(), same = (namespace ? namespace + '.' : '') + spelling;
-        const explicit = imports.filter(name => !/\.\*$/.test(name) && name.split('.').pop() === spelling)
-            .filter((name, index, all) => all.indexOf(name) === index);
-        if (explicit.length > 1) fail('ambiguous explicit type: ' + owner + ':' + spelling);
-        if (builtins.indexOf(spelling) >= 0) {
-            if (ownName === spelling || known(same) || explicit.length
-                || imports.some(name => /\.\*$/.test(name) && known(name.slice(0, -1) + spelling)))
-                fail('ambiguous builtin type: ' + owner + ':' + spelling);
-            return spelling;
-        }
-        if (ownName === spelling) return owner;
-        if (explicit.length) return explicit[0];
-        if (known(same)) return same;
-        const wildcard = imports.filter(name => /\.\*$/.test(name)).map(name => name.slice(0, -1) + spelling)
-            .filter(known).filter((name, index, all) => all.indexOf(name) === index);
-        if (wildcard.length > 1) fail('ambiguous wildcard type: ' + owner + ':' + spelling);
-        return wildcard[0] || spelling;
+        try {
+            const identity = resolve(spelling);
+            if (typeof identity === 'string') return identity;
+            if (privateNames) return privateDeclarationIdentity(identity);
+            return fail('private source binding requires emission integration');
+        } catch (error) {fail(error.message.replace(/^AS3_SOURCE_UNIT_UNSUPPORTED: /, '').replace(/^AS3_GENERATED_DECLARATIONS_UNSUPPORTED: /, ''));}
     };
+}
+
+/** Resolve one authenticated implementation declaration in its complete source file. */
+export function nativeGeneratedDeclarationResolver(plan: NativeGeneratedDeclarationPlan, owner: string, source: string):
+    {root: Node; owner: string; resolve: (name: string) => string} {
+    nativeGeneratedDeclarationSource(plan, plan && plan.scope, owner, source);
+    const input = nativeGeneratedDeclarationInputs(plan, plan.scope), unit = nativeGeneratedSourceUnit(plan, owner);
+    const helper = plan.privateBindings.find(binding => binding.identity === owner);
+    const descriptor = helper ? helper.declaration : unit.declarations[0];
+    const known = Object.keys(input.sources).concat(Object.keys(input.providers || {}));
+    return {root: nativeSourceUnitAst(unit).root, owner,
+        resolve: plannedUnitResolver(unit, name => known.indexOf(name) >= 0, true, descriptor)};
 }
 
 /** A consumer resolves existing identities; it never adds tokens or publishers. */
@@ -498,5 +626,6 @@ export function nativeGeneratedConsumerResolver(plan: NativeGeneratedDeclaration
     const owner = (namespace ? namespace + '.' : '') + classes[0].findChild(K.NAME).text;
     if (input.sources[owner]) nativeGeneratedDeclarationSource(plan, input.scope, owner, source);
     const known = Object.keys(input.sources).concat(Object.keys(input.providers || {}));
-    return {root, owner, resolve: sourceResolver(root, owner, name => known.indexOf(name) >= 0)};
+    const unit = input.sources[owner] ? nativeGeneratedSourceUnit(plan, owner) : readNativeSourceUnit(owner, source, hash(source));
+    return {root, owner, resolve: plannedUnitResolver(unit, name => known.indexOf(name) >= 0)};
 }

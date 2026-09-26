@@ -39,7 +39,9 @@ export class NativeTypedLocals {
                 if (value.kind===K.FORIN||value.kind===K.FOREACH){
                     const target=value.children[0];
                     const wildcardForIn=value.kind===K.FORIN&&target.children.length===1&&target.children[0].kind===K.IDENTIFIER;
-                    if(!this.matchSourceSpans||!wildcardForIn&&(value.kind!==K.FOREACH||target.kind!==K.NAME))
+                    const inline = value.kind===K.FOREACH && target.kind===K.VAR && target.children.length===1
+                        && target.children[0].kind===K.NAME_TYPE_INIT && !target.children[0].findChild(K.INIT);
+                    if(!this.matchSourceSpans||!wildcardForIn&&(value.kind!==K.FOREACH||target.kind!==K.NAME&&!inline))
                         this.fail('source enumeration targets held');
                     // Validate after collecting all function-scoped declarations.
                 }
@@ -73,12 +75,13 @@ export class NativeTypedLocals {
             const body=node.findChild(K.BLOCK);if(body)collect(body);
             const enumeration=(value:Node):void=>{
                 if(value.kind===K.FOREACH){
-                    const name=value.children[0].text;
+                    const target=value.children[0],inline=target.kind===K.VAR;
+                    const name=inline?target.findChild(K.NAME_TYPE_INIT).findChild(K.NAME).text:target.text;
                     const reference=locals.some(local=>local.name===name&&!!local.reference);
                     const wildcard=this.matchSourceSpans&&wildcards.indexOf(name)>=0;
                     // The generated local assignment pass applies storage coercion
                     // to each enumerated value before publishing the new value.
-                    const storage=this.matchSourceSpans&&locals.some(local=>local.name===name&&['String','Object','Class'].indexOf(local.type)>=0&&!local.parameter);
+                    const storage=this.matchSourceSpans&&locals.some(local=>local.name===name&&(inline||['String','Object','Class'].indexOf(local.type)>=0)&&!local.parameter);
                     if(!reference&&!wildcard&&!storage)this.fail('source enumeration requires a declared reference, String, Object, Class or wildcard local');
                     if(wildcard||storage)for(let scope=value.parent;scope&&scope!==node;scope=scope.parent)
                         if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===name)

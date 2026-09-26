@@ -466,15 +466,12 @@ function parseAccessExpression(parser:AS3Parser):Node {
 
 function parseFunctionCall(parser:AS3Parser, node:Node):Node {
 
-    let result:Node = createNode(NodeKind.CALL, {start: node.start});
-    result.children.push(node);
-
+    let result = node;
+    // Each argument list invokes the preceding result, not the original callee.
     while (tokIs(parser, Operators.LEFT_PARENTHESIS)) {
-        result.children.push(parseArgumentList(parser));
+        const args = parseArgumentList(parser);
+        result = createNode(NodeKind.CALL, {start: result.start, end: args.end}, result, args);
     }
-    result.end = result.children.reduce((index:number, child:Node) => {
-        return Math.max(index, child ? child.end : 0);
-    }, 0);
     return result;
 }
 

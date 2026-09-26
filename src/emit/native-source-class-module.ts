@@ -1,7 +1,7 @@
 import * as ts from 'typescript-4-9';
 import parse = require('../parse');
 import {emit, EmitterOptions} from './emitter';
-import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedClassDeclaration} from './native-generated-declarations';
 import {NativeTweenSourcePlans} from './native-tween-plans';
 
 export interface NativeSourceClassModuleInput {
@@ -45,6 +45,7 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         movie={width,height,sourceSha256};
     }
     const plan = input.plan, planned = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
+    if (plan.namespaces.length) fail('source namespace value publication requires qualification');
     if (!planned.inheritScriptClasses || !planned.scriptDomainProvider || !planned.scriptGlobalProviderModule
         || !(plan.bindings.length + plan.interfaces.length) || plan.bindings.some(b => !b.scriptGlobalExport)
         || Object.keys(planned.sources).length !== plan.bindings.length + plan.interfaces.length
@@ -62,12 +63,13 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
     const session = specifier(input.loadingSessionModule), helper = specifier(options.nativeClassHelperModules.nativeClass);
     if (external.indexOf(session) < 0 || external.indexOf(helper) < 0) fail('session and native Class helpers must be explicit external modules');
     const domain = planned.scriptDomainProvider, declarations = './__native_declarations';
-    const classModules = plan.bindings.map((b, i) => './__native_class_' + i);
+    const classes = plan.bindings.map(b=>b.qname).concat(plan.privateBindings.map(b=>b.identity)).map(identity=>nativeGeneratedClassDeclaration(plan,identity));
+    const classModules = classes.map((b, i) => './__native_class_' + i);
     const interfaceModules = plan.interfaces.map((b, i) => './__native_interface_' + i);
     const local = [domain.module, declarations].concat(classModules, interfaceModules);
     if (new Set(local).size !== local.length || external.some(m => local.indexOf(m) >= 0)) fail('local/external module collision');
     const imports = {...options.importModules};
-    plan.bindings.forEach((b, i) => {imports[b.qname] = classModules[i];});
+    classes.forEach((b, i) => {imports[b.identity] = classModules[i];});
     plan.interfaces.forEach((b, i) => {imports[b.qname] = interfaceModules[i];});
     const generated = [{module: declarations, source: plan.moduleSource}];
     if(input.tweenSourcePlans){
@@ -77,13 +79,13 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
                 ||input.tweenSourcePlans[q].source!==planned.sources[q].source)fail('tween plan source not in class cohort');
         });
     }
-    plan.bindings.forEach((binding, i) => {
-        const source = planned.sources[binding.qname].source;
+    classes.forEach((binding, i) => {
+        const source = planned.sources[binding.sourceOwner].source;
         const opts = {...options, customVisitors: [], importModules: imports,
-            ...(input.tweenSourcePlans?{nativeTweenSourcePlans:input.tweenSourcePlans[binding.qname]}:{}),
-            nativeGeneratedDeclarations: {plan, module: declarations},
+            ...(input.tweenSourcePlans?{nativeTweenSourcePlans:input.tweenSourcePlans[binding.sourceOwner]}:{}),
+            nativeGeneratedDeclarations: {plan, module: declarations, declarationIdentity:binding.identity},
             nativeReferenceCoercion: {...options.nativeReferenceCoercion, plan, module: declarations}} as EmitterOptions;
-        generated.push({module: classModules[i], source: emit(parse(binding.qname + '.as', source), source, opts)});
+        generated.push({module: classModules[i], source: emit(parse(binding.sourceOwner + '.as', source), source, opts)});
     });
     // Interfaces retain their complete authored type declarations. Runtime
     // identity comes from the selected nominal header, never a JS constructor.
@@ -133,7 +135,12 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         dependencies.push(Object.freeze({module: item.module, imports: Object.freeze(required)}));
         return '[' + JSON.stringify(item.module) + ', function(exports, require) {\n' + compiled.outputText + '\n}]';
     });
+    const units=plan.bindings.map((binding,index)=>({binding,index,helpers:plan.privateBindings.filter(p=>p.declaration.sourceOwner===binding.qname)})).filter(unit=>unit.helpers.length);
     const used = new Set<string>([session, helper]);
+    if(units.length) {
+        if(external.indexOf(planned.scriptGlobalProviderModule)<0)fail('source unit script provider must be explicit');
+        used.add(planned.scriptGlobalProviderModule);
+    }
     dependencies.forEach(d => d.imports.forEach(m => {if (external.indexOf(m) >= 0) used.add(m);}));
     const providers = external.filter(m => used.has(m));
     const providerName = (m: string): string => '__provider' + providers.indexOf(m);
@@ -154,6 +161,19 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         '    return exports;',
         '  }',
         '  const headers = load(' + JSON.stringify(declarations) + ');',
+        ...units.map(unit=>{
+            const members=[classes[unit.index]].concat(unit.helpers.map(p=>classes.find(b=>b.identity===p.identity)));
+            const records=members.map((b,index)=>({name:index?unit.helpers[index-1].declaration.name:unit.binding.qname.split('.').pop(),uri:index?'':unit.binding.qname.split('.').slice(0,-1).join('.'),
+                ...(index?{visibility:'file-private'}:{}),kind:'constant',type:b.reflectedName}));
+            const declaration={sourceId:unit.binding.qname,sourceSha256:planned.sources[unit.binding.qname].sourceSha256,bindings:records};
+            const readers=members.map((b,index)=>'()=>'+providerName(helper)+'.readNativeClass(load('+JSON.stringify(classModules[classes.indexOf(b)])+')['+JSON.stringify(records[index].name)+'],"value")');
+            return '  {let activeGlobal;headers.bindSourceUnit'+unit.index+'((selected,factory)=>{\n'
+                +'    if(activeGlobal)return factory(activeGlobal);\n    let result;\n'
+                +'    '+providerName(planned.scriptGlobalProviderModule)+'.instantiateAS3ScriptUnit(domain,'+JSON.stringify(declaration)+',context=>{\n'
+                +'      activeGlobal=context.global;try {const readers=['+readers.join(',')+'];readers[selected]=()=>factory(context.global);\n'
+                +'        return '+JSON.stringify(records)+'.map((record,index)=>{const value=readers[index]();if(index===selected)result=value;return {...record,value};});\n'
+                +'      }finally{activeGlobal=undefined;}\n    });return result;\n  });}';
+        }),
         '  return [',
         plan.bindings.map((b, i) => '    {name:' + JSON.stringify(b.qname) + ',declaration:headers[' + JSON.stringify(b.tokenExport)
             + '],resolve:()=>' + providerName(helper) + '.readNativeClass(load(' + JSON.stringify(classModules[i]) + ')['

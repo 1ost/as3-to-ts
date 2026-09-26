@@ -45,9 +45,10 @@ async function main(){
     assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,...change}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;
    }
    const guards=[['packagecases.Shared','LIMIT:uint=19','LIMIT:uint=1+18'],['packagecases.Shared','bump():void','bump(value:uint):void'],['packagecases.Shared','bump():void','bump():Boolean'],['packagecases.Shared','count:uint','count:Number']];
-   if(cohort==='child')guards.push(['packagecases.Shared','public class Shared {','public class Shared { public function Shared(){}']);
+   // Empty constructors are supported; retain a constructor boundary that still needs qualification.
+   if(cohort==='child')guards.push(['packagecases.Shared','public class Shared {','public class Shared { public function Shared(value:Vector.<Object>){}']);
    for(const [q,before,after]of guards){const source=sources[q].source.replace(before,after);assert.notEqual(source,sources[q].source);
-    assert.throws(()=>emitPlan(api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,[q]:{source,sourceSha256:hash(source)}}})),/AS3_[A-Z_]+UNSUPPORTED/);rejectionGuards++;
+    assert.throws(()=>emitPlan(api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,[q]:{source,sourceSha256:hash(source)}}})),/AS3_[A-Z_]+UNSUPPORTED/,cohort+': '+before+' -> '+after);rejectionGuards++;
    }
    const unnamed='package {public class Unnamed {}}';assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,Unnamed:{source:unnamed,sourceSha256:hash(unnamed)}}}),/inherited internal membership requires named source packages/);rejectionGuards++;
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;

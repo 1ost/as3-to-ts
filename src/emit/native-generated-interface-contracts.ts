@@ -119,7 +119,7 @@ export function projectNativeGeneratedInterfaceContracts(
             for(const ancestor of ancestors){
                 const candidate=declarations.get(ancestor.qname).findChild(K.CONTENT).children.find(node=>
                     memberKind(node)===expected.kind&&node.findChild(K.NAME).text===expected.name
-                    &&!(node.kind===K.FUNCTION&&node.findChild(K.NAME).text===ancestor.qname.split('.').pop())
+                    &&!(node.kind===K.FUNCTION&&node.findChild(K.NAME).text===declarations.get(ancestor.qname).findChild(K.NAME).text)
                     &&flags(node).indexOf('public')>=0&&flags(node).indexOf('static')<0);
                 if(candidate){actual=member(ancestor.qname,candidate);break;}
             }

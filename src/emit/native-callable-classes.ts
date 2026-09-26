@@ -1,3 +1,4 @@
+import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource} from './native-generated-declarations';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {generatedMethodCompletes} from './native-generated-completions';
 import {NativeLexicalMembers} from './native-lexical-members';
@@ -36,11 +37,18 @@ export class NativeCallableClasses {
         if (typeof options !== 'object' || Array.isArray(options)
             || Object.getPrototypeOf(options) !== Object.prototype && Object.getPrototypeOf(options) !== null)
             this.fail('invalid exact source class map');
+        const classNameFor=(key:string):string=>{
+            const helper=generated&&generated.options.plan.privateBindings.find(binding=>binding.identity===key);
+            return helper?helper.declaration.name:key.split('.').pop();
+        };
+        const sourceClassNames=Object.keys(options).map(classNameFor);
         const roots = new Map<string, Node>();
         Object.keys(options).forEach(qname => {
             if (typeof options[qname] !== 'string' || !lazy || lazy[qname] !== 'lazy') this.fail('source identity must be lazy: ' + qname);
             this.sourceTexts.set(qname, options[qname]);
-            const root = parse(qname + '.as', options[qname]), declarations: Node[] = [];
+            if(generated) nativeGeneratedDeclarationSource(generated.options.plan,generated.options.plan.scope,qname,options[qname]);
+            const selected=generated&&nativeGeneratedClassDeclaration(generated.options.plan,qname);
+            const root = generated ? nativeGeneratedDeclarationNode(generated.options.plan,qname) : parse(qname + '.as', options[qname]), declarations: Node[] = [];
             const walk = (node: Node): void => {
                 if (!node) return;
                 node.children = node.children.filter(child => !!child);
@@ -68,9 +76,10 @@ export class NativeCallableClasses {
             if (metadata) validateNativeTypeOf(cls, options[qname], Object.keys(lazy));
             let pkg = cls.parent; while (pkg && pkg.kind !== K.PACKAGE) pkg = pkg.parent;
             const namespace = pkg && pkg.findChild(K.NAME).text || '';
-            const imports = pkg.findChild(K.CONTENT).findChildren(K.IMPORT).map(node => node.text);
-            if ((namespace ? namespace + '.' : '') + name !== qname) this.fail('mismatched source identity: ' + qname);
-            const classAliases = new Set<string>(Object.keys(options).map(key => key.split('.').pop()));
+            const importContent = pkg ? pkg.findChild(K.CONTENT) : cls.parent;
+            const imports = importContent.findChildren(K.IMPORT).map(node => node.text);
+            if (!selected && (namespace ? namespace + '.' : '') + name !== qname) this.fail('mismatched source identity: ' + qname);
+            const classAliases = new Set<string>(sourceClassNames);
             const aliasScan = (node: Node): void => {
                 if (node.kind === K.NAME_TYPE_INIT && node.findChild(K.TYPE) && node.findChild(K.TYPE).text === 'Class')
                     classAliases.add(node.findChild(K.NAME).text);
@@ -87,7 +96,7 @@ export class NativeCallableClasses {
                     && ['call', 'apply', 'bind', 'prototype'].indexOf(node.children[1].text) >= 0)
                     this.fail('direct callable-constructor invocation/prototype manipulation');
                 if (node.kind === K.CALL && node.children[0] && isClassAlias(node,node.children[0].text)
-                    && !Object.keys(options).some(key => key.split('.').pop() === node.children[0].text)
+                    && sourceClassNames.indexOf(node.children[0].text)<0
                     && !(generated&&classValueModule&&node.parent&&node.parent.kind===K.NEW&&this.isCapturedClass(node,node.children[0].text)))
                     this.fail('dynamic Class invocation requires exact constructor authority');
                 node.children.forEach(callScan);
@@ -96,7 +105,8 @@ export class NativeCallableClasses {
             if (cls.findChild(K.IMPLEMENTS_LIST) && !generated) this.fail('interface construction identity requires separate authority');
             let base: string = null;
             const ext = cls.findChild(K.EXTENDS);
-            if (ext) {
+            if (selected) base=selected.base;
+            else if (ext) {
                 if (ext.text.indexOf('.') >= 0) this.fail('qualified base syntax');
                 const candidates: string[] = [];
                 const local = (namespace ? namespace + '.' : '') + ext.text;
@@ -153,8 +163,8 @@ export class NativeCallableClasses {
                     const value = parameter.findChild(K.NAME_TYPE_INIT), type = value.findChild(K.TYPE);
                     if(value.findChild(K.VECTOR))this.fail('vector constructor parameter coercion requires authority');
                     const sourceReference=generated&&type&&generated.options.plan.references.find(ref=>ref.owner===qname&&ref.start===type.start&&ref.end===type.end);
-                    const sourceDeclaration=sourceReference&&(sourceReference.kind==='declaration'
-                        ?generated.options.plan.bindings.find(binding=>binding.qname===sourceReference.identity)
+                    const sourceDeclaration=sourceReference&&((sourceReference.kind==='declaration'||sourceReference.kind==='private-declaration')
+                        ?{qname:sourceReference.identity,tokenExport:nativeGeneratedClassDeclaration(generated.options.plan,sourceReference.identity).tokenExport}
                         :sourceReference.kind==='interface'&&generated.options.plan.interfaces.find(binding=>binding.qname===sourceReference.identity));
                     const nativeReference=sourceReference&&sourceReference.kind==='native'
                         &&(accessibilityReference&&sourceReference.identity==='flash.accessibility.AccessibilityImplementation'
@@ -220,7 +230,7 @@ export class NativeCallableClasses {
                 if(rest&&usesArguments)this.fail('combined rest/arguments constructor scope requires qualification');
             }
             const value = {qname, name, base, fields, parameters, usesArguments, rest, instanceMembers}; this.classes.set(qname, value); roots.set(qname, cls); this.sourceRoots.set(qname, cls);
-            if (options[qname] === source) {
+            if (options[qname] === source && (!generated || generated.projection.binding.identity===qname)) {
                 if (this.own) this.fail('ambiguous current source');
                 this.own = value;
             }
@@ -267,7 +277,12 @@ export class NativeCallableClasses {
         if (!this.own) return source;
         const ts = this.ts, S = ts.SyntaxKind, name = this.own.name;
         const file = ts.createSourceFile('Callable.ts', source, ts.ScriptTarget.Latest, true);
-        if (file.parseDiagnostics.length) this.fail('intermediate native syntax');
+        if (file.parseDiagnostics.length) {
+            const first = file.parseDiagnostics[0];
+            this.fail('intermediate native syntax: '
+                + ts.flattenDiagnosticMessageText(first.messageText, ' ')
+                + ' near ' + JSON.stringify(source.slice(Math.max(0, first.start - 60), first.start + 100)));
+        }
         let cls: any, alias: any;
         const visit = (node: any): void => {
             if (node.kind === S.ClassDeclaration && node.name.text === name) cls = node;
@@ -338,7 +353,7 @@ export class NativeCallableClasses {
                 if(this.generated) {
                     const ref=type&&this.generated.options.plan.references.find(r=>r.owner===owner.qname&&r.start===type.start&&r.end===type.end);
                     const qualified=ref&&(ref.kind==='intrinsic'&&['*','int','uint','Number','Boolean','String','Object'].indexOf(ref.identity)>=0
-                        ||ref.kind==='declaration'||ref.kind==='interface');
+                        ||ref.kind==='declaration'||ref.kind==='private-declaration'||ref.kind==='interface');
                     if(!qualified)this.fail('generated super signature requires qualified parameters');
                     const init=declaration.findChild(K.INIT);
                     if(init){validateOptionalDefault(owner.qname,type,init);optional=true;}
@@ -415,9 +430,10 @@ export class NativeCallableClasses {
         const referenceToken = planned || this.generated ? (qname:string):string => {
             const binding=this.declarationDomain&&this.declarationDomain.bindings.find(value=>value.qname===qname)
                 ||this.generated&&[...this.generated.options.plan.interfaces,...this.generated.options.plan.bindings].find(value=>value.qname===qname);
+            const helper=this.generated&&this.generated.options.plan.privateBindings.find(value=>value.identity===qname);
             const native=this.generated&&this.generated.options.plan.nativeBindings.find(value=>value.qname===qname);
-            if(!binding&&!native)this.fail('foreign local declaration is absent from its compiler domain');
-            return domainImport+'.'+(binding?binding.tokenExport:native.referenceExport);
+            if(!binding&&!helper&&!native)this.fail('foreign local declaration is absent from its compiler domain');
+            return domainImport+'.'+(binding?binding.tokenExport:helper?helper.tokenExport:native.referenceExport);
         } : undefined;
         const text = (node: any): string => node.getText(file);
         const params = (member: any, signature: boolean): string => member.parameters.filter((p:any)=>signature||!this.generated||!p.dotDotDotToken).map((p: any) => {

@@ -1567,8 +1567,8 @@ try {
         arraySource,sha256,undefined,undefined,undefined,undefined,sourceMemberAuthority);
     const arrayOutput=built.emitter.emitSemanticProgram(arraySemantic,
         {compiler:require("typescript-4-9"),expectedTypeScriptVersion:"4.9.5"});
-    assert.match(arrayOutput.code,/private values: unknown\[\] \| null;/);
-    assert.match(arrayOutput.code,/this\.values = __as3ArrayLiteral\(\[\]\);/);
+    assert.match(arrayOutput.code,/private declare __as3PrivateField_[\da-f]+_values: unknown\[\] \| null;/);
+    assert.match(arrayOutput.code,/this\.__as3PrivateField_[\da-f]+_values = __as3ArrayLiteral\(\[\]\);/);
     const shadowArraySource="package p { public class Array { public function Array() {} public function make():* { return new Array(); } } }";
     const shadowArrayAst=built.normalizer.normalizeParserAst(built.parse("fixtures/Array.as",shadowArraySource),shadowArraySource,sha256);
     const shadowArrayProgram=built.adapter.adaptNormalizedParserAst(shadowArrayAst,authority(built.ledger),

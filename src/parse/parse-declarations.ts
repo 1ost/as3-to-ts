@@ -88,16 +88,10 @@ function parsePackageContent(parser:AS3Parser, allowScriptStatements:boolean):No
             meta.length = 0;
         } else if (tokIs(parser, Keywords.FUNCTION)) {
             parseClassFunctions(parser, result, modifiers, meta);
-        } else if (allowScriptStatements && tokIs(parser, Keywords.VAR)) {
-            result.children.push(parseVarList(parser, meta, modifiers));
-            skip(parser, Operators.SEMI_COLUMN);
-            modifiers.length = 0;
-            meta.length = 0;
-        } else if (allowScriptStatements && tokIs(parser, Keywords.CONST)) {
-            result.children.push(parseConstList(parser, meta, modifiers));
-            skip(parser, Operators.SEMI_COLUMN);
-            modifiers.length = 0;
-            meta.length = 0;
+        } else if (tokIs(parser, Keywords.VAR)) {
+            parseClassField(parser, result, modifiers, meta);
+        } else if (tokIs(parser, Keywords.CONST)) {
+            parseClassConstant(parser, result, modifiers, meta);
         } else if (allowScriptStatements && tokIs(parser, Keywords.NAMESPACE)) {
             result.children.push(parseNativeNamespaceDeclaration(parser, modifiers));
             skip(parser, Operators.SEMI_COLUMN);
@@ -297,7 +291,7 @@ function parseClass(parser:AS3Parser, meta:Node[], modifier:Token[]):Node {
     result.end = tok.end;
     result.start = result.children.reduce((index:number, child:Node) => {
         return Math.min(index, child ? child.start : Infinity);
-    }, index);
+    }, result.start);
 
     return result;
 }
@@ -727,4 +721,3 @@ function isDeclarationModifier(text:string):boolean {
 function appendIfPresent(parent:Node, child:Node):void {
     if (child) parent.children.push(child);
 }
-

@@ -7742,7 +7742,8 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
     const declaration: SemanticClass = Object.assign(identity(classNode), {
         declarationKind: "class" as "class", name: className,
         modifiers: parseModifiers(classNode, true,
-            placeholder.sourceMemberAuthority !== null && localDeclaration(placeholder,placeholder.classQualifiedName,classNode).status === "complete"
+            placeholder.localMemberAuthority !== null && placeholder.resolveCurrentLocal !== null
+                && localDeclaration(placeholder,placeholder.classQualifiedName,classNode).status === "complete"
             || isArrayType(semanticType(classNode,className,className,[],false,placeholder.classQualifiedName),placeholder)),
         extendsType,
         interfaceExtendsTypes: [],

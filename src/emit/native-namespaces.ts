@@ -2,6 +2,13 @@ import Node, {createNode, outerEncapsulatedExpression} from '../syntax/node';
 import NodeKind from '../syntax/nodeKind';
 import {NativeSourceAncestryPlan} from './native-source-ancestry';
 
+/** Shared literal boundary for source planning and ordinary namespace lowering. */
+export function nativeNamespaceLiteralUri(text: string): string {
+    const literal = /^(["'])([^\\\r\n]*)\1$/.exec(text);
+    if (!literal || !literal[2]) throw new Error('AS3_NAMESPACE_UNSUPPORTED: namespace URI must be a nonempty unescaped literal');
+    return literal[2];
+}
+
 export interface NamespaceMember {
     uri: string;
     name: string;
@@ -303,9 +310,7 @@ export class NativeNamespaces {
         if (active.indexOf(node) >= 0) this.fail('cyclic namespace alias');
         const value = node.children[2];
         if (value.kind === NodeKind.LITERAL) {
-            const literal = /^(["'])([^\\\r\n]*)\1$/.exec(value.text);
-            if (!literal || !literal[2]) this.fail('namespace URI must be a nonempty unescaped literal');
-            return literal[2];
+            return nativeNamespaceLiteralUri(value.text);
         }
         if (value.kind !== NodeKind.IDENTIFIER) this.fail('dynamic namespace declaration');
         const qname = this.lookup(node, value.text);
