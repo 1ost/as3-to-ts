@@ -535,14 +535,23 @@ function buildTree(options = {}) {
             n("RETURN"),
         ];
     }
-    if (options.objectWorkpack || options.objectDuplicate || options.objectProto) {
+    if (options.objectWorkpack || options.objectDuplicate || options.objectProto
+        || options.objectEscapedKey || options.objectEscapedDuplicate || options.objectInvalidEscape) {
         const properties = options.objectProto
             ? [["__proto__", n("LITERAL", "1")]]
             : options.objectDuplicate
                 ? [["alpha", n("LITERAL", "1")], ["alpha", n("LITERAL", "2")]]
                 : [["alpha", n("LITERAL", "1")], ["label", n("LITERAL", '\"ready\"')]];
+        const escaped = raw => n("PROP", null, [n("NAME", raw), n("VALUE", null, [n("LITERAL", "1")])]);
+        const object = options.objectEscapedKey
+            ? n("OBJECT", null, [escaped(String.raw`"one\'two\nthree"`)])
+            : options.objectEscapedDuplicate
+                ? n("OBJECT", null, [escaped(String.raw`"one\'two"`), escaped('"one\'two"')])
+                : options.objectInvalidEscape
+                    ? n("OBJECT", null, [escaped(String.raw`"bad\x"`)])
+                    : objectLiteral(properties);
         onEventBody = [
-            localDeclaration("VAR_LIST", "config", "Object", objectLiteral(properties)),
+            localDeclaration("VAR_LIST", "config", "Object", object),
             n("RETURN"),
         ];
     }
@@ -2130,6 +2139,12 @@ function main() {
     const objectProgram = adapt(api, buildTree({ objectWorkpack: true }), authority);
     const objectOutput = api.emitSemanticProgram(objectProgram, { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
     assert.match(objectOutput.code, /var config: unknown = \{ "alpha": 1, "label": "ready" \};/);
+    const escapedKeyProgram = adapt(api, buildTree({ objectEscapedKey: true }), authority);
+    const escapedKeyOutput = api.emitSemanticProgram(escapedKeyProgram,
+        { compiler: ts, expectedTypeScriptVersion: "4.9.5" });
+    assert.ok(escapedKeyOutput.code.includes('"one\'two\\nthree": 1'));
+    assertErrorCode(() => adapt(api, buildTree({ objectEscapedDuplicate: true }), authority), "HARDENED_OBJECT_NAME");
+    assertErrorCode(() => adapt(api, buildTree({ objectInvalidEscape: true }), authority), "HARDENED_OBJECT_NAME");
     assertErrorCode(() => adapt(api, buildTree({ objectDuplicate: true }), authority), "HARDENED_OBJECT_NAME");
     assertErrorCode(() => adapt(api, buildTree({ objectProto: true }), authority), "HARDENED_OBJECT_NAME");
     const defaultParameterProgram = adapt(api, buildTree({ defaultParameterWorkpack: true }), authority);

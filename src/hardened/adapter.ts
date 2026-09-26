@@ -3127,9 +3127,10 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
             }
             const rawName = requiredText(nameNode, "object property name");
             let name: string;
-            if (rawName.startsWith('"') && rawName.endsWith('"')) {
-                try { name = JSON.parse(rawName); } catch (_error) {
-                    fail("HARDENED_OBJECT_NAME", "quoted object property name must be canonical JSON string source", nameNode);
+            if ((rawName.startsWith('"') && rawName.endsWith('"'))
+                || (rawName.startsWith("'") && rawName.endsWith("'"))) {
+                try { name = JSON.parse(canonicalizeAdmittedStringLiteral(rawName)); } catch (_error) {
+                    fail("HARDENED_OBJECT_NAME", "quoted object property name is outside the admitted AS3 escape subset", nameNode);
                 }
                 if (typeof name !== "string") fail("HARDENED_OBJECT_NAME", "object property name must be a string", nameNode);
             } else if (/^(?:0|[1-9][0-9]*)$/.test(rawName) && Number.isSafeInteger(Number(rawName))) {
