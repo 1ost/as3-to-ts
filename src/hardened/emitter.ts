@@ -316,7 +316,8 @@ function expressionNode(expression: SemanticExpression, ts: TypeScriptCompilerAp
             && expression.callee.bindingKind === "import"
             && expression.callee.bindingSourceQualifiedName === "flash.net.navigateToURL")
             return ts.factory.createCallExpression(ts.factory.createIdentifier(expression.callee.name), undefined,
-                expression.arguments.map(argument => expressionNode(argument, ts)));
+                [...expression.arguments.map(argument => expressionNode(argument, ts)),
+                    ...(expression.defaultNavigationTarget ? [ts.factory.createStringLiteral("_blank")] : [])]);
         if (expression.sharedArraySome && expression.callee.kind === "member")
             return ts.factory.createCallExpression(ts.factory.createIdentifier("__as3ArraySome"),undefined,
                 [expressionNode(expression.callee.target,ts),ts.factory.createArrayLiteralExpression(

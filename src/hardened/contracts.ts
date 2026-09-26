@@ -321,6 +321,7 @@ export interface CallExpression extends SemanticIdentity {
     callee: SemanticExpression;
     calleeNullable: boolean;
     packageFunctionCall?: true;
+    defaultNavigationTarget?: true;
     arguments: SemanticExpression[];
     capabilitySource: string | null;
     capabilityMember: string | null;

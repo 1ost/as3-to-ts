@@ -5122,6 +5122,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         let resultType: SemanticType | null = null;
         let calleeNullable = false;
         let packageFunctionCall: true | undefined;
+        let defaultNavigationTarget: true | undefined;
         let nativeDispatcherSelfTarget: true | undefined;
         if (callee.kind === "super") {
             if (context.baseLocalQName !== null) {
@@ -5355,11 +5356,13 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 || mapping.targetExport !== "navigateToURL"
                 || mapping.targetSignature !== "(request: URLRequest, target: string) => void")
                 fail("HARDENED_NAVIGATION_AUTHORITY", "Flash navigation lacks its authenticated shared target", node);
-            if (args.length !== 2
+            if ((args.length !== 1 && args.length !== 2)
                 || mappedFlashQNameForType(assignmentType(args[0]!, context, node.children[1]!.children[0]!), context)
                     !== "flash.net.URLRequest"
-                || args[1]!.kind !== "literal" || args[1]!.value !== "_blank")
+                || args.length === 2 && (args[1]!.kind !== "literal" || args[1]!.value !== "_blank"))
                 fail("HARDENED_NAVIGATION_ARGUMENT", "Flash navigation requires a URLRequest and the retained _blank target", node);
+            // The SDK's omitted window argument opens a new window, matching _blank.
+            if (args.length === 1) defaultNavigationTarget = true;
             capabilitySource = mapping.sourceQName; capabilityMember = "<call>";
             resultType = semanticType(node, "void", "void");
         } else if (callee.kind === "identifier" && callee.bindingKind === "import"
@@ -5655,6 +5658,7 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
         const result: CallExpression = Object.assign(identity(node), {
             kind: "call" as "call", callee, calleeNullable, arguments: args,
             ...(packageFunctionCall ? {packageFunctionCall} : {}),
+            ...(defaultNavigationTarget ? {defaultNavigationTarget} : {}),
             ...(nativeDispatcherSelfTarget ? {nativeDispatcherSelfTarget} : {}),
             capabilitySource, capabilityMember, resultType,
             ...(context.arraySomeProvider && capabilitySource === "Array" && capabilityMember === "some"

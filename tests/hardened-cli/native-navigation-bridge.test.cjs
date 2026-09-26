@@ -21,14 +21,14 @@ test("native navigateToURL uses the authenticated LayaAir function", { skip: !ai
         import flash.net.URLRequest;
         import flash.net.navigateToURL;
         public class NavigationProbe {
-            public function open():void { navigateToURL(new URLRequest("https://example.test/"), ${target}); }
+            public function open():void { navigateToURL(new URLRequest("https://example.test/")${target ? `, ${target}` : ""}); }
         }
     }`;
     const sourcePath = path.join(source, "NavigationProbe.as");
     const run = (command, args) => spawnSync(command, args, { cwd: root, encoding: "utf8", timeout: 120000 });
     const profile = target => {
         fs.writeFileSync(sourcePath, program(target));
-        const output = path.join(directory, "profile-" + target.replace(/\W/g, ""));
+        const output = path.join(directory, "profile-" + (target ? target.replace(/\W/g, "") : "default"));
         const result = run("python3", ["-B", "tools/create-fixture-profile.py", "--source", source,
             "--entry", "NavigationProbe", "--air-sdk", air, "--laya", laya,
             "--ffdec-jar", ffdec, "--output", output]);
@@ -48,6 +48,13 @@ test("native navigateToURL uses the authenticated LayaAir function", { skip: !ai
     assert.match(generated, /import \{ navigateToURL \} from "laya\/flash\/net\/URLRequest";/);
     assert.match(generated, /navigateToURL\(new \(__as3InitializeClass\(URLRequest, false\)\)/);
     assert.doesNotMatch(generated, /__as3InitializeClass\(navigateToURL/);
+
+    const defaultProfile = profile(null);
+    const defaultOutput = path.join(directory, "default");
+    const defaultTarget = compile("transpile", defaultProfile, defaultOutput);
+    assert.equal(defaultTarget.status, 0, defaultTarget.stdout + defaultTarget.stderr);
+    const defaultGenerated = fs.readFileSync(path.join(defaultOutput, "__as3_runtime/application/NavigationProbe.ts"), "utf8");
+    assert.match(defaultGenerated, /navigateToURL\(new \(__as3InitializeClass\(URLRequest, false\)\).*"_blank"\)/);
 
     const invalidProfile = profile('"_self"');
     const invalidOutput = path.join(directory, "invalid");
