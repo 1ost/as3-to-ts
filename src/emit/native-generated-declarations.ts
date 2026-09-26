@@ -32,7 +32,7 @@ export interface NativeGeneratedDeclarationInput {
     /** Explicit single-Class script units whose failed initializer globals are retained. */
     classScriptSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
-    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher' | 'Sprite'; nativeInterface?: true; nativeVector?: true}};
+    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher' | 'Sprite' | 'MovieClip'; nativeInterface?: true; nativeVector?: true}};
 }
 export interface NativeGeneratedDeclarationBinding {
     readonly qname: string;
@@ -157,8 +157,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if(provider.nativeBase !== undefined && !((provider.nativeBase === 'Event' && name === 'flash.events.Event' && provider.exportName === 'Event')
             || (provider.nativeBase === 'Error' && name === 'Error' && provider.exportName === 'Error')
             || (provider.nativeBase === 'EventDispatcher' && name === 'flash.events.EventDispatcher' && provider.exportName === 'EventDispatcher')
-            || (provider.nativeBase === 'Sprite' && name === 'flash.display.Sprite' && provider.exportName === 'Sprite')))
-            fail('native base requires the exact supported Event, Error, EventDispatcher or Sprite provider');
+            || (provider.nativeBase === 'Sprite' && name === 'flash.display.Sprite' && provider.exportName === 'Sprite')
+            || (provider.nativeBase === 'MovieClip' && name === 'flash.display.MovieClip' && provider.exportName === 'MovieClip')))
+            fail('native base requires the exact supported Event, Error, EventDispatcher, Sprite or MovieClip provider');
         moduleName(provider.module);
         if (!/^[A-Za-z_$][\w$]*$/.test(provider.exportName)) fail('provider export name');
     });
@@ -173,6 +174,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         try {unit = readNativeSourceUnit(name, record.source, record.sourceSha256);}
         catch (error) {fail(error.message.replace(/^AS3_SOURCE_UNIT_UNSUPPORTED: /, ''));}
         const ast = nativeSourceUnitAst(unit), root = ast.root, cls = ast.declarations[0] && ast.declarations[0].node;
+        // An embedded display Class needs its authored allocation/child binding
+        // before source fields and super entry. Plain native-base allocation
+        // cannot silently replace that symbol with an empty MovieClip.
+        if (!record.referenceOnly && ast.declarations.some(declaration => {
+            const metadata = declaration.node.findChild(K.META_LIST);
+            return metadata && metadata.children.some(item => /^\[\s*Embed\b/.test(item.text || ''));
+        })) fail('Embed Class requires authenticated authored symbol construction: ' + name);
         // Private declarations retain this source unit. Implementation admission
         // remains gated separately from header/type planning.
         if (record.referenceOnly && unit.declarations.length !== 1) fail('reference-only source cannot supply private Class implementations');
@@ -239,7 +247,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 if (!interfaces.some(binding => binding.qname === name)) fail('interface declaration authority required: ' + owner + ':' + name);
             });
             const baseNode = cls.findChild(K.EXTENDS), base = baseNode ? resolve(owner, baseNode.qualifiedName || baseNode.text) : 'Object';
-            if (base !== 'Object' && (!classes.has(base) || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite')))
+            if (base !== 'Object' && (!classes.has(base) || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite' || providers[base].nativeBase === 'MovieClip')))
                 fail('base requires a planned source declaration: ' + owner + ':' + base);
             bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
                 tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length,
@@ -418,8 +426,11 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         }
         lines.push('export {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';');
         if(provider.nativeBase) {
-            if(provider.nativeBase==='Sprite')lines.push('import {requireGeneratedFlashSpriteSurface as __requireSpriteSurface} from '+JSON.stringify(provider.module)+';',
-                '__requireSpriteSurface();');
+            if(provider.nativeBase==='Sprite'||provider.nativeBase==='MovieClip') {
+                const base=provider.nativeBase;
+                lines.push('import {requireGeneratedFlash'+base+'Surface as __require'+base+'Surface} from '+JSON.stringify(provider.module)+';',
+                    '__require'+base+'Surface();');
+            }
             const declarationExport='nativeType'+index,nativeBaseExport='nativeEntry'+index;
             lines.push('import {'+provider.nativeBase+'Declaration as '+declarationExport+'} from '+JSON.stringify(provider.module)+';');
             lines.push('export {'+declarationExport+'};');
