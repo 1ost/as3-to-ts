@@ -94,3 +94,66 @@ export function nativeSourceUnitLocal(unit: NativeSourceUnit, consumer: NativeSo
     if (!context || !context.nodes.has(consumer)) fail('exact source-unit declaration capability required');
     return unit.declarations.find(declaration => declaration.filePrivate && declaration.name === spelling) || null;
 }
+
+export const nativeSourceIntrinsicNames: ReadonlyArray<string> = Object.freeze([
+    '*', 'void', 'int', 'uint', 'Number', 'Boolean', 'String', 'Object', 'Array', 'Function', 'Class'
+]);
+/** Private names resolve to opaque descriptors, never to reflected/public strings. */
+export function nativeSourceUnitResolver(unit: NativeSourceUnit, consumer: NativeSourceUnitDeclaration,
+    known: (name: string) => boolean): (spelling: string) => string | NativeSourceUnitDeclaration {
+    const context = contexts.get(unit);
+    if (!context || !context.nodes.has(consumer)) fail('exact source-unit declaration capability required');
+    const pkg = context.root.findChild(K.PACKAGE);
+    const content = consumer.filePrivate ? context.root.findChild(K.CONTENT) : pkg.findChild(K.CONTENT);
+    const namespace = consumer.filePrivate ? '' : pkg.findChild(K.NAME).text;
+    const imports = content ? content.findChildren(K.IMPORT).map(node => node.text) : [];
+    return (spelling: string): string | NativeSourceUnitDeclaration => {
+        if (typeof spelling !== 'string') fail('source type spelling required');
+        if (spelling.indexOf('.') >= 0) return spelling;
+        const local = nativeSourceUnitLocal(unit, consumer, spelling);
+        const same = (namespace ? namespace + '.' : '') + spelling;
+        const explicit = imports.filter(name => !/\.\*$/.test(name) && name.split('.').pop() === spelling)
+            .filter((name, index, all) => all.indexOf(name) === index);
+        if (explicit.length > 1) fail('ambiguous explicit type: ' + unit.owner + ':' + spelling);
+        if (nativeSourceIntrinsicNames.indexOf(spelling) >= 0) {
+            if (consumer.name === spelling || local || known(same) || explicit.length
+                || imports.some(name => /\.\*$/.test(name) && known(name.slice(0, -1) + spelling)))
+                fail('ambiguous builtin type: ' + unit.owner + ':' + spelling);
+            return spelling;
+        }
+        if (local) {
+            // Colliding explicit imports need a separately qualified ambiguity rule.
+            if (explicit.length || consumer.name === spelling && !consumer.filePrivate)
+                fail('file-local/import declaration collision: ' + unit.owner + ':' + spelling);
+            return local;
+        }
+        if (consumer.name === spelling) return consumer.packageQName;
+        if (explicit.length) return explicit[0];
+        if (known(same)) return same;
+        const wildcard = imports.filter(name => /\.\*$/.test(name)).map(name => name.slice(0, -1) + spelling)
+            .filter(known).filter((name, index, all) => all.indexOf(name) === index);
+        if (wildcard.length > 1) fail('ambiguous wildcard type: ' + unit.owner + ':' + spelling);
+        return wildcard[0] || spelling;
+    };
+}
+
+export interface NativeSourceUnitReference {
+    readonly start: number;
+    readonly end: number;
+    readonly spelling: string;
+    readonly identity: string | NativeSourceUnitDeclaration;
+}
+/** Exact type/base spans owned by one declaration, including private Vector elements. */
+export function nativeSourceUnitReferences(unit: NativeSourceUnit, consumer: NativeSourceUnitDeclaration,
+    known: (name: string) => boolean): ReadonlyArray<NativeSourceUnitReference> {
+    const node = nativeSourceUnitNode(unit, consumer), resolve = nativeSourceUnitResolver(unit, consumer, known);
+    const references: NativeSourceUnitReference[] = [];
+    const visit = (value: Node): void => {
+        if ([K.TYPE, K.EXTENDS, K.IMPLEMENTS].indexOf(value.kind) >= 0 && value.text !== 'function') {
+            const spelling = value.qualifiedName || value.text || '*';
+            references.push(Object.freeze({start: value.start, end: value.end, spelling, identity: resolve(spelling)}));
+        }
+        value.children.forEach(visit);
+    }; visit(node);
+    return Object.freeze(references);
+}

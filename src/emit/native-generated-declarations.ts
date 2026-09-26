@@ -1,5 +1,5 @@
 import Node from '../syntax/node';
-import {NativeSourceUnit, readNativeSourceUnit, nativeSourceUnitAst} from './native-source-unit';
+import {NativeSourceUnit, readNativeSourceUnit, nativeSourceUnitAst, nativeSourceUnitResolver, nativeSourceIntrinsicNames} from './native-source-unit';
 import K from '../syntax/nodeKind';
 import parse = require('../parse');
 import {NativePatternLocal, nativePatternLocals} from './native-pattern-locals';
@@ -68,7 +68,7 @@ export interface NativeGeneratedDeclarationPlan {
 }
 interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan; units: Map<string, NativeSourceUnit>;}
 const contexts = new WeakMap<object, Context>();
-const builtins = ['*', 'void', 'int', 'uint', 'Number', 'Boolean', 'String', 'Object', 'Array', 'Function', 'Class'];
+const builtins = nativeSourceIntrinsicNames;
 function fail(reason: string): never {throw new Error('AS3_GENERATED_DECLARATIONS_UNSUPPORTED: ' + reason);}
 function moduleName(value: string): string {
     if (typeof value !== 'string' || !value.trim() || /[\x00\r\n]/.test(value)) fail('module specifier');
@@ -173,8 +173,12 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         units.set(name, unit);
         roots.set(name, root); classes.set(name, cls); sourceHashes[name] = record.sourceSha256;
     });
-    const resolve = (owner: string, spelling: string): string => sourceResolver(roots.get(owner), owner,
-        name => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0)(spelling);
+    const resolvers = new Map<string, (spelling: string) => string>();
+    const resolve = (owner: string, spelling: string): string => {
+        if (!resolvers.has(owner)) resolvers.set(owner, plannedUnitResolver(units.get(owner),
+            name => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0));
+        return resolvers.get(owner)(spelling);
+    };
     if (data.tweenHandleProviderModule && (classes.has('com.greensock.TweenMax') || providers['com.greensock.TweenMax']))
         fail('TweenMax migration cannot also declare or bind its source Class');
     const bindings: NativeGeneratedDeclarationBinding[] = [], references: NativeGeneratedReference[] = [];
@@ -470,28 +474,14 @@ export function nativeGeneratedDeclarationInputs(plan: NativeGeneratedDeclaratio
     return context.input;
 }
 
-function sourceResolver(root: Node, owner: string, known: (name: string) => boolean): (spelling: string) => string {
+function plannedUnitResolver(unit: NativeSourceUnit, known: (name: string) => boolean): (spelling: string) => string {
+    const resolve = nativeSourceUnitResolver(unit, unit.declarations[0], known);
     return (spelling: string): string => {
-        if (spelling.indexOf('.') >= 0) return spelling;
-        const pkg = root.findChild(K.PACKAGE), namespace = pkg.findChild(K.NAME).text;
-        const imports = pkg.findChild(K.CONTENT).findChildren(K.IMPORT).map(node => node.text);
-        const ownName = owner.split('.').pop(), same = (namespace ? namespace + '.' : '') + spelling;
-        const explicit = imports.filter(name => !/\.\*$/.test(name) && name.split('.').pop() === spelling)
-            .filter((name, index, all) => all.indexOf(name) === index);
-        if (explicit.length > 1) fail('ambiguous explicit type: ' + owner + ':' + spelling);
-        if (builtins.indexOf(spelling) >= 0) {
-            if (ownName === spelling || known(same) || explicit.length
-                || imports.some(name => /\.\*$/.test(name) && known(name.slice(0, -1) + spelling)))
-                fail('ambiguous builtin type: ' + owner + ':' + spelling);
-            return spelling;
-        }
-        if (ownName === spelling) return owner;
-        if (explicit.length) return explicit[0];
-        if (known(same)) return same;
-        const wildcard = imports.filter(name => /\.\*$/.test(name)).map(name => name.slice(0, -1) + spelling)
-            .filter(known).filter((name, index, all) => all.indexOf(name) === index);
-        if (wildcard.length > 1) fail('ambiguous wildcard type: ' + owner + ':' + spelling);
-        return wildcard[0] || spelling;
+        try {
+            const identity = resolve(spelling);
+            if (typeof identity === 'string') return identity;
+            return fail('private source binding requires emission integration');
+        } catch (error) {fail(error.message.replace(/^AS3_SOURCE_UNIT_UNSUPPORTED: /, '').replace(/^AS3_GENERATED_DECLARATIONS_UNSUPPORTED: /, ''));}
     };
 }
 
@@ -511,5 +501,6 @@ export function nativeGeneratedConsumerResolver(plan: NativeGeneratedDeclaration
     const owner = (namespace ? namespace + '.' : '') + classes[0].findChild(K.NAME).text;
     if (input.sources[owner]) nativeGeneratedDeclarationSource(plan, input.scope, owner, source);
     const known = Object.keys(input.sources).concat(Object.keys(input.providers || {}));
-    return {root, owner, resolve: sourceResolver(root, owner, name => known.indexOf(name) >= 0)};
+    const unit = input.sources[owner] ? nativeGeneratedSourceUnit(plan, owner) : readNativeSourceUnit(owner, source, hash(source));
+    return {root, owner, resolve: plannedUnitResolver(unit, name => known.indexOf(name) >= 0)};
 }

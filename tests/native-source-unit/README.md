@@ -14,8 +14,16 @@ Existing single-declaration plans now retain and parse through this model.
 Trait, lexical-member and static-reference consumers request detached declaration
 ASTs through the same planned source-file capability.
 
-This is build-time identity infrastructure backed by the shared 22-row Flash
+This is build-time identity infrastructure backed by the shared 24-row Flash
 fixture, not a replay of those behaviors in native factories. Declaration
 planning still holds on multiple declarations until trait/reference consumers,
 private script initialization and complete module emission support the model.
 No helper is registered as a public class or substituted with an Object type.
+
+Run `node tests/native-source-unit/resolve.cjs` for resolution coverage. The
+primary class uses package imports; helpers use imports outside the package,
+matching the two additional Flash rows. Sixty-three type/base references and two
+Vector element sites retain their owning helper descriptor. Four guards reject
+forged scopes and unresolved import collisions. The same resolver now serves
+existing generated declaration and reference consumers; private identities remain
+held at emission until per-declaration binding and script publication are ready.
