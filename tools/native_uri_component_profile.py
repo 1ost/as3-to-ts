@@ -21,10 +21,10 @@ EVIDENCE = {
 DECODE_SOURCE_SHA = "fb3c28c303631a83e412a2f00f2e33563a116b76e6551316cb42593edb55cb90"
 DECODE_ERROR_DECLARATION_SHA = "8e0caed79bcb9712343ad85d3932cdae9c80334219715fb1828eafa8ad94187e"
 DECODE_RUNTIME_SHA = "2f5a8b644405350d04a72c768270d0fd7a29323b5642e2ff5b1e0b5e5b052f02"
-# Requalified after the additive inverse-coordinate ArgumentError #2004 case.
-# The URIError factory and typed-catch predicate are unchanged, and the
-# retained AIR decoder comparison passes against this source revision.
-DECODE_ERROR_SHA = "4daafbddc702349b1ca09974b24927152b8947ba9b23c85952630a581e4ddb6f"
+# Requalified after additive LayaAir source-error bridge updates. The URIError
+# factory and typed-catch predicate are unchanged, and the retained AIR decoder
+# comparison passes against this source revision.
+DECODE_ERROR_SHA = "4bc098101086ffe467a8d623811e0a61d51e9f33e0a346d0550bf69aec2e23cd"
 DECODE_EVIDENCE = {
     "DecodeURIComponentProbe.as": "3cd30573a0805ebccd8163866ce92ac1a13ff0ae1f6c7e245fd1ceb386c2979d",
     "scenario.json": "dcd1432cfba7a7ec47c762bf52e35bdd7e33a01acee31c152f817309d224d8ec",
