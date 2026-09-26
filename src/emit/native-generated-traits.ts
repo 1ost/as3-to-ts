@@ -1,6 +1,7 @@
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import Node from '../syntax/node';
 import {nativeSpriteTraits} from './native-sprite-traits';
+import {nativeMovieClipTraits} from './native-movieclip-traits';
 import K from '../syntax/nodeKind';
 import {NativeGeneratedDeclarationPlan, NativeGeneratedClassDeclaration,
     nativeGeneratedClassDeclaration, nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationNode} from './native-generated-declarations';
@@ -92,17 +93,17 @@ export class NativeGeneratedClassTraits {
                 .map(([name,parameterCount])=>({name,parameterCount,kind:'method',declaredBy} as Member));
             surfaces.set('flash.events.EventDispatcher',{instance,statics:[],dynamic:false,final:false});
         }
-        if(plan.nativeBindings.some(binding=>binding.qname==='flash.display.Sprite'&&!!binding.nativeBaseExport)) {
-            const instance: Member[]=nativeSpriteTraits.map(trait=>{
+        for(const base of ['Sprite','MovieClip']) if(plan.nativeBindings.some(binding=>binding.qname==='flash.display.'+base&&!!binding.nativeBaseExport)) {
+            const instance: Member[]=(base==='Sprite'?nativeSpriteTraits:nativeMovieClipTraits).map(trait=>{
                 let type: TraitType=trait.type;
                 if(type && type.indexOf('::')>=0) {
                     const native=plan.nativeBindings.find(binding=>binding.qname===(type as string).replace('::','.'));
-                    if(!native || native.nativeInterface)fail('native Sprite trait requires explicit reference provider: '+trait.name+':'+type);
+                    if(!native || native.nativeInterface)fail('native '+base+' trait requires explicit reference provider: '+trait.name+':'+type);
                     type={name:type as string,referenceExport:native.referenceExport};
                 }
                 return Object.assign({},trait,type===undefined?{}:{type}) as Member;
             });
-            surfaces.set('flash.display.Sprite',{instance,statics:[],dynamic:false,final:false});
+            surfaces.set('flash.display.'+base,{instance,statics:[],dynamic:base==='MovieClip',final:false});
         }
         const type = (qname: string, node: Node): TraitType => {
             if (!node) return '*';
@@ -231,6 +232,9 @@ export class NativeGeneratedClassTraits {
             own.instance.forEach(member => {
                 const index = instance.findIndex(item => item.name === member.name), previous = instance[index];
                 if (previous) {
+                    if(inherited && inherited.instance.some(trait=>trait.declaredBy==='flash.display::MovieClip')
+                        && nativeMovieClipTraits.some(trait=>trait.name===previous.name&&trait.declaredBy===previous.declaredBy))
+                        fail('native MovieClip override requires separate signature/dispatch authority: '+member.name);
                     if(inherited && inherited.instance.some(trait=>trait.declaredBy==='flash.display::Sprite')
                         && nativeSpriteTraits.some(trait=>trait.name===previous.name&&trait.declaredBy===previous.declaredBy))
                         fail('native Sprite override requires separate signature/dispatch authority: '+member.name);
