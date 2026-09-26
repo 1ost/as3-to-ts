@@ -82,7 +82,7 @@ test("mapped Flash receivers use the authenticated shared Object.hasOwnProperty 
             const row = JSON.parse(fs.readFileSync(path.join(temporary,"without-provider/manifest.json"),"utf8"))
                 .files.find(item => item.sourcePath === "ObjectHasOwnProbe.as");
             assert.equal(row.status, "held");
-            assert.equal(row.code, "HARDENED_MEMBER_TARGET");
+            assert.equal(row.code, "HARDENED_MAPPED_NATIVE_DYNAMIC_LITERAL_TARGET_AUTHORITY");
         } finally {
             fs.writeFileSync(lockPath, savedLock);
         }
