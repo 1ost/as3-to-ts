@@ -1219,9 +1219,9 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 	// TweenMax Class. Preserve the import's identity for shadowing checks.
 	if (emitter.options.nativeTweenModule !== undefined
 		&& (node.text === 'com.greensock.TweenMax' || node.text === 'com.greensock.TweenLite')) {
-		if (!inline) emitter.catchup(node.start);
+		if (!inline) emitter.catchup(importStart);
 		emitter.declareInScope({name: importedName, sourceImport: node.text});
-		if (!inline) emitter.skipTo(node.end + Keywords.IMPORT.length + 1);
+		if (!inline) emitter.skipTo(importStatementEnd);
 		return;
 	}
 
