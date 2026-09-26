@@ -1,5 +1,6 @@
 package probe {
     import com.greensock.TweenMax;
+    import com.greensock.TweenLite;
 
     // Wildcard handles intentionally isolate call routing from the still-held
     // TweenMax typed-local/source-Class conversion boundary.
@@ -19,6 +20,12 @@ package probe {
         }
         public static function query(target:Function):Array {
             return TweenMax.getTweensOf(target());
+        }
+        public static function mixed():Array {
+            var target:Object = {x:0};
+            var max:* = TweenMax.to(target, 1, {x:1});
+            var lite:* = TweenLite.to(target, 1, {x:2});
+            return [max, lite, TweenMax.getTweensOf(target)];
         }
     }
 }

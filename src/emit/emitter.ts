@@ -4360,7 +4360,8 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 	emitter.ensureImportIdentifier('FlashTweenRuntime as ' + helper, module, false);
 	emitter.nativeSourceHelpers.add(helper);
 	emitter.catchup(node.start);
-	emitter.insert(helper + '.current().' + name.text + '(');
+	const method = receiver.text === 'TweenLite' && name.text === 'to' ? 'toLite' : name.text;
+	emitter.insert(helper + '.current().' + method + '(');
 	if (args.children.length) {
 		emitter.skipTo(args.children[0].start);
 		visitNodes(emitter, args.children);

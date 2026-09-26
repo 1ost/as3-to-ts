@@ -46,7 +46,7 @@ async function main() {
             fs.writeFileSync(path.join(dir, 'QueryMigration.js'), compiled);
             const entry = path.join(dir, 'entry.ts');
             fs.writeFileSync(entry, `import {QueryMigration} from './QueryMigration.js';
-import {FlashTweenRuntime} from ${JSON.stringify(runtime)};
+import {FlashTweenRuntime, coerceFlashTweenMaxHandle} from ${JSON.stringify(runtime)};
 export function run() {
  const runtime = new FlashTweenRuntime(() => 0);
  try {
@@ -56,7 +56,11 @@ export function run() {
   const selected = QueryMigration.query(() => {calls++;return target;});
   const other = QueryMigration.query(() => ({}));
   selected[0].kill();
-  return {rows, checks:{calls, identity:selected[0] === first, other:other.length, remaining:runtime.getTweensOf(target).length}};
+  const mixed = QueryMigration.mixed();let liteRejected = false;
+  try {coerceFlashTweenMaxHandle(mixed[1]);} catch(error) {liteRejected = error.name === 'TypeError' && error.errorID === 1034;}
+  return {rows, checks:{calls, identity:selected[0] === first, other:other.length, remaining:runtime.getTweensOf(target).length,
+   maxIdentity:coerceFlashTweenMaxHandle(mixed[0]) === mixed[0],liteRejected,
+   mixedOrder:mixed[2].length === 2 && mixed[2][0] === mixed[1] && mixed[2][1] === mixed[0]}};
  } finally {runtime.dispose();}
 }`);
             for (const [platform, format, name] of [['node', 'cjs', 'node.cjs'], ['browser', 'iife', 'browser.js']]) {
@@ -68,11 +72,11 @@ export function run() {
             await page.addScriptTag({path:path.join(dir, 'browser.js')});
             const chromiumResult = await page.evaluate(() => window.TweenQuery.run());await page.close();
             assert.deepEqual(errors, []);assert.deepEqual(node, chromiumResult);assert.deepEqual(node.rows, expected);
-            assert.deepEqual(node.checks, {calls:1, identity:true, other:0, remaining:0});
+            assert.deepEqual(node.checks, {calls:1, identity:true, other:0, remaining:0,maxIdentity:true,liteRejected:true,mixedOrder:true});
             results.push({target, diagnostics, node, chromium:chromiumResult, generatedSha256:hash(generated), compiledSha256:hash(compiled)});
         }
     } finally {await browser.close();}
     fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify({scope:'Imported call routing; wildcard handles; two retained Flash projections, not complete WindowLayer or typed-local qualification', sourceSha256:hash(source), expected, results}, null, 2));
-    console.log(JSON.stringify({status:'pass', targets:results.length, originalRows:expected.length, runtimeChecks:4, out}));
+    console.log(JSON.stringify({status:'pass', targets:results.length, originalRows:expected.length, runtimeChecks:7, out}));
 }
 main().catch(error => {console.error(error);process.exitCode = 1;});
