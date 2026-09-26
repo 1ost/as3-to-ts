@@ -269,11 +269,11 @@ export class NativeGeneratedLexical {
         const type=trait.type&&trait.type.text;
         if(trait.visibility==='internal'&&trait.static&&type==='uint'&&value&&/^(?:0[xX][0-9a-fA-F]+|0|[1-9]\d*)$/.test(value)
             &&Number(value)<=4294967295)return String(Number(value));
-        if(trait.kind==='constant'&&(trait.visibility==='protected'||trait.visibility==='private'&&trait.static&&type==='String')&&value
+        if(trait.kind==='constant'&&(trait.visibility==='protected'||trait.visibility==='private'&&trait.static&&(type==='String'||type==='int'))&&value
             &&(type==='String'&&/^(?:"(?:[^"\\\r\n]|\\[^\r\n])*"|'(?:[^'\\\r\n]|\\[^\r\n])*')$/.test(value)
-                ||type==='int'&&!trait.static&&/^[+-]?(?:0|[1-9]\d*)$/.test(value)&&Number(value)>=-2147483648&&Number(value)<=2147483647))
+                ||type==='int'&&(!trait.static||trait.visibility==='private')&&/^[+-]?(?:0|[1-9]\d*)$/.test(value)&&Number(value)>=-2147483648&&Number(value)<=2147483647))
             return type==='int'?String(Number(value)):value.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
-        return fail('protected String/instance int or private static String literal constant required');
+        return fail('protected String/instance int or private static String/int literal constant required');
     }
     earlyInstanceValue(trait:Trait):string|undefined {
         if(trait.visibility!=='internal'||trait.static||trait.kind!=='variable')return undefined;
