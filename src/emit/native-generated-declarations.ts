@@ -215,6 +215,10 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         });
         interfaces.push(Object.freeze({qname: owner, bases: Object.freeze(bases), tokenExport: 'interface' + interfaces.length}));
     });
+    privateBindings.forEach(binding => binding.interfaces.forEach(name => {
+        if (!interfaces.some(item => item.qname === name))
+            fail('file-private implements requires exact source interface: ' + binding.identity + ':' + name);
+    }));
     names.forEach(owner => {
         const cls = classes.get(owner);
         if (cls.kind === K.INTERFACE) return;
@@ -473,9 +477,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         }
         const authority = '__authority_' + binding.tokenExport;
         lines.push('const '+authority+'=declareAS3ReferenceType<unknown>('+JSON.stringify(binding.declaration.reflectedName)+(baseToken?','+baseToken:'')+');',
-            'export const '+binding.tokenExport+'='+authority+'.type;',
-            'export const '+binding.publishExport+'='+authority+'.publishGeneration;',
-            'export const '+binding.lexicalExport+'=new WeakMap<Function,any>();');
+            'export const '+binding.tokenExport+'='+authority+'.type;');
+        if (binding.interfaces.length) {
+            const tokens = binding.interfaces.map(name => interfaces.find(item => item.qname === name).tokenExport);
+            lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{const generation='+authority+'.publishGeneration(constructor);'
+                +'registerAS3Class(constructor,['+tokens.join(',')+']);return generation;};');
+        } else lines.push('export const '+binding.publishExport+'='+authority+'.publishGeneration;');
+        lines.push('export const '+binding.lexicalExport+'=new WeakMap<Function,any>();');
         privateActive.delete(binding.identity); privateDone.add(binding.identity);
     };
     privateBindings.forEach(addPrivate);
@@ -499,8 +507,14 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             lines.push(membership+'(['+tokens.join(',')+']);');
         });
     }
-    const interfaceContracts=projectNativeGeneratedInterfaceContracts(classes,bindings,interfaces,resolve,
-        name=>builtins.indexOf(name)>=0||bindings.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0,
+    const contractNodes = new Map(classes);
+    const contractClasses = bindings.concat(privateBindings.map(binding => {
+        contractNodes.set(binding.identity, nativeSourceUnitNode(units.get(binding.declaration.sourceOwner), binding.declaration));
+        return {...binding, qname: binding.identity, base: typeof binding.base === 'string' || binding.base === null
+            ? binding.base as string | null : privateDeclarationIdentity(binding.base)};
+    }));
+    const interfaceContracts=projectNativeGeneratedInterfaceContracts(contractNodes,contractClasses,interfaces,resolve,
+        name=>builtins.indexOf(name)>=0||contractClasses.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0,
         name=>providers[name]&&providers[name].nativeInterface?nativeGeneratedInterfaceBoundary(name):undefined,
         name=>name==='flash.events.EventDispatcher'&&providers[name]&&providers[name].nativeBase==='EventDispatcher'
             ?nativeGeneratedInterfaceBoundary('flash.events.IEventDispatcher'):undefined);
@@ -553,7 +567,7 @@ export function nativeGeneratedClassDeclaration(plan: NativeGeneratedDeclaration
         base: helper.base === null ? null : typeof helper.base === 'string' ? helper.base : privateDeclarationIdentity(helper.base),
         tokenExport: helper.tokenExport, publishExport: helper.publishExport, lexicalExport: helper.lexicalExport,
         ...(plan.bindings.some(b=>b.qname===helper.declaration.sourceOwner&&!!b.scriptGlobalExport)?{scriptGlobalExport:'publishPrivateScript'+plan.privateBindings.indexOf(helper)}:{}),
-        interfaces: Object.freeze([] as string[])});
+        interfaces: helper.interfaces});
 }
 
 /** Exact compiler capability plus source-byte check; serialization grants no authority. */

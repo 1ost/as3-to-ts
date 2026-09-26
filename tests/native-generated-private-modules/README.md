@@ -36,6 +36,7 @@ the common call/apply provider even when invoked immediately. Scalar reflection
 name/base reads use exact registered identity fields without fabricating a full
 reflection document.
 
-Remaining boundaries include private interfaces/implements, arbitrary
+Public interface implementations by private Classes are covered separately by
+`tests/native-generated-private-implements`. Remaining boundaries include private interfaces, arbitrary
 multi-declaration static-initializer failure/retry, and complete generated XML
 reflection. This test does not qualify the entire OP2 client or Parcel port.

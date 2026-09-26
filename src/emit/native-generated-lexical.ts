@@ -652,8 +652,8 @@ export class NativeGeneratedLexical {
         }
         if(operation==='set'&&node.children[1].text==='+=') {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
-            if(found.trait.kind!=='variable'||found.trait.visibility!=='private'||!ref||ref.kind!=='intrinsic'||ref.identity!=='String')
-                fail('lexical addition requires qualified private String variable');
+            if(found.trait.kind!=='variable'||found.trait.visibility!=='private'||!ref||ref.kind!=='intrinsic'||['String','int'].indexOf(ref.identity)<0)
+                fail('lexical addition requires qualified private String or int variable');
             const module=emitter.options.nativeTypedLocalAdditionModule;
             if(typeof module!=='string'||!module.trim()||/[\x00-\x1f'"\\]/.test(module))fail('lexical addition provider required');
             const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};

@@ -3635,7 +3635,27 @@ function emitLexicalSpriteConstruction(emitter:Emitter,node:Node):boolean {
  return true;
 }
 
+function emitSourceDefinitionLookup(emitter:Emitter,node:Node):boolean {
+    if(!emitter.generated||!emitter.options.importModules||!emitter.options.importModules['flash.utils.getDefinitionByName'])return false;
+    const target=unwrapEncapsulatedExpression(node.children[0]);
+    if(!target||target.kind!==NodeKind.IDENTIFIER||target.text!=='getDefinitionByName')return false;
+    const definition=emitter.findDefInScope(target.text);
+    if(!definition||definition.sourceImport!=='flash.utils.getDefinitionByName'||typeOfBinding(target,emitter.source,[])==='lexical')return false;
+    const input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+    if(!input.scriptDomainProvider||!emitter.generated.projection.binding.scriptGlobalExport)return false;
+    const args=node.findChild(NodeKind.ARGUMENTS);
+    if(!args||node.parent&&node.parent.kind===NodeKind.NEW)throw new Error('AS3_DEFINITION_LOOKUP_UNSUPPORTED: package function requires direct call');
+    const module=generatedModule(xmlGlobalProviderModule(input.scriptGlobalProviderModule,emitter.generated.options.module));
+    const helper=propertyHelper(emitter,'getAS3ScriptDefinitionByName',module);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'('+emitter.generated.lexical.scriptGlobal);
+    args.children.forEach(argument=>{
+        emitter.insert(',');emitter.skipTo(getExpressionStart(argument));visitNode(emitter,argument);emitter.catchup(getEffectiveNodeEnd(argument));
+    });
+    emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 function emitCall(emitter:Emitter, node:Node):void {
+    if(emitSourceDefinitionLookup(emitter,node))return;
     if(emitLocalFunctionIntrinsic(emitter,node))return;
     const pattern=emitter.generated&&emitter.generated.options.plan.patternLocals.find(p=>p.owner===emitter.generated.lexical.owner&&p.calls.indexOf(node.start)>=0);
     if(pattern){
@@ -4209,8 +4229,10 @@ function emitObjectPropertyRead(emitter:Emitter,node:Node):boolean {
     emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 function dynamicWriteAccess(emitter:Emitter,node:Node):DictionaryAccess {
-    const access=dynamicAccess(emitter,node);
+    const setter=sourceInterfaceAccessorAccess(emitter,node,'set');
+    const access=dynamicAccess(emitter,node)||setter;
     if(access&&emitter.options.nativeDynamicPropertyWritesModule===undefined){
+        if(setter)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: source interface writes require provider');
         if(isInterfaceCast(emitter,access.receiver))generatedModule(emitter.options.nativeDynamicPropertyWritesModule);
         if(generatedReceiver(emitter,access.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property writes require provider');
         return null;
@@ -4231,7 +4253,7 @@ function emitDynamicKey(emitter:Emitter,access:DictionaryAccess):void {
 }
 function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     const module=emitter.options.nativeDynamicPropertyReadsModule;
-    const found=dynamicAccess(emitter,node)||sourceInterfaceGetterAccess(emitter,node);if(!found)return false;
+    const found=dynamicAccess(emitter,node)||sourceInterfaceAccessorAccess(emitter,node,'get');if(!found)return false;
     if(module===undefined){
         if(isInterfaceCast(emitter,found.receiver))generatedModule(module);
         if(generatedReceiver(emitter,found.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property reads require provider');
@@ -4248,9 +4270,8 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     return true;
 }
 
-/** Source interface getter reads must preserve source null errors as well as
- * dispatch. A host property read would instead leak a JavaScript TypeError. */
-function sourceInterfaceGetterAccess(emitter:Emitter,node:Node):DictionaryAccess {
+/** Source interface accessors preserve null errors and canonical dispatch. */
+function sourceInterfaceAccessorAccess(emitter:Emitter,node:Node,kind:'get'|'set'):DictionaryAccess {
     if(!emitter.generated||!emitter.references||!node||node.kind!==NodeKind.DOT||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(receiver.kind!==NodeKind.IDENTIFIER||key.kind!==NodeKind.LITERAL)return null;
@@ -4263,7 +4284,7 @@ function sourceInterfaceGetterAccess(emitter:Emitter,node:Node):DictionaryAccess
     const visit=(name:string):void=>{if(owners.has(name))return;owners.add(name);
         const binding=plan.interfaces.find(value=>value.qname===name);if(binding)binding.bases.forEach(visit);};
     visit(contract.qname);
-    return plan.interfaceContracts.members.some(member=>owners.has(member.owner)&&member.name===key.text&&member.kind==='get')
+    return plan.interfaceContracts.members.some(member=>owners.has(member.owner)&&member.name===key.text&&member.kind===kind)
         ?{receiver,key,literalKey:key.text}:null;
 }
 

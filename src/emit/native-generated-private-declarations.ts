@@ -6,6 +6,7 @@ export interface NativeGeneratedPrivateDeclarationBinding {
     readonly identity: string;
     readonly declaration: NativeSourceUnitDeclaration;
     readonly base: string | NativeSourceUnitDeclaration | null;
+    readonly interfaces: ReadonlyArray<string>;
     readonly tokenExport: string;
     readonly publishExport: string;
     readonly lexicalExport: string;
@@ -31,13 +32,19 @@ export function planNativePrivateDeclarations(units: Map<string, NativeSourceUni
             const declaration = item.declaration;
             if (declaration.kind !== 'class') fail('file-private interface emission requires qualification');
             const node = item.node;
-            if (node.findChild(K.IMPLEMENTS_LIST)) fail('file-private implements publication requires qualification');
             const ext = node.findChild(K.EXTENDS), resolve = nativeSourceUnitResolver(unit, declaration, known);
+            const implemented = node.findChild(K.IMPLEMENTS_LIST);
+            const interfaces = implemented ? implemented.children.map(item => {
+                const identity = resolve(item.qualifiedName || item.text);
+                if (typeof identity !== 'string') fail('file-private interface identity requires qualification: ' + unit.owner + ':' + declaration.name);
+                return identity as string;
+            }) : [];
+            if (new Set(interfaces).size !== interfaces.length) fail('duplicate file-private implements declaration: ' + unit.owner + ':' + declaration.name);
             const base = ext ? resolve(ext.qualifiedName || ext.text) : 'Object';
             if (typeof base !== 'string' && base.kind !== 'class') fail('file-private base must be a source class');
             const identity = privateDeclarationIdentity(declaration);
             const index = bindings.length;
-            bindings.push(Object.freeze({identity, declaration, base: base === 'Object' ? null : base,
+            bindings.push(Object.freeze({identity, declaration, base: base === 'Object' ? null : base, interfaces: Object.freeze(interfaces),
                 tokenExport: 'privateType' + index, publishExport: 'privatePublish' + index, lexicalExport: 'privateLexical' + index}));
             nativeSourceUnitReferences(unit, declaration, known).forEach(reference => references.push(Object.freeze({
                 owner: identity, start: reference.start, end: reference.end, spelling: reference.spelling, identity: reference.identity
