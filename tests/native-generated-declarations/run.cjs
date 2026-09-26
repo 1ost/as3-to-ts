@@ -47,7 +47,7 @@ rejects(x=>x.sources['records.ZBase']=source('package records { public class ZBa
 rejects(x=>x.sources['records.AChild']=source('package records { public class AChild extends External {} }'));
 rejects(x=>x.sources['records.AChild']=source('package records { public class AChild implements IThing {} }'));
 rejects(x=>x.sources['records.ZBase'].referenceOnly=true);
-rejects(x=>x.sources['records.AChild']=source('package records { public class AChild {} } class Hidden {}'));
+rejects(x=>x.sources['records.AChild']=source('package records { public class AChild {} } class Hidden extends Missing {}'));
 rejects(x=>x.providers['records.ZBase']={module:'./provider',exportName:'ByteArray'});
 rejects(x=>x.providers.Object={module:'./provider',exportName:'Object'});
 rejects(x=>x.providers['flash.utils.ByteArray'].module='bad\nmodule');

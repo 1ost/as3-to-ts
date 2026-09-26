@@ -45,6 +45,7 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         movie={width,height,sourceSha256};
     }
     const plan = input.plan, planned = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
+    if (plan.privateBindings.length) fail('file-private Class script emission requires source-unit implementation');
     if (!planned.inheritScriptClasses || !planned.scriptDomainProvider || !planned.scriptGlobalProviderModule
         || !(plan.bindings.length + plan.interfaces.length) || plan.bindings.some(b => !b.scriptGlobalExport)
         || Object.keys(planned.sources).length !== plan.bindings.length + plan.interfaces.length

@@ -29,6 +29,6 @@ const duplicate=first.source+'\nclass Helper {}';reject(()=>model.readNativeSour
 const simple='package sample {public class Single {public var value:int;}}',plan=api.createNativeGeneratedDeclarationPlan({scope:'source-unit-regression',providerModule:'./provider',sources:{'sample.Single':{source:simple,sourceSha256:hash(simple)}}});
 const retained=nativeGeneratedSourceUnit(plan,'sample.Single');assert.equal(retained.source,simple);assert.equal(retained.declarations[0].packageQName,'sample.Single');
 reject(()=>nativeGeneratedSourceUnit(JSON.parse(JSON.stringify(plan)),'sample.Single'));
-// Recognition is deliberately not admission before multi-declaration emitters exist.
-reject(()=>api.createNativeGeneratedDeclarationPlan({scope:'file-local-pending',providerModule:'./provider',sources:{[first.owner]:{source:first.source,sourceSha256:first.sourceSha256}}}));
+const privatePlan=api.createNativeGeneratedDeclarationPlan({scope:'file-local-headers',providerModule:'./provider',sources:{[first.owner]:{source:first.source,sourceSha256:first.sourceSha256}}});
+assert.equal(privatePlan.bindings.length,1);assert.equal(privatePlan.privateBindings.length,2);
 console.log(JSON.stringify({qualification:'source-unit identity model and existing single-declaration planner integration; no native runtime replay',flashRows:rows.length,sourceFiles:2,privateDeclarations:3,guards}));

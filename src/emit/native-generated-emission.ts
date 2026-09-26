@@ -40,6 +40,7 @@ export class NativeGeneratedEmission {
         generatedModule(helpers.nativeClass); generatedModule(helpers.callableClass);
         generatedModule(lexicalModule); generatedModule(propertyModule);
         const input = nativeGeneratedDeclarationInputs(options.plan, options.plan && options.plan.scope);
+        if (options.plan.privateBindings.length) fail('file-private Class emission requires source-unit implementation');
         const owners = Object.keys(input.sources).filter(name => input.sources[name].source === source);
         if (owners.length !== 1) fail('exact current source bytes required');
         this.projection = new NativeGeneratedClassTraits(options.plan,input.scope,owners[0],source);
