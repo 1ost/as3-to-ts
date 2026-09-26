@@ -272,14 +272,22 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             // Other direct native bases still require their own qualification.
             const dispatcherBase=binding.base==='flash.events.EventDispatcher'
                 &&providers[binding.base]&&providers[binding.base].nativeBase==='EventDispatcher';
-            const parent=bindings.find(value=>value.qname===binding.base);
-            // A stable source parent may be a root or directly inherit the
-            // authenticated Sprite boundary. Failed leaf generations retain
-            // native allocation and source membership across retry. Parent
-            // initializer retries and other native/multilevel bases remain held.
-            const spriteParent=parent&&parent.base==='flash.display.Sprite'
-                && providers[parent.base]&&providers[parent.base].nativeBase==='Sprite';
-            if(!dispatcherBase&&(!parent||!parent.scriptGlobalExport||(parent.base&&!spriteParent)||data.classScriptSources.indexOf(parent.qname)>=0))
+            // Stable source ancestry may end at the authenticated Sprite
+            // boundary. Check every ancestor: a retrying intermediate Class
+            // cannot be treated as a stable constructor/prototype authority.
+            // The previously qualified immediate source-root case is retained.
+            let parent=bindings.find(value=>value.qname===binding.base);
+            const seen=new Set<string>([name]);
+            let stableParent=false,depth=0;
+            while(parent&&parent.scriptGlobalExport&&!seen.has(parent.qname)
+                &&data.classScriptSources.indexOf(parent.qname)<0){
+                seen.add(parent.qname);depth++;
+                if(!parent.base){stableParent=depth===1;break;}
+                if(parent.base==='flash.display.Sprite'&&providers[parent.base]
+                    &&providers[parent.base].nativeBase==='Sprite'){stableParent=true;break;}
+                parent=bindings.find(value=>value.qname===parent.base);
+            }
+            if(!dispatcherBase&&!stableParent)
                 fail('derived Class script requires a non-retrying source root parent');
         }
     });
