@@ -1,5 +1,6 @@
 export default class Token {
     end: number;
+    leadingTrivia: Token[] = [];
 
     constructor(
         public text: string,

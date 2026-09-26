@@ -1,0 +1,517 @@
+# Independent native-oracle profiles
+
+`flash.utils.getQualifiedClassName(value)` uses Laya's `resolveNativeClassName`
+with the generated application's sealed class identity query. Profiles
+authenticate both the SDK's Flash wrapper and native `avmplus` declaration.
+Direct calls require exactly one argument; function-value escapes, other
+reflection APIs and unregistered host instances remain held or explicitly
+unavailable. The query does not infer identities from application constructor
+fields or register observed definitions. Its 75-checkpoint AIR 51 macOS fixture
+includes numeric atom boundaries, negative zero, package names, class values
+and method closures. Other Flash versions are not established by this corpus.
+
+The same fixture admits builtin Object/Array/String/Number/Boolean/Function
+class values and uninitialized Number locals. Those Number slots initialize
+to NaN once at function entry, including declarations inside loops/branches;
+capturing lambdas do not reset an outer slot. This does not qualify every typed
+local's initialization or general callable builtin class values.
+
+`create-fixture-profile.py` creates an explicit application profile for a bounded
+independent AS3 fixture (1 to 128 source files). It leaves the default Bleach trust root untouched and
+uses the real declaration worker, qualifier and emitter. Build the transpiler
+with `npm ci --ignore-scripts` and `npm run build` first.
+
+```sh
+python3 tools/create-fixture-profile.py \
+  --source /absolute/path/to/fixture \
+  --entry Probe \
+  --laya /absolute/path/to/LayaAir \
+  --air-sdk /absolute/path/to/AIRSDK \
+  --output /absolute/path/to/new-profile
+
+node bin/as3-frontend transpile /absolute/path/to/fixture /absolute/path/to/new-output \
+  --source-census /absolute/path/to/new-profile/census.json \
+  --target-capabilities /absolute/path/to/LayaAir/docTool/architecture/authored-content-capabilities.json \
+  --profile-lock /absolute/path/to/new-profile/profile-lock.json
+```
+
+The source directory must contain the requested entry and its complete local
+source closure, with only explicit Flash or included local imports. Multi-file
+identities come from the shared declaration worker, including package functions.
+Wildcard imports and application-wide source censuses require a full application
+profile. This fixture generator uses a bounded source scan for imports and roles;
+it is not a production census tool.
+Admission of expressions and member access still comes from the hardened adapter.
+
+Primitive Flash properties are recovered from the actual SDK's getter/setter
+signatures through its class ancestry and matched to the pinned Laya public
+surface. This permits original overrides and `super` property reads/writes
+without adding accessors or changing visibility in the AS3 input. Mismatched
+override types and unmapped members remain held. Numeric `int`/`uint`/`Number`
+operations retain numeric expression results and coercion at assignment boundaries.
+Default-package base classes still require their declared local dependency edges.
+
+The profile pins source content, declaration-worker output, capability mapping,
+runtime predicates, Laya capability bytes and AIR SDK member ancestry recovered
+from its actual `airglobal.swc`/`swfdump` output. The retained generator-inputs file
+identifies the exact tooling and SDK inputs. An explicit profile is a new caller
+supplied authority context, not permission to rewrite the compiled default lock.
+The CLI verifies source path and content even for classes that never reference a
+local member. Modified source requires a newly generated profile.
+
+The generated `__as3_runtime/ApplicationEntry.generated.js` seals the authority
+before loading application classes. Execute that entry and honor its generated
+package exports. Substituting raw runtime TypeScript aliases can load a second,
+unsealed authority instance. Parsing or successful TypeScript emission alone is
+not native parity evidence.
+
+The authority module also exports immutable `AS3_CLASS_DEFINITIONS` bindings
+for its authenticated classes: `{name, definition, initialize}`. Creating or
+reading that list does not run AS3 static initializers. A host may explicitly
+publish the bindings into a native definition domain before running application
+code. The initializer delegates to the existing idempotent/retryable AS3 class
+initialization runtime. This optional interface does not register definitions
+in Laya automatically or add a Laya dependency to the compiler.
+
+The application entry exports optional immutable
+`AS3_APPLICATION_FUNCTION_DEFINITIONS` bindings for original public package
+functions in the emitted module set. Each `{name, definition}` preserves the
+original callable identity and defaults; publication does not invoke functions
+or scan helper exports. Hosts explicitly register these alongside class bindings.
+Authenticated SDK `getDefinitionByName` calls use the shared Laya registry,
+including native String argument conversion and missing/null-name errors.
+Interface publication, incremental authority installation and unloadable module
+closures remain separate work.
+
+LayaAir's `tests/nativeFlashOracle/README.md` documents the paired AIR/browser
+suite, authored SWF conversion, exact pixels and retained qualification holds.
+Language fixes belong here; Flash display and authored-content fixes belong in
+LayaAir. The shared application-profile/normalizer/member support incorporates
+the existing generic converter patch series previously carried by AP's port
+integration. AP-specific entry lists and source inventories remain consumers.
+
+Preserve the original AS3 class contract when investigating a hold or mismatch.
+Do not alter input types, inheritance, visibility, fields, method signatures or
+constructors to make the current emitter accept a class. Parsing, binding and
+emission fixes must accept the same source and preserve its native behavior;
+runtime differences belong in LayaAir and its bridges. A new profile authenticates
+changed bytes but does not establish that those edits are a compatibility fix.
+Keep the original failing fixture and native evidence, and close it only after
+the shared implementation passes that same input. Smaller reproducers and
+simpler passing examples are additional coverage, not substitutes.
+
+Focused validation (canonical `/private/tmp` avoids macOS `/var` symlink aliases):
+
+```sh
+TMPDIR=/private/tmp node --test tests/hardened-cli/cli.test.cjs
+TMPDIR=/private/tmp node tests/hardened/parser-normalizer.test.cjs
+TMPDIR=/private/tmp HARDENED_FIXTURE_AIR_SDK=/path/to/AIRSDK \
+  HARDENED_FIXTURE_LAYA=/path/to/LayaAir \
+  node --test tests/hardened-cli/application-profile.test.cjs
+```
+
+The fixture-profile test skips unless both explicit environment paths are set;
+report that skip as unavailable validation. The historical full test suite also
+contains external Bleach/Windows fixture dependencies absent from a fresh clone.
+Full application-profile generators can reuse `source_members()` and
+`primitive_property_mappings()` from `create-fixture-profile.py`. Supply the
+authenticated SDK inventory and the exact target capability row, then retain
+the returned mappings and member uses in the locked application profile. Read
+and write access are checked separately; missing or ambiguous target accessors
+remain unmapped. This uses the same authority logic as the native fixture lane.
+
+
+Styled original classes can add `--ffdec-jar /path/to/ffdec.jar`. The shared
+`native-api-profile.py` recovers complete public SDK signatures, optional
+arguments and declaring owners from retained decompiled SDK bytes. The profile
+pins this evidence in its source manifest; unsupported target members remain
+unmapped. Native inheritance is resolved from the authenticated SDK ancestry.
+`TextField.autoSize` uses the shared `flashAutoSize` bridge to avoid Laya's
+boolean property collision; source field and method names remain intact.
+
+The admitted `[Embed(source="relative.png")]` form is an original static const
+Class field with no explicit initializer. PNG bytes are retained under their
+SHA-256 in the output manifest, and the compiler emits a Bitmap subclass for
+that field. Install the generated runtime's `installAS3EmbeddedBitmapDataHost`
+only after shared Laya `EmbeddedBitmapAssets` has preloaded the manifest's
+resources. Each construction receives independent canonical BitmapData.
+Other formats/options and constructor arguments remain held. Compiler-generated
+embedded class names are internal identities; native synthesized linkage-name
+reflection still requires conversion evidence before it can be accepted.
+
+Focused SDK-backed Embed regression:
+
+```sh
+TMPDIR=/private/tmp HARDENED_FIXTURE_AIR_SDK=/path/to/AIRSDK \
+  HARDENED_FIXTURE_LAYA=/path/to/LayaAir HARDENED_FIXTURE_FFDEC_JAR=/path/to/ffdec.jar \
+  node --test tests/hardened-cli/embedded-bitmap-profile.test.cjs
+PYTHONDONTWRITEBYTECODE=1 python3 tools/test-native-api-profile.py
+```
+
+Math admission currently includes numeric `min`/`max` and `PI`; String includes
+source-typed `indexOf`/`substr`. Loose equality is limited to null comparisons.
+Binary chains preserve left associativity, conditional branches join compatible
+numeric/nullability types, and reference upcasts require authenticated ancestry.
+These are language lowerings, not application-profile implementations.
+
+Object literals use the shared `AS3Object` runtime factory. Native AIR evaluates
+all name/value pairs left-to-right but installs them in reverse, so the first
+value wins for duplicate names. Special names including `__proto__` remain own
+data properties. Wildcard-to-Object assignment converts undefined to null while
+preserving other values; uninitialized wildcard locals use explicit undefined IR and emit function-scoped
+`var` declarations without resetting the value at the declaration site.
+`ObjectValuesProbe` in the shared Laya oracle retains the executable comparison.
+Authenticated profiles route scalar-key Object/wildcard reads, writes, deletion,
+`in`, `hasOwnProperty` and `toString` through shared Object dispatch. Class reads
+use retained traits and lexical caller identity; no raw JS class access is admitted.
+Uninitialized Number locals and defaults of other local types before their
+declaration remain separate compatibility work.
+
+Generated local class authority now includes immutable instance `objectTraits`:
+member kind, runtime type name, original visibility and original namespace name.
+The declaring QName remains attached through the ordered class chain. These
+records participate in the canonical authority SHA-256. Mapped bridge classes
+without this metadata remain explicitly unresolved; JavaScript own properties or
+a mutable `constructor` property cannot supply missing source traits.
+
+Native AIR dynamic-class probes show that computed access uses lexical namespaces:
+same-class access can reach a private field while external access fails; `in` and
+`hasOwnProperty` use public names. Do not implement generic indexing using only
+public descriptors, nor infer source privacy from generated JavaScript fields.
+Namespace names retained here are source identities, not resolved namespace URIs.
+The dispatcher implements retained sealed-class reads/writes and public presence
+checks; native-only class captures are replayed against the runtime helper. The
+unchanged dynamic-object fixture also passes actual generated Laya execution.
+Mapped classes without traits, protected lookup, resolved named namespaces,
+namespace storage collisions, primitive receivers and reference
+slot coercion remain explicit unsupported boundaries. General dynamic calls and
+dynamic class declarations remain held. Helper tests do not establish full class
+execution or application parity.
+
+Object indexing now admits wildcard, Object, Array and Function key domains
+through the existing public String-hint conversion protocol. Native AIR's
+74-checkpoint `object-keys` fixture retains scalar and `for … in` keys, Arrays,
+functions, null-result fallback, thrown conversion errors, builtin names and
+null receivers. Presence checks convert the key once, including misses. Unknown
+host classes, host-only primitives and unsupported conversion protocols still
+fail explicitly; this does not add XML/QName or Dictionary key semantics.
+
+The same unchanged fixture required lexical instance-field capture in anonymous
+functions. An explicit generated closure captures the enclosing instance while
+retaining an ordinary function and its distinct dynamic receiver. Nested
+captures propagate that instance; `lexical-field-apply` invokes both levels with
+different receiver objects and conflicting field names. The separate unchanged
+`lexical-field` Object-indexed invocation fixture remains held on general dynamic
+calls; it is retained rather than rewritten to clear that boundary. Original own fields require an
+authenticated instance scope. Explicit dynamic `this`, implicit accessors,
+methods and inherited members inside anonymous functions remain held. Existing
+own-record confinement still applies before capturing a field.
+
+
+Application profiles also admit value-preserving `&&` and `||` for supported
+value domains. The result retains the selected operand rather than inventing a
+Boolean return type, and the emitted operator evaluates the right operand only
+when required. A consuming Boolean context performs its own coercion. The shared
+LogicalValuesProbe retains native null/zero/false/empty/reference/undefined values
+and side-effect counts; XML/XMLList operands and void operands in value contexts
+remain held. Discarded logical expressions may invoke a void-returning function.
+
+
+Array push/pop/shift/unshift now use shared AS3Array dispatch for all authenticated
+Array receivers, including static fields. Insertions preserve arguments as `*`;
+push/unshift return uint lengths, while removals return the actual value or
+undefined. Native null-receiver errors are retained. Overridden methods and length
+overflow remain explicit unsupported boundaries. Indexed writes and other Array
+methods still require shared support.
+
+Array `concat` now returns a fresh native Array, spreads Array arguments one level,
+retains reference identity and preserves sparse holes. It ignores named fields
+and an overridden source constructor rather than consulting JavaScript species.
+The 16-checkpoint ArrayConcatProbe passes native AIR and generated Laya, including
+the `[].concat(message, rest)` pattern from unchanged AP LoggerManager. The
+separate sparse probe's four native captures are replayed against the shared
+runtime; its indexed writes and hasOwnProperty source emission remain separate
+holds. Array subclasses, prototype indices, own symbols, indexed accessors,
+hidden slots, overridden concat and length overflow still fail explicitly.
+
+Strict equality involving Object/wildcard values preserves native type-sensitive
+primitive comparisons and reference identity; loose coercive equality is unchanged.
+Class registration admits recursively literal static Array/Object containers,
+which cannot call source code or observe another class. Aggregate coercions,
+constructors, source calls and other executable static initialization remain held.
+The ArrayMutationProbe, DynamicEqualityProbe and definition-closure tests retain
+these boundaries. This is not a waiver for general lazy AS3 class initialization.
+
+
+Native String conversion now handles scalar values, plain Objects, Arrays,
+authenticated local instance traits, registered/builtin Class labels, Function
+labels and canonical Error text. Native null-result fallback and errors 1006/1050
+are retained. Unresolved mapped instance traits, cyclic Arrays, overridden Array
+join, XML/XMLList and other unproved value domains remain explicit boundaries.
+
+Generated trace arguments use deferred shared conversion values. The Laya trace
+bridge performs each conversion after the native separator, so failures retain
+already-written text and do not convert later arguments. The original TraceValues
+and TraceErrors probes now pass complete output-stream comparisons, not merely
+state observations. Canonical Error name/message reads and zero/one non-null
+String Error construction support the retained failure path. Error IDs and broader
+Error construction remain outside that bounded constructor admission.
+
+Unshadowed undefined/NaN/Infinity use language constants; local, imported and
+inherited bindings retain precedence. Authenticated local/mapped class identifiers
+have Class value types. Non-void functions ending in throw terminate normally for
+return-path analysis; throwing getters and lambdas use the same shared rule.
+
+
+## Dynamic numeric operations
+
+The authenticated application adapter admits wildcard `-`, `*`, `/` and `%`
+against wildcard or numeric operands. The generated shared runtime evaluates both
+operand expressions before converting left then right; it preserves Number
+results and applies int/uint narrowing only at typed boundaries. Original Object
+field reads therefore retain their native numeric behavior without source casts.
+
+Number/int/uint call conversion uses the shared public valueOf/toString path.
+Explicit `Number(undefined)` differs from omitted `Number()`. Retained AIR 51
+evidence covers signed hex, rejected binary/octal text, the AVM whitespace set,
+empty exponents, null conversion results, non-callable methods and side effects.
+The parsing behavior was cross-checked against Adobe's MathUtils implementation:
+https://github.com/adobe/avmplus/blob/master/core/MathUtils.cpp
+The native captures, not this older source alone, establish the exercised runtime.
+
+Run `HARDENED_FIXTURE_LAYA=/path/to/LayaAir node --test
+tests/hardened-runtime/as3-number.test.cjs` and Laya's paired `dynamic-number`
+case. Its 81 checkpoints execute the same AS3 through AIR and generated Laya.
+This does not establish addition/loose equality, all decimal-rounding edge cases,
+Date/XML/Vector conversion, mapped instance traits, or overridden Function/Class
+conversion. Unregistered objects and unresolved mapped traits remain explicit
+runtime boundaries. Existing typed-slot and other intrinsic conversion paths
+still need their own consumer evidence.
+
+
+## Original package functions
+
+Package-level public functions retain their original QName, parameters, defaults,
+rest arguments and body as callable exports. They are never synthesized into
+classes or registered as class identities. Same-package expression bindings use
+the authenticated dependency graph after local/member bindings. Definition-order
+proofs include function modules and only use roots the runtime loader can load.
+
+Typed slots coerce at function entry, after all argument expressions evaluate.
+Optional defaults distinguish omitted arguments from explicit undefined; runtime
+arity checks also apply through Function.apply. Rest values are native Arrays.
+Global trace as a Function retains identity and the shared deferred trace stream.
+The 19-checkpoint, six-file package-functions AIR/Laya fixture covers direct calls,
+recursion, same-package lookup, apply, defaults, typed conversion, arity errors,
+null receiver errors, trace output and argument evaluation order.
+
+Package-global this, package lexical dynamic-object dispatch, Function.call,
+overridden apply, invalid Array/Function reference coercion and general function
+reflection remain explicit unsupported boundaries. AP can use
+`tools/inspect-source-declarations.cjs` to recover original package identities;
+profiles must not manufacture declarations or modify the AS3 source.
+
+## Startup expression and Array iteration regressions
+
+Discarded `&&`/`||` statements now retain native short circuit behavior, including
+void effects and `trace.apply` calls. String.length reads use shared UTF-16 code
+unit counts and native null errors. Canonical Error.toString reads reuse retained
+native Error formatting; custom Error subclasses/overrides remain explicit holds
+or unavailable runtime behavior. SDK member signatures retain their static modifier
+when matched to existing authenticated bridge mappings.
+
+Array `for each` keeps its original receiver and visits live dense slots in index
+order. Push/pop/shift/unshift during iteration, break/continue, nesting, null arrays,
+and existing typed Object/int/String slots are covered by the 16-case AIR/Laya
+fixture. Declared wildcard bindings retain their function scope. Declared typed
+bindings remain held pending function-wide initialization/hoisting evidence.
+Sparse arrays, named properties, hidden/accessor slots and subclasses remain
+explicit unsupported enumeration domains. Normal dense traversal is linear;
+shape checks do not copy or pre-coerce values ahead of iteration.
+
+The 23-case startup-expressions fixture covers logical effects, complete gated
+trace streams, Unicode String lengths and Error/null text. These are language
+regressions, not proof of a complete application's startup or browser host flows.
+
+
+### Native lowercase and static calls
+
+String.toLowerCase uses the retained AIR scan of all 65,536 UTF-16 units.
+`tools/create-native-case-table.py --fixture <LayaAir>/tests/nativeFlashOracle/string-case-scan --check`
+verifies the generated 739-entry table against its native source and receipt.
+The 22-case sequence fixture covers contextual/expanding Unicode differences from
+JavaScript, supplementary characters, mixed locale text and null errors. The
+original application source and generated classes are never repaired by hand.
+
+Authenticated Flash static method calls now retain their static SDK modifier,
+source/target signature checks and native rest-parameter arity. Point.distance
+and Point.interpolate pass ten native/generated checkpoints alongside the absent
+ExternalInterface host guard. `native-static-profile.test.cjs` additionally checks
+zero/extra rest arguments, missing required arguments, wrong geometry types and
+static method-value rejection. Set HARDENED_FIXTURE_AIR_SDK, HARDENED_FIXTURE_LAYA
+and HARDENED_FIXTURE_FFDEC to the real SDK, Laya checkout and FFDec jar. Configured
+browser host calls and callbacks require their own interaction evidence.
+
+The initial Number.toFixed reference retained 256 Number(text).toFixed checkpoints.
+The shared implementation and expanded evidence are documented below; JavaScript
+formatting is not an admitted fallback.
+
+
+### Native fixed decimal formatting
+
+Number.toFixed now lowers into the shared runtime for original Number/int/uint
+receivers, with native precision coercion, range errors and fixed decimal output.
+The decimal magnitude parser preserves AVM integer-power multiplication order
+and the native BigInteger rounding window; it does not use JavaScript's decimal
+parser as a behavioral substitute. The MPL-2.0 adapted runtime file carries its
+upstream provenance and license notice.
+
+The unchanged NumberFormatProbe has 391 retained checkpoints: the initial 256
+remain intact, followed by numeric extremes and long-integer rounding tails.
+Both native and generated-class evidence are required. The tails reproduced six
+mismatches with JavaScript's BigInt-to-Number rounding before the shared fix.
+Native errors include the exact #1002 name/message and precision validation
+before nonfinite formatting. Numeric method closures and other Number formatting
+methods remain outside this change.
+
+
+### Native wildcard addition and typed method slots
+
+Wildcard/Object/Array/Function `+` and compound `+=` use the shared native addition
+helper. AIR's conversion shortcut is asymmetric: an original left String converts
+the right operand with String conversion, while a right String does not bypass
+the left operand's default primitive conversion. When neither starts as a String
+on the left, both operand expressions evaluate before left-to-right primitive
+conversion. Native null/undefined behavior, numeric results, concatenation and
+exact conversion errors are retained.
+
+Compound assignment preserves existing typed slots and supports local variables,
+parameters and direct `this` fields/accessors. General indexed or computed
+receivers remain held until their evaluation-order lowering is proved. Numeric
+compound operators on wildcard values remain outside this addition change.
+
+Generated ordinary methods normalize supported primitive/Object/Array/Function
+parameters at body entry, including host/callback invocations. This reuses the
+shared function-slot helper; parameter names and declared signatures stay intact.
+The fixture exposed missing Number-slot coercion for an empty-string host input.
+This increment does not qualify general method arity/default semantics, unresolved
+reference-class coercion or every call-site conversion-order path.
+
+The unchanged AddValuesProbe retains 47 native/generated checkpoints, including
+asymmetric custom conversion, class/function labels, null results, exact errors,
+String/Number slots and getter/RHS/setter order. It is a shared language fixture,
+not an application controller replacement.
+
+
+Numeric switch expressions and case labels may mix int, uint and Number.
+Comparison preserves their numeric values: fractional labels are not truncated,
+uint boundary labels are not wrapped, NaN never matches, and negative zero
+matches zero. The native NumericSwitchProbe also retains selector/case evaluation
+order, first matching case, default placement and fallthrough. The emitted native
+JavaScript switch already supplies these proven semantics; no slot coercion is
+inserted into a case label. Other mixed source-type cases keep their existing
+admission boundary.
+
+
+Constructor-local declarations may precede an explicit top-level super call.
+Their initializers execute in source order before construction preparation, so
+values passed to the base and thrown initializers retain native behavior. The
+emitter preserves this order without relocating declarations in original AS3.
+Pre-super this/super references, lexical receiver captures and control flow remain
+held. ConstructorLocalsProbe retains default Number/NaN, null DisplayObject slots,
+ordered static calls, exception propagation and later construction recovery across
+three original classes. Its independent static compound hold also establishes
+current-class static-field updates through the existing coercion path; imported
+receiver expressions and static accessor compounds remain outside this extension.
+
+
+The SDK member census v2 adds the source `dynamic` class flag to the existing
+member-name/ancestry inventory. The shared runtime uses this census to prove
+that native ancestors do not conflict with a generated local member. It also
+retains names of native bases implemented through bridge composition. These
+names do not admit native member implementations: matching unresolved names
+still raise an explicit dispatch hold. V1 profiles remain accepted; their
+native dynamic flags remain unknown, so missing-member operations on direct
+native receivers cannot infer sealed/dynamic behavior. Generated local classes
+retain their own declared flags independently of native ancestors.
+
+Literal zero-argument dynamic method calls now retain native method-closure
+receivers and errors #1069/#1006. Dynamic calls with arguments or computed
+names remain held pending native evaluation/argument evidence. The native
+`dynamic-method` and `dynamic-method-errors` fixtures retain source, state and
+full diagnostic comparisons, including `Object(value)` after an interface test.
+
+Required instance-method arguments are checked before parameter conversion or
+body effects, including calls through bound method values stored on an Object.
+Native `dynamic-method-arity` retains missing-argument #1063 and omitted optional
+argument defaults. New dynamic calls to unregistered bare function values remain
+explicitly unavailable; method closures carry generated method behavior. This
+does not establish general anonymous-function arity or calls with extra arguments.
+
+
+Shared native ancestry can differ from JavaScript inheritance when Laya uses
+composition. Proven native-base assignments therefore use the authenticated
+reference cast helper, retaining object identity and producing a valid target
+TypeScript type. Reference identity comparisons erase structural overlap checks
+on the left operand only; the emitted JavaScript comparison is unchanged.
+After running Laya's `event-ancestry` native pair, validate the generated probe
+against the real bridge declarations with:
+
+```sh
+node tools/check-native-reference-types.cjs /absolute/path/to/EventAncestryProbe.ts /absolute/path/to/LayaAir
+```
+
+This bounded regression checks the generated file using the relevant actual
+bridge/runtime declarations. It is not a complete engine or game typecheck.
+
+Native timer package imports in multi-file fixtures require `--ffdec-jar`.
+The generator reads the actual SDK getTimer/setTimeout/setInterval/clearTimeout/clearInterval
+function signatures into package-function member evidence and selects the
+existing shared AS3Timer runtime. It does not replace the strict runtime timer
+signature table or manufacture an application implementation. Original FilterLib
+uses this path; its static-construction probe does not invoke delayed callbacks.
+
+ColorMatrixFilter admits only the source constructor and matrix accessors with
+its shared Array conversion boundary. The bridge accepts untyped Array elements
+and stores detached float32 coefficients. Numeric Array indexed assignments are
+admitted only with source-member authority and the existing integer-index proof.
+Sparse growth and consumed values preserve native behavior; accessor-backed,
+subclass and noncanonical-index writes remain unsupported. Numeric compound
+index writes cache the key, read through the original receiver, evaluate RHS,
+and reevaluate the receiver for the store. The native array-index-write probe
+retains this order. Null compound reads, logical indexed assignments and other
+compound operators require their own evidence before extending admission.
+
+
+## Authenticated static method values
+
+Original local static methods may be read as stable callable values from their
+own class, another admitted class or a package function. The semantic closure
+retains its authenticated class receiver; the runtime evaluates that receiver
+once, initializes it using the existing class protocol, and caches the bound
+method without installing an instance member. Public/internal visibility checks
+remain at the original member lookup boundary. Flash native static methods still
+require separate callable-value authority.
+
+Static method calls retain required/maximum arity, native class labels ending in
+`$`, and the distinction between omitted and explicitly undefined optional slots.
+The ten-checkpoint Laya `static-method-closure` fixture retains native AIR evidence.
+Inherited static lookup and callable-length reflection are not qualified here.
+
+
+## Dynamic for-each receivers
+
+Authenticated Object/wildcard receivers use the exported AS3Enumeration runtime.
+It evaluates the original receiver once and delegates actual Arrays, Dictionary
+and Vector instances to their existing runtime behavior. Native scalar/nullish
+values produce no entries. Object enumeration skips declared traits and converts
+each value before assigning the original typed local; a rejected reference cast
+preserves the previous binding. No source cast or generated-class repair is used.
+
+Object property order is unspecified by the AIR language reference:
+https://airsdk.dev/reference/actionscript/3.0/statements.html
+The Laya `dynamic-collection` fixture compares exact Array sequences and explicit
+Object membership/counts, retaining raw exploratory ordering separately. It does
+not qualify order-dependent Object gameplay behavior, dynamic-class source
+modifiers, prototype/mutation ordering, Function/Class enumeration or new
+sparse/named Array behavior. Existing guards for those paths remain applicable.

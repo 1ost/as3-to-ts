@@ -32,7 +32,7 @@ exports.run=function(compiler,evidence) {
  const dir=path.join(__dirname,'original/binding-errors'),file=path.join(dir,'compilation.json');
  assert.equal(hash(fs.readFileSync(file)),fs.readFileSync(path.join(dir,'compilation.sha256'),'utf8').trim());
  const records=JSON.parse(fs.readFileSync(file,'utf8'));
- for(const record of records)for(const source of record.files)assert.equal(hash(fs.readFileSync(path.join(dir,source.path))),source.sha256);
+ for(const record of records)for(const source of record.files)assert.equal(hash(fs.readFileSync(path.join(dir,...source.path.split(/[/\\]/)))),source.sha256);
  assert.equal(records[0].case,'unimported');assert.notEqual(records[0].exitCode,0);assert(records[0].stderr.includes('Access of undefined property hidden.'));
  assert.equal(records[1].case,'builtins');assert.equal(records[1].exitCode,0);
  passed.push('original foreign-name rejection and builtin acceptance authenticated');

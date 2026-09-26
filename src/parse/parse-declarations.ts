@@ -3,15 +3,15 @@ import NodeKind from '../syntax/nodeKind';
 import Token from './token';
 import * as Keywords from '../syntax/keywords';
 import * as Operators from '../syntax/operators';
-import {startsWith} from '../string';
-import AS3Parser, {nextToken, nextTokenIgnoringDocumentation, consume, skip, tokIs} from './parser';
+import AS3Parser, {
+    nextToken, nextTokenIgnoringDocumentation, consume, skip, tokIs,
+    getParserCheckPoint, rewindParser, assertProgress, assertNotEOF, parseError,
+} from './parser';
 import {parseQualifiedName, parseBlock, parseParameterList, parseNameTypeInit} from './parse-common';
-import {ASDOC_COMMENT, MULTIPLE_LINES_COMMENT} from './parser';
-import {VERBOSE_MASK} from '../config';
 import {parseExpression} from './parse-expressions';
+import {startsWith} from '../string';
 import {parseStatement} from './parse-statements';
 import {parseOptionalType} from './parse-types';
-import {ReportFlags} from '../reports/report-flags';
 
 /**
  * tok is empty, since nextToken has not been called before
@@ -22,8 +22,18 @@ export function parseCompilationUnit(parser:AS3Parser):Node {
     nextTokenIgnoringDocumentation(parser);
     if (tokIs(parser, Keywords.PACKAGE)) {
         result.children.push(parsePackage(parser));
+        if (!tokIs(parser, Keywords.EOF)) {
+            result.children.push(parsePackageContent(parser, true));
+        }
+    } else {
+        result.children.push(parsePackageContent(parser, true));
     }
-    result.children.push(parsePackageContent(parser));
+    if (!tokIs(parser, Keywords.EOF)) {
+        throw parseError(parser, 'AS3_PARSE_TRAILING_INPUT', 'end of input', 'compilation unit');
+    }
+    result.start = 0;
+    result.end = parser.sourceFile.content.length;
+    result.trivia = parser.trivia.slice();
     return result;
 }
 
@@ -34,36 +44,34 @@ function parsePackage(parser:AS3Parser):Node {
     let nameBuffer = '';
 
     let index = parser.tok.index;
+    let nameEnd = index;
     while (!tokIs(parser, Operators.LEFT_CURLY_BRACKET)) {
+        assertNotEOF(parser, 'package declaration');
+        const checkpoint = getParserCheckPoint(parser);
         nameBuffer += parser.tok.text;
+        nameEnd = parser.tok.end;
         nextToken(parser);
+        assertProgress(parser, checkpoint, 'package declaration');
     }
-    result.children.push(createNode(NodeKind.NAME, {start: index, text: nameBuffer}));
+    result.children.push(createNode(NodeKind.NAME, {start: index, end: nameEnd, text: nameBuffer}));
     consume(parser, Operators.LEFT_CURLY_BRACKET);
-    result.children.push(parsePackageContent(parser));
+    result.children.push(parsePackageContent(parser, true));
     tok = consume(parser, Operators.RIGHT_CURLY_BRACKET);
     result.end = tok.end;
     return result;
 }
 
 
-function parsePackageContent(parser:AS3Parser):Node {
-
-    //if(VERBOSE >= 1) {
-    if((VERBOSE_MASK & ReportFlags.PARSER_POINTS) == ReportFlags.PARSER_POINTS) {
-        console.log("parse-declarations.ts - parsePackageContent() - token: " + parser.tok.text + ", line: " + parser.scn.lastLineScanned);
-    }
+function parsePackageContent(parser:AS3Parser, allowScriptStatements:boolean):Node {
 
     let result:Node = createNode(NodeKind.CONTENT, {start: parser.tok.index});
     let modifiers:Token[] = [];
     let meta:Node[] = [];
 
     while (!tokIs(parser, Operators.RIGHT_CURLY_BRACKET) && !tokIs(parser, Keywords.EOF)) {
+        const checkpoint = getParserCheckPoint(parser);
         if (tokIs(parser, Keywords.IMPORT)) {
             result.children.push(parseImport(parser));
-        } else if (tokIs(parser, Keywords.NAMESPACE)) {
-            result.children.push(parseNamespaceDeclaration(parser, modifiers));
-            modifiers.length = 0;
         } else if (tokIs(parser, Keywords.USE)) {
             result.children.push(parseUse(parser));
         } else if (tokIs(parser, Keywords.INCLUDE) || tokIs(parser, Keywords.INCLUDE_AS2)) {
@@ -80,42 +88,75 @@ function parsePackageContent(parser:AS3Parser):Node {
             meta.length = 0;
         } else if (tokIs(parser, Keywords.FUNCTION)) {
             parseClassFunctions(parser, result, modifiers, meta);
-        } else if (startsWith(parser.tok.text, ASDOC_COMMENT)) {
-            parser.currentAsDoc = createNode(NodeKind.AS_DOC, {
-                start: parser.tok.index,
-                end: parser.tok.index + parser.tok.index - 1,
-                text: parser.tok.text
-            });
-            nextToken(parser);
-        } else if (startsWith(parser.tok.text, MULTIPLE_LINES_COMMENT)) {
-            parser.currentMultiLineComment = createNode(NodeKind.MULTI_LINE_COMMENT, {
-                start: parser.tok.index,
-                end: parser.tok.index + parser.tok.index - 1,
-                text: parser.tok.text
-            });
-            nextToken(parser);
-        } else {
+        } else if (allowScriptStatements && tokIs(parser, Keywords.VAR)) {
+            result.children.push(parseVarList(parser, meta, modifiers));
+            skip(parser, Operators.SEMI_COLUMN);
+            modifiers.length = 0;
+            meta.length = 0;
+        } else if (allowScriptStatements && tokIs(parser, Keywords.CONST)) {
+            result.children.push(parseConstList(parser, meta, modifiers));
+            skip(parser, Operators.SEMI_COLUMN);
+            modifiers.length = 0;
+            meta.length = 0;
+        } else if (allowScriptStatements && tokIs(parser, Keywords.NAMESPACE)) {
+            result.children.push(parseNativeNamespaceDeclaration(parser, modifiers));
+            skip(parser, Operators.SEMI_COLUMN);
+            modifiers.length = 0;
+            meta.length = 0;
+        } else if (isDeclarationModifier(parser.tok.text)) {
             modifiers.push(parser.tok);
             nextTokenIgnoringDocumentation(parser);
+        } else if (allowScriptStatements && modifiers.length === 0 && meta.length === 0) {
+            result.children.push(parseExpression(parser));
+            skip(parser, Operators.SEMI_COLUMN);
+        } else {
+            throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
+                'a package declaration or declaration modifier', 'package content');
         }
+        assertProgress(parser, checkpoint, 'package content');
     }
-    if (result.lastChild) {
-        result.end = result.lastChild.end;
+    if (modifiers.length || meta.length) {
+        throw parseError(parser, 'AS3_PARSE_UNEXPECTED_EOF', 'a declaration after modifiers or metadata',
+            'package content', 'EOF');
     }
+    result.end = parser.tok.index;
+    return result;
+}
+
+function parseNamespaceDeclaration(parser:AS3Parser, meta:Node[], modifiers:Token[]):Node {
+    const tok = consume(parser, Keywords.NAMESPACE);
+    if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(parser.tok.text)) {
+        throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN', 'a namespace identifier', 'namespace declaration');
+    }
+    const name = parser.tok;
+    nextToken(parser);
+    const result = createNode(NodeKind.NAMESPACE, { start: tok.index, end: name.end, text: name.text });
+    if (tokIs(parser, Operators.EQUAL)) {
+        const assignment = consume(parser, Operators.EQUAL);
+        const value = parseExpression(parser);
+        const init = createNode(NodeKind.INIT, {start:assignment.index,end:value.end});
+        init.children.push(value);
+        result.children.push(init);
+        result.end = value.end;
+    }
+    appendIfPresent(result, convertMeta(parser, meta));
+    appendIfPresent(result, convertModifiers(parser, modifiers));
+    result.start = result.children.reduce((index:number, child:Node) => Math.min(index, child.start), tok.index);
     return result;
 }
 
 
 function parseImport(parser:AS3Parser):Node {
 
-    let tok = consume(parser, Keywords.IMPORT);
+    const keyword = consume(parser, Keywords.IMPORT);
+    const nameStart = parser.tok.index;
     let name = parseImportName(parser);
-    let result:Node = createNode(NodeKind.IMPORT, {start: tok.index, text: name});
+    // Imported identifiers are syntactic namespace candidates; semantic authority resolves their kind.
+    const importedName = name.text.slice(name.text.lastIndexOf(".") + 1);
+    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(importedName)) parser.activeNamespaces.add(importedName);
+    let result:Node = createNode(NodeKind.IMPORT, {start: nameStart, end: name.end, text: name.text});
+    result.importKeywordStart = keyword.index;
     skip(parser, Operators.SEMI_COLUMN);
-    //if(VERBOSE >= 2) {
-    if((VERBOSE_MASK & ReportFlags.PARSER_IMPORTS) == ReportFlags.PARSER_IMPORTS) {
-        console.log("parse-declarations.ts - parseImport() - name: " + name + ", line: " + parser.scn.lastLineScanned);
-    }
     return result;
 }
 
@@ -124,8 +165,9 @@ function parseImport(parser:AS3Parser):Node {
  * tok is the first part of a name the last part can be a star exit tok is
  * the first token, which doesn't belong to the name
  */
-function parseImportName(parser:AS3Parser):string {
+function parseImportName(parser:AS3Parser):{text:string, end:number} {
     let result = '';
+    let end = parser.tok.end;
 
     result += parser.tok.text;
     nextToken(parser);
@@ -133,9 +175,10 @@ function parseImportName(parser:AS3Parser):string {
         result += Operators.DOT;
         nextToken(parser); // .
         result += parser.tok.text;
+        end = parser.tok.end;
         nextToken(parser); // part of name
     }
-    return result;
+    return {text: result, end};
 }
 
 
@@ -144,6 +187,7 @@ function parseUse(parser:AS3Parser):Node {
     consume(parser, Keywords.NAMESPACE);
     let nameIndex = parser.tok.index;
     let namespace = parseNamespaceName(parser);
+    parser.activeNamespaces.add(namespace);
     let result:Node = createNode(NodeKind.USE, {
         start: tok.index,
         end: nameIndex + namespace.length,
@@ -154,7 +198,7 @@ function parseUse(parser:AS3Parser):Node {
 }
 
 
-function parseNamespaceDeclaration(parser:AS3Parser, modifiers:Token[]):Node {
+function parseNativeNamespaceDeclaration(parser:AS3Parser, modifiers:Token[]):Node {
     let token = consume(parser, Keywords.NAMESPACE);
     let name = createNode(NodeKind.NAME, {tok: parser.tok});
     nextToken(parser);
@@ -193,21 +237,18 @@ function parseIncludeExpression(parser:AS3Parser):Node {
     result.end = result.children.reduce((index:number, child:Node) => {
         return Math.max(index, child ? child.end : 0);
     }, 0);
+    skip(parser, Operators.SEMI_COLUMN);
     return result;
 }
 
 
 function parseMetaData(parser:AS3Parser):Node {
-    let buffer = '';
-
-    let index = consume(parser, Operators.LEFT_SQUARE_BRACKET).index;
-    while (!tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) {
-        buffer += parser.tok.text;
-        nextToken(parser);
-    }
-    let end = parser.tok.end;
-    skip(parser, Operators.RIGHT_SQUARE_BRACKET);
-    return createNode(NodeKind.META, {start: index, end: end, text: '[' + buffer + ']'});
+    const start = consume(parser, Operators.LEFT_SQUARE_BRACKET).index;
+    const expression = parseExpression(parser);
+    const end = consume(parser, Operators.RIGHT_SQUARE_BRACKET).end;
+    const result = createNode(NodeKind.META, {start, end});
+    result.children.push(expression);
+    return result;
 }
 
 
@@ -228,12 +269,14 @@ function parseClass(parser:AS3Parser, meta:Node[], modifier:Token[]):Node {
         name = parseQualifiedName(parser, true);
     result.children.push(createNode(NodeKind.NAME, {start: index, text: name}));
 
-    result.children.push(convertMeta(parser, meta));
-    result.children.push(convertModifiers(parser, modifier));
+    appendIfPresent(result, convertMeta(parser, meta));
+    appendIfPresent(result, convertModifiers(parser, modifier));
 
     // nextToken(parser,  true ); // name
 
-    do {
+    while (!tokIs(parser, Operators.LEFT_CURLY_BRACKET)) {
+        assertNotEOF(parser, 'class header');
+        const checkpoint = getParserCheckPoint(parser);
         if (tokIs(parser, Keywords.EXTENDS)) {
             nextToken(parser, true); // extends
             index = parser.tok.index;
@@ -241,9 +284,12 @@ function parseClass(parser:AS3Parser, meta:Node[], modifier:Token[]):Node {
             result.children.push(createNode(NodeKind.EXTENDS, {start: index, text: name}));
         } else if (tokIs(parser, Keywords.IMPLEMENTS)) {
             result.children.push(parseImplementsList(parser));
+        } else {
+            throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
+                'extends, implements, or {', 'class header');
         }
+        assertProgress(parser, checkpoint, 'class header');
     }
-    while (!tokIs(parser, Operators.LEFT_CURLY_BRACKET));
     consume(parser, Operators.LEFT_CURLY_BRACKET);
     result.children.push(parseClassContent(parser));
     tok = consume(parser, Operators.RIGHT_CURLY_BRACKET);
@@ -261,35 +307,28 @@ function parseImplementsList(parser:AS3Parser):Node {
     consume(parser, Keywords.IMPLEMENTS);
     let result:Node = createNode(NodeKind.IMPLEMENTS_LIST, {start: parser.tok.index});
     let index = parser.tok.index;
-    let name = parseQualifiedName(parser, true);
+    let name = parseQualifiedName(parser, false);
     result.children.push(createNode(NodeKind.IMPLEMENTS, {start: index, text: name}));
     while (tokIs(parser, Operators.COMMA)) {
         nextToken(parser, true);
         let index = parser.tok.index;
-        let name = parseQualifiedName(parser, true);
+        let name = parseQualifiedName(parser, false);
         result.children.push(createNode(NodeKind.IMPLEMENTS, {start: index, text: name}));
     }
+    result.end = result.lastChild.end;
     return result;
 }
 
 
 function parseClassContent(parser:AS3Parser):Node {
 
-    //if(VERBOSE >= 1) {
-    if((VERBOSE_MASK & ReportFlags.PARSER_CONTENT) == ReportFlags.PARSER_CONTENT) {
-        console.log("parse-declarations.ts - parseClassContent() - token: " + parser.tok.text + ", line: " + parser.scn.lastLineScanned);
-    }
-
     let result:Node = createNode(NodeKind.CONTENT, {start: parser.tok.index});
     let modifiers:Token[] = [];
     let meta:Node[] = [];
 
     while (!tokIs(parser, Operators.RIGHT_CURLY_BRACKET)) {
-        if (tokIs(parser, Keywords.EOF)) throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: unterminated class content');
-        //if(VERBOSE >= 2) {
-        if((VERBOSE_MASK & ReportFlags.PARSER_CONTENT) == ReportFlags.PARSER_CONTENT) {
-            console.log("parse-declarations.ts - keyword: " + parser.tok.text + ", index: " + parser.tok.index);
-        }
+        assertNotEOF(parser, 'class body');
+        const checkpoint = getParserCheckPoint(parser);
         if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET) && classMetadataPrefix(parser)) {
             meta.push(parseMetaData(parser));
         } else if (tokIs(parser, Keywords.VAR)) {
@@ -306,21 +345,23 @@ function parseClassContent(parser:AS3Parser):Node {
             result.children.push(parseIncludeExpression(parser));
         } else if (tokIs(parser, Keywords.FUNCTION)) {
             parseClassFunctions(parser, result, modifiers, meta);
-        } else if (startsWith(parser.tok.text, ASDOC_COMMENT)
-            || startsWith(parser.tok.text, MULTIPLE_LINES_COMMENT) || classDeclarationPrefix(parser)) {
-            tryToParseCommentNode(parser, result, modifiers);
+        } else if (tokIs(parser, Operators.SEMI_COLUMN)) {
+            nextToken(parser);
+        } else if (classDeclarationPrefix(parser)) {
+            modifiers.push(parser.tok);
+            nextTokenIgnoringDocumentation(parser);
         } else {
             if (modifiers.length || meta.length)
-                throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: declaration prefix before statement');
+                throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
+                    'a class member following declaration metadata and modifiers', 'class body');
             const start = parser.tok.index;
             const statement = parseStatement(parser);
             result.children.push(createNode(NodeKind.CLASS_INITIALIZER,
-                {start, end: parser.tok.index}, statement));
+                {start, end: statement.end}, statement));
         }
+        assertProgress(parser, checkpoint, 'class body');
     }
-    if (result.lastChild) {
-        result.end = result.lastChild.end;
-    }
+    result.end = parser.tok.index;
     return result;
 }
 
@@ -418,21 +459,24 @@ function parseInterface(parser:AS3Parser, meta:Node[], modifier:Token[]):Node {
         result.children.push(parser.currentMultiLineComment);
         parser.currentMultiLineComment = null;
     }
+    let nameStart = parser.tok.index;
     let name = parseQualifiedName(parser, true);
-    result.children.push(createNode(NodeKind.NAME, {start: parser.tok.index, text: name}));
+    result.children.push(createNode(NodeKind.NAME, {start: nameStart, text: name}));
 
-    result.children.push(convertMeta(parser, meta));
-    result.children.push(convertModifiers(parser, modifier));
+    appendIfPresent(result, convertMeta(parser, meta));
+    appendIfPresent(result, convertModifiers(parser, modifier));
 
     if (tokIs(parser, Keywords.EXTENDS)) {
         nextToken(parser); // extends
+        nameStart = parser.tok.index;
         name = parseQualifiedName(parser, false);
-        result.children.push(createNode(NodeKind.EXTENDS, {start: parser.tok.index, text: name}));
+        result.children.push(createNode(NodeKind.EXTENDS, {start: nameStart, text: name}));
     }
     while (tokIs(parser, Operators.COMMA)) {
         nextToken(parser); // comma
+        nameStart = parser.tok.index;
         name = parseQualifiedName(parser, false);
-        result.children.push(createNode(NodeKind.EXTENDS, {start: parser.tok.index, text: name}));
+        result.children.push(createNode(NodeKind.EXTENDS, {start: nameStart, text: name}));
     }
     consume(parser, Operators.LEFT_CURLY_BRACKET);
     result.children.push(parseInterfaceContent(parser));
@@ -449,6 +493,8 @@ function parseInterfaceContent(parser:AS3Parser):Node {
     let result:Node = createNode(NodeKind.CONTENT, {start: parser.tok.index});
 
     while (!tokIs(parser, Operators.RIGHT_CURLY_BRACKET)) {
+        assertNotEOF(parser, 'interface body');
+        const checkpoint = getParserCheckPoint(parser);
         if (tokIs(parser, Keywords.IMPORT)) {
             result.children.push(parseImport(parser));
         } else if (tokIs(parser, Keywords.FUNCTION)) {
@@ -457,16 +503,19 @@ function parseInterfaceContent(parser:AS3Parser):Node {
             result.children.push(parseIncludeExpression(parser));
         } else if (tokIs(parser, Operators.LEFT_SQUARE_BRACKET)) {
             while (!tokIs(parser, Operators.RIGHT_SQUARE_BRACKET)) {
+                assertNotEOF(parser, 'interface metadata');
+                const metadataCheckpoint = getParserCheckPoint(parser);
                 nextToken(parser);
+                assertProgress(parser, metadataCheckpoint, 'interface metadata');
             }
             nextToken(parser);
         } else {
-            tryToParseCommentNode(parser, result, null);
+            throw parseError(parser, 'AS3_PARSE_UNEXPECTED_TOKEN',
+                'an interface member', 'interface body');
         }
+        assertProgress(parser, checkpoint, 'interface body');
     }
-    if (result.lastChild) {
-        result.end = result.lastChild.end;
-    }
+    result.end = parser.tok.index;
     return result;
 }
 
@@ -481,18 +530,8 @@ function parseClassFunctions(parser:AS3Parser, result:Node, modifiers:Token[], m
 
 function parseFunction(parser:AS3Parser, meta:Node[], modifiers:Token[]):Node {
 
-    if(modifiers && modifiers.length === 0) {
-        var line:number = parser.scn.getNumLineBreaksBeforeIndex();
-        throw new Error("*** ERROR *** Class member modifier (public, private, internal) is required at line: " + line);
-    }
-
     let {type, name, params, returnType} = doParseSignature(parser);
     let result:Node = createNode(findFunctionTypeFromTypeNode(type), {start: type.start, end: -1, text: type.text});
-
-    //if(VERBOSE >= 2) {
-    if((VERBOSE_MASK & ReportFlags.PARSER_FUNCTIONS) == ReportFlags.PARSER_FUNCTIONS) {
-        console.log("parse-declarations.ts - parseFunction: " + name.text + "()" + ", line: " + parser.scn.lastLineScanned);
-    }
 
     if (parser.currentAsDoc) {
         result.children.push(parser.currentAsDoc);
@@ -503,13 +542,8 @@ function parseFunction(parser:AS3Parser, meta:Node[], modifiers:Token[]):Node {
         parser.currentMultiLineComment = null;
     }
 
-    // Append dummy modifier to constructor
-    if (modifiers.length === 0 && /^[A-Z]/.test(name.text)) {
-        modifiers.push( new Token("public", type.start) )
-    }
-
-    result.children.push(convertMeta(parser, meta));
-    result.children.push(convertModifiers(parser, modifiers));
+    appendIfPresent(result, convertMeta(parser, meta));
+    appendIfPresent(result, convertModifiers(parser, modifiers));
     result.children.push(name);
     result.children.push(params);
     result.children.push(returnType);
@@ -534,7 +568,7 @@ function parseFunctionSignature(parser:AS3Parser):Node {
     let {type, name, params, returnType} = doParseSignature(parser);
     skip(parser, Operators.SEMI_COLUMN);
     let result:Node = createNode(
-        type.kind,
+        findFunctionTypeFromTypeNode(type),
         {start: type.start, end: -1, text: type.text},
         name,
         params,
@@ -548,8 +582,6 @@ function parseFunctionSignature(parser:AS3Parser):Node {
 
 function doParseSignature(parser:AS3Parser) {
 
-    // console.logparse-declarations.ts - doParseSignature()");
-
     let tok = consume(parser, Keywords.FUNCTION);
     let type:Node = createNode(NodeKind.TYPE, {tok: tok});
 
@@ -557,8 +589,7 @@ function doParseSignature(parser:AS3Parser) {
     let isSet = tokIs(parser, Keywords.SET);
 
     if (isGet || isSet) {
-        let currentToken = parser.tok;
-        let checkpoint = parser.scn.getCheckPoint();
+        let checkpoint = getParserCheckPoint(parser);
 
         nextToken(parser); // set or get
         let valid: boolean = (parser.tok.text !== "(");
@@ -571,8 +602,7 @@ function doParseSignature(parser:AS3Parser) {
             });
 
         } else {
-            parser.scn.rewind(checkpoint);
-            parser.tok = currentToken;
+            rewindParser(parser, checkpoint);
         }
 
     }
@@ -607,14 +637,10 @@ function parseFunctionBlock(parser:AS3Parser):Node {
 
 
 export function parseVarList(parser:AS3Parser, meta:Node[], modifiers:Token[]):Node {
-    if(modifiers && modifiers.length === 0) {
-        var line:number = parser.scn.getNumLineBreaksBeforeIndex();
-        throw new Error("*** ERROR *** Class member modifier (public, private, internal) is required at line: " + line);
-    }
     let tok = consume(parser, Keywords.VAR);
     let result:Node = createNode(NodeKind.VAR_LIST, {start: tok.index, end: tok.end});
-    result.children.push(convertMeta(parser, meta));
-    result.children.push(convertModifiers(parser, modifiers));
+    appendIfPresent(result, convertMeta(parser, meta));
+    appendIfPresent(result, convertModifiers(parser, modifiers));
     collectVarListContent(parser, result);
     result.start = result.children.reduce((index:number, child:Node) => {
         return Math.min(index, child ? child.start : Infinity);
@@ -629,8 +655,8 @@ export function parseVarList(parser:AS3Parser, meta:Node[], modifiers:Token[]):N
 export function parseConstList(parser:AS3Parser, meta:Node[], modifiers:Token[]):Node {
     let tok = consume(parser, Keywords.CONST);
     let result:Node = createNode(NodeKind.CONST_LIST, {start: tok.index});
-    result.children.push(convertMeta(parser, meta));
-    result.children.push(convertModifiers(parser, modifiers));
+    appendIfPresent(result, convertMeta(parser, meta));
+    appendIfPresent(result, convertModifiers(parser, modifiers));
     collectVarListContent(parser, result);
 
     result.start = result.children.reduce((index:number, child:Node) => {
@@ -647,30 +673,12 @@ export function parseConstList(parser:AS3Parser, meta:Node[], modifiers:Token[])
 function collectVarListContent(parser:AS3Parser, result:Node):Node {
     result.children.push(parseNameTypeInit(parser));
     while (tokIs(parser, Operators.COMMA)) {
+        const checkpoint = getParserCheckPoint(parser);
         nextToken(parser, true);
         result.children.push(parseNameTypeInit(parser));
+        assertProgress(parser, checkpoint, 'variable declaration list');
     }
     return result;
-}
-
-
-function tryToParseCommentNode(parser:AS3Parser, result:Node, modifiers:Token[]):void {
-    if (startsWith(parser.tok.text, ASDOC_COMMENT)) {
-        parser.currentAsDoc = createNode(NodeKind.AS_DOC, {start: parser.tok.index, end: -1, text: parser.tok.text});
-        nextToken(parser);
-    } else if (startsWith(parser.tok.text, MULTIPLE_LINES_COMMENT)) {
-        result.children.push(createNode(NodeKind.MULTI_LINE_COMMENT, {
-            start: parser.tok.index,
-            end: -1,
-            text: parser.tok.text
-        }));
-        nextToken(parser);
-    } else {
-        if (modifiers) {
-            modifiers.push(parser.tok);
-        }
-        nextTokenIgnoringDocumentation(parser);
-    }
 }
 
 
@@ -692,7 +700,7 @@ function convertMeta(parser:AS3Parser, metadataList:Node[]):Node {
 
 
 function convertModifiers(parser:AS3Parser, modifierList:Token[]):Node {
-    if (!modifierList) {
+    if (!modifierList || modifierList.length === 0) {
         return null;
     }
 
@@ -708,5 +716,15 @@ function convertModifiers(parser:AS3Parser, modifierList:Token[]):Node {
         return Math.min(index, child ? child.start : Infinity);
     }, result.start);
     return result;
+}
+
+function isDeclarationModifier(text:string):boolean {
+    return text === Keywords.PUBLIC || text === Keywords.PRIVATE || text === Keywords.PROTECTED
+        || text === Keywords.INTERNAL || text === Keywords.STATIC || text === Keywords.FINAL
+        || text === Keywords.OVERRIDE || text === Keywords.DYNAMIC || text === Keywords.INTRINSIC;
+}
+
+function appendIfPresent(parent:Node, child:Node):void {
+    if (child) parent.children.push(child);
 }
 

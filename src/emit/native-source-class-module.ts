@@ -1,4 +1,4 @@
-import * as ts from 'typescript';
+import * as ts from 'typescript-4-9';
 import parse = require('../parse');
 import {emit, EmitterOptions} from './emitter';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
