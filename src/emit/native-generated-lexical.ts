@@ -423,6 +423,24 @@ export class NativeGeneratedLexical {
                     references=field&&field.type?this.plan.references.filter(r=>r.owner===field.owner&&(r.kind==='declaration'||r.kind==='native')
                         &&r.start===field.type.start&&r.end===field.type.end):[];
                 }
+                if(receiver.kind===K.DOT&&receiver.children[0].kind===K.IDENTIFIER) {
+                    const root=receiver.children[0],rootBinding=emitter.findDefInScope(root.text);
+                    const owner=(!rootBinding||!Object.prototype.hasOwnProperty.call(rootBinding,'as3Type'))
+                        &&this.plan.bindings.find(b=>b.qname===this.resolveTypeName(root.text));
+                    const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
+                    if(owner&&input.sources[owner.qname]&&!input.sources[owner.qname].referenceOnly) {
+                        const getter=this.internalContent(owner.qname).children.find(member=>member.kind===K.GET
+                            &&modifiers(member).indexOf('public')>=0&&modifiers(member).indexOf('static')>=0
+                            &&member.findChild(K.NAME).text===receiver.children[1].text
+                            &&member.findChild(K.PARAMETER_LIST).children.length===0);
+                        const type=getter&&getter.findChild(K.TYPE);
+                        if(type)references=this.plan.references.filter(r=>r.owner===owner.qname&&r.kind==='declaration'
+                            &&r.start===type.start&&r.end===type.end);
+                    }
+                    // The source getter's declared result establishes the public
+                    // receiver type. Keep the complete expression for ordinary
+                    // property dispatch: evaluate it once, before call arguments.
+                }
                 const identities=Array.from(new Set(references.map(r=>r.identity)));
                 if(identities.length===1&&identities[0]==='flash.utils.ByteArray'
                     &&references.every(r=>r.kind==='native')&&['compress','uncompress','deflate','inflate'].indexOf(name)>=0) {
