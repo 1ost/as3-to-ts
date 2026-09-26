@@ -77,3 +77,27 @@ for (const expression of ['TweenMax', 'TweenMax.from(target, duration, vars)', '
     assert.throws(()=>generate(source,tweenOptions), /AS3_TWEEN_UNSUPPORTED/);
 }
 console.log('Native imported tween routing passed');
+
+const querySource = `package probe { import com.greensock.TweenMax;
+ public class Query {
+  public function run(target:Object):Array { return TweenMax.getTweensOf(target); }
+  public function shadow(TweenMax:*, target:Object):* { return TweenMax.getTweensOf(target); }
+ }
+}`;
+const queryOutput = generate(querySource, tweenOptions);
+assert.match(queryOutput, /__as3_FlashTweenRuntime\.current\(\)\.getTweensOf\(target\)/);
+assert.match(queryOutput, /return TweenMax\.getTweensOf\(target\)/, 'parameter retains ownership');
+for (const args of ['', 'target, true', 'target, false']) {
+    assert.throws(() => generate(querySource.replace('getTweensOf(target)', `getTweensOf(${args})`), tweenOptions),
+        /AS3_TWEEN_UNSUPPORTED: getTweensOf requires exactly one target argument/);
+}
+for (const expression of ['TweenMax.getTweensOf', 'new TweenMax(target)', 'new TweenMax.getTweensOf(target)', 'TweenMax.isTweening(target)']) {
+    assert.throws(() => generate(querySource.replace('TweenMax.getTweensOf(target)', expression), tweenOptions), /AS3_TWEEN_UNSUPPORTED/);
+}
+for (const source of [querySource.replace('import com.greensock.TweenMax;', ''),
+    querySource.replace('com.greensock.TweenMax', 'other.TweenMax')]) {
+    assert.doesNotMatch(generate(source, tweenOptions), /current\(\)\.getTweensOf/);
+}
+assert.doesNotMatch(generate(querySource, {...tweenOptions, nativeTweenModule: undefined}), /current\(\)\.getTweensOf/);
+assert.throws(() => generate(querySource.replace(/TweenMax/g, 'TweenLite'), tweenOptions), /AS3_TWEEN_UNSUPPORTED/);
+console.log('Native imported tween query routing and guards passed');

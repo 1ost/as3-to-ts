@@ -3603,7 +3603,7 @@ function emitCall(emitter:Emitter, node:Node):void {
     if (emitBuiltinBooleanCoercion(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
 	if (emitArraySortOn(emitter, node)) return;
-	if (emitTweenTo(emitter, node)) return;
+	if (emitTweenMigrationCall(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
     if (emitInternalDynamicCall(emitter, node)) return;
     if (emitObjectPropertyCall(emitter, node)) return;
@@ -4334,23 +4334,33 @@ function emitArraySortOn(emitter:Emitter, node:Node):boolean {
 	return true;
 }
 
-function emitTweenTo(emitter:Emitter, node:Node):boolean {
+function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 	const module = emitter.options.nativeTweenModule;
 	if (module === undefined || !node || node.kind !== NodeKind.CALL || node.children.length < 2) return false;
 	const callee = node.children[0], args = node.findChild(NodeKind.ARGUMENTS);
 	if (!callee || callee.kind !== NodeKind.DOT || callee.children.length !== 2 || !args) return false;
 	const receiver = callee.children[0], name = callee.children[1];
 	if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || (receiver.text !== 'TweenMax' && receiver.text !== 'TweenLite')
-		|| !name || name.kind !== NodeKind.LITERAL || name.text !== 'to') return false;
+		|| !name || name.kind !== NodeKind.LITERAL) return false;
+	const query = receiver.text === 'TweenMax' && name.text === 'getTweensOf';
+	if (name.text !== 'to' && !query) return false;
 	const binding = emitter.findDefInScope(receiver.text);
 	if (binding && (binding.bound || Object.prototype.hasOwnProperty.call(binding, 'as3Type')
 		|| binding.sourceImport !== 'com.greensock.' + receiver.text)) return false;
+	// Query authority comes from the exact legacy import. Unlike the older to()
+	// migration, an unbound namesake is not sufficient. The optional legacy
+	// onlyActive overload has no corresponding runtime contract.
+	if (query && !binding) return false;
+	if (query && emitter.isNew)
+		throw new Error('AS3_TWEEN_UNSUPPORTED: tween query construction is not qualified');
+	if (query && args.children.length !== 1)
+		throw new Error('AS3_TWEEN_UNSUPPORTED: getTweensOf requires exactly one target argument');
 	let helper = '__as3_FlashTweenRuntime';
 	while (emitter.source.indexOf(helper) >= 0) helper += '_';
 	emitter.ensureImportIdentifier('FlashTweenRuntime as ' + helper, module, false);
 	emitter.nativeSourceHelpers.add(helper);
 	emitter.catchup(node.start);
-	emitter.insert(helper + '.current().to(');
+	emitter.insert(helper + '.current().' + name.text + '(');
 	if (args.children.length) {
 		emitter.skipTo(args.children[0].start);
 		visitNodes(emitter, args.children);
@@ -5565,7 +5575,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	if (emitter.options.nativeTweenModule !== undefined && def && !def.bound
 		&& !Object.prototype.hasOwnProperty.call(def, 'as3Type')
 		&& (def.sourceImport === 'com.greensock.TweenMax' || def.sourceImport === 'com.greensock.TweenLite'))
-		throw new Error('AS3_TWEEN_UNSUPPORTED: imported tween Class is only qualified for direct to calls');
+		throw new Error('AS3_TWEEN_UNSUPPORTED: imported tween Class operation is not qualified');
     const interfaceValue = emitter.generated && emitter.references && emitter.references.sourceInterface(node.text);
     if (interfaceValue && (!def || !def.bound && !Object.prototype.hasOwnProperty.call(def, 'as3Type'))) {
         let method = node.parent;
