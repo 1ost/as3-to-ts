@@ -543,7 +543,7 @@ function adaptMappedCall(mapping: CapabilityMapping, argumentsList: SemanticExpr
             || mapping.targetModule !== "src/layaAir/flash/display/MovieClip.ts" || mapping.targetExport !== "MovieClip"
             || mapping.targetCapabilityId !== "api.flash.display" || mapping.targetMember?.kind !== "method"
             || mapping.targetMember.name !== "addFrameScript" || mapping.targetMember.scope !== "instance"
-            || mapping.targetMember.signature !== "(frame: number, script: FlashFrameScript, ...additional: Array<number | FlashFrameScript>) => void")
+            || mapping.targetMember.signature !== "(...values: unknown[]) => void")
             fail("HARDENED_FRAME_SCRIPT_AUTHORITY","Frame scripts require the exact authenticated native variadic and shared pair signature",node);
         if (argumentsList.length < 2 || argumentsList.length % 2 !== 0)
             fail("HARDENED_FRAME_SCRIPT_ARITY","Frame script calls require one or more frame/callback pairs",node);
