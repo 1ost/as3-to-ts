@@ -1728,8 +1728,11 @@ function emitForEach(emitter:Emitter, node:Node):void {
 	let inNode = node.children[1];
 	let objNode = inNode.children[0];
 	let blockNode = node.children[2];
+    const inlineTarget=varNode.kind===NodeKind.VAR&&varNode.findChild(NodeKind.NAME_TYPE_INIT);
+    const targetName=inlineTarget?inlineTarget.findChild(NodeKind.NAME).text:varNode.text;
     const localTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
-    if(emitter.generated&&localTarget&&!localTarget.bound&&['*','String','Object','Class'].indexOf(localTarget.as3Type)>=0){
+    if(emitter.generated&&(inlineTarget||localTarget&&!localTarget.bound&&['*','String','Object','Class'].indexOf(localTarget.as3Type)>=0)){
+        if(inlineTarget&&inlineTarget.findChild(NodeKind.INIT))throw new Error('AS3_ENUMERATION_UNSUPPORTED: inline iterator initializer');
         // The legacy parser represents a member target as a NAME plus a malformed
         // IN span. Require the original simple-target separator before lowering.
         const separator=emitter.source.slice(varNode.end,objNode.start).replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g,'').trim();
@@ -1739,11 +1742,13 @@ function emitForEach(emitter:Emitter, node:Node):void {
         let receiver:string,cursor:string,step:string;
         do {emitter.loopObjectCounter++;receiver='__as3_eachReceiver_'+emitter.loopObjectCounter;cursor='__as3_eachKeys_'+emitter.loopObjectCounter;step='__as3_eachStep_'+emitter.loopObjectCounter;}
         while([receiver,cursor,step].some(name=>emitter.source.indexOf(name)>=0));
-        emitter.catchup(node.start);emitter.insert('{ const '+receiver+'=');
+        emitter.catchup(node.start);emitter.insert('{ const '+receiver+':any=');
         emitter.skipTo(objNode.start);visitNode(emitter,objNode);emitter.catchup(objNode.end);
         emitter.insert(';const '+cursor+'='+values+'('+receiver+');let '+step+':any;try{');
         if(emitter.pendingStatementLabel){emitter.insert(emitter.pendingStatementLabel+':');emitter.pendingStatementLabel=null;}
-        emitter.insert('for(;!('+step+'='+cursor+'.next()).done;){'+(emitter.getIdentifierRemap(varNode.text)||varNode.text)+'='+step+'.value;');
+        // The generated function-local pass supplies declaration defaults and
+        // coerces this assignment before publishing the iterator's new value.
+        emitter.insert('for(;!('+step+'='+cursor+'.next()).done;){'+(inlineTarget?'var ':'')+(emitter.getIdentifierRemap(targetName)||targetName)+'='+step+'.value;');
         emitter.skipTo(blockNode.start);visitNode(emitter,blockNode);finishEnumerationBody(emitter,blockNode,false);
         emitter.insert('}}finally{if('+step+'&&!'+step+'.done&&'+cursor+'.return)'+cursor+'.return();}}');return;
     }

@@ -23,7 +23,8 @@ assert(a.publication('Helper','Base','headers','intrinsic').includes('headers.'+
 assert(b.publication('Helper','Base','headers','intrinsic').includes('headers.'+second.lexicalExport+'.set('));
 assert(secondPrimary.typedLocals);assert(a.typedLocals);assert(c.typedLocals);
 let guards=0;const reject=(fn,re)=>{assert.throws(fn,re);guards++;};
-reject(()=>make('localcases.First'),/source enumeration targets held/);
+const firstPrimary=make('localcases.First');assert(firstPrimary.typedLocals);
+const privateCurrent=firstPrimary.trait('current',false);assert.equal(firstPrimary.typeExpression(privateCurrent.type,privateCurrent.owner,'headers','Array'),'{name:"::Helper",reference:headers.'+first.tokenExport+'}');
 reject(()=>new NativeGeneratedLexical({...plan},first.identity,sources['localcases.First'].source,true),/exact planned scope/);
 reject(()=>make(first.identity,sources['localcases.Second'].source),/exact planned/);
 reject(()=>nativeGeneratedDeclarationResolver(plan,'localcases.Helper',sources['localcases.First'].source),/exact planned/);
