@@ -1190,13 +1190,14 @@ function boundMethodNames(program: SemanticProgram): string[] {
     return Object.keys(names).sort();
 }
 
-function bindMethodStatement(name: string, ts: TypeScriptCompilerApi): any {
-    const method = ts.factory.createPropertyAccessExpression(ts.factory.createThis(), name);
+function bindMethodStatement(name: string, ts: TypeScriptCompilerApi, receiverName?: string): any {
+    const receiver=()=>receiverName ? ts.factory.createIdentifier(receiverName) : ts.factory.createThis();
+    const method = ts.factory.createPropertyAccessExpression(receiver(), name);
     return ts.factory.createExpressionStatement(ts.factory.createBinaryExpression(
         method,
         ts.factory.createToken(ts.SyntaxKind.EqualsToken),
         ts.factory.createCallExpression(ts.factory.createIdentifier("__as3BindMethod"), undefined,
-            [ts.factory.createThis(), method]),
+            [receiver(), method]),
     ));
 }
 
@@ -1461,12 +1462,16 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
         && statement.expression.kind === "call" && statement.expression.callee.kind === "super") ?? -1;
     const staged=member?.preSuperFieldState === true;
     const receiverMode=member?.preSuperReceiverState === true;
+    const nativeTextMode=member?.preSuperNativeTextField === true;
     const preSuperReceiverName="__as3PreSuperReceiver";
+    const nativeTextReceiverName="__as3NativeTextReceiver";
+    const constructorReceiver=nativeTextMode ? ts.factory.createIdentifier(nativeTextReceiverName) : ts.factory.createThis();
     const instanceFields=classDeclaration.members.filter((item):item is SemanticField=>item.kind === "field"
         && !item.modifiers.includes("static"));
     const original = member === null ? [] : member.body.map((statement,index) => statementNode(
-        (staged || receiverMode) && index <= superIndex
-            ? stagedConstructorValue(statement,receiverMode ? preSuperReceiverName : "__as3PreSuperFields") : statement, ts));
+        nativeTextMode ? stagedConstructorValue(statement,nativeTextReceiverName)
+            : (staged || receiverMode) && index <= superIndex
+                ? stagedConstructorValue(statement,receiverMode ? preSuperReceiverName : "__as3PreSuperFields") : statement, ts));
     const stagedFieldSetup:any[]=staged ? [ts.factory.createVariableStatement(undefined,
         ts.factory.createVariableDeclarationList([ts.factory.createVariableDeclaration("__as3PreSuperFields",undefined,
             ts.factory.createTypeLiteralNode(instanceFields.map(field=>ts.factory.createPropertySignature(undefined,
@@ -1493,6 +1498,16 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
         .map(field=>ts.factory.createExpressionStatement(ts.factory.createAssignment(
             ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier(preSuperReceiverName),fieldStorageName(field)),
             expressionNode(stagedConstructorValue(field.initializer!,preSuperReceiverName),ts)))) : [];
+    // AIR exposes a usable native TextField before the source-level super()
+    // statement. Allocate the canonical native object once, with the real
+    // generated new.target, so pre-super setters and reads run in place.
+    const nativeTextSetup:any[]=nativeTextMode ? [ts.factory.createVariableStatement(undefined,
+        ts.factory.createVariableDeclarationList([ts.factory.createVariableDeclaration(nativeTextReceiverName,undefined,undefined,
+            ts.factory.createAsExpression(ts.factory.createCallExpression(
+                ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("Reflect"),"construct"),undefined,[
+                    ts.factory.createIdentifier(classDeclaration.extendsType!.emittedName),
+                    ts.factory.createArrayLiteralExpression(),newTargetExpression(ts)]),
+                ts.factory.createTypeReferenceNode(className)))],ts.NodeFlags.Const))] : [];
     // Keep local side effects and failures before preparing the base constructor call.
     const leadingLocals = superIndex < 0 ? [] : original.splice(0, superIndex);
     const originalSuperStatement = superIndex >= 0 ? original.shift()! : derived && member === null
@@ -1527,31 +1542,33 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
     }
     const prologue: any[] = [ts.factory.createExpressionStatement(ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3EnterConstruction"), undefined,
-        [ts.factory.createThis(), newTargetExpression(ts), ts.factory.createIdentifier(className),
+        [constructorReceiver, newTargetExpression(ts), ts.factory.createIdentifier(className),
             ts.factory.createIdentifier("__as3ConstructionProof")])),
     ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
         ts.factory.createIdentifier("__as3ConstructionTargets"), "set"), undefined,
-    [ts.factory.createThis(), ts.factory.createAsExpression(newTargetExpression(ts),
+    [constructorReceiver, ts.factory.createAsExpression(newTargetExpression(ts),
         ts.factory.createTypeQueryNode(ts.factory.createIdentifier(className)))])),
     ts.factory.createVariableStatement(undefined, ts.factory.createVariableDeclarationList([
         ts.factory.createVariableDeclaration("__as3ConstructionFailed", undefined, undefined, ts.factory.createFalse()),
     ], ts.NodeFlags.Let))];
     const explicitFields = (receiverMode ? [] : instanceFields.filter(field => staged || field.initializer !== null)).map(field =>
         ts.factory.createExpressionStatement(ts.factory.createBinaryExpression(
-            ts.factory.createPropertyAccessExpression(ts.factory.createThis(), fieldStorageName(field)),
+            ts.factory.createPropertyAccessExpression(constructorReceiver, fieldStorageName(field)),
             ts.factory.createToken(ts.SyntaxKind.EqualsToken), staged
                 ? ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("__as3PreSuperFields"),fieldStorageName(field))
-                : expressionNode(field.initializer!, ts))));
+                : expressionNode(nativeTextMode ? stagedConstructorValue(field.initializer!,nativeTextReceiverName)
+                    : field.initializer!, ts))));
     const tryBody = [ts.factory.createExpressionStatement(ts.factory.createCallExpression(
         ts.factory.createIdentifier("__as3InitializeInstanceFields"), undefined,
-        [ts.factory.createThis(), newTargetExpression(ts)])),
-    ...boundMethods.map(name => bindMethodStatement(name, ts)), ...explicitFields, ...original];
+        [constructorReceiver, newTargetExpression(ts)])),
+    ...boundMethods.map(name => bindMethodStatement(name, ts,nativeTextMode ? nativeTextReceiverName : undefined)),
+    ...explicitFields,...(nativeTextMode ? leadingLocals : []), ...original];
     const catchClause = ts.factory.createCatchClause(ts.factory.createVariableDeclaration("__as3ConstructionError"),
         ts.factory.createBlock([ts.factory.createExpressionStatement(ts.factory.createBinaryExpression(
             ts.factory.createIdentifier("__as3ConstructionFailed"), ts.factory.createToken(ts.SyntaxKind.EqualsToken),
             ts.factory.createTrue())), ts.factory.createExpressionStatement(ts.factory.createCallExpression(
             ts.factory.createIdentifier("__as3AbortConstruction"), undefined,
-            [ts.factory.createThis(), newTargetExpression(ts), ts.factory.createIdentifier(className),
+            [constructorReceiver, newTargetExpression(ts), ts.factory.createIdentifier(className),
                 ts.factory.createIdentifier("__as3ConstructionProof")])),
         ts.factory.createThrowStatement(ts.factory.createIdentifier("__as3ConstructionError"))], true));
     const exactTarget = ts.factory.createBinaryExpression(newTargetExpression(ts),
@@ -1560,12 +1577,12 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
         ts.factory.createPrefixUnaryExpression(ts.SyntaxKind.ExclamationToken,
             ts.factory.createIdentifier("__as3ConstructionFailed")), ts.factory.createToken(ts.SyntaxKind.AmpersandAmpersandToken),
         exactTarget), ts.factory.createBlock([ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
-        ts.factory.createIdentifier("__as3ClassInstances"), "add"), undefined, [ts.factory.createThis()])),
+        ts.factory.createIdentifier("__as3ClassInstances"), "add"), undefined, [constructorReceiver])),
         ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createIdentifier("__as3CompleteConstruction"), undefined,
-            [ts.factory.createThis(), newTargetExpression(ts), ts.factory.createIdentifier(className),
+            [constructorReceiver, newTargetExpression(ts), ts.factory.createIdentifier(className),
                 ts.factory.createIdentifier("__as3ConstructionProof")]))], true)),
     ts.factory.createExpressionStatement(ts.factory.createCallExpression(ts.factory.createPropertyAccessExpression(
-        ts.factory.createIdentifier("__as3ConstructionTargets"), "delete"), undefined, [ts.factory.createThis()]))], true);
+        ts.factory.createIdentifier("__as3ConstructionTargets"), "delete"), undefined, [constructorReceiver]))], true);
     const constructorParameters=(member?.parameters ?? []).map(parameter=>{
         if (parameter.rest) return parameterNode(parameter,ts);
         return ts.factory.createParameterDeclaration(undefined,undefined,parameter.name,
@@ -1597,11 +1614,16 @@ function classConstructorNode(program: SemanticProgram, member: SemanticConstruc
         : program.packageName ? program.packageName+"."+className : className;
     const body = [ts.factory.createExpressionStatement(initializeClassNode(ts.factory.createIdentifier(className), true, ts)),
         constructorArityGuard(constructorQName, member, ts), ...constructorSlots, ...stagedFieldSetup, ...receiverSetup,
-        ...(receiverMode ? [] : leadingLocals),
-        ...(superStatement === null ? [] : receiverMode ? [superStatement] : [prepareStatement, superStatement])]
+        ...nativeTextSetup,
+        ...(receiverMode || nativeTextMode ? [] : leadingLocals),
+        ...(nativeTextMode || superStatement === null ? [] : receiverMode ? [superStatement] : [prepareStatement, superStatement])]
         .concat(prologue, [ts.factory.createTryStatement(
-        ts.factory.createBlock(tryBody, true), catchClause, finallyClause)]);
-    if (derived && superStatement === null) {
+        ts.factory.createBlock(tryBody, true), catchClause, finallyClause)],
+        // TypeScript requires a syntactic super() in a derived constructor.
+        // AIR's source-level call has already been accounted for by the early
+        // native allocation; this unreachable statement never allocates again.
+        nativeTextMode ? [ts.factory.createReturnStatement(constructorReceiver),originalSuperStatement] : []);
+    if (derived && superStatement === null && !nativeTextMode) {
         throw new HardenedSemanticError("HARDENED_EMIT_CONSTRUCTOR", "derived constructor lacks its proven top-level super call", program.sourceNodeId);
     }
     return ts.factory.createConstructorDeclaration(member === null ? undefined : modifierTokens(member.modifiers, ts),

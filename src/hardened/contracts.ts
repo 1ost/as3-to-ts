@@ -855,6 +855,8 @@ export interface SemanticConstructor extends SemanticIdentity {
     /** Authenticated local receiver and audited virtual methods needed before super. */
     preSuperReceiverState?: true;
     preSuperReceiverMethods?: string[];
+    /** Canonical native TextField allocated before source pre-super operations. */
+    preSuperNativeTextField?: true;
     modifiers: SemanticModifier[];
     parameters: SemanticParameter[];
     body: SemanticStatement[];

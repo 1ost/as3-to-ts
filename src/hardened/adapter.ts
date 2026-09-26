@@ -2626,6 +2626,15 @@ function assignmentTargetType(expression: SemanticExpression, context: AdapterCo
                     "current-class static write lacks one exact writable field or setter declaration", node);
             }
             const imported = context.importsByLocal[expression.target.name];
+            if (imported?.authorityKind === "flash" && imported.localValueType === null) {
+                const mapping=memberMapping(context,imported.sourceQualifiedName,"write",expression.name,node);
+                if (!mapping || expression.capabilitySource !== imported.sourceQualifiedName
+                    || !mapping.sourceRoles.includes("static-member")
+                    || mapping.targetMember?.scope !== "static"
+                    || !["set","get+set","field"].includes(mapping.targetMember.kind))
+                    fail("HARDENED_STATIC_MEMBER","Flash static write requires one exact writable mapped property",node);
+                return mappedMemberType(mapping,"write",context,node);
+            }
             if (imported?.authorityKind === "local" && imported.localValueType === null) {
                 const members = localStaticNamedMembers(context, imported.sourceQualifiedName,
                     expression.name, node);
@@ -6731,6 +6740,21 @@ function usesConstructionReceiver(value: unknown): boolean {
         || Object.values(item).some(usesConstructionReceiver);
 }
 
+function usesSuperExpression(value: unknown): boolean {
+    if (value === null || typeof value !== "object") return false;
+    if (Array.isArray(value)) return value.some(usesSuperExpression);
+    const item=value as {[key:string]:unknown};
+    return item.kind === "super" || Object.values(item).some(usesSuperExpression);
+}
+
+function containsConstructorReturn(value: unknown): boolean {
+    if (value === null || typeof value !== "object") return false;
+    if (Array.isArray(value)) return value.some(containsConstructorReturn);
+    const item=value as {[key:string]:unknown};
+    if (item.kind === "lambda") return false;
+    return item.kind === "return" || Object.values(item).some(containsConstructorReturn);
+}
+
 /** A staged slot must never expose the not-yet-allocated receiver or execute an accessor. */
 function onlyOwnPreSuperFields(value: unknown, context: AdapterContext): boolean {
     if (value === null || typeof value !== "object") return true;
@@ -6884,7 +6908,12 @@ function superCall(statement: SemanticStatement): boolean {
 
 function modulePath(packageName: string, className: string, node: TreeNode): string {
     const segments = packageName === "" ? [] : packageName.split(".");
-    segments.forEach((segment) => validateIdentifier(segment, node));
+    // Package components become filesystem path segments and quoted import
+    // strings, never TypeScript bindings. AS3 permits names such as `enum`.
+    segments.forEach((segment) => {
+        if (!IDENTIFIER.test(segment) || segment.toLowerCase().startsWith("__as3"))
+            fail("HARDENED_MODULE_PATH", "source package has an unsafe output path segment",node);
+    });
     return segments.concat([className + ".ts"]).join("/");
 }
 
@@ -7671,6 +7700,9 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                 const nativeFieldStaging=placeholder.sourceMemberAuthority !== null
                     && (placeholder.baseSourceQName === "flash.display.Bitmap"
                         || placeholder.baseSourceQName === "flash.events.Event");
+                const nativeTextReceiver=placeholder.sourceMemberAuthority !== null
+                    && placeholder.baseSourceQName === "flash.text.TextField"
+                    && (leading.some(usesConstructionReceiver) || argumentReceiver);
                 // These authenticated native constructors do not inspect subclass
                 // slots or dispatch subclass methods. Their own-slot writes can
                 // therefore be staged until the JS receiver exists after super.
@@ -7687,7 +7719,7 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                     if (!onlyOwnPreSuperFields(leading,placeholder) || !onlyOwnPreSuperFields(call?.arguments ?? [],placeholder)
                         || fields.some(field=>field.embeddedBitmap || !onlyOwnPreSuperFields(field.initializer,placeholder)))
                         fail("HARDENED_SUPER_FIELD_RECEIVER", "native pre-super code may use own field slots but cannot expose this or call receiver methods/accessors",node);
-                } else if (leading.some(usesConstructionReceiver) || argumentReceiver) {
+                } else if (!nativeTextReceiver && (leading.some(usesConstructionReceiver) || argumentReceiver)) {
                     // AS3 var declarations remain function-scoped through the
                     // generated pre-super try block. Const is block-scoped, and
                     // a local initializer must not capture the temporary receiver.
@@ -7698,11 +7730,18 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                         || unsafeLocal)
                         fail("HARDENED_SUPER_LOCAL_RECEIVER", "pre-super local receiver needs an authenticated source base and receiver-free function-scoped locals", node);
                 }
+                if (nativeTextReceiver && (call?.arguments.length !== 0
+                    || header.parameters.some(parameter=>usesConstructionReceiver(parameter.defaultValue))
+                    || containsConstructorReturn(body)
+                    || body.some((statement,index)=>index!==superIndex && usesSuperExpression(statement))))
+                    fail("HARDENED_SUPER_NATIVE_TEXTFIELD", "native TextField pre-super construction requires a zero-argument base call, no other super use and no constructor return",node);
                 if (extendsType === null && count === 1) body = body.filter(statement => !superCall(statement));
                 const constructor: SemanticConstructor = Object.assign(identity(node), {
                     kind: "constructor" as "constructor", modifiers: header.modifiers,
                     parameters: header.parameters, body, ...(stagedFields ? {preSuperFieldState:true as const} : {}),
+                    ...(nativeTextReceiver ? {preSuperNativeTextField:true as const} : {}),
                     ...(!stagedFields && (leading.some(usesConstructionReceiver) || argumentReceiver)
+                        && !nativeTextReceiver
                         ? {preSuperReceiverState:true as const} : {}),
                 });
                 members.push(constructor);
@@ -7757,6 +7796,9 @@ function adaptSourceClass(ast: NormalizedParserAst, authority: LoadedCapabilityA
                 fail("HARDENED_SUPER_FIELD_RECEIVER", "staged native field initializers cannot expose the construction receiver",classNode);
         }
     }
+    if (members.some(member=>member.kind === "constructor" && member.preSuperNativeTextField)
+        && members.some(member=>member.kind === "field" && member.embeddedBitmap))
+        fail("HARDENED_SUPER_NATIVE_TEXTFIELD", "native TextField pre-super construction cannot own embedded bitmap fields",classNode);
     for (const constructor of members.filter((member):member is SemanticConstructor=>member.kind === "constructor"
         && member.preSuperReceiverState === true)) {
         const superIndex = constructor.body.findIndex(superCall);
