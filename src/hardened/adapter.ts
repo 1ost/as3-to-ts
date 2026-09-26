@@ -5228,10 +5228,12 @@ function parseExpression(node: TreeNode, context: AdapterContext, valuePosition:
                 fail("HARDENED_INTEGER_STRING_ARITY", "integer toString accepts at most one radix", node);
             if (args.length === 1) {
                 const radixType = assignmentType(args[0]!, context, node.children[1]!.children[0]!);
+                const literalRadix = args[0]!.kind === "literal" && typeof args[0]!.value === "number"
+                    && Number.isInteger(args[0]!.value) && args[0]!.value >= 2 && args[0]!.value <= 36;
                 if (!["int", "uint"].includes(integerType.sourceName)
                     || integerType.emittedName !== "number"
-                    || !["int", "uint"].includes(radixType.sourceName)
-                    || radixType.emittedName !== "number")
+                    || !(literalRadix || ["int", "uint"].includes(radixType.sourceName)
+                        && radixType.emittedName === "number"))
                     fail("HARDENED_INTEGER_STRING_ARITY", "radix conversion requires proven int/uint receiver and radix", node);
                 capabilitySource="int";capabilityMember="toStringRadix";
                 resultType=semanticType(node,"String","string",[],false);
