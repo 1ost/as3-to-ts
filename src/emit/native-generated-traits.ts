@@ -1,8 +1,8 @@
 import Node from '../syntax/node';
 import {nativeSpriteTraits} from './native-sprite-traits';
 import K from '../syntax/nodeKind';
-import {NativeGeneratedDeclarationPlan, NativeGeneratedDeclarationBinding,
-    nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationNode} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, NativeGeneratedClassDeclaration,
+    nativeGeneratedClassDeclaration, nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 
 interface ReferenceType {readonly name: string; readonly referenceExport?: string; readonly vectorExport?:string;}
 type TraitType = string | ReferenceType;
@@ -50,7 +50,7 @@ function frozen<T>(value: T): T {
  * Initializer scheduling and native provider admission are separate consumers.
  */
 export class NativeGeneratedClassTraits {
-    public readonly binding: NativeGeneratedDeclarationBinding;
+    public readonly binding: NativeGeneratedClassDeclaration;
     public readonly metadata: any;
     public readonly instanceTraits: ReadonlyArray<Trait>;
     public readonly staticTraits: ReadonlyArray<Trait>;
@@ -63,8 +63,10 @@ export class NativeGeneratedClassTraits {
     constructor(plan: NativeGeneratedDeclarationPlan, scope: string, owner: string, source: string) {
         nativeGeneratedDeclarationSource(plan, scope, owner, source);
         const input = nativeGeneratedDeclarationInputs(plan, scope);
-        this.binding = plan.bindings.find(item => item.qname === owner);
+        this.binding = nativeGeneratedClassDeclaration(plan, owner);
         if (!this.binding) fail('reference-only source cannot publish a class: ' + owner);
+        const isClass = (identity: string): boolean => plan.bindings.some(item => item.qname === identity) || plan.privateBindings.some(item => item.identity === identity);
+        const reflectedClass = (identity: string): string => isClass(identity) ? nativeGeneratedClassDeclaration(plan, identity).reflectedName : reflected(identity);
         const lexical: LexicalMember[] = [];
         const surfaces = new Map<string, {instance: Member[]; statics: Member[]; dynamic: boolean; final: boolean}>();
         if(plan.nativeBindings.some(binding=>!!binding.eventBaseExport)) {
@@ -115,26 +117,26 @@ export class NativeGeneratedClassTraits {
                     fail('intrinsic storage requires provider authority: ' + reference.identity);
                 return reference.identity;
             }
-            const binding = reference.kind === 'declaration' && plan.bindings.find(item => item.qname === reference.identity);
+            const binding = (reference.kind === 'declaration' || reference.kind === 'private-declaration') && nativeGeneratedClassDeclaration(plan, reference.identity);
             const contract = reference.kind === 'interface' && plan.interfaces.find(item => item.qname === reference.identity);
             const native = reference.kind === 'native' && plan.nativeBindings.find(item => item.qname === reference.identity);
             if (!binding && !contract && !native) fail('unresolved source storage type: ' + qname + ':' + reference.sourceName);
-            return {name: reflected(reference.identity), referenceExport: binding ? binding.tokenExport : contract ? contract.tokenExport : native.referenceExport};
+            return {name: binding ? binding.reflectedName : reflected(reference.identity), referenceExport: binding ? binding.tokenExport : contract ? contract.tokenExport : native.referenceExport};
         };
-        const build = (binding: NativeGeneratedDeclarationBinding): void => {
-            if (surfaces.has(binding.qname)) return;
-            const parent = binding.base && plan.bindings.find(item => item.qname === binding.base);
+        const build = (binding: NativeGeneratedClassDeclaration): void => {
+            if (surfaces.has(binding.identity)) return;
+            const parent = binding.base && isClass(binding.base) && nativeGeneratedClassDeclaration(plan, binding.base);
             if (parent) build(parent);
             const inherited = binding.base && surfaces.get(binding.base);
-            if (inherited && inherited.final) fail('source extends final class: ' + binding.qname);
-            const cls = nativeGeneratedDeclarationNode(plan, binding.qname);
+            if (inherited && inherited.final) fail('source extends final class: ' + binding.identity);
+            const cls = nativeGeneratedDeclarationNode(plan, binding.identity);
             const own: {instance: Member[]; statics: Member[]} = {instance: [], statics: []};
             const visit = (member: Node): void => {
                 const mods = flags(member), isStatic = mods.indexOf('static') >= 0;
                 if (mods.some(mod => ['public','private','protected','internal','static','override','final'].indexOf(mod) < 0))
-                    fail('custom namespace or unsupported member modifier: ' + binding.qname);
+                    fail('custom namespace or unsupported member modifier: ' + binding.identity);
                 if ([K.NAMESPACE_DECLARATION,K.USE,K.INCLUDE,K.EMBED].indexOf(member.kind) >= 0)
-                    fail('namespace/include/embed declaration authority: ' + binding.qname);
+                    fail('namespace/include/embed declaration authority: ' + binding.identity);
                 if ([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind) < 0) return;
                 const visibility = mods.filter(mod => ['public','private','protected','internal'].indexOf(mod) >= 0);
                 if (visibility.length > 1) fail('conflicting source visibility');
@@ -143,7 +145,7 @@ export class NativeGeneratedClassTraits {
                     return;
                 }
                 if (visibility[0] !== 'public') {
-                    lexical.push({owner:binding.qname,start:member.start,end:member.end,visibility:visibility[0] || 'internal',static:isStatic});
+                    lexical.push({owner:binding.identity,start:member.start,end:member.end,visibility:visibility[0] || 'internal',static:isStatic});
                     return;
                 }
                 const list = own[isStatic ? 'statics' : 'instance'];
@@ -153,22 +155,22 @@ export class NativeGeneratedClassTraits {
                         if (previous.kind !== 'accessor' || value.kind !== 'accessor' || previous.access === value.access
                             || previous.access === 'readwrite' || JSON.stringify(previous.type) !== JSON.stringify(value.type)
                             || previous.override !== value.override || previous.final !== value.final)
-                            fail('duplicate or incompatible public declaration: ' + binding.qname + ':' + value.name);
+                            fail('duplicate or incompatible public declaration: ' + binding.identity + ':' + value.name);
                         previous.access = 'readwrite';
                         previous.parts=Object.assign({},previous.parts,value.parts);
                     } else list.push(value);
                 };
-                const common = {declaredBy:reflected(binding.qname),override:mods.indexOf('override') >= 0,final:mods.indexOf('final') >= 0};
+                const common = {declaredBy:binding.reflectedName,override:mods.indexOf('override') >= 0,final:mods.indexOf('final') >= 0};
                 if (isStatic && common.override) fail('static override authority');
                 if (member.kind === K.VAR_LIST || member.kind === K.CONST_LIST) {
                     if (common.override || common.final) fail('storage override/final modifier');
                     member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
                         if(field.findChild(K.VECTOR)&&(isStatic||member.kind===K.CONST_LIST))fail('Vector static/constant storage requires separate authority');
-                        const fieldType = type(binding.qname,storageType(field));
+                        const fieldType = type(binding.identity,storageType(field));
                         let constantLiteral: string;
                         if (member.kind === K.CONST_LIST && !isStatic) {
                             const init = field.findChild(K.INIT);
-                            constantLiteral = init && input.sources[binding.qname].source.slice(init.start,initializerEnd(init)).trim();
+                            constantLiteral = init && input.sources[binding.sourceOwner].source.slice(init.start,initializerEnd(init)).trim();
                             const numeric = constantLiteral && /^[+-]?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/.test(constantLiteral)
                                 && isFinite(Number(constantLiteral));
                             if (!(typeof fieldType === 'string' && (['int','uint','Number'].indexOf(fieldType)>=0 && numeric
@@ -188,8 +190,8 @@ export class NativeGeneratedClassTraits {
                     const signatureType=(node:Node,returns=false):TraitType=>{
                         if(!node)return '*';
                         if(returns && node.kind===K.TYPE && node.text==='void')return 'void';
-                        const ref=plan.references.find(r=>r.owner===binding.qname && r.start===node.start && r.end===node.end);
-                        if(ref && (ref.kind==='declaration'||ref.kind==='interface'))return type(binding.qname,node);
+                        const ref=plan.references.find(r=>r.owner===binding.identity && r.start===node.start && r.end===node.end);
+                        if(ref && (ref.kind==='declaration'||ref.kind==='private-declaration'||ref.kind==='interface'))return type(binding.identity,node);
                         return ref && ref.kind==='intrinsic' && ['*','Object','int','uint','Number','Boolean','String','Function'].indexOf(ref.identity)>=0
                             ? ref.identity : undefined;
                     };
@@ -211,17 +213,17 @@ export class NativeGeneratedClassTraits {
                 let valueType: TraitType;
                 if (member.kind === K.GET) {
                     if (params.length) fail('getter parameter count');
-                    valueType = type(binding.qname, storageType(member));
+                    valueType = type(binding.identity, storageType(member));
                 } else {
                     if (params.length !== 1 || params[0].findChild(K.REST)) fail('setter parameter count/rest');
                     const value = params[0].findChild(K.NAME_TYPE_INIT), result = member.findChild(K.TYPE);
                     if (value.findChild(K.INIT) || result && result.text !== 'void') fail('setter signature');
-                    valueType = type(binding.qname,storageType(value));
+                    valueType = type(binding.identity,storageType(value));
                 }
                 // Accessors use the same exact planned specialization as fields.
                 // Callable entry/return conversion owns their Vector coercion;
                 // a getter does not introduce a separately initialized slot.
-                add(Object.assign({},common,{name,kind:'accessor',type:valueType,access:member.kind === K.GET ? 'readonly' : 'writeonly',parts:{[member.kind===K.GET?'get':'set']:{owner:reflected(binding.qname),override:common.override,final:common.final}}}) as Member);
+                add(Object.assign({},common,{name,kind:'accessor',type:valueType,access:member.kind === K.GET ? 'readonly' : 'writeonly',parts:{[member.kind===K.GET?'get':'set']:{owner:binding.reflectedName,override:common.override,final:common.final}}}) as Member);
             };
             cls.findChild(K.CONTENT).children.forEach(visit);
             const instance = inherited ? inherited.instance.slice() : [];
@@ -237,7 +239,7 @@ export class NativeGeneratedClassTraits {
                         && member.type==='Boolean' && previous.type==='Boolean' && member.parts && previous.parts) {
                         for(const side of (['get','set'] as ('get'|'set')[]))if(member.parts[side]){
                             if(!member.parts[side].override||!previous.parts[side]||previous.parts[side].final)
-                                fail('accessor override requires matching nonfinal parent half: '+binding.qname+':'+member.name);
+                                fail('accessor override requires matching nonfinal parent half: '+binding.identity+':'+member.name);
                         }
                         const parts=Object.assign({},previous.parts,member.parts);
                         instance[index]=Object.assign({},member,{parts,access:parts.get&&parts.set?'readwrite':parts.get?'readonly':'writeonly'});
@@ -246,29 +248,29 @@ export class NativeGeneratedClassTraits {
                     if (!member.override || previous.final || previous.kind !== member.kind || member.kind === 'variable' || member.kind === 'constant'
                         || member.kind === 'accessor' && (previous.access !== member.access || JSON.stringify(previous.type) !== JSON.stringify(member.type))
                         || member.kind === 'method' && previous.parameterCount !== member.parameterCount)
-                        fail('inherited collision/partial override requires authority: ' + binding.qname + ':' + member.name);
+                        fail('inherited collision/partial override requires authority: ' + binding.identity + ':' + member.name);
                     if(input.inheritScriptClasses && parent && member.kind==='method'
                         && (!member.signature || !previous.signature || JSON.stringify(member.signature)!==JSON.stringify(previous.signature)))
-                        fail('selected parent override requires matching method signature: '+binding.qname+':'+member.name);
+                        fail('selected parent override requires matching method signature: '+binding.identity+':'+member.name);
                     instance[index] = member;
                 } else {
-                    if (member.override) fail('override without source public ancestor: ' + binding.qname + ':' + member.name);
+                    if (member.override) fail('override without source public ancestor: ' + binding.identity + ':' + member.name);
                     instance.push(member);
                 }
             });
-            surfaces.set(binding.qname,{instance,statics:own.statics,dynamic:flags(cls).indexOf('dynamic') >= 0,final:flags(cls).indexOf('final') >= 0});
+            surfaces.set(binding.identity,{instance,statics:own.statics,dynamic:flags(cls).indexOf('dynamic') >= 0,final:flags(cls).indexOf('final') >= 0});
         };
         build(this.binding);
         const surface = surfaces.get(owner);
         this.inheritInstanceLayout = !!input.inheritScriptClasses && !!this.binding.base
-            && plan.bindings.some(binding=>binding.qname===this.binding.base);
-        if(this.inheritInstanceLayout && surface.instance.some(item=>item.declaredBy===reflected(owner) && item.override && item.kind!=='method' && !(item.kind==='accessor'&&item.type==='Boolean'&&item.parts)))
+            && isClass(this.binding.base);
+        if(this.inheritInstanceLayout && surface.instance.some(item=>item.declaredBy===reflectedClass(owner) && item.override && item.kind!=='method' && !(item.kind==='accessor'&&item.type==='Boolean'&&item.parts)))
             fail('selected parent accessor override requires separate authority');
         this.instanceAccessors=frozen(surface.instance.filter(item=>item.kind==='accessor'&&item.type==='Boolean'&&item.parts
-            && (['get','set'] as ('get'|'set')[]).some(side=>item.parts[side]&&item.parts[side].owner===reflected(owner))).map(item=>Object.assign({},item,{parts:{
-                get:item.parts.get&&item.parts.get.owner===reflected(owner)?item.parts.get:undefined,
-                set:item.parts.set&&item.parts.set.owner===reflected(owner)?item.parts.set:undefined}})));
-        this.instanceMethods=frozen(surface.instance.filter(item=>item.kind==='method' && item.declaredBy===reflected(owner)
+            && (['get','set'] as ('get'|'set')[]).some(side=>item.parts[side]&&item.parts[side].owner===reflectedClass(owner))).map(item=>Object.assign({},item,{parts:{
+                get:item.parts.get&&item.parts.get.owner===reflectedClass(owner)?item.parts.get:undefined,
+                set:item.parts.set&&item.parts.set.owner===reflectedClass(owner)?item.parts.set:undefined}})));
+        this.instanceMethods=frozen(surface.instance.filter(item=>item.kind==='method' && item.declaredBy===reflectedClass(owner)
             && !!item.signature && (!item.override || this.inheritInstanceLayout)).map(item=>({name:item.name,
                 parameters:item.signature.parameters,returns:item.signature.returns,requiredCount:item.signature.requiredCount,override:!!item.override,final:!!item.final})));
         const members = (items: Member[]): any => {
@@ -284,7 +286,7 @@ export class NativeGeneratedClassTraits {
         };
         const traits = (items: Member[]): Trait[] => items.map(item => Object.assign({name:item.name,kind:item.kind},
             item.type === undefined ? {} : {type:item.type},item.kind === 'accessor' ? {access:item.access} : {}));
-        this.metadata = frozen({name:reflected(owner),base:this.binding.base ? reflected(this.binding.base) : 'Object',
+        this.metadata = frozen({name:reflectedClass(owner),base:this.binding.base ? reflectedClass(this.binding.base) : 'Object',
             isDynamic:surface.dynamic,isFinal:surface.final,instance:members(surface.instance),statics:members(surface.statics)});
         this.instanceConstants = frozen(surface.instance.filter(item=>item.kind==='constant').map(item=>({name:item.name,literal:item.constantLiteral})));
         this.instanceTraits = frozen(traits(surface.instance));

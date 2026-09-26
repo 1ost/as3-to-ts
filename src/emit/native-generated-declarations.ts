@@ -508,6 +508,33 @@ export function nativeGeneratedDeclarationNode(plan: NativeGeneratedDeclarationP
     return selected.node;
 }
 
+/** Internal class view shared by public and file-private implementation consumers.
+ * identity is an opaque compiler key, never a public loading/registry name. */
+export interface NativeGeneratedClassDeclaration {
+    readonly identity: string;
+    readonly sourceOwner: string;
+    readonly reflectedName: string;
+    readonly base: string | null;
+    readonly tokenExport: string;
+    readonly publishExport: string;
+    readonly lexicalExport: string;
+    readonly scriptGlobalExport?: string;
+    readonly interfaces: ReadonlyArray<string>;
+}
+export function nativeGeneratedClassDeclaration(plan: NativeGeneratedDeclarationPlan, identity: string): NativeGeneratedClassDeclaration {
+    nativeGeneratedSourceUnit(plan, identity);
+    const binding = plan.bindings.find(item => item.qname === identity);
+    if (binding) return Object.freeze({identity, sourceOwner: identity, reflectedName: identity.replace(/\.([^.]*)$/, '::$1'),
+        base: binding.base, tokenExport: binding.tokenExport, publishExport: binding.publishExport,
+        lexicalExport: binding.lexicalExport, scriptGlobalExport: binding.scriptGlobalExport, interfaces: binding.interfaces});
+    const helper = plan.privateBindings.find(item => item.identity === identity);
+    if (!helper) fail('reference-only source cannot publish a class: ' + identity);
+    return Object.freeze({identity, sourceOwner: helper.declaration.sourceOwner, reflectedName: helper.declaration.reflectedName,
+        base: helper.base === null ? null : typeof helper.base === 'string' ? helper.base : privateDeclarationIdentity(helper.base),
+        tokenExport: helper.tokenExport, publishExport: helper.publishExport, lexicalExport: helper.lexicalExport,
+        interfaces: Object.freeze([] as string[])});
+}
+
 /** Exact compiler capability plus source-byte check; serialization grants no authority. */
 export function nativeGeneratedDeclarationSource(plan: NativeGeneratedDeclarationPlan, scope: string, owner: string, source: string):
     {readonly source: string; readonly sourceSha256: string; readonly referenceOnly?: boolean} {

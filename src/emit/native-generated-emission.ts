@@ -1,7 +1,7 @@
 import {nativeNumericProductConstant} from './native-numeric-product-constant';
 import {nativeUintOrConstants} from './native-uint-or-constants';
 import {nativeScriptConstantInitializers} from './native-script-constant-initializers';
-import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedClassDeclaration} from './native-generated-declarations';
 import {NativeGeneratedClassTraits} from './native-generated-traits';
 import {NativeGeneratedLexical} from './native-generated-lexical';
 import K from '../syntax/nodeKind';
@@ -48,7 +48,7 @@ export class NativeGeneratedEmission {
         while(ancestor.base) {
             const native=options.plan.nativeBindings.find(binding=>binding.qname===ancestor.base&&!!binding.nativeBaseExport);
             if(native){this.nativeBase=native;break;}
-            ancestor=options.plan.bindings.find(binding=>binding.qname===ancestor.base);
+            ancestor=nativeGeneratedClassDeclaration(options.plan,ancestor.base);
         }
         this.lexical = new NativeGeneratedLexical(options.plan,owners[0],source,typedLocals);
         this.uintOrInitializers=nativeUintOrConstants(this.lexical.ownClass,source);

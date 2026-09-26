@@ -429,7 +429,7 @@ export default class Emitter {
             this.options.nativeCallableClasses = this.generated.sources;
             this.options.nativeClassInitialization = {classes:this.generated.classes};
             // A caller-supplied/mutated AST must not override the authenticated bytes.
-            ast = require('../parse')(this.generated.projection.binding.qname + '.as',this.source);
+            ast = require('../parse')(this.generated.projection.binding.identity + '.as',this.source);
         }
 
         for (const [qname, moduleOption] of [['flash.display.DisplayObject',this.options.nativeDisplayObjectReferenceModule],['flash.display.MovieClip',this.options.nativeMovieClipReferenceModule],['flash.text.TextFormat',this.options.nativeTextFormatReferenceModule],['flash.display.InteractiveObject',this.options.nativeInteractiveObjectReferenceModule]]) if (moduleOption !== undefined) {
@@ -3116,7 +3116,7 @@ function emitGeneratedVectorLiteral(emitter:Emitter,node:Node):boolean {
  const input=nativeGeneratedDeclarationInputs(options.plan,options.plan.scope);
  const fail=(reason:string):never=>{throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: '+reason);};
  if(!input.vectorProviderModule||!emitter.generated)fail('literal requires generated class and Vector provider authority');
- const owner=emitter.generated.projection.binding.qname,vector=literal.findChild(NodeKind.VECTOR),values=literal.findChild(NodeKind.ARRAY);
+ const owner=emitter.generated.projection.binding.identity,vector=literal.findChild(NodeKind.VECTOR),values=literal.findChild(NodeKind.ARRAY);
  const spec=vector&&options.plan.vectors.find(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end);
  if(!spec||spec.identity!=='Vector.<Class>'||input.sources[owner].source!==emitter.source||!values)
   fail('exact Class literal specialization required');
@@ -3140,7 +3140,7 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node):boolean {
  const fail=(reason:string):never=>{throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: '+reason);};
  if(!input.vectorProviderModule){if(emitter.generated)fail('explicit Vector provider required');return false;}
  if(!emitter.generated)fail('construction requires generated class authority');
- const owner=emitter.generated.projection.binding.qname;
+ const owner=emitter.generated.projection.binding.identity;
  const spec=options.plan.vectors.find(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end);
  if(!spec||input.sources[owner].source!==emitter.source)fail('exact construction specialization required');
  const args=call.findChild(NodeKind.ARGUMENTS);
@@ -4694,7 +4694,7 @@ function emitRelation(emitter:Emitter, node:Node):void {
         const nativeEvent=emitter.generated&&emitter.generated.nativeBase&&emitter.generated.nativeBase.qname==='flash.events.Event'&&targetBinding
             &&targetBinding.sourceImport==='flash.events.Event';
         const nativeArray=emitter.generated&&target.kind===NodeKind.IDENTIFIER&&target.text==='Array'
-            &&!targetBinding&&emitter.generated.projection.binding.qname.split('.').pop()!=='Array';
+            &&!targetBinding&&emitter.generated.projection.binding.identity.split('.').pop()!=='Array';
         if (global && (global.name === 'AS3Date' || emitter.options.nativeXMLModule && ['XML','XMLList'].indexOf(global.name)>=0) || nativeEvent || nativeArray) {
             const module = emitter.options.nativeComputedTypeTestModule;
             generatedModule(module);
