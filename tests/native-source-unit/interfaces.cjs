@@ -52,4 +52,4 @@ const unit=model.readNativeSourceUnit('p.I',decorated,hash(decorated)),node=mode
 assert.match(decorated.slice(node.start,node.end),/^public interface/);
 for(const ref of node.findChildren(K.EXTENDS))assert.equal(decorated.slice(ref.start,ref.end),ref.text);
 assert.equal(node.findChildren(K.EXTENDS).length,2);
-console.log(JSON.stringify({qualification:'source interface identity, lexical ownership and original declaration/reference spans; runtime emission remains held',flashRows:rows.length,interfaces,references,guards}));
+console.log(JSON.stringify({qualification:'source interface identity, lexical ownership and original declaration/reference spans; not a runtime replay',flashRows:rows.length,interfaces,references,guards}));

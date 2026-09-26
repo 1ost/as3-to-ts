@@ -35,8 +35,9 @@ assert(plan.references.some(r=>r.kind==='interface'&&r.owner===a.identity&&r.ide
 assert(!plan.references.some(r=>r.kind==='private-declaration'&&plan.privateInterfaces.some(b=>b.identity===r.identity)));
 let guards=0;const reject=(fn,re)=>{assert.throws(fn,re);guards++;};
 reject(()=>api.createNativeGeneratedDeclarationPlan({...input,interfaceProviderModule:undefined}),/explicit source interface provider/);
-reject(()=>api.emitNativeSourceClassModule({plan,target:'ES2015',emitterOptions:{},externalModules:[],loadingSessionModule:'./session'}),/file-private interface source module publication/);
-reject(()=>accessor.nativeGeneratedClassDeclaration(plan,'localinterfaces.First'),/file-private interface Class emission/);
+reject(()=>api.emitNativeSourceClassModule({plan,target:'ES2015',emitterOptions:{},externalModules:[],loadingSessionModule:'./session'}),/native Class and reference providers/);
+reject(()=>accessor.nativeGeneratedClassDeclaration(plan,a.identity),/cannot publish a class/);
+assert.equal(accessor.nativeGeneratedClassDeclaration(plan,'localinterfaces.First').interfaces[0],a.identity);
 reject(()=>accessor.nativeGeneratedSourceUnit({...plan},a.identity),/exact planned/);
 reject(()=>accessor.nativeGeneratedDeclarationSource(plan,plan.scope,a.identity,sources['localinterfaces.Second'].source),/exact planned/);
 const change=(from,to)=>{const source=sources['localinterfaces.First'].source.replace(from,to);assert.notEqual(source,sources['localinterfaces.First'].source);return {...input,sources:{...sources,'localinterfaces.First':{source,sourceSha256:hash(source)}}};};
@@ -64,6 +65,6 @@ async function main(){
   const bundled=esbuild.buildSync({stdin:{contents:harness+';globalThis["privateInterfaceResult"]=run();',resolveDir:out,loader:'ts'},write:false,bundle:true,platform:'browser',format:'iife',target:'es2020'}).outputFiles[0].text;
   const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.route('http://private-interface.test/**',route=>route.fulfill({status:200,contentType:route.request().url().endsWith('.js')?'application/javascript':'text/html',headers:{'Content-Security-Policy':"default-src 'none'; script-src 'self'"},body:route.request().url().endsWith('.js')?bundled:'<script src="/case.js"></script>'}));await page.goto('http://private-interface.test/');await page.waitForFunction(()=>globalThis.privateInterfaceResult!==undefined);assert.equal(await page.evaluate(()=>globalThis.privateInterfaceResult),checks);assert.deepEqual(errors,[]);await page.close();results.push({target,checks,typeErrors:diagnostics.length});
  }}finally{await browser.close();}
- fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({qualification:'File-private interface headers and contracts only; complete source factories and inherited private token publication remain held',flashEvidenceRows:expected.length,guards,results,sourceHashes:plan.sourceHashes},null,2)+'\n');console.log(JSON.stringify({out,guards,results}));
+ fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({qualification:'File-private interface headers and contracts only; complete source replay is in full.cjs',flashEvidenceRows:expected.length,guards,results,sourceHashes:plan.sourceHashes},null,2)+'\n');console.log(JSON.stringify({out,guards,results}));
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

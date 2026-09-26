@@ -456,7 +456,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         // Opaque common-engine scopes indexed by exact native generation. These
         // compiler exports never become properties of the source Class value.
         lines.push('export const ' + binding.lexicalExport + '=new WeakMap<Function,any>();');
-        if(binding.scriptGlobalExport && privateBindings.some(p => p.declaration.sourceOwner === binding.qname)) {
+        if(binding.scriptGlobalExport && (privateBindings.some(p => p.declaration.sourceOwner === binding.qname) || privateInterfaces.some(p => p.declaration.sourceOwner === binding.qname))) {
             lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>'+(data.inheritScriptClasses?selection+'?'+selection+'.resolve() as T:':'')+'__sourceUnit'+bindings.indexOf(binding)+'(0,factory);');
         } else if(binding.scriptGlobalExport) {
             const split=binding.qname.lastIndexOf('.'),local=binding.qname.slice(split+1),uri=split<0?'':binding.qname.slice(0,split);
@@ -500,7 +500,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     privateBindings.forEach(addPrivate);
     bindings.forEach((binding,index) => {
         const helpers=privateBindings.filter(p=>p.declaration.sourceOwner===binding.qname);
-        if(!helpers.length||!binding.scriptGlobalExport)return;
+        if((!helpers.length&&!privateInterfaces.some(p=>p.declaration.sourceOwner===binding.qname))||!binding.scriptGlobalExport)return;
         if(data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0)fail('multi-declaration Class script retry requires qualification');
         lines.push('let __sourceUnit'+index+':<T>(selected:number,factory:(global:object)=>T)=>T;',
             'export function bindSourceUnit'+index+'(run:typeof __sourceUnit'+index+'):void {if(__sourceUnit'+index+')throw new TypeError("Source unit already bound");__sourceUnit'+index+'=run;}');
@@ -569,9 +569,7 @@ export interface NativeGeneratedClassDeclaration {
     readonly interfaces: ReadonlyArray<string>;
 }
 export function nativeGeneratedClassDeclaration(plan: NativeGeneratedDeclarationPlan, identity: string): NativeGeneratedClassDeclaration {
-    const unit = nativeGeneratedSourceUnit(plan, identity);
-    if (plan.privateInterfaces.some(binding => binding.declaration.sourceOwner === unit.owner))
-        fail('file-private interface Class emission requires qualification');
+    nativeGeneratedSourceUnit(plan, identity);
     const binding = plan.bindings.find(item => item.qname === identity);
     if (binding) return Object.freeze({identity, sourceOwner: identity, reflectedName: identity.replace(/\.([^.]*)$/, '::$1'),
         base: binding.base, tokenExport: binding.tokenExport, publishExport: binding.publishExport,
@@ -643,4 +641,15 @@ export function nativeGeneratedConsumerResolver(plan: NativeGeneratedDeclaration
     const known = Object.keys(input.sources).concat(Object.keys(input.providers || {}));
     const unit = input.sources[owner] ? nativeGeneratedSourceUnit(plan, owner) : readNativeSourceUnit(owner, source, hash(source));
     return {root, owner, resolve: plannedUnitResolver(unit, name => known.indexOf(name) >= 0)};
+}
+
+/** Internal interface view. Private keys are never registry QNames. */
+const interfaceViews = new WeakMap<NativeGeneratedDeclarationPlan, ReadonlyArray<NativeGeneratedInterfaceBinding & {readonly reflectedName:string}>>();
+export function nativeGeneratedInterfaceBindings(plan: NativeGeneratedDeclarationPlan): ReadonlyArray<NativeGeneratedInterfaceBinding & {readonly reflectedName:string}> {
+    nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
+    if (interfaceViews.has(plan)) return interfaceViews.get(plan);
+    const view = Object.freeze(plan.interfaces.map(binding => Object.freeze({...binding, reflectedName:binding.qname.replace(/\.([^.]*)$/, '::$1')}))
+        .concat(plan.privateInterfaces.map(binding => Object.freeze({qname:binding.identity, bases:binding.bases,
+            tokenExport:binding.tokenExport, reflectedName:binding.declaration.reflectedName}))));
+    interfaceViews.set(plan,view);return view;
 }

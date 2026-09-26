@@ -1,7 +1,7 @@
 import * as ts from 'typescript';
 import parse = require('../parse');
 import {emit, EmitterOptions} from './emitter';
-import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedClassDeclaration} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedClassDeclaration, nativeGeneratedInterfaceBindings, nativeGeneratedSourceUnit} from './native-generated-declarations';
 import {NativeTweenSourcePlans} from './native-tween-plans';
 
 export interface NativeSourceClassModuleInput {
@@ -46,7 +46,6 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
     }
     const plan = input.plan, planned = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
     if (plan.namespaces.length) fail('source namespace value publication requires qualification');
-    if (plan.privateInterfaces.length) fail('file-private interface source module publication requires qualification');
     if (!planned.inheritScriptClasses || !planned.scriptDomainProvider || !planned.scriptGlobalProviderModule
         || !(plan.bindings.length + plan.interfaces.length) || plan.bindings.some(b => !b.scriptGlobalExport)
         || Object.keys(planned.sources).length !== plan.bindings.length + plan.interfaces.length
@@ -66,12 +65,13 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
     const domain = planned.scriptDomainProvider, declarations = './__native_declarations';
     const classes = plan.bindings.map(b=>b.qname).concat(plan.privateBindings.map(b=>b.identity)).map(identity=>nativeGeneratedClassDeclaration(plan,identity));
     const classModules = classes.map((b, i) => './__native_class_' + i);
-    const interfaceModules = plan.interfaces.map((b, i) => './__native_interface_' + i);
+    const interfaces = nativeGeneratedInterfaceBindings(plan);
+    const interfaceModules = interfaces.map((b, i) => './__native_interface_' + i);
     const local = [domain.module, declarations].concat(classModules, interfaceModules);
     if (new Set(local).size !== local.length || external.some(m => local.indexOf(m) >= 0)) fail('local/external module collision');
     const imports = {...options.importModules};
     classes.forEach((b, i) => {imports[b.identity] = classModules[i];});
-    plan.interfaces.forEach((b, i) => {imports[b.qname] = interfaceModules[i];});
+    interfaces.forEach((b, i) => {imports[b.qname] = interfaceModules[i];});
     const generated = [{module: declarations, source: plan.moduleSource}];
     if(input.tweenSourcePlans){
         if(options.nativeTweenSourcePlans)fail('per-source and global tween plans conflict');
@@ -90,11 +90,11 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
     });
     // Interfaces retain their complete authored type declarations. Runtime
     // identity comes from the selected nominal header, never a JS constructor.
-    plan.interfaces.forEach((binding, i) => {
-        const source = planned.sources[binding.qname].source;
+    interfaces.forEach((binding, i) => {
+        const source = nativeGeneratedSourceUnit(plan,binding.qname).source;
         const opts = {...options, customVisitors: [], importModules: imports} as EmitterOptions;
         Object.keys(opts).filter(key => key.indexOf('native') === 0).forEach(key => delete (opts as any)[key]);
-        opts.nativeVectorTypes = {plan, module: declarations};
+        opts.nativeVectorTypes = {plan, module: declarations, declarationIdentity:binding.qname};
         generated.push({module: interfaceModules[i], source: emit(parse(binding.qname + '.as', source), source, opts)});
     });
     const dependencies: {module: string; imports: ReadonlyArray<string>}[] = [];
@@ -136,7 +136,7 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         dependencies.push(Object.freeze({module: item.module, imports: Object.freeze(required)}));
         return '[' + JSON.stringify(item.module) + ', function(exports, require) {\n' + compiled.outputText + '\n}]';
     });
-    const units=plan.bindings.map((binding,index)=>({binding,index,helpers:plan.privateBindings.filter(p=>p.declaration.sourceOwner===binding.qname)})).filter(unit=>unit.helpers.length);
+    const units=plan.bindings.map((binding,index)=>({binding,index,helpers:plan.privateBindings.filter(p=>p.declaration.sourceOwner===binding.qname),interfaces:plan.privateInterfaces.filter(p=>p.declaration.sourceOwner===binding.qname)})).filter(unit=>unit.helpers.length||unit.interfaces.length);
     const used = new Set<string>([session, helper]);
     if(units.length) {
         if(external.indexOf(planned.scriptGlobalProviderModule)<0)fail('source unit script provider must be explicit');
@@ -164,10 +164,12 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         '  const headers = load(' + JSON.stringify(declarations) + ');',
         ...units.map(unit=>{
             const members=[classes[unit.index]].concat(unit.helpers.map(p=>classes.find(b=>b.identity===p.identity)));
-            const records=members.map((b,index)=>({name:index?unit.helpers[index-1].declaration.name:unit.binding.qname.split('.').pop(),uri:index?'':unit.binding.qname.split('.').slice(0,-1).join('.'),
+            const records: {name:string;uri:string;visibility?:string;kind:string;type:string}[]=members.map((b,index)=>({name:index?unit.helpers[index-1].declaration.name:unit.binding.qname.split('.').pop(),uri:index?'':unit.binding.qname.split('.').slice(0,-1).join('.'),
                 ...(index?{visibility:'file-private'}:{}),kind:'constant',type:b.reflectedName}));
+            unit.interfaces.forEach(binding=>records.push({name:binding.declaration.name,uri:'',visibility:'file-private',kind:'constant',type:binding.declaration.reflectedName}));
             const declaration={sourceId:unit.binding.qname,sourceSha256:planned.sources[unit.binding.qname].sourceSha256,bindings:records};
             const readers=members.map((b,index)=>'()=>'+providerName(helper)+'.readNativeClass(load('+JSON.stringify(classModules[classes.indexOf(b)])+')['+JSON.stringify(records[index].name)+'],"value")');
+            unit.interfaces.forEach(binding=>readers.push('()=>headers['+JSON.stringify(binding.tokenExport)+']'));
             return '  {let activeGlobal;headers.bindSourceUnit'+unit.index+'((selected,factory)=>{\n'
                 +'    if(activeGlobal)return factory(activeGlobal);\n    let result;\n'
                 +'    '+providerName(planned.scriptGlobalProviderModule)+'.instantiateAS3ScriptUnit(domain,'+JSON.stringify(declaration)+',context=>{\n'

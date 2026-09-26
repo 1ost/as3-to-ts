@@ -1,3 +1,4 @@
+import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import {NativeTypedLocals, NestedLocalFunction} from './native-typed-locals';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
@@ -337,10 +338,10 @@ export class NativeGeneratedLexical {
             return JSON.stringify(ref.identity);
         }
         const binding=(ref.kind==='declaration'||ref.kind==='private-declaration')&&this.declarations.find(b=>b.identity===ref.identity);
-        const contract=ref.kind==='interface'&&this.plan.interfaces.find(b=>b.qname===ref.identity);
+        const contract=ref.kind==='interface'&&nativeGeneratedInterfaceBindings(this.plan).find(b=>b.qname===ref.identity);
         const native=ref.kind==='native'&&this.plan.nativeBindings.find(b=>b.qname===ref.identity);
         if(!binding&&!contract&&!native)fail('unresolved lexical reference '+ref.sourceName);
-        return '{name:'+JSON.stringify(binding?binding.reflectedName:ref.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domain+'.'+(binding?binding.tokenExport:contract?contract.tokenExport:native.referenceExport)+'}';
+        return '{name:'+JSON.stringify(binding?binding.reflectedName:contract?contract.reflectedName:ref.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domain+'.'+(binding?binding.tokenExport:contract?contract.tokenExport:native.referenceExport)+'}';
     }
     publication(name:string,base:string,domain:string,intrinsic:string):string {
         const own=this.declarations.find(b=>b.identity===this.owner),parent=own.base&&this.declarations.find(b=>b.identity===own.base);
