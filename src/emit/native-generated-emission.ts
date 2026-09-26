@@ -60,9 +60,15 @@ export class NativeGeneratedEmission {
             const constantInitializers=nativeScriptConstantInitializers(this.lexical.ownClass,source,this.uintOrInitializers.constants);
             if(members.some(member=>member.kind===K.CLASS_INITIALIZER))
                 fail('script global with class-body initializer requires retry identity authority');
+            const privateClass=options.plan.privateBindings.some(b=>b.identity===selected);
+            const primitiveHelperInitializer=(value:Node):boolean=>{
+                const type=value.findChild(K.TYPE),init=value.findChild(K.INIT);
+                return privateClass&&!!type&&['int','uint','Number'].indexOf(type.text)>=0&&!!init
+                    &&/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(source.slice(init.start,initializerEnd(init)).trim());
+            };
             if(!classScript&&members.some(member=>[K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)>=0
                 &&member.findChild(K.MOD_LIST)&&member.findChild(K.MOD_LIST).children.some(mod=>mod.text==='static')
-                &&member.findChildren(K.NAME_TYPE_INIT).some(value=>!!value.findChild(K.INIT)&&!constantInitializers.has(value))))
+                &&member.findChildren(K.NAME_TYPE_INIT).some(value=>!!value.findChild(K.INIT)&&!constantInitializers.has(value)&&!primitiveHelperInitializer(value))))
                 fail('script global with static initializer requires retry identity authority');
         }
         if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => p.name === t.name)))

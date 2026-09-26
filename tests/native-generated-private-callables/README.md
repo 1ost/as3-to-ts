@@ -1,5 +1,9 @@
 # Private Class callable construction planning
 
+Complete helper execution is now qualified separately by
+`tests/native-generated-private-modules/run.cjs` (34 Flash rows). The checks
+below remain focused compiler-consumer evidence.
+
 Run `npm run -s build` then `node tests/native-generated-private-callables/run.cjs`.
 The test authenticates the shared five-source/24-row Flash fixture and constructs
 real generated-emission and callable compiler plans for both public owners and

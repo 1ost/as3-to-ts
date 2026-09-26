@@ -251,7 +251,7 @@ function parseClass(parser:AS3Parser, meta:Node[], modifier:Token[]):Node {
     result.end = tok.end;
     result.start = result.children.reduce((index:number, child:Node) => {
         return Math.min(index, child ? child.start : Infinity);
-    }, index);
+    }, result.start);
 
     return result;
 }

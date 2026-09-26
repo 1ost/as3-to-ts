@@ -1,5 +1,9 @@
 # Private Class trait projection
 
+Complete helper execution is now qualified separately by
+`tests/native-generated-private-modules/run.cjs` (34 Flash rows). The checks
+below remain focused compiler-consumer evidence.
+
 Run `npm run -s build` then `node tests/native-generated-private-traits/run.cjs`.
 The shared authenticated five-file/24-row Flash fixture supplies all three
 private class declarations. The existing trait projector now uses internal

@@ -23,7 +23,7 @@ for(const identity of identities){
  assert.equal(c.classes.size,8);assert.equal(c.sourceTexts.get(identity),source);
  assert.equal(c.sourceRoots.get(identity).start,g.lexical.ownClass.start);assert.equal(c.sourceRoots.get(identity).end,g.lexical.ownClass.end);
  assert.equal(g.sources[identity],source);assert.equal(g.classes[identity],'lazy');
- if(identity.includes('#file:')){assert.equal(g.projection.binding.scriptGlobalExport,undefined);assert.deepEqual(c.own.parameters.map(p=>[p.name,p.type]),[['n','int']]);}
+ if(identity.includes('#file:')){assert.match(g.projection.binding.scriptGlobalExport,/^publishPrivateScript/);assert.deepEqual(c.own.parameters.map(p=>[p.name,p.type]),[['n','int']]);}
  views.push({identity,name:c.own.name,base:c.own.base,fields:c.own.fields});
 }
 assert.equal(views[3].base,plan.privateBindings[0].identity);
@@ -34,11 +34,11 @@ reject(()=>emission(plan,plan.privateBindings[0].identity,sources['localcases.Se
 const identity=plan.privateBindings[0].identity,g=emission(plan,identity),source=sources['localcases.First'].source;
 reject(()=>callable(g,source,{...g.sources,[identity]:source+' '}),/exact planned/);
 reject(()=>callable(g,sources['localcases.Second'].source),/current source bytes/);
-reject(()=>api.emitNativeSourceClassModule({plan}),/file-private Class script emission/);
+reject(()=>api.emitNativeSourceClassModule({plan}),/target/);
 // Constructor signatures keep private reference identity as well as numeric entry coercion.
 const referenceSource='package args {public class Unit {}} class Helper { public function Helper(value:Helper=null) {} }';
 const referencePlan=api.createNativeGeneratedDeclarationPlan({...input,sources:{'args.Unit':{source:referenceSource,sourceSha256:hash(referenceSource)}}});
 const referenceIdentity=referencePlan.privateBindings[0].identity,referenceEmission=emission(referencePlan,referenceIdentity,referenceSource),referenceCallable=callable(referenceEmission,referenceSource);
 assert.deepEqual(referenceCallable.own.parameters[0].reference,{identity:referenceIdentity,exported:referencePlan.privateBindings[0].tokenExport});
 assert.equal(referenceCallable.own.parameters[0].optional,true);
-console.log(JSON.stringify({qualification:'Complete source callable construction planning; private emission remains gated',selectedDeclarations:views.length,sourceClasses:8,guards,views}));
+console.log(JSON.stringify({qualification:'Complete source callable construction planning; full execution checked by native-generated-private-modules',selectedDeclarations:views.length,sourceClasses:8,guards,views}));

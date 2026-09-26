@@ -15,7 +15,7 @@ const a=projection(plan,first),c=projection(plan,child),b=projection(plan,second
 assert.deepEqual([a.metadata.name,c.metadata.name,b.metadata.name],['::Helper','::Child','::Helper']);
 assert.equal(c.metadata.base,'::Helper');assert.equal(c.inheritInstanceLayout,true);
 assert.notEqual(a.binding.identity,b.binding.identity);assert.equal(a.binding.sourceOwner,'localcases.First');
-assert.equal(a.binding.scriptGlobalExport,undefined);assert(!('qname' in a.binding));
+assert.match(a.binding.scriptGlobalExport,/^publishPrivateScript/);assert(!('qname' in a.binding));
 assert.deepEqual(a.instanceTraits.map(t=>[t.name,t.kind,t.type]),[['value','variable','int'],['inc','method',undefined],['peer','method',undefined]]);
 assert.deepEqual(b.instanceTraits.map(t=>t.name),['value','inc']);
 assert.deepEqual(a.instanceMethods.find(m=>m.name==='peer').returns,{name:'::Helper',referenceExport:first.tokenExport});
@@ -47,4 +47,4 @@ const literalSource='package rules { public class Unit {} } class Parent { publi
 const literalPlan=api.createNativeGeneratedDeclarationPlan({...input,sources:{'rules.Unit':{source:literalSource,sourceSha256:hash(literalSource)}}});
 const literal=new NativeGeneratedClassTraits(literalPlan,literalPlan.scope,literalPlan.privateBindings[0].identity,literalSource);
 assert.deepEqual(literal.instanceConstants,[{name:'n',literal:'17'}]);
-console.log(JSON.stringify({qualification:'Exact source private trait projection; complete class emission remains gated',privateClasses:3,flashRows:24,guards}));
+console.log(JSON.stringify({qualification:'Exact source private trait projection; full execution checked by native-generated-private-modules',privateClasses:3,flashRows:24,guards}));

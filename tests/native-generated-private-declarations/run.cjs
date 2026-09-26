@@ -15,7 +15,7 @@ for(const p of plan.privateBindings){assert.equal(p.declaration.packageQName,nul
 const accessor=require('../../lib/emit/native-generated-declarations');assert.equal(accessor.nativeGeneratedDeclarationSource(plan,plan.scope,a.identity,sources['localcases.First'].source).source,sources['localcases.First'].source);
 assert.equal(accessor.nativeGeneratedDeclarationNode(plan,child.identity).findChild(require('../../lib/syntax/nodeKind').default.NAME).text,'Child');
 let guards=0;const reject=(fn,re)=>{assert.throws(fn,re);guards++;};
-reject(()=>api.emitNativeSourceClassModule({plan,target:'ES2015',emitterOptions:{},externalModules:[],loadingSessionModule:'./session'}),/file-private Class script emission/);
+reject(()=>api.emitNativeSourceClassModule({plan,target:'ES2015',emitterOptions:{},externalModules:[],loadingSessionModule:'./session'}),/native Class and reference providers/);
 const modified=(q,text,extra={})=>({...input,sources:{[q]:{source:text,sourceSha256:hash(text),...extra}}});
 reject(()=>api.createNativeGeneratedDeclarationPlan(modified('a.Unit','package a {public class Unit {}} class X extends Y {} class Y extends X {}')),/cyclic file-private/);
 reject(()=>api.createNativeGeneratedDeclarationPlan(modified('a.Unit','package a {public class Unit {}} class X extends Missing {}')),/file-private base requires/);

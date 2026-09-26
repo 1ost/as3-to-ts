@@ -53,4 +53,4 @@ function parameter(node){return node.findChild(K.CONTENT).children.find(c=>c.kin
 assert.equal(ownRef.declaration(parameter(ownNode)).exported,helper.tokenExport);
 assert.equal(ownRef.declaration(parameter(helperNode)),undefined);
 assert.equal(helperRef.declaration(parameter(ownNode)),undefined);
-console.log(JSON.stringify({qualification:'Authenticated per-declaration reference and initializer consumers; full helper module emission remains gated',selectedDeclarations:identities.length,guards}));
+console.log(JSON.stringify({qualification:'Authenticated per-declaration reference and initializer consumers; full execution checked by native-generated-private-modules',selectedDeclarations:identities.length,guards}));

@@ -40,4 +40,4 @@ assert.deepEqual(derived.traits.map(t=>[t.name,t.owner]),[['n',p2.privateBinding
 const unresolved='package rules {public class Unit {}} class Helper { internal var n:uint; }';
 const p3=api.createNativeGeneratedDeclarationPlan({...input,sources:{'rules.Unit':{source:unresolved,sourceSha256:hash(unresolved)}}});
 reject(()=>new NativeGeneratedLexical(p3,p3.privateBindings[0].identity,unresolved,true),/internal namespace storage authority/);
-console.log(JSON.stringify({qualification:'Private declaration lexical projection and typed-local identity; complete emission remains gated',privateClasses:3,flashRows:24,guards}));
+console.log(JSON.stringify({qualification:'Private declaration lexical projection and typed-local identity; full execution checked by native-generated-private-modules',privateClasses:3,flashRows:24,guards}));

@@ -431,7 +431,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         // Opaque common-engine scopes indexed by exact native generation. These
         // compiler exports never become properties of the source Class value.
         lines.push('export const ' + binding.lexicalExport + '=new WeakMap<Function,any>();');
-        if(binding.scriptGlobalExport) {
+        if(binding.scriptGlobalExport && privateBindings.some(p => p.declaration.sourceOwner === binding.qname)) {
+            lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>'+(data.inheritScriptClasses?selection+'?'+selection+'.resolve() as T:':'')+'__sourceUnit'+bindings.indexOf(binding)+'(0,factory);');
+        } else if(binding.scriptGlobalExport) {
             const split=binding.qname.lastIndexOf('.'),local=binding.qname.slice(split+1),uri=split<0?'':binding.qname.slice(0,split);
             const declaration={sourceId:binding.qname,sourceSha256:sourceHashes[binding.qname],bindings:[{name:local,uri,kind:'constant',type:name}]};
             const instantiate=data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0?'instantiateAS3ClassScriptUnit':'instantiateAS3ScriptUnit';
@@ -467,6 +469,14 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         privateActive.delete(binding.identity); privateDone.add(binding.identity);
     };
     privateBindings.forEach(addPrivate);
+    bindings.forEach((binding,index) => {
+        const helpers=privateBindings.filter(p=>p.declaration.sourceOwner===binding.qname);
+        if(!helpers.length||!binding.scriptGlobalExport)return;
+        if(data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0)fail('multi-declaration Class script retry requires qualification');
+        lines.push('let __sourceUnit'+index+':<T>(selected:number,factory:(global:object)=>T)=>T;',
+            'export function bindSourceUnit'+index+'(run:typeof __sourceUnit'+index+'):void {if(__sourceUnit'+index+')throw new TypeError("Source unit already bound");__sourceUnit'+index+'=run;}');
+        helpers.forEach((helper,slot)=>lines.push('export const publishPrivateScript'+privateBindings.indexOf(helper)+'=<T>(factory:(global:object)=>T):T=>__sourceUnit'+index+'('+(slot+1)+',factory);'));
+    });
     lines.push(...vectorLines);
     if(data.lexicalProviderModule){
         const membership=data.inheritScriptClasses?'bindAS3InternalPackage':'declareAS3InternalPackage';
@@ -532,6 +542,7 @@ export function nativeGeneratedClassDeclaration(plan: NativeGeneratedDeclaration
     return Object.freeze({identity, sourceOwner: helper.declaration.sourceOwner, reflectedName: helper.declaration.reflectedName,
         base: helper.base === null ? null : typeof helper.base === 'string' ? helper.base : privateDeclarationIdentity(helper.base),
         tokenExport: helper.tokenExport, publishExport: helper.publishExport, lexicalExport: helper.lexicalExport,
+        ...(plan.bindings.some(b=>b.qname===helper.declaration.sourceOwner&&!!b.scriptGlobalExport)?{scriptGlobalExport:'publishPrivateScript'+plan.privateBindings.indexOf(helper)}:{}),
         interfaces: Object.freeze([] as string[])});
 }
 

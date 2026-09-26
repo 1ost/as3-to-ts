@@ -3,7 +3,7 @@ import {NativeTweenPlans,NativeTweenSourcePlans,tweenOptionNames} from './native
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {emitNativeXML, xmlGlobalProviderModule} from './native-xml';
 import {NativeClassMetadataOptions} from './native-class-metadata';
-import {nativeGeneratedDeclarationInputs} from './native-generated-declarations';
+import {nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 import {nativeSourceTypeIdentity} from './native-source-type';
 import {insideTypeOf, sourceIdentifier, typeOfBinding} from './native-typeof';
 import NodeKind, {nodeKindName} from '../syntax/nodeKind';
@@ -420,8 +420,6 @@ export default class Emitter {
             this.generated = new NativeGeneratedEmission(this.source,this.options.nativeGeneratedDeclarations,
                 this.options.nativeClassTraitsModule,this.options.nativeClassHelperModules,
                 this.options.nativeLexicalMembersModule,this.options.nativeGeneratedPropertyModule,this.options.nativeTypedLocals === true);
-            if (this.generated.options.plan.privateBindings.length)
-                throw new Error('AS3_GENERATED_EMISSION_UNSUPPORTED: file-private Class emission requires source-unit implementation');
             if(this.generated.projection.metadata.isDynamic) {
                 generatedModule(this.options.nativeDynamicPropertyReadsModule);
                 generatedModule(this.options.nativeDynamicPropertyWritesModule);
@@ -735,7 +733,10 @@ export default class Emitter {
                 || this.options.useNamespaces)
                 throw new Error('AS3_RELATIONAL_COMPILER_UNSUPPORTED: authenticated lazy callable metadata and lexical source required');
         }
-		const filtered = filterAST(ast);
+		const selected = this.generated && this.generated.options.plan.privateBindings.some(b => b.declaration.sourceOwner === this.generated.projection.binding.sourceOwner)
+            ? nativeGeneratedDeclarationNode(this.generated.options.plan, this.generated.projection.binding.identity) : null;
+        const filtered = filterAST(selected || ast);
+        if(selected)filtered.parent=selected.parent;
         this.nativeGlobals = new NativeGlobalModules(this.source, this.options.nativeGlobalModules,
             this.options.definitionsByNamespace, this.options.useNamespaces);
         if (this.options.nativeTypedLocals && !this.options.nativeLexicalMembersModule)
@@ -758,8 +759,20 @@ export default class Emitter {
             }, this.generated);
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;
-			visitNode(this, filtered);
-			this.catchup(this.source.length);
+			if (selected) {
+                const pkg = selected.parent && selected.parent.parent && selected.parent.parent.kind === NodeKind.PACKAGE ? selected.parent.parent : null;
+                this.sourcePackage = pkg ? pkg.findChild(NodeKind.NAME).text : '';
+                ClassList.setCurrentClassRecord(new ClassRecord(this.sourcePackage, selected.findChild(NodeKind.NAME).text));
+                // Visit original import and declaration nodes at their original
+                // offsets. Other declarations never become emitted source text.
+                selected.parent.findChildren(NodeKind.IMPORT).forEach(node => {
+                    this.skipTo(node.start); emitImport(this, node); this.insert(';\n');
+                });
+                this.skipTo(filtered.start); visitNode(this, filtered); this.catchup(filtered.end);
+                this.skipTo(this.source.length);
+            } else {
+                visitNode(this, filtered); this.catchup(this.source.length);
+            }
 		});
 		this.output = this.output.replace(/\s([^\n])\s*?=>/gm, " =>");//TODO hotfix. To remove new lines between arrow operator nad {
 		if (this.logicalAssignmentTemps.size)
@@ -946,7 +959,7 @@ export default class Emitter {
 
 		// Ensure this file is not declaring this class
 		if (
-			this.source.indexOf(`class ${ identifier } `) === -1 && !isGloballyAvailable && !this.findDefInScope(identifier)
+			(this.generated ? identifier !== this.generated.lexical.ownClass.findChild(NodeKind.NAME).text : this.source.indexOf(`class ${ identifier } `) === -1) && !isGloballyAvailable && !this.findDefInScope(identifier)
 		) {
 			// Same-package implicit imports must use the authenticated QName mapping too.
 			if (checkGlobals && from === `./${identifier}` && this.options.importModules) {
@@ -3405,6 +3418,28 @@ function emitReflectionXML(emitter:Emitter, node:Node):boolean {
 	if (typeof module !== 'string' || !module.trim() || /["\\\x00-\x1f\u2028\u2029]/.test(module))
 		throw new Error('AS3_REFLECTION_XML_UNSUPPORTED: explicit common reflection XML module required');
 
+    // These scalar E4X reads need exact identity fields, not a fabricated
+    // complete describeType document for a generated trait projection.
+    if(node.kind===NodeKind.CALL&&node.children[0].kind===NodeKind.IDENTIFIER&&node.children[0].text==='String'
+        &&!emitter.findDefInScope('String')) {
+        const args=node.findChild(NodeKind.ARGUMENTS),attribute=args&&args.children.length===1&&args.children[0];
+        if(attribute&&attribute.kind===NodeKind.DOT&&attribute.children[1].kind===NodeKind.LITERAL) {
+            let root=attribute.children[0],field:string;
+            if(attribute.children[1].text==='@name'&&reflectionXMLRoot(root))field='name';
+            else if(attribute.children[1].text==='@type'&&root.kind===NodeKind.ARRAY_ACCESSOR
+                &&root.children[1].kind===NodeKind.LITERAL&&root.children[1].text==='0') {
+                const child=root.children[0];
+                if(child.kind===NodeKind.DOT&&child.children[1].text==='extendsClass'&&reflectionXMLRoot(child.children[0])){root=child.children[0];field='base';}
+            }
+            if(field) {
+                const helper=propertyHelper(emitter,'as3DescribeTypeIdentityAttribute',module);
+                emitter.catchup(node.start);emitter.insert(helper+'(');
+                const receiver=reflectionXMLArgument(root);emitter.skipTo(receiver.start);visitNode(emitter,receiver);emitter.catchup(receiver.end);
+                emitter.insert(','+JSON.stringify(field)+')');emitter.skipTo(node.end);return true;
+            }
+        }
+    }
+
 	// A literal attribute followed by toString() is the scalar form used by
 	// the maintained JSON encoder. Missing attributes stringify to the empty
 	// string in Flash; the provider's nominal reader returns undefined.
@@ -3544,11 +3579,21 @@ function generatedMethodValue(emitter:Emitter,node:Node):boolean {
     return method(traits.staticTraits,name)||qname===generated.lexical.owner&&generated.lexical.traits.some(t=>t.static&&t.kind==='method'&&t.name===name);
 }
 
+/** A declared Function return keeps its nominal call/apply behavior when the
+ * source uses the result immediately instead of assigning a typed local. */
+function generatedFunctionResult(emitter:Emitter,node:Node):boolean {
+    if(!emitter.generated||!node||node.kind!==NodeKind.CALL)return false;
+    const callee=node.children[0];
+    if(callee.kind!==NodeKind.DOT||callee.children[1].kind!==NodeKind.LITERAL)return false;
+    const projection=generatedReceiver(emitter,unwrapEncapsulatedExpression(callee.children[0]));
+    return !!projection&&projection.instanceMethods.some(method=>method.name===callee.children[1].text&&method.returns==='Function');
+}
+
 function emitLocalFunctionIntrinsic(emitter:Emitter,node:Node):boolean {
     const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
     if(!emitter.generated||!emitter.typedLocalPlan||!callee||callee.kind!==NodeKind.DOT||!args)return false;
     const receiver=unwrapEncapsulatedExpression(callee.children[0]),member=callee.children[1];
-    if(!member||['call','apply'].indexOf(member.text)<0||!emitter.typedLocalPlan.functionLocal(receiver,emitter)&&!generatedMethodValue(emitter,receiver))return false;
+    if(!member||['call','apply'].indexOf(member.text)<0||!emitter.typedLocalPlan.functionLocal(receiver,emitter)&&!generatedMethodValue(emitter,receiver)&&!generatedFunctionResult(emitter,receiver))return false;
     if(emitter.isNew)throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: Function intrinsic construction');
     // Capture the Function before argument effects; resolve its intrinsic only
     // afterwards, preserving AIR null errors and declaration-global receivers.
@@ -4023,9 +4068,10 @@ function generatedReceiver(emitter:Emitter,receiver:Node):NativeGeneratedClassTr
     const definition=emitter.findDefInScope(receiver.text);
     const token=definition&&emitter.references&&emitter.references.type(definition.as3Type);
     const plan=emitter.generated.options.plan,binding=token&&plan.bindings.find(b=>b.tokenExport===token);
-    if(!binding)return null;
-    let projection=emitter.generatedReceiverTraits.get(binding.qname);
-    if(!projection){projection=new NativeGeneratedClassTraits(plan,plan.scope,binding.qname,emitter.generated.sources[binding.qname]);emitter.generatedReceiverTraits.set(binding.qname,projection);}
+    const helper=token&&plan.privateBindings.find(b=>b.tokenExport===token),identity=binding?binding.qname:helper?helper.identity:null;
+    if(!identity)return null;
+    let projection=emitter.generatedReceiverTraits.get(identity);
+    if(!projection){projection=new NativeGeneratedClassTraits(plan,plan.scope,identity,emitter.generated.sources[identity]);emitter.generatedReceiverTraits.set(identity,projection);}
     return projection;
 }
 function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {

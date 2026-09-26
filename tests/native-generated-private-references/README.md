@@ -1,5 +1,9 @@
 # Declaration-specific reference and initializer consumers
 
+Complete helper execution is now qualified separately by
+`tests/native-generated-private-modules/run.cjs` (34 Flash rows). The checks
+below remain focused compiler-consumer evidence.
+
 Run `node tests/native-generated-private-references/run.cjs` after building.
 
 The test authenticates the five original sources and 24 retained Flash rows in
