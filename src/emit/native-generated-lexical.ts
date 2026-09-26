@@ -138,10 +138,10 @@ export class NativeGeneratedLexical {
             if(!target||target.kind!==K.IDENTIFIER)fail('for-in requires an existing wildcard slot');
             for(let scope=node.parent;scope;scope=scope.parent){
                 if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===target.text)fail('catch-shadow for-in target held');
-                if(scope.kind!==K.FUNCTION&&scope.kind!==K.LAMBDA)continue;
+                if([K.FUNCTION,K.LAMBDA,K.GET,K.SET].indexOf(scope.kind)<0)continue;
                 const declarations:Node[]=[];
                 scope.findChild(K.PARAMETER_LIST).children.forEach(p=>{const d=p.findChild(K.NAME_TYPE_INIT);if(d)declarations.push(d);});
-                const collect=(n:Node):void=>{if(n.kind===K.FUNCTION||n.kind===K.LAMBDA)return;if([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(n.kind)>=0)declarations.push(...n.findChildren(K.NAME_TYPE_INIT));n.children.forEach(collect);};collect(scope.findChild(K.BLOCK));
+                const collect=(n:Node):void=>{if([K.FUNCTION,K.LAMBDA,K.GET,K.SET].indexOf(n.kind)>=0)return;if([K.VAR_LIST,K.CONST_LIST,K.VAR,K.CONST].indexOf(n.kind)>=0)declarations.push(...n.findChildren(K.NAME_TYPE_INIT));n.children.forEach(collect);};collect(scope.findChild(K.BLOCK));
                 const slot=declarations.find(d=>d.findChild(K.NAME).text===target.text);
                 if(slot){if(slot.findChild(K.TYPE)&&['*','String','Object'].indexOf(slot.findChild(K.TYPE).text)<0)fail('typed for-in target held');return;}
             }
@@ -353,6 +353,37 @@ export class NativeGeneratedLexical {
             +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
     emit(emitter:any,node:Node,visit:(emitter:any,node:Node)=>void):boolean {
+        // Protected methods have lexical symbol storage, so a source super call
+        // must use the selected parent scope rather than a public prototype key.
+        const callee=node.kind===K.CALL&&node.children[0];
+        if(callee&&callee.kind===K.DOT&&callee.children[0].text==='super') {
+            const name=callee.children[1].text;
+            let owner=this.plan.bindings.find(b=>b.qname===this.owner).base,member:Node;
+            while(owner&&this.plan.bindings.some(b=>b.qname===owner)) {
+                member=this.internalContent(owner).children.find(m=>m.findChild(K.NAME)&&m.findChild(K.NAME).text===name);
+                if(member)break;
+                owner=this.plan.bindings.find(b=>b.qname===owner).base;
+            }
+            if(member&&modifiers(member).indexOf('protected')>=0) {
+                let method=node.parent;
+                while(method&&method.kind!==K.FUNCTION)method=method.parent;
+                if(!method||method.parent.kind!==K.CONTENT||modifiers(method).indexOf('static')>=0
+                    ||method.findChild(K.NAME).text===this.owner.split('.').pop())
+                    fail('protected super requires ordinary instance method');
+                if(member.kind!==K.FUNCTION||modifiers(member).indexOf('static')>=0)
+                    fail('protected super requires instance method target');
+                const parameters=member.findChild(K.PARAMETER_LIST).children,args=node.findChild(K.ARGUMENTS);
+                if(parameters.some(p=>!!p.findChild(K.REST)))fail('protected super rest signature held');
+                const minimum=parameters.filter(p=>!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)).length;
+                if(!args||args.children.length<minimum||args.children.length>parameters.length)
+                    fail('protected super source arity');
+                emitter.catchup(node.start);
+                emitter.insert('(<any>'+this.provider+'.as3CallLexicalMember(this,'+this.provider
+                    +'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(name)+',"protected",false,true),()=>[');
+                args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                emitter.insert(']))');emitter.skipTo(node.end);return true;
+            }
+        }
         const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
@@ -388,6 +419,14 @@ export class NativeGeneratedLexical {
                         ? this.plan.bindings.filter(b=>b.qname===this.resolveTypeName(receiver.text)) : [];
                     const identity=identities.length===1?identities[0]:knownClass.length===1?knownClass[0].qname:undefined;
                     const statics=!!identity&&knownClass.some(b=>b.qname===identity);
+                    // A private spelling in this class does not capture an
+                    // explicitly qualified public static of another source class.
+                    if(lexicalName&&statics&&identity!==this.owner){
+                        const cacheKey='static:'+identity;
+                        if(!this.foreignPublicMembers.has(cacheKey))this.foreignPublicMembers.set(cacheKey,
+                            new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,input.sources[identity].source).staticTraits);
+                        if(this.foreignPublicMembers.get(cacheKey).some(member=>member.name===name))return null;
+                    }
                     let inaccessible=false;
                     for(let current=identity;current;current=this.plan.bindings.find(b=>b.qname===current).base){
                         if(!input.sources[current]||input.sources[current].referenceOnly)break;
@@ -421,6 +460,10 @@ export class NativeGeneratedLexical {
                     if(member)return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method'};
                 }
                 if(!lexicalName)return null;
+                // A rest parameter is an intrinsic Array. Its members remain
+                // Array members even when the declaring class has a namesake.
+                if(receiver.kind===K.IDENTIFIER&&binding&&!binding.bound&&binding.as3Type==='Array'
+                    &&this.resolveTypeName('Array')==='Array')return null;
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
                 // Dynamic receivers use runtime namespace lookup, even when
                 // this class declares an internal/private namesake.
