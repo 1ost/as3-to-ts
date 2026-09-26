@@ -1,0 +1,42 @@
+import { Laya } from "@ENGINE@/src/layaAir/Laya";
+import "@ENGINE@/src/layaAir/laya/ModuleDef";
+import "@ENGINE@/src/layaAir/laya/platform/BrowserAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/FileSystemAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/FontAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/MediaAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/StorageAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/TextInputAdapter";
+import "@ENGINE@/src/layaAir/laya/device/WebDeviceAdapter";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/RenderModuleData/WebModuleData/WebUnitRenderModuleDataFactory";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/WebGLDriver/RenderDevice/WebGLRenderDeviceFactory";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/WebGLDriver/2DRenderPass/WebGLRender2DProcess";
+
+import {TextLineMetrics} from '@FLASH@/utils/AS3CanonicalTextLineMetricsReference';
+import {TextField} from '@FLASH@/utils/AS3CanonicalTextFieldReference';
+import {describeRegisteredFlashType,describeRegisteredFlashInstanceType} from '@FLASH@/utils/FlashTypeMetadata';
+import {Point} from '@FLASH@/geom/Point';
+import {as3GetProperty} from '@FLASH@/utils/AS3Property';
+import {as3CallProperty} from '@FLASH@/utils/AS3Property';
+import {NativeSourceClassModule,createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+export async function run(module:NativeSourceClassModule){
+ await Laya.init(160,120);
+ const session=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:2});
+ const loaded=await session.load('a',new ApplicationDomain(ApplicationDomain.currentDomain));
+ const Reader=loaded.getDefinition('metrics.Reader') as any,c=new Reader(),a=new TextLineMetrics(1,2,3,4,5,6),b=new TextLineMetrics(-1,9.5,0,4,5,-2),rows:any[]=[],checks:string[]=[];
+ const run=(id:string,fn:()=>unknown)=>{try{rows.push({id,value:fn()});}catch(e:any){rows.push({id,error:[e.name,e.errorID]});}};
+ run('values',()=>c.read(a));run('default',()=>c.empty());run('null',()=>c.nullish(null));run('undefined',()=>c.nullish(undefined));
+ run('object',()=>c.read({x:1,width:2,height:3,ascent:4,descent:5,leading:6}));run('wrong-reference',()=>c.read(new Point()));run('class',()=>c.read(TextLineMetrics));
+ run('replace',()=>c.replace(a,b));run('replace-invalid',()=>c.replace(a,{}));run('replace-null',()=>c.replace(a,null));run('field',()=>c.field(new TextField()));
+ const fn=as3GetProperty(c,'read');run('bound',()=>as3CallProperty(fn,'call',()=>[{},b]));
+ run('write-string',()=>c.write(a,'7.5'));run('write-null',()=>c.write(a,null));
+ rows.push({id:'class-document',value:describeRegisteredFlashType(TextLineMetrics).reflectionAuthority.document});
+ rows.push({id:'instance-document',value:describeRegisteredFlashInstanceType(TextLineMetrics).reflectionAuthority.document});
+ const check=(id:string,pass:boolean)=>{if(!pass)throw Error(id);checks.push(id);};
+ const failure=(fn:()=>unknown)=>{try{fn();return [];}catch(e:any){return [e.name,e.errorID];}};
+ check('forged native receiver rejected',JSON.stringify(failure(()=>c.read(Object.create(TextLineMetrics.prototype))))===JSON.stringify(['TypeError',1034]));
+ check('proxy native receiver rejected',JSON.stringify(failure(()=>c.read(new Proxy(a,{}))))===JSON.stringify(['TypeError',1034]));
+ const sibling=await session.load('b',new ApplicationDomain(ApplicationDomain.currentDomain));const Other=sibling.getDefinition('metrics.Reader') as any;
+ check('separate source Classes share native reference',Other!==Reader&&new Other().read(a)[0]===true);session.retire();
+ return {rows,checks};
+}
