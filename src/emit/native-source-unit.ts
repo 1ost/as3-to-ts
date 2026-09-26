@@ -12,13 +12,23 @@ export interface NativeSourceUnitDeclaration {
     readonly filePrivate: boolean;
     readonly kind: 'class' | 'interface';
 }
+/** A namespace definition is not a Class/type descriptor. */
+export interface NativeSourceUnitNamespace {
+    readonly sourceOwner: string;
+    readonly name: string;
+    readonly packageQName: string;
+    readonly filePrivate: false;
+    readonly kind: 'namespace';
+}
 export interface NativeSourceUnit {
     readonly owner: string;
     readonly source: string;
     readonly sourceSha256: string;
     readonly declarations: ReadonlyArray<NativeSourceUnitDeclaration>;
+    readonly namespaces: ReadonlyArray<NativeSourceUnitNamespace>;
 }
-interface Context {root: Node; nodes: Map<NativeSourceUnitDeclaration, Node>;}
+type SourceDescriptor = NativeSourceUnitDeclaration | NativeSourceUnitNamespace;
+interface Context {root: Node; nodes: Map<SourceDescriptor, Node>;}
 const contexts = new WeakMap<NativeSourceUnit, Context>();
 function fail(reason: string): never {throw new Error('AS3_SOURCE_UNIT_UNSUPPORTED: ' + reason);}
 function normalize(node: Node): void {
@@ -36,13 +46,23 @@ export function readNativeSourceUnit(owner: string, source: string, sourceSha256
     const packages = root.findChildren(K.PACKAGE), pkg = packages[0], content = pkg && pkg.findChild(K.CONTENT);
     const declared = (node: Node): boolean => node.kind === K.CLASS || node.kind === K.INTERFACE;
     const primary = content && content.children.filter(declared);
-    if (packages.length !== 1 || !primary || primary.length !== 1) fail('exactly one package class or interface: ' + owner);
-    const namespace = pkg.findChild(K.NAME).text, name = primary[0].findChild(K.NAME).text;
+    const namespaceNodes = content ? content.findChildren(K.NAMESPACE_DECLARATION) : [];
+    if (packages.length !== 1 || !primary || primary.length > 1
+        || !primary.length && namespaceNodes.length !== 1)
+        fail('exactly one package class, interface or standalone namespace: ' + owner);
+    const namespace = pkg.findChild(K.NAME).text, name = (primary[0] || namespaceNodes[0]).findChild(K.NAME).text;
     if ((namespace ? namespace + '.' : '') + name !== owner) fail('source QName mismatch: ' + owner);
     const tails = root.findChildren(K.CONTENT);
     if (tails.length > 1) fail('one file scope required: ' + owner);
     const tail = tails[0], helpers = tail ? tail.children.filter(declared) : [];
-    const all = [primary[0]].concat(helpers), nodes = new Map<NativeSourceUnitDeclaration, Node>();
+    if (!primary.length && helpers.length) fail('namespace source with file-local classes requires qualification: ' + owner);
+    if (!primary.length && content.children.some(node =>
+        [K.NAMESPACE_DECLARATION, K.IMPORT, K.AS_DOC, K.MULTI_LINE_COMMENT, K.STMT_EMPTY].indexOf(node.kind) < 0))
+        fail('standalone namespace source has additional package statements: ' + owner);
+    if (!primary.length && tail && tail.children.some(node =>
+        [K.IMPORT, K.AS_DOC, K.MULTI_LINE_COMMENT, K.STMT_EMPTY].indexOf(node.kind) < 0))
+        fail('standalone namespace source has additional file statements: ' + owner);
+    const all = primary.concat(helpers), nodes = new Map<SourceDescriptor, Node>();
     const localNames = new Set<string>();
     const declarations = all.map((node, index) => {
         const local = node.findChild(K.NAME).text;
@@ -58,17 +78,29 @@ export function readNativeSourceUnit(owner: string, source: string, sourceSha256
             filePrivate: index !== 0, kind: node.kind === K.CLASS ? 'class' : 'interface'});
         nodes.set(value, node); return value;
     });
+    const packageNames = new Set(primary.map(node => node.findChild(K.NAME).text));
+    const namespaces = namespaceNodes.map(node => {
+        const local = node.findChild(K.NAME).text, mods = node.findChild(K.MOD_LIST);
+        if (!mods || mods.children.length !== 1 || mods.children[0].text !== 'public')
+            fail('public source namespace required: ' + owner + ':' + local);
+        if (packageNames.has(local)) fail('duplicate package declaration: ' + owner + ':' + local);
+        packageNames.add(local);
+        const value = Object.freeze<NativeSourceUnitNamespace>({sourceOwner: owner, name: local,
+            packageQName: (namespace ? namespace + '.' : '') + local, filePrivate: false, kind: 'namespace'});
+        nodes.set(value, node); return value;
+    });
     let count = 0;
-    const visit = (node: Node): void => {if (declared(node)) count++; node.children.forEach(visit);}; visit(root);
-    if (count !== all.length) fail('nested declaration scope: ' + owner);
-    const unit = Object.freeze({owner, source, sourceSha256, declarations: Object.freeze(declarations)});
+    const visit = (node: Node): void => {if (declared(node) || node.kind === K.NAMESPACE_DECLARATION) count++; node.children.forEach(visit);}; visit(root);
+    if (count !== all.length + namespaces.length) fail('nested declaration scope: ' + owner);
+    const unit = Object.freeze({owner, source, sourceSha256, declarations: Object.freeze(declarations), namespaces: Object.freeze(namespaces)});
     contexts.set(unit, {root, nodes});
     return unit;
 }
 
 /** Return a detached AST; mutations by one consumer never change source authority. */
 export function nativeSourceUnitAst(unit: NativeSourceUnit):
-    {root: Node; declarations: ReadonlyArray<{declaration: NativeSourceUnitDeclaration; node: Node}>} {
+    {root: Node; declarations: ReadonlyArray<{declaration: NativeSourceUnitDeclaration; node: Node}>;
+        namespaces: ReadonlyArray<{declaration: NativeSourceUnitNamespace; node: Node}>} {
     const context = contexts.get(unit);
     if (!context) fail('exact source-unit capability required');
     const copies = new Map<Node, Node>();
@@ -78,17 +110,21 @@ export function nativeSourceUnitAst(unit: NativeSourceUnit):
         copies.set(node, result); result.children = node.children.map(child => clone(child, result)); return result;
     };
     const root = clone(context.root);
-    return {root, declarations: unit.declarations.map(declaration => ({declaration, node: copies.get(context.nodes.get(declaration))}))};
+    return {root, declarations: unit.declarations.map(declaration => ({declaration, node: copies.get(context.nodes.get(declaration))})),
+        namespaces: unit.namespaces.map(declaration => ({declaration, node: copies.get(context.nodes.get(declaration))}))};
 }
 /** Only live compiler-owned units and their own descriptors authorize AST access. */
-export function nativeSourceUnitNode(unit: NativeSourceUnit, declaration: NativeSourceUnitDeclaration): Node {
+export function nativeSourceUnitNode(unit: NativeSourceUnit, declaration: SourceDescriptor): Node {
     const context = contexts.get(unit);
     if (!context || !context.nodes.has(declaration)) fail('exact source-unit declaration capability required');
-    return nativeSourceUnitAst(unit).declarations.find(item => item.declaration === declaration).node;
+    const ast = nativeSourceUnitAst(unit);
+    return declaration.kind === 'namespace'
+        ? ast.namespaces.find(item => item.declaration === declaration).node
+        : ast.declarations.find(item => item.declaration === declaration).node;
 }
 /** File-local candidates are visible only to declarations in this same live unit.
  * Import/builtin conflicts still need the caller's full lexical resolution. */
-export function nativeSourceUnitLocal(unit: NativeSourceUnit, consumer: NativeSourceUnitDeclaration,
+export function nativeSourceUnitLocal(unit: NativeSourceUnit, consumer: SourceDescriptor,
     spelling: string): NativeSourceUnitDeclaration | null {
     const context = contexts.get(unit);
     if (!context || !context.nodes.has(consumer)) fail('exact source-unit declaration capability required');
@@ -99,7 +135,7 @@ export const nativeSourceIntrinsicNames: ReadonlyArray<string> = Object.freeze([
     '*', 'void', 'int', 'uint', 'Number', 'Boolean', 'String', 'Object', 'Array', 'Function', 'Class'
 ]);
 /** Private names resolve to opaque descriptors, never to reflected/public strings. */
-export function nativeSourceUnitResolver(unit: NativeSourceUnit, consumer: NativeSourceUnitDeclaration,
+export function nativeSourceUnitResolver(unit: NativeSourceUnit, consumer: SourceDescriptor,
     known: (name: string) => boolean): (spelling: string) => string | NativeSourceUnitDeclaration {
     const context = contexts.get(unit);
     if (!context || !context.nodes.has(consumer)) fail('exact source-unit declaration capability required');

@@ -78,6 +78,10 @@ function parsePackageContent(parser:AS3Parser):Node {
             result.children.push(parseInterface(parser, meta, modifiers));
             modifiers.length = 0;
             meta.length = 0;
+        } else if (tokIs(parser, Keywords.VAR)) {
+            parseClassField(parser, result, modifiers, meta);
+        } else if (tokIs(parser, Keywords.CONST)) {
+            parseClassConstant(parser, result, modifiers, meta);
         } else if (tokIs(parser, Keywords.FUNCTION)) {
             parseClassFunctions(parser, result, modifiers, meta);
         } else if (startsWith(parser.tok.text, ASDOC_COMMENT)) {
