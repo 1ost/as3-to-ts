@@ -1,5 +1,7 @@
 import Node from '../syntax/node';
 import NodeKind from '../syntax/nodeKind';
+import {NativeGeneratedEmission} from './native-generated-emission';
+import {nativeGeneratedDeclarationResolver, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 
 export interface NativeClassInitializationOptions {
     /** Exact source QNames. Lazy entries must all use this compiler contract;
@@ -13,8 +15,9 @@ export class NativeClassInitializers {
     public ownNames = new Map<Node, string>();
     public declareName: string;
     public readName: string;
+    private generatedResolve: (name: string) => string;
 
-    constructor(root: Node, source: string, options?: NativeClassInitializationOptions, qualifiedRead?: (node: Node) => boolean) {
+    constructor(root: Node, source: string, options?: NativeClassInitializationOptions, qualifiedRead?: (node: Node) => boolean, generated?: NativeGeneratedEmission) {
         this.enabled = options !== undefined;
         this.classes = options && options.classes || {};
         const fail = (message: string): never => { throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: ' + message); };
@@ -23,8 +26,19 @@ export class NativeClassInitializers {
             || typeof options.classes !== 'object' || Array.isArray(options.classes)
             || Object.getPrototypeOf(options.classes) !== Object.prototype && Object.getPrototypeOf(options.classes) !== null))
             fail('invalid class initialization configuration');
+        let selected: Node, identity: string;
+        if (generated) {
+            const plan = generated.options.plan;
+            identity = generated.projection.binding.identity;
+            this.generatedResolve = nativeGeneratedDeclarationResolver(plan, identity, source).resolve;
+            selected = nativeGeneratedDeclarationNode(plan, identity);
+            if (!this.enabled || Object.keys(this.classes).length !== Object.keys(generated.classes).length
+                || Object.keys(generated.classes).some(name => this.classes[name] !== generated.classes[name]))
+                fail('generated class initialization plan must agree');
+        }
         Object.keys(this.classes).forEach(qname => {
-            if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(qname)
+            const helper = generated && generated.options.plan.privateBindings.some(binding => binding.identity === qname);
+            if (!helper && !/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(qname)
                 || ['lazy', 'ready'].indexOf(this.classes[qname]) < 0) fail('invalid class identity: ' + qname);
         });
         let sequence = 0;
@@ -38,7 +52,10 @@ export class NativeClassInitializers {
             if (!node) return;
             if (node.kind === NodeKind.CLASS_INITIALIZER && !this.enabled) fail('class-body statements require native class initialization');
             if (node.kind === NodeKind.CLASS && this.enabled) {
-                const qname = this.packageName(node) + node.findChild(NodeKind.NAME).text;
+                if (selected && (selected.start !== node.start || selected.end !== node.end
+                    || selected.findChild(NodeKind.NAME).text !== node.findChild(NodeKind.NAME).text))
+                    fail('selected generated declaration required');
+                const qname = identity || this.packageName(node) + node.findChild(NodeKind.NAME).text;
                 if (!Object.prototype.hasOwnProperty.call(this.classes, qname) || this.classes[qname] !== 'lazy')
                     fail('source class must have an exact lazy identity: ' + qname);
                 this.ownNames.set(node, fresh('classValue'));
@@ -82,6 +99,7 @@ export class NativeClassInitializers {
     }
     public resolve(node: Node, name: string): 'lazy' | 'ready' | null {
         if (!this.enabled) return null;
+        if (this.generatedResolve) return this.resolveQualified(this.generatedResolve(name));
         const candidates: string[] = [];
         const local = this.packageName(node) + name;
         if (Object.prototype.hasOwnProperty.call(this.classes, local)) candidates.push(local);

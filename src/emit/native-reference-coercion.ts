@@ -2,7 +2,7 @@ import {nativeNumericProductConstant} from './native-numeric-product-constant';
 import {nativeUintOrConstants} from './native-uint-or-constants';
 import Node, {outerEncapsulatedExpression, unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
-import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationNode} from './native-generated-declarations';
+import {NativeGeneratedDeclarationPlan, nativeGeneratedConsumerResolver, nativeGeneratedDeclarationResolver, nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationNode, nativeGeneratedClassDeclaration} from './native-generated-declarations';
 import {generatedModule} from './native-generated-emission';
 
 export const nativeLoaderReferenceNames: ReadonlyArray<string> = Object.freeze(['flash.display.Loader','flash.display.Bitmap','flash.net.URLLoader','flash.media.Sound']);
@@ -31,11 +31,16 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false, nativeSpriteValues = false, nativeSpriteOwners = false, nativeLoaders = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false, nativeSpriteValues = false, nativeSpriteOwners = false, nativeLoaders = false, declarationIdentity?: string) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
-        const consumer = nativeGeneratedConsumerResolver(options.plan, source);
+        if (declarationIdentity !== undefined && !generated) fail('declaration selection requires generated implementation');
+        const consumer = declarationIdentity === undefined ? nativeGeneratedConsumerResolver(options.plan, source)
+            : nativeGeneratedDeclarationResolver(options.plan, declarationIdentity, source);
         this.root = consumer.root; this.owner = consumer.owner; this.resolve = consumer.resolve;
+        // Inspect only this implementation, while keeping the complete original
+        // AST (and its package/file imports) available to the emitter.
+        const selected = declarationIdentity === undefined ? this.root : nativeGeneratedDeclarationNode(options.plan, declarationIdentity);
         const walk = (node: Node, fn: Node): void => {
             if (functions.indexOf(node.kind) >= 0) {
                 if (fn&&!generated) fail('nested consumer functions require lexical scope qualification');
@@ -116,7 +121,7 @@ export class NativeReferenceCoercion {
             }
             node.children.forEach(child => walk(child,fn));
         };
-        walk(this.root,null);
+        walk(selected,null);
         const guard = (node: Node): void => {
             const signature = this.signature(node);
             if (signature && node.kind === K.NAME_TYPE_INIT && node.findChild(K.NAME).text === 'arguments')
@@ -212,7 +217,7 @@ export class NativeReferenceCoercion {
             }
             node.children.forEach(guard);
         };
-        guard(this.root);
+        guard(selected);
     }
     signature(node: Node): ReferenceSignature {
         for (let value = node; value; value = value.parent) {
@@ -230,13 +235,14 @@ export class NativeReferenceCoercion {
             return contract.tokenExport;
         }
         const source = plan.bindings.find(binding => binding.qname === identity);
+        const helper = plan.privateBindings.find(binding => binding.identity === identity);
         const native = plan.nativeBindings.find(binding => binding.qname === identity);
-        return source ? source.tokenExport : native ? native.referenceExport : null;
+        return source ? source.tokenExport : helper ? helper.tokenExport : native ? native.referenceExport : null;
     }
     literalStaticConstant(name:string, member:string): {type:string; literal:string} {
         const identity=this.resolve(name),plan=this.options.plan;
-        if(!plan.bindings.some(binding=>binding.qname===identity))return null;
-        const input=nativeGeneratedDeclarationInputs(plan,plan.scope),source=input.sources[identity].source;
+        if(!this.sourceClass(name))return null;
+        const input=nativeGeneratedDeclarationInputs(plan,plan.scope),source=input.sources[nativeGeneratedClassDeclaration(plan,identity).sourceOwner].source;
         let declaration=this.constantDeclarations.get(identity);
         if(!declaration){
             declaration=nativeGeneratedDeclarationNode(plan,identity);
@@ -253,7 +259,7 @@ export class NativeReferenceCoercion {
                 fail('consumer constant requires a primitive literal declaration');
             if(['String','Number','int','uint','Boolean'].indexOf(type.text)<0) {
                 const reference=plan.references.find(item=>item.owner===identity&&item.start===type.start&&item.end===type.end);
-                if(!this.generated||!reference||reference.kind!=='declaration'
+                if(!this.generated||!reference||reference.kind!=='declaration'&&reference.kind!=='private-declaration'
                     &&!(reference.kind==='intrinsic'&&['Object','Array'].indexOf(reference.identity)>=0))
                     fail('consumer constant requires a primitive literal declaration');
                 return {type:type.text,literal:null};
@@ -270,7 +276,7 @@ export class NativeReferenceCoercion {
     }
     publicStaticMethod(name:string,member:string):boolean {
         const identity=this.resolve(name),plan=this.options.plan;
-        if(!plan.bindings.some(binding=>binding.qname===identity))return false;
+        if(!this.sourceClass(name))return false;
         let declaration=this.constantDeclarations.get(identity);
         if(!declaration){
             declaration=nativeGeneratedDeclarationNode(plan,identity);
@@ -285,7 +291,8 @@ export class NativeReferenceCoercion {
     }
     sourceClass(name: string): boolean {
         const identity = this.resolve(name);
-        return this.options.plan.bindings.some(binding => binding.qname === identity);
+        return this.options.plan.bindings.some(binding => binding.qname === identity)
+            || this.options.plan.privateBindings.some(binding => binding.identity === identity);
     }
     sourceInterface(name: string): string {
         const identity = this.resolve(name);
