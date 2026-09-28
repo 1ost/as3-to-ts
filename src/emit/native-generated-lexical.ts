@@ -651,6 +651,25 @@ export class NativeGeneratedLexical {
             if(operation==='set'){emitter.insert(',');emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);}
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
+        if(operation==='set'&&node.children[1].text==='-=') {
+            const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
+            if(found.trait.kind!=='variable'||found.trait.visibility!=='private'||found.trait.static
+                ||!ref||ref.kind!=='intrinsic'||['Number','int','uint'].indexOf(ref.identity)<0)
+                fail('lexical subtraction requires qualified private numeric instance variable');
+            const module=emitter.options.nativeCallableCoercionModule;
+            if(typeof module!=='string'||!module.trim()||/[\x00-\x1f'"\\]/.test(module))fail('lexical subtraction coercion provider required');
+            const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
+            const number=unique('__as3_lexical_number'),receiver=unique('__as3_lexical_target'),previous=unique('__as3_lexical_previous');
+            emitter.ensureImportIdentifier('as3CoerceNumber as '+number,module,false);emitter.nativeSourceHelpers.add(number);
+            // Capture the receiver and numeric field before RHS evaluation or
+            // conversion. The lexical write performs int/uint storage coercion.
+            emitter.catchup(node.start);emitter.insert('(<any>(()=>{const '+receiver+':any=');
+            if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
+            else emitter.insert('this');
+            emitter.insert(';const '+previous+':number='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+') as number;return '+this.provider+'.as3SetLexicalMember('+receiver+','+found.trait.access+','+previous+'-'+number+'(');
+            emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);
+            emitter.insert('));})())');emitter.skipTo(node.end);return true;
+        }
         if(operation==='set'&&node.children[1].text==='+=') {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
             if(found.trait.kind!=='variable'||found.trait.visibility!=='private'||!ref||ref.kind!=='intrinsic'||['String','int'].indexOf(ref.identity)<0)

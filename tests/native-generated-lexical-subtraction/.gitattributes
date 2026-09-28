@@ -1,0 +1,3 @@
+# Authenticated original oracle bytes.
+evidence/** -text -whitespace
+source/** -text -whitespace

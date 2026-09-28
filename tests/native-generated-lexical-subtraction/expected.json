@@ -1,0 +1,292 @@
+[
+  {
+    "value": [
+      7.5,
+      7.5
+    ],
+    "id": "number-0"
+  },
+  {
+    "value": [
+      -2147483651,
+      2147483645
+    ],
+    "id": "int-0"
+  },
+  {
+    "value": [
+      -3,
+      4294967293
+    ],
+    "id": "uint-0"
+  },
+  {
+    "value": [
+      8,
+      8
+    ],
+    "id": "number-1"
+  },
+  {
+    "value": [
+      -2147483650.5,
+      2147483646
+    ],
+    "id": "int-1"
+  },
+  {
+    "value": [
+      -2.5,
+      4294967294
+    ],
+    "id": "uint-1"
+  },
+  {
+    "value": [
+      9.5,
+      9.5
+    ],
+    "id": "number-2"
+  },
+  {
+    "value": [
+      -2147483649,
+      2147483647
+    ],
+    "id": "int-2"
+  },
+  {
+    "value": [
+      -1,
+      4294967295
+    ],
+    "id": "uint-2"
+  },
+  {
+    "value": [
+      10.5,
+      10.5
+    ],
+    "id": "number-3"
+  },
+  {
+    "value": [
+      -2147483648,
+      -2147483648
+    ],
+    "id": "int-3"
+  },
+  {
+    "value": [
+      0,
+      0
+    ],
+    "id": "uint-3"
+  },
+  {
+    "value": [
+      10.5,
+      10.5
+    ],
+    "id": "number-4"
+  },
+  {
+    "value": [
+      -2147483648,
+      -2147483648
+    ],
+    "id": "int-4"
+  },
+  {
+    "value": [
+      0,
+      0
+    ],
+    "id": "uint-4"
+  },
+  {
+    "value": [
+      null,
+      null
+    ],
+    "id": "number-5"
+  },
+  {
+    "value": [
+      null,
+      0
+    ],
+    "id": "int-5"
+  },
+  {
+    "value": [
+      null,
+      0
+    ],
+    "id": "uint-5"
+  },
+  {
+    "value": [
+      null,
+      null
+    ],
+    "id": "number-6"
+  },
+  {
+    "value": [
+      null,
+      0
+    ],
+    "id": "int-6"
+  },
+  {
+    "value": [
+      null,
+      0
+    ],
+    "id": "uint-6"
+  },
+  {
+    "value": [
+      null,
+      null
+    ],
+    "id": "number-7"
+  },
+  {
+    "value": [
+      null,
+      0
+    ],
+    "id": "int-7"
+  },
+  {
+    "value": [
+      null,
+      0
+    ],
+    "id": "uint-7"
+  },
+  {
+    "value": [
+      null,
+      null
+    ],
+    "id": "number-8"
+  },
+  {
+    "value": [
+      null,
+      0
+    ],
+    "id": "int-8"
+  },
+  {
+    "value": [
+      null,
+      0
+    ],
+    "id": "uint-8"
+  },
+  {
+    "value": [
+      10.5,
+      10.5
+    ],
+    "id": "number-9"
+  },
+  {
+    "value": [
+      -2147483648,
+      -2147483648
+    ],
+    "id": "int-9"
+  },
+  {
+    "value": [
+      0,
+      0
+    ],
+    "id": "uint-9"
+  },
+  {
+    "value": [
+      4,
+      4,
+      "rhs;"
+    ],
+    "id": "order"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009,
+      ""
+    ],
+    "id": "null"
+  },
+  {
+    "value": [
+      "rhs-failure",
+      [
+        10,
+        10,
+        10,
+        "rhs;"
+      ],
+      [
+        7,
+        7,
+        7,
+        ""
+      ]
+    ],
+    "id": "throw"
+  },
+  {
+    "value": [
+      7.5,
+      7.5
+    ],
+    "id": "convert"
+  },
+  {
+    "value": [
+      7.5,
+      10,
+      10,
+      "convert;"
+    ],
+    "id": "convert-state"
+  },
+  {
+    "value": [
+      0
+    ],
+    "id": "wrap-0"
+  },
+  {
+    "value": [
+      0
+    ],
+    "id": "wrap-1"
+  },
+  {
+    "value": [
+      0.25
+    ],
+    "id": "wrap-1.25"
+  },
+  {
+    "value": [
+      0.75
+    ],
+    "id": "wrap--1.25"
+  },
+  {
+    "value": [
+      null
+    ],
+    "id": "wrap-NaN"
+  }
+]
