@@ -6,7 +6,7 @@ import * as Operators from "./syntax/operators";
 
 export {Parser, Scanner, Emitter, KeyWords, Operators};
 export {NativeSourceNamespaceBinding} from './emit/native-source-namespaces';
-export {createNativeGeneratedDeclarationPlan, NativeGeneratedDeclarationInput, NativeGeneratedDeclarationPlan,
+export {createNativeGeneratedDeclarationPlan, NativeGeneratedDeclarationInput, NativeGeneratedDeclarationPlan, NativeGeneratedAuthoredSymbol,
     NativeGeneratedDeclarationBinding, NativeGeneratedInterfaceBinding, NativeGeneratedReference} from './emit/native-generated-declarations';
 export {NativeGeneratedInterfaceContracts,NativeGeneratedInterfaceMember,NativeGeneratedInterfaceImplementation} from './emit/native-generated-interface-contracts';
 export {createNativeDeclarationDomain, NativeDeclarationDomain, NativeDeclarationDomainInput,

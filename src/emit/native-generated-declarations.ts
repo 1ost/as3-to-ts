@@ -8,6 +8,13 @@ import {NativeGeneratedInterfaceContracts,projectNativeGeneratedInterfaceContrac
 import {nativeGeneratedInterfaceBoundary} from './native-generated-interface-boundaries';
 import {NativeSourceNamespaceBinding, planNativeSourceNamespaces} from './native-source-namespaces';
 
+export interface NativeGeneratedAuthoredSymbol {
+    /** Exact source= literal in the maintained Embed metadata. */
+    readonly source: string;
+    readonly linkage: string;
+    /** SWF identity from the authenticated asset conversion input. */
+    readonly sourceSha256: string;
+}
 export interface NativeGeneratedDeclarationInput {
     scope: string;
     providerModule: string;
@@ -31,7 +38,7 @@ export interface NativeGeneratedDeclarationInput {
     scriptGlobalSources?: ReadonlyArray<string>;
     /** Explicit single-Class script units whose failed initializer globals are retained. */
     classScriptSources?: ReadonlyArray<string>;
-    sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean}};
+    sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean; authoredSymbol?: NativeGeneratedAuthoredSymbol}};
     providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher' | 'Sprite' | 'MovieClip'; nativeInterface?: true; nativeVector?: true}};
 }
 export interface NativeGeneratedDeclarationBinding {
@@ -106,6 +113,31 @@ function fields(value: any, allowed: string[]): void {
 }
 function hash(source: string): string {return require('crypto').createHash('sha256').update(source).digest('hex');}
 
+function validateAuthoredSymbol(symbol: NativeGeneratedAuthoredSymbol, metadata: string, owner: string): void {
+    if (!table(symbol)) fail('authored symbol record required: ' + owner);
+    fields(symbol, ['source', 'linkage', 'sourceSha256']);
+    if (typeof symbol.source !== 'string' || !symbol.source.trim()
+        || typeof symbol.linkage !== 'string' || !symbol.linkage.trim()
+        || typeof symbol.sourceSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(symbol.sourceSha256))
+        fail('authored symbol source, linkage and SWF hash required: ' + owner);
+    const envelope = /^\[\s*Embed\s*\(([\s\S]*)\)\s*\]$/.exec(metadata);
+    if (!envelope) fail('unsupported Embed metadata: ' + owner);
+    let rest = envelope[1];
+    const attributes: {[name: string]: string} = Object.create(null);
+    while (rest.trim()) {
+        // Metadata is retained as text by the AS3 parser. Admit literal source
+        // and symbol attributes only; never evaluate expressions or escapes.
+        const attribute = /^\s*(source|symbol)\s*=\s*(?:"([^"\\\r\n]*)"|'([^'\\\r\n]*)')\s*(,|$)/.exec(rest);
+        if (!attribute || Object.prototype.hasOwnProperty.call(attributes, attribute[1]))
+            fail('unsupported or duplicate Embed attribute: ' + owner);
+        attributes[attribute[1]] = attribute[2] === undefined ? attribute[3] : attribute[2];
+        rest = rest.slice(attribute[0].length);
+        if (attribute[4] === ',' && !rest.trim()) fail('trailing Embed attribute separator: ' + owner);
+    }
+    if (Object.keys(attributes).length !== 2 || attributes.source !== symbol.source || attributes.symbol !== symbol.linkage)
+        fail('authored symbol differs from maintained Embed metadata: ' + owner);
+}
+
 /**
  * Plan declaration identities without loading their implementations. This does
  * not approve constructor/static initialization, reflection or trait emission.
@@ -168,7 +200,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         const record = data.sources[name];
         if (!table(record) || typeof record.source !== 'string' || hash(record.source) !== record.sourceSha256)
             fail('exact source bytes/hash required: ' + name);
-        fields(record, ['source', 'sourceSha256', 'referenceOnly']);
+        fields(record, ['source', 'sourceSha256', 'referenceOnly', 'authoredSymbol']);
         if (record.referenceOnly !== undefined && typeof record.referenceOnly !== 'boolean') fail('referenceOnly must be boolean');
         let unit: NativeSourceUnit;
         try {unit = readNativeSourceUnit(name, record.source, record.sourceSha256);}
@@ -177,10 +209,16 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         // An embedded display Class needs its authored allocation/child binding
         // before source fields and super entry. Plain native-base allocation
         // cannot silently replace that symbol with an empty MovieClip.
-        if (!record.referenceOnly && ast.declarations.some(declaration => {
+        const embedded = ast.declarations.map(declaration => {
             const metadata = declaration.node.findChild(K.META_LIST);
-            return metadata && metadata.children.some(item => /^\[\s*Embed\b/.test(item.text || ''));
-        })) fail('Embed Class requires authenticated authored symbol construction: ' + name);
+            return {node: declaration.node, items: metadata ? metadata.children.filter(item => /^\[\s*Embed\b/.test(item.text || '')) : []};
+        }).filter(declaration => declaration.items.length);
+        if (record.authoredSymbol !== undefined) {
+            if (record.referenceOnly || embedded.length !== 1 || embedded[0].node !== cls || embedded[0].items.length !== 1 || cls.kind !== K.CLASS)
+                fail('authored symbol requires one implemented public Embed Class: ' + name);
+            validateAuthoredSymbol(record.authoredSymbol, embedded[0].items[0].text, name);
+        } else if (!record.referenceOnly && embedded.length)
+            fail('Embed Class requires authenticated authored symbol construction: ' + name);
         // Private declarations retain this source unit. Implementation admission
         // remains gated separately from header/type planning.
         if (record.referenceOnly && unit.declarations.length !== 1) fail('reference-only source cannot supply private Class implementations');
@@ -254,6 +292,19 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 ...(data.scriptGlobalProviderModule&&(!data.scriptGlobalSources||data.scriptGlobalSources.indexOf(owner)>=0) ? {scriptGlobalExport:'publishScript'+bindings.length} : {}),
                 interfaces: Object.freeze(declaredInterfaces)}));
         }
+    });
+    const authoredNames = sourceNames.filter(name => data.sources[name].authoredSymbol !== undefined);
+    authoredNames.forEach(owner => {
+        let current = owner;
+        const seen = new Set<string>();
+        while (classes.has(current)) {
+            if (seen.has(current)) fail('cyclic authored source ancestry: ' + owner);
+            seen.add(current);
+            const binding = bindings.find(value => value.qname === current);
+            current = binding && binding.base;
+        }
+        if (current !== 'flash.display.MovieClip' || !providers[current] || providers[current].nativeBase !== 'MovieClip')
+            fail('authored symbol requires the generated MovieClip construction provider: ' + owner);
     });
     const patternLocals: NativePatternLocal[] = [];
     if(data.patternProviderModule) names.forEach(owner => {
@@ -345,6 +396,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     });
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
+    if (authoredNames.length) lines.push('import {requireGeneratedFlashMovieClipSymbol as __requireAuthoredSymbol} from '
+        + JSON.stringify(providers['flash.display.MovieClip'].module) + ';');
     if (references.some(ref => ref.kind === 'tween-handle-local')) lines.push(
         'import {coerceFlashTweenMaxHandle as __tweenHandleCoerce} from ' + JSON.stringify(data.tweenHandleProviderModule) + ';',
         'export const coerceTweenMaxHandle=__tweenHandleCoerce;');
@@ -457,7 +510,16 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         lines.push('const ' + authority + '='+(data.inheritScriptClasses?selection+'?null:':'')+'declareAS3ReferenceType<unknown>(' + JSON.stringify(name)
             + (parent ? ',' + parent.tokenExport : nativeParent ? ',' + nativeParent.declarationExport : '') + ');');
         lines.push('export const ' + binding.tokenExport + '='+(data.inheritScriptClasses?selection+'?'+selection+'.declaration:':'') + authority + '.type;');
-        if(binding.interfaces.length) {
+        const authoredSymbol = data.sources[binding.qname].authoredSymbol;
+        if (authoredSymbol) {
+            const tokens = binding.interfaces.map(name => interfaces.find(value => value.qname === name).tokenExport);
+            lines.push('export const ' + binding.publishExport + '=(constructor:Function)=>{'
+                + (data.inheritScriptClasses ? 'if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");' : '')
+                + 'const generation=' + authority + '.publishGeneration(constructor);'
+                + '__requireAuthoredSymbol(constructor,' + JSON.stringify({sourceSha256: authoredSymbol.sourceSha256, linkage: authoredSymbol.linkage}) + ');'
+                + (tokens.length ? 'registerAS3Class(constructor,['+tokens.join(',')+']);' : '')
+                + 'return generation;};');
+        } else if(binding.interfaces.length) {
             const tokens=binding.interfaces.map(name=>interfaces.find(value=>value.qname===name).tokenExport);
             lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{'+(data.inheritScriptClasses?'if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");':'')+'const generation='+authority+'.publishGeneration(constructor);'
                 +'registerAS3Class(constructor,['+tokens.join(',')+']);return generation;};');
