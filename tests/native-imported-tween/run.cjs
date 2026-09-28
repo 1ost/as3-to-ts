@@ -91,7 +91,7 @@ for (const args of ['', 'target, true', 'target, false']) {
     assert.throws(() => generate(querySource.replace('getTweensOf(target)', `getTweensOf(${args})`), tweenOptions),
         /AS3_TWEEN_UNSUPPORTED: getTweensOf requires exactly one target argument/);
 }
-for (const expression of ['TweenMax.getTweensOf', 'new TweenMax(target)', 'new TweenMax.getTweensOf(target)', 'TweenMax.isTweening(target)']) {
+for (const expression of ['TweenMax.getTweensOf', 'new TweenMax(target)', 'new TweenMax.getTweensOf(target)']) {
     assert.throws(() => generate(querySource.replace('TweenMax.getTweensOf(target)', expression), tweenOptions), /AS3_TWEEN_UNSUPPORTED/);
 }
 for (const source of [querySource.replace('import com.greensock.TweenMax;', ''),
@@ -101,3 +101,19 @@ for (const source of [querySource.replace('import com.greensock.TweenMax;', ''),
 assert.doesNotMatch(generate(querySource, {...tweenOptions, nativeTweenModule: undefined}), /current\(\)\.getTweensOf/);
 assert.throws(() => generate(querySource.replace(/TweenMax/g, 'TweenLite'), tweenOptions), /AS3_TWEEN_UNSUPPORTED/);
 console.log('Native imported tween query routing and guards passed');
+
+for (const method of ['killTweensOf', 'isTweening']) {
+    const source=querySource.replaceAll('getTweensOf',method);
+    const output=generate(source,tweenOptions);
+    assert.ok(output.includes('.current().'+method+'(target)'));
+    assert.ok(output.includes('return TweenMax.'+method+'(target)'), 'shadow retains ownership');
+    for(const args of ['', 'target, true', 'target, false', 'target, false, {}'])
+        assert.throws(()=>generate(source.replace(method+'(target)',method+'('+args+')'),tweenOptions),/requires exactly one target argument/);
+    for(const expression of ['TweenMax.'+method, 'new TweenMax.'+method+'(target)'])
+        assert.throws(()=>generate(source.replace('TweenMax.'+method+'(target)',expression),tweenOptions),/AS3_TWEEN_UNSUPPORTED/);
+    for(const changed of [source.replace('import com.greensock.TweenMax;', ''),source.replace('com.greensock.TweenMax','other.TweenMax')])
+        assert.ok(!generate(changed,tweenOptions).includes('.current().'+method+'('));
+    assert.ok(!generate(source,{...tweenOptions,nativeTweenModule:undefined}).includes('.current().'+method+'('));
+    assert.throws(()=>generate(source.replaceAll('TweenMax','TweenLite'),tweenOptions),/AS3_TWEEN_UNSUPPORTED/);
+}
+console.log('Native imported tween cancellation/activity routing and guards passed');

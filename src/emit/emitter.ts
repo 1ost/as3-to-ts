@@ -4454,7 +4454,8 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 	if (!receiver || receiver.kind !== NodeKind.IDENTIFIER || (receiver.text !== 'TweenMax' && receiver.text !== 'TweenLite')
 		|| !name || name.kind !== NodeKind.LITERAL) return false;
 	const query = receiver.text === 'TweenMax' && name.text === 'getTweensOf';
-	if (name.text !== 'to' && !query) return false;
+	const control = receiver.text === 'TweenMax' && (name.text === 'killTweensOf' || name.text === 'isTweening');
+	if (name.text !== 'to' && !query && !control) return false;
 	const binding = emitter.findDefInScope(receiver.text);
 	const sourcePlan=emitter.tweenPlans.get(node);
 	if(sourcePlan&&(!binding||binding.bound||Object.prototype.hasOwnProperty.call(binding,'as3Type')
@@ -4465,11 +4466,11 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 	// Query authority comes from the exact legacy import. Unlike the older to()
 	// migration, an unbound namesake is not sufficient. The optional legacy
 	// onlyActive overload has no corresponding runtime contract.
-	if (query && !binding) return false;
-	if (query && emitter.isNew)
+	if ((query || control) && !binding) return false;
+	if ((query || control) && emitter.isNew)
 		throw new Error('AS3_TWEEN_UNSUPPORTED: tween query construction is not qualified');
-	if (query && args.children.length !== 1)
-		throw new Error('AS3_TWEEN_UNSUPPORTED: getTweensOf requires exactly one target argument');
+	if ((query || control) && args.children.length !== 1)
+		throw new Error('AS3_TWEEN_UNSUPPORTED: ' + name.text + ' requires exactly one target argument');
 	if(name.text==='to'&&args.children.length===3&&tweenOptionNames(args.children[2]).indexOf('bezier')>=0&&!sourcePlan)
 		throw new Error('AS3_TWEEN_UNSUPPORTED: Bezier call requires authenticated source plan');
 	let helper = '__as3_FlashTweenRuntime';
