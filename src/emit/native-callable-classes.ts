@@ -29,7 +29,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false, private spriteOwnerReferences=false, private loaderReferences=false, private xmlReferences=false, private pointReference=false, private textFieldReference=false) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false, private spriteOwnerReferences=false, private loaderReferences=false, private xmlReferences=false, private pointReference=false, private textFieldReference=false, private containerReference=false) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -677,6 +677,7 @@ export class NativeCallableClasses {
                         &&!(this.loaderReferences&&nativeLoaderReferenceNames.indexOf(reference.identity)>=0)
                         &&!(this.spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(reference.identity)>=0)
                         &&!(this.interactiveReference&&reference.identity==='flash.display.InteractiveObject')
+                        &&!(this.containerReference&&reference.identity==='flash.display.DisplayObjectContainer')
                         &&!this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&binding.nativeInterface)
                         &&!(reference.identity==='flash.media.ID3Info'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity))
                         &&!(this.pointReference&&reference.identity==='flash.geom.Point')

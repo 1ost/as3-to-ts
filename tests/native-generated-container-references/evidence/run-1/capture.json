@@ -1,0 +1,458 @@
+{
+  "state": {
+    "ready": true,
+    "observations": [
+      {
+        "value": [
+          true,
+          true,
+          false,
+          2,
+          true,
+          false
+        ],
+        "id": "identity-0"
+      },
+      {
+        "value": [
+          true,
+          false
+        ],
+        "id": "coerce-0"
+      },
+      {
+        "value": [
+          true,
+          false,
+          1
+        ],
+        "id": "explicit-0"
+      },
+      {
+        "value": [
+          true,
+          false,
+          1
+        ],
+        "id": "return-0"
+      },
+      {
+        "value": [
+          true,
+          true,
+          false,
+          2,
+          true,
+          false
+        ],
+        "id": "identity-1"
+      },
+      {
+        "value": [
+          true,
+          false
+        ],
+        "id": "coerce-1"
+      },
+      {
+        "value": [
+          true,
+          false,
+          1
+        ],
+        "id": "explicit-1"
+      },
+      {
+        "value": [
+          true,
+          false,
+          1
+        ],
+        "id": "return-1"
+      },
+      {
+        "value": [
+          true,
+          true,
+          false,
+          2,
+          true,
+          false
+        ],
+        "id": "identity-2"
+      },
+      {
+        "value": [
+          true,
+          false
+        ],
+        "id": "coerce-2"
+      },
+      {
+        "value": [
+          true,
+          false,
+          1
+        ],
+        "id": "explicit-2"
+      },
+      {
+        "value": [
+          true,
+          false,
+          1
+        ],
+        "id": "return-2"
+      },
+      {
+        "value": [
+          false,
+          false,
+          true,
+          2,
+          false,
+          true
+        ],
+        "id": "identity-3"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true
+        ],
+        "id": "coerce-3"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "explicit-3"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "return-3"
+      },
+      {
+        "value": [
+          false,
+          false,
+          true,
+          2,
+          false,
+          true
+        ],
+        "id": "identity-4"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true
+        ],
+        "id": "coerce-4"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "explicit-4"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "return-4"
+      },
+      {
+        "value": [
+          false,
+          false,
+          true,
+          2,
+          false,
+          true
+        ],
+        "id": "identity-5"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true
+        ],
+        "id": "coerce-5"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "explicit-5"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "return-5"
+      },
+      {
+        "value": [
+          false,
+          true,
+          true,
+          2,
+          true,
+          true
+        ],
+        "id": "identity-6"
+      },
+      {
+        "value": [
+          true,
+          true
+        ],
+        "id": "coerce-6"
+      },
+      {
+        "value": [
+          true,
+          true,
+          1
+        ],
+        "id": "explicit-6"
+      },
+      {
+        "value": [
+          true,
+          true,
+          1
+        ],
+        "id": "return-6"
+      },
+      {
+        "value": [
+          false,
+          false,
+          true,
+          2,
+          false,
+          true
+        ],
+        "id": "identity-7"
+      },
+      {
+        "value": [
+          false,
+          true
+        ],
+        "id": "coerce-7"
+      },
+      {
+        "value": [
+          false,
+          true,
+          1
+        ],
+        "id": "explicit-7"
+      },
+      {
+        "value": [
+          false,
+          true,
+          1
+        ],
+        "id": "return-7"
+      },
+      {
+        "value": [
+          false,
+          false,
+          true,
+          2,
+          false,
+          true
+        ],
+        "id": "identity-8"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true
+        ],
+        "id": "coerce-8"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "explicit-8"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "return-8"
+      },
+      {
+        "value": [
+          false,
+          false,
+          true,
+          2,
+          false,
+          true
+        ],
+        "id": "identity-9"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true
+        ],
+        "id": "coerce-9"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "explicit-9"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "return-9"
+      },
+      {
+        "value": [
+          false,
+          false,
+          true,
+          2,
+          false,
+          true
+        ],
+        "id": "identity-10"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true
+        ],
+        "id": "coerce-10"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "explicit-10"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "return-10"
+      },
+      {
+        "value": [
+          false,
+          false,
+          true,
+          2,
+          false,
+          true
+        ],
+        "id": "identity-11"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true
+        ],
+        "id": "coerce-11"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "explicit-11"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034,
+          true,
+          1
+        ],
+        "id": "return-11"
+      }
+    ],
+    "failure": ""
+  },
+  "runtime": {
+    "os": "Windows 10 Server",
+    "playerType": "PlugIn",
+    "screenDPI": 72,
+    "version": "WIN 26,0,0,131"
+  },
+  "browser": {
+    "devicePixelRatio": 1,
+    "innerWidth": 320,
+    "innerHeight": 240,
+    "objectWidth": 320,
+    "objectHeight": 240
+  },
+  "frame": {
+    "pngWidth": 320,
+    "pngHeight": 240,
+    "nativeImageSize": {
+      "width": 320,
+      "height": 240
+    }
+  }
+}
