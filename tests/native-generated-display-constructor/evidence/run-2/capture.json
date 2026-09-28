@@ -1,0 +1,126 @@
+{
+  "runtime": {
+    "os": "Windows 10 Server",
+    "playerType": "PlugIn",
+    "screenDPI": 72,
+    "version": "WIN 26,0,0,131"
+  },
+  "state": {
+    "ready": true,
+    "observations": [
+      {
+        "value": [
+          true,
+          false,
+          "default"
+        ],
+        "id": "value-0"
+      },
+      {
+        "value": [
+          true,
+          false,
+          "default"
+        ],
+        "id": "value-1"
+      },
+      {
+        "value": [
+          true,
+          false,
+          "default"
+        ],
+        "id": "value-2"
+      },
+      {
+        "value": [
+          true,
+          false,
+          "default"
+        ],
+        "id": "value-3"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034
+        ],
+        "id": "value-4"
+      },
+      {
+        "value": [
+          true,
+          true,
+          "default"
+        ],
+        "id": "value-5"
+      },
+      {
+        "value": [
+          false,
+          true,
+          "default"
+        ],
+        "id": "value-6"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034
+        ],
+        "id": "value-7"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034
+        ],
+        "id": "value-8"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034
+        ],
+        "id": "value-9"
+      },
+      {
+        "value": [
+          "TypeError",
+          1034
+        ],
+        "id": "value-10"
+      },
+      {
+        "value": [
+          true,
+          null
+        ],
+        "id": "undefined-label"
+      },
+      {
+        "value": [
+          "ArgumentError",
+          1063
+        ],
+        "id": "missing"
+      }
+    ],
+    "failure": ""
+  },
+  "browser": {
+    "devicePixelRatio": 1,
+    "innerWidth": 320,
+    "innerHeight": 240,
+    "objectWidth": 320,
+    "objectHeight": 240
+  },
+  "frame": {
+    "pngWidth": 320,
+    "pngHeight": 240,
+    "nativeImageSize": {
+      "width": 320,
+      "height": 240
+    }
+  }
+}

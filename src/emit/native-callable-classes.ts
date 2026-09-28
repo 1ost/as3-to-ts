@@ -169,6 +169,7 @@ export class NativeCallableClasses {
                         :sourceReference.kind==='interface'&&nativeGeneratedInterfaceBindings(generated.options.plan).find(binding=>binding.qname===sourceReference.identity));
                     const nativeReference=sourceReference&&sourceReference.kind==='native'
                         &&(accessibilityReference&&sourceReference.identity==='flash.accessibility.AccessibilityImplementation'
+                            ||displayReference&&sourceReference.identity==='flash.display.DisplayObject'
                             ||spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(sourceReference.identity)>=0
                             ||loaderReferences&&nativeLoaderReferenceNames.indexOf(sourceReference.identity)>=0
                             ||spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(sourceReference.identity)>=0)
