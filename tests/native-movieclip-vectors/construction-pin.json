@@ -1,0 +1,12 @@
+{
+  "reports": {
+    "construction-vectors.json.gz": "4ecb9b31c4d7564200a7b614f9127aae2ae7a5dba169fe30112b3a24d6578ec7",
+    "construction-subclasses.json.gz": "6f42835696178abc2250d557213997859dd12f4cee856f082523aa6d9b55967e"
+  },
+  "runners": {
+    "tests/native-movieclip-vectors/run.cjs": "1b1f0988f3e0c61386663785a5cb6355e016b29e0db6def4944da4ffff26904a",
+    "tests/native-movieclip-vectors/runtime-driver.js": "136a71e7327b59921ed9e55ca6fbc120c9a70f84e5c78cbe36ef5626da08d7e6",
+    "tests/native-generated-movieclip/execute.cjs": "fef1e3e56fc4c5c02b2b68b3d0cecf74b080d8d35f07ef30ebbdc57f8a86aa38",
+    "tests/native-generated-movieclip/observer.ts": "1dcd075c6779ccb9a98395a6fd82444c5e98c13f574647730768376baee1b503"
+  }
+}

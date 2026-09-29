@@ -1,6 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
+const vectors=process.argv.includes('--vectors');
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const evidence=path.join(engine,'tests/nativeFlashOracle/movieclip-source-surface');
 const expected=require(path.join(evidence,'verify.cjs')).filter(r=>r.id.startsWith('subclass-'));
@@ -18,7 +19,7 @@ async function main(){
   const modulePath=file=>{const r=path.relative(dir,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
   const provider=n=>modulePath(path.join(engine,'src/layaAir/flash/utils',n+'.ts'));
   const nativeProviders={
-   'flash.display.MovieClip':{module:provider('AS3GeneratedMovieClipConstruction'),exportName:'MovieClip',nativeBase:'MovieClip'},
+   'flash.display.MovieClip':{module:provider('AS3GeneratedMovieClipConstruction'),exportName:'MovieClip',nativeBase:'MovieClip',...(vectors?{nativeVector:true}:{})},
    'flash.display.Sprite':{module:modulePath(path.join(engine,'src/layaAir/flash/display/Sprite.ts')),exportName:'Sprite'},
    'flash.display.Scene':{module:provider('AS3CanonicalSceneProperties'),exportName:'Scene'},
    'flash.display.DisplayObject':{module:provider('AS3CanonicalDisplayReference'),exportName:'DisplayObject'},
@@ -82,7 +83,7 @@ async function main(){
  }}finally{await browser.close();}
  for(const item of compilerInputs)assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  for(const result of results)for(const item of result.inputs)assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
- fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,sources,compilerInputs,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),scope:'Complete unchanged code-created MovieClip subclass source; authored symbols remain separate.'},null,2));
+ fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({vectors,results,sources,compilerInputs,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),scope:'Complete unchanged code-created MovieClip subclass source; authored symbols remain separate.'},null,2));
  console.log(JSON.stringify({out,status:'passed',targets:2,realms:1}));
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
