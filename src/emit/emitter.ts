@@ -3687,7 +3687,50 @@ function emitSourceDefinitionLookup(emitter:Emitter,node:Node):boolean {
     emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 
+/** A generated Flash display object's parent has the source container API,
+ * not Laya Node's implementation signature. Keep both property lookup and
+ * method invocation in source dispatch, without widening the generated type. */
+function emitGeneratedParentRemoval(emitter:Emitter,node:Node):boolean {
+    if(!emitter.generated)return false;
+    const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
+    if(!callee||callee.kind!==NodeKind.DOT||callee.children[1].text!=='removeChild'||!args)return false;
+    const receiver=unwrapEncapsulatedExpression(callee.children[0]);
+    let root:Node=null,projection:NativeGeneratedClassTraits=null;
+    if(receiver.kind===NodeKind.IDENTIFIER&&receiver.text==='parent') {
+        if(hasFunctionLocal(emitter,'parent')||emitter.generated.lexical.traits.some(t=>t.name==='parent'))return false;
+        let member=node;while(member.parent&&member.parent.kind!==NodeKind.CONTENT)member=member.parent;
+        const mods=member.findChild(NodeKind.MOD_LIST);
+        if(mods&&mods.children.some(m=>m.text==='static'))return false;
+        projection=emitter.generated.projection;
+    }else if(receiver.kind===NodeKind.DOT&&receiver.children[1].text==='parent') {
+        root=unwrapEncapsulatedExpression(receiver.children[0]);
+        if(root.kind===NodeKind.IDENTIFIER&&root.text==='this'
+            &&emitter.generated.lexical.traits.some(t=>t.name==='parent'))return false;
+        projection=generatedReceiver(emitter,root);
+    }
+    const parent=projection&&projection.instanceTraits.find(t=>t.name==='parent');
+    if(!parent||parent.kind!=='accessor'||typeof parent.type!=='object'
+        ||parent.type.name!=='flash.display::DisplayObjectContainer')return false;
+    const plan=emitter.generated.options.plan;
+    const container=plan.nativeBindings.find(b=>b.qname==='flash.display.DisplayObjectContainer');
+    if(!container||parent.type.referenceExport!==container.referenceExport
+        ||!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==plan)
+        throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: parent removal requires authenticated container reference');
+    if(emitter.isNew)throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: parent method construction');
+    const get=propertyHelper(emitter,'as3GetProperty',emitter.generated.propertyModule);
+    const call=propertyHelper(emitter,'as3CallProperty',emitter.generated.propertyModule);
+    // Read parent once before arguments. Method dispatch (including null and
+    // ownership failures) follows all argument effects, matching Flash.
+    emitter.catchup(node.start);
+    emitter.insert('(<any>((target:any,values:any[])=>'+call+'(target,"removeChild",()=>values))('+get+'(');
+    if(root){emitter.skipTo(root.start);visitNode(emitter,root);emitter.catchup(root.end);}else emitter.insert('this');
+    emitter.insert(',"parent"),[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 function emitCall(emitter:Emitter, node:Node):void {
+    if(emitGeneratedParentRemoval(emitter,node))return;
     if(emitSourceDefinitionLookup(emitter,node))return;
     if(emitLocalFunctionIntrinsic(emitter,node))return;
     const pattern=emitter.generated&&emitter.generated.options.plan.patternLocals.find(p=>p.owner===emitter.generated.lexical.owner&&p.calls.indexOf(node.start)>=0);

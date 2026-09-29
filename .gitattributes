@@ -61,3 +61,4 @@ tests/native-generated-class-locals/evidence/** -text -whitespace
 # Stable bytes for qualified Sprite position override implementation.
 src/emit/native-callable-classes.ts text eol=lf
 src/emit/native-generated-traits.ts text eol=lf
+src/emit/emitter.ts text eol=lf

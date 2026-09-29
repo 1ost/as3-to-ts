@@ -1,0 +1,13 @@
+{
+  "fullGame": false,
+  "emitter": "d3ba034e30fbaeed33aaae132b574b2f81578c8ceea545cfed00a328341aaa73",
+  "runner": {
+    "build.mjs": "f1eb31362752ab138729eef171966924816c1b5b8cf015ea256c7ff8a2ac0108",
+    "run.mjs": "0e8695f68448a349f397973088d15c996017cdf36f5164af11dc1ad234336b39",
+    "observer.ts": "9597c3e297494d6430a8e323e214de3de05b89ca66e679be25557f8a09183f74"
+  },
+  "files": {
+    "ES5.json.gz": "dab937081e499acb9dfd7a94baeeb09f308bd8c0f526a357bd31326dce84ffe9",
+    "ES2015.json.gz": "3dcedbd9c6f8504f60b8b1d166629fec5c592aa33a6e9a01b3b0f159a593444a"
+  }
+}

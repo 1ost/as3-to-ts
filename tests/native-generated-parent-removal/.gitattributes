@@ -1,0 +1,2 @@
+*.mjs -text -whitespace
+*.ts -text -whitespace
