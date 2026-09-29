@@ -67,15 +67,18 @@ async function main() {
             reports.push({group,target,moduleName,nodeMatched:true,chromeMatched:true,rows:actual.length,strictDiagnostics,bundleSHA256:hash(script)});
         }
         }
-        const guards=require('./guards.cjs').run(compiler,evidence).concat(require('./binding-guards.cjs').run(compiler,verify('binding'))),held=[];
+        const guards=require('./guards.cjs').run(compiler,evidence).concat(require('./binding-guards.cjs').run(compiler,verify('binding'))),held=[],arrayJournal=[];
         for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]) {
             const native=require('./fixture.cjs').fixture(compiler,target,arrayHeld.sources,commonSource,authenticateMetadata(arrayHeld,arrayHeld.metadata));
-            assert.throws(()=>native.get('Subject'),/Unsupported source property representation: missing or invalid declared type/);
-            held.push({target,scope:'Array-typed journal field',receiptSHA256:arrayHeld.receiptSHA256,
-                reason:'Typed reference property trait lowering is required before this original class can initialize'});
+            Object.assign(native.context,{readTestClass:native.get,testCommon:native.common});
+            const expression='('+require('./driver.cjs').toString()+')(readTestClass,testCommon)';
+            const actual=JSON.parse(vm.runInContext('JSON.stringify('+expression+')',native.context));
+            assert.deepStrictEqual(actual,arrayHeld.expected.rows);
+            arrayJournal.push({target,scope:'Original Array-typed journal field',receiptSHA256:arrayHeld.receiptSHA256,
+                rows:actual.length,nodeMatched:true});
         }
         const report={scope:'Original source typeof, exact binding and public readonly getters; unresolved identifiers reject at compile time',engineCommit,receiptSHA256:evidence.receiptSHA256,bindingReceiptSHA256:verify('binding').receiptSHA256,
-            compilerTypeScript:ts.version,strictTypeScript:modern.version,strictNullChecks:false,skipLibCheck:true,declarationAdaptation:false,browser:browser.version(),reports,guards,held,
+            compilerTypeScript:ts.version,strictTypeScript:modern.version,strictNullChecks:false,skipLibCheck:true,declarationAdaptation:false,browser:browser.version(),reports,guards,held,arrayJournal,
             compilerInputs:['src/emit/emitter.ts','src/emit/native-callable-classes.ts','src/emit/native-class-metadata.ts','src/emit/native-source-operations.ts','src/emit/native-typeof.ts','lib/emit/emitter.js','lib/emit/native-callable-classes.js','lib/emit/native-class-metadata.js','lib/emit/native-source-operations.js','lib/emit/native-typeof.js'].map(file=>({path:file,sha256:hash(fs.readFileSync(path.join(compiler,file)))})),
             providerInputs:provider.getSourceFiles().filter(file=>file.fileName.startsWith(providerRoot)).map(file=>({path:path.relative(providerRoot,file.fileName).replace(/\\/g,'/'),sha256:hash(fs.readFileSync(file.fileName))}))};
         fs.writeFileSync(path.join(run,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({evidence:run,rows:62,strictSurfaces:8,guards:guards.length,engineCommit}));

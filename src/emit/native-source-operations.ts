@@ -1,7 +1,7 @@
 import {NativeLexicalMembers} from './native-lexical-members';
 /** Native source expression lowering to common provider APIs; no execution engine. */
 export function lowerNativeSourceOperations(source: string, provider: string, compilerHelpers: Set<string>, unique: (name: string) => string, lexical?: NativeLexicalMembers): string {
-    const ts = require('typescript'), S = ts.SyntaxKind;
+    const ts = require('typescript-4-9'), S = ts.SyntaxKind;
     const file = ts.createSourceFile('SourceBody.ts', source, ts.ScriptTarget.Latest, true);
     const fail = (reason: string): never => {throw new Error('AS3_SOURCE_OPERATION_UNSUPPORTED: ' + reason);};
     if (file.parseDiagnostics.length) fail('source body syntax');

@@ -106,7 +106,7 @@ export function nativeSourceUnitAst(unit: NativeSourceUnit):
     const copies = new Map<Node, Node>();
     const clone = (node: Node, parent?: Node): Node => {
         const result = Object.assign(new Node(), {kind: node.kind, text: node.text, start: node.start, end: node.end,
-            qualifiedName: node.qualifiedName, parent});
+            qualifiedName: node.qualifiedName, importKeywordStart: node.importKeywordStart, parent});
         copies.set(node, result); result.children = node.children.map(child => clone(child, result)); return result;
     };
     const root = clone(context.root);

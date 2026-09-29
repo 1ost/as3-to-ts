@@ -46,7 +46,7 @@ async function main(){
    fs.writeFileSync(path.join(dir,cohort+'-factory.js'),artifact.moduleSource);
    const declaration=path.join(dir,cohort+'-factory.d.ts');fs.writeFileSync(declaration,artifact.declarationSource);files.push(declaration);
    files.push(...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f)));
-   const program=ts.createProgram(files,{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,resolveJsonModule:true,esModuleInterop:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
+   const program=ts.createProgram(files,{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,types:[],resolveJsonModule:true,esModuleInterop:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
    const diagnostics=ts.getPreEmitDiagnostics(program).map(d=>({file:d.file?.fileName,code:d.code,text:ts.flattenDiagnosticMessageText(d.messageText,'\n')}));
    fs.writeFileSync(path.join(dir,cohort+'-types.json'),JSON.stringify(diagnostics,null,2));assert.deepEqual(diagnostics,[]);
    typechecks.push({cohort,diagnostics,inputs:program.getSourceFiles().map(f=>({file:f.fileName,sha256:hash(fs.readFileSync(f.fileName))}))});
@@ -64,8 +64,12 @@ async function main(){
   await esbuild.build({entryPoints:[nodeEntry],outfile:path.join(dir,'node.cjs'),bundle:true,format:'cjs',platform:'node',target:'es2020'});
   const node=await require(path.join(dir,'node.cjs')).completion;assert.deepEqual(node,web);
   const factory=path.join(dir,'subject/subject-factory.js'),original=fs.readFileSync(factory,'utf8');
-  const mutation=/exports\.coerceTweenMaxHandle = [^;]+;/g;assert.equal([...original.matchAll(mutation)].length,1);
-  const changed=original.replace(mutation,'exports.coerceTweenMaxHandle = function(value) { return value; };');
+  const assignments=[...original.matchAll(/exports\.coerceTweenMaxHandle = ([^;]+);/g)]
+    .filter(match=>match[1]!=='void 0');
+  assert.equal(assignments.length,1);
+  assert.match(assignments[0][1],/coerceFlashTweenMaxHandle/);
+  const changed=original.replace(assignments[0][0],
+    'exports.coerceTweenMaxHandle = function(value) { return value; };');
   fs.writeFileSync(factory,changed);
   try {
    await esbuild.build({entryPoints:[nodeEntry],outfile:path.join(dir,'mutated.cjs'),bundle:true,format:'cjs',platform:'node',target:'es2020'});

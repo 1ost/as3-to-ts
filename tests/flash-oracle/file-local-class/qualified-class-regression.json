@@ -1,0 +1,35 @@
+{
+  "schema": "as3-file-local-runtime-regression@1",
+  "status": "passed",
+  "scope": "Existing public-class reflection through actual transpiler and Laya Chrome WebGL; private class original-source adaptation is not yet admitted.",
+  "nativeObservationCount": 75,
+  "semanticDifferences": [],
+  "traceDifferences": [],
+  "differingPixels": 0,
+  "suiteSha256": "9adbe6cb964cf51f15dd81aa7784110882947d83596966e66a2aaecca8503a42",
+  "comparisonSha256": "e0161baef89a974ec22a8028c1ad4d5f1e847089747a7767c0e90a6ddd06b6be",
+  "nativeReceiptSha256": "9d85456b8a528390b1c591258cf7db60fc594a41825e7669b7ffffa4a7215de8",
+  "nativeCaptureSha256": "7d1404965e6e9eb4335d518e66ec92b0960d3e8957bc3e5c5215654f926b7d80",
+  "runtimeSourceHashes": {
+    "internal/AS3FileLocalIdentity.ts": "9adbd4a9ab454a7d8351982d6da643d6510d2486658305eb0530170651232abb",
+    "internal/AS3TypeRegistry.ts": "0243d38348cd76a2b5a930840135d50d983366c5a0300340c1adfaa2c454d088",
+    "AS3Type.ts": "09d0426f69251fabab38e2f070628effd136a640f12fcaa4fdecb4f8f597aff4",
+    "AS3ObjectDispatch.ts": "5b14d4f13b9e23a4855a21c1139e7fa6f4eae43380a0dc5f8e20057ad60a4895"
+  },
+  "compilerHashes": {
+    "src/hardened/emitter.ts": "008826cef264fa1da090ead93cf996448f46ab6b0a76c72e95c8d70eff6dd6ab",
+    "src/hardened/type-authority.ts": "b255f720f41dcc462e0190bdbaf0189f9afaa6cd9a8d03a69272f8507f112545",
+    "src/hardened-cli/cli.ts": "4039806bb625ef780bec6c6ca9969560804720c8bb378229f00eb9bdc33d31ae",
+    "lib/command.js": "3c1e024d0bdd6624af949cb86b201383aae1185ca3d06fa25c92368063e207f2"
+  },
+  "generatedCandidateHashes": {
+    "__as3_runtime/application/QualifiedClassProbe.ts": "6032fadc262ffe62a239179b7f7461f8a8a1e54d0efd7810c354de81e9fe0ed6",
+    "__as3_runtime/AS3Authority.generated.js": "2f2e73abb2994198382afab6b03c19f70a1cbcda72f977c2c0d81f0c4ae4ca69",
+    "__as3_runtime/ApplicationEntry.generated.js": "0e7ecd39ed6ae4e85c162f382b6e8a3cf3aaf11be7027336c532ea449276915c"
+  },
+  "tests": {
+    "runtime": 34,
+    "declarationAndEmitter": 18,
+    "parserNormalizerNodes": 562
+  }
+}

@@ -1,7 +1,7 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const api=require('../../lib'),accessor=require('../../lib/emit/native-generated-declarations');
 const engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
-const ts=require('typescript'),modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
+const modern=require(path.join(engine,'node_modules/typescript')),ts=modern,esbuild=require(path.join(engine,'node_modules/esbuild'));
 const evidence=path.join(engine,'tests/nativeFlashOracle/file-local-interfaces'),expected=require(path.join(evidence,'verify.cjs'));
 const root=path.resolve('.cache/native-generated-private-interfaces');fs.mkdirSync(root,{recursive:true});const out=fs.mkdtempSync(path.join(root,'run-'));
 const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
@@ -51,7 +51,7 @@ reject(()=>api.createNativeGeneratedDeclarationPlan(change('class Helper impleme
 reject(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'localinterfaces.First':{...sources['localinterfaces.First'],referenceOnly:true}}}),/reference-only/);
 fs.writeFileSync(path.join(out,'headers.ts'),plan.moduleSource);
 fs.writeFileSync(path.join(out,'domain.ts'),'import {createAS3ScriptDomain} from '+JSON.stringify(provider('AS3ScriptGlobal'))+';import {ApplicationDomain} from '+JSON.stringify(applicationDomain)+';export const scriptDomain=createAS3ScriptDomain(ApplicationDomain.createIsolatedScope());');
-const program=modern.createProgram([path.join(out,'headers.ts'),path.join(out,'domain.ts'),...['glsl.d.ts','spine.d.ts'].map(n=>path.join(engine,'src/layaAir/tslibs',n))],{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,resolveJsonModule:true,esModuleInterop:true,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
+const program=modern.createProgram([path.join(out,'headers.ts'),path.join(out,'domain.ts'),...['glsl.d.ts','spine.d.ts'].map(n=>path.join(engine,'src/layaAir/tslibs',n))],{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,resolveJsonModule:true,esModuleInterop:true,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,types:[],lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
 const diagnostics=modern.getPreEmitDiagnostics(program).map(d=>modern.flattenDiagnosticMessageText(d.messageText,'\n'));assert.deepEqual(diagnostics,[]);
 async function main(){
  const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));

@@ -24,7 +24,7 @@ function shape(node) {
 if (process.argv[2] === '--child') {
   const test = JSON.parse(process.argv[3]);
   if (test.invalid) {
-    assert.throws(() => parse('Comments.as', wrap(test.invalid)), /AS3_ARGUMENT_LIST|unexpected token|failed to parse/);
+    assert.throws(() => parse('Comments.as', wrap(test.invalid)), /AS3_ARGUMENT_LIST|AS3_PARSE_UNEXPECTED_(TOKEN|EOF)|unexpected token|failed to parse/);
   } else {
     const actual = parse('Comments.as', wrap(test.source));
     assert.deepStrictEqual(shape(actual), shape(parse('Comments.as', wrap(test.base))));

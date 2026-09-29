@@ -19,7 +19,7 @@ for folder in ['evidence-a', 'evidence-b']:
     root = evidence / folder
     receipt = json.loads(read(root / 'provenance.json'))
     for file in receipt['files']:
-        name = file['path']
+        name = file['path'].replace('\\', '/')
         path = root / (name if name in ['oracle.swf', 'flash.json', 'commands.json'] else 'sources/' + name)
         assert hashlib.sha256(read(path)).hexdigest() == file['sha256'], str(path)
     documents.append(json.loads(read(root / 'flash.json')))

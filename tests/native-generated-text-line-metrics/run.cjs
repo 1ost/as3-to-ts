@@ -49,7 +49,7 @@ async function main(){
    fs.writeFileSync(path.join(dir,cohort+'-factory.js'),artifact.moduleSource);
    const declaration=path.join(dir,cohort+'-factory.d.ts');fs.writeFileSync(declaration,artifact.declarationSource);files.push(declaration);
    files.push(...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f)));
-   const program=ts.createProgram(files,{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,resolveJsonModule:true,esModuleInterop:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
+   const program=ts.createProgram(files,{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,types:[],resolveJsonModule:true,esModuleInterop:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
    const diagnostics=ts.getPreEmitDiagnostics(program).map(d=>({file:d.file?.fileName,code:d.code,text:ts.flattenDiagnosticMessageText(d.messageText,'\n')}));
    fs.writeFileSync(path.join(dir,cohort+'-types.json'),JSON.stringify(diagnostics,null,2));assert.deepEqual(diagnostics,[]);
    typechecks.push({cohort,diagnostics,inputs:program.getSourceFiles().map(f=>({file:f.fileName,sha256:hash(fs.readFileSync(f.fileName))}))});
@@ -58,7 +58,7 @@ async function main(){
   fs.writeFileSync(path.join(dir,'observer.ts'),observer);
   const entry=path.join(dir,'entry.ts');fs.writeFileSync(entry,"import {run} from './observer';import {nativeSourceClassModule as subject} from './subject/subject-factory.js';globalThis.completion=run(subject).then(value=>{globalThis.result=value;});");
   const build=(mutate=false)=>esbuild.build({entryPoints:[entry],bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',metafile:true,loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},plugins:mutate?[{name:'remove-metric-property-dispatch',setup(b){b.onLoad({filter:/subject-factory\.js$/},args=>{
-   let contents=fs.readFileSync(args.path,'utf8');const re=/AS3Property_\d+\.as3GetProperty\(m, "width"\)/g;assert.ok([...contents.matchAll(re)].length>=2);contents=contents.replace(re,'m.width');return {contents,loader:'js'};
+   let contents=fs.readFileSync(args.path,'utf8');const re=/\(0, AS3Property_\d+\.as3GetProperty\)\(m, "width"\)/g;assert.ok([...contents.matchAll(re)].length>=2);contents=contents.replace(re,'m.width');return {contents,loader:'js'};
   });}}]:[]});
   const built=await build();
   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(dir,'bundle.js'),code);

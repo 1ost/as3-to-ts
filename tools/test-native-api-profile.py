@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+"""Regression checks for retained native SDK signatures and target admission."""
+import importlib.util
+from pathlib import Path
+import tempfile
+import unittest
+
+spec = importlib.util.spec_from_file_location('native_api', Path(__file__).with_name('native-api-profile.py'))
+api = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(api)
+
+class NativeSignaturesTest(unittest.TestCase):
+    def test_global_trace_comes_from_native_sdk_signature(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'scripts').mkdir()
+            source = root / 'scripts/trace.as'
+            source.write_text('package { [native("FlashUtilScript::trace")] public native function trace(... rest) : void; }')
+            row = {'module':'src/layaAir/flash/debug/trace.ts','export':'trace','kind':'function','signature':'(...values: unknown[]) => void'}
+            target = {'capabilities':[{'id':'api.flash.debug','status':'typescript-obligation','obligations':[row]}]}
+            apis, mappings = api.map_native_globals(root, {'trace'}, target)
+            self.assertEqual(apis[0]['signatures'], ['public native function trace(... rest) : void;'])
+            self.assertEqual(mappings[0]['sourceRoles'], ['global-function'])
+            self.assertEqual(api.map_native_globals(root, set(), target), ([], []))
+            source.write_text('package { public function trace(value:String):void {} }')
+            with self.assertRaisesRegex(ValueError, 'SDK declaration'):
+                api.map_native_globals(root, {'trace'}, target)
+
+    def test_definition_lookup_requires_exact_native_sdk_function(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'scripts/flash/utils/getDefinitionByName.as'
+            source.parent.mkdir(parents=True)
+            source.write_text('package flash.utils { [native("FlashUtilScript::getDefinitionByName")] public native function getDefinitionByName(param1:String) : Object; }')
+            apis = [{'qname':'flash.utils.getDefinitionByName'}]
+            api.annotate_native_function_signatures(apis, root)
+            self.assertEqual(apis[0]['signatures'], ['public native function getDefinitionByName(param1:String) : Object;'])
+            source.write_text('package flash.utils { public function getDefinitionByName(param1:String) : Object {return null;} }')
+            with self.assertRaisesRegex(ValueError, 'authenticated SDK'):
+                api.annotate_native_function_signatures(apis, root)
+
+    def test_signature_closure_follows_implicit_receivers_and_keeps_unavailable_types_held(self):
+        def member(name, result):
+            return dict(name=name, access='read', scope='instance', constructor=False, type=result, parameters=[])
+        classes = {
+            'flash.display.Shape': {'base': None, 'members': [member('graphics', 'flash.display.Graphics')]},
+            'flash.display.Graphics': {'base': None, 'members': [member('clear', 'void'), member('unsupported', 'flash.Missing')]},
+        }
+        self.assertEqual(api.native_type_closure(['flash.display.Shape'], classes, {'graphics', 'clear', 'unsupported'}, classes.__contains__),
+                         ['flash.display.Graphics', 'flash.display.Shape'])
+        self.assertEqual(api.native_type_closure(['flash.display.Shape'], classes, {'clear'}, classes.__contains__), ['flash.display.Shape'])
+
+    def test_sdk_override_before_public_keeps_the_actual_declaring_class(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Event.as').write_text('''package flash.events { public class Event {
+ public function clone():Event {}
+ public function toString():String {}
+} }''')
+            (root / 'StatusEvent.as').write_text('''package flash.events { public class StatusEvent extends Event {
+ override public function clone():Event {}
+ public override function toString():String {}
+ private function hidden():void {}
+} }''')
+            members = list(api.native_members(api.read_native_declarations(root), 'flash.events.StatusEvent'))
+            self.assertEqual([(m['name'], m['declaredBy']) for m in members],
+                [('clone', 'flash.events.StatusEvent'), ('toString', 'flash.events.StatusEvent')])
+            self.assertEqual(members[0]['type'], 'flash.events.Event')
+
+    def test_wildcard_types_defaults_and_declaring_owner(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Matrix.as').write_text('package flash.geom { public class Matrix {} }')
+            (root / 'Base.as').write_text('''package flash.display {
+import flash.geom.*;
+import flash.geom.*;
+public class Base {
+ public function Base(value:int = 7) {}
+ public function draw(matrix:Matrix = null, label:String = "a,b"):void {}
+ public function get width():Number {}
+}
+}''')
+            (root / 'Child.as').write_text('package flash.display { public class Child extends Base {} }')
+            classes = api.read_native_declarations(root)
+            members = list(api.native_members(classes, 'flash.display.Child'))
+            draw = next(m for m in members if m['name'] == 'draw')
+            self.assertEqual(draw['parameters'][0]['type'], 'flash.geom.Matrix')
+            self.assertEqual(draw['minArgs'], 0)
+            self.assertEqual(draw['maxArgs'], 2)
+            self.assertEqual(draw['declaredBy'], 'flash.display.Base')
+            self.assertFalse(any(m['constructor'] for m in members))
+            self.assertEqual(draw['parameters'][1]['default'], '"a,b"')
+
+    def test_unknown_type_is_not_invented(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'C.as').write_text('package p { public class C {\npublic function f(x:Missing):void {}\n} }')
+            with self.assertRaisesRegex(ValueError, 'Unresolved native signature type'):
+                api.read_native_declarations(directory)
+
+    def test_target_arity_preserves_optional_and_generic_arguments(self):
+        self.assertEqual(api.target_arity('new <K = unknown, V = unknown>(weakKeys?: boolean): Dictionary<K, V>'), (0, 1))
+        self.assertEqual(api.target_arity('<T extends LayaNode>(child: T) => T'), (1, 1))
+        self.assertEqual(api.target_arity('(x: number, y?: number) => void'), (1, 2))
+        self.assertEqual(api.target_arity('(x: number, ...args: unknown[]) => void'), (1, 1000000))
+        self.assertEqual(api.target_arity('<T extends Node = Node>(index: number, classType?: new (...args: any[]) => T) => T'), (1, 2))
+        self.assertEqual(api.target_arity('(callback: (x: number, y: number) => void, label?: string) => () => void'), (1, 2))
+        self.assertEqual(api.target_arity('<T extends () => void>(callback: T) => T'), (1, 1))
+        with self.assertRaisesRegex(ValueError, 'Malformed native parameter signature'):
+            api.split_parameters('x: (number]')
+        self.assertIsNone(api.target_arity('number'))
+
+    def test_member_requires_compatible_target_type_and_arity(self):
+        member = dict(name='width', access='read', scope='instance', constructor=False,
+            signature='public function get width() : Number', minArgs=0, maxArgs=0,
+            type='Number', parameters=[])
+        classes = {'flash.display.Base': {'base':None, 'members':[member]}}
+        row = dict(module='src/layaAir/flash/display/Base.ts', export='Base', kind='class', signature='typeof Base',
+            members=[dict(name='width', scope='instance', kind='get+set', signature='boolean')])
+        args = ('flash.display.Base', ['instance-member'], row, 'capability', classes, {'width'})
+        self.assertEqual(api.map_native_members(*args), ([], []))
+        row['members'][0]['signature'] = 'get number; set unknown'
+        self.assertEqual(len(api.map_native_members(*args)[0]), 1)
+
+    def test_wildcard_read_requires_an_explicit_unknown_target(self):
+        member = dict(name='data', access='read', scope='instance', constructor=False,
+            signature='public var data:*;', minArgs=0, maxArgs=0, type='*', parameters=[])
+        classes = {'flash.net.URLLoader': {'base': None, 'members': [member]}}
+        target = dict(name='data', scope='instance', kind='get', signature='unknown')
+        row = dict(module='URLLoader.ts', export='URLLoader', kind='class', signature='typeof URLLoader', members=[target])
+        args = ('flash.net.URLLoader', ['instance-member'], row, 'capability', classes, {'data'})
+        self.assertEqual(len(api.map_native_members(*args)[0]), 1)
+        for signature in ['any', 'string', 'number', 'Function', 'unknown[]']:
+            target['signature'] = signature
+            self.assertEqual(api.map_native_members(*args), ([], []), signature)
+        target['signature'] = 'unknown'
+        target['kind'] = 'set'
+        self.assertEqual(api.map_native_members(*args), ([], []))
+        target['kind'] = 'get'
+        member['access'] = 'write'
+        self.assertEqual(api.map_native_members(*args), ([], []))
+
+    def test_native_string_is_nullable_but_numeric_and_boolean_are_not(self):
+        member = dict(name='value', access='read', scope='instance', constructor=False,
+            signature='public function get value() : String', minArgs=0, maxArgs=0,
+            type='String', parameters=[])
+        classes = {'flash.events.Payload': {'base': None, 'members': [member]}}
+        target = dict(name='value', scope='instance', kind='get+set', signature='string | null')
+        row = dict(module='Payload.ts', export='Payload', kind='class', signature='typeof Payload', members=[target])
+        args = ('flash.events.Payload', ['base-type', 'instance-member'], row, 'capability', classes, {'value'})
+        self.assertEqual(len(api.map_native_members(*args)[0]), 1)
+        self.assertEqual(api.map_native_members(*args)[0][0]['sourceRoles'], ['instance-member'])
+        for native, target_type in [('Boolean', 'boolean | null'), ('Number', 'number | null'), ('String', 'string | undefined')]:
+            member['type'] = native
+            target['signature'] = target_type
+            self.assertEqual(api.map_native_members(*args), ([], []))
+
+    def test_native_object_read_keeps_the_exact_sdk_type_and_unknown_target(self):
+        member = dict(name='currentTarget', access='read', scope='instance', constructor=False,
+            signature='public function get currentTarget() : Object', minArgs=0, maxArgs=0,
+            type='Object', parameters=[])
+        classes = {'flash.events.Event': {'base': None, 'members': [member]}}
+        target = dict(name='currentTarget', scope='instance', kind='get', signature='unknown')
+        row = dict(module='Event.ts', export='Event', kind='class', signature='typeof Event', members=[target])
+        args = ('flash.events.Event', ['instance-member'], row, 'capability', classes, {'currentTarget'})
+        mappings, uses = api.map_native_members(*args)
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(uses[0]['signatures'][0]['returnType'], 'Object')
+        for signature in ['any', 'object', 'string', 'number', 'Function', 'unknown[]']:
+            target['signature'] = signature
+            self.assertEqual(api.map_native_members(*args), ([], []), signature)
+        target['signature'] = 'unknown'
+        target['kind'] = 'set'
+        self.assertEqual(api.map_native_members(*args), ([], []))
+
+    def test_native_object_record_reads_preserve_source_and_exact_target(self):
+        member = dict(name='parameters', access='read', scope='instance', constructor=False,
+            signature='public function get parameters() : Object', minArgs=0, maxArgs=0,
+            type='Object', parameters=[])
+        classes = {'flash.display.LoaderInfo': {'base': None, 'members': [member]}}
+        target = dict(name='parameters', scope='instance', kind='get+set', signature='Record<string, string>')
+        row = dict(module='LoaderInfo.ts', export='LoaderInfo', kind='class', signature='typeof LoaderInfo', members=[target])
+        args = ('flash.display.LoaderInfo', ['instance-member'], row, 'capability', classes, {'parameters'})
+        for signature in ['Record<string, string>', 'Readonly<Record<string, string>>',
+                          'Record<string, number>', 'Record<string, boolean>',
+                          'Readonly < Record < string , string > >']:
+            with self.subTest(signature=signature):
+                target['signature'] = signature
+                mappings, uses = api.map_native_members(*args)
+                self.assertEqual(len(mappings), 1)
+                self.assertEqual(mappings[0]['sourceMember']['signature'], member['signature'])
+                self.assertEqual(mappings[0]['targetMember']['signature'], signature)
+                self.assertEqual(uses[0]['signatures'][0]['returnType'], 'Object')
+                member['access'] = 'write'
+                self.assertEqual(api.map_native_members(*args), ([], []))
+                member['access'] = 'read'
+        for signature in ['Record<number, string>', 'Record<string | number, string>',
+                          'Record<string, any>', 'Record<string, unknown>', 'Record<string, object>',
+                          'Record<string, Function>', 'Record<string, string[]>',
+                          'Record<string, string | null>', 'Record<string, string> | null',
+                          'Record<string, Record<string, string>>', 'Readonly<Readonly<Record<string, string>>>',
+                          'Record<string, string', 'Readonly<Record<string, string>',
+                          'Record<string, string>>', 'Record<string, string, string>',
+                          'Record<string, string> & Extra', 'ReadonlyRecord<string, string>',
+                          '{ [key: string]: string }', 'Map<string, string>', 'object', 'string', 'any']:
+            target['signature'] = signature
+            self.assertEqual(api.map_native_members(*args), ([], []), signature)
+        target['signature'] = 'Record<string, string>'
+        row['members'].append(dict(target))
+        self.assertEqual(api.map_native_members(*args), ([], []))
+
+    def test_text_format_object_slots_preserve_native_type_and_bound_access(self):
+        native = dict(name='size', access='read', scope='instance', constructor=False,
+            signature='public function get size() : Object', minArgs=0, maxArgs=0, type='Object', parameters=[])
+        target = dict(name='size', kind='get+set', scope='instance', signature='number | null')
+        row = dict(module='TextFormat.ts', export='TextFormat', kind='class', signature='typeof TextFormat', members=[target])
+        def mapped(qname='flash.text.TextFormat'):
+            return api.map_native_members(qname, ['instance-member'], row, 'api.flash.text',
+                {qname: {'base': None, 'members': [native]}}, {native['name']})
+        for name, expected in [('size', 'number'), ('color', 'number'), ('bold', 'boolean'), ('kerning', 'boolean')]:
+            native['name'] = target['name'] = name
+            for signature in [expected, expected+' | null', 'null | '+expected]:
+                target['signature'] = signature
+                mappings, uses = mapped()
+                self.assertEqual(len(mappings), 1)
+                self.assertEqual(uses[0]['signatures'][0]['returnType'], 'Object')
+                self.assertEqual(mappings[0]['targetMember']['signature'], signature)
+                self.assertEqual(mapped('flash.other.Format'), ([], []))
+            native['access'] = 'write'
+            self.assertEqual(len(mapped()[0]), 1 if name == 'size' else 0)
+            native['access'] = 'read'
+        for signature in ['string', 'boolean | undefined', 'any', 'number[]', 'number | boolean']:
+            native['name'] = target['name'] = 'size';target['signature'] = signature
+            self.assertEqual(mapped(), ([], []))
+
+    def test_native_constructor_does_not_admit_extra_host_parameters(self):
+        member = dict(name='Loader', access='call', scope='static', constructor=True,
+            signature='public function Loader()', minArgs=0, maxArgs=0,
+            type='flash.display.Loader', parameters=[])
+        classes = {'flash.display.Loader': {'base': None, 'members': [member]}}
+        row = dict(module='Loader.ts', export='Loader', kind='class', signature='typeof Loader',
+            constructors=['new (host?: NativeHost): Loader'])
+        args = ('flash.display.Loader', ['constructor'], row, 'capability', classes, set())
+        self.assertEqual(api.map_native_members(*args), ([], []))
+        row['constructors'].append('new (): Loader')
+        self.assertEqual(len(api.map_native_members(*args)[0]), 1)
+
+    def test_overload_selection_keeps_complete_ledger_identity(self):
+        native = dict(name='getBounds', access='call', scope='instance', constructor=False,
+            signature='public function getBounds(target:flash.display.DisplayObject) : flash.geom.Rectangle',
+            minArgs=1, maxArgs=1, type='flash.geom.Rectangle', parameters=[{'type':'flash.display.DisplayObject'}])
+        classes = {'flash.display.DisplayObject': {'base':None, 'members':[native]}}
+        target = dict(name='getBounds', scope='instance', kind='method',
+            signature='{ (targetCoordinateSpace: DisplayObject): Rectangle; (out?: LayaRectangle): LayaRectangle; }')
+        row = dict(module='DisplayObject.ts', export='DisplayObject', kind='class', signature='typeof DisplayObject', members=[target])
+        args = ('flash.display.DisplayObject', ['instance-member'], row, 'capability', classes, {'getBounds'})
+        mappings, uses = api.map_native_members(*args)
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(mappings[0]['targetMember']['signature'], target['signature'])
+        self.assertEqual(mappings[0]['sourceMember']['signature'], native['signature'])
+        for signature in [
+            '{ (target: DisplayObject): LayaRectangle; (out?: LayaRectangle): LayaRectangle; }',
+            '{ (target: DisplayObject): Rectangle; (other?: DisplayObject): Rectangle; }',
+            '{ (target: DisplayObject, extra: number): Rectangle; (out?: LayaRectangle): LayaRectangle; }',
+            '{ (target: LayaRectangle): Rectangle; (out?: LayaRectangle): LayaRectangle; }',
+            '{ (target: DisplayObject): Rectangle; broken; }',
+        ]:
+            target['signature'] = signature
+            self.assertEqual(api.map_native_members(*args), ([], []), signature)
+
+    def test_flash_sprite_start_drag_requires_the_exact_aliased_overload(self):
+        native = dict(name='startDrag', access='call', scope='instance', constructor=False,
+            signature='public function startDrag(param1:Boolean = false, param2:flash.geom.Rectangle = null) : void',
+            nativeSignature='public native function startDrag(param1:Boolean = false, param2:Rectangle = null) : void;',
+            minArgs=0, maxArgs=2, type='void', declaredBy='flash.display.Sprite', parameters=[
+                {'name':'param1','type':'Boolean','optional':True,'default':'false','rest':False},
+                {'name':'param2','type':'flash.geom.Rectangle','optional':True,'default':'null','rest':False},
+            ])
+        classes = {'flash.display.Sprite': {'base':None, 'members':[native]}}
+        target = dict(name='startDrag', scope='instance', kind='method',
+            signature=('{ (lockCenter?: boolean, bounds?: FlashRectangle | null): void; '
+                '(area?: LayaRectangle, hasInertia?: boolean, elasticDistance?: number, elasticBackTime?: number, '
+                'data?: any, ratio?: number): void; }'))
+        row = dict(module='src/layaAir/flash/display/Sprite.ts', export='Sprite', kind='class',
+            signature='typeof Sprite', members=[target])
+        args = ('flash.display.Sprite', ['instance-member'], row, 'api.flash.display', classes, {'startDrag'})
+        mappings, uses = api.map_native_members(*args)
+        self.assertEqual(len(mappings), 1)
+        self.assertEqual(mappings[0]['sourceMember']['maxArgs'], 2)
+        self.assertEqual(mappings[0]['targetMember']['signature'], target['signature'])
+        self.assertEqual(uses[0]['signatures'][0]['declaredBy'], 'flash.display.Sprite')
+        for owner, key, value in [
+            (row, 'module', 'src/layaAir/laya/display/Sprite.ts'),
+            (row, 'signature', 'typeof LayaSprite'),
+            (target, 'signature', target['signature'].replace('FlashRectangle', 'Rectangle')),
+            (native, 'nativeSignature', native['nativeSignature'].replace('native ', '')),
+            (native, 'signature', native['signature'].replace('flash.geom.Rectangle', 'Object')),
+            (native, 'maxArgs', 6),
+        ]:
+            original = owner[key]
+            owner[key] = value
+            self.assertEqual(api.map_native_members(*args), ([], []), (key, value))
+            owner[key] = original
+
+if __name__ == '__main__': unittest.main()

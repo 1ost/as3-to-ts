@@ -1,0 +1,345 @@
+import {
+    HardenedSemanticError,
+    LocalDeclarationExtract,
+    FileLocalClassDeclaration,
+    LocalDeclarationMember,
+    LocalDeclarationParameter,
+    NormalizedParserAst,
+} from "./contracts";
+import { buildTree, TreeNode } from "./adapter";
+import { Sha256Function } from "./ledger";
+
+const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+const QNAME = /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/;
+const ORDINARY_MODIFIERS = new Set(["public", "private", "protected", "internal", "static", "override", "final"]);
+
+function fail(code: string, message: string, node: TreeNode | null = null): never {
+    throw new HardenedSemanticError(code, message, node?.id ?? null);
+}
+
+function one(node: TreeNode, kind: string, optional: boolean = false): TreeNode | null {
+    const matches = node.children.filter(child => child.kind === kind);
+    if (matches.length !== (optional ? 0 : 1) && !(optional && matches.length === 1)) {
+        fail("HARDENED_LOCAL_DECLARATION_SHAPE", `${node.kind} requires ${optional ? "at most" : "exactly"} one ${kind}`, node);
+    }
+    return matches[0] ?? null;
+}
+
+function requiredText(node: TreeNode, label: string): string {
+    if (typeof node.text !== "string" || node.text.length === 0) {
+        fail("HARDENED_LOCAL_DECLARATION_TEXT", `${label} requires exact parser text`, node);
+    }
+    return node.text;
+}
+
+function identifier(node: TreeNode, label: string): string {
+    const value = requiredText(node, label);
+    if (!IDENTIFIER.test(value)) fail("HARDENED_LOCAL_DECLARATION_NAME", `${label} is not an AS3 identifier`, node);
+    return value;
+}
+
+function sourceType(node: TreeNode): string {
+    if (node.kind === "TYPE") {
+        if (node.children.length !== 0) fail("HARDENED_LOCAL_DECLARATION_TYPE", "named type must be a leaf", node);
+        if (node.text === null) return "*";
+        const value = requiredText(node, "source type");
+        if (value !== "*" && !QNAME.test(value)) {
+            fail("HARDENED_LOCAL_DECLARATION_TYPE", "named type has unsupported spelling", node);
+        }
+        return value;
+    }
+    if (node.kind === "VECTOR") {
+        if (node.children.length !== 1 || !["TYPE", "VECTOR"].includes(node.children[0]!.kind)) {
+            fail("HARDENED_LOCAL_DECLARATION_TYPE", "Vector type requires one nested source type", node);
+        }
+        return `Vector.<${sourceType(node.children[0]!)}>`;
+    }
+    fail("HARDENED_LOCAL_DECLARATION_TYPE", "declaration type must be named or Vector", node);
+}
+
+function declarationType(node: TreeNode): TreeNode {
+    const matches = node.children.filter(child => child.kind === "TYPE" || child.kind === "VECTOR");
+    if (matches.length !== 1) fail("HARDENED_LOCAL_DECLARATION_TYPE", "declaration requires exactly one type", node);
+    return matches[0]!;
+}
+
+function modifiers(node: TreeNode): { values: string[]; namespaceName: string | null } {
+    const list = one(node, "MOD_LIST", true);
+    if (list === null) return { values: [], namespaceName: null };
+    if (list.children.some(child => child.kind !== "MODIFIER")) {
+        fail("HARDENED_LOCAL_DECLARATION_MODIFIER", "modifier list contains a non-modifier", list);
+    }
+    const values: string[] = [];
+    let namespaceName: string | null = null;
+    const seen = new Set<string>();
+    list.children.forEach(child => {
+        const value = identifier(child, "modifier");
+        if (seen.has(value)) fail("HARDENED_LOCAL_DECLARATION_MODIFIER", "modifier is duplicated", child);
+        seen.add(value);
+        if (ORDINARY_MODIFIERS.has(value)) values.push(value);
+        else if (namespaceName === null) namespaceName = value;
+        else fail("HARDENED_LOCAL_DECLARATION_MODIFIER", "member has multiple namespace modifiers", child);
+    });
+    return { values, namespaceName };
+}
+
+function parameters(node: TreeNode): LocalDeclarationParameter[] {
+    if (node.children.some(child => child.kind !== "PARAMETER")) {
+        fail("HARDENED_LOCAL_DECLARATION_PARAMETER", "parameter list contains a non-parameter", node);
+    }
+    const seen = new Set<string>();
+    return node.children.map((parameter, index) => {
+        const rest = one(parameter, "REST", true);
+        if (rest !== null) {
+            if (parameter.children.length !== 1 || index !== node.children.length - 1) {
+                fail("HARDENED_LOCAL_DECLARATION_PARAMETER", "rest parameter must be final and structurally isolated", parameter);
+            }
+            const name = identifier(rest, "rest parameter");
+            if (seen.has(name)) fail("HARDENED_LOCAL_DECLARATION_PARAMETER", "parameter name is duplicated", rest);
+            seen.add(name);
+            return { name, type: "*", optional: false, rest: true };
+        }
+        const declaration = one(parameter, "NAME_TYPE_INIT")!;
+        const nameNode = one(declaration, "NAME")!;
+        const name = identifier(nameNode, "parameter");
+        if (seen.has(name)) fail("HARDENED_LOCAL_DECLARATION_PARAMETER", "parameter name is duplicated", nameNode);
+        seen.add(name);
+        const init = one(declaration, "INIT", true);
+        if (init !== null && init.children.length !== 1) {
+            fail("HARDENED_LOCAL_DECLARATION_PARAMETER", "default parameter requires one expression", init);
+        }
+        return { name, type: sourceType(declarationType(declaration)), optional: init !== null, rest: false };
+    });
+}
+
+function callable(node: TreeNode, className: string): LocalDeclarationMember {
+    const nameNode = one(node, "NAME")!;
+    const name = identifier(nameNode, "member name");
+    const parameterList = one(node, "PARAMETER_LIST")!;
+    const memberModifiers = modifiers(node);
+    const constructor = node.kind === "FUNCTION" && name === className;
+    const kind = constructor ? "constructor" : node.kind === "GET" ? "getter" : node.kind === "SET" ? "setter" : "method";
+    const returnType = constructor ? null : sourceType(declarationType(node));
+    return {
+        kind, name, modifiers: memberModifiers.values, namespaceName: memberModifiers.namespaceName,
+        parameters: parameters(parameterList), returnType, fieldType: null, readonly: false,
+    };
+}
+
+function fields(node: TreeNode): LocalDeclarationMember[] {
+    const memberModifiers = modifiers(node);
+    return node.children.filter(child => child.kind === "NAME_TYPE_INIT").map<LocalDeclarationMember>(declaration => ({
+        kind: "field",
+        name: identifier(one(declaration, "NAME")!, "field name"),
+        modifiers: memberModifiers.values,
+        namespaceName: memberModifiers.namespaceName,
+        parameters: [], returnType: null,
+        fieldType: sourceType(declarationType(declaration)),
+        readonly: node.kind === "CONST_LIST",
+    }));
+}
+
+function classInitializer(node: TreeNode, className: string, members: LocalDeclarationMember[],
+    content: TreeNode): LocalDeclarationExtract["classInitializer"] {
+    const position = content.children.indexOf(node);
+    const before = content.children.slice(0, position);
+    const after = content.children.slice(position + 1);
+    const staticField = (child: TreeNode): boolean => (child.kind === "VAR_LIST" || child.kind === "CONST_LIST")
+        && modifiers(child).values.includes("static");
+    if (position < 0 || before.some(child => child.kind !== "IMPORT" && child.kind !== "USE" && !staticField(child))
+        || after.some(child => !["FUNCTION", "GET", "SET"].includes(child.kind))) {
+        fail("HARDENED_CLASS_INITIALIZER_ORDER",
+            "same-class cinit call must follow static fields and precede callable declarations", node);
+    }
+    if (node.kind !== "CALL" || node.children.length !== 2 || node.children[0]!.kind !== "DOT"
+        || node.children[0]!.text !== null || node.children[0]!.children.length !== 2
+        || node.children[0]!.children[0]!.kind !== "IDENTIFIER"
+        || node.children[0]!.children[0]!.text !== className
+        || node.children[0]!.children[1]!.kind !== "LITERAL"
+        || node.children[1]!.kind !== "ARGUMENTS" || node.children[1]!.children.length !== 0) {
+        fail("HARDENED_CLASS_INITIALIZER_SHAPE",
+            "class cinit admits only CurrentClass.literalStaticMethod()", node);
+    }
+    const methodName = identifier(node.children[0]!.children[1]!, "class initializer method");
+    const matches = members.filter(member => member.kind === "method" && member.name === methodName
+        && member.namespaceName === null && member.modifiers.includes("static") && member.returnType === "void"
+        && member.parameters.every(parameter => parameter.optional || parameter.rest));
+    if (matches.length !== 1) {
+        fail("HARDENED_CLASS_INITIALIZER_SIGNATURE",
+            "class cinit target must be one unnamespaced static zero-required-argument void method", node);
+    }
+    return { kind: "same-class-static-void-call", ownerName: className, methodName, argumentCount: 0 };
+}
+
+function fileLocalClasses(root: TreeNode, packageNode: TreeNode, ownerQualifiedName: string,
+    sourcePath: string | undefined): FileLocalClassDeclaration[] {
+    const nodes: TreeNode[] = [];
+    for (const child of root.children) {
+        if (child === packageNode) continue;
+        if (child.kind !== "CONTENT") fail("HARDENED_LOCAL_FILE_CONTENT", "file scope requires parser CONTENT nodes", child);
+        nodes.push(...child.children);
+    }
+    if (nodes.length === 0) return [];
+    if (nodes.some(node => node.kind !== "IMPORT" && node.kind !== "CLASS"))
+        fail("HARDENED_LOCAL_FILE_CONTENT", "file scope currently requires imports and class declarations", root);
+    const basename = sourcePath?.split(/[\\/]/).pop();
+    if (!basename || !/^[A-Za-z_$][A-Za-z0-9_$]*\.as$/.test(basename))
+        fail("HARDENED_LOCAL_FILE_SOURCE", "file-private declarations require the authenticated source filename", root);
+    const namespaceUri = "FilePrivateNS:" + basename.slice(0, -3);
+    const imports = nodes.filter(node => node.kind === "IMPORT").map(node => requiredText(node, "file import"));
+    if (new Set(imports).size !== imports.length)
+        fail("HARDENED_LOCAL_DECLARATION_IMPORT", "file import is duplicated", root);
+    const seen = new Set<string>();
+    return nodes.filter(node => node.kind === "CLASS").map(node => {
+        if (node.children.some(child => !["NAME", "MOD_LIST", "EXTENDS", "IMPLEMENTS_LIST", "CONTENT"].includes(child.kind)))
+            fail("HARDENED_LOCAL_FILE_CLASS", "file-local class contains an unsupported declaration child", node);
+        const name = identifier(one(node, "NAME")!, "file-local class name");
+        if (seen.has(name)) fail("HARDENED_LOCAL_FILE_CLASS", "file-local class name is duplicated", node);
+        seen.add(name);
+        const modList = one(node, "MOD_LIST", true);
+        const values = modList?.children.map(child => {
+            if (child.kind !== "MODIFIER") fail("HARDENED_LOCAL_FILE_CLASS", "file-local class modifier is malformed", child);
+            return requiredText(child, "class modifier");
+        }) || [];
+        if (new Set(values).size !== values.length || values.some(value => !["final", "dynamic"].includes(value)))
+            fail("HARDENED_LOCAL_FILE_CLASS", "file-local classes cannot declare package visibility", node);
+        const members: LocalDeclarationMember[] = [];
+        for (const child of one(node, "CONTENT")!.children) {
+            if (["FUNCTION", "GET", "SET"].includes(child.kind)) members.push(callable(child, name));
+            else if (["VAR_LIST", "CONST_LIST"].includes(child.kind)) members.push(...fields(child));
+            else fail("HARDENED_LOCAL_DECLARATION_MEMBER", "file-local member kind is not structurally admitted", child);
+        }
+        return { schema: "as3-file-local-class-declaration@1", ownerQualifiedName, namespaceUri, name,
+            sourceNodeId: node.id, modifiers: values, imports: imports.slice(),
+            extendsNames: node.children.filter(child => child.kind === "EXTENDS").map(child => requiredText(child, "file-local base")),
+            implementsNames: node.children.filter(child => child.kind === "IMPLEMENTS_LIST")
+                .flatMap(list => list.children.map(child => requiredText(child, "file-local interface"))), members };
+    });
+}
+
+export function extractLocalDeclaration(ast: NormalizedParserAst, sourceText: string,
+    sha256: Sha256Function, sourcePath?: string): LocalDeclarationExtract {
+    const root = buildTree(ast, sourceText, sha256);
+    if (root.kind !== "COMPILATION_UNIT") fail("HARDENED_LOCAL_DECLARATION_ROOT", "root must be a compilation unit", root);
+    const packageNode = one(root, "PACKAGE")!;
+    const packageNameNode = one(packageNode, "NAME", true);
+    const packageName = packageNameNode === null || packageNameNode.text === null || packageNameNode.text === "" ? ""
+        : requiredText(packageNameNode, "package name");
+    if (packageName !== "" && !QNAME.test(packageName)) {
+        fail("HARDENED_LOCAL_DECLARATION_PACKAGE", "package name is invalid", packageNameNode);
+    }
+    const content = one(packageNode, "CONTENT")!;
+    const declarations = content.children.filter(child => child.kind === "CLASS" || child.kind === "INTERFACE");
+    const packageSymbols = content.children.filter(child => child.kind === "CONST_LIST" || child.kind === "NAMESPACE" || child.kind === "FUNCTION");
+    if ((declarations.length !== 1 || packageSymbols.length !== 0)
+        && (declarations.length !== 0 || packageSymbols.length !== 1)
+        || content.children.some(child => !["IMPORT", "USE", "CLASS", "INTERFACE", "CONST_LIST", "NAMESPACE", "FUNCTION"].includes(child.kind))) {
+        fail("HARDENED_LOCAL_DECLARATION_CONTENT",
+            "package must contain exactly one class, interface, constant, namespace, or function declaration", content);
+    }
+    const declaration = declarations[0] || packageSymbols[0]!;
+    let name: string;
+    if (declaration.kind === "CONST_LIST") {
+        const constantFields = fields(declaration);
+        if (constantFields.length !== 1) {
+            fail("HARDENED_LOCAL_DECLARATION_CONTENT", "package constant source requires exactly one declaration", declaration);
+        }
+        name = constantFields[0]!.name;
+    } else if (declaration.kind === "NAMESPACE") {
+        name = identifier(declaration, "namespace declaration");
+    } else {
+        name = identifier(one(declaration, "NAME")!, "declaration name");
+    }
+    const qualifiedName = packageName === "" ? name : `${packageName}.${name}`;
+    const members: LocalDeclarationMember[] = [];
+    let initializerNode: TreeNode | undefined;
+    if (declaration.kind === "CONST_LIST") {
+        members.push(...fields(declaration));
+    } else if (declaration.kind === "FUNCTION") {
+        members.push(callable(declaration, ""));
+    } else if (declaration.kind === "NAMESPACE") {
+        const memberModifiers = modifiers(declaration);
+        const initializer=one(declaration,"INIT",true);
+        let namespaceUri:string|undefined;
+        if(initializer) {
+            const literal=initializer.children.length===1 && initializer.children[0]!.kind==="LITERAL" ? initializer.children[0]!.text : null;
+            if(!literal || !literal.startsWith('"')) fail("HARDENED_NAMESPACE_INITIALIZER","namespace URI must be one exact string literal",initializer);
+            try { namespaceUri=JSON.parse(literal); } catch { fail("HARDENED_NAMESPACE_INITIALIZER","namespace URI literal is malformed",initializer); }
+            if(typeof namespaceUri!=="string") fail("HARDENED_NAMESPACE_INITIALIZER","namespace URI must be String",initializer);
+        }
+        members.push({
+            ...(namespaceUri!==undefined ? {namespaceUri} : {}),
+            kind: "namespace", name, modifiers: memberModifiers.values,
+            namespaceName: memberModifiers.namespaceName, parameters: [], returnType: null,
+            fieldType: null, readonly: false,
+        });
+    } else {
+        const body = one(declaration, "CONTENT")!;
+        body.children.forEach(member => {
+            if (member.kind === "FUNCTION" || member.kind === "GET" || member.kind === "SET") {
+                members.push(callable(member, name));
+            } else if (member.kind === "VAR_LIST" || member.kind === "CONST_LIST") {
+                members.push(...fields(member));
+            } else if (member.kind === "CALL") {
+                if (initializerNode !== undefined) {
+                    fail("HARDENED_CLASS_INITIALIZER_SHAPE", "class admits at most one narrow cinit call", member);
+                }
+                initializerNode = member;
+            } else if (member.kind !== "IMPORT") {
+                fail("HARDENED_LOCAL_DECLARATION_MEMBER", "class member kind is not structurally admitted", member);
+            }
+        });
+    }
+    const initializer = initializerNode === undefined ? undefined
+        : classInitializer(initializerNode, name, members, one(declaration, "CONTENT")!);
+    const packageImports = content.children.filter(child => child.kind === "IMPORT")
+        .map(child => requiredText(child, "package import"));
+    const classImports = declaration.kind === "CLASS" ? one(declaration, "CONTENT")!.children
+        .filter(child => child.kind === "IMPORT").map(child => requiredText(child, "class include import")) : [];
+    if (new Set(packageImports).size !== packageImports.length
+        || new Set(classImports).size !== classImports.length) {
+        fail("HARDENED_LOCAL_DECLARATION_IMPORT", "import is duplicated within one declaration scope", content);
+    }
+    // AIR accepts an include fragment inside a class that repeats an exact
+    // package-scope import. The authenticated include expander retains both
+    // nodes, while declaration identity needs only the one equal QName.
+    const packageImportSet = new Set(packageImports);
+    const imports = packageImports.concat(classImports.filter(qname => !packageImportSet.has(qname)));
+    let packageInitializer: LocalDeclarationExtract["packageInitializer"] = null;
+    if (declaration.kind === "CONST_LIST") {
+        const declarator = declaration.children.filter(child => child.kind === "NAME_TYPE_INIT")[0]!;
+        const init = one(declarator, "INIT", true);
+        const expression = init !== null && init.children.length === 1 ? init.children[0]! : null;
+        const call = expression?.kind === "NEW" && expression.children.length === 1
+            && expression.children[0]!.kind === "CALL" ? expression.children[0]! : null;
+        if (!call || call.children.length !== 2 || call.children[0]!.kind !== "IDENTIFIER"
+            || call.children[1]!.kind !== "ARGUMENTS" || call.children[1]!.children.length !== 0) {
+            fail("HARDENED_LOCAL_PACKAGE_INITIALIZER",
+                "package const initializer must be one zero-argument direct constructor", init || declarator);
+        }
+        packageInitializer = {
+            kind: "new", typeName: requiredText(call.children[0]!, "package initializer type"), argumentCount: 0,
+        };
+    }
+    const result: LocalDeclarationExtract = {
+        ...(declaration.kind === "CLASS" && declaration.children.some(list => list.kind === "MOD_LIST"
+            && list.children.some(modifier => modifier.text === "final")) ? {finalClass:true as const} : {}),
+        schema: "as3-local-declaration-extract@1",
+        sourceSha256: ast.sourceSha256,
+        packageName,
+        qualifiedName,
+        declarationKind: declaration.kind === "CLASS" ? "class"
+            : declaration.kind === "INTERFACE" ? "interface" : "package",
+        imports,
+        extendsNames: declarations.length === 0 ? []
+            : declaration.children.filter(child => child.kind === "EXTENDS").map(child => requiredText(child, "base type")),
+        implementsNames: declarations.length === 0 ? [] : declaration.children.filter(child => child.kind === "IMPLEMENTS_LIST")
+            .flatMap(list => list.children.map(child => requiredText(child, "implemented type"))),
+        members,
+        packageInitializer,
+        ...(initializer !== undefined ? {classInitializer: initializer} : {}),
+    };
+    const locals = fileLocalClasses(root, packageNode, qualifiedName, sourcePath);
+    if (locals.length > 0) result.fileLocalClasses = locals;
+    return result;
+}

@@ -1,0 +1,16 @@
+{
+  "read": [
+    "result"
+  ],
+  "steps": [
+    {
+      "id": "same-basename-private-classes",
+      "calls": [
+        {
+          "method": "exercise",
+          "args": []
+        }
+      ]
+    }
+  ]
+}

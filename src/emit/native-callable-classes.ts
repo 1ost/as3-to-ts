@@ -250,7 +250,7 @@ export class NativeCallableClasses {
             }
         });
         // This optional compiler pass uses the toolkit's installed TypeScript parser.
-        this.ts = require('typescript');
+        this.ts = require('typescript-4-9');
     }
 
     /** Find the source slot, stopping at each function or catch shadow. */
@@ -279,7 +279,12 @@ export class NativeCallableClasses {
         if (!this.own) return source;
         const ts = this.ts, S = ts.SyntaxKind, name = this.own.name;
         const file = ts.createSourceFile('Callable.ts', source, ts.ScriptTarget.Latest, true);
-        if (file.parseDiagnostics.length) this.fail('intermediate native syntax');
+        if (file.parseDiagnostics.length) {
+            const first = file.parseDiagnostics[0];
+            this.fail('intermediate native syntax: '
+                + ts.flattenDiagnosticMessageText(first.messageText, ' ')
+                + ' near ' + JSON.stringify(source.slice(Math.max(0, first.start - 60), first.start + 100)));
+        }
         let cls: any, alias: any;
         const visit = (node: any): void => {
             if (node.kind === S.ClassDeclaration && node.name.text === name) cls = node;

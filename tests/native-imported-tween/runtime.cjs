@@ -39,7 +39,7 @@ async function main() {
             const file = path.join(dir, 'QueryMigration.ts');fs.writeFileSync(file, generated);
             // Dependencies target ES2020; downlevel only the generated consumer.
             const program = ts.createProgram([file], {target:ts.ScriptTarget.ES2020, module:ts.ModuleKind.CommonJS, experimentalDecorators:true,
-                moduleResolution:ts.ModuleResolutionKind.NodeJs, lib:['lib.es2020.d.ts', 'lib.dom.d.ts'], noEmit:true});
+                moduleResolution:ts.ModuleResolutionKind.NodeJs, lib:['lib.es2020.d.ts', 'lib.dom.d.ts'], noEmit:true,skipLibCheck:true,types:[]});
             const diagnostics = ts.getPreEmitDiagnostics(program).map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
             assert.deepEqual(diagnostics, []);
             const compiled = ts.transpileModule(generated, {compilerOptions:{target:ts.ScriptTarget[target], module:ts.ModuleKind.ESNext, experimentalDecorators:true}}).outputText;

@@ -1,3 +1,4 @@
+config/big-turntable-inner-dto-authority.json text eol=lf
 tests/native-assignments/oracle/* -text
 tests/native-assignments/RetainFlashAssignments.js text eol=lf
 tests/native-class-initializers/oracle/** -text
