@@ -1,6 +1,7 @@
+import {nativeSourceUnitAst} from './native-source-unit';
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import {generatedProxyMember,generatedProxyUri} from './native-generated-proxy';
-import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource} from './native-generated-declarations';
+import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource, nativeGeneratedSourceUnit} from './native-generated-declarations';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {generatedMethodCompletes} from './native-generated-completions';
 import {NativeLexicalMembers} from './native-lexical-members';
@@ -171,6 +172,7 @@ export class NativeCallableClasses {
                     const nativeReference=sourceReference&&sourceReference.kind==='native'
                         &&(accessibilityReference&&sourceReference.identity==='flash.accessibility.AccessibilityImplementation'
                             ||displayReference&&sourceReference.identity==='flash.display.DisplayObject'
+                            ||interactiveReference&&sourceReference.identity==='flash.display.InteractiveObject'
                             ||spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(sourceReference.identity)>=0
                             ||loaderReferences&&nativeLoaderReferenceNames.indexOf(sourceReference.identity)>=0
                             ||spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(sourceReference.identity)>=0)
@@ -208,11 +210,24 @@ export class NativeCallableClasses {
                             : (expression.kind === K.MINUS || expression.kind === K.PLUS)
                                 && expression.children.length === 1 && expression.children[0].kind === K.LITERAL
                                 ? (expression.kind === K.MINUS ? '-' : '+') + expression.children[0].text : '';
+                        const nativeNaN = !!generated && sourceType === 'Number' && expression.kind === K.IDENTIFIER && expression.text === 'NaN';
+                        if(nativeNaN) {
+                            let shadowed=false;
+                            const inspect=(node:Node):void=>{
+                                if(node.kind===K.NAME&&node.text==='NaN'||node.kind===K.IMPORT&&/(?:^|\.)NaN$/.test(node.text))shadowed=true;
+                                node.children.forEach(child=>{if(child)inspect(child);});
+                            };
+                            inspect(nativeSourceUnitAst(nativeGeneratedSourceUnit(generated.options.plan,qname)).root);
+                            if(shadowed||generated.options.plan.bindings.some(b=>/(?:^|\.)NaN$/.test(b.qname))
+                                ||generated.options.plan.nativeBindings.some(b=>/(?:^|\.)NaN$/.test(b.qname)))
+                                this.fail('shadowed NaN constructor default requires source constant authority');
+                            defaultLiteral='(0/0)';
+                        }
                         const numeric = /^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(defaultLiteral)
                             ? Number(defaultLiteral) : NaN;
-                        if (/^[+-]?0[0-9]/.test(defaultLiteral) || !isFinite(numeric) || sourceType !== 'Number'
+                        if (!nativeNaN && (/^[+-]?0[0-9]/.test(defaultLiteral) || !isFinite(numeric) || sourceType !== 'Number'
                             && (Math.floor(numeric) !== numeric || numeric < (sourceType === 'int' ? -2147483648 : 0)
-                                || numeric > (sourceType === 'int' ? 2147483647 : 4294967295)))
+                                || numeric > (sourceType === 'int' ? 2147483647 : 4294967295))))
                             this.fail('numeric constructor default requires finite source literal authority');
                     }
                     parameters.push({name:value.findChild(K.NAME).text, type:sourceType, optional:!!init, defaultLiteral, reference});
@@ -745,7 +760,7 @@ export class NativeCallableClasses {
                         &&!(this.dateReference&&reference.identity==='Date')
                         // Canonical display allocation proof also authenticates Sprite
                         // returns; other native display families remain separately held.
-                        &&!(this.displayReference&&(reference.identity==='flash.display.DisplayObject'||reference.identity==='flash.display.Sprite'))&&!(['flash.events.Event','flash.utils.Proxy'].indexOf(reference.identity)>=0
+                        &&!(this.displayReference&&(reference.identity==='flash.display.DisplayObject'||reference.identity==='flash.display.Sprite'))&&!(['flash.events.Event','flash.events.MouseEvent','flash.utils.Proxy'].indexOf(reference.identity)>=0
                         &&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&!!binding.nativeBaseExport)))
                         this.fail('generated native return type requires separate qualification');
                     const sourceBody=sourceMethod.findChild(K.BLOCK);

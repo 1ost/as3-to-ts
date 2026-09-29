@@ -2392,7 +2392,7 @@ function emitClass(emitter:Emitter, node:Node):void {
 				isInterfaceLinkPrinted = true;
 			}
 			// console.log(node)
-			if (!emitter.namespaces.memberDeclaration(node)) storeClassMember(node);
+			if (!emitter.generated && !emitter.namespaces.memberDeclaration(node)) storeClassMember(node);
 			switch (node.kind) {
 				case NodeKind.SET:
 					emitSet(emitter, node);

@@ -1,6 +1,7 @@
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import {generatedProxyMember, generatedProxyNamespace, generatedProxyUri, generatedProxySignatures} from './native-generated-proxy';
 import Node from '../syntax/node';
+import {nativeMouseEventTraits} from './native-mouseevent-traits';
 import {nativeSpriteTraits} from './native-sprite-traits';
 import {nativeMovieClipTraits} from './native-movieclip-traits';
 import K from '../syntax/nodeKind';
@@ -10,7 +11,7 @@ import {NativeGeneratedDeclarationPlan, NativeGeneratedClassDeclaration,
 // Original Flash evidence covers Boolean source halves and Number position
 // halves. Other native names/signatures retain their existing admission holds.
 function qualifiedAccessor(member: {type?: TraitType; name: string}): boolean {
-    return member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
+    return member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
 }
 interface ReferenceType {readonly name: string; readonly referenceExport?: string; readonly vectorExport?:string;}
 type TraitType = string | ReferenceType;
@@ -102,6 +103,19 @@ export class NativeGeneratedClassTraits {
             ['clone','toString','formatToString','stopImmediatePropagation','preventDefault','isDefaultPrevented','stopPropagation']
                 .forEach(name=>instance.push({name,kind:'method',parameterCount:name==='formatToString'?1:0,declaredBy}));
             surfaces.set('flash.events.Event',{instance,statics:[],dynamic:false,final:false});
+        }
+        if(plan.nativeBindings.some(binding=>binding.qname==='flash.events.MouseEvent'&&!!binding.nativeBaseExport)) {
+            const instance:Member[]=nativeMouseEventTraits.map(trait=>{
+                let type:TraitType=trait.type;
+                if(type&&type.indexOf('::')>=0) {
+                    const native=plan.nativeBindings.find(binding=>binding.qname===(type as string).replace('::','.'));
+                    if(!native||native.nativeInterface)fail('native MouseEvent trait requires explicit reference provider: '+trait.name+':'+type);
+                    type={name:type as string,referenceExport:native.referenceExport};
+                }
+                return Object.assign({},trait,type===undefined?{}:{type},trait.kind==='accessor'&&trait.type==='Object'&&['target','currentTarget'].indexOf(trait.name)>=0
+                    ?{parts:{get:{owner:trait.declaredBy,override:false,final:false}}}:{}) as Member;
+            });
+            surfaces.set('flash.events.MouseEvent',{instance,statics:[],dynamic:false,final:false});
         }
         if(plan.nativeBindings.some(binding=>binding.qname==='Error'&&!!binding.nativeBaseExport)) {
             const declaredBy='Error';
@@ -268,9 +282,12 @@ export class NativeGeneratedClassTraits {
                         && nativeSpriteTraits.some(trait=>trait.name===previous.name&&trait.declaredBy===previous.declaredBy)
                         && !(input.inheritScriptClasses && member.kind==='accessor' && member.type==='Number' && previous.type==='Number' && ['x','y'].indexOf(member.name)>=0))
                         fail('native Sprite override requires separate signature/dispatch authority: '+member.name);
-                    if(previous.declaredBy==='flash.events::Event' && ['clone','toString','formatToString'].indexOf(member.name)<0)
+                    if(previous.declaredBy==='flash.events::MouseEvent')
+                        fail('native MouseEvent method/property override requires separate source authority: '+member.name);
+                    if(previous.declaredBy==='flash.events::Event' && ['clone','toString','formatToString'].indexOf(member.name)<0
+                        && !(binding.base==='flash.events.MouseEvent'&&member.kind==='accessor'&&member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0))
                         fail('native Event override requires separate source authority: '+member.name);
-                    if(member.kind==='accessor' && previous.kind==='accessor' && (parent || binding.base==='flash.display.Sprite') && input.inheritScriptClasses
+                    if(member.kind==='accessor' && previous.kind==='accessor' && (parent || binding.base==='flash.display.Sprite'||binding.base==='flash.events.MouseEvent') && input.inheritScriptClasses
                         && qualifiedAccessor(member) && member.type===previous.type && member.parts && previous.parts) {
                         for(const side of (['get','set'] as ('get'|'set')[]))if(member.parts[side]){
                             if(!member.parts[side].override||!previous.parts[side]||previous.parts[side].final)
@@ -305,7 +322,7 @@ export class NativeGeneratedClassTraits {
             && (['get','set'] as ('get'|'set')[]).some(side=>item.parts[side]&&item.parts[side].owner===reflectedClass(owner))).map(item=>Object.assign({},item,{parts:{
                 get:item.parts.get&&item.parts.get.owner===reflectedClass(owner)?item.parts.get:undefined,
                 set:item.parts.set&&item.parts.set.owner===reflectedClass(owner)?item.parts.set:undefined}})));
-        this.nativeAccessorBase=this.binding.base==='flash.display.Sprite' && this.instanceAccessors.some(a=>a.parts.get&&a.parts.get.override||a.parts.set&&a.parts.set.override);
+        this.nativeAccessorBase=['flash.display.Sprite','flash.events.MouseEvent'].indexOf(this.binding.base)>=0 && this.instanceAccessors.some(a=>a.parts.get&&a.parts.get.override||a.parts.set&&a.parts.set.override);
         this.instanceMethods=frozen(surface.instance.filter(item=>!item.uri && item.kind==='method' && item.declaredBy===reflectedClass(owner)
             && !!item.signature && (!item.override || this.inheritInstanceLayout)).map(item=>({name:item.name,
                 parameters:item.signature.parameters,returns:item.signature.returns,requiredCount:item.signature.requiredCount,override:!!item.override,final:!!item.final})));
