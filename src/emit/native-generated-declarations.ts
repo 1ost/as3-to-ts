@@ -378,14 +378,15 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             // Stable source ancestry may end at the authenticated Sprite
             // boundary. Check every ancestor: a retrying intermediate Class
             // cannot be treated as a stable constructor/prototype authority.
-            // The previously qualified immediate source-root case is retained.
+            // Stable source-only chains use the same ancestry authority. The
+            // entire chain must remain non-retrying, including its root.
             let parent=bindings.find(value=>value.qname===binding.base);
             const seen=new Set<string>([name]);
-            let stableParent=false,depth=0;
+            let stableParent=false;
             while(parent&&parent.scriptGlobalExport&&!seen.has(parent.qname)
                 &&data.classScriptSources.indexOf(parent.qname)<0){
-                seen.add(parent.qname);depth++;
-                if(!parent.base){stableParent=depth===1;break;}
+                seen.add(parent.qname);
+                if(!parent.base){stableParent=true;break;}
                 if(parent.base==='flash.display.Sprite'&&providers[parent.base]
                     &&providers[parent.base].nativeBase==='Sprite'){stableParent=true;break;}
                 parent=bindings.find(value=>value.qname===parent.base);
