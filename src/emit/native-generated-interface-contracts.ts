@@ -114,7 +114,7 @@ export function projectNativeGeneratedInterfaceContracts(
         for(let current=cls;current;current=classes.find(c=>c.qname===current.base)){
             ancestors.push(current);current.interfaces.forEach(name=>closure(name,required));
         }
-        for(const name of Array.from(required).sort())for(const expected of Array.from(surfaces.get(name).values())){
+        for(const name of Array.from(required).sort())for(const expected of Array.from(build(name).values())){
             let actual:NativeGeneratedInterfaceMember;
             for(const ancestor of ancestors){
                 const candidate=declarations.get(ancestor.qname).findChild(K.CONTENT).children.find(node=>

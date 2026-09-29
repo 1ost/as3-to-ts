@@ -8,7 +8,7 @@ const compilerInputs=fs.readdirSync(path.resolve('src'),{recursive:true}).filter
 const cache=path.resolve('.cache/native-generated-externalizable');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
-const cohorts={parent:read('source',['externalcontract.IRecord','externalcontract.Record','externalcontract.Child','externalcontract.Consumer'])};
+const cohorts={parent:read('source',['externalcontract.Direct','externalcontract.IRecord','externalcontract.Record','externalcontract.Child','externalcontract.Consumer'])};
 async function main(){
  const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
  const browser=await chromium.launch({headless:true}),results=[];
@@ -26,7 +26,7 @@ async function main(){
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
    const nativeProviders=Object.fromEntries(['IExternalizable','IDataInput','IDataOutput'].map(name=>['flash.utils.'+name,{module:provider(name),exportName:name,nativeInterface:true}]));
    const trace=modulePath(path.join(engine,'src/layaAir/flash/debug/trace.ts'));externalModules.push(trace,...Object.values(nativeProviders).map(p=>p.module));
-   const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,...(process.argv.includes('--internal')?{lexicalProviderModule:provider('AS3LexicalMembers')}:{ })};
+   const input={scope:'externalizable-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,...(process.argv.includes('--internal')?{lexicalProviderModule:provider('AS3LexicalMembers')}:{ })};
 
    const plan=api.createNativeGeneratedDeclarationPlan(input);
    const definitionsByNamespace={};for(const q of [...Object.keys(sources),...Object.keys(nativeProviders)]){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
@@ -48,6 +48,7 @@ async function main(){
    changeSource('externalcontract.Record',s=>s.replace('readExternal(input:IDataInput)','readExternal(input:IDataOutput)'));
    changeSource('externalcontract.Record',s=>s.replace('writeExternal(output:IDataOutput):void','writeExternal(output:IDataOutput):int'));
    changeSource('externalcontract.Record',s=>s.replace('readExternal(input:IDataInput)','readExternal(input:IDataInput,extra:int)'));
+   changeSource('externalcontract.Direct',s=>s.replace('readExternal(input:IDataInput)','readExternal(input:IDataOutput)'));
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);
    const files=[];

@@ -282,7 +282,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             const declaredInterfaces = implemented ? implemented.children.map(node => resolve(owner,node.qualifiedName || node.text)) : [];
             if (new Set(declaredInterfaces).size !== declaredInterfaces.length) fail('duplicate implements declaration: ' + owner);
             declaredInterfaces.forEach(name => {
-                if (!interfaces.some(binding => binding.qname === name)) fail('interface declaration authority required: ' + owner + ':' + name);
+                if (!interfaces.some(binding => binding.qname === name)
+                    && !(providers[name] && providers[name].nativeInterface && nativeGeneratedInterfaceBoundary(name)))
+                    fail('interface declaration authority required: ' + owner + ':' + name);
             });
             const baseNode = cls.findChild(K.EXTENDS), base = baseNode ? resolve(owner, baseNode.qualifiedName || baseNode.text) : 'Object';
             if (base !== 'Object' && (!classes.has(base) || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite' || providers[base].nativeBase === 'MovieClip')))
@@ -408,7 +410,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             ? 'import {'+data.scriptDomainProvider.exportName+' as __scriptDomain} from '+JSON.stringify(data.scriptDomainProvider.module)+';'
             : 'const __scriptDomain=createAS3ScriptDomain();');
     }
-    if (interfaces.length) lines.push('import {defineAS3Interface,registerAS3Class'+(data.inheritScriptClasses?',isAS3Interface':'')+'} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
+    if (interfaces.length || bindings.some(binding=>binding.interfaces.length>0)) lines.push('import {defineAS3Interface,registerAS3Class'+(data.inheritScriptClasses?',isAS3Interface':'')+'} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     if (nativeNames.some(name => providers[name].nativeInterface))
         lines.push('import {isAS3Interface as __isNativeInterface} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     const emittedInterfaces = new Set<string>(), activeInterfaces = new Set<string>();
@@ -513,7 +515,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         lines.push('export const ' + binding.tokenExport + '='+(data.inheritScriptClasses?selection+'?'+selection+'.declaration:':'') + authority + '.type;');
         const authoredSymbol = data.sources[binding.qname].authoredSymbol;
         if (authoredSymbol) {
-            const tokens = binding.interfaces.map(name => interfaces.find(value => value.qname === name).tokenExport);
+            const tokens = binding.interfaces.map(name => {const source=interfaces.find(value => value.qname === name);return source?source.tokenExport:'native'+nativeNames.indexOf(name);});
             lines.push('export const ' + binding.publishExport + '=(constructor:Function)=>{'
                 + (data.inheritScriptClasses ? 'if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");' : '')
                 + 'const generation=' + authority + '.publishGeneration(constructor);'
@@ -521,7 +523,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 + (tokens.length ? 'registerAS3Class(constructor,['+tokens.join(',')+']);' : '')
                 + 'return generation;};');
         } else if(binding.interfaces.length) {
-            const tokens=binding.interfaces.map(name=>interfaces.find(value=>value.qname===name).tokenExport);
+            const tokens=binding.interfaces.map(name=>{const source=interfaces.find(value=>value.qname===name);return source?source.tokenExport:'native'+nativeNames.indexOf(name);});
             lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{'+(data.inheritScriptClasses?'if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");':'')+'const generation='+authority+'.publishGeneration(constructor);'
                 +'registerAS3Class(constructor,['+tokens.join(',')+']);return generation;};');
         } else lines.push('export const ' + binding.publishExport + '=' + (data.inheritScriptClasses

@@ -12,7 +12,7 @@ export async function run(module){
  const Record=def('Record'),Child=def('Child'),IRecord=def('IRecord'),Consumer=def('Consumer');
  const record=as3ConstructClass(Record,[123]),child=as3ConstructClass(Child,[-456]),bytes=new ByteArray();
  const call=(name,args)=>as3CallValue(get(Consumer,name),()=>args),rows=[],row=(id,value)=>rows.push({id,value});
- row('native-name',IExternalizable.name);
+ row('native-name',IExternalizable.name);const direct=as3ConstructClass(def('Direct'),[17]);row('direct',[as3Is(direct,IExternalizable),as3Is(direct,IRecord),call('accept',[direct])===direct,get(direct,'value')]);
  row('identity',[as3Is(record,IExternalizable),as3Is(record,IRecord),as3Is(child,IExternalizable),as3Is(child,IRecord),call('accept',[record])===record]);
  call('write',[record,bytes]);call('write',[child,bytes]);row('writes',[bytes.length,bytes.position]);bytes.position=0;row('wire-integers',[bytes.readInt(),bytes.readInt()]);
  bytes.position=0;call('read',[child,bytes]);call('read',[record,bytes]);row('reads',[get(child,'value'),get(record,'value'),bytes.position]);
