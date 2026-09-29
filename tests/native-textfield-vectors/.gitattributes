@@ -1,0 +1,3 @@
+* -text
+*.cjs whitespace=cr-at-eol
+*.js whitespace=cr-at-eol
