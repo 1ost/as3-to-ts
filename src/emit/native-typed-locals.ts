@@ -81,8 +81,8 @@ export class NativeTypedLocals {
                     const wildcard=this.matchSourceSpans&&wildcards.indexOf(name)>=0;
                     // The generated local assignment pass applies storage coercion
                     // to each enumerated value before publishing the new value.
-                    const storage=this.matchSourceSpans&&locals.some(local=>local.name===name&&(inline||['String','Object','Class'].indexOf(local.type)>=0)&&!local.parameter);
-                    if(!reference&&!wildcard&&!storage)this.fail('source enumeration requires a declared reference, String, Object, Class or wildcard local');
+                    const storage=this.matchSourceSpans&&locals.some(local=>local.name===name&&(inline||['Number','String','Object','Class'].indexOf(local.type)>=0)&&!local.parameter);
+                    if(!reference&&!wildcard&&!storage)this.fail('source enumeration requires a declared reference, Number, String, Object, Class or wildcard local');
                     if(wildcard||storage)for(let scope=value.parent;scope&&scope!==node;scope=scope.parent)
                         if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===name)
                             this.fail('enumeration catch-shadow target held');

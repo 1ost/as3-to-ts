@@ -1,0 +1,117 @@
+{
+  "state": {
+    "ready": true,
+    "observations": [
+      {
+        "value": [
+          [
+            "3.75",
+            "0",
+            "NaN",
+            "1",
+            "0",
+            "NaN",
+            "-2.5",
+            "Infinity",
+            "-Infinity"
+          ],
+          "-Infinity"
+        ],
+        "id": "number-coercion"
+      },
+      {
+        "value": 23,
+        "id": "empty-preserves"
+      },
+      {
+        "value": 23,
+        "id": "null-preserves"
+      },
+      {
+        "value": 23,
+        "id": "undefined-preserves"
+      },
+      {
+        "value": [
+          9,
+          4,
+          1
+        ],
+        "id": "receiver-once"
+      },
+      {
+        "value": [
+          5,
+          3
+        ],
+        "id": "break-continue"
+      },
+      {
+        "value": [
+          7,
+          "body"
+        ],
+        "id": "throw-preserves"
+      },
+      {
+        "value": [
+          6.5
+        ],
+        "id": "sparse"
+      },
+      {
+        "value": [
+          6.25,
+          -3
+        ],
+        "id": "vector"
+      },
+      {
+        "value": "-Infinity",
+        "id": "negative-zero"
+      },
+      {
+        "value": 0.5,
+        "id": "sum-coercion"
+      },
+      {
+        "value": 0,
+        "id": "sum-empty"
+      },
+      {
+        "value": 0,
+        "id": "sum-null"
+      },
+      {
+        "value": "NaN",
+        "id": "sum-nan"
+      },
+      {
+        "value": 5,
+        "id": "average"
+      }
+    ],
+    "failure": ""
+  },
+  "runtime": {
+    "os": "Windows 10 Server",
+    "playerType": "PlugIn",
+    "screenDPI": 72,
+    "version": "WIN 26,0,0,131"
+  },
+  "browser": {
+    "devicePixelRatio": 1,
+    "innerWidth": 320,
+    "innerHeight": 240,
+    "objectWidth": 320,
+    "objectHeight": 240
+  },
+  "frame": {
+    "pngWidth": 320,
+    "pngHeight": 240,
+    "nativeImageSize": {
+      "width": 320,
+      "height": 240
+    }
+  }
+}

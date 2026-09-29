@@ -1,0 +1,25 @@
+{
+  "actual_uncompressed_length": 4198,
+  "compression": "zlib",
+  "declared_uncompressed_length": 4198,
+  "frame_count": 1,
+  "frame_rate": 30.0,
+  "length_matches_header": true,
+  "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\tests\\native-generated-number-each\\flash\\oracle.swf",
+  "schema": "swf-header@1",
+  "sha256": "7aa34df8a5686a414e280c9ac51a7bb0ab8eaf5202a60d730a7d3334e0cdd7b4",
+  "signature": "CWS",
+  "stage": {
+    "height": 240.0,
+    "width": 320.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "stage_twips": {
+    "xmax": 6400,
+    "xmin": 0,
+    "ymax": 4800,
+    "ymin": 0
+  },
+  "swf_version": 37
+}

@@ -1,0 +1,90 @@
+[
+  {
+    "value": [
+      [
+        "3.75",
+        "0",
+        "NaN",
+        "1",
+        "0",
+        "NaN",
+        "-2.5",
+        "Infinity",
+        "-Infinity"
+      ],
+      "-Infinity"
+    ],
+    "id": "number-coercion"
+  },
+  {
+    "value": 23,
+    "id": "empty-preserves"
+  },
+  {
+    "value": 23,
+    "id": "null-preserves"
+  },
+  {
+    "value": 23,
+    "id": "undefined-preserves"
+  },
+  {
+    "value": [
+      9,
+      4,
+      1
+    ],
+    "id": "receiver-once"
+  },
+  {
+    "value": [
+      5,
+      3
+    ],
+    "id": "break-continue"
+  },
+  {
+    "value": [
+      7,
+      "body"
+    ],
+    "id": "throw-preserves"
+  },
+  {
+    "value": [
+      6.5
+    ],
+    "id": "sparse"
+  },
+  {
+    "value": [
+      6.25,
+      -3
+    ],
+    "id": "vector"
+  },
+  {
+    "value": "-Infinity",
+    "id": "negative-zero"
+  },
+  {
+    "value": 0.5,
+    "id": "sum-coercion"
+  },
+  {
+    "value": 0,
+    "id": "sum-empty"
+  },
+  {
+    "value": 0,
+    "id": "sum-null"
+  },
+  {
+    "value": "NaN",
+    "id": "sum-nan"
+  },
+  {
+    "value": 5,
+    "id": "average"
+  }
+]

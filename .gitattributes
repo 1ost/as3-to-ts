@@ -62,3 +62,5 @@ tests/native-generated-class-locals/evidence/** -text -whitespace
 src/emit/native-callable-classes.ts text eol=lf
 src/emit/native-generated-traits.ts text eol=lf
 src/emit/emitter.ts text eol=lf
+
+src/emit/native-typed-locals.ts text eol=lf
