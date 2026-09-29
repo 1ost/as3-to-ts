@@ -3757,6 +3757,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitArraySortOn(emitter, node)) return;
 	if (emitTweenMigrationCall(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
+    if (emitInterfaceMethodCall(emitter, node)) return;
     if (emitInternalDynamicCall(emitter, node)) return;
     if (emitObjectPropertyCall(emitter, node)) return;
     const callee = node.children[0];
@@ -4174,6 +4175,8 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!node||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.kind)<0||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(!receiver||!key)return null;
+    const interfaceMethod=sourceInterfaceAccessorAccess(emitter,node,'method');
+    if(interfaceMethod)return interfaceMethod;
     if(isInterfaceCast(emitter,receiver)){
         if(node.kind!==NodeKind.DOT||key.kind!==NodeKind.LITERAL)
             throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: computed interface-cast properties require separate authority');
@@ -4346,8 +4349,8 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     return true;
 }
 
-/** Source interface accessors preserve null errors and canonical dispatch. */
-function sourceInterfaceAccessorAccess(emitter:Emitter,node:Node,kind:'get'|'set'):DictionaryAccess {
+/** Authenticated interface members preserve null errors and canonical dispatch. */
+function sourceInterfaceAccessorAccess(emitter:Emitter,node:Node,kind:'get'|'set'|'method'):DictionaryAccess {
     if(!emitter.generated||!emitter.references||!node||node.kind!==NodeKind.DOT||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(receiver.kind!==NodeKind.IDENTIFIER||key.kind!==NodeKind.LITERAL)return null;
@@ -4355,11 +4358,12 @@ function sourceInterfaceAccessorAccess(emitter:Emitter,node:Node,kind:'get'|'set
     if(!definition||definition.bound||typeof definition.as3Type!=='string')return null;
     const token=emitter.references.sourceInterface(definition.as3Type),plan=emitter.generated.options.plan;
     const contract=nativeGeneratedInterfaceBindings(plan).find(binding=>binding.tokenExport===token);
-    if(!contract)return null;
+    const native=plan.nativeBindings.find(binding=>binding.nativeInterface&&binding.referenceExport===token);
+    if(!contract&&!native)return null;
     const owners=new Set<string>();
     const visit=(name:string):void=>{if(owners.has(name))return;owners.add(name);
         const binding=nativeGeneratedInterfaceBindings(plan).find(value=>value.qname===name);if(binding)binding.bases.forEach(visit);};
-    visit(contract.qname);
+    visit(contract?contract.qname:native.qname);
     return plan.interfaceContracts.members.some(member=>owners.has(member.owner)&&member.name===key.text&&member.kind===kind)
         ?{receiver,key,literalKey:key.text}:null;
 }
@@ -4411,6 +4415,17 @@ function emitInternalDynamicCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(',()=>[');
     args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
     emitter.insert(']))');emitter.skipTo(node.end);return true;
+}
+
+function emitInterfaceMethodCall(emitter:Emitter,node:Node):boolean {
+    const access=sourceInterfaceAccessorAccess(emitter,node.children[0],'method'),args=node.findChild(NodeKind.ARGUMENTS);
+    if(!access||!args)return false;
+    if(emitter.isNew)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: interface method is not a constructor');
+    const helper=propertyHelper(emitter,'as3CallNamedProperty',emitter.options.nativeDynamicPropertyReadsModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitPropertyKey(emitter,access);
+    emitter.insert(',()=>[');
+    args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 
 function emitDictionaryPropertyCall(emitter:Emitter, node:Node):boolean {

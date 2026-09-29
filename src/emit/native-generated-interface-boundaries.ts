@@ -15,6 +15,13 @@ const dispatcher=Object.freeze([
     method('willTrigger','Boolean',[['String',false]])
 ]);
 
+// Captured from AIR describeType(IExternalizable). The native token supplies
+// identity; source implementations must satisfy both exact method contracts.
+const externalizable=Object.freeze([
+    Object.freeze({...method('readExternal','void',[['flash.utils.IDataInput',false]]),owner:'flash.utils.IExternalizable'}),
+    Object.freeze({...method('writeExternal','void',[['flash.utils.IDataOutput',false]]),owner:'flash.utils.IExternalizable'})
+]);
+
 export function nativeGeneratedInterfaceBoundary(name:string):ReadonlyArray<NativeGeneratedInterfaceMember>|undefined {
-    return name===owner?dispatcher:undefined;
+    return name===owner?dispatcher:name==='flash.utils.IExternalizable'?externalizable:undefined;
 }
