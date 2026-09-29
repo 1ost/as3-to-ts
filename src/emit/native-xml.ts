@@ -2,7 +2,8 @@ import {intrinsicStringAs} from './native-string-casts';
 import Node, {unwrapEncapsulatedExpression, outerEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {generatedModule} from './native-generated-emission';
-import {nativeGeneratedDeclarationInputs} from './native-generated-declarations';
+import {nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationNode} from './native-generated-declarations';
+import {typeOfBinding} from './native-typeof';
 
 function fail(detail:string):never {throw new Error('AS3_XML_UNSUPPORTED: '+detail);}
 /** Provider paths in a plan are relative to its declaration-domain module. */
@@ -12,16 +13,35 @@ export function xmlGlobalProviderModule(module:string,domain:string):string {
     const rebased=path.normalize(path.join(path.dirname(domain),module));
     return rebased.charAt(0)==='.'?rebased:'./'+rebased;
 }
-/** Literal E4X operations on exact source XML local/parameter bindings. */
+/** Literal E4X paths on exact XML bindings and authenticated source return types. */
 export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     if(e.options.nativeXMLModule===undefined)return false;
     const module=generatedModule(e.options.nativeXMLModule);
     const type=(value:Node):string=>{
         value=unwrapEncapsulatedExpression(value);
-        if(!value||value.kind!==K.IDENTIFIER||!e.generated||!e.references)return null;
-        const binding=e.findDefInScope(value.text);
-        if(!binding||binding.bound||!binding.as3Type)return null;
-        const identity=e.references.resolve(binding.as3Type);
+        if(!value||!e.generated||!e.references)return null;
+        if(value.kind===K.DOT&&value.children[1].kind===K.LITERAL
+            &&/^@?[A-Za-z_$][A-Za-z0-9_$]*$/.test(value.children[1].text)&&type(value.children[0]))return 'XMLList';
+        let identity:string=null;
+        if(value.kind===K.IDENTIFIER){
+            const binding=e.findDefInScope(value.text);
+            if(!binding||binding.bound||!binding.as3Type)return null;
+            identity=e.references.resolve(binding.as3Type);
+        }else if(value.kind===K.CALL&&value.children[0].kind===K.DOT){
+            const receiver=unwrapEncapsulatedExpression(value.children[0].children[0]),member=value.children[0].children[1];
+            if(receiver.kind!==K.IDENTIFIER||member.kind!==K.LITERAL)return null;
+            const binding=e.findDefInScope(receiver.text),plan=e.generated.options.plan;
+            if(binding&&(binding.bound||Object.prototype.hasOwnProperty.call(binding,'as3Type'))
+                ||typeOfBinding(receiver,e.source,Object.keys(e.generated.classes))==='lexical'
+                ||!e.references.publicStaticMethod(receiver.text,member.text))return null;
+            const owner=e.references.resolve(receiver.text);
+            const method=nativeGeneratedDeclarationNode(plan,owner).findChild(K.CONTENT).children.find((n:Node)=>
+                n.kind===K.FUNCTION&&n.findChild(K.NAME).text===member.text);
+            const returned=method&&method.findChild(K.TYPE);
+            const ref=returned&&plan.references.find((r:any)=>r.owner===owner&&r.start===returned.start&&r.end===returned.end);
+            if(!ref||ref.kind!=='native')return null;
+            identity=ref.identity;
+        }
         if(['XML','XMLList'].indexOf(identity)<0)return null;
         const input=nativeGeneratedDeclarationInputs(e.generated.options.plan,e.generated.options.plan.scope);
         const provider=input.providers&&input.providers[identity];
@@ -37,9 +57,9 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     const attribute=(value:Node):{receiver:Node;name:string}|null=>{
         if(value&&value.kind===K.DOT&&value.children[1]
             &&value.children[1].kind===K.LITERAL&&/^@[A-Za-z_$][A-Za-z0-9_$]*$/.test(value.children[1].text)
-            &&type(value.children[0])==='XML')return {receiver:value.children[0],name:value.children[1].text.slice(1)};
+            &&type(value.children[0]))return {receiver:value.children[0],name:value.children[1].text.slice(1)};
         if(value&&value.kind===K.CALL&&value.children[0].kind===K.DOT
-            &&value.children[0].children[1].text==='attribute'&&type(value.children[0].children[0])==='XML'){
+            &&value.children[0].children[1].text==='attribute'&&type(value.children[0].children[0])){
             const args=value.findChild(K.ARGUMENTS).children;
             if(args.length!==1||args[0].kind!==K.LITERAL||!/^(["'])[A-Za-z_$][A-Za-z0-9_$]*\1$/.test(args[0].text))
                 fail('XML attribute method requires one unqualified literal name');
@@ -120,13 +140,29 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
             fail('XML attribute writes require separate qualification');
         emit(n,selectedAttribute.receiver,'as3XMLAttribute',JSON.stringify(selectedAttribute.name));return true;
     }
+    if(n.kind===K.DOT&&n.children[1].kind===K.LITERAL&&/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(n.children[1].text)
+        &&type(n.children[0])){
+        if(['addNamespace','appendChild','attribute','attributes','child','childIndex','children','comments','contains','copy',
+            'descendants','elements','hasComplexContent','hasOwnProperty','hasSimpleContent','inScopeNamespaces',
+            'insertChildAfter','insertChildBefore','length','localName','name','namespace','namespaceDeclarations',
+            'nodeKind','normalize','parent','prependChild','processingInstructions','propertyIsEnumerable',
+            'removeNamespace','replace','setChildren','setLocalName','setName','setNamespace','text','toString',
+            'toXMLString','valueOf'].indexOf(n.children[1].text)>=0)
+            fail('XML method-name child selection requires separate qualification');
+        const outer=outerEncapsulatedExpression(n),parent=outer.parent;
+        if(parent&&parent.children[0]===outer&&[K.ASSIGN,K.DELETE,K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC,K.CALL,K.NEW].indexOf(parent.kind)>=0)
+            fail('XML child mutation or invocation requires separate qualification');
+        emit(n,n.children[0],'as3XMLChildNamed',JSON.stringify(n.children[1].text));return true;
+    }
     if(n.kind===K.TYPEOF&&attribute(n.children[0])){emit(n,n.children[0],'as3TypeOf');return true;}
     const stringReceiver=call(n,'toString'),lengthReceiver=call(n,'length');
     const localNameReceiver=call(n,'localName');
     if(localNameReceiver&&type(localNameReceiver)==='XML'){emit(n,localNameReceiver,'as3XMLLocalName');return true;}
     if(stringReceiver&&type(stringReceiver)==='XML'){emit(n,stringReceiver,'as3XMLNodeString');return true;}
-    if(stringReceiver&&attribute(stringReceiver)){emit(n,stringReceiver,'as3XMLListString');return true;}
-    if(lengthReceiver&&attribute(lengthReceiver)){emit(n,lengthReceiver,'as3XMLListLength');return true;}
+    const selectedList=(value:Node):boolean=>!!attribute(value)
+        ||unwrapEncapsulatedExpression(value).kind===K.DOT&&type(value)==='XMLList';
+    if(stringReceiver&&selectedList(stringReceiver)){emit(n,stringReceiver,'as3XMLListString');return true;}
+    if(lengthReceiver&&selectedList(lengthReceiver)){emit(n,lengthReceiver,'as3XMLListLength');return true;}
     const nameReceiver=stringReceiver&&call(stringReceiver,'name');
     if(nameReceiver&&type(nameReceiver)==='XML'){emit(n,nameReceiver,'as3XMLNameString');return true;}
     if(n.kind===K.DOT&&(type(n.children[0])||n.children[1]&&/^@/.test(n.children[1].text)))
