@@ -1,0 +1,76 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
+const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
+const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
+
+
+const compilerInputs=require('node:child_process').execFileSync('git',['ls-files','src','utils','package.json','package-lock.json','tsconfig.json'],{encoding:'utf8'}).trim().split(/\r?\n/);
+compilerInputs.push('src/emit/native-mouseevent-traits.ts');
+const compilerGraph=[...new Set(compilerInputs)].map(file=>({file,sha256:hash(fs.readFileSync(file,'utf8').replace(/\r\n/g,'\n'))}));
+const evidence=path.join(engine,'tests/nativeFlashOracle/generated-interaction-event-references'),expected=require(path.join(evidence,'verify.cjs'));
+const sources={};for(const q of ["eventcases.InteractionHandler","flashx.textLayout.edit.IInteractionEventHandler"]){const source=fs.readFileSync(path.join(evidence,"source",q.replaceAll(".","/")+".as"),"utf8");sources[q]={source,sourceSha256:hash(source)};}
+const cache=path.resolve('.cache/native-generated-interaction-events');fs.mkdirSync(cache,{recursive:true});const out=fs.mkdtempSync(path.join(cache,'run-'));
+const callable=require('../../lib/emit/native-callable-classes').NativeCallableClasses,lower=callable.prototype.lower;
+callable.prototype.lower=function(source){try{return lower.call(this,source);}catch(error){fs.writeFileSync(path.join(out,'failed-intermediate.ts'),source);console.error('Failed declaration',this.own&&this.own.qname);throw error;}};
+async function main(){
+ const {createLayaSourceAliasPlugin}=await import(require('node:url').pathToFileURL(path.join(engine,'tests/nativeCanonicalSpriteClass/laya-source-alias.mjs')).href);
+ const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
+ const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader','--use-angle=swiftshader']}),results=[];
+ try{for(const target of ['ES5','ES2015']){
+  const dir=path.join(out,target);fs.mkdirSync(dir);
+  const modulePath=file=>{const r=path.relative(dir,file).replaceAll('\\','/').replace(/\.ts$/,'');return r.startsWith('.')?r:'./'+r;};
+  const provider=n=>modulePath(path.join(engine,'src/layaAir/flash/utils',n+'.ts'));
+  const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(n=>[n,modulePath(path.resolve('utils',n+'.ts'))]));
+  const sourceError=modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts'));
+  const modules=['AS3GeneratedClass','AS3ScriptGlobal','AS3Type','AS3Class','AS3Invocation','AS3LexicalMembers','AS3Property','AS3MethodBinding','AS3Coercion','AS3String','AS3Addition','AS3ArrayCreation','AS3Vector','Dictionary','AS3GeneratedMouseEventConstruction','AS3CanonicalInteractionEventReferences','AS3CanonicalInteractiveReference','NativeSourceClassLoadingSession','getQualifiedClassName','DefinitionRegistry','describeType','AS3ReflectionQuery','AS3XML'];
+  const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
+   const nativeProviders=Object.fromEntries(['Event','MouseEvent','KeyboardEvent','FocusEvent','TextEvent','IMEEvent','ContextMenuEvent'].map(name=>['flash.events.'+name,{module:provider('AS3CanonicalInteractionEventReferences'),exportName:name}]));
+   const input={providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),scope:'interaction-events',sources,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true};
+   const plan=api.createNativeGeneratedDeclarationPlan(input);
+   const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
+   const options={customVisitors:[],definitionsByNamespace,nativeReflectionQueryModule:provider('AS3ReflectionQuery'),nativeReflectionXMLModule:provider('AS3ReflectionQuery'),nativeVectorTypes:{plan,module:'./__native_declarations'},nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},importModules:{'flash.utils.getQualifiedClassName':provider('getQualifiedClassName'),'flash.utils.getDefinitionByName':provider('DefinitionRegistry'),'flash.utils.describeType':provider('describeType'),'flash.events.MouseEvent':provider('AS3GeneratedMouseEventConstruction'),'flash.display.InteractiveObject':provider('AS3CanonicalInteractiveReference'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
+    decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
+    nativeClassTraitsModule:provider('AS3GeneratedClass'),nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
+    nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
+    nativeSourceErrorModule:sourceError,nativeDynamicPropertyReadsModule:provider('AS3Property'),nativeDynamicPropertyWritesModule:provider('AS3Property'),
+    nativeComputedTypeTestModule:provider('AS3Type'),nativeDictionaryPropertyModule:provider('AS3Property'),nativeObjectCreationModule:provider('AS3Class'),
+    nativeTypedLocals:true,nativeTypedLocalReferenceModule:provider('AS3Type'),nativeTypedLocalAdditionModule:provider('AS3Addition'),nativeArrayCreationModule:provider('AS3ArrayCreation'),
+    nativeReferenceCoercion:{plan,module:'./unused',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')};
+   Object.assign(options.importModules,Object.fromEntries(Object.entries(nativeProviders).map(([q,b])=>[q,b.module])));
+   const config={plan,target,emitterOptions:options,externalModules,loadingSessionModule:provider('NativeSourceClassLoadingSession')};
+   assert.deepEqual(plan.references.filter(r=>r.kind==='unresolved'),[]);
+   assert.equal(plan.privateBindings.length,0);
+   let guards=0;
+   assert.throws(()=>api.emitNativeSourceClassModule({...config,plan:{...plan}}),/AS3_.*UNSUPPORTED/);guards++;
+   for(const name of ['Event','MouseEvent','KeyboardEvent','FocusEvent','TextEvent','IMEEvent','ContextMenuEvent']){
+    const providers={...nativeProviders};delete providers['flash.events.'+name];
+    assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,providers}),/unresolved interface signature type/);guards++;
+   }
+   const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));
+   assert.equal(artifact.generatedSources.length,3);
+   const files=[];
+   for(const item of artifact.generatedSources){const file=path.join(dir,item.module+'.ts');fs.writeFileSync(file,item.source);files.push(file);}
+   const domain=path.join(dir,'cohortDomain.ts');fs.writeFileSync(domain,'import {AS3ScriptDomain} from '+JSON.stringify(provider('AS3ScriptGlobal'))+';export declare const scriptDomain:AS3ScriptDomain;');files.push(domain);
+   fs.writeFileSync(path.join(dir,'subject-factory.js'),artifact.moduleSource);
+   fs.writeFileSync(path.join(dir,'subject-factory.d.ts'),artifact.declarationSource);files.push(path.join(dir,'subject-factory.d.ts'));
+   const observer=fs.readFileSync(path.join(__dirname,'observer.ts'),'utf8').replaceAll('@FLASH@',modulePath(path.join(engine,'src/layaAir/flash'))).replaceAll('@ENGINE@',modulePath(engine));
+   fs.writeFileSync(path.join(dir,'observer.ts'),observer);files.push(path.join(dir,'observer.ts'));
+   files.push(...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f)));
+   const program=ts.createProgram(files,{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,baseUrl:engine,paths:{"@laya/engine/*":["src/layaAir/*"],"@laya/flash/*":["src/layaAir/flash/*"]},experimentalDecorators:true,noEmit:true,skipLibCheck:true,resolveJsonModule:true,esModuleInterop:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']});
+   const diagnostics=ts.getPreEmitDiagnostics(program).map(d=>({file:d.file?.fileName,code:d.code,text:ts.flattenDiagnosticMessageText(d.messageText,'\n')}));
+   fs.writeFileSync(path.join(dir,'types.json'),JSON.stringify(diagnostics,null,2));assert.deepEqual(diagnostics,[]);
+   const entry=path.join(dir,'entry.ts');fs.writeFileSync(entry,"import {run} from './observer';import {nativeSourceClassModule} from './subject-factory.js';globalThis.completion=run(nativeSourceClassModule).then(value=>{globalThis.result=value;});");
+   const built=await esbuild.build({entryPoints:[entry],bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',metafile:true,plugins:[createLayaSourceAliasPlugin(engine)],loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},tsconfigRaw:{compilerOptions:{useDefineForClassFields:false}}});
+   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(dir,'bundle.js'),code);
+   const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));
+   await page.route('http://mouse-generated.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script></body>'}));
+   await page.goto('http://mouse-generated.test/');assert.deepEqual(errors,[]);await page.evaluate(()=>globalThis.completion);const web=await page.evaluate(()=>globalThis.result);await page.close();assert.deepEqual(errors,[]);assert.deepEqual(web.rows,expected);
+   assert.equal(guards,8);
+   assert.equal(web.guards.length,20);
+   results.push({target,web,artifact,diagnostics,guards,errors,providerGraph:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
+   console.log(JSON.stringify({target,rows:web.rows.length,errors:errors.length}));
+ }}finally{await browser.close();}
+ fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,sources,compilerGraph,runnerSha256:hash(fs.readFileSync(__filename,'utf8').replace(/\r\n/g,'\n')),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'),'utf8').replace(/\r\n/g,'\n'))},null,2));
+ console.log(JSON.stringify({out,status:'passed'}));
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});
