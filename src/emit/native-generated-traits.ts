@@ -79,6 +79,17 @@ export class NativeGeneratedClassTraits {
         const reflectedClass = (identity: string): string => isClass(identity) ? nativeGeneratedClassDeclaration(plan, identity).reflectedName : reflected(identity);
         const lexical: LexicalMember[] = [];
         const surfaces = new Map<string, {instance: Member[]; statics: Member[]; dynamic: boolean; final: boolean}>();
+        if(plan.nativeBindings.some(b=>b.qname==='flash.accessibility.AccessibilityImplementation'&&!!b.nativeBaseExport)) {
+            const declaredBy='flash.accessibility::AccessibilityImplementation';
+            const instance:Member[]=[{name:'stub',kind:'variable',type:'Boolean',declaredBy},
+                {name:'errno',kind:'variable',type:'uint',declaredBy}];
+            const counts:{[name:string]:number}={accDoDefaultAction:1,accLocation:1,get_accSelection:0,get_accFocus:0,
+                isLabeledBy:1,accSelect:2,getChildIDArray:0,get_accRole:1,get_accName:1,get_accValue:1,get_accState:1,get_accDefaultAction:1};
+            const returns:{[name:string]:string}={accDoDefaultAction:'void',accLocation:'*',get_accFocus:'uint',accSelect:'void',get_accRole:'uint',get_accName:'String',get_accValue:'String',get_accState:'uint',get_accDefaultAction:'String'};
+            Object.keys(counts).forEach(name=>instance.push({name,kind:'method',parameterCount:counts[name],declaredBy,
+                signature:returns[name]?{parameters:Array(counts[name]).fill('uint'),returns:returns[name],requiredCount:counts[name]}:undefined}));
+            surfaces.set('flash.accessibility.AccessibilityImplementation',{instance,statics:[],dynamic:false,final:false});
+        }
         if(plan.nativeBindings.some(b=>b.qname==='flash.utils.Proxy'&&!!b.nativeBaseExport)) {
             const instance:Member[]=Object.keys(generatedProxySignatures).map(name=>({name,uri:generatedProxyUri,kind:'method',
                 declaredBy:'flash.utils::Proxy',parameterCount:generatedProxySignatures[name].parameters.length} as Member));
@@ -273,7 +284,7 @@ export class NativeGeneratedClassTraits {
                         || member.kind === 'accessor' && (previous.access !== member.access || JSON.stringify(previous.type) !== JSON.stringify(member.type))
                         || member.kind === 'method' && previous.parameterCount !== member.parameterCount)
                         fail('inherited collision/partial override requires authority: ' + binding.identity + ':' + member.name);
-                    if(input.inheritScriptClasses && parent && member.kind==='method'
+                    if(input.inheritScriptClasses && (parent||binding.base==='flash.accessibility.AccessibilityImplementation') && member.kind==='method'
                         && (!member.signature || !previous.signature || JSON.stringify(member.signature)!==JSON.stringify(previous.signature)))
                         fail('selected parent override requires matching method signature: '+binding.identity+':'+member.name);
                     instance[index] = member;
@@ -287,7 +298,7 @@ export class NativeGeneratedClassTraits {
         build(this.binding);
         const surface = surfaces.get(owner);
         this.inheritInstanceLayout = !!input.inheritScriptClasses && !!this.binding.base
-            && isClass(this.binding.base);
+            && (isClass(this.binding.base)||this.binding.base==='flash.accessibility.AccessibilityImplementation');
         if(this.inheritInstanceLayout && surface.instance.some(item=>item.declaredBy===reflectedClass(owner) && item.override && item.kind!=='method' && !(item.kind==='accessor'&&qualifiedAccessor(item)&&item.parts)))
             fail('selected parent accessor override requires separate authority');
         this.instanceAccessors=frozen(surface.instance.filter(item=>item.kind==='accessor'&&qualifiedAccessor(item)&&item.parts

@@ -39,7 +39,7 @@ export interface NativeGeneratedDeclarationInput {
     /** Explicit single-Class script units whose failed initializer globals are retained. */
     classScriptSources?: ReadonlyArray<string>;
     sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean; authoredSymbol?: NativeGeneratedAuthoredSymbol}};
-    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher' | 'Sprite' | 'MovieClip' | 'Proxy'; nativeInterface?: true; nativeVector?: true}};
+    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'Error' | 'EventDispatcher' | 'Sprite' | 'MovieClip' | 'Proxy' | 'AccessibilityImplementation'; nativeInterface?: true; nativeVector?: true}};
 }
 export interface NativeGeneratedDeclarationBinding {
     readonly qname: string;
@@ -191,8 +191,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             || (provider.nativeBase === 'EventDispatcher' && name === 'flash.events.EventDispatcher' && provider.exportName === 'EventDispatcher')
             || (provider.nativeBase === 'Sprite' && name === 'flash.display.Sprite' && provider.exportName === 'Sprite')
             || (provider.nativeBase === 'MovieClip' && name === 'flash.display.MovieClip' && provider.exportName === 'MovieClip')
-            || (provider.nativeBase === 'Proxy' && name === 'flash.utils.Proxy' && provider.exportName === 'Proxy')))
-            fail('native base requires the exact supported Event, Error, EventDispatcher, Sprite, MovieClip or Proxy provider');
+            || (provider.nativeBase === 'Proxy' && name === 'flash.utils.Proxy' && provider.exportName === 'Proxy')
+            || (provider.nativeBase === 'AccessibilityImplementation' && name === 'flash.accessibility.AccessibilityImplementation' && provider.exportName === 'AccessibilityImplementation')))
+            fail('native base requires the exact supported Event, Error, EventDispatcher, Sprite, MovieClip, Proxy or AccessibilityImplementation provider');
         moduleName(provider.module);
         if (!/^[A-Za-z_$][\w$]*$/.test(provider.exportName)) fail('provider export name');
     });
@@ -288,7 +289,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                     fail('interface declaration authority required: ' + owner + ':' + name);
             });
             const baseNode = cls.findChild(K.EXTENDS), base = baseNode ? resolve(owner, baseNode.qualifiedName || baseNode.text) : 'Object';
-            if (base !== 'Object' && (!classes.has(base) || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite' || providers[base].nativeBase === 'MovieClip' || providers[base].nativeBase === 'Proxy')))
+            if (base !== 'Object' && (!classes.has(base) || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite' || providers[base].nativeBase === 'MovieClip' || providers[base].nativeBase === 'Proxy' || providers[base].nativeBase === 'AccessibilityImplementation')))
                 fail('base requires a planned source declaration: ' + owner + ':' + base);
             bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
                 tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length,

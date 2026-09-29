@@ -324,8 +324,8 @@ export class NativeCallableClasses {
                 this.fail('generated optional parameter requires qualified literal default');
         };
         const directSuper = (key: string, supplied: number): string => {
-            let owner = this.classes.get(this.own.base), depth = 0, method: Node;
-            for (; owner; owner = this.classes.get(owner.base), depth++) {
+            let ancestor = this.own.base, owner = this.classes.get(ancestor), depth = 0, method: Node;
+            for (; owner; ancestor = owner.base, owner = this.classes.get(ancestor), depth++) {
                 const content = this.sourceRoots.get(owner.qname).findChild(K.CONTENT);
                 const candidates = content.children.filter(member => member.findChild(K.NAME)
                     && member.findChild(K.NAME).text === key);
@@ -336,6 +336,23 @@ export class NativeCallableClasses {
                 }
                 if (owner.fields.some(field => field.name === key))
                     this.fail('super target is a source field');
+            }
+            if (!method && ancestor==='flash.accessibility.AccessibilityImplementation' && this.generated
+                && this.generated.options.plan.nativeBindings.some(binding=>binding.qname===ancestor&&!!binding.nativeBaseExport)) {
+                const counts:{[name:string]:number}={accDoDefaultAction:1,accLocation:1,get_accSelection:0,get_accFocus:0,
+                    isLabeledBy:1,accSelect:2,getChildIDArray:0,get_accRole:1,get_accName:1,get_accValue:1,get_accState:1,get_accDefaultAction:1};
+                if(!Object.prototype.hasOwnProperty.call(counts,key)||supplied!==counts[key])
+                    this.fail('native accessibility super method or arity requires authority');
+                let capture=superMethodNames.get(key);
+                if(!capture){
+                    capture=unique('superMethod'+superMethods.length);
+                    let prototype=baseName+'.prototype';
+                    for(let index=0;index<depth;index++)prototype=intrinsic+'.getPrototypeOf('+prototype+')';
+                    superMethods.push('const '+capture+' = '+intrinsic+'.getOwnPropertyDescriptor('+prototype+', '+JSON.stringify(key)+')!.value;');
+                    superMethodNames.set(key,capture);
+                }
+                const args=unique('superCallArguments');
+                return '((...'+args+': any[]): any => '+intrinsic+'.apply('+capture+', this, '+args+'))';
             }
             if (!method) this.fail('super method is absent from complete source ancestry');
             if (key === owner.name) this.fail('super constructor is not an instance method');

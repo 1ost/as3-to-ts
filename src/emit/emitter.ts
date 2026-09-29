@@ -519,7 +519,7 @@ export default class Emitter {
             if(!this.generated||!reference)throw new Error('AS3_ACCESSIBILITY_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
             const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
             const provider=inputs.providers&&inputs.providers['flash.accessibility.AccessibilityImplementation'];
-            if(!provider||provider.exportName!=='AccessibilityImplementation'||provider.nativeBase||provider.nativeInterface
+            if(!provider||provider.exportName!=='AccessibilityImplementation'||(provider.nativeBase&&provider.nativeBase!=='AccessibilityImplementation')||provider.nativeInterface
                 ||xmlGlobalProviderModule(provider.module,reference.module)!==module
                 ||!this.options.importModules||this.options.importModules['flash.accessibility.AccessibilityImplementation']!==module)
                 throw new Error('AS3_ACCESSIBILITY_REFERENCE_UNSUPPORTED: exact native provider binding required');
