@@ -30,7 +30,7 @@ export class NativeCallableClasses {
     private ts: any;
     private declarationDomain: NativeDeclarationDomain;
     private fail(message: string): never { throw new Error('AS3_CALLABLE_CLASS_UNSUPPORTED: ' + message); }
-    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false, private spriteOwnerReferences=false, private loaderReferences=false, private xmlReferences=false, private pointReference=false, private textFieldReference=false, private containerReference=false, private simpleButtonReference=false) {
+    constructor(source: string, options: NativeCallableClassOptions, lazy: {[qname: string]: string}, private methodBindingModule?: string, private coercionModule?: string, private metadata?: NativeClassMetadataOptions, private sourceHelpers?: Set<string>, private stringModule?: string, private lexical?: NativeLexicalMembers, private localAdditionModule?: string, private generated?: NativeGeneratedEmission, private localReferenceModule?: string, private classValueModule?:string, private sourceErrorModule?:string, private displayReference=false, private dateReference=false, private byteArrayReference=false, private movieClipReference=false, private textFormatReference=false, private interactiveReference=false, private accessibilityReference=false, private spriteValueReferences=false, private spriteOwnerReferences=false, private loaderReferences=false, private xmlReferences=false, private pointReference=false, private textFieldReference=false, private containerReference=false, private simpleButtonReference=false, private tabStopReference=false) {
         if (!options) return;
         this.declarationDomain = nativeDeclarationDomainFor(metadata,options,lexical);
         if (typeof methodBindingModule !== 'string' || !methodBindingModule.trim()
@@ -740,6 +740,7 @@ export class NativeCallableClasses {
                         &&!(this.pointReference&&reference.identity==='flash.geom.Point')
                         &&!(this.textFieldReference&&reference.identity==='flash.text.TextField')
                         &&!(this.simpleButtonReference&&reference.identity==='flash.display.SimpleButton')
+                        &&!(this.tabStopReference&&reference.identity==='flash.text.engine.TabStop')
                         &&!(this.dateReference&&reference.identity==='Date')
                         // Canonical display allocation proof also authenticates Sprite
                         // returns; other native display families remain separately held.
