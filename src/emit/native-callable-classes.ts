@@ -21,6 +21,10 @@ interface SourceClass {
     parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}}[]; usesArguments: boolean; rest?: string;
     instanceMembers: {name: string; method: boolean}[];
 }
+// These native entry protocols have AIR-qualified zero-argument construction.
+function implicitNativeBase(identity:string):boolean {
+    return ['flash.events.EventDispatcher','flash.display.Sprite'].indexOf(identity)>=0;
+}
 
 /** Explicit closed-source prototype. No provider allocation or constructor-body dispatcher. */
 export class NativeCallableClasses {
@@ -152,7 +156,8 @@ export class NativeCallableClasses {
                 let calls=0;
                 const scan=(node:Node):void=>{if(node.kind===K.CALL&&node.children[0]&&node.children[0].text==='super')calls++;node.children.forEach(scan);};
                 if(constructor)scan(constructor.findChild(K.BLOCK));
-                if(calls!==1)this.fail('native base requires one explicit source base call');
+                if(calls!==1&&!(calls===0&&implicitNativeBase(base)))
+                    this.fail('native base requires one explicit source base call');
             }
             const parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}}[] = [];
             let usesArguments = false, rest: string;
@@ -649,7 +654,8 @@ export class NativeCallableClasses {
                 ts.forEachChild(node, (child: any) => walk(child, insideSuperArguments, childFunction));
             };
             walk(member.body);
-            if (constructor && this.own.base && superCount !== 1) this.fail('missing source-base constructor call');
+            const implicitNative=constructor&&directNativeBase&&superCount===0&&implicitNativeBase(this.own.base);
+            if (constructor && this.own.base && superCount !== 1&&!implicitNative) this.fail('missing source-base constructor call');
             let result = source.slice(member.body.getStart(file) + 1, member.body.end - 1);
             const offset = member.body.getStart(file) + 1;
             // Replace the original token before inserting a wrapper at the same
@@ -657,6 +663,7 @@ export class NativeCallableClasses {
             edits.sort((a,b) => b.start - a.start || b.end - a.end).forEach(edit => {
                 result = result.slice(0, edit.start - offset) + edit.value + result.slice(edit.end - offset);
             });
+            if(implicitNative)result=intrinsic+'.callNativeBase(this,'+identity+','+baseName+',[]);\n'+result;
             result = this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
             if (typedLocals) result = typedLocals.lower(result, constructor ? this.own.name : namespaceMethods.has(member)?namespaceMethods.get(member).name:member.name.text,
                 !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), this.generated ? localReference : provider, localCoercion, localString, localAddition, intrinsic + '.array', unique, referenceToken,
@@ -805,7 +812,7 @@ export class NativeCallableClasses {
                     + (member.kind === S.GetAccessor ? 'get' : 'set') + ': ' + functionValue + ', configurable:true, enumerable:false}));');
             } else this.fail('unrecognized complete class member');
         });
-        if (!ctor && this.own.base) {
+        if (!ctor && this.own.base && !(directNativeBase&&implicitNativeBase(this.own.base))) {
             // An implicit constructor owns a zero-argument signature and calls
             // its immediate source base with no arguments. The base supplies
             // optional defaults and enters any qualified native ancestor.
@@ -840,7 +847,8 @@ export class NativeCallableClasses {
         const sourceBaseName = this.own.base && (directNativeBase ? this.own.base==='flash.utils.Proxy'
             ? 'Pick<'+nativeBaseClass+',keyof '+nativeBaseClass+'>' : nativeBaseClass : this.classes.get(this.own.base).name);
         const constructorBody = ctor ? body(ctor, true) : this.own.base
-            ? intrinsic+'.expectBase(this,'+identity+','+baseName+');'+intrinsic+'.apply('+baseName+',this,[]);' : '';
+            ? directNativeBase ? intrinsic+'.callNativeBase(this,'+identity+','+baseName+',[]);'
+                : intrinsic+'.expectBase(this,'+identity+','+baseName+');'+intrinsic+'.apply('+baseName+',this,[]);' : '';
         const tail = ctor && ctor.body.statements[ctor.body.statements.length - 1];
         const completion = !constructorReturns && tail && tail.kind === S.ThrowStatement ? '' : succeeded + ' = true;';
         const completedBody = constructorReturns ? constructorCompletion + ': {\n' + constructorBody + '\n}' : constructorBody;
