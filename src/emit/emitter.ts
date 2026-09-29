@@ -3253,7 +3253,8 @@ function emitSourceErrorConstruction(emitter:Emitter, node:Node):boolean {
 	const exports:{[name:string]:string} = {
 		Error: 'as3CreateError',
 		ArgumentError: 'as3CreateArgumentError',
-		ReferenceError: 'as3CreateReferenceError'
+		ReferenceError: 'as3CreateReferenceError',
+        RangeError: 'as3CreateRangeError'
 	};
 	const exported = exports[callee.text];
 	if (!exported) return false;
@@ -3775,6 +3776,7 @@ function emitCall(emitter:Emitter, node:Node):void {
     if (emitBuiltinIntCoercion(emitter, node)) return;
     if (emitBuiltinBooleanCoercion(emitter, node)) return;
 	if (emitBuiltinObjectCreation(emitter, node)) return;
+    if (emitGeneratedArraySortCall(emitter,node)) return;
 	if (emitArraySortOn(emitter, node)) return;
 	if (emitTweenMigrationCall(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
@@ -4498,6 +4500,54 @@ function emitDelete(emitter:Emitter, node:Node):void {
 	}
 	emitter.catchup(node.start);
 	visitNodes(emitter, node.children);
+}
+
+/** Resolve source Array authority before lexical fields become native accesses. */
+function generatedArraySortAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    if(!emitter.generated||emitter.options.nativeArraySortModule===undefined||!node
+        ||node.kind!==NodeKind.DOT||node.children.length!==2)return null;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),key=node.children[1];
+    if(key.kind!==NodeKind.LITERAL||['sort','sortOn'].indexOf(key.text)<0
+        ||emitter.generated.lexical.resolveTypeName('Array')!=='Array')return null;
+    let array=false;
+    if(receiver.kind===NodeKind.IDENTIFIER){
+        const definition=emitter.findDefInScope(receiver.text);
+        array=!!definition&&!definition.bound&&definition.as3Type==='Array';
+        if(!definition||definition.bound)array=emitter.generated.lexical.own.some(t=>!t.static&&t.kind==='variable'
+            &&t.name===receiver.text&&!!t.type&&t.type.text==='Array')
+            ||emitter.generated.projection.instanceTraits.some(t=>t.kind==='variable'&&t.name===receiver.text&&t.type==='Array');
+    }else if(receiver.kind===NodeKind.DOT&&receiver.children.length===2
+        &&receiver.children[0].kind===NodeKind.IDENTIFIER&&receiver.children[0].text==='this'
+        &&receiver.children[1].kind===NodeKind.LITERAL){
+        const name=receiver.children[1].text;
+        array=emitter.generated.lexical.own.some(t=>!t.static&&t.kind==='variable'&&t.name===name&&!!t.type&&t.type.text==='Array')
+            ||emitter.generated.projection.instanceTraits.some(t=>t.kind==='variable'&&t.name===name&&t.type==='Array');
+    }
+    return array?{receiver:node.children[0],key,literalKey:key.text}:null;
+}
+function emitGeneratedArraySortRead(emitter:Emitter,node:Node):boolean {
+    const access=generatedArraySortAccess(emitter,node);if(!access)return false;
+    const outer=outerEncapsulatedExpression(node),parent=outer&&outer.parent;
+    if(parent&&(parent.children[0]===outer&&[NodeKind.ASSIGN,NodeKind.NEW].indexOf(parent.kind)>=0
+        ||[NodeKind.DELETE,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC].indexOf(parent.kind)>=0))
+        throw new Error('AS3_ARRAY_SORT_UNSUPPORTED: generated Array method mutation/construction held');
+    const helper=propertyHelper(emitter,'as3GetProperty',emitter.generated.propertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitPropertyKey(emitter,access);
+    emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+function emitGeneratedArraySortCall(emitter:Emitter,node:Node):boolean {
+    const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
+    let access=generatedArraySortAccess(emitter,callee);
+    if(!access&&callee&&callee.kind===NodeKind.DOT&&callee.children.length===2
+        &&callee.children[1].kind===NodeKind.LITERAL&&['call','apply'].indexOf(callee.children[1].text)>=0
+        &&generatedArraySortAccess(emitter,unwrapEncapsulatedExpression(callee.children[0])))
+        access={receiver:callee.children[0],key:callee.children[1],literalKey:callee.children[1].text};
+    if(!access||!args)return false;
+    if(emitter.isNew)throw new Error('AS3_ARRAY_SORT_UNSUPPORTED: Array method construction held');
+    const helper=propertyHelper(emitter,'as3CallNamedProperty',emitter.generated.propertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitPropertyKey(emitter,access);emitter.insert(',()=>[');
+    args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 
 function emitArraySortOn(emitter:Emitter, node:Node):boolean {
@@ -6061,6 +6111,7 @@ function qualifiedNativeStaticRead(emitter:Emitter,node:Node):{module:string;exp
 }
 
 function emitDot(emitter:Emitter, node:Node) {
+    if (emitGeneratedArraySortRead(emitter,node)) return;
     if (emitGeneratedArrayFieldRead(emitter,node)) return;
     if (emitLexicalApplicationDomain(emitter,node)) return;
     const nativeRead=qualifiedNativeStaticRead(emitter,node);
