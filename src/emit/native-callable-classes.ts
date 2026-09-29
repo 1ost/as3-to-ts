@@ -1,4 +1,5 @@
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
+import {generatedProxyMember,generatedProxyUri} from './native-generated-proxy';
 import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource} from './native-generated-declarations';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {generatedMethodCompletes} from './native-generated-completions';
@@ -439,6 +440,26 @@ export class NativeCallableClasses {
             return domainImport+'.'+(binding?binding.tokenExport:helper?helper.tokenExport:native.referenceExport);
         } : undefined;
         const text = (node: any): string => node.getText(file);
+        const namespaceMethods=new Map<any,{name:string;encoded:string;node:Node}>();
+        if(this.generated) for(const member of cls.members) {
+            if(!member.name||member.name.kind!==S.ComputedPropertyName)continue;
+            const expression=member.name.expression;
+            if(expression.kind!==S.Identifier||member.kind!==S.MethodDeclaration)this.fail('computed member identity');
+            let identity:string;
+            for(const statement of file.statements)if(statement.kind===S.VariableStatement)
+                for(const variable of statement.declarationList.declarations)if(variable.name.text===expression.text) {
+                    const init=variable.initializer;
+                    if(init&&init.kind===S.CallExpression&&text(init.expression)==='globalThis.Symbol.for'
+                        &&init.arguments.length===1&&init.arguments[0].kind===S.StringLiteral)identity=init.arguments[0].text;
+                }
+            const own=this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node=>{
+                const name=node.findChild(K.NAME);
+                return name&&identity==='as3.namespace.member@1:'+JSON.stringify([generatedProxyUri,name.text])
+                    &&!!generatedProxyMember(this.generated.options.plan,this.own.qname,node);
+            });
+            if(!own)this.fail('computed method requires exact source namespace authority');
+            namespaceMethods.set(member,{name:own.findChild(K.NAME).text,encoded:text(expression),node:own});
+        }
         const params = (member: any, signature: boolean): string => member.parameters.filter((p:any)=>signature||!this.generated||!p.dotDotDotToken).map((p: any) => {
             if (!signature) return this.generated?text(p.name)+': '+(p.type?text(p.type):'any'):text(p);
             return (p.dotDotDotToken ? '...' : '') + text(p.name) + (p.questionToken || p.initializer ? '?' : '')
@@ -448,6 +469,16 @@ export class NativeCallableClasses {
         const instanceTypes: string[] = [], staticTypes: string[] = [], definitions: string[] = [], initializers: string[] = [];
         const staticMethods: string[] = [];
         let ctor: any, constructorReturns = 0;
+        const sourceMethodNode=(member:any,constructor:boolean):Node=>{
+            const namespaced=namespaceMethods.get(member);if(namespaced)return namespaced.node;
+            const kind=member.kind===S.GetAccessor?K.GET:member.kind===S.SetAccessor?K.SET:K.FUNCTION;
+            const isStatic=!!member.modifiers&&member.modifiers.some((mod:any)=>mod.kind===S.StaticKeyword);
+            return this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node=>{
+                const mods=node.findChild(K.MOD_LIST),sourceStatic=!!mods&&mods.children.some(mod=>mod.text==='static');
+                return node.kind===kind&&node.findChild(K.NAME).text===(constructor?this.own.name:member.name.text)
+                    &&sourceStatic===isStatic&&!generatedProxyMember(this.generated.options.plan,this.own.qname,node);
+            });
+        };
         const body = (member: any, constructor: boolean, returnType?: string): string => {
             if (!member.body) this.fail('bodyless member');
             const returnPrefix = '<any>'+(returnType==='"Class"'?classValue+'.as3CoerceClass(':generatedProperty+'.coerceAS3PropertyValue(');
@@ -594,14 +625,14 @@ export class NativeCallableClasses {
                 result = result.slice(0, edit.start - offset) + edit.value + result.slice(edit.end - offset);
             });
             result = this.metadata ? lowerNativeSourceOperations(result, provider, compilerHelpers, unique, this.lexical) : result;
-            if (typedLocals) result = typedLocals.lower(result, constructor ? this.own.name : member.name.text,
+            if (typedLocals) result = typedLocals.lower(result, constructor ? this.own.name : namespaceMethods.has(member)?namespaceMethods.get(member).name:member.name.text,
                 !!member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword), this.generated ? localReference : provider, localCoercion, localString, localAddition, intrinsic + '.array', unique, referenceToken,
                 member.kind===S.GetAccessor?K.GET:member.kind===S.SetAccessor?K.SET:K.FUNCTION,this.classValueModule?classValue:undefined,
                 this.generated?(identity,value)=>{
                     const vector=this.generated.options.plan.vectors.find(v=>v.identity===identity);
                     if(!vector)this.fail('unplanned Vector local identity');
                     return generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(vector.name)+',vector:'+domainImport+'.'+vector.specExport+'})';
-                }:undefined,this.generated?generatedProperty:undefined,this.generated?value=>domainImport+'.coerceTweenMaxHandle('+value+')':undefined);
+                }:undefined,this.generated?generatedProperty:undefined,this.generated?value=>domainImport+'.coerceTweenMaxHandle('+value+')':undefined,this.generated?sourceMethodNode(member,constructor).start:undefined);
             return result;
         };
         const accessorTypes = new Set<string>();
@@ -609,10 +640,11 @@ export class NativeCallableClasses {
             const isStatic = member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword);
             const destination = isStatic ? name : name + '.prototype';
             if (member.kind === S.Constructor) { ctor = member; return; }
-            if (!member.name || member.name.kind !== S.Identifier) this.fail('computed member identity');
-            const key = member.name.text, lexicalMember = this.lexical && this.lexical.trait(key, !!isStatic)
-                || this.generated && this.generated.lexical.trait(key,!!isStatic);
-            const encoded = lexicalMember ? lexicalMember.key : JSON.stringify(key);
+            const namespaced=namespaceMethods.get(member);
+            if (!member.name || member.name.kind !== S.Identifier && !namespaced) this.fail('computed member identity');
+            const key = namespaced?namespaced.name:member.name.text, lexicalMember = !namespaced && (this.lexical && this.lexical.trait(key, !!isStatic)
+                || this.generated && this.generated.lexical.trait(key,!!isStatic));
+            const encoded = namespaced?namespaced.encoded:lexicalMember ? lexicalMember.key : JSON.stringify(key);
             if (key === 'constructor') this.fail('reserved constructor member');
             if (isStatic && ['prototype', 'call', 'apply', 'bind'].indexOf(key) >= 0)
                 this.fail('reserved static callable constructor identity');
@@ -647,9 +679,10 @@ export class NativeCallableClasses {
             let signature = '', returnType: string;
             if (this.generated && [S.MethodDeclaration,S.GetAccessor,S.SetAccessor].indexOf(member.kind)>=0) {
                 const sourceKind=member.kind===S.GetAccessor?K.GET:member.kind===S.SetAccessor?K.SET:K.FUNCTION;
-                const sourceMethod = this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node => {
+                const sourceMethod = namespaced?namespaced.node:this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node => {
                     const mods=node.findChild(K.MOD_LIST),sourceStatic=!!mods&&mods.children.some(mod=>mod.text==='static');
-                    return node.kind === sourceKind && node.findChild(K.NAME).text === key && sourceStatic === !!isStatic;
+                    return node.kind === sourceKind && node.findChild(K.NAME).text === key && sourceStatic === !!isStatic
+                        && !generatedProxyMember(this.generated.options.plan,this.own.qname,node);
                 });
                 const parameters = sourceMethod.findChild(K.PARAMETER_LIST).children;
                 const fixed=parameters.filter(p=>!p.findChild(K.REST)),spread=parameters.find(p=>!!p.findChild(K.REST));
@@ -719,7 +752,9 @@ export class NativeCallableClasses {
                 + (this.lexical ? provider + '.as3CheckArgumentCount(arguments.length,' + member.parameters.length + ',' + member.parameters.length + ');' : '')
                 + signature + body(member, false, returnType) + '}';
             if (member.kind === S.MethodDeclaration) {
-                if (!lexicalMember) (isStatic ? staticTypes : instanceTypes).push(key + '(' + params(member, true) + '): ' + type(member) + ';');
+                // Namespace hooks are selected through the authenticated runtime
+                // trait table; do not expose them as public structural members.
+                if (!lexicalMember && !namespaced) (isStatic ? staticTypes : instanceTypes).push(key + '(' + params(member, true) + '): ' + type(member) + ';');
                 definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
                     + ', {value: ' + functionValue + ', writable:true, configurable:true, enumerable:false});');
                 if (isStatic && !lexicalMember) staticMethods.push(key);
@@ -766,7 +801,8 @@ export class NativeCallableClasses {
             + ', {value:' + field.value + ', writable:true, enumerable:true, configurable:false});').join('\n');
         const ancestry = cls.heritageClauses && cls.heritageClauses.find((clause:any)=>clause.token===S.ExtendsKeyword);
         const base = ancestry ? 'const ' + baseName + ' = ' + intrinsic + '.constructorIdentity(' + (directNativeBase ? nativeBaseClass : text(ancestry.types[0].expression)) + ');\n' : '';
-        const sourceBaseName = this.own.base && (directNativeBase ? nativeBaseClass : this.classes.get(this.own.base).name);
+        const sourceBaseName = this.own.base && (directNativeBase ? this.own.base==='flash.utils.Proxy'
+            ? 'Pick<'+nativeBaseClass+',keyof '+nativeBaseClass+'>' : nativeBaseClass : this.classes.get(this.own.base).name);
         const constructorBody = ctor ? body(ctor, true) : this.own.base
             ? intrinsic+'.expectBase(this,'+identity+','+baseName+');'+intrinsic+'.apply('+baseName+',this,[]);' : '';
         const tail = ctor && ctor.body.statements[ctor.body.statements.length - 1];

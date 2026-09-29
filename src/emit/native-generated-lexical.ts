@@ -1,4 +1,5 @@
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
+import {generatedProxyMember} from './native-generated-proxy';
 import {NativeTypedLocals, NestedLocalFunction} from './native-typed-locals';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
@@ -75,6 +76,7 @@ export class NativeGeneratedLexical {
             if(!inherited)(this as any).ownClass=cls;
             cls.findChild(K.CONTENT).children.forEach(member=>{
                 if([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0)return;
+                if(generatedProxyMember(plan,name,member))return;
                 const mods=modifiers(member), visibility=mods.indexOf('public')>=0?'public':mods.indexOf('private')>=0?'private':mods.indexOf('protected')>=0?'protected':'internal';
                 if(visibility==='public'||inherited&&visibility==='private')return;
                 if(visibility==='internal'){
@@ -140,8 +142,13 @@ export class NativeGeneratedLexical {
         });
         const forInTarget=(node:Node):void=>{
             if(node.kind!==K.FORIN)return;
-            const target=node.children[0].children[0];
-            if(!target||target.kind!==K.IDENTIFIER)fail('for-in requires an existing wildcard slot');
+            let target=node.children[0].children[0];
+            if(target&&target.kind===K.VAR_LIST&&target.findChildren(K.NAME_TYPE_INIT).length===1) {
+                const value=target.findChild(K.NAME_TYPE_INIT),type=value.findChild(K.TYPE);
+                if(value.findChild(K.INIT)||!type||type.text!=='String')fail('inline for-in requires a String declaration');
+                target=value.findChild(K.NAME);
+            }
+            if(!target||[K.IDENTIFIER,K.NAME].indexOf(target.kind)<0)fail('for-in requires an existing wildcard slot');
             for(let scope=node.parent;scope;scope=scope.parent){
                 if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===target.text)fail('catch-shadow for-in target held');
                 if([K.FUNCTION,K.LAMBDA,K.GET,K.SET].indexOf(scope.kind)<0)continue;
@@ -168,12 +175,12 @@ export class NativeGeneratedLexical {
                     return value.findChild(K.NAME).text;
                 });
                 const returned=node.findChild(K.TYPE),returnType=returned&&this.resolveTypeName(returned.text);
-                if(returned&&['*','void','Object'].indexOf(returnType)<0)fail('anonymous typed return held');
+                if(returned&&['*','void','Object','String'].indexOf(returnType)<0)fail('anonymous typed return held');
                 const outerNames:string[]=[];
                 const outer=(n:Node):void=>{if(n.kind===K.LAMBDA||n.kind===K.FUNCTION&&n!==method)return;if(n.kind===K.NAME_TYPE_INIT)outerNames.push(n.findChild(K.NAME).text);n.children.forEach(outer);};outer(method);
                 const inspect=(n:Node):void=>{
                     forInTarget(n);
-                    if(returnType==='Object'&&n.kind===K.RETURN&&!n.children.length)fail('anonymous typed bare return held');
+                    if((returnType==='Object'||returnType==='String')&&n.kind===K.RETURN&&!n.children.length)fail('anonymous typed bare return held');
                     if(n.kind===K.DOT&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='this')fail('anonymous receiver property access held');
                     if([K.LAMBDA,K.FUNCTION,K.TRY].indexOf(n.kind)>=0)fail('nested anonymous callable body held');
                     if(n.kind===K.IDENTIFIER&&['super','arguments'].concat(memberNames).indexOf(n.text)>=0)fail('anonymous callable receiver/member lookup held');

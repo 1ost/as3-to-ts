@@ -1,4 +1,5 @@
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
+import {generatedProxyMember, generatedProxyNamespace, generatedProxyUri, generatedProxySignatures} from './native-generated-proxy';
 import Node from '../syntax/node';
 import {nativeSpriteTraits} from './native-sprite-traits';
 import {nativeMovieClipTraits} from './native-movieclip-traits';
@@ -15,6 +16,7 @@ interface ReferenceType {readonly name: string; readonly referenceExport?: strin
 type TraitType = string | ReferenceType;
 interface Trait {
     readonly name: string;
+    readonly uri?: string;
     readonly kind: 'variable' | 'constant' | 'method' | 'accessor';
     readonly type?: TraitType;
     readonly access?: 'readonly' | 'writeonly' | 'readwrite';
@@ -77,6 +79,11 @@ export class NativeGeneratedClassTraits {
         const reflectedClass = (identity: string): string => isClass(identity) ? nativeGeneratedClassDeclaration(plan, identity).reflectedName : reflected(identity);
         const lexical: LexicalMember[] = [];
         const surfaces = new Map<string, {instance: Member[]; statics: Member[]; dynamic: boolean; final: boolean}>();
+        if(plan.nativeBindings.some(b=>b.qname==='flash.utils.Proxy'&&!!b.nativeBaseExport)) {
+            const instance:Member[]=Object.keys(generatedProxySignatures).map(name=>({name,uri:generatedProxyUri,kind:'method',
+                declaredBy:'flash.utils::Proxy',parameterCount:generatedProxySignatures[name].parameters.length} as Member));
+            surfaces.set('flash.utils.Proxy',{instance,statics:[],dynamic:false,final:false});
+        }
         if(plan.nativeBindings.some(binding=>!!binding.eventBaseExport)) {
             const declaredBy='flash.events::Event';
             const instance: Member[] = [['type','String'],['bubbles','Boolean'],['cancelable','Boolean'],['eventPhase','uint'],['target','Object'],['currentTarget','Object']]
@@ -141,8 +148,13 @@ export class NativeGeneratedClassTraits {
             const own: {instance: Member[]; statics: Member[]} = {instance: [], statics: []};
             const visit = (member: Node): void => {
                 const mods = flags(member), isStatic = mods.indexOf('static') >= 0;
-                if (mods.some(mod => ['public','private','protected','internal','static','override','final'].indexOf(mod) < 0))
+                const proxyMember=generatedProxyMember(plan,binding.identity,member);
+                if (!proxyMember && mods.some(mod => ['public','private','protected','internal','static','override','final'].indexOf(mod) < 0))
                     fail('custom namespace or unsupported member modifier: ' + binding.identity);
+                if(member.kind===K.USE) {
+                    const ns=generatedProxyNamespace(plan,binding.identity);
+                    if(ns&&ns.resolve(member,member.text)===generatedProxyUri)return;
+                }
                 if ([K.NAMESPACE_DECLARATION,K.USE,K.INCLUDE,K.EMBED].indexOf(member.kind) >= 0)
                     fail('namespace/include/embed declaration authority: ' + binding.identity);
                 if ([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind) < 0) return;
@@ -152,13 +164,13 @@ export class NativeGeneratedClassTraits {
                     if (isStatic || mods.indexOf('override') >= 0 || visibility[0] && visibility[0] !== 'public') fail('source constructor modifiers');
                     return;
                 }
-                if (visibility[0] !== 'public') {
+                if (visibility[0] !== 'public' && !proxyMember) {
                     lexical.push({owner:binding.identity,start:member.start,end:member.end,visibility:visibility[0] || 'internal',static:isStatic});
                     return;
                 }
                 const list = own[isStatic ? 'statics' : 'instance'];
                 const add = (value: Member): void => {
-                    const previous = list.find(item => item.name === value.name);
+                    const previous = list.find(item => item.name === value.name && item.uri===value.uri);
                     if (previous) {
                         if (previous.kind !== 'accessor' || value.kind !== 'accessor' || previous.access === value.access
                             || previous.access === 'readwrite' || JSON.stringify(previous.type) !== JSON.stringify(value.type)
@@ -168,7 +180,7 @@ export class NativeGeneratedClassTraits {
                         previous.parts=Object.assign({},previous.parts,value.parts);
                     } else list.push(value);
                 };
-                const common = {declaredBy:binding.reflectedName,override:mods.indexOf('override') >= 0,final:mods.indexOf('final') >= 0};
+                const common = {declaredBy:binding.reflectedName,override:mods.indexOf('override') >= 0,final:mods.indexOf('final') >= 0,...(proxyMember?{uri:generatedProxyUri}:{})};
                 if (isStatic && common.override) fail('static override authority');
                 if (member.kind === K.VAR_LIST || member.kind === K.CONST_LIST) {
                     if (common.override || common.final) fail('storage override/final modifier');
@@ -236,7 +248,7 @@ export class NativeGeneratedClassTraits {
             cls.findChild(K.CONTENT).children.forEach(visit);
             const instance = inherited ? inherited.instance.slice() : [];
             own.instance.forEach(member => {
-                const index = instance.findIndex(item => item.name === member.name), previous = instance[index];
+                const index = instance.findIndex(item => item.name === member.name && item.uri===member.uri), previous = instance[index];
                 if (previous) {
                     if(inherited && inherited.instance.some(trait=>trait.declaredBy==='flash.display::MovieClip')
                         && nativeMovieClipTraits.some(trait=>trait.name===previous.name&&trait.declaredBy===previous.declaredBy))
@@ -283,13 +295,14 @@ export class NativeGeneratedClassTraits {
                 get:item.parts.get&&item.parts.get.owner===reflectedClass(owner)?item.parts.get:undefined,
                 set:item.parts.set&&item.parts.set.owner===reflectedClass(owner)?item.parts.set:undefined}})));
         this.nativeAccessorBase=this.binding.base==='flash.display.Sprite' && this.instanceAccessors.some(a=>a.parts.get&&a.parts.get.override||a.parts.set&&a.parts.set.override);
-        this.instanceMethods=frozen(surface.instance.filter(item=>item.kind==='method' && item.declaredBy===reflectedClass(owner)
+        this.instanceMethods=frozen(surface.instance.filter(item=>!item.uri && item.kind==='method' && item.declaredBy===reflectedClass(owner)
             && !!item.signature && (!item.override || this.inheritInstanceLayout)).map(item=>({name:item.name,
                 parameters:item.signature.parameters,returns:item.signature.returns,requiredCount:item.signature.requiredCount,override:!!item.override,final:!!item.final})));
         const members = (items: Member[]): any => {
             const result: any = {variables:[],constants:[],methods:[],accessors:[]};
             items.forEach(item => {
                 const value: any = {name:item.name,declaredBy:item.declaredBy};
+                if(item.uri)value.uri=item.uri;
                 if (item.kind === 'method') value.parameterCount = item.parameterCount;
                 else if (item.kind === 'accessor') {value.access = item.access;if(item.parts)value.declaredBy=(item.parts.get||item.parts.set).owner;if(qualifiedAccessor(item))value.type=item.type;}
                 else value.type = typeof item.type === 'string' ? item.type : item.type.name;
@@ -298,7 +311,7 @@ export class NativeGeneratedClassTraits {
             return result;
         };
         const traits = (items: Member[]): Trait[] => items.map(item => Object.assign({name:item.name,kind:item.kind},
-            item.type === undefined ? {} : {type:item.type},item.kind === 'accessor' ? {access:item.access} : {}));
+            item.uri ? {uri:item.uri} : {}, item.type === undefined ? {} : {type:item.type},item.kind === 'accessor' ? {access:item.access} : {}));
         this.metadata = frozen({name:reflectedClass(owner),base:this.binding.base ? reflectedClass(this.binding.base) : 'Object',
             isDynamic:surface.dynamic,isFinal:surface.final,instance:members(surface.instance),statics:members(surface.statics)});
         this.instanceConstants = frozen(surface.instance.filter(item=>item.kind==='constant').map(item=>({name:item.name,literal:item.constantLiteral})));
@@ -314,6 +327,7 @@ export class NativeGeneratedClassTraits {
         if (this.inheritInstanceLayout && (!base || !/^[A-Za-z_$][\w$]*$/.test(base))) fail('compiler base expression');
         const emit = (traits: ReadonlyArray<Trait>): string => '[' + traits.map(trait => {
             const fields = 'name:' + JSON.stringify(trait.name) + ',kind:' + JSON.stringify(trait.kind)
+                + (trait.uri ? ',uri:'+JSON.stringify(trait.uri)+',key:globalThis.Symbol.for('+JSON.stringify('as3.namespace.member@1:'+JSON.stringify([trait.uri,trait.name]))+')' : '')
                 + (trait.access === undefined ? '' : ',access:' + JSON.stringify(trait.access));
             if (trait.type === undefined) return '{' + fields + '}';
             const type = trait.type === 'Array' ? '{name:"Array",reference:' + array + '}' : typeof trait.type === 'string' ? JSON.stringify(trait.type)

@@ -1,3 +1,4 @@
+import {generatedProxyUri,generatedProxySignatures} from './native-generated-proxy';
 import {nativeGeneratedInterfaceBindings, nativeGeneratedDeclarationResolver} from './native-generated-declarations';
 import {intrinsicStringAs} from './native-string-casts';
 import {NativeTweenPlans,NativeTweenSourcePlans,tweenOptionNames} from './native-tween-plans';
@@ -764,7 +765,7 @@ export default class Emitter {
             this.lexical = new NativeLexicalMembers(this.source, filtered, this.options.nativeLexicalMembersModule, this.options.nativeCallableMetadata, this.options.nativeTypedLocals === true);
         }
 		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris,
-			this.options.nativeProxyModule !== undefined, this.options.nativeSourceAncestry);
+			this.options.nativeProxyModule !== undefined || !!this.generated && this.generated.options.plan.nativeBindings.some(b=>b.qname==='flash.utils.Proxy'&&!!b.nativeBaseExport), this.options.nativeSourceAncestry);
 		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization,
             node=>{
                 const value=outerEncapsulatedExpression(node),parent=value.parent;
@@ -1090,7 +1091,7 @@ function emitName(emitter:Emitter, node:Node):void {
     const member = emitter.namespaces.member(node);
     emitter.catchup(node.start);
     if (!member) return;
-    if (emitter.options.nativeProxyModule !== undefined
+    if (!emitter.generated && emitter.options.nativeProxyModule !== undefined
         && member.uri === 'http://www.adobe.com/2006/actionscript/flash/proxy') {
         emitter.insert(node.text);
         emitter.skipTo(node.end);
@@ -1584,8 +1585,8 @@ function emitFunction(emitter:Emitter, node:Node):void {
   emitter.withScope(getFunctionDeclarations(emitter,node),()=>{
    parameters.children.forEach((p,index)=>{if(index)emitter.insert(',');emitter.skipTo(p.start);visitNode(emitter,p);emitter.catchup(p.end);});
    emitter.insert('):any ');emitter.skipTo(body.start);visitNode(emitter,body);
-   if(anonymous.returned==='Object'){
-    // AIR coerces an implicit undefined completion to null for Object returns.
+   if(anonymous.returned==='Object'||anonymous.returned==='String'){
+    // AIR coerces an implicit undefined completion to null for Object and String returns.
     emitter.catchup(body.end-1);emitter.insert('\nreturn null;\n');
    }
    emitter.catchup(body.end);
@@ -1650,8 +1651,9 @@ function emitParametersList(emitter:Emitter, node:Node):void {
 
 function emitForIn(emitter:Emitter, node:Node):void {
  if(emitter.generated){
-  const target=node.children[0].children[0],receiver=node.children[1].children[0],body=node.children[2];
-  const binding=target&&target.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(target.text);
+  const declaration=node.children[0].children[0],target=declaration&&declaration.kind===NodeKind.VAR_LIST
+   ?declaration.findChild(NodeKind.NAME_TYPE_INIT).findChild(NodeKind.NAME):declaration,receiver=node.children[1].children[0],body=node.children[2];
+  const binding=target&&[NodeKind.IDENTIFIER,NodeKind.NAME].indexOf(target.kind)>=0&&emitter.findDefInScope(target.text);
   if(!binding||binding.bound||['*','String','Object'].indexOf(binding.as3Type)<0)throw new Error('AS3_ENUMERATION_UNSUPPORTED: generated for-in requires a declared wildcard, String or Object target');
   for(let scope=node.parent;scope&&[NodeKind.FUNCTION,NodeKind.LAMBDA,NodeKind.GET,NodeKind.SET].indexOf(scope.kind)<0;scope=scope.parent)
    if(scope.kind===NodeKind.CATCH&&scope.findChild(NodeKind.NAME).text===target.text)throw new Error('AS3_ENUMERATION_UNSUPPORTED: catch-shadow loop target held');
@@ -3729,7 +3731,26 @@ function emitGeneratedParentRemoval(emitter:Emitter,node:Node):boolean {
     emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 
+function emitGeneratedProxyNamespaceCall(emitter:Emitter,node:Node):boolean {
+    if(!emitter.generated||node.children[0].kind!==NodeKind.NAMESPACE_ACCESS)return false;
+    const access=emitter.namespaces.access(node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);
+    if(access.uri!==generatedProxyUri||!generatedProxySignatures[access.name]||!access.receiver
+        ||access.receiver.kind!==NodeKind.IDENTIFIER||!args)return false;
+    if(emitter.isNew||hasFunctionLocal(emitter,access.qualifier))
+        emitter.namespaces.fail('namespace construction or shadowed qualifier requires separate lowering');
+    const qnameModule=emitter.options.nativeGlobalModules&&emitter.options.nativeGlobalModules.QName;
+    if(!qnameModule)emitter.namespaces.fail('qualified Proxy call requires canonical QName provider');
+    let qname='__as3_proxyQName';while(emitter.source.indexOf(qname)>=0)qname+='_';
+    emitter.ensureImportIdentifier('QName as '+qname,qnameModule,false);emitter.nativeSourceHelpers.add(qname);
+    const helper=propertyHelper(emitter,'as3CallNamedProperty',emitter.generated.propertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+    emitter.skipTo(access.receiver.start);visitNode(emitter,access.receiver);emitter.catchup(access.receiver.end);
+    emitter.insert(',new '+qname+'('+JSON.stringify(access.uri)+','+JSON.stringify(access.name)+'),()=>[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
 function emitCall(emitter:Emitter, node:Node):void {
+    if(emitGeneratedProxyNamespaceCall(emitter,node))return;
     if(emitGeneratedParentRemoval(emitter,node))return;
     if(emitSourceDefinitionLookup(emitter,node))return;
     if(emitLocalFunctionIntrinsic(emitter,node))return;
@@ -4452,6 +4473,12 @@ function emitDictionaryPropertyCall(emitter:Emitter, node:Node):boolean {
 }
 
 function emitDelete(emitter:Emitter, node:Node):void {
+    const object=node.children.length===1&&objectPropertyAccess(emitter,unwrapEncapsulatedExpression(node.children[0]));
+    if(object){
+        const helper=propertyHelper(emitter,'as3DeleteProperty',emitter.options.nativeObjectPropertyModule);
+        emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(object.receiver.start);
+        emitPropertyKey(emitter,object);emitter.insert(')');emitter.skipTo(node.end);return;
+    }
     const dynamic=node.children.length===1 && dynamicWriteAccess(emitter,node.children[0]);
     if(dynamic){
         const helper=dynamicHelper(emitter,dynamic,'Delete',emitter.options.nativeDynamicPropertyWritesModule);
@@ -4744,6 +4771,29 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if(emitter.generated&&node.children.length===3&&node.children[1].text==='in'
+        &&emitter.options.nativeObjectPropertyModule&&node.lastChild.kind===NodeKind.IDENTIFIER){
+        const definition=emitter.findDefInScope(node.lastChild.text);
+        if(definition&&!definition.bound&&['*','Object'].indexOf(definition.as3Type)>=0
+            &&!(definition.as3Type==='Object'&&emitter.references.sourceClass('Object'))){
+            const helper=propertyHelper(emitter,'as3HasProperty',emitter.options.nativeObjectPropertyModule);
+            emitter.catchup(node.start);emitter.insert(helper+'(');
+            visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+            emitter.insert(',');emitter.skipTo(node.lastChild.start);visitNode(emitter,node.lastChild);
+            emitter.catchup(node.lastChild.end);emitter.insert(')');emitter.skipTo(node.end);return;
+        }
+    }
+    if(emitter.generated&&emitter.references&&node.children.length===3&&node.children[1].text==='is'
+        &&node.lastChild.kind===NodeKind.IDENTIFIER&&node.lastChild.text==='TypeError'
+        &&emitter.references.resolve('TypeError')==='TypeError'&&!emitter.findDefInScope('TypeError')
+        &&emitter.references.owner!=='TypeError'
+        &&!emitter.generated.options.plan.nativeBindings.some(b=>b.qname==='TypeError')
+        &&!emitter.generated.options.plan.bindings.some(b=>b.qname==='TypeError')){
+        const helper=propertyHelper(emitter,'as3IsSourceTypeErrorInstance',generatedModule(emitter.options.nativeSourceErrorModule));
+        emitter.catchup(node.start);emitter.insert(helper+'(');
+        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+        emitter.insert(')');emitter.skipTo(node.end);return;
+    }
     if(intrinsicStringAs(emitter,node)) {
         const helper=propertyHelper(emitter,'as3As',generatedModule(emitter.options.nativeComputedTypeTestModule));
         emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
@@ -5362,8 +5412,8 @@ function emitReferenceReturn(emitter:Emitter, node:Node):void {
     let owner=node.parent;
     while(owner&&[NodeKind.FUNCTION,NodeKind.LAMBDA,NodeKind.GET,NodeKind.SET].indexOf(owner.kind)<0)owner=owner.parent;
     const anonymous=owner&&emitter.generated&&emitter.generated.lexical.anonymousFunctions.find(fn=>fn.start===owner.start&&fn.end===owner.end);
-    if(anonymous&&anonymous.returned==='Object'){
-        const expression=node.children[0],parts=signatureBuiltinCoercionParts(emitter,'Object');
+    if(anonymous&&(anonymous.returned==='Object'||anonymous.returned==='String')){
+        const expression=node.children[0],parts=signatureBuiltinCoercionParts(emitter,anonymous.returned);
         emitter.catchup(getExpressionStart(expression));emitter.insert(parts[0]);
         visitNode(emitter,expression);emitter.catchup(getEffectiveNodeEnd(expression));emitter.insert(parts[1]);return;
     }

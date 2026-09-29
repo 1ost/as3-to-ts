@@ -38,7 +38,9 @@ export class NativeTypedLocals {
                 if(value.kind===K.FUNCTION&&this.nested.some(fn=>fn.start===value.start&&fn.end===value.end))return;
                 if (value.kind===K.FORIN||value.kind===K.FOREACH){
                     const target=value.children[0];
-                    const wildcardForIn=value.kind===K.FORIN&&target.children.length===1&&target.children[0].kind===K.IDENTIFIER;
+                    const inDeclaration=value.kind===K.FORIN&&target.children.length===1&&target.children[0].kind===K.VAR_LIST
+                        &&target.children[0].findChildren(K.NAME_TYPE_INIT).length===1;
+                    const wildcardForIn=value.kind===K.FORIN&&target.children.length===1&&(target.children[0].kind===K.IDENTIFIER||inDeclaration);
                     const inline = value.kind===K.FOREACH && target.kind===K.VAR && target.children.length===1
                         && target.children[0].kind===K.NAME_TYPE_INIT && !target.children[0].findChild(K.INIT);
                     if(!this.matchSourceSpans||!wildcardForIn&&(value.kind!==K.FOREACH||target.kind!==K.NAME&&!inline))
@@ -178,8 +180,8 @@ export class NativeTypedLocals {
         const binding=emitter.findDefInScope(name);
         return !!binding&&!binding.bound&&binding.as3Type!=='*';
     }
-    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string, vectorCoerce?:(identity:string,value:string)=>string, propertyProvider?:string, tweenCoerce?:(value:string)=>string): string {
-        const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic&&m.node.kind===kind);
+    lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string, vectorCoerce?:(identity:string,value:string)=>string, propertyProvider?:string, tweenCoerce?:(value:string)=>string, sourceStart?:number): string {
+        const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic&&m.node.kind===kind&&(sourceStart===undefined||m.node.start===sourceStart));
         if(!method||!method.locals.length&&!method.outerCaptures.length&&!this.nested.some(fn=>fn.methodStart===method.node.start&&!!fn.returned))return source;
         const ts=require('typescript'),S=ts.SyntaxKind,file=ts.createSourceFile('TypedLocals.ts',source,ts.ScriptTarget.Latest,true);
         if(file.parseDiagnostics.length)this.fail('intermediate local syntax');

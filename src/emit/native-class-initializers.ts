@@ -1,4 +1,7 @@
 import Node from '../syntax/node';
+import {NativeNamespaces} from './native-namespaces';
+import {generatedProxySignatures} from './native-generated-proxy';
+import {generatedProxyNamespace,generatedProxyUri} from './native-generated-proxy';
 import NodeKind from '../syntax/nodeKind';
 import {NativeGeneratedEmission} from './native-generated-emission';
 import {nativeGeneratedDeclarationResolver, nativeGeneratedDeclarationNode} from './native-generated-declarations';
@@ -61,7 +64,18 @@ export class NativeClassInitializers {
                 this.ownNames.set(node, fresh('classValue'));
             }
             if (this.enabled && [NodeKind.NAMESPACE_DECLARATION, NodeKind.NAMESPACE_ACCESS, NodeKind.USE,
-                NodeKind.EMBED, NodeKind.INCLUDE].indexOf(node.kind) >= 0) fail('namespace/embedded/include initialization requires separate authority');
+                NodeKind.EMBED, NodeKind.INCLUDE].indexOf(node.kind) >= 0) {
+                const ns=generated && node.kind===NodeKind.USE && generatedProxyNamespace(generated.options.plan,identity);
+                const accessNs=generated&&node.kind===NodeKind.NAMESPACE_ACCESS
+                    &&generated.options.plan.nativeBindings.some(b=>b.qname==='flash.utils.Proxy'&&!!b.nativeBaseExport)
+                    &&new NativeNamespaces(root,source,undefined,true);
+                const access=accessNs&&accessNs.access(node);
+                const call=access&&node.parent;
+                const directHook=access&&access.uri===generatedProxyUri&&!!generatedProxySignatures[access.name]
+                    &&access.receiver&&access.receiver.kind===NodeKind.IDENTIFIER
+                    &&call&&call.kind===NodeKind.CALL&&call.children[0]===node;
+                if(!directHook&&(!ns || ns.resolve(node,node.text)!==generatedProxyUri))fail('namespace/embedded/include initialization requires separate authority');
+            }
             if (this.enabled && node.kind === NodeKind.DOT) {
                 const qualified = (value: Node): string => value.kind === NodeKind.IDENTIFIER ? value.text
                     : value.kind === NodeKind.DOT && value.children[1].kind === NodeKind.LITERAL

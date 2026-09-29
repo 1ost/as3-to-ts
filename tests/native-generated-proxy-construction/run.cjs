@@ -50,7 +50,7 @@ async function main(){
    };
    rejectEmission(s=>s.replace('super();',''));
    rejectEmission(s=>s.replace('super();','super(); super();'));
-   rejectEmission(s=>s.replace('public function inspect()', 'override flash_proxy function getProperty(name:*):* { return null; } public function inspect()'));
+   rejectEmission(s=>s.replace('public function inspect()', 'override flash_proxy function getProperty(name:String):* { return null; } public function inspect()'));
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);
    const files=[];

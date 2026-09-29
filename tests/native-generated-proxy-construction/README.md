@@ -22,3 +22,8 @@ or repeated super call, and unqualified namespace hook are rejected.
 `verify.cjs` checks the retained comparisons. Namespace-hook lowering, dynamic
 Proxy property dispatch and complete OP2 ArrayCollection integration remain open.
 This does not claim whole Proxy subclass support or full game startup.
+
+Follow-up: the malformed namespace signature remains rejected; valid generated
+Proxy hooks now have their own complete-source dispatch fixture in
+../native-generated-proxy-dispatch. The latest retained construction receipt
+passes the same ten rows, two reflection documents and existing guards.
