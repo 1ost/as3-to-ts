@@ -179,6 +179,7 @@ export class NativeCallableClasses {
                             ||accessibilityReference&&sourceReference.identity==='flash.accessibility.AccessibilityImplementation'
                             ||displayReference&&sourceReference.identity==='flash.display.DisplayObject'
                             ||interactiveReference&&sourceReference.identity==='flash.display.InteractiveObject'
+                            ||xmlReferences&&['XML','XMLList'].indexOf(sourceReference.identity)>=0
                             ||spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(sourceReference.identity)>=0
                             ||loaderReferences&&nativeLoaderReferenceNames.indexOf(sourceReference.identity)>=0
                             ||spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(sourceReference.identity)>=0)
