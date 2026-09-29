@@ -388,7 +388,47 @@ export class NativeGeneratedLexical {
                 emitter.insert(']))');emitter.skipTo(node.end);return true;
             }
         }
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        // Follow only authenticated public source storage/getter declarations.
+        // Keep the expression intact for emission so getters run exactly once;
+        // type discovery must never evaluate or duplicate a source receiver.
+        const chainedReferences=(expression:Node):NativeGeneratedDeclarationPlan['references']=>{
+            expression=unwrapEncapsulatedExpression(expression);
+            if(!expression)return [];
+            if(expression.kind===K.IDENTIFIER){
+                const binding=emitter.findDefInScope(expression.text);
+                if(!binding||binding.bound)return [];
+                return this.plan.references.filter(r=>r.owner===this.owner&&r.sourceName===binding.as3Type
+                    &&(r.kind==='declaration'||r.kind==='private-declaration'));
+            }
+            if(expression.kind!==K.DOT||expression.children[1].kind!==K.LITERAL)return [];
+            const root=unwrapEncapsulatedExpression(expression.children[0]);
+            let identity:string;
+            if(root.kind===K.IDENTIFIER&&root.text==='this'){
+                let method=expression;
+                while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0)method=method.parent;
+                if(!method||method.parent.kind!==K.CONTENT||modifiers(method).indexOf('static')>=0)return [];
+                identity=this.owner;
+            }else{
+                const refs=chainedReferences(root),identities=Array.from(new Set(refs.map(r=>r.identity)));
+                if(identities.length!==1)return [];
+                identity=identities[0];
+            }
+            for(let current=identity;current;){
+                const declaration=this.declarations.find(b=>b.identity===current);
+                if(!declaration||!this.classSource(current)||this.classSource(current).referenceOnly)return [];
+                for(const member of this.internalContent(current).children){
+                    if(modifiers(member).indexOf('public')<0||modifiers(member).indexOf('static')>=0)continue;
+                    const value=member.kind===K.GET&&member.findChild(K.NAME).text===expression.children[1].text
+                        ?member:member.kind===K.VAR_LIST?member.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===expression.children[1].text):null;
+                    const type=value&&value.findChild(K.TYPE);
+                    if(type)return this.plan.references.filter(r=>r.owner===current&&r.start===type.start&&r.end===type.end
+                        &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'));
+                }
+                current=declaration.base;
+            }
+            return [];
+        };
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;dynamicRead?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -444,6 +484,7 @@ export class NativeGeneratedLexical {
                     // receiver type. Keep the complete expression for ordinary
                     // property dispatch: evaluate it once, before call arguments.
                 }
+                if(receiver.kind===K.DOT&&!references.length)references=chainedReferences(receiver).slice();
                 const identities=Array.from(new Set(references.map(r=>r.identity)));
                 if(identities.length===1&&identities[0]==='flash.utils.ByteArray'
                     &&references.every(r=>r.kind==='native')&&['compress','uncompress','deflate','inflate'].indexOf(name)>=0) {
@@ -518,6 +559,8 @@ export class NativeGeneratedLexical {
                     }
                     const member=this.foreignPublicMembers.get(identity).find(member=>member.name===name);
                     if(member)return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method'};
+                    if(receiver.kind===K.DOT&&modifiers(nativeGeneratedDeclarationNode(this.plan,identity)).indexOf('dynamic')>=0)
+                        return {trait:null,receiver,publicName:name,publicMethod:false,dynamicRead:true};
                 }
                 if(!lexicalName)return null;
                 // A rest parameter is an intrinsic Array. Its members remain
@@ -628,6 +671,7 @@ export class NativeGeneratedLexical {
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(found.publicName) {
+            if(found.dynamicRead&&operation!=='get')fail('chained dynamic receiver currently requires a property read');
             if(operation==='call'&&found.publicMethod) {
                 let helper='__as3_generated_foreign_call';while(emitter.source.indexOf(helper)>=0)helper+='_';
                 emitter.ensureImportIdentifier('as3CallProperty as '+helper,emitter.generated.propertyModule,false);

@@ -64,3 +64,4 @@ src/emit/native-generated-traits.ts text eol=lf
 src/emit/emitter.ts text eol=lf
 
 src/emit/native-typed-locals.ts text eol=lf
+src/emit/native-generated-lexical.ts text eol=lf

@@ -1,0 +1,3 @@
+* -text -whitespace
+source/** -text -whitespace
+flash/** -text -whitespace

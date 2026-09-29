@@ -1,0 +1,25 @@
+{
+  "actual_uncompressed_length": 3899,
+  "compression": "zlib",
+  "declared_uncompressed_length": 3899,
+  "frame_count": 1,
+  "frame_rate": 30.0,
+  "length_matches_header": true,
+  "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2\\.cache\\chained-reference-flash-final\\oracle.swf",
+  "schema": "swf-header@1",
+  "sha256": "5ad1d6cc516b310107d184e9a9b55df302f221896e5d9cf6d764c60e83bbf237",
+  "signature": "CWS",
+  "stage": {
+    "height": 240.0,
+    "width": 320.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "stage_twips": {
+    "xmax": 6400,
+    "xmin": 0,
+    "ymax": 4800,
+    "ymin": 0
+  },
+  "swf_version": 37
+}

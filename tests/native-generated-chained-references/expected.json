@@ -1,0 +1,90 @@
+[
+  {
+    "value": [
+      7,
+      1,
+      1,
+      1
+    ],
+    "id": "constructor-chain"
+  },
+  {
+    "value": [
+      true,
+      2
+    ],
+    "id": "absent-dynamic"
+  },
+  {
+    "value": [
+      true,
+      3
+    ],
+    "id": "missing-undefined"
+  },
+  {
+    "value": [
+      11,
+      4
+    ],
+    "id": "present-dynamic"
+  },
+  {
+    "value": 7,
+    "id": "local-chain"
+  },
+  {
+    "value": [
+      19,
+      7,
+      5
+    ],
+    "id": "changed-storage"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009,
+      6,
+      1
+    ],
+    "id": "null-leaf"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009,
+      7,
+      1
+    ],
+    "id": "null-link"
+  },
+  {
+    "value": [
+      "TypeError",
+      1034,
+      11,
+      8
+    ],
+    "id": "failed-coercion"
+  },
+  {
+    "value": [
+      true,
+      2,
+      9,
+      2
+    ],
+    "id": "null-argument"
+  },
+  {
+    "value": [
+      19,
+      31,
+      3,
+      10,
+      3
+    ],
+    "id": "arguments-retain-receiver"
+  }
+]
