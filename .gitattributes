@@ -57,3 +57,7 @@ tests/native-namespace-updates/evidence/** -text whitespace=cr-at-eol
 # Preserve original class-local sources and repeated native AIR capture artifacts.
 tests/native-generated-class-locals/source/** -text -whitespace
 tests/native-generated-class-locals/evidence/** -text -whitespace
+
+# Stable bytes for qualified Sprite position override implementation.
+src/emit/native-callable-classes.ts text eol=lf
+src/emit/native-generated-traits.ts text eol=lf

@@ -6,6 +6,11 @@ import K from '../syntax/nodeKind';
 import {NativeGeneratedDeclarationPlan, NativeGeneratedClassDeclaration,
     nativeGeneratedClassDeclaration, nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 
+// Original Flash evidence covers Boolean source halves and Number position
+// halves. Other native names/signatures retain their existing admission holds.
+function qualifiedAccessor(member: {type?: TraitType; name: string}): boolean {
+    return member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
+}
 interface ReferenceType {readonly name: string; readonly referenceExport?: string; readonly vectorExport?:string;}
 type TraitType = string | ReferenceType;
 interface Trait {
@@ -59,6 +64,7 @@ export class NativeGeneratedClassTraits {
     public readonly instanceConstants: ReadonlyArray<{name: string; literal: string}>;
     public readonly lexicalMembers: ReadonlyArray<LexicalMember>;
     public readonly inheritInstanceLayout: boolean;
+    public readonly nativeAccessorBase: boolean;
     public readonly instanceAccessors: ReadonlyArray<Member>;
     public readonly instanceMethods: ReadonlyArray<MethodSignature>;
 
@@ -101,7 +107,7 @@ export class NativeGeneratedClassTraits {
                     if(!native || native.nativeInterface)fail('native '+base+' trait requires explicit reference provider: '+trait.name+':'+type);
                     type={name:type as string,referenceExport:native.referenceExport};
                 }
-                return Object.assign({},trait,type===undefined?{}:{type}) as Member;
+                return Object.assign({},trait,type===undefined?{}:{type},base==='Sprite'&&trait.kind==='accessor'&&trait.type==='Number'&&['x','y'].indexOf(trait.name)>=0?{parts:{get:{owner:trait.declaredBy,override:false,final:false},set:{owner:trait.declaredBy,override:false,final:false}}}:{}) as Member;
             });
             surfaces.set('flash.display.'+base,{instance,statics:[],dynamic:base==='MovieClip',final:false});
         }
@@ -236,12 +242,13 @@ export class NativeGeneratedClassTraits {
                         && nativeMovieClipTraits.some(trait=>trait.name===previous.name&&trait.declaredBy===previous.declaredBy))
                         fail('native MovieClip override requires separate signature/dispatch authority: '+member.name);
                     if(inherited && inherited.instance.some(trait=>trait.declaredBy==='flash.display::Sprite')
-                        && nativeSpriteTraits.some(trait=>trait.name===previous.name&&trait.declaredBy===previous.declaredBy))
+                        && nativeSpriteTraits.some(trait=>trait.name===previous.name&&trait.declaredBy===previous.declaredBy)
+                        && !(input.inheritScriptClasses && member.kind==='accessor' && member.type==='Number' && previous.type==='Number' && ['x','y'].indexOf(member.name)>=0))
                         fail('native Sprite override requires separate signature/dispatch authority: '+member.name);
                     if(previous.declaredBy==='flash.events::Event' && ['clone','toString','formatToString'].indexOf(member.name)<0)
                         fail('native Event override requires separate source authority: '+member.name);
-                    if(member.kind==='accessor' && previous.kind==='accessor' && parent && input.inheritScriptClasses
-                        && member.type==='Boolean' && previous.type==='Boolean' && member.parts && previous.parts) {
+                    if(member.kind==='accessor' && previous.kind==='accessor' && (parent || binding.base==='flash.display.Sprite') && input.inheritScriptClasses
+                        && qualifiedAccessor(member) && member.type===previous.type && member.parts && previous.parts) {
                         for(const side of (['get','set'] as ('get'|'set')[]))if(member.parts[side]){
                             if(!member.parts[side].override||!previous.parts[side]||previous.parts[side].final)
                                 fail('accessor override requires matching nonfinal parent half: '+binding.identity+':'+member.name);
@@ -269,12 +276,13 @@ export class NativeGeneratedClassTraits {
         const surface = surfaces.get(owner);
         this.inheritInstanceLayout = !!input.inheritScriptClasses && !!this.binding.base
             && isClass(this.binding.base);
-        if(this.inheritInstanceLayout && surface.instance.some(item=>item.declaredBy===reflectedClass(owner) && item.override && item.kind!=='method' && !(item.kind==='accessor'&&item.type==='Boolean'&&item.parts)))
+        if(this.inheritInstanceLayout && surface.instance.some(item=>item.declaredBy===reflectedClass(owner) && item.override && item.kind!=='method' && !(item.kind==='accessor'&&qualifiedAccessor(item)&&item.parts)))
             fail('selected parent accessor override requires separate authority');
-        this.instanceAccessors=frozen(surface.instance.filter(item=>item.kind==='accessor'&&item.type==='Boolean'&&item.parts
+        this.instanceAccessors=frozen(surface.instance.filter(item=>item.kind==='accessor'&&qualifiedAccessor(item)&&item.parts
             && (['get','set'] as ('get'|'set')[]).some(side=>item.parts[side]&&item.parts[side].owner===reflectedClass(owner))).map(item=>Object.assign({},item,{parts:{
                 get:item.parts.get&&item.parts.get.owner===reflectedClass(owner)?item.parts.get:undefined,
                 set:item.parts.set&&item.parts.set.owner===reflectedClass(owner)?item.parts.set:undefined}})));
+        this.nativeAccessorBase=this.binding.base==='flash.display.Sprite' && this.instanceAccessors.some(a=>a.parts.get&&a.parts.get.override||a.parts.set&&a.parts.set.override);
         this.instanceMethods=frozen(surface.instance.filter(item=>item.kind==='method' && item.declaredBy===reflectedClass(owner)
             && !!item.signature && (!item.override || this.inheritInstanceLayout)).map(item=>({name:item.name,
                 parameters:item.signature.parameters,returns:item.signature.returns,requiredCount:item.signature.requiredCount,override:!!item.override,final:!!item.final})));
@@ -283,7 +291,7 @@ export class NativeGeneratedClassTraits {
             items.forEach(item => {
                 const value: any = {name:item.name,declaredBy:item.declaredBy};
                 if (item.kind === 'method') value.parameterCount = item.parameterCount;
-                else if (item.kind === 'accessor') {value.access = item.access;if(item.parts)value.declaredBy=(item.parts.get||item.parts.set).owner;if(item.type==='Boolean')value.type='Boolean';}
+                else if (item.kind === 'accessor') {value.access = item.access;if(item.parts)value.declaredBy=(item.parts.get||item.parts.set).owner;if(qualifiedAccessor(item))value.type=item.type;}
                 else value.type = typeof item.type === 'string' ? item.type : item.type.name;
                 result[item.kind === 'variable' ? 'variables' : item.kind === 'constant' ? 'constants' : item.kind === 'method' ? 'methods' : 'accessors'].push(value);
             });
@@ -314,12 +322,12 @@ export class NativeGeneratedClassTraits {
         }).join(',') + ']';
         const metadata = this.inheritInstanceLayout ? Object.assign({},this.metadata,{instance:Object.keys(this.metadata.instance).reduce((members:any,kind)=>{
             members[kind]=this.metadata.instance[kind].filter((member:any)=>member.declaredBy===this.metadata.name || kind==='accessors'&&this.instanceAccessors.some(a=>a.name===member.name)).map((member:any)=>kind==='accessors'&&this.instanceAccessors.some(a=>a.name===member.name)?Object.assign({},member,{declaredBy:this.metadata.name}):member);return members;
-        },{})}) : this.metadata;
+        },{})}) : this.nativeAccessorBase ? Object.assign({},this.metadata,{instance:Object.assign({},this.metadata.instance,{accessors:this.metadata.instance.accessors.map((a:any)=>this.instanceAccessors.some(own=>own.name===a.name)?Object.assign({},a,{declaredBy:this.metadata.name}):a)})}) : this.metadata;
         const ownNames = this.inheritInstanceLayout ? new Set<string>([].concat(...Object.keys(metadata.instance).map(kind=>metadata.instance[kind])).map((member:any)=>member.name)) : null;
         const methodType=(value:TraitType):string=>typeof value==='string'?JSON.stringify(value)
             : '{name:'+JSON.stringify(value.name)+',reference:'+domain+'.'+value.referenceExport+'}';
         const methods='['+this.instanceMethods.map(method=>'{name:'+JSON.stringify(method.name)+',parameters:['+method.parameters.map(methodType).join(',')+'],returns:'+methodType(method.returns)+',requiredCount:'+method.requiredCount+',override:'+method.override+',final:'+method.final+'}').join(',')+']';
-        return '{' + (this.inheritInstanceLayout ? 'instanceBase:' + base + ',' : '') + 'metadata:' + JSON.stringify(metadata) + ',instanceTraits:' + emit(ownNames ? this.instanceTraits.filter(trait=>ownNames.has(trait.name)) : this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
+        return '{' + (this.nativeAccessorBase ? 'nativeAccessorBase:'+base+',' : '') + (this.inheritInstanceLayout ? 'instanceBase:' + base + ',' : '') + 'metadata:' + JSON.stringify(metadata) + ',instanceTraits:' + emit(ownNames ? this.instanceTraits.filter(trait=>ownNames.has(trait.name)) : this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
             + ',instanceConstants:[' + this.instanceConstants.filter(item=>!ownNames || ownNames.has(item.name)).map(item=>'{name:'+JSON.stringify(item.name)+',value:'+item.literal+'}').join(',') + ']'
             + ',instanceAccessors:'+JSON.stringify(this.instanceAccessors.map(a=>({name:a.name,type:a.type,...(a.parts.get?{get:{override:a.parts.get.override,final:a.parts.get.final}}:{}),...(a.parts.set?{set:{override:a.parts.set.override,final:a.parts.set.final}}:{})})))
             + ',instanceMethods:' + methods

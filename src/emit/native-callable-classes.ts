@@ -382,7 +382,7 @@ export class NativeCallableClasses {
                 + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
         };
         const directSuperAccessor = (key: string, side: 'get'|'set'): string => {
-            if (!this.generated || !this.generated.projection.inheritInstanceLayout)
+            if (!this.generated || !this.generated.projection.inheritInstanceLayout && !this.generated.projection.nativeAccessorBase)
                 this.fail('super accessor requires selected generated ancestry');
             let owner = this.classes.get(this.own.base), depth = 0, accessor: Node;
             for (; owner; owner = this.classes.get(owner.base), depth++) {
@@ -393,6 +393,12 @@ export class NativeCallableClasses {
                 accessor = candidates.find(node => node.kind === (side === 'get' ? K.GET : K.SET));
                 if (accessor) break;
             }
+            if (!accessor && this.generated.projection.nativeAccessorBase && ['x','y'].indexOf(key)>=0) {
+                const identity=side+':'+key;
+                let capture=superMethodNames.get(identity);
+                if(!capture){capture=unique('superAccessor'+superMethods.length);superMethods.push('const '+capture+' = '+provider+'.getAS3GeneratedNativePositionAccessor('+baseName+','+JSON.stringify(key)+','+JSON.stringify(side)+');');superMethodNames.set(identity,capture);}
+                return capture;
+            }
             if (!accessor) this.fail('super accessor half absent from complete source ancestry');
             const mods = accessor.findChild(K.MOD_LIST), parameters = accessor.findChild(K.PARAMETER_LIST).children;
             if (!mods || !mods.children.some(mod => mod.text === 'public') || mods.children.some(mod => mod.text === 'static'))
@@ -400,8 +406,8 @@ export class NativeCallableClasses {
             const type = side === 'get' ? accessor.findChild(K.TYPE)
                 : parameters.length === 1 && parameters[0].findChild(K.NAME_TYPE_INIT).findChild(K.TYPE);
             const ref = type && this.generated.options.plan.references.find(r => r.owner === owner.qname && r.start === type.start && r.end === type.end);
-            if (!ref || ref.kind !== 'intrinsic' || ref.identity !== 'Boolean')
-                this.fail('super accessor requires qualified Boolean signature');
+            if (!ref || ref.kind !== 'intrinsic' || !(ref.identity === 'Boolean'||ref.identity==='Number'&&['x','y'].indexOf(key)>=0))
+                this.fail('super accessor requires qualified signature');
             const identity = side + ':' + key;
             let capture = superMethodNames.get(identity);
             if (!capture) {

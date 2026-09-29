@@ -1,0 +1,18 @@
+{
+  "files": {
+    "ES5.json.gz": "f238751dd7d52027cc55ff203a1b4a7697689e53fd9906561e39a4d78b4a0b6d",
+    "ES2015.json.gz": "50aedd8fb4697d4e2345b39c13de52c43977c3fc1ede11a5d0b27805a79eeda3"
+  },
+  "runner": {
+    "run.mjs": "57a068516241d0e561aa97413acbd5f529d0e44799196be4832861147014cd22",
+    "build.mjs": "f7108fcc55627621c8f99621e53dafe3a7d779ebdeb5f9cc678688c2482075f9",
+    "observer.ts": "1f7d28c7059c7ae335bb21a03507b01014c25148aa6e35ed6fe45768079f1d05"
+  },
+  "implementation": {
+    "compiler:src/emit/native-callable-classes.ts": "65a8a981ecfd171557a4f137de9622baf5493121a476b225fbd183adaa3d9e9a",
+    "compiler:src/emit/native-generated-traits.ts": "203ef6cc1ac2e14ed74d6cd6fa6a6a5839869590c00b42190038621c3e3a6824",
+    "engine:src/layaAir/flash/utils/AS3GeneratedClass.ts": "c41c9c5aa0cf630dc54504addf71f15358bfae6c0264810669f9cf1760947249",
+    "engine:src/layaAir/flash/utils/AS3GeneratedSpriteConstruction.ts": "a6bcf6ac7395b97ad38a973f2f7cc1b6b9004948645b2d338cbb3601e50647b3"
+  },
+  "fullGame": false
+}
