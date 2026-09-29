@@ -182,10 +182,11 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if (!table(provider)) fail('provider binding required');
         fields(provider, ['module', 'exportName','nativeBase','nativeInterface','nativeVector']);
         if (provider.nativeVector !== undefined && (provider.nativeVector !== true || !((name === 'flash.display.MovieClip' && provider.exportName === 'MovieClip')
-            || (name === 'flash.text.TextField' && provider.exportName === 'TextField'))
+            || (name === 'flash.text.TextField' && provider.exportName === 'TextField')
+            || (name === 'flash.display.SimpleButton' && provider.exportName === 'SimpleButton'))
             || (provider.nativeBase !== undefined && !(name === 'flash.display.MovieClip' && provider.nativeBase === 'MovieClip'))
             || provider.nativeInterface !== undefined))
-            fail('native Vector requires the qualified MovieClip or TextField provider');
+            fail('native Vector requires the qualified MovieClip or TextField or SimpleButton provider');
         if (provider.nativeInterface !== undefined && (provider.nativeInterface !== true || provider.nativeBase !== undefined || !data.interfaceProviderModule))
             fail('native interface requires explicit interface provider and cannot be a native Class base');
         if(provider.nativeBase !== undefined && !((provider.nativeBase === 'Event' && name === 'flash.events.Event' && provider.exportName === 'Event')
