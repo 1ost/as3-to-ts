@@ -1,3 +1,4 @@
+import {NativeEmbeddedBinaryInput, NativeEmbeddedBinaryBinding, planNativeEmbeddedBinary} from './native-embedded-binary';
 import Node from '../syntax/node';
 import {NativeGeneratedPrivateDeclarationBinding, NativeGeneratedPrivateInterfaceBinding, planNativePrivateDeclarations, privateDeclarationIdentity} from './native-generated-private-declarations';
 import {NativeSourceUnit, readNativeSourceUnit, nativeSourceUnitAst, nativeSourceUnitNode, NativeSourceUnitDeclaration, nativeSourceUnitResolver, nativeSourceIntrinsicNames} from './native-source-unit';
@@ -16,6 +17,7 @@ export interface NativeGeneratedAuthoredSymbol {
     readonly sourceSha256: string;
 }
 export interface NativeGeneratedDeclarationInput {
+    embeddedBinaryProviderModule?: string;
     scope: string;
     providerModule: string;
     /** Explicit common AS3Type provider; required for source interface tokens. */
@@ -38,7 +40,7 @@ export interface NativeGeneratedDeclarationInput {
     scriptGlobalSources?: ReadonlyArray<string>;
     /** Explicit single-Class script units whose failed initializer globals are retained. */
     classScriptSources?: ReadonlyArray<string>;
-    sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean; authoredSymbol?: NativeGeneratedAuthoredSymbol}};
+    sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean; authoredSymbol?: NativeGeneratedAuthoredSymbol; embeddedBinary?: {[field:string]:NativeEmbeddedBinaryInput}}};
     providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'MouseEvent' | 'Error' | 'EventDispatcher' | 'Sprite' | 'MovieClip' | 'Proxy' | 'AccessibilityImplementation'; nativeInterface?: true; nativeVector?: true}};
 }
 export interface NativeGeneratedDeclarationBinding {
@@ -66,6 +68,7 @@ export interface NativeGeneratedReference {
 export interface NativeGeneratedDeclarationPlan {
     readonly scope: string;
     readonly moduleSource: string;
+    readonly embeddedBinary: ReadonlyArray<NativeEmbeddedBinaryBinding>;
     readonly bindings: ReadonlyArray<NativeGeneratedDeclarationBinding>;
     readonly interfaces: ReadonlyArray<NativeGeneratedInterfaceBinding>;
     readonly privateBindings: ReadonlyArray<NativeGeneratedPrivateDeclarationBinding>;
@@ -147,8 +150,9 @@ function validateAuthoredSymbol(symbol: NativeGeneratedAuthoredSymbol, metadata:
 export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
     const data: NativeGeneratedDeclarationInput = copy(input);
     if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
-    fields(data, ['scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'inheritScriptClasses', 'scriptGlobalSources', 'classScriptSources', 'lexicalProviderModule', 'patternProviderModule', 'tweenHandleProviderModule', 'sources', 'providers']);
+    fields(data, ['embeddedBinaryProviderModule', 'scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'inheritScriptClasses', 'scriptGlobalSources', 'classScriptSources', 'lexicalProviderModule', 'patternProviderModule', 'tweenHandleProviderModule', 'sources', 'providers']);
     moduleName(data.providerModule);
+    if(data.embeddedBinaryProviderModule!==undefined)moduleName(data.embeddedBinaryProviderModule);
     if (data.patternProviderModule !== undefined) moduleName(data.patternProviderModule);
     if (data.tweenHandleProviderModule !== undefined) moduleName(data.tweenHandleProviderModule);
     if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
@@ -208,7 +212,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         const record = data.sources[name];
         if (!table(record) || typeof record.source !== 'string' || hash(record.source) !== record.sourceSha256)
             fail('exact source bytes/hash required: ' + name);
-        fields(record, ['source', 'sourceSha256', 'referenceOnly', 'authoredSymbol']);
+        fields(record, ['source', 'sourceSha256', 'referenceOnly', 'authoredSymbol', 'embeddedBinary']);
         if (record.referenceOnly !== undefined && typeof record.referenceOnly !== 'boolean') fail('referenceOnly must be boolean');
         let unit: NativeSourceUnit;
         try {unit = readNativeSourceUnit(name, record.source, record.sourceSha256);}
@@ -405,6 +409,22 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 fail('derived Class script requires a non-retrying source root parent');
         }
     });
+    const embeddedBinary:NativeEmbeddedBinaryBinding[]=[];
+    for(const owner of sourceNames){
+        const record=data.sources[owner];
+        if(record.referenceOnly){if(record.embeddedBinary)fail('reference-only binary Embed implementation');continue;}
+        const cls=classes.get(owner);
+        if(!cls||cls.kind!==K.CLASS){if(record.embeddedBinary)fail('binary Embed requires a source Class');continue;}
+        for(const item of planNativeEmbeddedBinary(owner,cls,record.embeddedBinary)){
+            const ref=references.find(r=>r.owner===owner&&r.start>=item.start&&r.end<=item.end&&r.sourceName==='Class');
+            if(!ref||ref.kind!=='intrinsic'||ref.identity!=='Class')fail('embedded field requires intrinsic Class type');
+            if(!data.embeddedBinaryProviderModule||!data.scriptDomainProvider)fail('binary Embed requires explicit provider and script domain');
+            const same=embeddedBinary.find(b=>b.symbol===item.symbol);
+            if(same&&(same.className!==item.className||same.sourceSha256!==item.sourceSha256||same.definitionSha256!==item.definitionSha256))fail('conflicting binary symbol binding');
+            if(embeddedBinary.some(b=>b.symbol!==item.symbol&&b.className===item.className))fail('binary Class name collision');
+            embeddedBinary.push(Object.freeze({...item,getterExport:same?same.getterExport:'embeddedBinary'+embeddedBinary.length}));
+        }
+    }
     const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
         'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
     if (authoredNames.length) lines.push('import {requireGeneratedFlashMovieClipSymbol as __requireAuthoredSymbol} from '
@@ -417,6 +437,15 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         lines.push(data.scriptDomainProvider
             ? 'import {'+data.scriptDomainProvider.exportName+' as __scriptDomain} from '+JSON.stringify(data.scriptDomainProvider.module)+';'
             : 'const __scriptDomain=createAS3ScriptDomain();');
+    }
+    if(embeddedBinary.length){
+        lines.push('import {resolveAS3EmbeddedByteArrayClass as __resolveEmbeddedBinary} from '+JSON.stringify(data.embeddedBinaryProviderModule)+';');
+        const seen=new Set<string>();
+        for(const item of embeddedBinary)if(!seen.has(item.symbol)){
+            seen.add(item.symbol);
+            lines.push('const __'+item.getterExport+'Bytes=new Uint8Array('+JSON.stringify(item.payload)+');');
+            lines.push('export const '+item.getterExport+'=()=>__resolveEmbeddedBinary(__scriptDomain,'+JSON.stringify(item.symbol)+','+JSON.stringify(item.className)+',__'+item.getterExport+'Bytes);');
+        }
     }
     if (interfaces.length || bindings.some(binding=>binding.interfaces.length>0)) lines.push('import {defineAS3Interface,registerAS3Class'+(data.inheritScriptClasses?',isAS3Interface':'')+'} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
     if (nativeNames.some(name => providers[name].nativeInterface))
@@ -617,7 +646,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         name=>name==='flash.events.EventDispatcher'&&providers[name]&&providers[name].nativeBase==='EventDispatcher'
             ?nativeGeneratedInterfaceBoundary('flash.events.IEventDispatcher'):undefined);
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
-        sourceHashes: Object.freeze(sourceHashes), privateBindings, privateInterfaces, bindings: Object.freeze(bindings),
+        embeddedBinary:Object.freeze(embeddedBinary), sourceHashes: Object.freeze(sourceHashes), privateBindings, privateInterfaces, bindings: Object.freeze(bindings),
         interfaces: Object.freeze(interfaces.filter(binding => !privateInterfaces.some(item => item.identity === binding.qname))), references: Object.freeze(references),vectors:Object.freeze(vectors),
         nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts,namespaces});
     contexts.set(plan, {input: data, plan, units});

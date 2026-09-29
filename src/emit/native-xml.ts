@@ -125,8 +125,18 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
             if(!args||args.children.length>1)fail('XML String constructor requires zero or one argument');
             const value=args.children.length?unwrapEncapsulatedExpression(args.children[0]):null;
             const binding=value&&value.kind===K.IDENTIFIER&&e.findDefInScope(value.text);
+            const byteMethod=value&&value.kind===K.CALL&&value.children[0].kind===K.DOT&&value.children[0];
+            const byteReceiver=byteMethod&&unwrapEncapsulatedExpression(byteMethod.children[0]);
+            const byteBinding=byteReceiver&&byteReceiver.kind===K.IDENTIFIER&&e.findDefInScope(byteReceiver.text);
+            // The shared ByteArray provider authenticates this source method's
+            // String return type. Unknown/dynamic calls still need their own proof.
+            const byteString=e.options.nativeByteArrayReferenceModule!==undefined&&byteMethod
+                &&byteMethod.children[1].kind===K.LITERAL&&byteMethod.children[1].text==='readUTFBytes'
+                &&value.findChild(K.ARGUMENTS).children.length===1
+                &&byteBinding&&!byteBinding.bound&&byteBinding.as3Type
+                &&e.references.resolve(byteBinding.as3Type)==='flash.utils.ByteArray';
             if(value&&!(binding&&!binding.bound&&binding.as3Type&&e.references.resolve(binding.as3Type)==='String')
-                &&!(value.kind===K.LITERAL&&/^["']/.test(value.text))&&value.text!=='null'&&!intrinsicStringAs(e,value))
+                &&!(value.kind===K.LITERAL&&/^["']/.test(value.text))&&value.text!=='null'&&!intrinsicStringAs(e,value)&&!byteString)
                 fail('XML constructor input requires String binding, literal, null or intrinsic String-as');
             e.catchup(n.start);e.insert(helper('as3ConstructXMLString')+'(');
             if(value){e.skipTo(value.start);visit(e,value);e.catchup(value.end);}

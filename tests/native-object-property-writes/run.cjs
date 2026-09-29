@@ -31,7 +31,9 @@ for(const changed of [{...options,nativeObjectPropertyModule:'./wrong'},
  {...options,importModules:{...options.importModules,'compiler.AS3Property':undefined}},{...options,useNamespaces:true}]){
  assert.throws(()=>emit(parse('Writer.as',source),source,changed),/AS3_.*UNSUPPORTED/);rejectionGuards++;
 }
-for(const replacement of ['return value.value++;','return value.value -= rhs();','return delete value.value;','return new value.value();']){
+// Public Object deletion is already qualified by object-conversion-property;
+// keep only operations still outside this provider's admitted source shapes.
+for(const replacement of ['return value.value++;','return value.value -= rhs();','return new value.value();']){
  const alteredSource=source.replace('return value.value = rhs();',replacement);
  assert.notEqual(alteredSource,source);
  const altered=api.createNativeGeneratedDeclarationPlan({...planInput,sources:{...sources,'cases.Writer':{source:alteredSource,sourceSha256:hash(alteredSource)}}});

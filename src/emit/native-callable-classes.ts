@@ -104,7 +104,7 @@ export class NativeCallableClasses {
                     this.fail('direct callable-constructor invocation/prototype manipulation');
                 if (node.kind === K.CALL && node.children[0] && isClassAlias(node,node.children[0].text)
                     && sourceClassNames.indexOf(node.children[0].text)<0
-                    && !(generated&&classValueModule&&node.parent&&node.parent.kind===K.NEW&&this.isCapturedClass(node,node.children[0].text)))
+                    && !(generated&&classValueModule&&node.parent&&node.parent.kind===K.NEW&&(this.isCapturedClass(node,node.children[0].text)||this.capturedType(node,node.children[0].text)===undefined&&generated.options.plan.embeddedBinary.some(b=>b.owner===qname&&b.field===node.children[0].text))))
                     this.fail('dynamic Class invocation requires exact constructor authority');
                 node.children.forEach(callScan);
             };

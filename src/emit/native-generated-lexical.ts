@@ -275,7 +275,12 @@ export class NativeGeneratedLexical {
             node=>plan.references.some(r=>r.owner===owner&&r.start===node.start&&r.end===node.end&&r.kind==='tween-handle-local'));
     }
     trait(name:string,isStatic:boolean):Trait{return this.own.find(t=>t.name===name&&t.static===isStatic);}
+    embeddedConstant(trait:Trait) {
+        return trait&&trait.kind==='constant'&&trait.visibility==='private'&&trait.static
+            &&this.plan.embeddedBinary.find(b=>b.owner===trait.owner&&b.field===trait.name&&b.start===trait.node.start&&b.end===trait.node.end);
+    }
     constantValue(trait:Trait):string {
+        if(this.embeddedConstant(trait))return 'null';
         const init=trait.node.findChild(K.INIT);
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
         const value=init&&this.classSource(trait.owner).source.slice(init.start,end(init)).trim();
@@ -322,7 +327,7 @@ export class NativeGeneratedLexical {
         }
         // A call initializer runs in cinit after default storage publication;
         // unlike an int literal it is not an early trait value.
-        if(trait.visibility==='private'&&trait.type&&trait.type.text==='int'&&expression&&expression.kind===K.CALL)return undefined;
+        if(trait.visibility==='private'&&trait.type&&['int','Boolean'].indexOf(trait.type.text)>=0&&expression&&expression.kind===K.CALL)return undefined;
         if(trait.type&&['int','uint','Number','Boolean','String','*'].indexOf(trait.type.text)>=0)
             fail('static lexical primitive initializer requires qualification');
         if(!expression||[K.ARRAY,K.CALL,K.NEW,K.DOT,K.IDENTIFIER].indexOf(expression.kind)<0
@@ -341,7 +346,7 @@ export class NativeGeneratedLexical {
         if(!ref)fail('exact lexical type span');
         if(ref.kind==='intrinsic') {
             if(ref.identity==='Array')return '{name:"Array",reference:'+array+'}';
-            if(['*','int','uint','Number','Boolean','String','Object','Function'].indexOf(ref.identity)<0)fail('unsupported lexical intrinsic '+ref.identity);
+            if(['*','int','uint','Number','Boolean','String','Object','Function','Class'].indexOf(ref.identity)<0)fail('unsupported lexical intrinsic '+ref.identity);
             return JSON.stringify(ref.identity);
         }
         const binding=(ref.kind==='declaration'||ref.kind==='private-declaration')&&this.declarations.find(b=>b.identity===ref.identity);
@@ -356,7 +361,7 @@ export class NativeGeneratedLexical {
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
             +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
-            +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
+            +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'&&!this.embeddedConstant(t)?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
         return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?(nativeGeneratedDeclarationInputs(this.plan,this.plan.scope).inheritScriptClasses?this.provider+'.getAS3InheritedLexicalBase('+base+')':domain+'.'+parent.lexicalExport+'.get('+base+')'):native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
             +this.traits.filter(t=>t.static&&t.owner!==this.owner).map(t=>'const '+t.key+'='+base+';\n').join('')

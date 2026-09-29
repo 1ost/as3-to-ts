@@ -2625,6 +2625,14 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 	const mods = declaration && declaration.findChild(NodeKind.MOD_LIST);
 	if (emitter.classFactory && declaration && declaration.parent === emitter.classFactory.node.findChild(NodeKind.CONTENT)
 		&& mods && mods.children.some(mod => mod.text === 'static')) {
+        const binaryTrait=emitter.generated&&emitter.generated.lexical.trait(node.findChild(NodeKind.NAME).text,true);
+        const binary=emitter.generated&&emitter.generated.lexical.embeddedConstant(binaryTrait);
+        if(binary){
+            const lexical=emitter.generated.lexical;
+            const getter=propertyHelper(emitter,binary.getterExport,emitter.generated.options.module);
+            emitter.classFactory.fields.push(lexical.provider+'.getAS3LexicalClassConstantInitializer('+emitter.classFactory.value+','+binaryTrait.access+')('+getter+'());');
+            visitNodes(emitter,node.children);return;
+        }
         const deferred=emitter.generated && declaration.kind===NodeKind.CONST_LIST
             && emitter.generated.deferredConstants[node.findChild(NodeKind.NAME).text];
         if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred) {
@@ -3166,7 +3174,9 @@ function emitNew(emitter:Emitter, node:Node):void {
  if(emitter.generated&&node.children.length===1&&node.children[0].kind===NodeKind.CALL){
   const call=node.children[0],callee=call.children[0],args=call.findChild(NodeKind.ARGUMENTS);
   const binding=callee&&callee.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(callee.text);
-  if(binding&&!binding.bound&&binding.as3Type==='Class'&&args){
+  const embedded=callee&&callee.kind===NodeKind.IDENTIFIER&&(!binding||binding.bound)
+    &&emitter.generated.lexical.embeddedConstant(emitter.generated.lexical.trait(callee.text,true));
+  if((binding&&!binding.bound&&binding.as3Type==='Class'||embedded)&&args){
    const module=generatedModule(emitter.options.nativeObjectCreationModule);
    let helper='__as3_constructCapturedClass';while(emitter.source.indexOf(helper)>=0)helper+='_';
    emitter.ensureImportIdentifier('as3ConstructClass as '+helper,module,false);emitter.nativeSourceHelpers.add(helper);
@@ -4516,18 +4526,19 @@ function emitDictionaryPropertyCall(emitter:Emitter, node:Node):boolean {
 }
 
 function emitDelete(emitter:Emitter, node:Node):void {
-    const object=node.children.length===1&&objectPropertyAccess(emitter,unwrapEncapsulatedExpression(node.children[0]));
-    if(object){
-        const helper=propertyHelper(emitter,'as3DeleteProperty',emitter.options.nativeObjectPropertyModule);
-        emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(object.receiver.start);
-        emitPropertyKey(emitter,object);emitter.insert(')');emitter.skipTo(node.end);return;
-    }
     const dynamic=node.children.length===1 && dynamicWriteAccess(emitter,node.children[0]);
     if(dynamic){
         const helper=dynamicHelper(emitter,dynamic,'Delete',emitter.options.nativeDynamicPropertyWritesModule);
         emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(dynamic.receiver.start);
         emitDynamicKey(emitter,dynamic);emitter.insert(')');emitter.skipTo(node.end);return;
     }
+    const object=node.children.length===1&&objectPropertyAccess(emitter,unwrapEncapsulatedExpression(node.children[0]));
+    if(object){
+        const helper=propertyHelper(emitter,'as3DeleteProperty',emitter.options.nativeObjectPropertyModule);
+        emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(object.receiver.start);
+        emitPropertyKey(emitter,object);emitter.insert(')');emitter.skipTo(node.end);return;
+    }
+
 
 	if (node.children.length === 1) {
 		const access = dictionaryAccess(emitter, node.children[0]);
