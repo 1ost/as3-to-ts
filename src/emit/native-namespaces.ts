@@ -775,6 +775,13 @@ export class NativeNamespaces {
     checkDot(node: Node, receiverType?: string): void {
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (!owner) return;
+        const pkg = this.ancestor(node, NodeKind.PACKAGE);
+        const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
+            .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+        // This guard concerns implicit resolution through an opened namespace.
+        // Unrelated provider members (for example Proxy.setProperty) cannot make
+        // ordinary public dots require namespace ancestry when none is opened.
+        if (!opened.length) return;
         const name = node.children[1].text;
         if (!Array.from(this.members.values()).some(member => member.name === name)) return;
         const receiverClass = receiverType && this.classType(node, receiverType);
@@ -783,9 +790,6 @@ export class NativeNamespaces {
         const owners = this.hierarchy(owner);
         this.members.forEach(member => {
             if (owners.indexOf(member.owner) < 0 || member.name !== name) return;
-            const pkg = this.ancestor(node, NodeKind.PACKAGE);
-            const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
-                .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
             if (opened.some(directive => this.resolve(directive, directive.text) === member.uri)) {
                 // A typed ordinary receiver can legally have the same public
                 // spelling. Only reject the dot when that receiver itself has
