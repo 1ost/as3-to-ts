@@ -168,6 +168,8 @@ export interface EmitterOptions {
     nativeSimpleButtonReferenceModule?: string;
     /** Canonical Flash Text Engine TabStop references. */
     nativeTabStopReferenceModule?: string;
+    /** Canonical FTE ContentElement family references; no layout admission. */
+    nativeContentElementReferenceModule?: string;
     nativeDisplayObjectReferenceModule?: string;
     nativeMovieClipReferenceModule?: string;
     nativeTextFormatReferenceModule?: string;
@@ -496,6 +498,20 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules['flash.text.engine.TabStop']!==module)
                 throw new Error('AS3_TABSTOP_REFERENCE_UNSUPPORTED: exact native TabStop provider binding required');
         }
+        if (this.options.nativeContentElementReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeContentElementReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_CONTENT_ELEMENT_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const types=['ContentElement','TextElement','GroupElement','GraphicElement'].filter(type=>inputs.providers&&inputs.providers['flash.text.engine.'+type]);
+            if(!types.length)throw new Error('AS3_CONTENT_ELEMENT_REFERENCE_UNSUPPORTED: native content provider required');
+            for(const type of types){
+                const name='flash.text.engine.'+type,provider=inputs.providers[name];
+                if(provider.exportName!==type||provider.nativeBase||provider.nativeInterface
+                    ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                    ||!this.options.importModules||this.options.importModules[name]!==module)
+                    throw new Error('AS3_CONTENT_ELEMENT_REFERENCE_UNSUPPORTED: exact native content provider binding required: '+name);
+            }
+        }
         if (this.options.nativeSpriteValueReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeSpriteValueReferenceModule),reference=this.options.nativeReferenceCoercion;
             if(!this.generated||!reference)throw new Error('AS3_SPRITE_VALUE_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
@@ -818,7 +834,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 

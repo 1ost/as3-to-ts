@@ -184,10 +184,11 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if (provider.nativeVector !== undefined && (provider.nativeVector !== true || !((name === 'flash.display.MovieClip' && provider.exportName === 'MovieClip')
             || (name === 'flash.text.TextField' && provider.exportName === 'TextField')
             || (name === 'flash.display.SimpleButton' && provider.exportName === 'SimpleButton')
-            || (name === 'flash.text.engine.TabStop' && provider.exportName === 'TabStop'))
+            || (name === 'flash.text.engine.TabStop' && provider.exportName === 'TabStop')
+            || (['ContentElement','TextElement','GroupElement','GraphicElement'].some(type=>name === 'flash.text.engine.' + type && provider.exportName === type)))
             || (provider.nativeBase !== undefined && !(name === 'flash.display.MovieClip' && provider.nativeBase === 'MovieClip'))
             || provider.nativeInterface !== undefined))
-            fail('native Vector requires the qualified MovieClip or TextField or SimpleButton or TabStop provider');
+            fail('native Vector requires the qualified MovieClip, TextField, SimpleButton, TabStop or content-family provider');
         if (provider.nativeInterface !== undefined && (provider.nativeInterface !== true || provider.nativeBase !== undefined || !data.interfaceProviderModule))
             fail('native interface requires explicit interface provider and cannot be a native Class base');
         if(provider.nativeBase !== undefined && !((provider.nativeBase === 'Event' && name === 'flash.events.Event' && provider.exportName === 'Event')
