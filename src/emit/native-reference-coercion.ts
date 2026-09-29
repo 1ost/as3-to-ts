@@ -175,6 +175,10 @@ export class NativeReferenceCoercion {
             const nativeEventTest = nativeEvent && generated && node.kind === K.RELATION && node.children.some(child => child.text === 'is')
                 && node.lastChild.kind === K.IDENTIFIER && this.resolve(node.lastChild.text) === 'flash.events.Event'
                 && options.plan.nativeBindings.some(binding => binding.qname === 'flash.events.Event' && !!binding.eventBaseExport);
+            const nativeProxyTest = generated && node.kind===K.RELATION && node.children.length===3
+                && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
+                && this.resolve(node.lastChild.text)==='flash.utils.Proxy'
+                && options.plan.nativeBindings.some(binding=>binding.qname==='flash.utils.Proxy'&&!!binding.nativeBaseExport);
             const sourceAs = generated && node.kind===K.RELATION && node.children.length===3
                 && node.children[1].kind===K.AS && node.lastChild.kind===K.IDENTIFIER
                 && (this.sourceClass(node.lastChild.text) || !!this.sourceInterface(node.lastChild.text));
@@ -201,7 +205,7 @@ export class NativeReferenceCoercion {
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && this.resolve(node.lastChild.text)==='flash.utils.ByteArray';
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
-                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !nativeXMLTest && !sourceAs && !sourceIs && !interfaceTest && !displayTest && !byteArrayTest)
+                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeDateTest && !nativeEventTest && !nativeProxyTest && !nativeXMLTest && !sourceAs && !sourceIs && !interfaceTest && !displayTest && !byteArrayTest)
                 fail('reference type operation requires class-evaluation authority: '+this.resolve(node.lastChild.qualifiedName || node.lastChild.text)+' at offset '+node.start);
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text
