@@ -3182,10 +3182,10 @@ function emitGeneratedVectorLiteral(emitter:Emitter,node:Node):boolean {
  emitter.insert('return '+value+';})()');emitter.skipTo(node.end);return true;
 }
 
-function emitGeneratedVectorConstruction(emitter:Emitter,node:Node):boolean {
+function emitGeneratedVectorConstruction(emitter:Emitter,node:Node,conversion=false):boolean {
  const options=emitter.options.nativeVectorTypes||emitter.options.nativeGeneratedDeclarations;
- if(!options||node.children.length!==1)return false;
- const call=node.children[0],vector=call&&call.kind===NodeKind.CALL&&call.children[0];
+ if(!options||!conversion&&node.children.length!==1)return false;
+ const call=conversion?node:node.children[0],vector=call&&call.kind===NodeKind.CALL&&call.children[0];
  if(!vector||vector.kind!==NodeKind.VECTOR)return false;
  const input=nativeGeneratedDeclarationInputs(options.plan,options.plan.scope);
  const fail=(reason:string):never=>{throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: '+reason);};
@@ -3195,18 +3195,18 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node):boolean {
  const spec=options.plan.vectors.find(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end);
  if(!spec||input.sources[owner].source!==emitter.source)fail('exact construction specialization required');
  const args=call.findChild(NodeKind.ARGUMENTS);
- if(!args||args.children.length>2)fail('constructor argument count requires qualification');
- args.children.forEach((arg,index)=>{
+ if(!args||(conversion?args.children.length!==1:args.children.length>2))fail('Vector argument count requires qualification');
+ if(!conversion)args.children.forEach((arg,index)=>{
   const value=unwrapEncapsulatedExpression(arg),binding=value.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(value.text);
   const typed=binding&&!binding.bound&&binding.as3Type===(index===0?'uint':'Boolean');
   const literal=index===0?value.kind===NodeKind.LITERAL&&/^\d+$/.test(value.text)&&Number(value.text)<=1048576
    :value.kind===NodeKind.IDENTIFIER&&/^(true|false)$/.test(value.text);
   if(!typed&&!literal)fail('constructor requires uint length and Boolean fixed values; argument coercion held');
  });
- let helper='__as3_createVector',specialization='__as3_vectorSpec_'+spec.specExport;
+ let helper=conversion?'__as3_convertVector':'__as3_createVector',specialization='__as3_vectorSpec_'+spec.specExport;
  // Each specialization needs a distinct binding even when a class constructs several types.
  while(emitter.source.indexOf(helper)>=0)helper+='_';while(emitter.source.indexOf(specialization)>=0)specialization+='_';
- emitter.ensureImportIdentifier('as3VectorCreate as '+helper,vectorProviderModule(input.vectorProviderModule,options.module),false);
+ emitter.ensureImportIdentifier((conversion?'as3VectorConvert':'as3VectorCreate')+' as '+helper,vectorProviderModule(input.vectorProviderModule,options.module),false);
  emitter.ensureImportIdentifier(spec.specExport+' as '+specialization,generatedModule(options.module),false);
  emitter.nativeSourceHelpers.add(helper);
  if(spec.elementNative){
@@ -3763,6 +3763,7 @@ function emitGeneratedProxyNamespaceCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 function emitCall(emitter:Emitter, node:Node):void {
+    if(emitGeneratedVectorConstruction(emitter,node,true))return;
     if(emitGeneratedProxyNamespaceCall(emitter,node))return;
     if(emitGeneratedParentRemoval(emitter,node))return;
     if(emitSourceDefinitionLookup(emitter,node))return;

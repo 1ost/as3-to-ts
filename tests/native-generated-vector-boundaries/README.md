@@ -15,7 +15,7 @@ entry/return/local conversions use the matching common property specialization.
 Interface signature annotations use nativeVectorTypes with the same exact plan.
 No Vector Array substitution or authored body rewriting is used.
 
-Eleven rejection guards retain Vector conversion calls, static/constant or
+Eleven rejection guards retain invalid Vector conversion arity, static/constant or
 internal storage, optional/constructor parameters, unplanned source class element publication and nested
 specialization publication, extra construction arguments, unqualified constructor
 argument coercion and missing Vector providers as separate prerequisites. Three comparison controls
