@@ -198,6 +198,7 @@ export class NativeCallableClasses {
                             ||accessibilityReference&&sourceReference.identity==='flash.accessibility.AccessibilityImplementation'
                             ||displayReference&&['flash.display.DisplayObject','flash.display.Sprite'].indexOf(sourceReference.identity)>=0
                             ||interactiveReference&&sourceReference.identity==='flash.display.InteractiveObject'
+                            ||movieClipReference&&sourceReference.identity==='flash.display.MovieClip'
                             ||xmlReferences&&['XML','XMLList'].indexOf(sourceReference.identity)>=0
                             ||rectangleReference&&sourceReference.identity==='flash.geom.Rectangle'
                             ||spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(sourceReference.identity)>=0
