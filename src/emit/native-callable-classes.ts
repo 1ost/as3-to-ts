@@ -1,7 +1,7 @@
 import {nativeSourceUnitAst} from './native-source-unit';
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import {generatedProxyMember,generatedProxyUri} from './native-generated-proxy';
-import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource, nativeGeneratedSourceUnit} from './native-generated-declarations';
+import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationResolver, nativeGeneratedSourceUnit} from './native-generated-declarations';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {generatedMethodCompletes} from './native-generated-completions';
 import {NativeLexicalMembers} from './native-lexical-members';
@@ -97,10 +97,29 @@ export class NativeCallableClasses {
                 const local = this.capturedType(node,name);
                 return local === undefined ? classAliases.has(name) : local === 'Class';
             };
+            const declaredStaticMethod = (node:Node, receiver:Node):boolean => {
+                if (!generated || receiver.kind !== K.IDENTIFIER
+                    || ['call','apply','bind'].indexOf(node.children[1].text) < 0
+                    || this.capturedType(node,receiver.text) !== undefined) return false;
+                // A source field or method with the same spelling shadows a Class.
+                if (cls.findChild(K.CONTENT).children.some(member =>
+                    member.findChildren(K.NAME_TYPE_INIT).some(value => value.findChild(K.NAME).text === receiver.text)
+                    || member.findChild(K.NAME) && member.findChild(K.NAME).text === receiver.text
+                        && member.findChild(K.NAME).text !== name)) return false;
+                const identity = nativeGeneratedDeclarationResolver(generated.options.plan,qname,options[qname]).resolve(receiver.text);
+                if (!generated.options.plan.bindings.some(binding => binding.qname === identity)
+                    && !generated.options.plan.privateBindings.some(binding => binding.identity === identity)) return false;
+                return nativeGeneratedDeclarationNode(generated.options.plan,identity).findChild(K.CONTENT).children.some(member => {
+                    const mods = member.findChild(K.MOD_LIST);
+                    return member.kind === K.FUNCTION && member.findChild(K.NAME).text === node.children[1].text
+                        && !!mods && ['public','static'].every(mod => mods.children.some(value => value.text === mod));
+                });
+            };
             const callScan = (node: Node): void => {
                 const receiver = node.children[0] && unwrapEncapsulatedExpression(node.children[0]);
                 if (node.kind === K.DOT && receiver && isClassAlias(node,receiver.text)
-                    && ['call', 'apply', 'bind', 'prototype'].indexOf(node.children[1].text) >= 0)
+                    && ['call', 'apply', 'bind', 'prototype'].indexOf(node.children[1].text) >= 0
+                    && !declaredStaticMethod(node,receiver))
                     this.fail('direct callable-constructor invocation/prototype manipulation');
                 if (node.kind === K.CALL && node.children[0] && isClassAlias(node,node.children[0].text)
                     && sourceClassNames.indexOf(node.children[0].text)<0
@@ -688,7 +707,9 @@ export class NativeCallableClasses {
                 || this.generated && this.generated.lexical.trait(key,!!isStatic));
             const encoded = namespaced?namespaced.encoded:lexicalMember ? lexicalMember.key : JSON.stringify(key);
             if (key === 'constructor') this.fail('reserved constructor member');
-            if (isStatic && ['prototype', 'call', 'apply', 'bind'].indexOf(key) >= 0)
+            if (isStatic && ['prototype', 'call', 'apply', 'bind'].indexOf(key) >= 0
+                && !(this.generated && key !== 'prototype' && member.kind === S.MethodDeclaration
+                    && this.generated.projection.staticTraits.some(trait => trait.name === key && trait.kind === 'method')))
                 this.fail('reserved static callable constructor identity');
             if (member.kind === S.PropertyDeclaration) {
                 if (lexicalMember) {
