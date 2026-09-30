@@ -1,0 +1,52 @@
+[
+  {
+    "value": 2,
+    "id": "other-caller"
+  },
+  {
+    "value": [
+      2,
+      0
+    ],
+    "id": "selected-receiver"
+  },
+  {
+    "value": true,
+    "id": "stable-closure"
+  },
+  {
+    "value": 5,
+    "id": "retained-receiver"
+  },
+  {
+    "value": true,
+    "id": "new-closure"
+  },
+  {
+    "value": 7,
+    "id": "receiver-before-argument"
+  },
+  {
+    "value": [
+      5,
+      7
+    ],
+    "id": "state"
+  },
+  {
+    "value": 1009,
+    "id": "null-error"
+  },
+  {
+    "value": [
+      [
+        "argument",
+        "argument"
+      ],
+      [
+        "argument"
+      ]
+    ],
+    "id": "argument-evaluation"
+  }
+]

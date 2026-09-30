@@ -502,6 +502,16 @@ export class NativeGeneratedLexical {
                         &&this.declarations.find(b=>b.identity===this.resolveTypeName(root.text));
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                     if(owner&&this.classSource(owner.identity)&&!this.classSource(owner.identity).referenceOnly) {
+                        // A class can reach its own instance through its private
+                        // static storage. Authenticate the declared receiver type;
+                        // emission still evaluates the storage before arguments.
+                        if(owner.identity===this.owner&&(!rootBinding||!rootBinding.bound)) {
+                            const field=this.own.find(trait=>trait.name===receiver.children[1].text
+                                &&trait.static&&trait.kind==='variable'&&trait.visibility==='private');
+                            if(field&&field.type)references=this.plan.references.filter(r=>r.owner===this.owner
+                                &&r.start===field.type.start&&r.end===field.type.end
+                                &&r.kind==='declaration'&&r.identity===this.owner);
+                        }
                         const getter=this.internalContent(owner.identity).children.find(member=>member.kind===K.GET
                             &&modifiers(member).indexOf('public')>=0&&modifiers(member).indexOf('static')>=0
                             &&member.findChild(K.NAME).text===receiver.children[1].text
