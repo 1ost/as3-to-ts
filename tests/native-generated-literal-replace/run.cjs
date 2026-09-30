@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const evidence=path.join(engine,'tests/nativeFlashOracle/literal-string-replace'),expected=require(path.join(evidence,'verify.cjs')); 
+const evidence=path.join(engine,'tests/nativeFlashOracle/literal-string-replace'),expected=require(path.join(evidence,'verify.cjs'));
 const cache=path.resolve('.cache/native-generated-literal-replace');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
