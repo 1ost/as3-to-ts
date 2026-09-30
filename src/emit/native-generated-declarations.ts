@@ -369,10 +369,12 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     if(data.classScriptSources)data.classScriptSources.forEach(name=>{
         const binding=bindings.find(value=>value.qname===name);
         if(!binding||!binding.scriptGlobalExport)fail('Class script selection requires a planned class with script global');
-        // Root Class generations retain their package capability and independent
-        // lexical storage across initializer failures. Derived internal retries
-        // still need separate evidence for ancestry and trait enrollment.
-        if(data.lexicalProviderModule&&binding.base){
+        const dispatcherBase=binding.base==='flash.events.EventDispatcher'
+            &&providers[binding.base]&&providers[binding.base].nativeBase==='EventDispatcher';
+        // Root and direct EventDispatcher generations retain their package
+        // capability, internal closures and independent lexical/native storage
+        // across failures. Other ancestry with internal declarations remains held.
+        if(data.lexicalProviderModule&&binding.base&&!dispatcherBase){
             const pkg=name.slice(0,name.lastIndexOf('.'));
             classes.forEach((cls,qname)=>{
                 if(qname.slice(0,qname.lastIndexOf('.'))!==pkg)return;
@@ -387,8 +389,6 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             // Direct EventDispatcher generations retain the canonical native
             // constructor entry and independent event storage across retries.
             // Other direct native bases still require their own qualification.
-            const dispatcherBase=binding.base==='flash.events.EventDispatcher'
-                &&providers[binding.base]&&providers[binding.base].nativeBase==='EventDispatcher';
             // Stable source ancestry may end at the authenticated Sprite
             // boundary. Check every ancestor: a retrying intermediate Class
             // cannot be treated as a stable constructor/prototype authority.

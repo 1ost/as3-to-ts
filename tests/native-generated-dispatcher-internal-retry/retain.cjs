@@ -1,0 +1,12 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto'),zlib=require('node:zlib'),cp=require('node:child_process');
+const root=path.resolve(__dirname,'../..'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2-internal-values-review');
+const sha=v=>crypto.createHash('sha256').update(v).digest('hex');
+assert.equal(process.argv.length,3,'Pass completed report.json');
+const report=JSON.parse(fs.readFileSync(path.resolve(process.argv[2])));
+assert.equal(report.runnerSha256,sha(fs.readFileSync(path.join(__dirname,'run.cjs'))));
+assert.equal(report.observerSha256,sha(fs.readFileSync(path.join(__dirname,'observer.ts'))));
+for(const item of report.compilerInputs)assert.equal(sha(fs.readFileSync(path.join(root,item.file),'utf8').replace(/\r\n/g,'\n')),item.sha256,item.file);
+for(const result of report.results)for(const item of [...result.inputs,...result.typechecks.flatMap(c=>c.inputs)])assert.equal(sha(fs.readFileSync(item.file)),item.sha256,item.file);
+const bytes=zlib.gzipSync(Buffer.from(JSON.stringify(report)),{level:9});fs.writeFileSync(path.join(__dirname,'native.json.gz'),bytes);
+fs.writeFileSync(path.join(__dirname,'native-pin.json'),JSON.stringify({baselineCompilerCommit:'fe64bd29736b20744f50a1458e8194dc2d642c0e',engineCommit:cp.execFileSync('git',['rev-parse','HEAD'],{cwd:engine,encoding:'utf8'}).trim(),reportSha256:sha(bytes)},null,2)+'\n');
+console.log('Retained dispatcher internal retry comparison');

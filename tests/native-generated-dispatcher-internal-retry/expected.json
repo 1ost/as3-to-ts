@@ -1,0 +1,210 @@
+[
+  {
+    "value": 0,
+    "id": "before"
+  },
+  {
+    "value": [
+      true,
+      1,
+      1
+    ],
+    "id": "first"
+  },
+  {
+    "value": [
+      true,
+      "global"
+    ],
+    "id": "failed-closure"
+  },
+  {
+    "value": [
+      true,
+      true,
+      false
+    ],
+    "id": "failed-instance"
+  },
+  {
+    "value": [
+      11,
+      true,
+      19
+    ],
+    "id": "failed-internal"
+  },
+  {
+    "value": [
+      true,
+      0
+    ],
+    "id": "method-binding"
+  },
+  {
+    "value": [
+      true,
+      2,
+      2
+    ],
+    "id": "second"
+  },
+  {
+    "value": [
+      false,
+      false,
+      false,
+      false
+    ],
+    "id": "retry-identities"
+  },
+  {
+    "value": [
+      19,
+      null
+    ],
+    "id": "retry-global-state"
+  },
+  {
+    "value": [
+      3,
+      true,
+      true,
+      0,
+      0
+    ],
+    "id": "success"
+  },
+  {
+    "value": [
+      false,
+      false,
+      true,
+      false,
+      false
+    ],
+    "id": "success-identities"
+  },
+  {
+    "value": [
+      null,
+      19
+    ],
+    "id": "success-global-state"
+  },
+  {
+    "value": [
+      3,
+      true,
+      true
+    ],
+    "id": "success-once"
+  },
+  {
+    "value": [
+      "value",
+      false,
+      true,
+      false
+    ],
+    "id": "failed-global-binding"
+  },
+  {
+    "value": [
+      "value",
+      true,
+      false,
+      false
+    ],
+    "id": "successful-global-binding"
+  },
+  {
+    "value": 3,
+    "id": "after-binding-reads"
+  },
+  {
+    "value": [
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "id": "successful-instance"
+  },
+  {
+    "value": [
+      true,
+      true,
+      true,
+      3
+    ],
+    "id": "parent-identity"
+  },
+  {
+    "value": [
+      7,
+      true,
+      19
+    ],
+    "id": "successful-internal"
+  },
+  {
+    "value": [
+      [
+        21,
+        true,
+        19
+      ],
+      [
+        7,
+        true,
+        19
+      ]
+    ],
+    "id": "retained-internal"
+  },
+  {
+    "value": [
+      [
+        22,
+        true,
+        19
+      ],
+      [
+        7,
+        true,
+        19
+      ]
+    ],
+    "id": "retained-method"
+  },
+  {
+    "value": [
+      true,
+      false
+    ],
+    "id": "listener-isolation"
+  },
+  {
+    "value": [
+      false,
+      [
+        [
+          true,
+          true
+        ]
+      ]
+    ],
+    "id": "failed-generation-dispatch"
+  },
+  {
+    "value": [
+      false,
+      true,
+      1
+    ],
+    "id": "listener-removal"
+  }
+]
