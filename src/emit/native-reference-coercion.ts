@@ -192,7 +192,7 @@ export class NativeReferenceCoercion {
                 && (!!this.sourceClass(node.lastChild.text) || !!this.nativeInterface(node.lastChild.text));
             const displayTest = node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
-                && ((nativeDisplayObject && this.resolve(node.lastChild.text)==='flash.display.DisplayObject')
+                && ((nativeDisplayObject && ['flash.display.DisplayObject','flash.display.Sprite'].indexOf(this.resolve(node.lastChild.text))>=0)
                     || (nativeDisplayObjectContainer && this.resolve(node.lastChild.text)==='flash.display.DisplayObjectContainer')
                     || (nativeMovieClip && this.resolve(node.lastChild.text)==='flash.display.MovieClip')
                     || (nativeTextFormat && this.resolve(node.lastChild.text)==='flash.text.TextFormat')

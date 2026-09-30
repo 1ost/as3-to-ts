@@ -1,0 +1,66 @@
+[
+  {
+    "value": [
+      true,
+      true
+    ],
+    "id": "sprite"
+  },
+  {
+    "value": [
+      true,
+      true
+    ],
+    "id": "movieclip"
+  },
+  {
+    "value": [
+      false,
+      true
+    ],
+    "id": "shape"
+  },
+  {
+    "value": [
+      false,
+      false,
+      true,
+      true
+    ],
+    "id": "nullish"
+  },
+  {
+    "value": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ],
+    "id": "primitive"
+  },
+  {
+    "value": [
+      false,
+      false,
+      true,
+      true
+    ],
+    "id": "object-class"
+  },
+  {
+    "value": [
+      true,
+      1
+    ],
+    "id": "call-valid"
+  },
+  {
+    "value": [
+      true,
+      2
+    ],
+    "id": "call-invalid"
+  }
+]

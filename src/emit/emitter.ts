@@ -5038,7 +5038,7 @@ function emitRelation(emitter:Emitter, node:Node):void {
     }
     if(emitter.references&&node.children.length===3
         &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
-        &&((emitter.options.nativeDisplayObjectReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.DisplayObject')
+        &&((emitter.options.nativeDisplayObjectReferenceModule!==undefined&&['flash.display.DisplayObject','flash.display.Sprite'].indexOf(emitter.references.resolve(node.lastChild.text))>=0)
           ||(emitter.options.nativeMovieClipReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.display.MovieClip')
           ||(emitter.options.nativeTextFormatReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.text.TextFormat')
           ||(emitter.options.nativeAccessibilityReferenceModule!==undefined&&emitter.references.resolve(node.lastChild.text)==='flash.accessibility.AccessibilityImplementation')
