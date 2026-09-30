@@ -1677,6 +1677,9 @@ function emitFunction(emitter:Emitter, node:Node):void {
     // AIR coerces an implicit undefined completion to null for Object and String returns.
     emitter.catchup(body.end-1);emitter.insert('\nreturn null;\n');
    }
+   if(anonymous.returned==='int'){
+    emitter.catchup(body.end-1);emitter.insert('\nreturn 0;\n');
+   }
    emitter.catchup(body.end);
   });
   emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');emitter.skipTo(node.end);return;
@@ -2063,6 +2066,23 @@ function emitBlock(emitter:Emitter, node:Node):void {
 	// Logical assignments capture effectful receivers in ordinary function-local
 	// variables. Do not introduce an IIFE: that would change lexical arguments.
 	emitter.catchup(node.start + 1);
+	const anonymous=node.parent&&emitter.generated&&emitter.generated.lexical.anonymousFunctions.find(fn=>fn.start===node.parent.start&&fn.end===node.parent.end);
+	if(anonymous&&anonymous.typedSignature){
+		if(!emitter.references)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: anonymous signature requires authenticated reference plan');
+		// AIR accepts extra arguments for a zero-parameter anonymous function.
+		if(anonymous.parameters.length){
+			const count=propertyHelper(emitter,'as3CheckArgumentCount',emitter.references.options.coercionModule);
+			emitter.insert('\n'+count+'(arguments.length,'+anonymous.parameters.length+','+anonymous.parameters.length+');\n');
+		}
+		node.parent.findChild(NodeKind.PARAMETER_LIST).children.forEach(parameter=>{
+			const value=parameter.findChild(NodeKind.NAME_TYPE_INIT),type=value&&value.findChild(NodeKind.TYPE);
+			if(!type||type.text==='*')return;
+			const reference=emitter.references.declaration(value);
+			if(!reference)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: anonymous parameter requires exact source reference');
+			const parts=referenceCoercionParts(emitter,reference);
+			emitter.insert(reference.name+'='+parts[0]+reference.name+parts[1]+';\n');
+		});
+	}
 	if (!emitReferenceMethodEntry(emitter, node)) emitNumericMethodParameterCoercion(emitter, node);
 	if (emitter.references) emitter.references.defaults(node).forEach(local => {
 		const global = emitter.nativeGlobals.resolve(local.node.findChild(NodeKind.TYPE),true);
@@ -5562,7 +5582,7 @@ function emitReferenceReturn(emitter:Emitter, node:Node):void {
     let owner=node.parent;
     while(owner&&[NodeKind.FUNCTION,NodeKind.LAMBDA,NodeKind.GET,NodeKind.SET].indexOf(owner.kind)<0)owner=owner.parent;
     const anonymous=owner&&emitter.generated&&emitter.generated.lexical.anonymousFunctions.find(fn=>fn.start===owner.start&&fn.end===owner.end);
-    if(anonymous&&(anonymous.returned==='Object'||anonymous.returned==='String')){
+    if(anonymous&&['Object','String','int'].indexOf(anonymous.returned)>=0){
         const expression=node.children[0],parts=signatureBuiltinCoercionParts(emitter,anonymous.returned);
         emitter.catchup(getExpressionStart(expression));emitter.insert(parts[0]);
         visitNode(emitter,expression);emitter.catchup(getEffectiveNodeEnd(expression));emitter.insert(parts[1]);return;
