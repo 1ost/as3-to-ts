@@ -168,6 +168,8 @@ export interface EmitterOptions {
     nativeMatrixReferenceModule?: string;
     /** Privately allocated TextLine constructor references; no layout/member admission. */
     nativeTextLineReferenceModule?: string;
+    /** Canonical ErrorEvent reference provider for generated constructor parameters. */
+    nativeErrorEventReferenceModule?: string;
     /** Canonical TextField reference provider for generated typed returns. */
     nativeTextFieldReferenceModule?: string;
     /** Canonical SimpleButton reference provider for generated typed returns. */
@@ -503,6 +505,16 @@ export default class Emitter {
                 ||xmlGlobalProviderModule(provider.module,reference.module)!==module
                 ||!this.options.importModules||this.options.importModules['flash.text.engine.TextLine']!==module)
                 throw new Error('AS3_TEXTLINE_REFERENCE_UNSUPPORTED: exact native TextLine provider binding required');
+        }
+        if (this.options.nativeErrorEventReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeErrorEventReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_ERROREVENT_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const provider=inputs.providers&&inputs.providers['flash.events.ErrorEvent'];
+            if(!provider||provider.exportName!=='ErrorEvent'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                ||!this.options.importModules||this.options.importModules['flash.events.ErrorEvent']!==module)
+                throw new Error('AS3_ERROREVENT_REFERENCE_UNSUPPORTED: exact native ErrorEvent provider binding required');
         }
         if (this.options.nativeTextFieldReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeTextFieldReferenceModule),reference=this.options.nativeReferenceCoercion;
@@ -870,7 +882,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
 	}
 
