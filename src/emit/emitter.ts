@@ -4148,9 +4148,17 @@ function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
     // source-pattern provider admits literal RegExp delimiters without limits.
     if(splitting&&(!args||!args.children[0]||args.children[0].kind!==NodeKind.LITERAL||!/^\/[\s\S]+\/[a-z]*$/.test(args.children[0].text)))return false;
     const receiver = unwrapEncapsulatedExpression(callee.children[0]);
-    if (receiver.kind !== NodeKind.IDENTIFIER) return false;
-    const binding = emitter.findDefInScope(receiver.text);
-    if (!binding || binding.bound || binding.as3Type !== 'String') return false;
+    const stringExpression = (input:Node):boolean => {
+        const value=unwrapEncapsulatedExpression(input);
+        if(value.kind===NodeKind.LITERAL && /^["']/.test(value.text))return true;
+        if(value.kind===NodeKind.IDENTIFIER){
+            const binding=emitter.findDefInScope(value.text);
+            return !!binding&&!binding.bound&&binding.as3Type==='String';
+        }
+        return value.kind===NodeKind.ADD&&value.children.length>=3&&value.children.length%2===1
+            &&value.children.every((child,index)=>index%2?child.text==='+':stringExpression(child));
+    };
+    if (!stringExpression(receiver) || !replacing && receiver.kind !== NodeKind.IDENTIFIER) return false;
     if (!emitter.references || emitter.references.resolve('String') !== 'String')
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
     if(splitting)nativePatternModule(emitter);else generatedModule(module);
@@ -4158,6 +4166,22 @@ function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: '+method+' requires exactly '+(replacing?'two':'one')+' authored arguments');
     // The legacy regex token end excludes flags; its exact text includes them.
     const pattern = args.children[0], raw = pattern.text;
+    const primitiveLiteral = (value:Node):boolean => value.kind===NodeKind.LITERAL
+        && /^(?:null|true|false|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|0[xX][\da-fA-F]+)$/.test(value.text);
+    const literalSearch=unwrapEncapsulatedExpression(pattern);
+    const primitiveKeyword=literalSearch.kind===NodeKind.IDENTIFIER
+        &&['null','true','false','undefined'].indexOf(literalSearch.text)>=0
+        &&!emitter.findDefInScope(literalSearch.text);
+    if(replacing&&(stringExpression(pattern)||primitiveLiteral(literalSearch)||primitiveKeyword)){
+        const replace=propertyHelper(emitter,'sourceStringLiteralReplace',module);
+        emitter.catchup(node.start);emitter.insert(replace+'(');
+        [callee.children[0],...args.children].forEach((argument,index)=>{
+            if(index)emitter.insert(',');
+            emitter.skipTo(getExpressionStart(argument));visitNode(emitter,argument);
+            emitter.catchup(getEffectiveNodeEnd(argument));
+        });
+        emitter.insert(')');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+    }
     let construction:Node = null, match:RegExpExecArray = null;
     if (pattern.kind === NodeKind.NEW) {
         if(!replacing)throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: match requires a qualified literal');

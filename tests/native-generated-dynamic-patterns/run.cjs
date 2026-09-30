@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const compiler=path.resolve(__dirname,'../..'),root=path.resolve(compiler,'../op2-html5'),engine=path.resolve(compiler,'../LayaAir-op2');
+const compiler=path.resolve(__dirname,'../..'),root=path.resolve(compiler,'../op2-html5'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||path.join(compiler,'../LayaAir-op2'));
 const api=require(path.join(compiler,'lib')),parse=require(path.join(compiler,'lib/parse')),emit=require(path.join(compiler,'lib/emit')),ts=require(path.join(compiler,'node_modules/typescript'));
 const modern=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const evidence=path.join(engine,'tests/nativeFlashOracle/stringutil-dynamic-patterns'),captured=require(path.join(evidence,'verify.cjs'));
