@@ -217,7 +217,8 @@ export class NativeCallableClasses {
                         :nativeReference?{identity:nativeReference.qname,exported:nativeReference.referenceExport}:undefined;
                     const sourceType = vector ? vector.identity : reference ? reference.identity : nativeSourceTypeIdentity(type, qname, imports);
                     const selfReference = !!metadata && sourceType === qname;
-                    if (!selfReference && !reference && !vector && !(generated&&['Function','Array'].indexOf(sourceType)>=0) && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
+                    const builtinClassReference=sourceReference&&sourceReference.kind==='intrinsic'&&sourceReference.identity==='Class'&&!!classValueModule;
+                    if (!selfReference && !reference && !vector && !builtinClassReference && !(generated&&['Function','Array'].indexOf(sourceType)>=0) && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
                         this.fail('constructor parameter coercion needs common provider authority: ' + (type && type.text || '*') + ' (' + sourceType + ')');
                     if (sourceType === 'String' && (typeof stringModule !== 'string' || !stringModule.trim()
                         || /[\r\n\u0000]/.test(stringModule)))
@@ -229,7 +230,7 @@ export class NativeCallableClasses {
                     const init = value.findChild(K.INIT);
                     if(generated&&['Function','Array'].indexOf(sourceType)>=0&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
                         this.fail(sourceType+' constructor default requires literal null');
-                    if((reference||vector)&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
+                    if((reference||vector||builtinClassReference)&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
                         this.fail('source reference constructor default requires literal null');
                     if (selfReference && (!init || init.children[0].kind !== K.IDENTIFIER || init.children[0].text !== 'null'))
                         this.fail('self-reference constructor parameter requires an optional null default');
@@ -894,6 +895,7 @@ export class NativeCallableClasses {
                 ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(parameter.vector.name)+',vector:'+domainImport+'.'+parameter.vector.specExport+'})'
                 : parameter.reference
                 ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(parameter.reference.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domainImport+'.'+parameter.reference.exported+'})'
+                : this.generated && parameter.type==='Class' ? '<any>'+classValue+'.as3CoerceClass('+value+')'
                 : this.generated && parameter.type==='Array' ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:"Array",reference:'+intrinsic+'.array})'
                 : this.generated && parameter.type==='Function' ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',"Function")'
                 : parameter.type === 'Number' ? numberCoercion + '(' + value + ')'

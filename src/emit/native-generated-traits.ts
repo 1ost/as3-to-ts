@@ -153,7 +153,7 @@ export class NativeGeneratedClassTraits {
             const reference = plan.references.find(item => item.owner === qname && item.start === node.start && item.end === node.end);
             if (!reference) fail('exact source type span required: ' + qname);
             if (reference.kind === 'intrinsic') {
-                if (['*','int','uint','Number','Boolean','String','Object','Function','Array'].indexOf(reference.identity) < 0)
+                if (['*','int','uint','Number','Boolean','String','Object','Function','Array','Class'].indexOf(reference.identity) < 0)
                     fail('intrinsic storage requires provider authority: ' + reference.identity);
                 return reference.identity;
             }
