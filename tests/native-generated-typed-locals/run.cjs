@@ -33,7 +33,7 @@ for(const member of [
  'public function f():* {var x:Vector.<int>;return x;}',
  'public function f():* {const x:int=1;return x;}',
  'public function f():* {for each(var x:int in []){}return x;}',
- 'private var x:*;public function f():* {var x:int;return x;}',
+ 'private function x():* {return null;}public function f():* {var x:int;return x;}',
  'public function f(x:*):* {var x:int;return x;}',
  'public function f():* {var x:int;var x:String;return x;}',
  'public function f():* {var x:int;try{}catch(x:*){x=1;}return x;}'

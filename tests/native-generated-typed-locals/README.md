@@ -26,3 +26,5 @@ does not establish the full data dependency chain, general Class construction,
 source object literal metadata, or real game readiness.
 
 Validation note (2026-09-22): generated Event and reference-constructor suites also passed. The legacy archived-engine typed-local replay was attempted twice, including a serial retry with a 1536 MB Node heap; both stopped with Array buffer allocation failed. No legacy full replay pass is claimed.
+
+The local/field shadow follow-up qualifies typed locals shadowing own private fields through existing function-entry defaults. The earlier blanket collision rejection is now a private-method collision rejection; complete AIR/native field-shadow evidence is in native-generated-local-field-shadow. Other historical scope statements above describe the original checkpoint.

@@ -258,7 +258,17 @@ export class NativeGeneratedLexical {
                     const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
                     if(!vector&&(!ref||(ref.kind!=='intrinsic'&&ref.kind!=='interface'&&ref.kind!=='declaration'&&ref.kind!=='private-declaration'&&ref.kind!=='native'&&ref.kind!=='pattern-local'&&ref.kind!=='tween-handle-local')))fail('typed local source reference lowering required');
                 }
-                if(this.traits.some(t=>t.name===value.findChild(K.NAME).text))fail('local/lexical declaration-order lookup required');
+                const collisions=this.traits.filter(t=>t.name===value.findChild(K.NAME).text);
+                if(collisions.length){
+                    let method=node.parent;while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0)method=method.parent;
+                    // The typed-local pass hoists source storage/defaults. The
+                    // lexical resolver already prefers local bindings, while
+                    // explicit this/Class accesses retain their field capability.
+                    if(!typedLocals||!type||type.text==='*'||node.kind!==K.VAR_LIST
+                        ||!method||method.parent!==content
+                        ||collisions.some(t=>t.owner!==owner||t.visibility!=='private'||t.kind!=='variable'))
+                        fail('local/lexical declaration-order lookup required');
+                }
             });
             if(node.kind===K.IDENTIFIER&&node.text==='arguments'){
                 let member=node;while(member.parent&&member.parent!==content)member=member.parent;

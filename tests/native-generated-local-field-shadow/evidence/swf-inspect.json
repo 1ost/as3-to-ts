@@ -1,0 +1,25 @@
+{
+  "actual_uncompressed_length": 4393,
+  "compression": "zlib",
+  "declared_uncompressed_length": 4393,
+  "frame_count": 1,
+  "frame_rate": 24.0,
+  "length_matches_header": true,
+  "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\.local\\local-field-shadow\\evidence-final\\oracle.swf",
+  "schema": "swf-header@1",
+  "sha256": "082b2a65e4295c6ce61b1f12ca26aa0ee390fe26d91f23bd8e31fc03af2b6c10",
+  "signature": "CWS",
+  "stage": {
+    "height": 375.0,
+    "width": 500.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "stage_twips": {
+    "xmax": 10000,
+    "xmin": 0,
+    "ymax": 7500,
+    "ymin": 0
+  },
+  "swf_version": 51
+}

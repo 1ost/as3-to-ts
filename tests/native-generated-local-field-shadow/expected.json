@@ -1,0 +1,62 @@
+[
+  {
+    "value": [
+      null,
+      "ctor",
+      "field"
+    ],
+    "id": "constructor"
+  },
+  {
+    "value": [
+      null,
+      3,
+      8
+    ],
+    "id": "reference"
+  },
+  {
+    "value": [
+      null,
+      "local",
+      "field"
+    ],
+    "id": "early-read"
+  },
+  {
+    "value": [
+      "field-local",
+      "field"
+    ],
+    "id": "explicit-field"
+  },
+  {
+    "value": [
+      null,
+      "field"
+    ],
+    "id": "skipped-declaration"
+  },
+  {
+    "value": [
+      [
+        1,
+        2
+      ],
+      [
+        2
+      ],
+      [
+        "field-array"
+      ]
+    ],
+    "id": "array-loop"
+  },
+  {
+    "value": [
+      5,
+      17
+    ],
+    "id": "static-local"
+  }
+]
