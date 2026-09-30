@@ -4734,7 +4734,8 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 		|| !name || name.kind !== NodeKind.LITERAL) return false;
 	const query = receiver.text === 'TweenMax' && name.text === 'getTweensOf';
 	const control = receiver.text === 'TweenMax' && (name.text === 'killTweensOf' || name.text === 'isTweening');
-	if (name.text !== 'to' && !query && !control) return false;
+	const delayedCall = receiver.text === 'TweenMax' && name.text === 'delayedCall';
+	if (name.text !== 'to' && !query && !control && !delayedCall) return false;
 	const binding = emitter.findDefInScope(receiver.text);
 	const sourcePlan=emitter.tweenPlans.get(node);
 	if(sourcePlan&&(!binding||binding.bound||Object.prototype.hasOwnProperty.call(binding,'as3Type')
@@ -4745,11 +4746,15 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 	// Query authority comes from the exact legacy import. Unlike the older to()
 	// migration, an unbound namesake is not sufficient. The optional legacy
 	// onlyActive overload has no corresponding runtime contract.
-	if ((query || control) && !binding) return false;
-	if ((query || control) && emitter.isNew)
+	if ((query || control || delayedCall) && !binding) return false;
+	if ((query || control || delayedCall) && emitter.isNew)
 		throw new Error('AS3_TWEEN_UNSUPPORTED: tween query construction is not qualified');
 	if ((query || control) && args.children.length !== 1)
 		throw new Error('AS3_TWEEN_UNSUPPORTED: ' + name.text + ' requires exactly one target argument');
+	// The captured migration covers the two-argument seconds-based callback.
+	// Optional parameter/scope/frame overloads need their own source evidence.
+	if (delayedCall && args.children.length !== 2)
+		throw new Error('AS3_TWEEN_UNSUPPORTED: delayedCall requires exactly two arguments');
 	if(name.text==='to'&&args.children.length===3&&tweenOptionNames(args.children[2]).indexOf('bezier')>=0&&!sourcePlan)
 		throw new Error('AS3_TWEEN_UNSUPPORTED: Bezier call requires authenticated source plan');
 	let helper = '__as3_FlashTweenRuntime';
