@@ -5594,6 +5594,12 @@ function emitLocalTypeOf(emitter:Emitter, node:Node):void {
     const operand = node.children.length === 1 && unwrapEncapsulatedExpression(node.children[0]);
     const local = operand && operand.kind === NodeKind.IDENTIFIER && emitter.references
         && emitter.references.local(operand,operand.text);
+    if(operand&&emitter.generated&&emitter.typedLocalPlan&&emitter.typedLocalPlan.booleanLocal(operand,emitter)) {
+        // Flash folds typeof a declared Boolean local, including raw values
+        // retained by logical assignment. Effectful operands are not folded.
+        emitter.catchup(node.start);emitter.insert('("boolean")');
+        emitter.skipTo(getEffectiveNodeEnd(node));return;
+    }
     const generatedString=operand&&emitter.generated&&emitter.typedLocalPlan&&emitter.typedLocalPlan.stringLocal(operand,emitter);
     if ((!local || !local.stringLocal)&&!generatedString) {visitNodes(emitter,node.children); return;}
     // Qualified String storage includes the source null String atom. The read
@@ -5796,8 +5802,17 @@ function emitAssign(emitter: Emitter, node: Node): void {
         }
     }
     if (operator.text === '||=' || operator.text === '&&=') {
-        if (emitter.typedLocalPlan && emitter.typedLocalPlan.owns(left, emitter))
-            throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: typed logical assignment held');
+        if (emitter.typedLocalPlan && emitter.typedLocalPlan.owns(left, emitter)) {
+            const marker=emitter.typedLocalPlan.logicalAssignmentMarker(left,emitter);
+            emitter.catchup(node.start);emitter.insert('(');
+            visitNode(emitter,left);emitter.catchup(getEffectiveNodeEnd(left));
+            emitter.insert(' '+operator.text.slice(0,-1)+' '+marker+'(');
+            visitNode(emitter,left);emitter.catchup(getEffectiveNodeEnd(left));
+            emitter.insert(',');emitter.skipTo(getExpressionStart(right));
+            visitNode(emitter,right);emitter.catchup(getEffectiveNodeEnd(right));
+            emitter.insert('))');emitter.skipTo(getEffectiveNodeEnd(node));
+            return;
+        }
         emitLogicalAssignment(emitter, node);
         return;
     }

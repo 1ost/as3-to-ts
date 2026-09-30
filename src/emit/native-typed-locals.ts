@@ -9,6 +9,17 @@ export interface NestedLocalFunction {start:number;end:number;name:string;method
 /** Bounded local storage plan, resolved against original AS3 declarations. */
 export class NativeTypedLocals {
     private methods: Method[] = [];
+    private logicalMarker: string;
+    /** Mark only proven own Boolean locals; the final pass retains raw storage. */
+    logicalAssignmentMarker(node:Node,emitter:any):string {
+        if(!this.typedLocal(unwrapEncapsulatedExpression(node),emitter,'Boolean'))this.fail('typed logical assignment held');
+        if(!this.logicalMarker){
+            this.logicalMarker='__as3_booleanLogicalWrite';
+            while(emitter.source.indexOf(this.logicalMarker)>=0)this.logicalMarker+='_';
+        }
+        emitter.nativeSourceHelpers.add(this.logicalMarker);
+        return this.logicalMarker;
+    }
     private memberNames: string[] = [];
     constructor(owner: Node, qname: string, imports: string[], referenceFor?: (node: Node) => string, private matchSourceSpans = false, private nested: NestedLocalFunction[] = [], private anonymous: {start:number;end:number;methodStart:number;name:string;parameters:string[]}[] = [], private patternLocal?: (type:Node)=>boolean, private tweenLocal?: (type:Node)=>boolean) {
         owner.findChild(K.CONTENT).children.forEach(member=>{
@@ -154,6 +165,9 @@ export class NativeTypedLocals {
     stringLocal(node: Node, emitter: any): boolean {
         return this.typedLocal(node,emitter,'String');
     }
+    booleanLocal(node: Node, emitter: any): boolean {
+        return this.typedLocal(node,emitter,'Boolean');
+    }
     functionLocal(node: Node, emitter: any): boolean {
         return this.typedLocal(node,emitter,'Function');
     }
@@ -204,6 +218,14 @@ export class NativeTypedLocals {
             :coercionProvider+'.as3Coerce'+(local.type==='int'?'Int':local.type==='uint'?'Uint':local.type)+'('+value+')';
         const write=(local:Local,value:string):string=>{const rhs=unique('typedRaw');return '(()=>{const '+rhs+': any='+value+';'+local.name+'='+coerce(local,rhs)+';return '+rhs+';})()';};
         const render=(node:any):string=>{
+            if(node.kind===S.CallExpression&&this.logicalMarker&&node.expression.kind===S.Identifier&&node.expression.text===this.logicalMarker){
+                const local=node.arguments.length===2&&resolve(node.arguments[0]);
+                if(!local||local.type!=='Boolean'||local.parameter)this.fail('logical assignment marker requires Boolean local');
+                // AIR retains the raw selected RHS, even in Boolean storage.
+                // The emitter preserves short-circuit selection outside this write.
+                const value=unique('typedLogicalValue');
+                return '(()=>{const '+value+': any='+render(node.arguments[1])+';'+local.name+'='+value+';return '+value+';})()';
+            }
             if(node.kind===S.ReturnStatement){
                 let fn=node.parent;while(fn&&fn.kind!==S.FunctionDeclaration)fn=fn.parent;
                 const signature=fn&&this.nested.find(n=>n.methodStart===method.node.start&&fn.name&&n.name===fn.name.text);
