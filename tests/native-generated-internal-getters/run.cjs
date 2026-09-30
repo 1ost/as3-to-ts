@@ -39,7 +39,7 @@ for(const changed of [
  holder.replace('internal function get hasDataDescriptor():Boolean','internal function get hasDataDescriptor():uint'),
  holder.replace('internal function get hasDataDescriptor():Boolean','internal static function get hasDataDescriptor():Boolean'),
  holder.replace('internal function get hasDataDescriptor():Boolean','private function get hasDataDescriptor():Boolean'),
- holder.replace('internal function get hasDataDescriptor():Boolean','protected function get hasDataDescriptor():Boolean'),
+ holder.replace('internal function get hasDataDescriptor():Boolean','protected function get hasDataDescriptor():uint'),
  holder.replace('return hasDataDescriptor;', 'return hasDataDescriptor=true;'),
  holder.replace('return hasDataDescriptor;', 'return hasDataDescriptor();'),
  holder.replace('return hasDataDescriptor;', 'return delete hasDataDescriptor;'),

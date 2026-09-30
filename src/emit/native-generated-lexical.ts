@@ -108,17 +108,17 @@ export class NativeGeneratedLexical {
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
                     fail('internal instance method requires required Object/int parameters and void return or one authenticated interface parameter and Boolean/void return');
-                const internalGetter=visibility==='internal'&&!isStatic&&member.kind===K.GET
+                const readonlyGetter=(visibility==='internal'||visibility==='protected')&&!isStatic&&member.kind===K.GET
                     &&member.findChild(K.TYPE)&&member.findChild(K.TYPE).text==='Boolean'
                     &&member.findChild(K.PARAMETER_LIST).children.length===0;
-                if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant&&!internalGetter)fail('lexical constant/accessor lowering required');
+                if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant&&!readonlyGetter)fail('lexical constant/accessor lowering required');
                 const declarations=member.kind===K.VAR_LIST||constant?member.findChildren(K.NAME_TYPE_INIT):[member];
                 declarations.forEach(node=>{
                     const local=node.findChild(K.NAME).text;
                     const previous=this.traits.find(t=>t.name===local&&t.static===isStatic);
                     if(previous) {
-                        if(inherited&&previous.visibility==='internal'&&visibility==='internal'&&previous.kind==='accessor'&&internalGetter) {
-                            if(modifiers(previous.node).indexOf('override')<0)fail('internal getter override requires source override');
+                        if(inherited&&previous.visibility===visibility&&previous.kind==='accessor'&&readonlyGetter) {
+                            if(modifiers(previous.node).indexOf('override')<0||mods.indexOf('final')>=0)fail('readonly getter override requires nonfinal source ancestor and override');
                             overridden.add(previous);return;
                         }
                         if(inherited&&previous.visibility===visibility&&(visibility==='protected'||visibility==='internal'&&internalMethod)&&previous.kind==='method'&&member.kind===K.FUNCTION) {
@@ -134,9 +134,9 @@ export class NativeGeneratedLexical {
                     if(vector&&(isStatic||['private','protected'].indexOf(visibility)<0||member.kind!==K.VAR_LIST
                         ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
                         fail('lexical vector storage authority');
-                    const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':internalGetter?'accessor':'method',owner:name,node,
+                    const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':readonlyGetter?'accessor':'method',owner:name,node,
                         type:vector||node.findChild(K.TYPE),key:fresh('key'),access:fresh('access'),parameterCount:member.kind===K.FUNCTION?node.findChild(K.PARAMETER_LIST).children.filter(p=>!p.findChild(K.REST)).length:0};
-                    if(visibility==='internal'&&!internalGetter&&!internalMethod&&!(trait.type&&trait.type.text==='uint'
+                    if(visibility==='internal'&&!readonlyGetter&&!internalMethod&&!(trait.type&&trait.type.text==='uint'
                         &&(trait.kind==='variable'&&!isStatic||trait.kind==='constant'&&isStatic)))fail('internal uint field/static constant required');
                     if(visibility==='internal'&&trait.kind==='variable')this.earlyInstanceValue(trait);
                     if(constant)this.constantValue(trait);
@@ -479,6 +479,23 @@ export class NativeGeneratedLexical {
             let method=node;while(method.parent&&method.parent.kind!==K.CONTENT)method=method.parent;
             const staticContext=modifiers(method).indexOf('static')>=0;
             if(receiver&&receiver.kind===K.IDENTIFIER&&receiver.text==='super'&&lexicalName) {
+                const getter=this.traits.find(t=>t.name===name&&!t.static&&t.visibility==='protected'&&t.kind==='accessor');
+                if(getter) {
+                    if(staticContext||[K.FUNCTION,K.GET].indexOf(method.kind)<0||method.findChild(K.NAME).text===this.ownClass.findChild(K.NAME).text)
+                        fail('protected super getter requires instance method or getter');
+                    for(let enclosing=node.parent;enclosing&&enclosing!==method;enclosing=enclosing.parent)
+                        if([K.FUNCTION,K.LAMBDA,K.GET,K.SET].indexOf(enclosing.kind)>=0)fail('nested protected super getter access');
+                    let ancestor=this.declarations.find(b=>b.identity===this.owner).base,selected:Node;
+                    while(ancestor&&this.classSource(ancestor)) {
+                        selected=nativeGeneratedDeclarationNode(this.plan,ancestor).findChild(K.CONTENT).children.find(member=>member.kind===K.GET
+                            &&member.findChild(K.NAME).text===name&&modifiers(member).indexOf('protected')>=0&&modifiers(member).indexOf('static')<0);
+                        if(selected)break;
+                        ancestor=this.declarations.find(b=>b.identity===ancestor).base;
+                    }
+                    if(!selected||!selected.findChild(K.TYPE)||selected.findChild(K.TYPE).text!=='Boolean')fail('protected super getter requires source Boolean ancestor');
+                    return {trait:Object.assign({},getter,{access:this.provider+'.resolveAS3LexicalMember('
+                        +this.scope+','+JSON.stringify(name)+',"protected",false,true)'}),receiver:null};
+                }
                 if(staticContext||method.kind!==K.FUNCTION||method.findChild(K.NAME).text===this.ownClass.findChild(K.NAME).text)
                     fail('protected super field requires ordinary instance method');
                 for(let enclosing=node.parent;enclosing&&enclosing!==method;enclosing=enclosing.parent)
