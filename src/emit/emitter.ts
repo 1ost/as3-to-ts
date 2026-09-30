@@ -1,4 +1,5 @@
 import {generatedProxyUri,generatedProxySignatures} from './native-generated-proxy';
+import {generatedNamespaceAncestry,generatedMemberIdentity,generatedMemberUri} from './native-generated-namespaces';
 import {nativeGeneratedInterfaceBindings, nativeGeneratedDeclarationResolver} from './native-generated-declarations';
 import {intrinsicStringAs} from './native-string-casts';
 import {NativeTweenPlans,NativeTweenSourcePlans,tweenOptionNames} from './native-tween-plans';
@@ -852,14 +853,18 @@ export default class Emitter {
                 throw new Error('AS3_LEXICAL_COMPILER_UNSUPPORTED: authenticated lazy callable source required');
             this.lexical = new NativeLexicalMembers(this.source, filtered, this.options.nativeLexicalMembersModule, this.options.nativeCallableMetadata, this.options.nativeTypedLocals === true);
         }
-		this.namespaces = new NativeNamespaces(filtered, this.source, this.options.namespaceUris,
-			this.options.nativeProxyModule !== undefined || !!this.generated && this.generated.options.plan.nativeBindings.some(b=>b.qname==='flash.utils.Proxy'&&!!b.nativeBaseExport), this.options.nativeSourceAncestry);
+        const generatedAncestry=this.generated&&this.generated.options.plan.namespaces.length?generatedNamespaceAncestry(this.generated.options.plan):undefined;
+        if(generatedAncestry&&this.options.namespaceUris)for(const name of Object.keys(this.options.namespaceUris)){
+            if(generatedAncestry.namespaceUris[name]!==this.options.namespaceUris[name])throw new Error('AS3_NAMESPACE_UNSUPPORTED: configured URI disagrees with generated source plan: '+name);
+        }
+		this.namespaces = new NativeNamespaces(filtered, this.source, generatedAncestry?generatedAncestry.namespaceUris:this.options.namespaceUris,
+			this.options.nativeProxyModule !== undefined || !!this.generated && this.generated.options.plan.nativeBindings.some(b=>b.qname==='flash.utils.Proxy'&&!!b.nativeBaseExport), generatedAncestry||this.options.nativeSourceAncestry);
 		this.classInitializers = new NativeClassInitializers(filtered, this.source, this.options.nativeClassInitialization,
             node=>{
                 const value=outerEncapsulatedExpression(node),parent=value.parent;
                 return !!(parent&&parent.kind===NodeKind.DOT&&parent.children[0]===value
                     &&(lexicalApplicationDomainModule(this,parent)||qualifiedNativeStaticRead(this,parent)));
-            }, this.generated);
+            }, this.generated, this.namespaces);
 		this.withScope([], (rootScope) => {
 			this.rootScope = rootScope;
 			if (selected) {
@@ -883,7 +888,11 @@ export default class Emitter {
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
 			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined)
-			.lower(this.headOutput + this.namespaces.keyDeclarations() + this.output);
+			.lower(this.headOutput + this.namespaces.keyDeclarations(this.generated&&this.generated.options.plan.namespaceKeys?(uri,name,key)=>{
+                const binding=this.generated.options.plan.namespaceKeys.find(k=>k.uri===uri&&k.name===name);
+                if(!binding){if(uri===generatedProxyUri)return 'const '+key+'=globalThis.Symbol.for('+JSON.stringify('as3.namespace.member@1:'+JSON.stringify([uri,name]))+');\n';this.namespaces.fail('generated namespace key is absent from source plan');}
+                return 'import {'+binding.exported+' as '+key+'} from '+JSON.stringify(this.generated.options.module)+';\n';
+            }:undefined) + this.output);
 	}
 
 	enterScope(declarations:Declaration[]):Scope {
@@ -1325,6 +1334,14 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 	split.pop();
 	let ns = split.join(".");*/
 	ClassList.addImportToLast(node.text.concat());
+    if(emitter.generated&&emitter.generated.options.plan.namespaces.some(binding=>binding.qname===node.text)){
+        // Namespace selectors become canonical Symbol keys. Their imported
+        // declaration is lexical authority, not a JavaScript Class dependency.
+        if(!inline)emitter.catchup(node.start);
+        emitter.declareInScope({name:importedName,sourceImport:node.text});
+        if(!inline)emitter.skipTo(node.end+Keywords.IMPORT.length+1);
+        return;
+    }
 	// This explicit migration routes calls to the runtime, not a replacement
 	// TweenMax Class. Preserve the import's identity for shadowing checks.
 	if (emitter.options.nativeTweenModule !== undefined
@@ -2693,7 +2710,7 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 	const mods = declaration && declaration.findChild(NodeKind.MOD_LIST);
 	if (emitter.classFactory && declaration && declaration.parent === emitter.classFactory.node.findChild(NodeKind.CONTENT)
 		&& mods && mods.children.some(mod => mod.text === 'static')) {
-        const binaryTrait=emitter.generated&&emitter.generated.lexical.trait(node.findChild(NodeKind.NAME).text,true);
+        const binaryTrait=!namespaceMember&&emitter.generated&&emitter.generated.lexical.trait(node.findChild(NodeKind.NAME).text,true);
         const binary=emitter.generated&&emitter.generated.lexical.embeddedConstant(binaryTrait);
         if(binary){
             const lexical=emitter.generated.lexical;
@@ -2702,7 +2719,7 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
             visitNodes(emitter,node.children);return;
         }
         const deferred=emitter.generated && declaration.kind===NodeKind.CONST_LIST
-            && emitter.generated.deferredConstants[node.findChild(NodeKind.NAME).text];
+            && emitter.generated.deferredConstants[generatedMemberIdentity(node.findChild(NodeKind.NAME).text,generatedMemberUri(emitter.generated.options.plan,emitter.generated.projection.binding.identity,declaration))];
         if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred) {
             // Literal constants are installed before publication by the common
             // generated-class provider, not rewritten as later mutable stores.
@@ -2710,12 +2727,12 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
             return;
         }
 		const init = node.findChild(NodeKind.INIT);
-		if(emitter.generated&&emitter.generated.uintOrInitializers.variables[node.findChild(NodeKind.NAME).text]!==undefined){
+		if(!namespaceMember&&emitter.generated&&emitter.generated.uintOrInitializers.variables[node.findChild(NodeKind.NAME).text]!==undefined){
 			visitNodes(emitter,node.children.filter(child=>child&&child!==init));
 			if(init)emitter.skipTo(getEffectiveNodeEnd(init));
 			return;
 		}
-		const generatedLexical=emitter.generated&&emitter.generated.lexical.trait(node.findChild(NodeKind.NAME).text,true);
+		const generatedLexical=!namespaceMember&&emitter.generated&&emitter.generated.lexical.trait(node.findChild(NodeKind.NAME).text,true);
 		visitNodes(emitter, node.children.filter(child => child && child !== init));
 		const type = getAS3DeclarationType(node);
 		const last = node.findChild(NodeKind.TYPE) || node.findChild(NodeKind.NAME);
@@ -2730,7 +2747,7 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
                 if(generatedLexical.kind!=='constant'&&emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
                     emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.as3SetLexicalMember('+emitter.classFactory.value+','+generatedLexical.access+','+emitter.output.slice(start)+');');
             } else emitter.classFactory.fields.push(deferred ? deferred+'('+emitter.output.slice(start)+');'
-                : emitter.classFactory.value + '[' + (lexical ? lexical.key : JSON.stringify(node.findChild(NodeKind.NAME).text))
+                : emitter.classFactory.value + '[' + (namespaceMember ? emitter.namespaces.key(namespaceMember.uri,namespaceMember.name) : lexical ? lexical.key : JSON.stringify(node.findChild(NodeKind.NAME).text))
                     + '] = ' + emitter.output.slice(start) + ';');
 			emitter.output = emitter.output.slice(0, start);
 		}
@@ -5475,6 +5492,14 @@ function getTypedAssignmentTarget(emitter: Emitter, node: Node): TypedAssignment
                 + '[' + emitter.namespaces.key(member.uri, member.name) + ']';
         }
     } else if (node.kind === NodeKind.IDENTIFIER) {
+        const opened=emitter.namespaces.openedIdentifier(node,hasFunctionLocal(emitter,node.text));
+        if(opened){
+            if(opened.declaration.kind!==NodeKind.VAR_LIST)return null;
+            const field=opened.declaration.findChild(NodeKind.NAME_TYPE_INIT);
+            if(!field)return null;
+            const as3Type=getAS3DeclarationType(field);
+            return isIntegerAS3Type(as3Type)?{declaration:{name:opened.name,as3Type},repeatText:(opened.static?emitter.currentClassName:'this')+'['+emitter.namespaces.key(opened.uri,opened.name)+']'}:null;
+        }
         declaration = emitter.findDefInScope(node.text);
         if (declaration) {
             let identifier = emitter.getIdentifierRemap(node.text) || node.text;

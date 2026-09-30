@@ -20,7 +20,7 @@ export class NativeClassInitializers {
     public readName: string;
     private generatedResolve: (name: string) => string;
 
-    constructor(root: Node, source: string, options?: NativeClassInitializationOptions, qualifiedRead?: (node: Node) => boolean, generated?: NativeGeneratedEmission) {
+    constructor(root: Node, source: string, options?: NativeClassInitializationOptions, qualifiedRead?: (node: Node) => boolean, generated?: NativeGeneratedEmission, namespaces?: NativeNamespaces) {
         this.enabled = options !== undefined;
         this.classes = options && options.classes || {};
         const fail = (message: string): never => { throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: ' + message); };
@@ -74,7 +74,9 @@ export class NativeClassInitializers {
                 const directHook=access&&access.uri===generatedProxyUri&&!!generatedProxySignatures[access.name]
                     &&access.receiver&&access.receiver.kind===NodeKind.IDENTIFIER
                     &&call&&call.kind===NodeKind.CALL&&call.children[0]===node;
-                if(!directHook&&(!ns || ns.resolve(node,node.text)!==generatedProxyUri))fail('namespace/embedded/include initialization requires separate authority');
+                const sourceUri=generated&&namespaces&&(node.kind===NodeKind.USE?namespaces.resolve(node,node.text):node.kind===NodeKind.NAMESPACE_ACCESS?namespaces.access(node).uri:undefined);
+                const sourceNamespace=sourceUri&&sourceUri!==generatedProxyUri&&generated.options.plan.namespaces.some(binding=>binding.uri===sourceUri);
+                if(!sourceNamespace&&!directHook&&(!ns || ns.resolve(node,node.text)!==generatedProxyUri))fail('namespace/embedded/include initialization requires separate authority');
             }
             if (this.enabled && node.kind === NodeKind.DOT) {
                 const qualified = (value: Node): string => value.kind === NodeKind.IDENTIFIER ? value.text

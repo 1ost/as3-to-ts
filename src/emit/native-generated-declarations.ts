@@ -8,6 +8,7 @@ import {NativePatternLocal, nativePatternLocals} from './native-pattern-locals';
 import {NativeGeneratedInterfaceContracts,projectNativeGeneratedInterfaceContracts} from './native-generated-interface-contracts';
 import {nativeGeneratedInterfaceBoundary} from './native-generated-interface-boundaries';
 import {NativeSourceNamespaceBinding, planNativeSourceNamespaces} from './native-source-namespaces';
+import {createNativeSourceAncestryPlan} from './native-source-ancestry';
 
 export interface NativeGeneratedAuthoredSymbol {
     /** Exact source= literal in the maintained Embed metadata. */
@@ -75,6 +76,8 @@ export interface NativeGeneratedDeclarationPlan {
     readonly privateInterfaces: ReadonlyArray<NativeGeneratedPrivateInterfaceBinding>;
     /** Source-authenticated URI identities; no runtime Namespace/Class publication. */
     readonly namespaces: ReadonlyArray<NativeSourceNamespaceBinding>;
+    /** Shared computed keys keep inherited TypeScript members nominally identical. */
+    readonly namespaceKeys?: ReadonlyArray<{readonly uri:string;readonly name:string;readonly exported:string}>;
     readonly interfaceContracts: NativeGeneratedInterfaceContracts;
     readonly references: ReadonlyArray<NativeGeneratedReference>;
     readonly patternLocals: ReadonlyArray<NativePatternLocal>;
@@ -653,10 +656,25 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         name=>providers[name]&&providers[name].nativeInterface?nativeGeneratedInterfaceBoundary(name):undefined,
         name=>name==='flash.events.EventDispatcher'&&providers[name]&&providers[name].nativeBase==='EventDispatcher'
             ?nativeGeneratedInterfaceBoundary('flash.events.IEventDispatcher'):undefined);
+    let namespaceKeys:ReadonlyArray<{uri:string;name:string;exported:string}>;
+    if(namespaces.length){
+        const namespaceUris:{[qname:string]:string}={};namespaces.forEach(binding=>namespaceUris[binding.qname]=binding.uri);
+        const ancestry=createNativeSourceAncestryPlan({sources:data.sources,namespaceUris}),keys=new Map<string,{uri:string;name:string}>();
+        Object.keys(ancestry.classes).forEach(qname=>ancestry.classes[qname].members.forEach(member=>{
+            if(namespaces.some(binding=>binding.uri===member.uri))keys.set(JSON.stringify([member.uri,member.name]),{uri:member.uri,name:member.name});
+        }));
+        namespaceKeys=Object.freeze(Array.from(keys.keys()).sort().map((identity,index)=>{
+            const exported='namespaceKey'+index;
+            // Inferred unique symbols type-check on the consumer compiler while
+            // remaining parseable by the compiler's TypeScript 2.5 factory pass.
+            lines.push('export const '+exported+' = Symbol.for('+JSON.stringify('as3.namespace.member@1:'+identity)+');');
+            return Object.freeze({...keys.get(identity),exported});
+        }));
+    }
     const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
         embeddedBinary:Object.freeze(embeddedBinary), sourceHashes: Object.freeze(sourceHashes), privateBindings, privateInterfaces, bindings: Object.freeze(bindings),
         interfaces: Object.freeze(interfaces.filter(binding => !privateInterfaces.some(item => item.identity === binding.qname))), references: Object.freeze(references),vectors:Object.freeze(vectors),
-        nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts,namespaces});
+        nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts,namespaces,...(namespaceKeys?{namespaceKeys}:{})});
     contexts.set(plan, {input: data, plan, units});
     return plan;
 }

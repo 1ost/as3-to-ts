@@ -1,4 +1,5 @@
 import {nativeNumericProductConstant} from './native-numeric-product-constant';
+import {generatedMemberUri,generatedMemberIdentity} from './native-generated-namespaces';
 import {nativeUintOrConstants} from './native-uint-or-constants';
 import {nativeScriptConstantInitializers} from './native-script-constant-initializers';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedClassDeclaration} from './native-generated-declarations';
@@ -71,7 +72,7 @@ export class NativeGeneratedEmission {
                 &&member.findChildren(K.NAME_TYPE_INIT).some(value=>!!value.findChild(K.INIT)&&!constantInitializers.has(value)&&!primitiveHelperInitializer(value))))
                 fail('script global with static initializer requires retry identity authority');
         }
-        if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => p.name === t.name)))
+        if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => !p.uri && p.name === t.name)))
             fail('public/lexical same-name lookup requires namespace authority');
         this.projection.staticTraits.filter(trait => trait.kind === 'constant').forEach(trait => {
             const deferred = ['int','uint','Number','Boolean','String'].indexOf(trait.type as string) < 0;
@@ -84,6 +85,7 @@ export class NativeGeneratedEmission {
             members.filter(member => member.kind === K.CONST_LIST).forEach(member => {
                 const mods = member.findChild(K.MOD_LIST);
                 if (!mods || !mods.children.some(mod => mod.text === 'static')) return;
+                if(generatedMemberUri(options.plan,selected,member)!==trait.uri)return;
                 member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
                     if (field.findChild(K.NAME).text !== trait.name) return;
                     const init = field.findChild(K.INIT);
@@ -96,10 +98,10 @@ export class NativeGeneratedEmission {
                     fail('reference constants with class-body statements require interleaving authority');
                 let name='__as3_initializeStaticConstant_'+Object.keys(this.deferredConstants).length;
                 while(source.indexOf(name)>=0)name+='_';
-                this.deferredConstants[trait.name]=name;
+                this.deferredConstants[generatedMemberIdentity(trait.name,trait.uri)]=name;
                 return;
             }
-            if(this.uintOrInitializers.constants[trait.name]!==undefined)return;
+            if(!trait.uri&&this.uintOrInitializers.constants[trait.name]!==undefined)return;
             // Literals and AIR-qualified numeric products are early storage.
             // Other computed primitive constants still require source authority.
             if (!literal || !/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal) && !nativeNumericProductConstant(literal,trait.type))

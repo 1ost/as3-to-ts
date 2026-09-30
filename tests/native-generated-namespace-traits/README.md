@@ -1,4 +1,43 @@
-# Generated namespace trait projection
+# Generated namespace Classes
+
+`node tests/native-generated-namespace-traits/run.cjs` now compiles all six original
+Classes from the nine immutable AS3 units into the actual source-Class factory.
+All constructors, methods, accessors and initializers come from the original
+source. The retained engine fixture supplies only the host observations. Both
+original AIR captures and source hashes are verified before comparison.
+
+The full output matches all 46 observations for ES5 and ES2015 in Node and
+Chromium under a self-only script CSP, with zero type diagnostics. Ten invalid
+source/configuration guards pass. Two mutations are applied to each complete
+factory and run in both realms: replacing the qualified static initializer key
+with a string produces a different 46-row trace; removing namespace method
+binding breaks captured closures. The latter is a failure control, not a complete
+alternative trace. `verify-runtime.cjs --check-current` verifies the retained
+compressed report, runner files, all compiler/utility TypeScript input hashes and
+recorded engine inputs. It does not rebuild omitted cache files.
+
+The compiler retains URI/name identity in callable signatures, static and instance
+initialization, method binding, opened-namespace updates and qualified `super`
+dispatch. Shared declaration exports supply the same computed symbol identity to
+base/child TypeScript interfaces. Separate accessor halves resolve through their
+original source ancestors. Existing Proxy signature restrictions remain enforced.
+
+Current regressions pass: generated Proxy dispatch (38 rows/eight guards), public
+accessor overrides (13 rows/five guards), accessibility (12 rows/seven compiler
+guards/sixteen runtime guards), declaration planning (26 guards), namespace and
+source-ancestry tests. Runtime regressions use both targets and both realms with
+zero type errors. The historical `native-generated-constants/run.cjs` stops at its
+obsolete rejection of `private static const value:int=7`; the unchanged `04057b67`
+baseline has the identical failure. That suite is not reported as passing.
+
+This qualifies the original namespace fixture, not complete TLF, FlowElement,
+ChatManager, or game startup. Replay those consumers before claiming integration.
+
+## Historical trait-only projection
+
+The earlier projection evidence below is retained unchanged at compiler
+`afe98d8b`; its `--check-current` mode is specific to that older source snapshot.
+Use `verify-runtime.cjs` for the current complete generated-Class checkpoint.
 
 Run `node tests/native-generated-namespace-traits/projection.cjs` after building
 the compiler. `LAYA_ENGINE_REPOSITORY` defaults to the isolated sibling

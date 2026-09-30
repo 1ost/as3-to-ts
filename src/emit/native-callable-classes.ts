@@ -1,6 +1,7 @@
 import {nativeSourceUnitAst} from './native-source-unit';
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
-import {generatedProxyMember,generatedProxyUri} from './native-generated-proxy';
+import {generatedProxyUri} from './native-generated-proxy';
+import {generatedMemberUri,generatedMemberIdentity} from './native-generated-namespaces';
 import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationResolver, nativeGeneratedSourceUnit} from './native-generated-declarations';
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {generatedMethodCompletes} from './native-generated-completions';
@@ -375,21 +376,22 @@ export class NativeCallableClasses {
                 ||raw==='null'&&['Number','int','uint','Boolean','*'].indexOf(identity)<0))
                 this.fail('generated optional parameter requires qualified literal default');
         };
-        const directSuper = (key: string, supplied: number): string => {
+        const sourceMemberMatches=(node:Node,key:string,owner:string,uri?:string):boolean=>{
+            const names=node.kind===K.VAR_LIST||node.kind===K.CONST_LIST?node.findChildren(K.NAME_TYPE_INIT).map(n=>n.findChild(K.NAME)): [node.findChild(K.NAME)];
+            return names.some(name=>name&&name.text===key)&&(!this.generated?!uri:generatedMemberUri(this.generated.options.plan,owner,node)===uri);
+        };
+        const directSuper = (key: string, supplied: number, uri?:string, encoded=JSON.stringify(key)): string => {
             let ancestor = this.own.base, owner = this.classes.get(ancestor), depth = 0, method: Node;
             for (; owner; ancestor = owner.base, owner = this.classes.get(ancestor), depth++) {
                 const content = this.sourceRoots.get(owner.qname).findChild(K.CONTENT);
-                const candidates = content.children.filter(member => member.findChild(K.NAME)
-                    && member.findChild(K.NAME).text === key);
+                const candidates = content.children.filter(member => sourceMemberMatches(member,key,owner.qname,uri));
                 if (candidates.length) {
                     if (candidates.length !== 1 || candidates[0].kind !== K.FUNCTION)
                         this.fail('super target must be an exact source instance method');
                     method = candidates[0]; break;
                 }
-                if (owner.fields.some(field => field.name === key))
-                    this.fail('super target is a source field');
             }
-            if (!method && ancestor==='flash.accessibility.AccessibilityImplementation' && this.generated
+            if (!uri && !method && ancestor==='flash.accessibility.AccessibilityImplementation' && this.generated
                 && this.generated.options.plan.nativeBindings.some(binding=>binding.qname===ancestor&&!!binding.nativeBaseExport)) {
                 const counts:{[name:string]:number}={accDoDefaultAction:1,accLocation:1,get_accSelection:0,get_accFocus:0,
                     isLabeledBy:1,accSelect:2,getChildIDArray:0,get_accRole:1,get_accName:1,get_accValue:1,get_accState:1,get_accDefaultAction:1};
@@ -410,7 +412,7 @@ export class NativeCallableClasses {
             if (key === owner.name) this.fail('super constructor is not an instance method');
             const mods = method.findChild(K.MOD_LIST);
             if (!mods || mods.children.some(mod => mod.text === 'private' || mod.text === 'static')
-                || !mods.children.some(mod => mod.text === 'public' || mod.text === 'protected'))
+                || !uri&&!mods.children.some(mod => mod.text === 'public' || mod.text === 'protected'))
                 this.fail('super method visibility requires separate authority');
             const parameters = method.findChild(K.PARAMETER_LIST).children;
             let minimum = 0, optional = false;
@@ -437,33 +439,33 @@ export class NativeCallableClasses {
             });
             if (supplied < minimum || supplied > parameters.length)
                 this.fail('super call source arity differs from declared signature');
-            let capture = superMethodNames.get(key);
+            const memberIdentity=generatedMemberIdentity(key,uri);
+            let capture = superMethodNames.get(memberIdentity);
             if (!capture) {
                 capture = unique('superMethod' + superMethods.length);
                 let prototype = baseName + '.prototype';
                 for (let index = 0; index < depth; index++) prototype = intrinsic + '.getPrototypeOf(' + prototype + ')';
                 superMethods.push('const ' + capture + ' = ' + intrinsic + '.getOwnPropertyDescriptor('
-                    + prototype + ', ' + JSON.stringify(key) + ')!.value;');
-                superMethodNames.set(key, capture);
+                    + prototype + ', ' + encoded + ')!.value;');
+                superMethodNames.set(memberIdentity, capture);
             }
             const args = unique('superCallArguments');
             return '((...' + args + ': any[]): any => {'
                 + (this.generated?'':parameters.slice(0, supplied).map((_,index) => args + '[' + index + '] = !!' + args + '[' + index + '];').join(''))
                 + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
         };
-        const directSuperAccessor = (key: string, side: 'get'|'set'): string => {
+        const directSuperAccessor = (key: string, side: 'get'|'set',uri?:string,encoded=JSON.stringify(key)): string => {
             if (!this.generated || !this.generated.projection.inheritInstanceLayout && !this.generated.projection.nativeAccessorBase)
                 this.fail('super accessor requires selected generated ancestry');
             let owner = this.classes.get(this.own.base), depth = 0, accessor: Node;
             for (; owner; owner = this.classes.get(owner.base), depth++) {
-                const candidates = this.sourceRoots.get(owner.qname).findChild(K.CONTENT).children.filter(node =>
-                    node.findChild(K.NAME) && node.findChild(K.NAME).text === key);
-                if (owner.fields.some(field => field.name === key) || candidates.some(node => node.kind !== K.GET && node.kind !== K.SET))
+                const candidates = this.sourceRoots.get(owner.qname).findChild(K.CONTENT).children.filter(node =>sourceMemberMatches(node,key,owner.qname,uri));
+                if (candidates.some(node => node.kind !== K.GET && node.kind !== K.SET))
                     this.fail('super accessor collides with source field or method');
                 accessor = candidates.find(node => node.kind === (side === 'get' ? K.GET : K.SET));
                 if (accessor) break;
             }
-            if (!accessor && this.generated.projection.nativeAccessorBase && ['x','y'].indexOf(key)>=0) {
+            if (!uri && !accessor && this.generated.projection.nativeAccessorBase && ['x','y'].indexOf(key)>=0) {
                 const identity=side+':'+key;
                 let capture=superMethodNames.get(identity);
                 if(!capture){capture=unique('superAccessor'+superMethods.length);superMethods.push('const '+capture+' = '+provider+'.getAS3GeneratedNativePositionAccessor('+baseName+','+JSON.stringify(key)+','+JSON.stringify(side)+');');superMethodNames.set(identity,capture);}
@@ -471,21 +473,22 @@ export class NativeCallableClasses {
             }
             if (!accessor) this.fail('super accessor half absent from complete source ancestry');
             const mods = accessor.findChild(K.MOD_LIST), parameters = accessor.findChild(K.PARAMETER_LIST).children;
-            if (!mods || !mods.children.some(mod => mod.text === 'public') || mods.children.some(mod => mod.text === 'static'))
+            if (!mods || !uri&&!mods.children.some(mod => mod.text === 'public') || mods.children.some(mod => mod.text === 'static'))
                 this.fail('super accessor requires public instance authority');
             const type = side === 'get' ? accessor.findChild(K.TYPE)
                 : parameters.length === 1 && parameters[0].findChild(K.NAME_TYPE_INIT).findChild(K.TYPE);
             const ref = type && this.generated.options.plan.references.find(r => r.owner === owner.qname && r.start === type.start && r.end === type.end);
-            if (!ref || ref.kind !== 'intrinsic' || !(ref.identity === 'Boolean'||ref.identity==='Number'&&['x','y'].indexOf(key)>=0))
+            if (!ref || !(uri ? ref.kind==='intrinsic'&&['*','Object','int','uint','Number','Boolean','String','Function','Array'].indexOf(ref.identity)>=0||ref.kind==='declaration'||ref.kind==='private-declaration'||ref.kind==='interface'
+                : ref.kind==='intrinsic'&&(ref.identity === 'Boolean'||ref.identity==='Number'&&['x','y'].indexOf(key)>=0)))
                 this.fail('super accessor requires qualified signature');
-            const identity = side + ':' + key;
+            const identity = side + ':' + generatedMemberIdentity(key,uri);
             let capture = superMethodNames.get(identity);
             if (!capture) {
                 capture = unique('superAccessor' + superMethods.length);
                 let prototype = baseName + '.prototype';
                 for (let index = 0; index < depth; index++) prototype = intrinsic + '.getPrototypeOf(' + prototype + ')';
                 superMethods.push('const ' + capture + ' = ' + intrinsic + '.getOwnPropertyDescriptor('
-                    + prototype + ', ' + JSON.stringify(key) + ')!.' + side + '!;');
+                    + prototype + ', ' + encoded + ')!.' + side + '!;');
                 superMethodNames.set(identity,capture);
             }
             return capture;
@@ -509,25 +512,60 @@ export class NativeCallableClasses {
             return domainImport+'.'+(binding?binding.tokenExport:helper?helper.tokenExport:native.referenceExport);
         } : undefined;
         const text = (node: any): string => node.getText(file);
-        const namespaceMethods=new Map<any,{name:string;encoded:string;node:Node}>();
+        const namespaceKeys=new Map<string,{name:string;uri:string;encoded:string}>();
+        if(this.generated)for(const statement of file.statements)if(statement.kind===S.ImportDeclaration&&statement.moduleSpecifier.text===this.generated.options.module){
+            const bindings=statement.importClause&&statement.importClause.namedBindings;
+            if(!bindings||bindings.kind!==S.NamedImports)continue;
+            for(const spec of bindings.elements){
+                const exported=spec.propertyName?spec.propertyName.text:spec.name.text;
+                const key=(this.generated.options.plan.namespaceKeys||[]).find(k=>k.exported===exported);
+                if(key)namespaceKeys.set(spec.name.text,{uri:key.uri,name:key.name,encoded:spec.name.text});
+            }
+        }
+        if(this.generated)for(const statement of file.statements)if(statement.kind===S.VariableStatement)
+            for(const variable of statement.declarationList.declarations){
+                const init=variable.initializer;
+                if(!init||init.kind!==S.CallExpression||text(init.expression)!=='globalThis.Symbol.for'||init.arguments.length!==1||init.arguments[0].kind!==S.StringLiteral)continue;
+                const value=init.arguments[0].text,prefix='as3.namespace.member@1:';
+                if(!value.startsWith(prefix))continue;
+                let pair:any;try{pair=JSON.parse(value.slice(prefix.length));}catch(_){this.fail('namespace key encoding');}
+                if(!Array.isArray(pair)||pair.length!==2||pair.some(v=>typeof v!=='string'||!v))this.fail('namespace key identity');
+                namespaceKeys.set(variable.name.text,{uri:pair[0],name:pair[1],encoded:variable.name.text});
+            }
+        const superKey=(node:any):{name:string;uri?:string;encoded:string}=>{
+            if(node.kind===S.PropertyAccessExpression)return {name:node.name.text,encoded:JSON.stringify(node.name.text)};
+            const selected=node.kind===S.ElementAccessExpression&&node.argumentExpression.kind===S.Identifier&&namespaceKeys.get(node.argumentExpression.text);
+            if(!selected)this.fail('super computed key requires source namespace identity');return selected;
+        };
+        const namespaceMethods=new Map<any,{name:string;uri:string;encoded:string;node:Node}>();
         if(this.generated) for(const member of cls.members) {
             if(!member.name||member.name.kind!==S.ComputedPropertyName)continue;
             const expression=member.name.expression;
-            if(expression.kind!==S.Identifier||member.kind!==S.MethodDeclaration)this.fail('computed member identity');
-            let identity:string;
+            if(expression.kind!==S.Identifier)this.fail('computed member identity');
+            const plannedKey=namespaceKeys.get(expression.text);
+            let identity:string=plannedKey?'as3.namespace.member@1:'+JSON.stringify([plannedKey.uri,plannedKey.name]):undefined;
             for(const statement of file.statements)if(statement.kind===S.VariableStatement)
                 for(const variable of statement.declarationList.declarations)if(variable.name.text===expression.text) {
                     const init=variable.initializer;
                     if(init&&init.kind===S.CallExpression&&text(init.expression)==='globalThis.Symbol.for'
                         &&init.arguments.length===1&&init.arguments[0].kind===S.StringLiteral)identity=init.arguments[0].text;
                 }
-            const own=this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node=>{
-                const name=node.findChild(K.NAME);
-                return name&&identity==='as3.namespace.member@1:'+JSON.stringify([generatedProxyUri,name.text])
-                    &&!!generatedProxyMember(this.generated.options.plan,this.own.qname,node);
-            });
-            if(!own)this.fail('computed method requires exact source namespace authority');
-            namespaceMethods.set(member,{name:own.findChild(K.NAME).text,encoded:text(expression),node:own});
+            const isStatic=!!member.modifiers&&member.modifiers.some((mod:any)=>mod.kind===S.StaticKeyword);
+            const kinds=member.kind===S.PropertyDeclaration?[K.VAR_LIST,K.CONST_LIST]:member.kind===S.MethodDeclaration?[K.FUNCTION]:member.kind===S.GetAccessor?[K.GET]:member.kind===S.SetAccessor?[K.SET]:[];
+            let matched:{name:string;uri:string;encoded:string;node:Node};
+            for(const node of this.generated.lexical.ownClass.findChild(K.CONTENT).children){
+                if(kinds.indexOf(node.kind)<0)continue;
+                const mods=node.findChild(K.MOD_LIST),sourceStatic=!!mods&&mods.children.some(mod=>mod.text==='static');
+                if(sourceStatic!==isStatic)continue;
+                const uri=generatedMemberUri(this.generated.options.plan,this.own.qname,node);
+                const names=node.kind===K.VAR_LIST||node.kind===K.CONST_LIST?node.findChildren(K.NAME_TYPE_INIT).map(n=>n.findChild(K.NAME)): [node.findChild(K.NAME)];
+                for(const name of names)if(uri&&identity==='as3.namespace.member@1:'+JSON.stringify([uri,name.text])){
+                    if(matched)this.fail('ambiguous computed source member');
+                    matched={name:name.text,uri,encoded:text(expression),node};
+                }
+            }
+            if(!matched)this.fail('computed member requires exact source namespace authority');
+            namespaceMethods.set(member,matched);
         }
         const params = (member: any, signature: boolean): string => member.parameters.filter((p:any)=>signature||!this.generated||!p.dotDotDotToken).map((p: any) => {
             if (!signature) return this.generated?text(p.name)+': '+(p.type?text(p.type):'any'):text(p);
@@ -545,7 +583,7 @@ export class NativeCallableClasses {
             return this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node=>{
                 const mods=node.findChild(K.MOD_LIST),sourceStatic=!!mods&&mods.children.some(mod=>mod.text==='static');
                 return node.kind===kind&&node.findChild(K.NAME).text===(constructor?this.own.name:member.name.text)
-                    &&sourceStatic===isStatic&&!generatedProxyMember(this.generated.options.plan,this.own.qname,node);
+                    &&sourceStatic===isStatic&&!generatedMemberUri(this.generated.options.plan,this.own.qname,node);
             });
         };
         const body = (member: any, constructor: boolean, returnType?: string): string => {
@@ -616,25 +654,26 @@ export class NativeCallableClasses {
                     this.fail('arguments.callee requires separate callable identity authority');
                 if (isSourceArguments(node) && !insideSuperArguments)
                     edits.push({start:node.getStart(file), end:node.end, value:sourceArguments});
-                if (node.kind === S.CallExpression && node.expression.kind === S.PropertyAccessExpression
+                if (node.kind === S.CallExpression && [S.PropertyAccessExpression,S.ElementAccessExpression].indexOf(node.expression.kind)>=0
                     && node.expression.expression.kind === S.SuperKeyword) {
                     if (constructor || nestedFunction || insideSuperArguments
                         || member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword))
                         this.fail('super direct method call requires an ordinary instance method body');
                     if (node.arguments.some((argument: any) => argument.kind === S.SpreadElement))
                         this.fail('spread super method arguments');
+                    const selected=superKey(node.expression);
                     edits.push({start:node.expression.getStart(file),end:node.expression.end,
-                        value:directSuper(node.expression.name.text,node.arguments.length)});
+                        value:directSuper(selected.name,node.arguments.length,selected.uri,selected.encoded)});
                     node.arguments.forEach((argument: any) => walk(argument,false,nestedFunction)); return;
                 }
-                const superProperty = (value: any): boolean => value.kind === S.PropertyAccessExpression && value.expression.kind === S.SuperKeyword;
+                const superProperty = (value: any): boolean => [S.PropertyAccessExpression,S.ElementAccessExpression].indexOf(value.kind)>=0 && value.expression.kind === S.SuperKeyword;
                 if (node.kind === S.BinaryExpression && superProperty(node.left) || superProperty(node)) {
                     if (constructor || nestedFunction || insideSuperArguments
                         || member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword))
                         this.fail('super accessor requires ordinary instance body');
                     if (node.kind === S.BinaryExpression) {
                         if (node.operatorToken.kind !== S.EqualsToken) this.fail('super accessor compound assignment requires authority');
-                        const capture = directSuperAccessor(node.left.name.text,'set'), value = unique('superAccessorValue');
+                        const selected=superKey(node.left),capture = directSuperAccessor(selected.name,'set',selected.uri,selected.encoded), value = unique('superAccessorValue');
                         edits.push({start:node.getStart(file),end:node.right.getStart(file),value:'((' + value + ': any): any => {'
                             + intrinsic + '.apply(' + capture + ',this,[' + value + ']);return ' + value + ';})('});
                         edits.push({start:node.end,end:node.end,value:')'});
@@ -642,8 +681,9 @@ export class NativeCallableClasses {
                     }
                     if (node.parent.kind === S.PrefixUnaryExpression && (node.parent.operator === S.PlusPlusToken || node.parent.operator === S.MinusMinusToken) || node.parent.kind === S.PostfixUnaryExpression
                         || node.parent.kind === S.DeleteExpression) this.fail('super accessor update/delete requires authority');
+                    const selected=superKey(node);
                     edits.push({start:node.getStart(file),end:node.end,value:intrinsic + '.apply('
-                        + directSuperAccessor(node.name.text,'get') + ',this,[])'});return;
+                        + directSuperAccessor(selected.name,'get',selected.uri,selected.encoded) + ',this,[])'});return;
                 }
                 if (node.kind === S.SuperKeyword) this.fail('super property access requires separate receiver authority');
                 if (node.kind === S.ReturnStatement && returnType && !nestedFunction) {
@@ -716,8 +756,8 @@ export class NativeCallableClasses {
             const key = namespaced?namespaced.name:member.name.text, lexicalMember = !namespaced && (this.lexical && this.lexical.trait(key, !!isStatic)
                 || this.generated && this.generated.lexical.trait(key,!!isStatic));
             const encoded = namespaced?namespaced.encoded:lexicalMember ? lexicalMember.key : JSON.stringify(key);
-            if (key === 'constructor') this.fail('reserved constructor member');
-            if (isStatic && ['prototype', 'call', 'apply', 'bind'].indexOf(key) >= 0
+            if (!namespaced && key === 'constructor') this.fail('reserved constructor member');
+            if (!namespaced && isStatic && ['prototype', 'call', 'apply', 'bind'].indexOf(key) >= 0
                 && !(this.generated && key !== 'prototype' && member.kind === S.MethodDeclaration
                     && this.generated.projection.staticTraits.some(trait => trait.name === key && trait.kind === 'method')))
                 this.fail('reserved static callable constructor identity');
@@ -729,16 +769,16 @@ export class NativeCallableClasses {
                         : 'this[' + lexicalMember.key + '] = ' + text(member.initializer) + ';');
                     return;
                 }
-                const constant = this.generated && this.generated.projection[isStatic?'staticTraits':'instanceTraits'].find(t => t.name === key && t.kind === 'constant');
-                (isStatic ? staticTypes : instanceTypes).push((constant ? 'readonly ' : '') + key + ': ' + type(member) + ';');
+                const constant = this.generated && this.generated.projection[isStatic?'staticTraits':'instanceTraits'].find(t => t.name === key && t.uri===(namespaced?namespaced.uri:undefined) && t.kind === 'constant');
+                (isStatic ? staticTypes : instanceTypes).push((constant ? 'readonly ' : '') + (namespaced?'['+encoded+']':key) + ': ' + type(member) + ';');
                 if (constant && !isStatic) return; // Literal storage is installed before all source effects.
                 if (constant) {
                     if (!member.initializer) this.fail('generated static constant literal missing');
-                    const deferred=this.generated.deferredConstants[key];
+                    const deferred=this.generated.deferredConstants[generatedMemberIdentity(key,namespaced?namespaced.uri:undefined)];
                     const constantType=constant.type==='Array'?'{name:"Array",reference:'+intrinsic+'.array}'
                         : typeof constant.type==='string'?JSON.stringify(constant.type)
                         : '{name:'+JSON.stringify(constant.type.name)+',reference:'+domainImport+'.'+constant.type.referenceExport+'}';
-                    const uintOr=this.generated.uintOrInitializers.constants[key];
+                    const uintOr=namespaced?undefined:this.generated.uintOrInitializers.constants[key];
                     definitions.push(deferred ? 'const '+deferred+'='+provider+'.declareAS3GeneratedStaticConstant('+destination+','+encoded+','+constantType+');'
                         : provider + '.defineAS3GeneratedStaticConstant(' + destination + ',' + encoded + ','
                             + constantType + ',' + (uintOr===undefined?text(member.initializer):uintOr) + ');');
@@ -755,7 +795,7 @@ export class NativeCallableClasses {
                 const sourceMethod = namespaced?namespaced.node:this.generated.lexical.ownClass.findChild(K.CONTENT).children.find(node => {
                     const mods=node.findChild(K.MOD_LIST),sourceStatic=!!mods&&mods.children.some(mod=>mod.text==='static');
                     return node.kind === sourceKind && node.findChild(K.NAME).text === key && sourceStatic === !!isStatic
-                        && !generatedProxyMember(this.generated.options.plan,this.own.qname,node);
+                        && !generatedMemberUri(this.generated.options.plan,this.own.qname,node);
                 });
                 const parameters = sourceMethod.findChild(K.PARAMETER_LIST).children;
                 const fixed=parameters.filter(p=>!p.findChild(K.REST)),spread=parameters.find(p=>!!p.findChild(K.REST));
@@ -830,14 +870,14 @@ export class NativeCallableClasses {
             if (member.kind === S.MethodDeclaration) {
                 // Namespace hooks are selected through the authenticated runtime
                 // trait table; do not expose them as public structural members.
-                if (!lexicalMember && !namespaced) (isStatic ? staticTypes : instanceTypes).push(key + '(' + params(member, true) + '): ' + type(member) + ';');
+                if (!lexicalMember&&(!namespaced||namespaced.uri!==generatedProxyUri)) (isStatic ? staticTypes : instanceTypes).push((namespaced?'['+encoded+']':key) + '(' + params(member, true) + '): ' + type(member) + ';');
                 definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
                     + ', {value: ' + functionValue + ', writable:true, configurable:true, enumerable:false});');
-                if (isStatic && !lexicalMember) staticMethods.push(key);
+                if (isStatic && !lexicalMember) staticMethods.push(encoded);
             } else if (member.kind === S.GetAccessor || member.kind === S.SetAccessor) {
-                const identity = (isStatic ? 'static.' : '') + key;
+                const identity = (isStatic ? 'static.' : '') + generatedMemberIdentity(key,namespaced?namespaced.uri:undefined);
                 if (!lexicalMember && !accessorTypes.has(identity)) {
-                    (isStatic ? staticTypes : instanceTypes).push(key + ': ' + (member.kind === S.GetAccessor ? type(member) : type(member.parameters[0])) + ';');
+                    (isStatic ? staticTypes : instanceTypes).push((namespaced?'['+encoded+']':key) + ': ' + (member.kind === S.GetAccessor ? type(member) : type(member.parameters[0])) + ';');
                     accessorTypes.add(identity);
                 }
                 definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded
@@ -860,7 +900,7 @@ export class NativeCallableClasses {
         const memberNames = new Set<string>(), instanceMethods: string[] = [];
         for (let current = this.own; current; current = this.classes.get(current.base)) {
             current.instanceMembers.forEach(member => {
-                if(this.generated && !this.generated.projection.instanceTraits.some(t=>t.name===member.name&&t.kind==='method'))return;
+                if(this.generated && !this.generated.projection.instanceTraits.some(t=>!t.uri&&t.name===member.name&&t.kind==='method'))return;
                 if (!memberNames.has(member.name)) {
                     memberNames.add(member.name);
                     if (member.method) instanceMethods.push(member.name);
@@ -868,7 +908,8 @@ export class NativeCallableClasses {
             });
         }
         const bindInstance = instanceMethods.filter(key=>!nativeBase||(nativeBase.qname==='Error'?['getStackTrace']:nativeBase.qname==='flash.events.EventDispatcher'?['addEventListener','removeEventListener','dispatchEvent','hasEventListener','willTrigger','toString']:['clone','toString','formatToString','stopImmediatePropagation','preventDefault','isDefaultPrevented','stopPropagation']).indexOf(key)<0)
-            .map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n');
+            .map(key => bindName + '(this, ' + JSON.stringify(key) + ');').join('\n')
+            + (this.generated?this.generated.projection.instanceTraits.filter(t=>!!t.uri&&t.uri!==generatedProxyUri&&t.kind==='method').map(t=>bindName+'(this,globalThis.Symbol.for('+JSON.stringify('as3.namespace.member@1:'+JSON.stringify([t.uri,t.name]))+'));').join('\n'):'');
         const defaults = (this.metadata || this.generated ? generation + '.enterInstance(this);\n' : '')
             + (nativeBase ? intrinsic+'.prepareNativeBase(this,'+nativeBaseClass+');\n' : '')
             + (this.generated ? this.generated.lexical.provider+'.initializeAS3LexicalInstance('+this.generated.lexical.scope+',this);\n' : '')
@@ -931,7 +972,7 @@ export class NativeCallableClasses {
             + (nativeBase ? intrinsic+'.registerNativeBase('+nativeBaseClass+','+domainImport+'.'+nativeBase.nativeBaseExport+');\n' : '')
             + intrinsic + '.register(' + identity + ', ' + (this.own.base ? baseName : 'null') + ');\n'
             + definitions.join('\n') + '\n'
-            + staticMethods.map(key => bindName + '(' + name + ', ' + JSON.stringify(key) + ');').join('\n')
+            + staticMethods.map(key => bindName + '(' + name + ', ' + key + ');').join('\n')
             + (this.metadata ? '\n' + intrinsic + '.defineProperty(' + name + ', "prototype", {writable:false});\n'
                 + provider + '.registerFlashTypeMetadata(' + identity + ', ' + JSON.stringify(this.metadata.classes[this.own.qname].metadata) + ');\n'
                 + provider + '.registerAS3Class(' + identity + ', []);\n'

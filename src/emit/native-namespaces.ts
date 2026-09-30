@@ -852,10 +852,11 @@ export class NativeNamespaces {
         return key;
     }
 
-    keyDeclarations(): string {
+    keyDeclarations(declaration?:(uri:string,name:string,key:string)=>string): string {
         let output = '';
         this.keys.forEach((key, identity) => {
-            output += 'const ' + key + ' = globalThis.Symbol.for(' + JSON.stringify('as3.namespace.member@1:' + identity) + ');\n';
+            const pair=JSON.parse(identity);
+            output += declaration?declaration(pair[0],pair[1],key):'const ' + key + ' = globalThis.Symbol.for(' + JSON.stringify('as3.namespace.member@1:' + identity) + ');\n';
         });
         return output;
     }

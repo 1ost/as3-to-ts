@@ -1,5 +1,5 @@
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
-import {generatedProxyMember} from './native-generated-proxy';
+import {generatedMemberUri} from './native-generated-namespaces';
 import {NativeTypedLocals, NestedLocalFunction} from './native-typed-locals';
 import Node, {unwrapEncapsulatedExpression} from '../syntax/node';
 import K from '../syntax/nodeKind';
@@ -90,7 +90,7 @@ export class NativeGeneratedLexical {
             if(!inherited)(this as any).ownClass=cls;
             cls.findChild(K.CONTENT).children.forEach(member=>{
                 if([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0)return;
-                if(generatedProxyMember(plan,name,member))return;
+                if(generatedMemberUri(plan,name,member))return;
                 const mods=modifiers(member), visibility=mods.indexOf('public')>=0?'public':mods.indexOf('private')>=0?'private':mods.indexOf('protected')>=0?'protected':'internal';
                 if(visibility==='public'||inherited&&visibility==='private')return;
                 if(visibility==='internal'){
@@ -575,7 +575,7 @@ export class NativeGeneratedLexical {
                     if(lexicalName&&statics&&identity!==this.owner){
                         const cacheKey='static:'+identity;
                         if(!this.foreignPublicMembers.has(cacheKey))this.foreignPublicMembers.set(cacheKey,
-                            new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,this.classSource(identity).source).staticTraits);
+                            new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,this.classSource(identity).source).staticTraits.filter(member=>!member.uri));
                         if(this.foreignPublicMembers.get(cacheKey).some(member=>member.name===name))return null;
                     }
                     let inaccessible=false;
@@ -605,7 +605,7 @@ export class NativeGeneratedLexical {
                     if(!this.foreignPublicMembers.has(identity)) {
                         const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                         this.foreignPublicMembers.set(identity,new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,this.classSource(identity).source).instanceTraits
-                            .filter(member=>member.kind==='variable'||member.kind==='accessor'||member.kind==='method'));
+                            .filter(member=>!member.uri&&(member.kind==='variable'||member.kind==='accessor'||member.kind==='method')));
                     }
                     const member=this.foreignPublicMembers.get(identity).find(member=>member.name===name);
                     if(member)return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method',
