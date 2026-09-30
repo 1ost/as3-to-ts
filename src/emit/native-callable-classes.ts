@@ -877,7 +877,12 @@ export class NativeCallableClasses {
             } else if (member.kind === S.GetAccessor || member.kind === S.SetAccessor) {
                 const identity = (isStatic ? 'static.' : '') + generatedMemberIdentity(key,namespaced?namespaced.uri:undefined);
                 if (!lexicalMember && !accessorTypes.has(identity)) {
-                    (isStatic ? staticTypes : instanceTypes).push((namespaced?'['+encoded+']':key) + ': ' + (member.kind === S.GetAccessor ? type(member) : type(member.parameters[0])) + ';');
+                    const projected=this.generated&&this.generated.projection[isStatic?'staticTraits':'instanceTraits'].find(t=>t.kind==='accessor'&&t.name===key&&t.uri===(namespaced?namespaced.uri:undefined));
+                    // TS 2.5 cannot express distinct read/write accessor types. The
+                    // runtime enforces each source half; the structural surface
+                    // must allow the wildcard side in either declaration order.
+                    const valueType=projected&&projected.setterType!==undefined?'any':member.kind===S.GetAccessor?type(member):type(member.parameters[0]);
+                    (isStatic ? staticTypes : instanceTypes).push((namespaced?'['+encoded+']':key) + ': ' + valueType + ';');
                     accessorTypes.add(identity);
                 }
                 definitions.push(intrinsic + '.defineProperty(' + destination + ', ' + encoded

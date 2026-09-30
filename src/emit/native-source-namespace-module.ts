@@ -16,7 +16,7 @@ export function emitNativeSourceNamespaceModule(plan: NativeGeneratedDeclaration
         'import {selectAS3ScriptDomainDefinition,instantiateAS3ScriptUnit} from '+JSON.stringify(input.scriptGlobalProviderModule)+';',
         'import {'+domain.exportName+' as domain} from '+JSON.stringify(domain.module)+';',
         'type Binding = {name:string;declaration:AS3SourceNamespaceDeclaration;resolve:()=>AS3SourceNamespaceValue};',
-        'const records = '+JSON.stringify(records)+';',
+        'const records: {name:string;uri:string;alias:string|null;unit:{sourceId:string;sourceSha256:string;bindings:{name:string;uri:string;kind:string;type:string}[]}}[] = '+JSON.stringify(records)+';',
         'const prepared = new Map<string,Binding>();',
         'function prepare(name:string):Binding {',
         '  const existing=prepared.get(name);if(existing)return existing;',

@@ -11,8 +11,8 @@ import {NativeGeneratedDeclarationPlan, NativeGeneratedClassDeclaration,
 
 // Original Flash evidence covers Boolean source halves and Number position
 // halves. Other native names/signatures retain their existing admission holds.
-function qualifiedAccessor(member: {type?: TraitType; name: string; uri?: string}): boolean {
-    return !!member.uri || member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
+function qualifiedAccessor(member: {type?: TraitType; setterType?: TraitType; name: string; uri?: string}): boolean {
+    return !!member.uri || member.type==='*'&&member.setterType!==undefined || member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
 }
 interface ReferenceType {readonly name: string; readonly referenceExport?: string; readonly vectorExport?:string;}
 type TraitType = string | ReferenceType;
@@ -21,9 +21,10 @@ interface Trait {
     readonly uri?: string;
     readonly kind: 'variable' | 'constant' | 'method' | 'accessor';
     readonly type?: TraitType;
+    readonly setterType?: TraitType;
     readonly access?: 'readonly' | 'writeonly' | 'readwrite';
 }
-interface AccessorPart {owner:string; override:boolean; final:boolean;}
+interface AccessorPart {owner:string; override:boolean; final:boolean; type?:TraitType;}
 interface Member extends Trait {
     parts?: {get?:AccessorPart; set?:AccessorPart};
     declaredBy: string;
@@ -33,6 +34,12 @@ interface Member extends Trait {
     override?: boolean;
     final?: boolean;
     signature?: {parameters: TraitType[]; returns: TraitType; requiredCount: number};
+}
+/** Reflection uses the getter type regardless of source declaration order. */
+function accessorTypes(parts:{get?:AccessorPart;set?:AccessorPart},fallback:TraitType):{type:TraitType;setterType?:TraitType} {
+    const read=parts.get ? parts.get.type===undefined?fallback:parts.get.type : parts.set.type===undefined?fallback:parts.set.type;
+    const write=parts.set ? parts.set.type===undefined?fallback:parts.set.type : read;
+    return Object.assign({type:read},parts.get&&parts.set&&JSON.stringify(read)!==JSON.stringify(write)?{setterType:write}:{});
 }
 interface MethodSignature {name: string; uri?: string; parameters: TraitType[]; returns: TraitType; requiredCount: number; override: boolean; final: boolean;}
 interface LexicalMember {
@@ -196,11 +203,12 @@ export class NativeGeneratedClassTraits {
                     const previous = list.find(item => item.name === value.name && item.uri===value.uri);
                     if (previous) {
                         if (previous.kind !== 'accessor' || value.kind !== 'accessor' || previous.access === value.access
-                            || previous.access === 'readwrite' || JSON.stringify(previous.type) !== JSON.stringify(value.type)
+                            || previous.access === 'readwrite' || JSON.stringify(previous.type) !== JSON.stringify(value.type) && previous.type!=='*' && value.type!=='*'
                             || previous.override !== value.override || previous.final !== value.final)
                             fail('duplicate or incompatible public declaration: ' + binding.identity + ':' + value.name);
                         previous.access = 'readwrite';
                         previous.parts=Object.assign({},previous.parts,value.parts);
+                        Object.assign(previous,accessorTypes(previous.parts,previous.type));
                     } else list.push(value);
                 };
                 const common = {declaredBy:binding.reflectedName,override:mods.indexOf('override') >= 0,final:mods.indexOf('final') >= 0,...(uri?{uri}:{})};
@@ -266,7 +274,7 @@ export class NativeGeneratedClassTraits {
                 // Accessors use the same exact planned specialization as fields.
                 // Callable entry/return conversion owns their Vector coercion;
                 // a getter does not introduce a separately initialized slot.
-                add(Object.assign({},common,{name,kind:'accessor',type:valueType,access:member.kind === K.GET ? 'readonly' : 'writeonly',parts:{[member.kind===K.GET?'get':'set']:{owner:binding.reflectedName,override:common.override,final:common.final}}}) as Member);
+                add(Object.assign({},common,{name,kind:'accessor',type:valueType,access:member.kind === K.GET ? 'readonly' : 'writeonly',parts:{[member.kind===K.GET?'get':'set']:{owner:binding.reflectedName,override:common.override,final:common.final,type:valueType}}}) as Member);
             };
             cls.findChild(K.CONTENT).children.forEach(visit);
             const instance = inherited ? inherited.instance.slice() : [];
@@ -286,13 +294,14 @@ export class NativeGeneratedClassTraits {
                         && !(binding.base==='flash.events.MouseEvent'&&member.kind==='accessor'&&member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0))
                         fail('native Event override requires separate source authority: '+member.name);
                     if(member.kind==='accessor' && previous.kind==='accessor' && (parent || binding.base==='flash.display.Sprite'||binding.base==='flash.events.MouseEvent') && input.inheritScriptClasses
-                        && qualifiedAccessor(member) && JSON.stringify(member.type)===JSON.stringify(previous.type) && member.parts && previous.parts) {
+                        && (qualifiedAccessor(member)||qualifiedAccessor(previous)) && member.parts && previous.parts) {
                         for(const side of (['get','set'] as ('get'|'set')[]))if(member.parts[side]){
-                            if(!member.parts[side].override||!previous.parts[side]||previous.parts[side].final)
+                            if(!member.parts[side].override||!previous.parts[side]||previous.parts[side].final
+                                || JSON.stringify(member.parts[side].type===undefined?member.type:member.parts[side].type)!==JSON.stringify(previous.parts[side].type===undefined?previous.type:previous.parts[side].type))
                                 fail('accessor override requires matching nonfinal parent half: '+binding.identity+':'+member.name);
                         }
                         const parts=Object.assign({},previous.parts,member.parts);
-                        instance[index]=Object.assign({},member,{parts,access:parts.get&&parts.set?'readwrite':parts.get?'readonly':'writeonly'});
+                        instance[index]=Object.assign({},member,accessorTypes(parts,previous.type),{parts,access:parts.get&&parts.set?'readwrite':parts.get?'readonly':'writeonly'});
                         return;
                     }
                     if (!member.override || previous.final || previous.kind !== member.kind || member.kind === 'variable' || member.kind === 'constant'
@@ -338,7 +347,7 @@ export class NativeGeneratedClassTraits {
             return result;
         };
         const traits = (items: Member[]): Trait[] => items.map(item => Object.assign({name:item.name,kind:item.kind},
-            item.uri ? {uri:item.uri} : {}, item.type === undefined ? {} : {type:item.type},item.kind === 'accessor' ? {access:item.access} : {}));
+            item.uri ? {uri:item.uri} : {}, item.type === undefined ? {} : {type:item.type},item.setterType===undefined?{}:{setterType:item.setterType},item.kind === 'accessor' ? {access:item.access} : {}));
         this.metadata = frozen({name:reflectedClass(owner),base:this.binding.base ? reflectedClass(this.binding.base) : 'Object',
             isDynamic:surface.dynamic,isFinal:surface.final,instance:members(surface.instance),statics:members(surface.statics)});
         this.instanceConstants = frozen(surface.instance.filter(item=>item.kind==='constant').map(item=>({name:item.name,...(item.uri?{uri:item.uri}:{}),literal:item.constantLiteral})));
@@ -361,7 +370,7 @@ export class NativeGeneratedClassTraits {
                 + (trait.uri ? ',uri:'+JSON.stringify(trait.uri)+',key:globalThis.Symbol.for('+JSON.stringify('as3.namespace.member@1:'+JSON.stringify([trait.uri,trait.name]))+')' : '')
                 + (trait.access === undefined ? '' : ',access:' + JSON.stringify(trait.access));
             if (trait.type === undefined) return '{' + fields + '}';
-            return '{' + fields + ',type:' + emitType(trait.type) + '}';
+            return '{' + fields + ',type:' + emitType(trait.type) + (trait.setterType===undefined?'':',setterType:'+emitType(trait.setterType)) + '}';
         }).join(',') + ']';
         const metadata = this.inheritInstanceLayout ? Object.assign({},this.metadata,{instance:Object.keys(this.metadata.instance).reduce((members:any,kind)=>{
             members[kind]=this.metadata.instance[kind].filter((member:any)=>member.declaredBy===this.metadata.name || kind==='accessors'&&this.instanceAccessors.some(a=>sameMember(a,member))).map((member:any)=>kind==='accessors'&&this.instanceAccessors.some(a=>sameMember(a,member))?Object.assign({},member,{declaredBy:this.metadata.name}):member);return members;
@@ -370,8 +379,9 @@ export class NativeGeneratedClassTraits {
         const methods='['+this.instanceMethods.map(method=>'{name:'+JSON.stringify(method.name)+(method.uri?',uri:'+JSON.stringify(method.uri):'')+',parameters:['+method.parameters.map(emitType).join(',')+'],returns:'+emitType(method.returns)+',requiredCount:'+method.requiredCount+',override:'+method.override+',final:'+method.final+'}').join(',')+']';
         const accessors='['+this.instanceAccessors.map(a=>{
             const halves={...(a.parts.get?{get:{override:a.parts.get.override,final:a.parts.get.final}}:{}),...(a.parts.set?{set:{override:a.parts.set.override,final:a.parts.set.final}}:{})};
-            if(!a.uri)return JSON.stringify({name:a.name,type:a.type,...halves});
-            return '{name:'+JSON.stringify(a.name)+',uri:'+JSON.stringify(a.uri)+',type:'+emitType(a.type)+','+JSON.stringify(halves).slice(1);
+            if(!a.uri&&typeof a.type==='string'&&(a.setterType===undefined||typeof a.setterType==='string'))
+                return JSON.stringify({name:a.name,type:a.type,...(a.setterType===undefined?{}:{setterType:a.setterType}),...halves});
+            return '{name:'+JSON.stringify(a.name)+(a.uri?',uri:'+JSON.stringify(a.uri):'')+',type:'+emitType(a.type)+(a.setterType===undefined?'':',setterType:'+emitType(a.setterType))+','+JSON.stringify(halves).slice(1);
         }).join(',')+']';
         return '{' + (this.nativeAccessorBase ? 'nativeAccessorBase:'+base+',' : '') + (this.inheritInstanceLayout ? 'instanceBase:' + base + ',' : '') + 'metadata:' + JSON.stringify(metadata) + ',instanceTraits:' + emit(ownNames ? this.instanceTraits.filter(trait=>ownNames.has(generatedMemberIdentity(trait.name,trait.uri))) : this.instanceTraits) + ',staticTraits:' + emit(this.staticTraits)
             + ',instanceConstants:[' + this.instanceConstants.filter(item=>!ownNames || ownNames.has(generatedMemberIdentity(item.name,item.uri))).map(item=>'{name:'+JSON.stringify(item.name)+(item.uri?',uri:'+JSON.stringify(item.uri):'')+',value:'+item.literal+'}').join(',') + ']'
