@@ -721,6 +721,29 @@ export class NativeGeneratedLexical {
         }
         if(found.publicName) {
             if(found.dynamicRead&&operation!=='get')fail('chained dynamic receiver currently requires a property read');
+            if(operation==='set'&&found.publicNumericUpdate&&['+=','-='].indexOf(node.children[1].text)>=0) {
+                const addition=node.children[1].text==='+=',unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
+                const helper=unique('__as3_public_compound_add'),get=unique('__as3_public_compound_get'),set=unique('__as3_public_compound_set'),number=unique('__as3_public_compound_number');
+                if(addition){emitter.ensureImportIdentifier('as3AddAssignProperty as '+helper,emitter.generated.propertyModule,false);emitter.nativeSourceHelpers.add(helper);}
+                else {
+                    const module=emitter.options.nativeCallableCoercionModule;
+                    if(typeof module!=='string'||!module.trim()||/[\x00-\x1f'"\\]/.test(module))fail('public compound subtraction coercion provider required');
+                    emitter.ensureImportIdentifier('as3GetProperty as '+get,emitter.generated.propertyModule,false);
+                    emitter.ensureImportIdentifier('as3SetProperty as '+set,emitter.generated.propertyModule,false);
+                    emitter.ensureImportIdentifier('as3CoerceNumber as '+number,module,false);
+                    [get,set,number].forEach(name=>emitter.nativeSourceHelpers.add(name));
+                }
+                emitter.catchup(node.start);
+                if(addition)emitter.insert('(<any>'+helper+'(');
+                else emitter.insert('(<any>((readTarget:any,key:string,rhs:()=>any,writeTarget:()=>any)=>{const previous:number=<any>'+get+'(readTarget,key);const value=previous-'+number+'(rhs());return '+set+'(writeTarget(),key,value);})(');
+                emitter.skipTo(found.receiver.start);const start=emitter.output.length;
+                visit(emitter,found.receiver);emitter.catchup(found.receiver.end);const receiver=emitter.output.slice(start);
+                emitter.insert(','+JSON.stringify(found.publicName)+',()=>(');
+                emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
+                // AS3 repeats the receiver path for storage after RHS evaluation
+                // and conversion. Do not substitute JavaScript reference capture.
+                emitter.insert('),()=>('+receiver+')))');emitter.skipTo(node.end);return true;
+            }
             if(operation==='call'&&found.publicMethod) {
                 let helper='__as3_generated_foreign_call';while(emitter.source.indexOf(helper)>=0)helper+='_';
                 emitter.ensureImportIdentifier('as3CallProperty as '+helper,emitter.generated.propertyModule,false);
