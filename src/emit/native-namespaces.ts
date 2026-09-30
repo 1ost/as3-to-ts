@@ -620,7 +620,7 @@ export class NativeNamespaces {
             const method = receiver.children[0].children[1];
             const baseType = this.receiverType(receiver.children[0], namespaceChain);
             const base = this.classType(node, baseType);
-            if (method && base) return this.methodReturnType(base, method.text);
+            if (method && base) return this.methodReturnType(base, method.text, namespaceChain);
             return null;
         } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
             && receiver.children[1].kind === NodeKind.LITERAL
@@ -699,8 +699,17 @@ export class NativeNamespaces {
         return null;
     }
 
-    private methodReturnType(owner: Node, name: string): string {
-        for (const cls of this.hierarchy(owner)) {
+    private methodReturnType(owner: Node, name: string, requireAncestry: boolean): string {
+        let classes: Node[];
+        try { classes = this.hierarchy(owner); } catch (error) {
+            // An ordinary public dot only requests an optional type hint, just
+            // like the field lookup above. A native/foreign base must not turn
+            // that probe into a namespace-inheritance requirement. Explicit
+            // namespace chains still require the complete proven hierarchy.
+            if (requireAncestry) throw error;
+            return null;
+        }
+        for (const cls of classes) {
             const content = cls.findChild(NodeKind.CONTENT);
             if (content) for (const declaration of content.children) {
                 if (declaration.kind !== NodeKind.FUNCTION) continue;
