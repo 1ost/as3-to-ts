@@ -88,9 +88,19 @@ export class NativeNamespaces {
             if (overridden) {
                 if ([NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET].indexOf(node.kind) < 0)
                     this.fail('namespace field overrides require separate lowering');
-                const base = this.hierarchy(owner).slice(1).map(candidate =>
-                    this.findMember(candidate, member.uri, member.name, member.static, true)).find(value => !!value);
-                if (!base || base.declaration.kind !== node.kind)
+                const accessor = (kind: NodeKind): boolean => kind === NodeKind.GET || kind === NodeKind.SET;
+                let base: NamespaceMember;
+                for (const candidate of this.hierarchy(owner).slice(1)) {
+                    const inherited = Array.from(this.members.values()).filter(value => value.owner === candidate
+                        && value.uri === member.uri && value.name === member.name && value.static === member.static);
+                    base = inherited.find(value => value.declaration.kind === node.kind);
+                    if (base) break;
+                    // A subclass may replace just one accessor half. Continue
+                    // through that half to find the other inherited half, but
+                    // never skip a conflicting field or method declaration.
+                    if (inherited.some(value => !accessor(node.kind) || !accessor(value.declaration.kind))) break;
+                }
+                if (!base)
                     this.fail('namespace override requires a matching inherited member: ' + member.name);
             }
             this.members.forEach(previous => {

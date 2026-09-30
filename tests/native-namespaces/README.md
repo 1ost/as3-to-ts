@@ -113,3 +113,19 @@ the next dot retain the receiver, and comments inside nested arguments are
 skipped as trivia. Each case runs in a child process with a timeout; malformed
 argument lists must throw rather than stall. The executable chain fixture also
 includes both comment positions.
+# Partial accessor override resolution
+
+`node tests/native-namespaces/AccessorOverrideTests.cjs` checks namespace
+declarations against the original RegistryBase/Child/Grandchild classes retained
+at engine commit `0e85a408b7b3cfe7041ec20e938b6a58309d3dca`. Set
+`LAYA_ENGINE_REPOSITORY` to a repository containing that commit; the default is
+the sibling `LayaAir-op2-namespace-traits-review` checkout. The test reads immutable
+Git objects and verifies source and repeated AIR capture hashes from their receipt.
+
+Lookup must select the inherited getter or setter independently, including through
+a parent that overrides only the opposite half. Both declaration orders and both
+override orders pass. Missing halves, different URIs, static/instance mismatches,
+and intervening incompatible declarations remain rejected. Two applied controls
+load the old compiler implementation and reproduce the original child failures.
+This proves declaration resolution only. Generated namespace Class emission and
+its runtime comparison remain separate work.
