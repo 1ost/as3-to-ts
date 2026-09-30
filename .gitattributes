@@ -68,3 +68,6 @@ src/emit/native-generated-lexical.ts text eol=lf
 
 tests/native-generated-source-namespaces/evidence/*.gz -text
 tests/native-large-declarations/** -text
+
+# Mixed accessor compiler receipts preserve exact fixture bytes.
+tests/native-generated-accessor-halves/** -text whitespace=cr-at-eol

@@ -9,11 +9,6 @@ import K from '../syntax/nodeKind';
 import {NativeGeneratedDeclarationPlan, NativeGeneratedClassDeclaration,
     nativeGeneratedClassDeclaration, nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 
-// Original Flash evidence covers Boolean source halves and Number position
-// halves. Other native names/signatures retain their existing admission holds.
-function qualifiedAccessor(member: {type?: TraitType; setterType?: TraitType; name: string; uri?: string}): boolean {
-    return !!member.uri || member.type==='*'&&member.setterType!==undefined || member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
-}
 interface ReferenceType {readonly name: string; readonly referenceExport?: string; readonly vectorExport?:string;}
 type TraitType = string | ReferenceType;
 interface Trait {
@@ -39,6 +34,8 @@ interface Member extends Trait {
 function accessorTypes(parts:{get?:AccessorPart;set?:AccessorPart},fallback:TraitType):{type:TraitType;setterType?:TraitType} {
     const read=parts.get ? parts.get.type===undefined?fallback:parts.get.type : parts.set.type===undefined?fallback:parts.set.type;
     const write=parts.set ? parts.set.type===undefined?fallback:parts.set.type : read;
+    if(parts.get&&parts.set&&JSON.stringify(read)!==JSON.stringify(write)&&read!=='*'&&write!=='*')
+        fail('incompatible accessor half types');
     return Object.assign({type:read},parts.get&&parts.set&&JSON.stringify(read)!==JSON.stringify(write)?{setterType:write}:{});
 }
 interface MethodSignature {name: string; uri?: string; parameters: TraitType[]; returns: TraitType; requiredCount: number; override: boolean; final: boolean;}
@@ -82,6 +79,13 @@ export class NativeGeneratedClassTraits {
     constructor(plan: NativeGeneratedDeclarationPlan, scope: string, owner: string, source: string) {
         nativeGeneratedDeclarationSource(plan, scope, owner, source);
         const input = nativeGeneratedDeclarationInputs(plan, scope);
+        // Source interfaces are admitted only through this authenticated plan's
+        // exact token exports. Class references and other native facets remain held.
+        const interfaces=nativeGeneratedInterfaceBindings(plan);
+        const qualifiedAccessor=(member:{type?:TraitType;setterType?:TraitType;name:string;uri?:string}):boolean=>
+            !!member.uri || member.type==='*'&&member.setterType!==undefined
+            || typeof member.type==='object'&&interfaces.some(i=>i.tokenExport===(member.type as ReferenceType).referenceExport&&i.reflectedName===(member.type as ReferenceType).name)
+            || member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
         this.binding = nativeGeneratedClassDeclaration(plan, owner);
         if (!this.binding) fail('reference-only source cannot publish a class: ' + owner);
         const isClass = (identity: string): boolean => plan.bindings.some(item => item.qname === identity) || plan.privateBindings.some(item => item.identity === identity);
@@ -204,10 +208,11 @@ export class NativeGeneratedClassTraits {
                     if (previous) {
                         if (previous.kind !== 'accessor' || value.kind !== 'accessor' || previous.access === value.access
                             || previous.access === 'readwrite' || JSON.stringify(previous.type) !== JSON.stringify(value.type) && previous.type!=='*' && value.type!=='*'
-                            || previous.override !== value.override || previous.final !== value.final)
+                            || previous.override !== value.override && !qualifiedAccessor(previous) && !qualifiedAccessor(value) || previous.final !== value.final)
                             fail('duplicate or incompatible public declaration: ' + binding.identity + ':' + value.name);
                         previous.access = 'readwrite';
                         previous.parts=Object.assign({},previous.parts,value.parts);
+                        previous.override=previous.override||value.override;
                         Object.assign(previous,accessorTypes(previous.parts,previous.type));
                     } else list.push(value);
                 };
@@ -296,8 +301,10 @@ export class NativeGeneratedClassTraits {
                     if(member.kind==='accessor' && previous.kind==='accessor' && (parent || binding.base==='flash.display.Sprite'||binding.base==='flash.events.MouseEvent') && input.inheritScriptClasses
                         && (qualifiedAccessor(member)||qualifiedAccessor(previous)) && member.parts && previous.parts) {
                         for(const side of (['get','set'] as ('get'|'set')[]))if(member.parts[side]){
-                            if(!member.parts[side].override||!previous.parts[side]||previous.parts[side].final
-                                || JSON.stringify(member.parts[side].type===undefined?member.type:member.parts[side].type)!==JSON.stringify(previous.parts[side].type===undefined?previous.type:previous.parts[side].type))
+                            const ownHalf=member.parts[side],parentHalf=previous.parts[side];
+                            if(parentHalf ? !ownHalf.override||parentHalf.final
+                                || JSON.stringify(ownHalf.type===undefined?member.type:ownHalf.type)!==JSON.stringify(parentHalf.type===undefined?previous.type:parentHalf.type)
+                                : !parent||ownHalf.override)
                                 fail('accessor override requires matching nonfinal parent half: '+binding.identity+':'+member.name);
                         }
                         const parts=Object.assign({},previous.parts,member.parts);
