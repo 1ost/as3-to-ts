@@ -72,3 +72,4 @@ tests/native-large-declarations/** -text
 # Mixed accessor compiler receipts preserve exact fixture bytes.
 tests/native-generated-accessor-halves/** -text whitespace=cr-at-eol
 tests/native-generated-protected-getter/** -text whitespace=cr-at-eol
+tests/native-generated-array-accessors/** -text whitespace=cr-at-eol

@@ -85,7 +85,7 @@ export class NativeGeneratedClassTraits {
         const qualifiedAccessor=(member:{type?:TraitType;setterType?:TraitType;name:string;uri?:string}):boolean=>
             !!member.uri || member.type==='*'&&member.setterType!==undefined
             || typeof member.type==='object'&&interfaces.some(i=>i.tokenExport===(member.type as ReferenceType).referenceExport&&i.reflectedName===(member.type as ReferenceType).name)
-            || member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
+            || member.type==='Array'|| member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
         this.binding = nativeGeneratedClassDeclaration(plan, owner);
         if (!this.binding) fail('reference-only source cannot publish a class: ' + owner);
         const isClass = (identity: string): boolean => plan.bindings.some(item => item.qname === identity) || plan.privateBindings.some(item => item.identity === identity);
@@ -386,7 +386,7 @@ export class NativeGeneratedClassTraits {
         const methods='['+this.instanceMethods.map(method=>'{name:'+JSON.stringify(method.name)+(method.uri?',uri:'+JSON.stringify(method.uri):'')+',parameters:['+method.parameters.map(emitType).join(',')+'],returns:'+emitType(method.returns)+',requiredCount:'+method.requiredCount+',override:'+method.override+',final:'+method.final+'}').join(',')+']';
         const accessors='['+this.instanceAccessors.map(a=>{
             const halves={...(a.parts.get?{get:{override:a.parts.get.override,final:a.parts.get.final}}:{}),...(a.parts.set?{set:{override:a.parts.set.override,final:a.parts.set.final}}:{})};
-            if(!a.uri&&typeof a.type==='string'&&(a.setterType===undefined||typeof a.setterType==='string'))
+            if(!a.uri&&typeof a.type==='string'&&a.type!=='Array'&&(a.setterType===undefined||typeof a.setterType==='string'&&a.setterType!=='Array'))
                 return JSON.stringify({name:a.name,type:a.type,...(a.setterType===undefined?{}:{setterType:a.setterType}),...halves});
             return '{name:'+JSON.stringify(a.name)+(a.uri?',uri:'+JSON.stringify(a.uri):'')+',type:'+emitType(a.type)+(a.setterType===undefined?'':',setterType:'+emitType(a.setterType))+','+JSON.stringify(halves).slice(1);
         }).join(',')+']';
