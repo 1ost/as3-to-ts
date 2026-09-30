@@ -13,6 +13,11 @@ interface Trait {
 function inputPackageEnabled(plan:NativeGeneratedDeclarationPlan):boolean{return !!nativeGeneratedDeclarationInputs(plan,plan.scope).lexicalProviderModule;}
 function fail(reason: string): never {throw new Error('AS3_GENERATED_LEXICAL_UNSUPPORTED: ' + reason);}
 function packageOf(name:string):string {const split=name.lastIndexOf('.');return split<0?'':name.slice(0,split);}
+// Legacy unary +/- nodes place the operator at end, before operand start.
+// Rewritten argument and assignment boundaries must include that operator.
+function expressionStart(node:Node):number {
+    return (node.kind===K.MINUS||node.kind===K.PLUS)&&node.end<node.start?node.end:node.start;
+}
 function modifiers(node: Node): string[] {const mods=node.findChild(K.MOD_LIST);return mods ? mods.children.map(n=>n.text) : [];}
 
 /** Resolve lexical declarations while AS3 scopes still exist; runtime dispatch
@@ -65,7 +70,7 @@ export class NativeGeneratedLexical {
         return this.plan.references.some(r=>r.owner===owner&&r.start===type.start&&r.end===type.end
             &&(r.kind==='interface'||r.kind==='native'&&this.plan.nativeBindings.some(b=>b.qname===r.identity&&b.nativeInterface)));
     }
-    private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string;readonly kind:string}>>();
+    private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string;readonly kind:string;readonly type?:string|{readonly name:string};readonly access?:string}>>();
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
         this.declarations=Object.freeze(plan.bindings.map(b=>b.qname).concat(plan.privateBindings.map(b=>b.identity)).map(identity=>nativeGeneratedClassDeclaration(plan,identity)));
@@ -409,7 +414,7 @@ export class NativeGeneratedLexical {
                 emitter.catchup(node.start);
                 emitter.insert('(<any>'+this.provider+'.as3CallLexicalMember(this,'+this.provider
                     +'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(name)+',"protected",false,true),()=>[');
-                args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});
                 emitter.insert(']))');emitter.skipTo(node.end);return true;
             }
         }
@@ -453,7 +458,7 @@ export class NativeGeneratedLexical {
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;dynamicRead?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -583,7 +588,9 @@ export class NativeGeneratedLexical {
                             .filter(member=>member.kind==='variable'||member.kind==='accessor'||member.kind==='method'));
                     }
                     const member=this.foreignPublicMembers.get(identity).find(member=>member.name===name);
-                    if(member)return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method'};
+                    if(member)return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method',
+                        publicNumericUpdate:typeof member.type==='string'&&['int','uint','Number'].indexOf(member.type)>=0
+                            &&(member.kind==='variable'||member.kind==='accessor'&&member.access==='readwrite')};
                     if(receiver.kind===K.DOT&&modifiers(nativeGeneratedDeclarationNode(this.plan,identity)).indexOf('dynamic')>=0)
                         return {trait:null,receiver,publicName:name,publicMethod:false,dynamicRead:true};
                 }
@@ -610,6 +617,23 @@ export class NativeGeneratedLexical {
         else if(node.kind===K.CALL){target=node.children[0];operation='call';args=node.children[1];}
         else if([K.PRE_INC,K.POST_INC,K.PRE_DEC,K.POST_DEC].indexOf(node.kind)>=0) {
             const found=resolve(node.children[0]);if(!found)return false;
+            if(found.publicName&&found.publicNumericUpdate) {
+                const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
+                const get=unique('__as3_public_update_get'),set=unique('__as3_public_update_set');
+                emitter.ensureImportIdentifier('as3GetProperty as '+get,emitter.generated.propertyModule,false);
+                emitter.ensureImportIdentifier('as3SetProperty as '+set,emitter.generated.propertyModule,false);
+                emitter.nativeSourceHelpers.add(get);emitter.nativeSourceHelpers.add(set);
+                const delta=node.kind===K.PRE_INC||node.kind===K.POST_INC?'+1':'-1';
+                const prefix=node.kind===K.PRE_INC||node.kind===K.PRE_DEC;
+                // Capture the typed receiver once, then read, update and write
+                // through common public dispatch. A setter receives its coerced
+                // storage value; the prefix result retains Number overflow.
+                emitter.catchup(node.start);
+                emitter.insert('(<any>((target:any)=>{const previous:number=<any>'+get+'(target,'+JSON.stringify(found.publicName)+');'
+                    +'const next=previous'+delta+';'+set+'(target,'+JSON.stringify(found.publicName)+',next);return '+(prefix?'next':'previous')+';})(');
+                emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
+                emitter.insert('))');emitter.skipTo(node.end);return true;
+            }
             if(!found.trait||found.trait.kind!=='variable'||found.trait.static||['private','protected','internal'].indexOf(found.trait.visibility)<0
                 ||!found.trait.type||['int','uint','Number'].indexOf(found.trait.type.text)<0)
                 fail('lexical numeric update requires qualified instance numeric variable');
@@ -640,7 +664,7 @@ export class NativeGeneratedLexical {
                 emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
                 emitter.skipTo(inner.start);visit(emitter,inner);emitter.catchup(inner.end);
                 emitter.insert(','+JSON.stringify(target.children[1].text)+',()=>[');
-                args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});
                 emitter.insert(']))');emitter.skipTo(node.end);return true;
             }
         }
@@ -658,7 +682,7 @@ export class NativeGeneratedLexical {
                 emitter.catchup(node.start);
                 emitter.insert('(<any>(function(fn:any,values:any[]){return '+helper+'(fn,'+JSON.stringify(target.children[1].text)+',()=>values);})(');
                 emitter.skipTo(inner.start);visit(emitter,inner);emitter.catchup(inner.end);
-                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});
                 emitter.insert(']))');emitter.skipTo(node.end);return true;
             }
         }
@@ -675,7 +699,7 @@ export class NativeGeneratedLexical {
             if(operation==='call'){
                 // The typed receiver is retained before evaluating arguments;
                 // null dispatch errors follow argument effects, as in AIR.
-                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']))');
+                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']))');
             }else emitter.insert(','+JSON.stringify(found.nativeMethod)+'))');
             emitter.skipTo(node.end);return true;
         }
@@ -691,8 +715,8 @@ export class NativeGeneratedLexical {
             emitter.catchup(node.start);emitter.insert('(<any>'+this.provider+'.'+(operation==='get'?'as3GetInternalMember':operation==='call'?'as3CallInternalMember':'as3SetInternalMember')+'(');
             emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
             emitter.insert(','+this.scope+','+token+','+JSON.stringify(found.internalName));
-            if(operation==='set'){emitter.insert(',');emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);}
-            if(operation==='call'){emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');}
+            if(operation==='set'){emitter.insert(',');emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);}
+            if(operation==='call'){emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');}
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(found.publicName) {
@@ -706,7 +730,7 @@ export class NativeGeneratedLexical {
                 emitter.catchup(node.start);
                 emitter.insert('(<any>((target:any,values:any[])=>'+helper+'(target,'+JSON.stringify(found.publicName)+',()=>values))(');
                 emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
-                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});
+                emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});
                 emitter.insert(']))');emitter.skipTo(node.end);return true;
             }
             if(operation==='call'||operation==='set'&&(found.publicMethod||node.children[1].text!=='='))fail('foreign public lexical collision operation');
@@ -717,7 +741,7 @@ export class NativeGeneratedLexical {
             emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
             emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
             emitter.insert(','+JSON.stringify(found.publicName));
-            if(operation==='set'){emitter.insert(',');emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);}
+            if(operation==='set'){emitter.insert(',');emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);}
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(operation==='set'&&node.children[1].text==='-=') {
@@ -736,7 +760,7 @@ export class NativeGeneratedLexical {
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
             else emitter.insert('this');
             emitter.insert(';const '+previous+':number='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+') as number;return '+this.provider+'.as3SetLexicalMember('+receiver+','+found.trait.access+','+previous+'-'+number+'(');
-            emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);
+            emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
             emitter.insert('));})())');emitter.skipTo(node.end);return true;
         }
         if(operation==='set'&&node.children[1].text==='+=') {
@@ -755,7 +779,7 @@ export class NativeGeneratedLexical {
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
             else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):'this');
             emitter.insert(';const '+previous+':any='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+');const '+value+':any='+add+'('+previous+',');
-            emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);
+            emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
             emitter.insert(');return '+this.provider+'.as3SetLexicalMember('+receiver+','+found.trait.access+','+value+');})())');
             emitter.skipTo(node.end);return true;
         }
@@ -773,9 +797,9 @@ export class NativeGeneratedLexical {
         if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
         else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):'this');
         emitter.insert(','+found.trait.access);
-        if(operation==='set'){emitter.insert(',');emitter.skipTo(right.start);visit(emitter,right);emitter.catchup(right.end);}
+        if(operation==='set'){emitter.insert(',');emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);}
         if(operation==='call'){
-            emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');
+            emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');
             if(fieldCall&&!found.receiver)emitter.insert(','+this.scriptGlobal);
         }
         emitter.insert(operation==='set'?')':'))');emitter.skipTo(node.end);return true;

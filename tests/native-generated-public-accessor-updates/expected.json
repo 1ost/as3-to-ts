@@ -1,0 +1,232 @@
+[
+  {
+    "value": [
+      9,
+      9,
+      [
+        "get",
+        [
+          "set",
+          9
+        ]
+      ]
+    ],
+    "id": "prefix"
+  },
+  {
+    "value": [
+      8,
+      9,
+      [
+        "get",
+        [
+          "set",
+          9
+        ]
+      ]
+    ],
+    "id": "postfix"
+  },
+  {
+    "value": [
+      -9,
+      -9,
+      [
+        "get",
+        [
+          "set",
+          -9
+        ]
+      ]
+    ],
+    "id": "prefix-down"
+  },
+  {
+    "value": [
+      -8,
+      -9,
+      [
+        "get",
+        [
+          "set",
+          -9
+        ]
+      ]
+    ],
+    "id": "postfix-down"
+  },
+  {
+    "value": [
+      2147483648,
+      -2147483648,
+      [
+        "get",
+        [
+          "set",
+          -2147483648
+        ]
+      ]
+    ],
+    "id": "int-overflow"
+  },
+  {
+    "value": [
+      2147483647,
+      -2147483648,
+      [
+        "get",
+        [
+          "set",
+          -2147483648
+        ]
+      ]
+    ],
+    "id": "int-post-overflow"
+  },
+  {
+    "value": [
+      -2147483649,
+      2147483647,
+      [
+        "get",
+        [
+          "set",
+          2147483647
+        ]
+      ]
+    ],
+    "id": "int-underflow"
+  },
+  {
+    "value": [
+      4294967296,
+      0
+    ],
+    "id": "uint-overflow"
+  },
+  {
+    "value": [
+      0,
+      4294967295
+    ],
+    "id": "uint-underflow"
+  },
+  {
+    "value": [
+      4294967296,
+      0
+    ],
+    "id": "field-overflow"
+  },
+  {
+    "value": [
+      2.5,
+      2.5
+    ],
+    "id": "number"
+  },
+  {
+    "value": [
+      "-Infinity",
+      1
+    ],
+    "id": "negative-zero"
+  },
+  {
+    "value": [
+      "NaN",
+      "NaN"
+    ],
+    "id": "nan"
+  },
+  {
+    "value": [
+      "Infinity",
+      "Infinity"
+    ],
+    "id": "infinity"
+  },
+  {
+    "value": [
+      13,
+      13,
+      [
+        "get",
+        [
+          "set",
+          13
+        ]
+      ],
+      91
+    ],
+    "id": "owned"
+  },
+  {
+    "value": [
+      17,
+      17,
+      [
+        "get",
+        [
+          "set",
+          17
+        ]
+      ],
+      1
+    ],
+    "id": "singleton"
+  },
+  {
+    "value": [
+      "read",
+      20,
+      [
+        "get"
+      ]
+    ],
+    "id": "read-throw"
+  },
+  {
+    "value": [
+      "write",
+      21,
+      [
+        "get",
+        [
+          "set",
+          22
+        ]
+      ]
+    ],
+    "id": "write-throw"
+  },
+  {
+    "value": [
+      "write",
+      22,
+      [
+        "get",
+        [
+          "set",
+          23
+        ]
+      ]
+    ],
+    "id": "post-write-throw"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009
+    ],
+    "id": "null"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009,
+      1
+    ],
+    "id": "singleton-null"
+  }
+]
