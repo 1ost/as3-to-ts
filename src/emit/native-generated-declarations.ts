@@ -536,6 +536,10 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     });
     // Validate native tokens before source interfaces use them as parents.
     interfaces.forEach(addInterface);
+    // Leave compact cohorts byte-stable. Switch well below the observed
+    // compiler flow limit so ancestry/interface expressions retain headroom.
+    const boundedSelectionFlow=!!data.inheritScriptClasses&&bindings.length>=512;
+    if(boundedSelectionFlow) lines.push('function __selectGeneratedValue<T>(selection:unknown,inherited:()=>T,local:()=>T):T{return selection?inherited():local();}');
     const emitted = new Set<string>(), active = new Set<string>();
     const add = (binding: NativeGeneratedDeclarationBinding): void => {
         if (emitted.has(binding.qname)) return;
@@ -548,9 +552,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         const name = binding.qname.replace(/\.([^.]*)$/, '::$1');
         const selection = '__inherited_' + binding.tokenExport;
         if(data.inheritScriptClasses) lines.push('const '+selection+'=selectAS3ScriptDomainClass(__scriptDomain,'+JSON.stringify(name)+');');
-        lines.push('const ' + authority + '='+(data.inheritScriptClasses?selection+'?null:':'')+'declareAS3ReferenceType<unknown>(' + JSON.stringify(name)
-            + (parent ? ',' + parent.tokenExport : nativeParent ? ',' + nativeParent.declarationExport : '') + ');');
-        lines.push('export const ' + binding.tokenExport + '='+(data.inheritScriptClasses?selection+'?'+selection+'.declaration:':'') + authority + '.type;');
+        // Keep each inherited/local choice in its own flow-analysis container.
+        // Thousands of top-level conditional initializers exceed TypeScript's
+        // module control-flow limit and lose contextual types in other exports.
+        const createAuthority='declareAS3ReferenceType<unknown>(' + JSON.stringify(name)
+            + (parent ? ',' + parent.tokenExport : nativeParent ? ',' + nativeParent.declarationExport : '') + ')';
+        lines.push('const ' + authority + '='+(boundedSelectionFlow?'__selectGeneratedValue('+selection+',()=>null,()=>'+createAuthority+')':(data.inheritScriptClasses?selection+'?null:':'')+createAuthority)+';');
+        lines.push('export const ' + binding.tokenExport + '='+(boundedSelectionFlow?'__selectGeneratedValue('+selection+',()=>'+selection+'.declaration,()=>'+authority+'.type)':(data.inheritScriptClasses?selection+'?'+selection+'.declaration:':'')+authority+'.type')+';');
         const authoredSymbol = data.sources[binding.qname].authoredSymbol;
         if (authoredSymbol) {
             const tokens = binding.interfaces.map(name => {const source=interfaces.find(value => value.qname === name);return source?source.tokenExport:'native'+nativeNames.indexOf(name);});

@@ -1,0 +1,323 @@
+{
+  "sha256": "f4dff625c923dcafd54db103bd4b372a4f54a0d6a362e17958793f0da7336a8c",
+  "compilerInputs": [
+    {
+      "file": "src/classlist.ts",
+      "sha256": "64cf843c89e4c2a329e60a5e7a123cd3aab92dff6fa3beb0e959f7ed1b640c97"
+    },
+    {
+      "file": "src/command.ts",
+      "sha256": "a9cc67c4322eca2b096bb4847f11b781aeb0c174ab3a52d346ee1accedb32a69"
+    },
+    {
+      "file": "src/config.ts",
+      "sha256": "9e128ba1cc4ede2fd81c0a1895f66b91f0d297bdb1ea3df239c205d5e3513f79"
+    },
+    {
+      "file": "src/emit.ts",
+      "sha256": "58b3294ae2b8e195775b3bb133dc941911fecfb198e59190144c836120b2bf6a"
+    },
+    {
+      "file": "src/index.ts",
+      "sha256": "3f7d231b25ab7a57902e350ce603e9c0e58bcd022cc6f11a553f04cf693901ad"
+    },
+    {
+      "file": "src/optimize.ts",
+      "sha256": "03594a6c2bbfbceb5c7963bbad1214d74d4feaea26523da8d1d6f7c8dd592783"
+    },
+    {
+      "file": "src/parse.ts",
+      "sha256": "db1622e44936ad831a4233ebf4fcd4d3ca9f45974061f904f920c079ec3f8990"
+    },
+    {
+      "file": "src/string.ts",
+      "sha256": "8fa89e37b90efc5774f897ffbf863c8110723cc1d89754c3c7006892956d6284"
+    },
+    {
+      "file": "src/custom-visitors/index.ts",
+      "sha256": "ba4f0ff51bc795cdba22739f789fed4fc984110e45297c7a6c132381b8cd851e"
+    },
+    {
+      "file": "src/definitions/readline-sync.d.ts",
+      "sha256": "39fae48188f3b5b161da4479084d9aefbe41d3e9b00563c59c7b4a563cd9215c"
+    },
+    {
+      "file": "src/emit/classlist.ts",
+      "sha256": "ea79f7e1635f6dd26fe859cb6d437ed6c6bf31476117af3bcd922af12ecb56c6"
+    },
+    {
+      "file": "src/emit/emitter.ts",
+      "sha256": "f4e5ae5e1f16964b3e60cb802c0f83b1345299af589186438210aea8f6242b67"
+    },
+    {
+      "file": "src/emit/logical-assignment.ts",
+      "sha256": "26c4926eabd3c855b27633531368876ad2e9cf061fa1133dfd3192b5f7276c55"
+    },
+    {
+      "file": "src/emit/native-callable-classes.ts",
+      "sha256": "2e386d2b0f0c76f3a036a0b1a64ec3f3edf72f7c3471bd5fc960b845b9943fca"
+    },
+    {
+      "file": "src/emit/native-class-initializers.ts",
+      "sha256": "df422ef70f3845881f7547593f008a52024cf03d2bfdc1fe97d2ba0ca99d5ec9"
+    },
+    {
+      "file": "src/emit/native-class-metadata.ts",
+      "sha256": "6e6388d3e14a706eec7822a0dbadc60eed588a3c53cd04e7851936def032993e"
+    },
+    {
+      "file": "src/emit/native-declaration-plan.ts",
+      "sha256": "f860f33834abf629b2e94992b71e0996751a305aa2a7d6f31aa9504c0f31fd02"
+    },
+    {
+      "file": "src/emit/native-embedded-binary.ts",
+      "sha256": "3730f359072fc363926a90b63f35ba784bf58817c01fd35f7ace35aa2ebb4d7e"
+    },
+    {
+      "file": "src/emit/native-generated-completions.ts",
+      "sha256": "56caf27eff5b19cecd28591673124f7d5827e7a5cff6f734a38e3988f6b7273c"
+    },
+    {
+      "file": "src/emit/native-generated-declarations.ts",
+      "sha256": "a01251089a29039b99742965c53c24023b368b3b72f57027c3e82fbe3c61d5b4"
+    },
+    {
+      "file": "src/emit/native-generated-emission.ts",
+      "sha256": "b09c3e22f65e4e7299815d120db7c734e8631cf632ecd79e772d7f7985a2cd72"
+    },
+    {
+      "file": "src/emit/native-generated-interface-boundaries.ts",
+      "sha256": "215bbd442ee394cd0eeb91ddd1e30afbc2f2750de33832f8aa787b169e9ce4d3"
+    },
+    {
+      "file": "src/emit/native-generated-interface-contracts.ts",
+      "sha256": "99827c203b73b8f45d38546edf1c4570f555eabc316270a143d741f0d6489d7f"
+    },
+    {
+      "file": "src/emit/native-generated-lexical.ts",
+      "sha256": "4193ea17f8495294f804134e70a08e1783a13f608998bb8c465b028e401d5c2e"
+    },
+    {
+      "file": "src/emit/native-generated-private-declarations.ts",
+      "sha256": "f230cafb5223d7ed2c125494bfc5fa98a39be10499b1c352e26703d794dc1e58"
+    },
+    {
+      "file": "src/emit/native-generated-proxy.ts",
+      "sha256": "180afee994734e40fce6b1668b3c3fac1a9e7e123cb68a9ec4cf42b06a246e94"
+    },
+    {
+      "file": "src/emit/native-generated-traits.ts",
+      "sha256": "2280bf6791c9162bbc528750a4d57608e5790470d887cb103ef3147b24770400"
+    },
+    {
+      "file": "src/emit/native-global-modules.ts",
+      "sha256": "a9f91431e8a87dbbf3cf621fa325781f6ea6e05a06c6fbd6130ef8c36425ea1a"
+    },
+    {
+      "file": "src/emit/native-lexical-members.ts",
+      "sha256": "7966d52827fa6a0dfad06ddbe5466576cf7984e944a89643b87d2ae49d66a9eb"
+    },
+    {
+      "file": "src/emit/native-method-signatures.ts",
+      "sha256": "b1cf4dd169061f66ab740d1b68921cdcdf5fdb671fe02c563b750386bb1eb2b5"
+    },
+    {
+      "file": "src/emit/native-mouseevent-traits.ts",
+      "sha256": "be94337c80b425e339aec2b1cb3c52e252b42cf0eaed2801fb8336fa1190b312"
+    },
+    {
+      "file": "src/emit/native-movieclip-traits.ts",
+      "sha256": "c796c75b8eb2aae396bceea470e4a062153c6057f03d6cb65a3a93107d4f75f2"
+    },
+    {
+      "file": "src/emit/native-namespaces.ts",
+      "sha256": "e055a1e723cd4cba6549c68fc26eeba41eee96732ba7bf9878b2f3481295198d"
+    },
+    {
+      "file": "src/emit/native-numeric-product-constant.ts",
+      "sha256": "5e2132f76449a9db192c464f6450c783238938654a0df448dcfc1b433a8104a4"
+    },
+    {
+      "file": "src/emit/native-pattern-locals.ts",
+      "sha256": "359a7a0b6cc6ab43138a857aef51fcf9807ffe6742ac6c9787d56f6376e36faa"
+    },
+    {
+      "file": "src/emit/native-reference-coercion.ts",
+      "sha256": "e5973f664a6ac93b211ea0389d15309369baaf2f9d6606623b89defe9e10f193"
+    },
+    {
+      "file": "src/emit/native-script-constant-initializers.ts",
+      "sha256": "847325d2ba92215eaf2048fdb98ae07bd04c5e1cc99330fc859a77426a04254b"
+    },
+    {
+      "file": "src/emit/native-source-ancestry.ts",
+      "sha256": "fa2af900871ef0e1b4a3ccbe8a03273872d2ba545386f475086701bdd94530f0"
+    },
+    {
+      "file": "src/emit/native-source-class-module.ts",
+      "sha256": "e14fff8ef7b78aff245396996ea015d0c26b893161bb986a0a899bc7e3192355"
+    },
+    {
+      "file": "src/emit/native-source-namespace-module.ts",
+      "sha256": "2824176056d132381f671101a9f7e21bf19e34bc51d6b76014d1e33a25ee580d"
+    },
+    {
+      "file": "src/emit/native-source-namespaces.ts",
+      "sha256": "a45682655341776a25fd6036e699f636dfed52a25de45c2567b14cd2a0c9b7d7"
+    },
+    {
+      "file": "src/emit/native-source-operations.ts",
+      "sha256": "886e63f69c9cbe6e905a05d9c41e3b0d00ade81e0f674b6cf6c309bd1f2f1edd"
+    },
+    {
+      "file": "src/emit/native-source-type.ts",
+      "sha256": "77daf4d4832db59b0ae2d2f1b5f9cc9967b87f107785353baa02dc788d31287a"
+    },
+    {
+      "file": "src/emit/native-source-unit.ts",
+      "sha256": "ebd8a5904e6cfeec4ae2c4cf1ae2c9b8041b401843c30e90b9d8674f879ead3f"
+    },
+    {
+      "file": "src/emit/native-sprite-traits.ts",
+      "sha256": "63cf4ef8c8369c4dc5f77b8c2abb1da59f4934bae105a12f48fe6523b3f3020e"
+    },
+    {
+      "file": "src/emit/native-string-casts.ts",
+      "sha256": "0e3115878323a145532df1118ac1cb1ea2199bbe4f3a3d82d2a5aca3846a6c09"
+    },
+    {
+      "file": "src/emit/native-tween-plans.ts",
+      "sha256": "961fa63e98c56fe97ae4003eddf9d87e71ac2d0ca327ce678b0ef40c9e357d2c"
+    },
+    {
+      "file": "src/emit/native-typed-locals.ts",
+      "sha256": "47f66c068f178fbb26d8e8c7d5d51a81707dfd3f495dea90d3c27e2ab265ae62"
+    },
+    {
+      "file": "src/emit/native-typeof.ts",
+      "sha256": "101065c35d1656f69c286690cc3e3583fcef25b5cce7822b2176812f211ad4a9"
+    },
+    {
+      "file": "src/emit/native-uint-or-constants.ts",
+      "sha256": "066ed5943e55960db4b912b0df85fdf0f6acc5d916156a89687f1e116fd293fb"
+    },
+    {
+      "file": "src/emit/native-xml.ts",
+      "sha256": "076a5ca2f4adfdda89d18e5ee976af833d7779464fe0c2e9d4775b74bbcea6c5"
+    },
+    {
+      "file": "src/parse/index.ts",
+      "sha256": "f972d56348c8b1c2b718e7322595c4980cb7d05f56bed6ae8cc958ae5db8e611"
+    },
+    {
+      "file": "src/parse/parse-common.ts",
+      "sha256": "1af75b9967bac6ab36efa964f2303549ee05cf450cd8bac577f9b7c2fd622aaa"
+    },
+    {
+      "file": "src/parse/parse-declarations.ts",
+      "sha256": "ae080788bf704b72914207810f766f2546e3c231337ca1a065b6f8d1ecf7ea09"
+    },
+    {
+      "file": "src/parse/parse-expressions.ts",
+      "sha256": "c6698d444bf06eccc856e89b56a1e65bd53f7d81a9aa99973ca6f40c29d4a64b"
+    },
+    {
+      "file": "src/parse/parse-literals.ts",
+      "sha256": "e4188dc18d0d249da70d7985fd3c8b065773467222b97addf99cdbea9989f013"
+    },
+    {
+      "file": "src/parse/parse-statements.ts",
+      "sha256": "e597956e14801a0b5b008bb1027d558ecae23da620eabbca18dcb54f877c328f"
+    },
+    {
+      "file": "src/parse/parse-types.ts",
+      "sha256": "f8a2b191c1b06ac9701e7b998530e05d551039401a1853a9bdd9bef86153b030"
+    },
+    {
+      "file": "src/parse/parser.ts",
+      "sha256": "a0e5f7ec123d59f5862f96842b9d833a6b93c0b6c8703b20890e6321927c9620"
+    },
+    {
+      "file": "src/parse/scanner.ts",
+      "sha256": "92fd92b4364e4af593dea964505e33f5629dcdcaed8c4d5a1043e0adfc7dc12c"
+    },
+    {
+      "file": "src/parse/source-file.ts",
+      "sha256": "71c69993f3f19112a057682ce6c8c74f74e10e34e70de8aa0cbb10512e85f430"
+    },
+    {
+      "file": "src/parse/token.ts",
+      "sha256": "3d8adb7a5b46552d241f4a69529ffdb54179363bba8c64030b8cfe871b825748"
+    },
+    {
+      "file": "src/reports/report-flags.ts",
+      "sha256": "1bc0fee89cac72c3b057e496f7d17d832c4622f10dfac18b723ef4e6f439f54a"
+    },
+    {
+      "file": "src/syntax/keywords.ts",
+      "sha256": "b16ec5d51c3d5147395c63ee1f5ef6b49a06d5d555019715a18db96013eba3ac"
+    },
+    {
+      "file": "src/syntax/node.ts",
+      "sha256": "47632add4cca700d9dccd24ccede92e0f44d7cf109491da04a3b49adc0423dc2"
+    },
+    {
+      "file": "src/syntax/nodeKind.ts",
+      "sha256": "ec29d2e135337104e8be94e266ffb52589ec8a6dca14fbcf8fba5ccc59fead49"
+    },
+    {
+      "file": "src/syntax/operators.ts",
+      "sha256": "4929d6a655608411792f139ae44dfb9c9a41f7097e0ee628e14a28f367f68179"
+    },
+    {
+      "file": "src/tool/lock.ts",
+      "sha256": "7f6dc71b455f60267cda6e90b50fae5071b82ed13fc1ac00b20336565815273d"
+    },
+    {
+      "file": "src/custom-visitors/createjs/index.ts",
+      "sha256": "c0f71efb5bab32f79a5fde0fe711bb9b43590143a5af0226f745096673fbc245"
+    },
+    {
+      "file": "src/custom-visitors/dictionary/index.ts",
+      "sha256": "8f912b0f1163c9aa1afc529c237f62c708d75d142638a8580b3c34effc486598"
+    },
+    {
+      "file": "src/custom-visitors/flash-errors/index.ts",
+      "sha256": "1d496eae9943314f63a8fb7ca754349a81738f5d04d131febe76215708e28684"
+    },
+    {
+      "file": "src/custom-visitors/gettimer/index.ts",
+      "sha256": "e895427c6ea0621472aae665aff422334a9b59cd5c23bb24b60bef1ce4a0c587"
+    },
+    {
+      "file": "src/custom-visitors/imports/index.ts",
+      "sha256": "7458a6ae16b7ee5a62feef9bc8591b6fc80c8af3df42c7d067e49f18ccad21bc"
+    },
+    {
+      "file": "src/custom-visitors/imports_toplevel/index.ts",
+      "sha256": "226479054ac44fdaee1da2e67b1541910174543fcc0b17ad0b30f07e907c86e9"
+    },
+    {
+      "file": "src/custom-visitors/signals/index.ts",
+      "sha256": "b8b576894a8bd2ddd9aea6c0db4e6bc1a767108efbb2935101a17ac383a32b4f"
+    },
+    {
+      "file": "src/custom-visitors/stringutil/index.ts",
+      "sha256": "5bf05ec4f633d1376ebf7e5932394d71bdc33bad17cf39cd54c96c6fc5b079d6"
+    },
+    {
+      "file": "src/custom-visitors/trace/index.ts",
+      "sha256": "e50e63d8962bb2f546d36a96c9d5961c9eac0f430d78277494c623218d60d44d"
+    },
+    {
+      "file": "src/custom-visitors/types/index.ts",
+      "sha256": "bf8f9d78917c9cdcfafcdf0285116b02312a4323e32292bd747ec0d3bb88112a"
+    },
+    {
+      "file": "src/custom-visitors/xml/index.ts",
+      "sha256": "88e7c39a2f494fa139c59a20dede2e7c0602d359b91bccbfcb8f205a4d70aa47"
+    }
+  ],
+  "baselineCommit": "161810596b2c9578644ae70225f05a29f31792c5",
+  "engineCommit": "7a29e6ba5a92a3b03674f182d29f6f6e40f7b3ee"
+}
