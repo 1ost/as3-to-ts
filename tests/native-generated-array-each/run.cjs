@@ -3,10 +3,10 @@ const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOS
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const evidence=__dirname,expected=require(path.join(evidence,'verify.cjs'));
-const cache=path.resolve('.cache/native-generated-primitive-each');fs.mkdirSync(cache,{recursive:true});
+const cache=path.resolve('.cache/native-generated-array-each');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
-const cohorts={subject:read('source',['PrimitiveEachProbe'])};
+const cohorts={subject:read('source',['ArrayEachProbe'])};
 async function main(){
  const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
  const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader']}),results=[];
@@ -22,11 +22,12 @@ async function main(){
   const sourceError=modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts'));
   const modules=['AS3GeneratedClass','AS3ScriptGlobal','AS3Type','AS3Class','AS3Invocation','AS3LexicalMembers','AS3Property','AS3MethodBinding','AS3Coercion','AS3String','AS3Addition','AS3ArrayCreation','AS3Vector','Dictionary','AS3CanonicalErrorConstruction','NativeSourceClassLoadingSession'];
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
-   const nativeProviders={Error:{module:provider('AS3CanonicalErrorConstruction'),exportName:'Error',nativeBase:'Error'}};
-   const input={providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),scope:'primitive-each-'+cohort,sources,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true};
+   const nativeProviders={'flash.events.EventDispatcher':{module:provider('AS3CanonicalEventDispatcherConstruction'),exportName:'EventDispatcher',nativeBase:'EventDispatcher'},Error:{module:provider('AS3CanonicalErrorConstruction'),exportName:'Error',nativeBase:'Error'}};
+   externalModules.push(provider("AS3CanonicalEventDispatcherConstruction"));
+   const input={providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),scope:'array-each-'+cohort,sources,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true};
    const plan=api.createNativeGeneratedDeclarationPlan(input);
-   const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
-   const options={customVisitors:[],definitionsByNamespace,nativeVectorTypes:{plan,module:'./__native_declarations'},nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},importModules:{Error:provider('AS3CanonicalErrorConstruction'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
+   const definitionsByNamespace={};for(const q of [...Object.keys(sources),...Object.keys(nativeProviders)]){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
+   const options={customVisitors:[],definitionsByNamespace,nativeVectorTypes:{plan,module:'./__native_declarations'},nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},importModules:{'flash.events.EventDispatcher':provider('AS3CanonicalEventDispatcherConstruction'),Error:provider('AS3CanonicalErrorConstruction'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
     decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
     nativeClassTraitsModule:provider('AS3GeneratedClass'),nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
     nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
@@ -40,13 +41,13 @@ async function main(){
    let guards=0;
    assert.throws(()=>api.emitNativeSourceClassModule({...config,emitterOptions:{...options,nativeEnumeration:undefined}}),/explicit common enumeration providers/);guards++;
    assert.throws(()=>api.emitNativeSourceClassModule({...config,emitterOptions:{...options,nativeTypedLocalReferenceModule:undefined}}),/AS3_[A-Z_]+UNSUPPORTED/);guards++;
-   for(const [before,after] of [['var signed:int=17','var signed:Missing=17'],['public function snapshot():Object','public function snapshot(signed:int):Object'],['var signed:int=17','var signed:Function=null'],['for each(signed in sparse)seen.push(signed);','try {throw 1;} catch(signed:*) {for each(signed in sparse)seen.push(signed);}']]){
-    const original=sources.PrimitiveEachProbe.source,source=original.replace(before,after);assert.notEqual(source,original);
-    const changed=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,PrimitiveEachProbe:{source,sourceSha256:hash(source)}}});
+   for(const [before,after] of [['value:Array=[9]','value:Missing=null'],['public function snapshot():Object','public function snapshot(value:Array):Object'],['value:Array=[9]','value:Function=null'],['for each(value in sparse){seen.push(value===b?"b":"a");value.push(3);}','try {throw 1;} catch(value:*) {for each(value in sparse){seen.push(value===b?"b":"a");value.push(3);}}']]){
+    const original=sources.ArrayEachProbe.source,source=original.replace(before,after);assert.notEqual(source,original);
+    const changed=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,ArrayEachProbe:{source,sourceSha256:hash(source)}}});
     assert.throws(()=>api.emitNativeSourceClassModule({...config,plan:changed,emitterOptions:{...options,nativeVectorTypes:{...options.nativeVectorTypes,plan:changed},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:changed}}}),/AS3_[A-Z_]+UNSUPPORTED/);guards++;
    }
    assert.equal(guards,6);
-   const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;assert.ok(!artifact.generatedSources.some(item=>item.source.includes('__$nflvObject')),'Number loops must use common enumeration authority');
+   const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;assert.ok(!artifact.generatedSources.some(item=>item.source.includes('__$nflvObject')),'Array loops require common enumeration');
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);
    const files=[];
    for(const item of artifact.generatedSources){const file=path.join(dir,item.module+'.ts');fs.writeFileSync(file,item.source);files.push(file);}
@@ -63,22 +64,21 @@ async function main(){
   fs.writeFileSync(path.join(dir,'observer.ts'),observer);
   const entry=path.join(dir,'entry.ts');fs.writeFileSync(entry,"import {run} from './observer';import {nativeSourceClassModule as subject} from './subject/subject-factory.js';globalThis.completion=run(subject).then(value=>{globalThis.result=value;return value;});");
 
-  const built=await esbuild.build({entryPoints:[entry],bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',metafile:true});
+  const built=await esbuild.build({entryPoints:[entry],bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',metafile:true,loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'}});
   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(dir,'bundle.js'),code);
   const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e)));
   await page.route('http://loaded-generated.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script></body>'}));
   await page.goto('http://loaded-generated.test/');await page.evaluate(()=>globalThis.completion);const web=await page.evaluate(()=>globalThis.result);await page.close();assert.deepEqual(errors,[]);assert.deepEqual(web.rows,expected);
   const nodeEntry=path.join(dir,'node-entry.ts');fs.writeFileSync(nodeEntry,"import {run} from './observer';import {nativeSourceClassModule as subject} from './subject/subject-factory.js';export const completion=run(subject);");
-  await esbuild.build({entryPoints:[nodeEntry],outfile:path.join(dir,'node.cjs'),bundle:true,format:'cjs',platform:'node',target:'es2020'});
+  await esbuild.build({entryPoints:[nodeEntry],outfile:path.join(dir,'node.cjs'),bundle:true,format:'cjs',platform:'node',target:'es2020',loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'}});
   const node=await require(path.join(dir,'node.cjs')).completion;assert.deepEqual(node,web);
   let mutations=0;const controls=[];
-  for(const [before,after]of [
-   ['__as3_callable_localCoercion.as3CoerceInt(__as3_callable_typedRaw)','__as3_callable_typedRaw'],
-   ['__as3_callable_localCoercion.as3CoerceUint(__as3_callable_typedRaw)','__as3_callable_typedRaw'],
-   ['!!__as3_callable_typedRaw','__as3_callable_typedRaw']]){
-   const changed=code.replaceAll(before,after);assert.ok(changed!==code,'Mutation absent: '+before);
-   const actual=await new Function(changed+';return globalThis.completion;')();
-   assert.ok(actual&&Array.isArray(actual.rows),"Applied control must produce a complete observation trace");assert.notDeepEqual(actual.rows,expected);controls.push({before,after,actual});mutations++;
+  const coercion=/__as3_callable_localReference\.as3CoerceReference\(__as3_callable_typedRaw,\s*[\w.]+\.array\)/g;
+  for(const mode of ['skip-coercion','copy-array']){
+   const changed=code.replace(coercion,expression=>mode==='skip-coercion'?'__as3_callable_typedRaw':'(function(value){return value===null?null:value.slice();})('+expression+')');assert.notEqual(changed,code,mode);
+   const actual=await new Function(changed+';return globalThis.completion;')();assert.notDeepEqual(actual.rows,expected,mode);
+   const controlPage=await browser.newPage();await controlPage.route('http://array-control.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:changed}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><script src="/bundle.js"></script>'}));
+   await controlPage.goto('http://array-control.test/');await controlPage.evaluate(()=>globalThis.completion);const browserActual=await controlPage.evaluate(()=>globalThis.result);await controlPage.close();assert.deepEqual(browserActual,actual);controls.push({mode,node:actual,web:browserActual});mutations++;
   }
   results.push({target,web,node,typechecks,artifacts,rejectionGuards:6,mutations,controls,bundleInputs:Object.keys(built.metafile.inputs).map(file=>({file:path.resolve(file),sha256:hash(fs.readFileSync(file))}))});
   console.log(JSON.stringify({target,observations:web.rows.length,typeErrors:0}));

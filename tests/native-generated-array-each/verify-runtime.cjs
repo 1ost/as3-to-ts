@@ -6,12 +6,10 @@ for(const item of report.compilerInputs)assert.equal(hash(fs.readFileSync(path.j
 for(const [q,source]of Object.entries(report.cohorts.subject))assert.equal(hash(fs.readFileSync(path.join(__dirname,'source',q.replaceAll('.','/')+'.as'))),source.sourceSha256);
 assert.deepEqual(report.results.map(r=>r.target),['ES5','ES2015']);
 for(const result of report.results){
- assert.deepEqual(result.web.rows,expected);assert.deepEqual(result.node,result.web);assert.equal(result.mutations,3);assert.equal(result.rejectionGuards,6);
- assert.equal(result.controls.length,3);for(const c of result.controls){assert.ok(c.actual&&Array.isArray(c.actual.rows));assert.notDeepEqual(c.actual.rows,expected);}
+ assert.deepEqual(result.web.rows,expected);assert.deepEqual(result.node,result.web);assert.equal(result.mutations,2);assert.equal(result.rejectionGuards,6);
+ assert.equal(result.controls.length,2);for(const c of result.controls){assert.deepEqual(c.node,c.web);assert.ok(Array.isArray(c.node.rows));assert.notDeepEqual(c.node.rows,expected);}
  for(const check of result.typechecks){assert.equal(check.guards,6);assert.deepEqual(check.diagnostics,[]);}
  assert.equal(result.artifacts.subject.generatedSources.length,2);assert(result.artifacts.subject.generatedSources.every(s=>!s.source.includes('__$nflvObject')));
  if(process.argv.includes('--check-current'))for(const input of [...result.bundleInputs,...result.typechecks.flatMap(c=>c.inputs)])assert.equal(hash(fs.readFileSync(input.file)),input.sha256,input.file);
 }
-console.log(JSON.stringify({airRows:15,targets:2,realms:2,typeErrors:0,guardsPerTarget:6,mutationsPerTarget:3}));
-
-const historical=fs.readFileSync(path.join(__dirname,'runtime-before-control-fix.json.gz'));assert.equal(hash(historical),require('./runtime-before-control-fix-pin.json').sha256);const old=JSON.parse(zlib.gunzipSync(historical));assert.equal(old.runnerSha256,hash(fs.readFileSync(path.join(__dirname,'runner-before-control-fix.cjs'))));
+console.log(JSON.stringify({airRows:12,targets:2,realms:2,typeErrors:0,guardsPerTarget:6,mutationsPerTarget:2}));

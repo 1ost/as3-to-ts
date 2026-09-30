@@ -28,3 +28,5 @@ loops. Retain a passing report using `retain.cjs REPORT`; verify its archived
 sources, generated artifacts, implementation hashes and comparisons using
 `verify-runtime.cjs --check-current`. This does not qualify complete managers or
 the full startup flow. Predeclared Array/Function iterator storage remains held.
+
+The Array-each follow-up admits predeclared Array targets separately. This runner now guards Function targets instead. Its deliberate-failure checks now require a complete returned trace before comparing observations; previously an undefined callback result could satisfy assert.throws. The earlier runner and runtime packet are preserved as runner-before-control-fix.cjs and runtime-before-control-fix*. Their mutation counts are historical and do not prove those controls detected value mismatches. The refreshed primary report retains the complete differing control traces.
