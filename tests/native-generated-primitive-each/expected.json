@@ -1,0 +1,164 @@
+[
+  {
+    "value": [
+      [
+        3,
+        0,
+        0,
+        1,
+        0,
+        0,
+        -2,
+        0,
+        0,
+        1,
+        -2147483648
+      ],
+      -2147483648
+    ],
+    "id": "int-coercion"
+  },
+  {
+    "value": [
+      [
+        3,
+        0,
+        0,
+        1,
+        0,
+        0,
+        4294967294,
+        0,
+        0,
+        1,
+        2147483648
+      ],
+      2147483648
+    ],
+    "id": "uint-coercion"
+  },
+  {
+    "value": [
+      [
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      true
+    ],
+    "id": "boolean-coercion"
+  },
+  {
+    "value": [
+      23,
+      24,
+      true
+    ],
+    "id": "empty-preserves"
+  },
+  {
+    "value": [
+      23,
+      24,
+      true
+    ],
+    "id": "null-preserves"
+  },
+  {
+    "value": [
+      23,
+      24,
+      true
+    ],
+    "id": "undefined-preserves"
+  },
+  {
+    "value": [
+      9,
+      4,
+      1
+    ],
+    "id": "receiver-once"
+  },
+  {
+    "value": [
+      5,
+      3
+    ],
+    "id": "break-continue"
+  },
+  {
+    "value": [
+      4294967295,
+      "body"
+    ],
+    "id": "throw-preserves"
+  },
+  {
+    "value": [
+      6
+    ],
+    "id": "sparse"
+  },
+  {
+    "value": [
+      [
+        9,
+        4294967293
+      ],
+      4294967293
+    ],
+    "id": "vector"
+  },
+  {
+    "value": [
+      0,
+      0,
+      false
+    ],
+    "id": "defaults"
+  },
+  {
+    "value": "Infinity",
+    "id": "signed-zero"
+  },
+  {
+    "value": "Infinity",
+    "id": "unsigned-zero"
+  },
+  {
+    "value": [
+      [
+        [
+          1,
+          4294967295
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          4294967295
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      2,
+      3
+    ],
+    "id": "nested"
+  }
+]

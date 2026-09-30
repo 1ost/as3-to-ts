@@ -1,0 +1,25 @@
+{
+  "actual_uncompressed_length": 5398,
+  "compression": "zlib",
+  "declared_uncompressed_length": 5398,
+  "frame_count": 1,
+  "frame_rate": 24.0,
+  "length_matches_header": true,
+  "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-primitive-each-review\\tests\\native-generated-primitive-each\\evidence\\oracle.swf",
+  "schema": "swf-header@1",
+  "sha256": "70fd3e02a2a18d4ff2715496b1813b42f8b26241c5c7b7855a7d5570b0af652d",
+  "signature": "CWS",
+  "stage": {
+    "height": 375.0,
+    "width": 500.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "stage_twips": {
+    "xmax": 10000,
+    "xmin": 0,
+    "ymax": 7500,
+    "ymin": 0
+  },
+  "swf_version": 51
+}

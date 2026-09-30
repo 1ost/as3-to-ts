@@ -11,9 +11,10 @@ scalar conversion, empty/null/undefined receivers, receiver evaluation once,
 break/continue, body exceptions, sparse arrays, Vector, negative zero, and actual
 MathUtil sum/avg calls. ES5 and ES2015 match in Chromium and Node with no type
 errors. Six guards retain provider authority, foreign-type rejection, parameter
-redeclaration rejection, int iterator exclusion and catch-shadow rejection.
-This change only admits predeclared Number locals; other types need their own
-evidence. The full OP2 loading flow remains unqualified.
+redeclaration rejection, Array iterator exclusion and catch-shadow rejection.
+Predeclared int/uint/Boolean locals now have separate evidence in
+native-generated-primitive-each; the former int exclusion guard has been replaced
+with the still-held Array case. The full OP2 loading flow remains unqualified.
 
 Run `npm run tsc`, then `node tests/native-generated-number-each/run.cjs`.
 `verify.cjs` authenticates original captures and `verify-runtime.cjs` checks the
