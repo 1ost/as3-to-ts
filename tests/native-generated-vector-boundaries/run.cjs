@@ -42,7 +42,7 @@ for(const body of [
  'public const queue:Vector.<IOrder> = null;',
  'internal var queue:Vector.<IOrder>;',
  'public function call(v:Vector.<IOrder>=null):void {}',
- 'public function Guard(v:Vector.<IOrder>) {}',
+ 'public function Guard(v:Vector.<IOrder>=1) {}',
  'public function call():Vector.<IOrder>{return Vector.<IOrder>(null,null);}',
  'public function call():Vector.<IOrder>{return new Vector.<IOrder>(0,false,true);}',
  'public function call(v:*):Vector.<IOrder>{return new Vector.<IOrder>(v);}',

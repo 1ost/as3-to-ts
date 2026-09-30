@@ -18,7 +18,7 @@ import {NativeGeneratedEmission} from './native-generated-emission';
 export interface NativeCallableClassOptions { [qname: string]: string; }
 interface SourceClass {
     qname: string; name: string; base: string; fields: {name: string; value: string}[];
-    parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}}[]; usesArguments: boolean; rest?: string;
+    parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}; vector?: {identity:string; name:string; specExport:string}}[]; usesArguments: boolean; rest?: string;
     instanceMembers: {name: string; method: boolean}[];
 }
 // These native entry protocols have AIR-qualified zero-argument construction.
@@ -178,7 +178,7 @@ export class NativeCallableClasses {
                 if(calls!==1&&!(calls===0&&implicitNativeBase(base)))
                     this.fail('native base requires one explicit source base call');
             }
-            const parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}}[] = [];
+            const parameters: {name: string; type: string; optional: boolean; defaultLiteral?: string; reference?: {identity:string; exported:string}; vector?: {identity:string; name:string; specExport:string}}[] = [];
             let usesArguments = false, rest: string;
             if (constructor) {
                 constructor.findChild(K.PARAMETER_LIST).children.forEach((parameter,index,list) => {
@@ -188,7 +188,9 @@ export class NativeCallableClasses {
                         rest=spread.text;return;
                     }
                     const value = parameter.findChild(K.NAME_TYPE_INIT), type = value.findChild(K.TYPE);
-                    if(value.findChild(K.VECTOR))this.fail('vector constructor parameter coercion requires authority');
+                    const vectorNode=value.findChild(K.VECTOR);
+                    const vector=vectorNode&&generated&&generated.options.plan.vectors.find(v=>v.owner===qname&&v.start===vectorNode.start&&v.end===vectorNode.end);
+                    if(vectorNode&&!vector)this.fail('vector constructor parameter coercion requires authenticated specialization');
                     const sourceReference=generated&&type&&generated.options.plan.references.find(ref=>ref.owner===qname&&ref.start===type.start&&ref.end===type.end);
                     const sourceDeclaration=sourceReference&&((sourceReference.kind==='declaration'||sourceReference.kind==='private-declaration')
                         ?{qname:sourceReference.identity,tokenExport:nativeGeneratedClassDeclaration(generated.options.plan,sourceReference.identity).tokenExport}
@@ -213,9 +215,9 @@ export class NativeCallableClasses {
                         &&generated.options.plan.nativeBindings.find(binding=>binding.qname===sourceReference.identity);
                     const reference=sourceDeclaration?{identity:sourceDeclaration.qname,exported:sourceDeclaration.tokenExport}
                         :nativeReference?{identity:nativeReference.qname,exported:nativeReference.referenceExport}:undefined;
-                    const sourceType = reference ? reference.identity : nativeSourceTypeIdentity(type, qname, imports);
+                    const sourceType = vector ? vector.identity : reference ? reference.identity : nativeSourceTypeIdentity(type, qname, imports);
                     const selfReference = !!metadata && sourceType === qname;
-                    if (!selfReference && !reference && !(generated&&['Function','Array'].indexOf(sourceType)>=0) && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
+                    if (!selfReference && !reference && !vector && !(generated&&['Function','Array'].indexOf(sourceType)>=0) && ['Number', 'int', 'uint', 'Boolean', 'Object', '*', 'String'].indexOf(sourceType) < 0)
                         this.fail('constructor parameter coercion needs common provider authority: ' + (type && type.text || '*') + ' (' + sourceType + ')');
                     if (sourceType === 'String' && (typeof stringModule !== 'string' || !stringModule.trim()
                         || /[\r\n\u0000]/.test(stringModule)))
@@ -227,7 +229,7 @@ export class NativeCallableClasses {
                     const init = value.findChild(K.INIT);
                     if(generated&&['Function','Array'].indexOf(sourceType)>=0&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
                         this.fail(sourceType+' constructor default requires literal null');
-                    if(reference&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
+                    if((reference||vector)&&init&&!(init.children[0].kind===K.IDENTIFIER&&init.children[0].text==='null'))
                         this.fail('source reference constructor default requires literal null');
                     if (selfReference && (!init || init.children[0].kind !== K.IDENTIFIER || init.children[0].text !== 'null'))
                         this.fail('self-reference constructor parameter requires an optional null default');
@@ -264,7 +266,7 @@ export class NativeCallableClasses {
                                 || numeric > (sourceType === 'int' ? 2147483647 : 4294967295))))
                             this.fail('numeric constructor default requires finite source literal authority');
                     }
-                    parameters.push({name:value.findChild(K.NAME).text, type:sourceType, optional:!!init, defaultLiteral, reference});
+                    parameters.push({name:value.findChild(K.NAME).text, type:sourceType, optional:!!init, defaultLiteral, reference, vector});
                 });
                 const scanArguments = (node: Node): void => {
                     if (node.kind === K.FUNCTION || node.kind === K.LAMBDA) {
@@ -888,7 +890,9 @@ export class NativeCallableClasses {
             + ') {throw ' + arityFailure + ';}\n';
         const coercions = this.own.parameters.map((parameter, index) => {
             const value = parameter.name;
-            const conversion = parameter.reference
+            const conversion = parameter.vector
+                ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(parameter.vector.name)+',vector:'+domainImport+'.'+parameter.vector.specExport+'})'
+                : parameter.reference
                 ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:'+JSON.stringify(parameter.reference.identity.replace(/\.([^.]*)$/,'::$1'))+',reference:'+domainImport+'.'+parameter.reference.exported+'})'
                 : this.generated && parameter.type==='Array' ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',{name:"Array",reference:'+intrinsic+'.array})'
                 : this.generated && parameter.type==='Function' ? '<any>'+generatedProperty+'.coerceAS3PropertyValue('+value+',"Function")'
