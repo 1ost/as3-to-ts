@@ -50,6 +50,15 @@ export class NativeGeneratedLexical {
         const parameters=member.findChild(K.PARAMETER_LIST).children,returned=member.findChild(K.TYPE);
         if(!returned||['Boolean','void'].indexOf(returned.text)<0)return false;
         if(parameters.length===0)return returned.text==='void';
+        // Value parameters retain the ordinary native signature coercion and
+        // arity checks. Resolve exact type spans so a source Class named Object
+        // cannot be mistaken for the intrinsic Object parameter contract.
+        if(returned.text==='void'&&parameters.every(parameter=>{
+            const value=parameter.findChild(K.NAME_TYPE_INIT),type=value&&value.findChild(K.TYPE);
+            return !!type&&!value.findChild(K.INIT)&&!parameter.findChild(K.REST)
+                &&this.plan.references.some(r=>r.owner===owner&&r.start===type.start&&r.end===type.end
+                    &&r.kind==='intrinsic'&&['Object','int'].indexOf(r.identity)>=0);
+        }))return true;
         if(parameters.length!==1)return false;
         const value=parameters[0].findChild(K.NAME_TYPE_INIT),type=value&&value.findChild(K.TYPE);
         if(!type||value.findChild(K.INIT)||parameters[0].findChild(K.REST))return false;
@@ -93,7 +102,7 @@ export class NativeGeneratedLexical {
                 if(inherited&&isStatic&&(!constant&&!inheritedPrimitives||name!==this.declarations.find(b=>b.identity===owner).base))fail('inherited static lexical ownership');
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
-                    fail('internal instance method requires zero parameters and void return or one authenticated interface parameter and Boolean/void return');
+                    fail('internal instance method requires required Object/int parameters and void return or one authenticated interface parameter and Boolean/void return');
                 const internalGetter=visibility==='internal'&&!isStatic&&member.kind===K.GET
                     &&member.findChild(K.TYPE)&&member.findChild(K.TYPE).text==='Boolean'
                     &&member.findChild(K.PARAMETER_LIST).children.length===0;

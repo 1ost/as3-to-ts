@@ -1,0 +1,13 @@
+Loading configuration: C:\Users\admin\Desktop\AIRSDK\AIRSDK_51.3.4\frameworks\air-config.xml
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-internal-values-review\tests\native-generated-internal-values\evidence\source\InternalValueProbe.as:16
+Warning: Illogical comparison with undefined.  Only untyped variables (or variables of type *) can be undefined.
+   fn(undefined);add("undefined-object",[h.last===null,h.last===undefined,h.calls]);
+                                                       ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-internal-values-review\tests\native-generated-internal-values\evidence\source\valuecases\Holder.as:10
+Warning: Illogical comparison with undefined.  Only untyped variables (or variables of type *) can be undefined.
+  internal function take(input:Object):void{calls++;if(input===undefined)calls+=1000;last=input;}
+                                                      ^
+
+5121 bytes written to C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-internal-values-review\tests\native-generated-internal-values\evidence\oracle.swf in 1.263 seconds

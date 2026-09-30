@@ -1,0 +1,237 @@
+[
+  {
+    "value": [
+      2,
+      true
+    ],
+    "id": "object-identity"
+  },
+  {
+    "value": [
+      true,
+      true,
+      1,
+      true,
+      true,
+      3
+    ],
+    "id": "closure"
+  },
+  {
+    "value": [
+      true,
+      4
+    ],
+    "id": "null-object"
+  },
+  {
+    "value": [
+      true,
+      false,
+      5
+    ],
+    "id": "undefined-object"
+  },
+  {
+    "value": [
+      true,
+      6
+    ],
+    "id": "number-object"
+  },
+  {
+    "value": [
+      true,
+      7
+    ],
+    "id": "string-object"
+  },
+  {
+    "value": [
+      true,
+      8
+    ],
+    "id": "boolean-object"
+  },
+  {
+    "value": [
+      true,
+      9
+    ],
+    "id": "array-object"
+  },
+  {
+    "value": [
+      "ArgumentError",
+      1063,
+      9
+    ],
+    "id": "missing-one"
+  },
+  {
+    "value": [
+      "ArgumentError",
+      1063,
+      9
+    ],
+    "id": "extra-one"
+  },
+  {
+    "value": [
+      3,
+      true,
+      true,
+      true,
+      10
+    ],
+    "id": "triple"
+  },
+  {
+    "value": [
+      "ArgumentError",
+      1063,
+      10
+    ],
+    "id": "missing-three"
+  },
+  {
+    "value": [
+      "ArgumentError",
+      1063,
+      10
+    ],
+    "id": "extra-three"
+  },
+  {
+    "value": [
+      "abc",
+      "a",
+      "b",
+      "c",
+      11
+    ],
+    "id": "ordered"
+  },
+  {
+    "value": [
+      "abcxyz",
+      "x",
+      "y",
+      "z",
+      12
+    ],
+    "id": "dynamic-ordered"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009,
+      "abcxyzabc"
+    ],
+    "id": "null-typed"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009,
+      "abcxyzabc"
+    ],
+    "id": "null-dynamic"
+  },
+  {
+    "value": [
+      1,
+      13
+    ],
+    "id": "int-wrap"
+  },
+  {
+    "value": [
+      -3,
+      14
+    ],
+    "id": "int-truncate"
+  },
+  {
+    "value": [
+      12,
+      15
+    ],
+    "id": "int-string"
+  },
+  {
+    "value": [
+      0,
+      16
+    ],
+    "id": "int-nan"
+  },
+  {
+    "value": [
+      0,
+      17
+    ],
+    "id": "int-undefined"
+  },
+  {
+    "value": [
+      2,
+      true,
+      2,
+      18
+    ],
+    "id": "mixed"
+  },
+  {
+    "value": [
+      20,
+      true,
+      true
+    ],
+    "id": "override"
+  },
+  {
+    "value": [
+      1,
+      2,
+      true,
+      false
+    ],
+    "id": "separate-package"
+  },
+  {
+    "value": [
+      "ReferenceError",
+      1069
+    ],
+    "id": "outside"
+  },
+  {
+    "value": [
+      "ReferenceError",
+      1037
+    ],
+    "id": "method-write"
+  },
+  {
+    "value": [
+      false,
+      true
+    ],
+    "id": "delete"
+  },
+  {
+    "value": [
+      0,
+      0
+    ],
+    "id": "reflection"
+  },
+  {
+    "value": [
+      false,
+      18
+    ],
+    "id": "fresh"
+  }
+]
