@@ -65,3 +65,5 @@ src/emit/emitter.ts text eol=lf
 
 src/emit/native-typed-locals.ts text eol=lf
 src/emit/native-generated-lexical.ts text eol=lf
+
+tests/native-generated-source-namespaces/evidence/*.gz -text

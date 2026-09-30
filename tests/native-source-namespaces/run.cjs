@@ -74,7 +74,7 @@ bad('a.bad', 'package a {public namespace bad="urn:one";} class Helper {}');
 bad('a.Box', 'package a {public namespace Box="urn:collision"; public class Box {}}');
 reject(() => declarations.nativeGeneratedClassDeclaration(plan, 'updatecases.slot'));
 reject(() => declarations.nativeGeneratedDeclarationNode(plan, 'updatecases.slot'));
-reject(() => api.emitNativeSourceClassModule({plan}), /source namespace value publication requires qualification/);
+reject(() => api.emitNativeSourceClassModule({plan}), /mixed source namespace value publication requires qualification/);
 reject(() => api.createNativeGeneratedDeclarationPlan({scope:'bad', providerModule:'./provider', sources:{'mixed.Box':sources['mixed.Box']}, providers:{'mixed.same':{module:'./provider',exportName:'same'}}}));
 reject(() => api.createNativeGeneratedDeclarationPlan({scope:'bad', providerModule:'./provider', sources:{'mixed.Box':{...sources['mixed.Box'],referenceOnly:true}}}));
 const inherited = 'package updatecases {public class Invalid extends slot {}}';
@@ -88,4 +88,4 @@ const normalize = node => {node.children = node.children.filter(Boolean); node.c
 const storage = parsed.findChild(K.PACKAGE).findChild(K.CONTENT);
 assert.equal(storage.findChild(K.VAR_LIST).findChild(K.NAME_TYPE_INIT).findChild(K.NAME).text, 'kept');
 assert.equal(storage.findChild(K.CONST_LIST).findChild(K.NAME_TYPE_INIT).findChild(K.NAME).text, 'fixed');
-console.log(JSON.stringify({qualification:'source namespace identity/alias planning; runtime value publication remains held',authenticatedExistingAIRRows:rows.length,plannedNamespaces:plan.namespaces.length,guards}));
+console.log(JSON.stringify({qualification:'source namespace identity/alias planning; mixed source-unit value publication remains held; standalone publication has a separate generated test',authenticatedExistingAIRRows:rows.length,plannedNamespaces:plan.namespaces.length,guards}));

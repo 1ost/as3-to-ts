@@ -3,6 +3,7 @@ import parse = require('../parse');
 import {emit, EmitterOptions} from './emitter';
 import {NativeGeneratedDeclarationPlan, nativeGeneratedDeclarationInputs, nativeGeneratedClassDeclaration, nativeGeneratedInterfaceBindings, nativeGeneratedSourceUnit} from './native-generated-declarations';
 import {NativeTweenSourcePlans} from './native-tween-plans';
+import {emitNativeSourceNamespaceModule} from './native-source-namespace-module';
 
 export interface NativeSourceClassModuleInput {
     plan: NativeGeneratedDeclarationPlan;
@@ -10,6 +11,8 @@ export interface NativeSourceClassModuleInput {
     /** Exact code-owned imports, resolved by the consumer's build, never by basename. */
     externalModules: ReadonlyArray<string>;
     loadingSessionModule: string;
+    /** Explicit shared runtime provider for standalone source namespace values. */
+    sourceNamespaceProviderModule?: string;
     target: 'ES5' | 'ES2015';
     /** Exact per-source call plans, never shared across unrelated module bodies. */
     tweenSourcePlans?:{[qname:string]:NativeTweenSourcePlans};
@@ -45,10 +48,11 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         movie={width,height,sourceSha256};
     }
     const plan = input.plan, planned = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
-    if (plan.namespaces.length) fail('source namespace value publication requires qualification');
+    if (plan.namespaces.some(binding => binding.sourceOwner !== binding.qname))
+        fail('mixed source namespace value publication requires qualification');
     if (!planned.inheritScriptClasses || !planned.scriptDomainProvider || !planned.scriptGlobalProviderModule
-        || !(plan.bindings.length + plan.interfaces.length) || plan.bindings.some(b => !b.scriptGlobalExport)
-        || Object.keys(planned.sources).length !== plan.bindings.length + plan.interfaces.length
+        || !(plan.bindings.length + plan.interfaces.length + plan.namespaces.length) || plan.bindings.some(b => !b.scriptGlobalExport)
+        || Object.keys(planned.sources).length !== plan.bindings.length + plan.interfaces.length + plan.namespaces.length
         || Object.keys(planned.sources).some(q => planned.sources[q].referenceOnly))
         fail('complete inherited script Class cohort required');
     if (input.target !== 'ES5' && input.target !== 'ES2015') fail('target');
@@ -61,18 +65,23 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
         fail('unique explicit external modules required');
     const external = input.externalModules.map(specifier);
     const session = specifier(input.loadingSessionModule), helper = specifier(options.nativeClassHelperModules.nativeClass);
+    const namespaces = './__native_namespaces';
+    const namespaceProvider = plan.namespaces.length ? specifier(input.sourceNamespaceProviderModule) : undefined;
+    if (namespaceProvider && (external.indexOf(namespaceProvider) < 0 || external.indexOf(planned.scriptGlobalProviderModule) < 0))
+        fail('source namespace and script providers must be explicit external modules');
     if (external.indexOf(session) < 0 || external.indexOf(helper) < 0) fail('session and native Class helpers must be explicit external modules');
     const domain = planned.scriptDomainProvider, declarations = './__native_declarations';
     const classes = plan.bindings.map(b=>b.qname).concat(plan.privateBindings.map(b=>b.identity)).map(identity=>nativeGeneratedClassDeclaration(plan,identity));
     const classModules = classes.map((b, i) => './__native_class_' + i);
     const interfaces = nativeGeneratedInterfaceBindings(plan);
     const interfaceModules = interfaces.map((b, i) => './__native_interface_' + i);
-    const local = [domain.module, declarations].concat(classModules, interfaceModules);
+    const local = [domain.module, declarations].concat(classModules, interfaceModules, namespaceProvider ? [namespaces] : []);
     if (new Set(local).size !== local.length || external.some(m => local.indexOf(m) >= 0)) fail('local/external module collision');
     const imports = {...options.importModules};
     classes.forEach((b, i) => {imports[b.identity] = classModules[i];});
     interfaces.forEach((b, i) => {imports[b.qname] = interfaceModules[i];});
     const generated = [{module: declarations, source: plan.moduleSource}];
+    if (namespaceProvider) generated.push({module:namespaces,source:emitNativeSourceNamespaceModule(plan,namespaceProvider)});
     if(input.tweenSourcePlans){
         if(options.nativeTweenSourcePlans)fail('per-source and global tween plans conflict');
         Object.keys(input.tweenSourcePlans).forEach(q=>{
@@ -183,7 +192,7 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
             + JSON.stringify(b.qname.split('.').pop()) + '],"value")}')
             .concat(plan.interfaces.map(b => '    {name:'+JSON.stringify(b.qname)+',declaration:headers['+JSON.stringify(b.tokenExport)
                 +'],resolve:()=>headers['+JSON.stringify(b.tokenExport)+']}')).join(',\n'),
-        '  ];', '}',
+        '  ]'+(namespaceProvider?'.concat(load('+JSON.stringify(namespaces)+').namespaceBindings)':'')+';', '}',
         'export const nativeSourceClassModule = ' + providerName(session) + '.createNativeSourceClassModule(async () => bindNativeSourceClasses'+(movie?','+JSON.stringify(movie):'')+');');
     return Object.freeze({moduleSource: lines.join('\n') + '\n',
         declarationSource: 'import {NativeSourceClassFactory, NativeSourceClassModule} from ' + JSON.stringify(session) + ';\n'
