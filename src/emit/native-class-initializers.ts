@@ -68,7 +68,9 @@ export class NativeClassInitializers {
                 const ns=generated && node.kind===NodeKind.USE && generatedProxyNamespace(generated.options.plan,identity);
                 const accessNs=generated&&node.kind===NodeKind.NAMESPACE_ACCESS
                     &&generated.options.plan.nativeBindings.some(b=>b.qname==='flash.utils.Proxy'&&!!b.nativeBaseExport)
-                    &&new NativeNamespaces(root,source,undefined,true);
+                    // Proxy availability must not discard the source namespace
+                    // identities already authenticated by the emitter.
+                    &&(namespaces||new NativeNamespaces(root,source,undefined,true));
                 const access=accessNs&&accessNs.access(node);
                 const call=access&&node.parent;
                 const directHook=access&&access.uri===generatedProxyUri&&!!generatedProxySignatures[access.name]

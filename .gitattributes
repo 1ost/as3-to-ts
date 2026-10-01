@@ -74,3 +74,5 @@ tests/native-generated-accessor-halves/** -text whitespace=cr-at-eol
 tests/native-generated-protected-getter/** -text whitespace=cr-at-eol
 tests/native-generated-array-accessors/** -text whitespace=cr-at-eol
 tests/native-generated-namespaced-initializer/** -text whitespace=cr-at-eol
+
+tests/native-generated-namespace-proxy-isolation/** -text whitespace=cr-at-eol
