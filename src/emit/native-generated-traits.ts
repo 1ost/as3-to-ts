@@ -248,6 +248,10 @@ export class NativeGeneratedClassTraits {
                         if(returns && node.kind===K.TYPE && node.text==='void')return 'void';
                         const ref=plan.references.find(r=>r.owner===binding.identity && r.start===node.start && r.end===node.end);
                         if(ref && (ref.kind==='declaration'||ref.kind==='private-declaration'||ref.kind==='interface'))return type(binding.identity,node);
+                        // Compare the authenticated native token, just as for source
+                        // declarations. Entry and return lowering still require their
+                        // own native coercion capabilities; a signature grants neither.
+                        if(ref && ref.kind==='native' && plan.nativeBindings.some(binding=>binding.qname===ref.identity))return type(binding.identity,node);
                         return ref && ref.kind==='intrinsic' && ['*','Object','int','uint','Number','Boolean','String','Function'].indexOf(ref.identity)>=0
                             ? ref.identity : undefined;
                     };

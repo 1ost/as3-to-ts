@@ -427,7 +427,8 @@ export class NativeCallableClasses {
                 if(this.generated) {
                     const ref=type&&this.generated.options.plan.references.find(r=>r.owner===owner.qname&&r.start===type.start&&r.end===type.end);
                     const qualified=ref&&(ref.kind==='intrinsic'&&['*','int','uint','Number','Boolean','String','Object'].indexOf(ref.identity)>=0
-                        ||ref.kind==='declaration'||ref.kind==='private-declaration'||ref.kind==='interface');
+                        ||ref.kind==='declaration'||ref.kind==='private-declaration'||ref.kind==='interface'
+                        ||ref.kind==='native'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===ref.identity));
                     if(!qualified)this.fail('generated super signature requires qualified parameters');
                     const init=declaration.findChild(K.INIT);
                     if(init){validateOptionalDefault(owner.qname,type,init);optional=true;}
