@@ -1,0 +1,37 @@
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+import {createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {as3GetProperty as get,as3SetProperty as set} from '@FLASH@/utils/AS3Property';
+import {as3CallValue} from '@FLASH@/utils/AS3Invocation';
+import {as3ConstructClass} from '@FLASH@/utils/AS3Class';
+import {SpaceJustifier,EastAsianJustifier} from '@FLASH@/utils/AS3CanonicalTextJustifierReference';
+import {getQualifiedClassName as name} from '@FLASH@/utils/getQualifiedClassName';
+import {run as native} from '@JUSTIFIER_OBSERVER@';
+export async function run(module){
+ const domain=new ApplicationDomain(ApplicationDomain.currentDomain),session=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:1});await session.load('justifiers',domain);
+ const subject=as3ConstructClass(domain.getDefinition('justifiercases.JustifierChild'),[]);
+ const call=(method,args=[])=>as3CallValue(get(subject,method),()=>args);
+ const engine=native(),rows=[...engine.rows];
+ const observe=(id,fn)=>{try{rows.push({id,value:fn()});}catch(e){rows.push({id,value:{error:[e.name,e.errorID]}});}};
+ const s=new SpaceJustifier(),e=new EastAsianJustifier();
+ observe('generated-defaults',()=>[get(subject,'stored')===null,get(subject,'space')===null,get(subject,'east')===null]);
+ observe('generated-space',()=>[call('select',[s])===s,get(subject,'stored')===s,call('selectSpace',[s])===s,get(subject,'space')===s]);
+ observe('generated-east',()=>[call('select',[e])===e,get(subject,'stored')===e,call('selectEast',[e])===e,get(subject,'east')===e]);
+ observe('generated-null',()=>[call('select',[null])===null,get(subject,'stored')===null]);
+ observe('generated-undefined',()=>[call('select',[undefined])===null,get(subject,'stored')===null]);
+ observe('generated-invalid',()=>call('select',[{}]));
+ observe('generated-invalid-space',()=>call('selectSpace',[e]));
+ observe('generated-invalid-east',()=>call('selectEast',[s]));
+ observe('generated-after-invalid',()=>[get(subject,'stored')===null,get(subject,'space')===s,get(subject,'east')===e]);
+ observe('generated-field',()=>{set(subject,'stored',s);return get(subject,'stored')===s;});
+ observe('generated-field-invalid',()=>{set(subject,'stored',{});return true;});
+ observe('generated-field-retained',()=>get(subject,'stored')===s);
+ observe('generated-field-undefined',()=>{set(subject,'stored',undefined);return get(subject,'stored')===null;});
+ observe('generated-field-space-invalid',()=>{set(subject,'space',e);return true;});
+ observe('generated-field-east-invalid',()=>{set(subject,'east',s);return true;});
+ observe('generated-field-concrete-retained',()=>[get(subject,'space')===s,get(subject,'east')===e]);
+ observe('generated-make-space',()=>{const v=call('makeSpace');return [name(v),get(v,'locale'),get(v,'lineJustification'),get(v,'letterSpacing'),get(v,'minimumSpacing'),get(v,'optimumSpacing'),get(v,'maximumSpacing')];});
+ observe('generated-make-east',()=>{const v=call('makeEast');return [name(v),get(v,'locale'),get(v,'lineJustification'),get(v,'justificationStyle'),get(v,'composeTrailingIdeographicSpaces')];});
+ for(const locale of ['ja','JA','en','zh','ko'])observe('generated-factory-'+locale,()=>{const v=call('factory',[locale]);return [name(v),get(v,'locale'),get(v,'lineJustification')];});
+ [s,e,null,{}].forEach((value,i)=>observe('generated-types-'+i,()=>[call('isBase',[value]),call('isSpace',[value]),call('isEast',[value]),call('asBase',[value])===value,call('asSpace',[value])===null,call('asEast',[value])===null]));
+ return {rows,guards:engine.guards};
+}

@@ -182,6 +182,8 @@ export interface EmitterOptions {
     nativeTabStopReferenceModule?: string;
     /** Canonical FontMetrics reference provider for generated typed returns. */
     nativeFontMetricsReferenceModule?: string;
+    /** Canonical FTE justifier values/references; TextBlock layout remains separate. */
+    nativeTextJustifierReferenceModule?: string;
     /** Canonical FTE ContentElement family references; no layout admission. */
     nativeContentElementReferenceModule?: string;
     nativeDisplayObjectReferenceModule?: string;
@@ -580,6 +582,20 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules['flash.text.engine.FontMetrics']!==module)
                 throw new Error('AS3_FONT_METRICS_REFERENCE_UNSUPPORTED: exact native FontMetrics provider binding required');
         }
+        if (this.options.nativeTextJustifierReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeTextJustifierReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_TEXT_JUSTIFIER_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const types=['TextJustifier','SpaceJustifier','EastAsianJustifier'].filter(type=>inputs.providers&&inputs.providers['flash.text.engine.'+type]);
+            if(!types.length)throw new Error('AS3_TEXT_JUSTIFIER_REFERENCE_UNSUPPORTED: native justifier provider required');
+            for(const type of types){
+                const name='flash.text.engine.'+type,provider=inputs.providers[name];
+                if(provider.exportName!==type||provider.nativeBase||provider.nativeInterface
+                    ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                    ||!this.options.importModules||this.options.importModules[name]!==module)
+                    throw new Error('AS3_TEXT_JUSTIFIER_REFERENCE_UNSUPPORTED: exact native justifier provider binding required');
+            }
+        }
         if (this.options.nativeContentElementReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeContentElementReferenceModule),reference=this.options.nativeReferenceCoercion;
             if(!this.generated||!reference)throw new Error('AS3_CONTENT_ELEMENT_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
@@ -679,7 +695,7 @@ export default class Emitter {
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
                 this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
                 this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : [],
-                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.generated ? this.generated.projection.binding.identity : undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeErrorEventSubtypeReferenceModule!==undefined);
+                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.generated ? this.generated.projection.binding.identity : undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeErrorEventSubtypeReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -920,7 +936,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeFontMetricsReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeFontMetricsReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations(this.generated&&this.generated.options.plan.namespaceKeys?(uri,name,key)=>{
                 const binding=this.generated.options.plan.namespaceKeys.find(k=>k.uri===uri&&k.name===name);
                 if(!binding){if(uri===generatedProxyUri)return 'const '+key+'=globalThis.Symbol.for('+JSON.stringify('as3.namespace.member@1:'+JSON.stringify([uri,name]))+');\n';this.namespaces.fail('generated namespace key is absent from source plan');}
@@ -5166,6 +5182,23 @@ function emitRelation(emitter:Emitter, node:Node):void {
         if(!method)throw new Error('AS3_BYTEARRAY_REFERENCE_UNSUPPORTED: class initializer type operation held');
         const operation=node.children[1].text;
         let helper='__as3_bytearray_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
+        emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,generatedModule(emitter.options.nativeComputedTypeTestModule),false);
+        emitter.nativeSourceHelpers.add(helper);
+        emitter.catchup(node.start);emitter.insert(helper+'(');
+        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+        emitter.insert(',');emitter.skipTo(target.start);visitNode(emitter,target);
+        emitter.catchup(target.end);emitter.insert(')');emitter.skipTo(node.end);return;
+    }
+    if(emitter.options.nativeTextJustifierReferenceModule!==undefined&&emitter.references&&node.children.length===3
+        &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
+        &&['TextJustifier','SpaceJustifier','EastAsianJustifier'].some(name=>emitter.references.resolve(node.lastChild.text)==='flash.text.engine.'+name)) {
+        const target=node.lastChild,definition=emitter.findDefInScope(target.text);
+        if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
+            throw new Error('AS3_TEXT_JUSTIFIER_REFERENCE_UNSUPPORTED: shadowed target requires separate Class authority');
+        let method=node.parent;while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
+        if(!method)throw new Error('AS3_TEXT_JUSTIFIER_REFERENCE_UNSUPPORTED: class initializer type operation held');
+        const operation=node.children[1].text;
+        let helper='__as3_justifier_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
         emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,generatedModule(emitter.options.nativeComputedTypeTestModule),false);
         emitter.nativeSourceHelpers.add(helper);
         emitter.catchup(node.start);emitter.insert(helper+'(');

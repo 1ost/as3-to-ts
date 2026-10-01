@@ -96,3 +96,6 @@ tests/native-generated-string-accessors/** -text whitespace=cr-at-eol
 tests/native-generated-wildcard-setters/** -text whitespace=cr-at-eol
 
 tests/native-generated-font-metrics/** -text whitespace=cr-at-eol
+
+tests/native-generated-justifiers/** -text whitespace=cr-at-eol
+src/emit/native-reference-coercion.ts -text
