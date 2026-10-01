@@ -645,8 +645,24 @@ export class NativeGeneratedLexical {
                 // this class declares an internal/private namesake.
                 if(receiver.text!=='this'&&binding&&!binding.bound&&(binding.as3Type==='Object'
                     ||binding.as3Type==='*'&&inputPackageEnabled(this.plan)))return null;
+                // The declaring class can select its own private capability on
+                // a descendant-typed local. Authenticate the complete source
+                // ancestry; a namesake private member in the child is distinct.
+                let privateDescendant=false;
+                if(binding&&!binding.bound&&identities.length===1
+                    &&references.every(r=>r.kind==='declaration'||r.kind==='private-declaration')
+                    &&this.own.some(t=>t.name===name&&!t.static&&t.visibility==='private')) {
+                    const visited=new Set<string>();
+                    for(let current=identities[0];current&&!visited.has(current);) {
+                        visited.add(current);
+                        const declaration=this.declarations.find(b=>b.identity===current);
+                        if(!declaration||!this.classSource(current)||this.classSource(current).referenceOnly)break;
+                        if(current===this.owner){privateDescendant=true;break;}
+                        current=declaration.base;
+                    }
+                }
                 if(receiver.text===this.ownClass.findChild(K.NAME).text&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type')))isStatic=true;
-                else if(receiver.text!=='this'&&(!binding||[this.owner,this.ownClass.findChild(K.NAME).text].indexOf(binding.as3Type)<0))fail('lexical receiver requires exact source type');
+                else if(receiver.text!=='this'&&!privateDescendant&&(!binding||[this.owner,this.ownClass.findChild(K.NAME).text].indexOf(binding.as3Type)<0))fail('lexical receiver requires exact source type');
             } else isStatic=staticContext||!this.traits.some(t=>t.name===name&&!t.static);
             const trait=this.traits.find(t=>t.name===name&&t.static===isStatic);
             if(!trait)fail('lexical static/instance ownership');
