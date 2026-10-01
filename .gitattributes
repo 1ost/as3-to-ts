@@ -90,3 +90,5 @@ tests/native-generated-error-event-construction/** -text whitespace=cr-at-eol
 tests/native-generated-native-signatures/** -text whitespace=cr-at-eol
 
 tests/native-generated-rest-signatures/** -text whitespace=cr-at-eol
+
+tests/native-generated-string-accessors/** -text whitespace=cr-at-eol

@@ -85,7 +85,7 @@ export class NativeGeneratedClassTraits {
         const qualifiedAccessor=(member:{type?:TraitType;setterType?:TraitType;name:string;uri?:string}):boolean=>
             !!member.uri || member.type==='*'&&member.setterType!==undefined
             || typeof member.type==='object'&&interfaces.some(i=>i.tokenExport===(member.type as ReferenceType).referenceExport&&i.reflectedName===(member.type as ReferenceType).name)
-            || member.type==='Array'|| member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
+            || member.type==='Array'|| member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='String'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
         this.binding = nativeGeneratedClassDeclaration(plan, owner);
         if (!this.binding) fail('reference-only source cannot publish a class: ' + owner);
         const isClass = (identity: string): boolean => plan.bindings.some(item => item.qname === identity) || plan.privateBindings.some(item => item.identity === identity);
