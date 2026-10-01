@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('fs'),path=require('path'),assert=require('assert/strict'),z=require('zlib');
+const {sources,frozen,hash}=require('./compile.cjs');
+const read=f=>fs.readFileSync(path.join(__dirname,f)),pin=JSON.parse(read('runtime-pin.json')),bytes=read('runtime.json.gz');assert.equal(hash(bytes),pin.sha256);
+const report=JSON.parse(z.gunzipSync(bytes));assert.equal(report.engineCommit,'84e111889ef029e31f1f7a83ecc903d74989114b');assert.equal(report.receiptSha256,hash(frozen('evidence/receipt.json')));assert.deepEqual(report.sources,sources);assert.equal(report.startupQualified,false);
+const expected=['xml-child-method','xml-list-return'].flatMap(family=>{const receipt=JSON.parse(frozen('evidence/receipt.json',family)),b=frozen('evidence/run-1/capture.json',family);assert.equal(hash(b),receipt.artifacts['run-1/capture.json']);assert.deepEqual(b,frozen('evidence/run-2/capture.json',family));return JSON.parse(b).state.observations;});assert.equal(expected.length,27);
+for(const item of report.runnerInputs)assert.equal(hash(read(item.file)),item.sha256);
+assert.deepEqual(report.runs.map(r=>r.target),['ES5','ES2015']);
+for(const run of report.runs){assert.deepEqual(run.node,expected);assert.deepEqual(run.web,expected);assert.deepEqual(run.typecheck.diagnostics,[]);assert.equal(run.artifact.generatedSources.length,3);assert.deepEqual(run.artifact.sourceHashes,Object.fromEntries(Object.entries(sources).map(([q,s])=>[q,s.sourceSha256])));assert.equal(run.guards.length,11);for(const g of run.guards)assert.match(g.error,/AS3_[A-Z_]+UNSUPPORTED/);assert.deepEqual(run.controls.map(c=>c.name),['native-xml','native-callable-classes']);assert.match(run.controls[0].error,/XML method-name child selection/);assert.match(run.controls[1].error,/generated native return type requires separate qualification/);}
+if(process.argv.includes('--check-current'))for(const item of [...report.compilerInputs,...report.runs.flatMap(r=>[...r.inputs,...r.typecheck.inputs])])assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
+console.log(JSON.stringify({status:'passed',rows:27,targets:2,realms:2,guards:11,compilerControls:2,current:process.argv.includes('--check-current')}));

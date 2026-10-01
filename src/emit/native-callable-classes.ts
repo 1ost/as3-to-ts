@@ -831,7 +831,7 @@ export class NativeCallableClasses {
                         &&!(this.textFormatReference&&reference.identity==='flash.text.TextFormat')
                         &&!(this.accessibilityReference&&reference.identity==='flash.accessibility.AccessibilityImplementation')
                         &&!(this.spriteValueReferences&&nativeSpriteValueReferenceNames.indexOf(reference.identity)>=0)
-                        &&!(this.xmlReferences&&reference.identity==='XML')
+                        &&!(this.xmlReferences&&['XML','XMLList'].indexOf(reference.identity)>=0)
                         &&!(this.loaderReferences&&nativeLoaderReferenceNames.indexOf(reference.identity)>=0)
                         &&!(this.spriteOwnerReferences&&nativeSpriteOwnerReferenceNames.indexOf(reference.identity)>=0)
                         &&!(this.interactiveReference&&reference.identity==='flash.display.InteractiveObject')

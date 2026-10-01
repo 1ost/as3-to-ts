@@ -20,6 +20,7 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     const type=(value:Node):string=>{
         value=unwrapEncapsulatedExpression(value);
         if(!value||!e.generated||!e.references)return null;
+        if(childSelection(value))return 'XMLList';
         if(value.kind===K.DOT&&value.children[1].kind===K.LITERAL
             &&/^@?[A-Za-z_$][A-Za-z0-9_$]*$/.test(value.children[1].text)&&type(value.children[0]))return 'XMLList';
         let identity:string=null;
@@ -53,6 +54,15 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     const helper=(name:string):string=>{
         let alias='__as3_xml_'+name;while(e.source.indexOf(alias)>=0)alias+='_';
         e.ensureImportIdentifier(name+' as '+alias,module,false);e.nativeSourceHelpers.add(alias);return alias;
+    };
+    const childSelection=(value:Node):{receiver:Node;name:string}|null=>{
+        value=unwrapEncapsulatedExpression(value);
+        if(!value||value.kind!==K.CALL||value.children[0].kind!==K.DOT
+            ||value.children[0].children[1].text!=='child'||!type(value.children[0].children[0]))return null;
+        const args=value.findChild(K.ARGUMENTS).children;
+        if(args.length!==1||args[0].kind!==K.LITERAL||!/^(["'])[A-Za-z_$][A-Za-z0-9_$]*\1$/.test(args[0].text))
+            fail('XML child method requires one unqualified literal name');
+        return {receiver:value.children[0].children[0],name:args[0].text.slice(1,-1)};
     };
     const attribute=(value:Node):{receiver:Node;name:string}|null=>{
         if(value&&value.kind===K.DOT&&value.children[1]
@@ -95,21 +105,35 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     };
     if(n.kind===K.FOREACH){
         const iterable=n.children[1].children[0],children=call(iterable,'children');
-        const selected=children&&type(children)==='XML'?{receiver:children,names:null}:selection(iterable);
+        const child=childSelection(iterable);
+        const selected=child?{receiver:child.receiver,names:null}:children&&type(children)==='XML'?{receiver:children,names:null}:selection(iterable);
         if(!selected)return false;
-        const target=n.children[0],binding=e.findDefInScope(target.text);
-        if(target.kind!==K.NAME||!binding||binding.bound||e.references.resolve(binding.as3Type)!=='XML')
-            fail('XML enumeration requires an existing XML local');
+        const target=n.children[0],inline=child&&target.kind===K.VAR&&target.children.length===1
+            &&target.children[0].kind===K.NAME_TYPE_INIT&&!target.children[0].findChild(K.INIT)?target.children[0]:null;
+        const targetName=inline?inline.findChild(K.NAME).text:target.text;
+        if(inline){
+            const annotation=inline.findChild(K.TYPE);
+            if(!annotation||e.references.resolve(annotation.qualifiedName||annotation.text)!=='XML')
+                fail('XML child enumeration requires an XML local');
+            e.declareInScope({name:targetName,as3Type:'XML'});
+        }
+        const binding=e.findDefInScope(targetName);
+        if(!inline&&target.kind!==K.NAME||!binding||binding.bound||e.references.resolve(binding.as3Type)!=='XML')
+            fail('XML enumeration requires an existing XML local or qualified child-loop declaration');
         let temporary='__as3_xml_item';while(e.source.indexOf(temporary)>=0)temporary+='_';
         e.declareInScope({name:temporary});
         e.catchup(n.start);e.insert('{');
         if(e.pendingStatementLabel){e.insert(e.pendingStatementLabel+': ');e.pendingStatementLabel=null;}
-        e.insert('for(var '+temporary+' of '+helper(selected.names?'as3XMLDescendantsNamed':'as3XMLChildren')+'(');
+        e.insert('for(var '+temporary+' of '+helper(child?'as3XMLChildNamed':selected.names?'as3XMLDescendantsNamed':'as3XMLChildren')+'(');
         e.skipTo(selected.receiver.start);visit(e,selected.receiver);e.catchup(selected.receiver.end);
-        e.insert((selected.names?', '+JSON.stringify(selected.names):'')+')){'+(e.getIdentifierRemap(target.text)||target.text)+'='+temporary+';');
+        // ES5 for-of lowering indexes arrays; a native XMLList is iterable but
+        // does not expose numeric JS properties. Preserve its selected node list.
+        e.insert((child?', '+JSON.stringify(child.name):selected.names?', '+JSON.stringify(selected.names):'')+')'+(child?'.toArray()':'')+'){'+(e.getIdentifierRemap(targetName)||targetName)+'='+temporary+';');
         const body=n.children[2];e.skipTo(body.start);visit(e,body);e.catchup(body.end);e.insert('}}');e.skipTo(n.end);return true;
     }
     if(n.kind===K.E4X_FILTER){selection(n);fail('XML filtered list escape requires separate qualification');}
+    const selectedChild=childSelection(n);
+    if(selectedChild){emit(n,selectedChild.receiver,'as3XMLChildNamed',JSON.stringify(selectedChild.name));return true;}
     if(n.kind===K.NEW){
         const target=n.children[0]&&n.children[0].kind===K.CALL?n.children[0].children[0]:n.children[0];
         const global=target&&e.nativeGlobals.resolve(target);
@@ -164,12 +188,12 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
             fail('XML child mutation or invocation requires separate qualification');
         emit(n,n.children[0],'as3XMLChildNamed',JSON.stringify(n.children[1].text));return true;
     }
-    if(n.kind===K.TYPEOF&&attribute(n.children[0])){emit(n,n.children[0],'as3TypeOf');return true;}
+    if(n.kind===K.TYPEOF&&(attribute(n.children[0])||childSelection(n.children[0]))){emit(n,n.children[0],'as3TypeOf');return true;}
     const stringReceiver=call(n,'toString'),lengthReceiver=call(n,'length');
     const localNameReceiver=call(n,'localName');
     if(localNameReceiver&&type(localNameReceiver)==='XML'){emit(n,localNameReceiver,'as3XMLLocalName');return true;}
     if(stringReceiver&&type(stringReceiver)==='XML'){emit(n,stringReceiver,'as3XMLNodeString');return true;}
-    const selectedList=(value:Node):boolean=>!!attribute(value)
+    const selectedList=(value:Node):boolean=>!!childSelection(value)||!!attribute(value)
         ||unwrapEncapsulatedExpression(value).kind===K.DOT&&type(value)==='XMLList';
     if(stringReceiver&&selectedList(stringReceiver)){emit(n,stringReceiver,'as3XMLListString');return true;}
     if(lengthReceiver&&selectedList(lengthReceiver)){emit(n,lengthReceiver,'as3XMLListLength');return true;}
