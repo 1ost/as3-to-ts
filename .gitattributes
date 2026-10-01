@@ -82,3 +82,4 @@ tests/native-generated-namespace-internal-isolation/** -text whitespace=cr-at-eo
 tests/native-generated-descendant-private-receiver/** -text whitespace=cr-at-eol
 
 tests/native-generated-negative-optional-default/** -text whitespace=cr-at-eol
+tests/native-generated-error-event-references/** -text whitespace=cr-at-eol
