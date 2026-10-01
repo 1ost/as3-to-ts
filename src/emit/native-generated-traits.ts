@@ -83,7 +83,7 @@ export class NativeGeneratedClassTraits {
         // exact token exports. Class references and other native facets remain held.
         const interfaces=nativeGeneratedInterfaceBindings(plan);
         const qualifiedAccessor=(member:{type?:TraitType;setterType?:TraitType;name:string;uri?:string}):boolean=>
-            !!member.uri || member.type==='*'&&member.setterType!==undefined
+            !!member.uri || member.type==='*'
             || typeof member.type==='object'&&interfaces.some(i=>i.tokenExport===(member.type as ReferenceType).referenceExport&&i.reflectedName===(member.type as ReferenceType).name)
             || member.type==='Array'|| member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='String'||member.type==='Number'&&['x','y'].indexOf(member.name)>=0;
         this.binding = nativeGeneratedClassDeclaration(plan, owner);
@@ -279,7 +279,7 @@ export class NativeGeneratedClassTraits {
                 } else {
                     if (params.length !== 1 || params[0].findChild(K.REST)) fail('setter parameter count/rest');
                     const value = params[0].findChild(K.NAME_TYPE_INIT), result = member.findChild(K.TYPE);
-                    if (value.findChild(K.INIT) || result && result.text !== 'void') fail('setter signature');
+                    if (value.findChild(K.INIT) || result && ['void','*'].indexOf(result.text)<0) fail('setter signature');
                     valueType = type(binding.identity,storageType(value));
                 }
                 // Accessors use the same exact planned specialization as fields.
