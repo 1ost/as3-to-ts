@@ -94,3 +94,5 @@ tests/native-generated-rest-signatures/** -text whitespace=cr-at-eol
 tests/native-generated-string-accessors/** -text whitespace=cr-at-eol
 
 tests/native-generated-wildcard-setters/** -text whitespace=cr-at-eol
+
+tests/native-generated-font-metrics/** -text whitespace=cr-at-eol

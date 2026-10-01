@@ -180,6 +180,8 @@ export interface EmitterOptions {
     nativeSimpleButtonReferenceModule?: string;
     /** Canonical Flash Text Engine TabStop references. */
     nativeTabStopReferenceModule?: string;
+    /** Canonical FontMetrics reference provider for generated typed returns. */
+    nativeFontMetricsReferenceModule?: string;
     /** Canonical FTE ContentElement family references; no layout admission. */
     nativeContentElementReferenceModule?: string;
     nativeDisplayObjectReferenceModule?: string;
@@ -568,6 +570,16 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules['flash.text.engine.TabStop']!==module)
                 throw new Error('AS3_TABSTOP_REFERENCE_UNSUPPORTED: exact native TabStop provider binding required');
         }
+        if (this.options.nativeFontMetricsReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeFontMetricsReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_FONT_METRICS_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const provider=inputs.providers&&inputs.providers['flash.text.engine.FontMetrics'];
+            if(!provider||provider.exportName!=='FontMetrics'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                ||!this.options.importModules||this.options.importModules['flash.text.engine.FontMetrics']!==module)
+                throw new Error('AS3_FONT_METRICS_REFERENCE_UNSUPPORTED: exact native FontMetrics provider binding required');
+        }
         if (this.options.nativeContentElementReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeContentElementReferenceModule),reference=this.options.nativeReferenceCoercion;
             if(!this.generated||!reference)throw new Error('AS3_CONTENT_ELEMENT_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
@@ -908,7 +920,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeFontMetricsReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations(this.generated&&this.generated.options.plan.namespaceKeys?(uri,name,key)=>{
                 const binding=this.generated.options.plan.namespaceKeys.find(k=>k.uri===uri&&k.name===name);
                 if(!binding){if(uri===generatedProxyUri)return 'const '+key+'=globalThis.Symbol.for('+JSON.stringify('as3.namespace.member@1:'+JSON.stringify([uri,name]))+');\n';this.namespaces.fail('generated namespace key is absent from source plan');}
