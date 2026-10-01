@@ -80,3 +80,5 @@ tests/native-generated-namespace-proxy-isolation/** -text whitespace=cr-at-eol
 tests/native-generated-namespace-internal-isolation/** -text whitespace=cr-at-eol
 
 tests/native-generated-descendant-private-receiver/** -text whitespace=cr-at-eol
+
+tests/native-generated-negative-optional-default/** -text whitespace=cr-at-eol

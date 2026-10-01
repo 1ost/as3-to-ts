@@ -364,7 +364,12 @@ export class NativeCallableClasses {
         const superMethodNames = new Map<string, string>();
         const validateOptionalDefault=(owner:string,type:Node,init:Node):void=>{
             if(type&&type.kind===K.VECTOR)this.fail('optional Vector parameter requires qualification');
-            const raw=this.sourceTexts.get(owner).slice(init.start,init.end).trim(),identity=type&&type.text||'*';
+            // Legacy unary defaults can have an empty INIT span; their operand
+            // descendants carry the end. Validate the complete expression so a
+            // truncated prefix cannot accidentally authorize a nonliteral default.
+            const defaultEnd=(node:Node):number=>Math.max(node.start,node.end,
+                ...(node.children||[]).filter(child=>!!child).map(defaultEnd));
+            const raw=this.sourceTexts.get(owner).slice(init.start,defaultEnd(init)).trim(),identity=type&&type.text||'*';
             const numeric=/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)$/.test(raw)&&isFinite(Number(raw));
             if(['int','uint'].indexOf(identity)>=0&&(!numeric||/^[+-]?0[0-9]/.test(raw)||Math.floor(Number(raw))!==Number(raw)
                 ||Number(raw)<(identity==='int'?-2147483648:0)||Number(raw)>(identity==='int'?2147483647:4294967295)))
