@@ -3,7 +3,6 @@ const fs=require('fs'),path=require('path'),z=require('zlib'),c=require('crypto'
 const hash=b=>c.createHash('sha256').update(b).digest('hex'),compiler=path.resolve(__dirname,'../..'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||path.join(compiler,'../LayaAir-op2-static-vector-review'));
 const bytes=fs.readFileSync(path.join(__dirname,'report.json.gz'));assert.equal(hash(bytes),JSON.parse(fs.readFileSync(path.join(__dirname,'pin.json'))).sha256);const report=JSON.parse(z.gunzipSync(bytes));
 const evidence=path.join(engine,'tests/nativeFlashOracle/static-vector-storage'),expected=require(path.join(evidence,'verify.cjs')),receipt=JSON.parse(fs.readFileSync(path.join(evidence,'evidence/receipt.json')));
-const expected=original.map(row=>row.id.startsWith('metadata-')?{...row,value:row.value.replace(/>\s+</g,'><')}:row);
 assert.equal(expected.length,28);assert.equal(hash(fs.readFileSync(path.join(evidence,'evidence/receipt.json'))),report.receiptSha256);
 assert.equal(hash(fs.readFileSync(path.join(__dirname,'run.cjs'))),report.runnerSha256);assert.equal(hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),report.observerSha256);
 for(const [q,s]of Object.entries(report.cohorts.parent)){assert.equal(hash(s.source),s.sourceSha256);assert.equal(s.sourceSha256,receipt.artifacts['source/'+q.replaceAll('.','/')+'.as']);}
