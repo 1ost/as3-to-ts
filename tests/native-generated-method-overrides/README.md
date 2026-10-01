@@ -13,8 +13,9 @@ contain fixed required intrinsic parameter types, return type and override/final
 modifiers. The engine verifies these against the actual selected parent before
 publishing the child. Source reference signatures are now qualified separately
 by `native-generated-reference-overrides`; optional parameters are qualified by
-`native-generated-optional-overrides`. Accessor, rest/native-reference and namespace override
-extensions remain held. Ordinary methods without such a contract remain usable
+`native-generated-optional-overrides`. Rest and native-reference overrides are separately qualified by
+`native-generated-rest-signatures` and `native-generated-native-signatures`. Other
+override extensions require their own evidence. Ordinary methods without such a contract remain usable
 through their existing providers, but cannot grant selected override authority.
 
 `run-ny3NCc`: ten AIR observations match on ES5/ES2015 in Node and Chromium,

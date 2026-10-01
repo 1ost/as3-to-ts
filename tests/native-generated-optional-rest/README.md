@@ -27,7 +27,7 @@ Array tests use the common AS3Type provider instead of the legacy AS3Utils path.
 Rest without typed storage, malformed required-after-optional signatures,
 computed/invalid defaults, rest compound/update/redeclaration/catch writes,
 method arguments and constructor rest plus arguments remain rejected. Rest
-super-method dispatch remains held. No arbitrary anonymous/nested callable or
+super-method dispatch is qualified separately by `native-generated-rest-signatures`. No arbitrary anonymous/nested callable or
 complete Signal runtime admission is implied. SlotList.NIL, source Error catch
 identity for arity failures, full diagnostic text and reflection are not proved
 by these rows. The observer catches wildcard thrown values and reads host/source

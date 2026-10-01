@@ -3,7 +3,7 @@ module.exports=(api,input,config,hash)=>{
  const cases=[
   ['missing-required','v:int','',/super call source arity/],
   ['too-many','v:int=0','1,2',/super call source arity/],
-  ['rest','...values','',/super rest method signature/],
+  ['rest-missing-required','v:int,...values','',/super call source arity/],
   ['integer-default','v:int=2147483648','',/optional integer default/],
   ['expression-default','v:Object=new Object()','',/optional parameter requires qualified literal/],
   ['required-after-optional','a:int=1,b:int','',/required (?:method )?parameter after optional|super parameter after optional/],

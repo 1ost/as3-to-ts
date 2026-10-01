@@ -385,7 +385,7 @@ export class NativeCallableClasses {
             const names=node.kind===K.VAR_LIST||node.kind===K.CONST_LIST?node.findChildren(K.NAME_TYPE_INIT).map(n=>n.findChild(K.NAME)): [node.findChild(K.NAME)];
             return names.some(name=>name&&name.text===key)&&(!this.generated?!uri:generatedMemberUri(this.generated.options.plan,owner,node)===uri);
         };
-        const directSuper = (key: string, supplied: number, uri?:string, encoded=JSON.stringify(key)): string => {
+        const directSuper = (key: string, supplied: number | undefined, uri?:string, encoded=JSON.stringify(key)): string => {
             let ancestor = this.own.base, owner = this.classes.get(ancestor), depth = 0, method: Node;
             for (; owner; ancestor = owner.base, owner = this.classes.get(ancestor), depth++) {
                 const content = this.sourceRoots.get(owner.qname).findChild(K.CONTENT);
@@ -420,9 +420,14 @@ export class NativeCallableClasses {
                 || !uri&&!mods.children.some(mod => mod.text === 'public' || mod.text === 'protected'))
                 this.fail('super method visibility requires separate authority');
             const parameters = method.findChild(K.PARAMETER_LIST).children;
+            const rest=parameters.filter(parameter=>!!parameter.findChild(K.REST));
+            if(rest.length && (!this.generated || rest.length!==1 || parameters[parameters.length-1]!==rest[0]))
+                this.fail('super rest method requires unique final generated parameter');
+            if(supplied===undefined && (!this.generated || !rest.length))
+                this.fail('super apply requires qualified generated rest method');
             let minimum = 0, optional = false;
             parameters.forEach(parameter => {
-                if (parameter.findChild(K.REST)) this.fail('super rest method signature');
+                if (parameter.findChild(K.REST)) return;
                 const declaration = parameter.findChild(K.NAME_TYPE_INIT), type = declaration.findChild(K.TYPE);
                 if(this.generated) {
                     const ref=type&&this.generated.options.plan.references.find(r=>r.owner===owner.qname&&r.start===type.start&&r.end===type.end);
@@ -443,7 +448,7 @@ export class NativeCallableClasses {
                 else if (!/^\s*(true|false)\s*$/.test(this.sourceTexts.get(owner.qname).slice(init.start,init.end)))
                     this.fail('super optional Boolean literal');
             });
-            if (supplied < minimum || supplied > parameters.length)
+            if (supplied!==undefined && (supplied < minimum || !rest.length && supplied > parameters.length))
                 this.fail('super call source arity differs from declared signature');
             const memberIdentity=generatedMemberIdentity(key,uri);
             let capture = superMethodNames.get(memberIdentity);
@@ -456,6 +461,8 @@ export class NativeCallableClasses {
                 superMethodNames.set(memberIdentity, capture);
             }
             const args = unique('superCallArguments');
+            if(supplied===undefined) return '((_receiver: any, '+args+': any): any => '
+                +provider+'.applyAS3GeneratedSuperMethod('+capture+',this,'+args+'))';
             return '((...' + args + ': any[]): any => {'
                 + (this.generated?'':parameters.slice(0, supplied).map((_,index) => args + '[' + index + '] = !!' + args + '[' + index + '];').join(''))
                 + 'return ' + intrinsic + '.apply(' + capture + ', this, ' + args + ');})';
@@ -660,6 +667,19 @@ export class NativeCallableClasses {
                     this.fail('arguments.callee requires separate callable identity authority');
                 if (isSourceArguments(node) && !insideSuperArguments)
                     edits.push({start:node.getStart(file), end:node.end, value:sourceArguments});
+                if(node.kind===S.CallExpression && node.expression.kind===S.PropertyAccessExpression
+                    && node.expression.name.text==='apply'
+                    && [S.PropertyAccessExpression,S.ElementAccessExpression].indexOf(node.expression.expression.kind)>=0
+                    && node.expression.expression.expression.kind===S.SuperKeyword) {
+                    if(constructor||nestedFunction||insideSuperArguments||node.arguments.length!==2
+                        ||node.arguments.some((argument:any)=>argument.kind===S.SpreadElement)
+                        ||member.modifiers&&member.modifiers.some((mod:any)=>mod.kind===S.StaticKeyword))
+                        this.fail('super apply requires two ordinary instance arguments');
+                    const selected=superKey(node.expression.expression);
+                    edits.push({start:node.expression.getStart(file),end:node.expression.end,
+                        value:directSuper(selected.name,undefined,selected.uri,selected.encoded)});
+                    node.arguments.forEach((argument:any)=>walk(argument,false,nestedFunction));return;
+                }
                 if (node.kind === S.CallExpression && [S.PropertyAccessExpression,S.ElementAccessExpression].indexOf(node.expression.kind)>=0
                     && node.expression.expression.kind === S.SuperKeyword) {
                     if (constructor || nestedFunction || insideSuperArguments
@@ -810,8 +830,7 @@ export class NativeCallableClasses {
                 if(spread&&parameters[parameters.length-1]!==spread)this.fail('rest method must be last');
                 if(spread&&!typedLocals)this.fail('rest method requires typed local storage');
                 const minimum=fixed.filter(p=>!p.findChild(K.NAME_TYPE_INIT).findChild(K.INIT)).length;
-                signature = 'if(arguments.length < ' + minimum + (spread?'':' || arguments.length > '+fixed.length) + ')throw ' + arityFailure + ';\n'
-                    + fixed.map((p,index) => {
+                const conversions = fixed.map((p,index) => {
                         const value=p.findChild(K.NAME_TYPE_INIT),name=value.findChild(K.NAME).text,type=value.findChild(K.VECTOR)||value.findChild(K.TYPE),init=value.findChild(K.INIT);
                         if(type&&type.kind===K.VECTOR&&init)this.fail('optional Vector parameter requires qualification');
                         if(!init&&index>=minimum)this.fail('required parameter after optional');
@@ -822,7 +841,12 @@ export class NativeCallableClasses {
                         }
                         if(type&&type.text==='Class'){if(!this.classValueModule)this.fail('Class parameter requires common class provider');return name+'='+fallback+'<any>'+classValue+'.as3CoerceClass('+name+');';}
                         return name+'='+fallback+'<any>'+generatedProperty+'.coerceAS3PropertyValue('+name+','+this.generated.lexical.typeExpression(type,this.own.qname,domainImport,intrinsic+'.array')+');';
-                    }).join('\n')+(spread?'\nvar '+spread.findChild(K.REST).text+': any = '+intrinsic+'.apply('+intrinsic+'.arraySlice,arguments,['+fixed.length+']);\n':'');
+                    });
+                // AIR coerces the fixed prefix of a rest method in reverse
+                // parameter order, before allocating its fresh untyped tail.
+                signature = 'if(arguments.length < ' + minimum + (spread?'':' || arguments.length > '+fixed.length) + ')throw ' + arityFailure + ';\n'
+                    + (spread?conversions.reverse():conversions).join('\n')
+                    +(spread?'\nvar '+spread.findChild(K.REST).text+': any = '+intrinsic+'.apply('+intrinsic+'.arraySlice,arguments,['+fixed.length+']);\n':'');
                 const returns=sourceMethod.findChild(K.VECTOR)||sourceMethod.findChild(K.TYPE);
                 if(returns && returns.text !== 'void' && returns.text !== '*') {
                     const reference=this.generated.options.plan.references.find(ref=>ref.owner===this.own.qname&&ref.start===returns.start&&ref.end===returns.end);

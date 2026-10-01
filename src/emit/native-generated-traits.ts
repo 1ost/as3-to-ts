@@ -28,7 +28,7 @@ interface Member extends Trait {
     parameterCount?: number;
     override?: boolean;
     final?: boolean;
-    signature?: {parameters: TraitType[]; returns: TraitType; requiredCount: number};
+    signature?: {parameters: TraitType[]; returns: TraitType; requiredCount: number; rest?: boolean};
 }
 /** Reflection uses the getter type regardless of source declaration order. */
 function accessorTypes(parts:{get?:AccessorPart;set?:AccessorPart},fallback:TraitType):{type:TraitType;setterType?:TraitType} {
@@ -38,7 +38,7 @@ function accessorTypes(parts:{get?:AccessorPart;set?:AccessorPart},fallback:Trai
         fail('incompatible accessor half types');
     return Object.assign({type:read},parts.get&&parts.set&&JSON.stringify(read)!==JSON.stringify(write)?{setterType:write}:{});
 }
-interface MethodSignature {name: string; uri?: string; parameters: TraitType[]; returns: TraitType; requiredCount: number; override: boolean; final: boolean;}
+interface MethodSignature {name: string; uri?: string; parameters: TraitType[]; returns: TraitType; requiredCount: number; rest?: boolean; override: boolean; final: boolean;}
 interface LexicalMember {
     readonly owner: string; readonly start: number; readonly end: number;
     readonly visibility: string; readonly static: boolean;
@@ -241,7 +241,7 @@ export class NativeGeneratedClassTraits {
                 }
                 const name = member.findChild(K.NAME).text, params = member.findChild(K.PARAMETER_LIST).children;
                 if (member.kind === K.FUNCTION) {
-                    // Non-rest signatures retain exact source declaration/interface
+                    // Fixed parameters retain exact source declaration/interface
                     // tokens; labels alone cannot grant selected-parent authority.
                     const signatureType=(node:Node,returns=false):TraitType=>{
                         if(!node)return '*';
@@ -255,7 +255,9 @@ export class NativeGeneratedClassTraits {
                         return ref && ref.kind==='intrinsic' && ['*','Object','int','uint','Number','Boolean','String','Function'].indexOf(ref.identity)>=0
                             ? ref.identity : undefined;
                     };
-                    const parameters=params.map(p=>{
+                    const rest=params.filter(p=>!!p.findChild(K.REST));
+                    if(rest.length>1||rest.length===1&&params[params.length-1]!==rest[0])fail('rest method parameter must be unique and last');
+                    const parameters=params.filter(p=>!p.findChild(K.REST)).map(p=>{
                         const value=p.findChild(K.NAME_TYPE_INIT);
                         return !p.findChild(K.REST) && value
                             ? signatureType(value.findChild(K.VECTOR)||value.findChild(K.TYPE)) : undefined;
@@ -266,7 +268,7 @@ export class NativeGeneratedClassTraits {
                         fail('required method parameter after optional');
                     // Defaults may differ in an AS3 override. Their literal values
                     // are validated and applied by the actual method implementation.
-                    const signature=returns!==undefined && parameters.every(p=>p!==undefined) ? {parameters,returns,requiredCount} : undefined;
+                    const signature=returns!==undefined && parameters.every(p=>p!==undefined) ? {parameters,returns,requiredCount,...(rest.length?{rest:true}:{})} : undefined;
                     add(Object.assign({},common,{name,kind:'method',parameterCount:params.filter(p=>!p.findChild(K.REST)).length,signature}) as Member);
                     return;
                 }
@@ -344,7 +346,7 @@ export class NativeGeneratedClassTraits {
         this.instanceMethods=frozen(surface.instance.filter(item=>item.uri!==generatedProxyUri && item.kind==='method' && item.declaredBy===reflectedClass(owner)
             && !!item.signature && (!item.override || this.inheritInstanceLayout)).map(item=>({name:item.name,
                 ...(item.uri?{uri:item.uri}:{}),
-                parameters:item.signature.parameters,returns:item.signature.returns,requiredCount:item.signature.requiredCount,override:!!item.override,final:!!item.final})));
+            parameters:item.signature.parameters,returns:item.signature.returns,requiredCount:item.signature.requiredCount,...(item.signature.rest?{rest:true}:{}),override:!!item.override,final:!!item.final})));
         const members = (items: Member[]): any => {
             const result: any = {variables:[],constants:[],methods:[],accessors:[]};
             items.forEach(item => {
@@ -387,7 +389,7 @@ export class NativeGeneratedClassTraits {
             members[kind]=this.metadata.instance[kind].filter((member:any)=>member.declaredBy===this.metadata.name || kind==='accessors'&&this.instanceAccessors.some(a=>sameMember(a,member))).map((member:any)=>kind==='accessors'&&this.instanceAccessors.some(a=>sameMember(a,member))?Object.assign({},member,{declaredBy:this.metadata.name}):member);return members;
         },{})}) : this.nativeAccessorBase ? Object.assign({},this.metadata,{instance:Object.assign({},this.metadata.instance,{accessors:this.metadata.instance.accessors.map((a:any)=>this.instanceAccessors.some(own=>sameMember(own,a))?Object.assign({},a,{declaredBy:this.metadata.name}):a)})}) : this.metadata;
         const ownNames = this.inheritInstanceLayout ? new Set<string>([].concat(...Object.keys(metadata.instance).map(kind=>metadata.instance[kind])).map((member:any)=>generatedMemberIdentity(member.name,member.uri))) : null;
-        const methods='['+this.instanceMethods.map(method=>'{name:'+JSON.stringify(method.name)+(method.uri?',uri:'+JSON.stringify(method.uri):'')+',parameters:['+method.parameters.map(emitType).join(',')+'],returns:'+emitType(method.returns)+',requiredCount:'+method.requiredCount+',override:'+method.override+',final:'+method.final+'}').join(',')+']';
+        const methods='['+this.instanceMethods.map(method=>'{name:'+JSON.stringify(method.name)+(method.uri?',uri:'+JSON.stringify(method.uri):'')+',parameters:['+method.parameters.map(emitType).join(',')+'],returns:'+emitType(method.returns)+',requiredCount:'+method.requiredCount+(method.rest?',rest:true':'')+',override:'+method.override+',final:'+method.final+'}').join(',')+']';
         const accessors='['+this.instanceAccessors.map(a=>{
             const halves={...(a.parts.get?{get:{override:a.parts.get.override,final:a.parts.get.final}}:{}),...(a.parts.set?{set:{override:a.parts.set.override,final:a.parts.set.final}}:{})};
             if(!a.uri&&typeof a.type==='string'&&a.type!=='Array'&&(a.setterType===undefined||typeof a.setterType==='string'&&a.setterType!=='Array'))
