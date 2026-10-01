@@ -76,3 +76,5 @@ tests/native-generated-array-accessors/** -text whitespace=cr-at-eol
 tests/native-generated-namespaced-initializer/** -text whitespace=cr-at-eol
 
 tests/native-generated-namespace-proxy-isolation/** -text whitespace=cr-at-eol
+
+tests/native-generated-namespace-internal-isolation/** -text whitespace=cr-at-eol

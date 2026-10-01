@@ -601,7 +601,11 @@ export class NativeGeneratedLexical {
                         const content=this.internalContent(current);
                         const field=content.children.filter(Boolean).find(m=>[K.VAR_LIST,K.CONST_LIST,K.GET,K.FUNCTION].indexOf(m.kind)>=0
                             &&modifiers(m).every(mod=>['public','private','protected'].indexOf(mod)<0)
-                            &&(modifiers(m).indexOf('static')>=0)===statics&&([K.GET,K.FUNCTION].indexOf(m.kind)>=0?m.findChild(K.NAME).text===name:m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===name)));
+                            &&(modifiers(m).indexOf('static')>=0)===statics&&([K.GET,K.FUNCTION].indexOf(m.kind)>=0?m.findChild(K.NAME).text===name:m.findChildren(K.NAME_TYPE_INIT).some(v=>v.findChild(K.NAME).text===name))
+                            // An authenticated custom namespace is not the
+                            // package-internal namespace. Leave it to ordinary
+                            // namespace resolution, including opened namespaces.
+                            &&!generatedMemberUri(this.plan,current,m));
                         if(!field)continue;
                         if(statics&&current!==identity)fail('inherited internal static lookup requires qualification');
                         if(this.packageOf(current)!==this.packageOf(this.owner)){inaccessible=true;continue;}
