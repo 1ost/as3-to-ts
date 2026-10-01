@@ -104,7 +104,12 @@ export class NativeGeneratedLexical {
                 if(inherited&&visibility==='internal'&&isStatic)return;
                 const inheritedPrimitives=visibility==='protected'&&member.kind===K.VAR_LIST
                     &&member.findChildren(K.NAME_TYPE_INIT).every(node=>node.findChild(K.TYPE)&&['String','Boolean'].indexOf(node.findChild(K.TYPE).text)>=0);
-                if(inherited&&isStatic&&(!constant&&!inheritedPrimitives||name!==this.declarations.find(b=>b.identity===owner).base))fail('inherited static lexical ownership');
+                const inheritedVectors=visibility==='protected'&&member.kind===K.VAR_LIST
+                    &&member.findChildren(K.NAME_TYPE_INIT).every(node=>{
+                        const vector=node.findChild(K.VECTOR);
+                        return vector&&plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end);
+                    });
+                if(inherited&&isStatic&&(!constant&&!inheritedPrimitives&&!inheritedVectors||name!==this.declarations.find(b=>b.identity===owner).base))fail('inherited static lexical ownership');
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
                     fail('internal instance method requires required Object/int parameters and void return or one authenticated interface parameter and Boolean/void return');
@@ -131,7 +136,7 @@ export class NativeGeneratedLexical {
                         fail('ambiguous lexical declaration: '+local);
                     }
                     const vector=node.findChild(K.VECTOR);
-                    if(vector&&(isStatic||['private','protected'].indexOf(visibility)<0||member.kind!==K.VAR_LIST
+                    if(vector&&(['private','protected'].indexOf(visibility)<0||member.kind!==K.VAR_LIST
                         ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
                         fail('lexical vector storage authority');
                     const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':readonlyGetter?'accessor':'method',owner:name,node,
