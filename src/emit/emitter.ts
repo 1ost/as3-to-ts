@@ -173,6 +173,7 @@ export interface EmitterOptions {
     nativeErrorEventReferenceModule?: string;
     /** Canonical IO/security event is/as/casts and text reads in generated methods. */
     nativeErrorEventSubtypeReferenceModule?: string;
+    nativeErrorEventSubtypeConstructionModule?: string;
     /** Canonical TextField reference provider for generated typed returns. */
     nativeTextFieldReferenceModule?: string;
     /** Canonical SimpleButton reference provider for generated typed returns. */
@@ -520,6 +521,12 @@ export default class Emitter {
                     ||!this.options.importModules||this.options.importModules[qname]!==module)
                     throw new Error('AS3_ERROREVENT_SUBTYPE_UNSUPPORTED: exact canonical provider binding required: '+qname);
             }
+        }
+        if (this.options.nativeErrorEventSubtypeConstructionModule !== undefined) {
+            const module=generatedModule(this.options.nativeErrorEventSubtypeConstructionModule),reference=this.options.nativeErrorEventSubtypeReferenceModule;
+            if(!reference||!/AS3CanonicalErrorEventSubtypes$/.test(reference)
+                ||module!==reference.replace(/AS3CanonicalErrorEventSubtypes$/,'AS3ErrorEventConstruction'))
+                throw new Error('AS3_ERROREVENT_CONSTRUCTION_UNSUPPORTED: canonical reference and construction modules required');
         }
         if (this.options.nativeErrorEventReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeErrorEventReferenceModule),reference=this.options.nativeReferenceCoercion;
@@ -3271,6 +3278,7 @@ function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
 }
 
 function emitNew(emitter:Emitter, node:Node):void {
+ if(emitErrorEventSubtypeConstruction(emitter,node))return;
  if(emitLexicalSpriteConstruction(emitter,node))return;
  if(emitDynamicConstruction(emitter,node))return;
  if(emitGeneratedVectorLiteral(emitter,node))return;
@@ -3741,6 +3749,19 @@ function errorEventSubtypeTarget(emitter:Emitter,node:Node):boolean {
     let method=node.parent;while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
     if(!method)throw new Error('AS3_ERROREVENT_SUBTYPE_UNSUPPORTED: class initializer reference operation held');
     return true;
+}
+function emitErrorEventSubtypeConstruction(emitter:Emitter,node:Node):boolean {
+    if(!emitter.options.nativeErrorEventSubtypeConstructionModule||node.children.length!==1)return false;
+    const call=node.children[0],callee=unwrapEncapsulatedExpression(call.kind===NodeKind.CALL?call.children[0]:call);
+    if(!errorEventSubtypeTarget(emitter,callee))return false;
+    const args=call.kind===NodeKind.CALL?call.findChild(NodeKind.ARGUMENTS):undefined;
+    if(!args||args.children.length<1||args.children.length>5)
+        throw new Error('AS3_ERROREVENT_CONSTRUCTION_UNSUPPORTED: one through five arguments required');
+    const helper=propertyHelper(emitter,'constructAS3ErrorEventSubtype',emitter.options.nativeErrorEventSubtypeConstructionModule);
+    const target=propertyHelper(emitter,emitter.references.resolve(callee.text).split('.').pop(),emitter.options.nativeErrorEventSubtypeReferenceModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'('+target+',[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 function emitErrorEventSubtypeCast(emitter:Emitter,node:Node):boolean {
     const callee=unwrapEncapsulatedExpression(node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);

@@ -86,3 +86,4 @@ tests/native-generated-error-event-references/** -text whitespace=cr-at-eol
 tests/native-generated-xml-child-method/** -text whitespace=cr-at-eol
 
 tests/native-scope-error-propagation/** -text whitespace=cr-at-eol
+tests/native-generated-error-event-construction/** -text whitespace=cr-at-eol
