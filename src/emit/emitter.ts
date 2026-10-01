@@ -923,10 +923,15 @@ export default class Emitter {
 		this.scope = this.scope.parent;
 	}
 
+	// Failed visitors can leave nested scopes open. Preserve their primary error
+	// while unwinding this scope; successful visitors still undergo balance checks.
 	withScope(declarations:Declaration[], body:(scope:Scope) => void):void {
 		let scope = this.enterScope(declarations);
 		try {
 			body(scope);
+		} catch (error) {
+			this.scope = scope;
+			throw error;
 		} finally {
 			this.exitScope(scope);
 		}
