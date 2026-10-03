@@ -572,7 +572,7 @@ export class NativeGeneratedLexical {
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -674,6 +674,18 @@ export class NativeGeneratedLexical {
                     // Typed native values use source variable dispatch: reads
                     // preserve null errors and writes coerce Number storage.
                     return {trait:null,receiver,publicName:name,publicMethod:false};
+                }
+                if(lexicalName&&identities.length===1&&identities[0]==='flash.utils.Timer'
+                    &&references.every(r=>r.kind==='native')&&['start','stop','reset'].indexOf(name)>=0) {
+                    const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
+                    const timer=input.providers&&input.providers['flash.utils.Timer'];
+                    if(!emitter.options.nativeTimerReferenceModule||!timer||timer.exportName!=='Timer'||timer.nativeBase||timer.nativeInterface
+                        ||!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
+                        ||!emitter.options.importModules||emitter.options.importModules['flash.utils.Timer']!==timer.module)
+                        fail('native Timer methods require authenticated reference/import plan');
+                    // A caller's private namesake cannot capture the typed Timer
+                    // method. Canonical dispatch preserves closures and null errors.
+                    return {trait:null,receiver,nativeMethod:name,timerMethod:true};
                 }
                 if(lexicalName&&identities.length===1&&identities[0]==='flash.display.Sprite'
                     &&references.every(r=>r.kind==='native')&&['startDrag','stopDrag'].indexOf(name)>=0) {
@@ -869,9 +881,9 @@ export class NativeGeneratedLexical {
         }
         const found=resolve(target);if(!found)return false;
         if(found.nativeMethod) {
-            if(operation!=='get'&&operation!=='call')fail('native ByteArray method assignment');
-            let helper='__as3_bytearray_method';while(emitter.source.indexOf(helper)>=0)helper+='_';
-            emitter.ensureImportIdentifier('as3GetByteArrayCompressionMethod as '+helper,emitter.options.nativeByteArrayReferenceModule,false);
+            if(operation!=='get'&&operation!=='call')fail(found.timerMethod?'native Timer method assignment':'native ByteArray method assignment');
+            let helper=found.timerMethod?'__as3_timer_method':'__as3_bytearray_method';while(emitter.source.indexOf(helper)>=0)helper+='_';
+            emitter.ensureImportIdentifier((found.timerMethod?'as3GetTimerMethod':'as3GetByteArrayCompressionMethod')+' as '+helper,found.timerMethod?emitter.options.nativeTimerReferenceModule:emitter.options.nativeByteArrayReferenceModule,false);
             emitter.nativeSourceHelpers.add(helper);
             emitter.catchup(node.start);
             if(operation==='call')emitter.insert('(<any>((target:any,values:any[])=>'+helper+'(target,'+JSON.stringify(found.nativeMethod)+').apply(null,values))(');
