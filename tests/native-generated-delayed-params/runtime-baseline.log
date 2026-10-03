@@ -1,0 +1,18 @@
+node : page.evaluate: TypeError: Callback parameters must be an array
+At line:3 char:1
++ node tests/native-generated-delayed-params/run.cjs > tests/native-gen ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (page.evaluate: ...ust be an array:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    at FlashTweenRuntime.create (http://loaded-generated.test/bundle.js:7075:60)
+    at http://loaded-generated.test/bundle.js:7057:21
+    at FlashTweenRuntime.operation (http://loaded-generated.test/bundle.js:6964:16)
+    at FlashTweenRuntime.delayedCall (http://loaded-generated.test/bundle.js:7055:19)
+    at DelayedParamsSubject2.value (http://loaded-generated.test/bundle.js:14283:124)
+    at run (http://loaded-generated.test/bundle.js:8848:9)
+    at async http://loaded-generated.test/bundle.js:14365:25
+    at main (C:\Users\admin\Desktop\GITHUB 
+REPO\as3-to-ts-op2-delayed-params-review\tests\native-generated-delayed-params\run.cjs:63:63) {
+  log: []
+}

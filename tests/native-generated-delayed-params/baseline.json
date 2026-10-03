@@ -1,0 +1,11 @@
+{
+  "compiler": "6bcb396b4b0175ed0bd201a1e9c5541bb588ddaa",
+  "engine": "d1094220d9a12c0aaae7125eea795056cf7239ce",
+  "compilerFailure": "AS3_TWEEN_UNSUPPORTED: delayedCall requires exactly two arguments",
+  "runtimeFailureAfterCompilerChange": "TypeError: Callback parameters must be an array",
+  "sourceSha256": "60ac1e67ee64a791191e75b746eb0a5e18f5a265540f0e6985214aea697968c7",
+  "logs": {
+    "compiler-baseline.log": "9e50ea5bb5c915a6d6c6a1816d90338921f24e25ef1c6c9edeb572a2d4c1ffed",
+    "runtime-baseline.log": "686190fef6d5eb8483f3fd9de400ec8d3b3070056756aa2d623b8eb41e7fd906"
+  }
+}

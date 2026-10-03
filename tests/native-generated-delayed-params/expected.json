@@ -1,0 +1,169 @@
+[
+  {
+    "value": [
+      0,
+      0
+    ],
+    "id": "deferred"
+  },
+  {
+    "value": [
+      "delay",
+      "callback",
+      "params"
+    ],
+    "id": "argument-order"
+  },
+  {
+    "value": [
+      0,
+      0
+    ],
+    "id": "before-first"
+  },
+  {
+    "value": [
+      1,
+      0,
+      [
+        [
+          "changed",
+          7
+        ]
+      ]
+    ],
+    "id": "retained-array-and-receiver"
+  },
+  {
+    "value": [
+      [
+        "other",
+        2
+      ]
+    ],
+    "id": "second-receiver"
+  },
+  {
+    "value": 1,
+    "id": "zero-deferred"
+  },
+  {
+    "value": [
+      [
+        "changed",
+        7
+      ],
+      [
+        "zero",
+        3
+      ]
+    ],
+    "id": "zero-delivered"
+  },
+  {
+    "value": 2,
+    "id": "cancelled-method-closure"
+  },
+  {
+    "value": [
+      [
+        "changed",
+        7
+      ],
+      [
+        "zero",
+        3
+      ],
+      [
+        null,
+        null
+      ]
+    ],
+    "id": "null-params"
+  },
+  {
+    "value": [
+      [
+        "changed",
+        7
+      ],
+      [
+        "zero",
+        3
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        null,
+        null
+      ]
+    ],
+    "id": "empty-params"
+  },
+  {
+    "value": [
+      [
+        "changed",
+        7
+      ],
+      [
+        "zero",
+        3
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        null,
+        null
+      ]
+    ],
+    "id": "omitted-params"
+  },
+  {
+    "value": [
+      [
+        "delay",
+        "callback",
+        "params",
+        "delay",
+        "callback",
+        "params",
+        "delay",
+        "callback",
+        "params",
+        "delay",
+        "callback",
+        "params",
+        "delay",
+        "callback",
+        "params"
+      ],
+      [
+        "delay",
+        "callback",
+        "params"
+      ]
+    ],
+    "id": "single-evaluation"
+  },
+  {
+    "value": 0,
+    "id": "static-deferred"
+  },
+  {
+    "value": [
+      1,
+      true,
+      "after"
+    ],
+    "id": "literal-element-capture"
+  }
+]

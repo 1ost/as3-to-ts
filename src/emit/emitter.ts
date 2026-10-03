@@ -5192,10 +5192,10 @@ function emitTweenMigrationCall(emitter:Emitter, node:Node):boolean {
 		throw new Error('AS3_TWEEN_UNSUPPORTED: tween query construction is not qualified');
 	if ((query || control) && args.children.length !== 1)
 		throw new Error('AS3_TWEEN_UNSUPPORTED: ' + name.text + ' requires exactly one target argument');
-	// The captured migration covers the two-argument seconds-based callback.
-	// Optional parameter/scope/frame overloads need their own source evidence.
-	if (delayedCall && args.children.length !== 2)
-		throw new Error('AS3_TWEEN_UNSUPPORTED: delayedCall requires exactly two arguments');
+	// AIR-qualified seconds-based calls retain the optional callback Array by reference.
+	// The frame overload still requires its own source evidence.
+	if (delayedCall && args.children.length !== 2 && args.children.length !== 3)
+		throw new Error('AS3_TWEEN_UNSUPPORTED: delayedCall requires two or three arguments');
 	if(name.text==='to'&&args.children.length===3&&tweenOptionNames(args.children[2]).indexOf('bezier')>=0&&!sourcePlan)
 		throw new Error('AS3_TWEEN_UNSUPPORTED: Bezier call requires authenticated source plan');
 	let helper = '__as3_FlashTweenRuntime';

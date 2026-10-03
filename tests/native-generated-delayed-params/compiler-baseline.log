@@ -1,0 +1,19 @@
+node : Error: AS3_TWEEN_UNSUPPORTED: delayedCall requires exactly two arguments
+At line:7 char:1
++ node tests/native-generated-delayed-params/run.cjs > tests/native-gen ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Error: AS3_TWEE...y two arguments:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    at emitTweenMigrationCall (C:\Users\admin\Desktop\GITHUB 
+REPO\as3-to-ts-op2-delayed-params-review\lib\emit\emitter.js:5386:15)
+    at emitCall (C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-delayed-params-review\lib\emit\emitter.js:4232:9)
+    at visitNode (C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-delayed-params-review\lib\emit\emitter.js:160:5)
+    at C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-delayed-params-review\lib\emit\emitter.js:130:31
+    at Array.forEach (<anonymous>)
+    at visitNodes (C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-delayed-params-review\lib\emit\emitter.js:130:15)
+    at emitReferenceReturn (C:\Users\admin\Desktop\GITHUB 
+REPO\as3-to-ts-op2-delayed-params-review\lib\emit\emitter.js:6508:9)
+    at visitNode (C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-delayed-params-review\lib\emit\emitter.js:160:5)
+    at C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-delayed-params-review\lib\emit\emitter.js:130:31
+    at Array.forEach (<anonymous>)
