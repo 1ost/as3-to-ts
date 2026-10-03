@@ -40,16 +40,16 @@ async function main(){
     nativeReferenceCoercion:{plan,module:'./unused',coercionModule:provider('AS3Type')},nativeNumericMethodParametersModule:provider('AS3Coercion'),nativeSignaturePropertyModule:provider('AS3Property')};
    const config={plan,target,emitterOptions:options,externalModules:[...new Set(externalModules)],loadingSessionModule:provider('NativeSourceClassLoadingSession')};
    const emitPlan=p=>api.emitNativeSourceClassModule({...config,plan:p,emitterOptions:{...options,nativeVectorTypes:{...options.nativeVectorTypes,plan:p},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:p}}});
+   assert.doesNotThrow(()=>api.createNativeGeneratedDeclarationPlan({...input,...{classScriptSources:['retrycases.Trace','retrycases.Retry','org.emvc.patterns.proxy.Proxy']}}));
    for(const change of [
-    {classScriptSources:['retrycases.Trace','retrycases.Retry','org.emvc.patterns.proxy.Proxy']},
     {scriptGlobalSources:['retrycases.Trace','retrycases.Retry'],inheritScriptClasses:undefined},
     {classScriptSources:['org.emvc.interfaces.IProxy']},
     {lexicalProviderModule:provider('AS3LexicalMembers'),inheritScriptClasses:undefined}
    ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,...change}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;}
    for(const [q,source]of [
-    ['org.emvc.patterns.proxy.Proxy',sources['org.emvc.patterns.proxy.Proxy'].source.replace('class Proxy implements','class Proxy extends Trace implements').replace('import org.emvc.interfaces.IProxy;','import org.emvc.interfaces.IProxy; import retrycases.Trace;')],
+    ['org.emvc.patterns.proxy.Proxy',sources['org.emvc.patterns.proxy.Proxy'].source.replace('class Proxy implements','class Proxy extends MissingRoot implements').replace('import org.emvc.interfaces.IProxy;','import org.emvc.interfaces.IProxy; import retrycases.Trace;')],
     ['retrycases.Retry',sources['retrycases.Retry'].source.replace('extends Proxy','extends Error')]
-   ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,providers:{Error:{module:provider('AS3CanonicalErrorConstruction'),exportName:'Error',nativeBase:'Error'}},sources:{...sources,[q]:{source,sourceSha256:hash(source)}}}),/non-retrying source root parent/);rejectionGuards++;}
+   ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,providers:{Error:{module:provider('AS3CanonicalErrorConstruction'),exportName:'Error',nativeBase:'Error'}},sources:{...sources,[q]:{source,sourceSha256:hash(source)}}}),/non-retrying source root parent|base requires a planned source declaration/);rejectionGuards++;}
    assert.throws(()=>emitPlan(api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:undefined})),/script global with static initializer requires retry identity authority/);rejectionGuards++;
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);

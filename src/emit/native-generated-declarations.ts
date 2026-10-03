@@ -399,20 +399,19 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             // Direct EventDispatcher generations retain the canonical native
             // constructor entry and independent event storage across retries.
             // Other direct native bases still require their own qualification.
-            // Stable source ancestry may end at the authenticated Sprite
-            // boundary. Check every ancestor: a retrying intermediate Class
-            // cannot be treated as a stable constructor/prototype authority.
-            // Stable source-only chains use the same ancestry authority. The
-            // entire chain must remain non-retrying, including its root.
+            // Source-only ancestry resolves each parent before publishing the
+            // child. Failed parent generations remain retryable; a successfully
+            // published parent is retained when a later child initializer fails.
+            // Native Sprite ancestry retains its separate stable-parent contract.
             let parent=bindings.find(value=>value.qname===binding.base);
             const seen=new Set<string>([name]);
-            let stableParent=false;
-            while(parent&&parent.scriptGlobalExport&&!seen.has(parent.qname)
-                &&data.classScriptSources.indexOf(parent.qname)<0){
+            let stableParent=false,retryingParent=false;
+            while(parent&&parent.scriptGlobalExport&&!seen.has(parent.qname)){
                 seen.add(parent.qname);
+                retryingParent=retryingParent||data.classScriptSources.indexOf(parent.qname)>=0;
                 if(!parent.base){stableParent=true;break;}
                 if(parent.base==='flash.display.Sprite'&&providers[parent.base]
-                    &&providers[parent.base].nativeBase==='Sprite'){stableParent=true;break;}
+                    &&providers[parent.base].nativeBase==='Sprite'&&!retryingParent){stableParent=true;break;}
                 parent=bindings.find(value=>value.qname===parent.base);
             }
             if(!dispatcherBase&&!stableParent)

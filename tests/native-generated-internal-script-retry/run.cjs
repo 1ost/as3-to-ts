@@ -48,8 +48,8 @@ async function main(){
    ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,...change}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;}
    const oldPlan=api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:undefined});
    assert.throws(()=>emitPlan(oldPlan),/script global with static initializer requires retry identity authority/);rejectionGuards++;
-   const parentSource='package retrycases {public class Parent extends Trace {}}',childSource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry extends Parent {');
-   assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Parent':{source:parentSource,sourceSha256:hash(parentSource)},'retrycases.Retry':{source:childSource,sourceSha256:hash(childSource)}}}),/internal declarations|non-retrying source root parent/);rejectionGuards++;
+   const parentSource='package retrycases {public class Parent extends MissingRoot {}}',childSource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry extends Parent {');
+   assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Parent':{source:parentSource,sourceSha256:hash(parentSource)},'retrycases.Retry':{source:childSource,sourceSha256:hash(childSource)}}}),/internal declarations|non-retrying source root parent|base requires a planned source declaration/);rejectionGuards++;
    const stableParent='package retrycases {public class Parent {}}';
    assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Parent':{source:stableParent,sourceSha256:hash(stableParent)},'retrycases.Retry':{source:childSource,sourceSha256:hash(childSource)}}}),/internal declarations/);rejectionGuards++;
    const bodySource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry { initial=[];');

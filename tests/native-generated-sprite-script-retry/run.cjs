@@ -24,10 +24,11 @@ async function main(){
   const sourceError=modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts'));
   const modules=['AS3CanonicalDisplayReference','AS3CanonicalEventConstruction','AS3CanonicalErrorConstruction','AS3CanonicalXMLReference','AS3XML','AS3ReflectionQuery','describeType','AS3Vector','AS3StringIntrinsics','Dictionary','AS3GeneratedClass','AS3ScriptGlobal','AS3Type','AS3Class','AS3Invocation','AS3LexicalMembers','AS3Property','AS3MethodBinding','AS3Coercion','AS3String','AS3Addition','AS3ArrayCreation','NativeSourceClassLoadingSession'];
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
-   const probe=JSON.parse(require('node:child_process').execFileSync(process.execPath,['../op2-html5/as3-to-layaair-porting-kit/tools/probe_sprite_ancestry.mjs'],{encoding:'utf8'}));
+   const probe=JSON.parse(require('node:child_process').execFileSync(process.execPath,['../op2-html5/as3-to-layaair-porting-kit/tools/probe_sprite_ancestry.mjs',...(process.env.OP2_PROVIDER_LOCK?['--provider-lock',path.resolve(process.env.OP2_PROVIDER_LOCK)]:[])],{encoding:'utf8'}));
    assert.equal(probe.status,'plan-only');
    const sprite=JSON.parse(fs.readFileSync(path.join(probe.out,'report.json')));
-   const nativeProviders=Object.fromEntries(Object.entries(sprite.input.providers).map(([q,b])=>[q,{...b,module:modulePath(path.resolve(probe.out,b.module))}]));
+   const probeEngine=path.resolve('../op2-html5',sprite.pins.layaair.checkout);
+   const nativeProviders=Object.fromEntries(Object.entries(sprite.input.providers).map(([q,b])=>{const relative=path.relative(probeEngine,path.resolve(probe.out,b.module));assert.ok(!relative.startsWith('..')&&!path.isAbsolute(relative));return [q,{...b,module:modulePath(path.join(engine,relative))}];}));
    const trace=modulePath(path.join(engine,'src/layaAir/flash/debug/trace.ts'));externalModules.push(trace,...Object.values(nativeProviders).map(p=>p.module));
    const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,lexicalProviderModule:provider('AS3LexicalMembers'),classScriptSources:['retrycases.Trace','retrycases.Retry']};
 
@@ -50,8 +51,8 @@ async function main(){
    ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,...change}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;}
    for(const [q,source] of [
     ['retrycases.Retry',sources['retrycases.Retry'].source.replace('import cn.kyiax.base.impl.BaseModule;','import flash.display.Sprite;').replace('extends BaseModule','extends Sprite')],
-    ['cn.kyiax.base.impl.BaseModule',sources['cn.kyiax.base.impl.BaseModule'].source.replace('import flash.display.Sprite;','import retrycases.Trace;').replace('extends Sprite','extends Trace')]
-   ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,[q]:{source,sourceSha256:hash(source)}}}),/non-retrying source root parent/);rejectionGuards++;}
+    ['cn.kyiax.base.impl.BaseModule',sources['cn.kyiax.base.impl.BaseModule'].source.replace('import flash.display.Sprite;','import retrycases.Trace;').replace('extends Sprite','extends MissingRoot')]
+   ]){assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,[q]:{source,sourceSha256:hash(source)}}}),/non-retrying source root parent|base requires a planned source declaration/);rejectionGuards++;}
    assert.throws(()=>emitPlan(api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:undefined})),/script global with static initializer requires retry identity authority/);rejectionGuards++;
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);
