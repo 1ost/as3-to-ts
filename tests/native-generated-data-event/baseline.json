@@ -1,0 +1,14 @@
+{
+  "compiler": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-ancestor-static-review",
+  "commit": "d0a6f010b26acdf5fc9a7567a49df5a1f424eb4a",
+  "results": [
+    {
+      "target": "ES5",
+      "message": "AS3_REFERENCE_COERCION_UNSUPPORTED: reference type operation requires class-evaluation authority: flash.events.DataEvent at offset 651"
+    },
+    {
+      "target": "ES2015",
+      "message": "AS3_REFERENCE_COERCION_UNSUPPORTED: reference type operation requires class-evaluation authority: flash.events.DataEvent at offset 651"
+    }
+  ]
+}

@@ -175,6 +175,10 @@ export interface EmitterOptions {
     nativeTextLineReferenceModule?: string;
     /** Canonical ErrorEvent reference provider for generated constructor parameters. */
     nativeErrorEventReferenceModule?: string;
+    /** Canonical DataEvent is/as/casts, typed returns and data reads. */
+    nativeDataEventReferenceModule?: string;
+    /** DataEvent construction with Flash defaults and argument coercion order. */
+    nativeDataEventConstructionModule?: string;
     /** Canonical IO/security event is/as/casts and text reads in generated methods. */
     nativeErrorEventSubtypeReferenceModule?: string;
     nativeErrorEventSubtypeConstructionModule?: string;
@@ -518,6 +522,22 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules['flash.text.engine.TextLine']!==module)
                 throw new Error('AS3_TEXTLINE_REFERENCE_UNSUPPORTED: exact native TextLine provider binding required');
         }
+        if (this.options.nativeDataEventReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeDataEventReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const qname='flash.events.DataEvent',provider=inputs.providers&&inputs.providers[qname];
+            if(!provider||provider.exportName!=='DataEvent'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                ||!this.options.importModules||this.options.importModules[qname]!==module)
+                throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: exact canonical provider binding required');
+        }
+        if (this.options.nativeDataEventConstructionModule !== undefined) {
+            const module=generatedModule(this.options.nativeDataEventConstructionModule),reference=this.options.nativeDataEventReferenceModule;
+            if(!reference||!/AS3CanonicalDataEventReference$/.test(reference)
+                ||module!==reference.replace(/AS3CanonicalDataEventReference$/,'AS3DataEventConstruction'))
+                throw new Error('AS3_DATAEVENT_CONSTRUCTION_UNSUPPORTED: canonical reference and construction modules required');
+        }
         if (this.options.nativeErrorEventSubtypeReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeErrorEventSubtypeReferenceModule),reference=this.options.nativeReferenceCoercion;
             if(!this.generated||!reference)throw new Error('AS3_ERROREVENT_SUBTYPE_UNSUPPORTED: generated declaration/reference plan required');
@@ -719,7 +739,7 @@ export default class Emitter {
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
                 this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
                 this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : [],
-                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.generated ? this.generated.projection.binding.identity : undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeErrorEventSubtypeReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined);
+                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.generated ? this.generated.projection.binding.identity : undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeErrorEventSubtypeReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDataEventReferenceModule!==undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -960,7 +980,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeFontMetricsReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeSoundLoaderContextReferenceModule!==undefined,this.options.nativeBitmapDataReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeFontMetricsReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeSoundLoaderContextReferenceModule!==undefined,this.options.nativeBitmapDataReferenceModule!==undefined,this.options.nativeDataEventReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations(this.generated&&this.generated.options.plan.namespaceKeys?(uri,name,key)=>{
                 const binding=this.generated.options.plan.namespaceKeys.find(k=>k.uri===uri&&k.name===name);
                 if(!binding){if(uri===generatedProxyUri)return 'const '+key+'=globalThis.Symbol.for('+JSON.stringify('as3.namespace.member@1:'+JSON.stringify([uri,name]))+');\n';this.namespaces.fail('generated namespace key is absent from source plan');}
@@ -3401,7 +3421,7 @@ function emitRegExpConstruction(emitter:Emitter,node:Node,conversion:boolean):bo
 }
 function emitNew(emitter:Emitter, node:Node):void {
  if(emitRegExpConstruction(emitter,node,false))return;
- if(emitErrorEventSubtypeConstruction(emitter,node))return;
+ if(emitDataEventConstruction(emitter,node)||emitErrorEventSubtypeConstruction(emitter,node))return;
  if(emitLexicalSpriteConstruction(emitter,node))return;
  if(emitDynamicConstruction(emitter,node))return;
  if(emitGeneratedVectorLiteral(emitter,node))return;
@@ -3856,6 +3876,70 @@ function emitInterfaceReceiverCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(']))');emitter.skipTo(node.end);return true;
 }
 
+function dataEventName(emitter:Emitter,name:string):boolean {
+    return emitter.options.nativeDataEventReferenceModule!==undefined&&!!emitter.references
+        &&emitter.references.resolve(name)==='flash.events.DataEvent';
+}
+function dataEventTarget(emitter:Emitter,node:Node):boolean {
+    if(!node||node.kind!==NodeKind.IDENTIFIER||!dataEventName(emitter,node.text))return false;
+    const definition=emitter.findDefInScope(node.text);
+    if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
+        throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: shadowed target requires separate Class authority');
+    let method=node.parent;while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
+    if(!method)throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: class initializer reference operation held');
+    return true;
+}
+function emitDataEventConstruction(emitter:Emitter,node:Node):boolean {
+    if(!emitter.options.nativeDataEventConstructionModule||node.children.length!==1)return false;
+    const call=node.children[0],callee=unwrapEncapsulatedExpression(call.kind===NodeKind.CALL?call.children[0]:call);
+    if(!dataEventTarget(emitter,callee))return false;
+    const args=call.kind===NodeKind.CALL?call.findChild(NodeKind.ARGUMENTS):undefined;
+    if(!args||args.children.length<1||args.children.length>4)
+        throw new Error('AS3_DATAEVENT_CONSTRUCTION_UNSUPPORTED: one through four arguments required');
+    const helper=propertyHelper(emitter,'constructAS3DataEvent',emitter.options.nativeDataEventConstructionModule);
+    const target=propertyHelper(emitter,emitter.references.resolve(callee.text).split('.').pop(),emitter.options.nativeDataEventReferenceModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'('+target+',[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+function emitDataEventCast(emitter:Emitter,node:Node):boolean {
+    const callee=unwrapEncapsulatedExpression(node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);
+    if(!dataEventTarget(emitter,callee))return false;
+    if(emitter.isNew||!args||args.children.length!==1)
+        throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: cast requires one argument and no construction');
+    const helper=propertyHelper(emitter,'as3CoerceReference',emitter.references.options.coercionModule),argument=args.children[0];
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitter.skipTo(getExpressionStart(argument));
+    visitNode(emitter,argument);emitter.catchup(getEffectiveNodeEnd(argument));emitter.insert(',');
+    // The cast target precedes the argument in source, so import its exact provider
+    // directly instead of rewinding the source cursor.
+    const name=emitter.references.resolve(callee.text).split('.').pop();
+    emitter.insert(propertyHelper(emitter,name,emitter.options.nativeDataEventReferenceModule)+'))');
+    emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+function emitDataEventData(emitter:Emitter,node:Node):boolean {
+    if(!emitter.options.nativeDataEventReferenceModule||node.children.length!==2)return false;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),key=node.children[1];
+    let qualified=false;
+    if(receiver.kind===NodeKind.IDENTIFIER){
+        const definition=emitter.findDefInScope(receiver.text);
+        qualified=!!definition&&!definition.bound&&!!definition.as3Type&&dataEventName(emitter,definition.as3Type);
+    }else if(receiver.kind===NodeKind.CALL){
+        qualified=dataEventTarget(emitter,unwrapEncapsulatedExpression(receiver.children[0]));
+    }else if(receiver.kind===NodeKind.RELATION&&receiver.children.length===3&&receiver.children[1].text==='as'
+        &&dataEventTarget(emitter,receiver.lastChild)){
+        throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: direct as-result member access requires separate authority');
+    }
+    if(!qualified)return false;
+    const expression=outerEncapsulatedExpression(node),operation=expression.parent;
+    if(node.kind!==NodeKind.DOT||key.kind!==NodeKind.LITERAL||key.text!=='data'||operation&&operation.children[0]===expression
+        &&[NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE,NodeKind.CALL,NodeKind.NEW].indexOf(operation.kind)>=0)
+        throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: only a data read is qualified');
+    const helper=propertyHelper(emitter,'readAS3DataEventData',emitter.options.nativeDataEventReferenceModule);
+    emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(node.children[0].start);
+    visitNode(emitter,node.children[0]);emitter.catchup(getEffectiveNodeEnd(node.children[0]));
+    emitter.insert(')');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 function errorEventSubtypeName(emitter:Emitter,name:string):boolean {
     return emitter.options.nativeErrorEventSubtypeReferenceModule!==undefined&&!!emitter.references
         &&['flash.events.IOErrorEvent','flash.events.SecurityErrorEvent'].indexOf(emitter.references.resolve(name))>=0;
@@ -4136,7 +4220,7 @@ function emitCall(emitter:Emitter, node:Node):void {
         });
         emitter.insert(')');emitter.skipTo(getEffectiveNodeEnd(node));return;
     }
-    if (emitErrorEventSubtypeCast(emitter,node) || emitInterfaceCoercionCall(emitter,node) || emitInterfaceReceiverCall(emitter,node)) return;
+    if (emitDataEventCast(emitter,node) || emitErrorEventSubtypeCast(emitter,node) || emitInterfaceCoercionCall(emitter,node) || emitInterfaceReceiverCall(emitter,node)) return;
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
     if (emitJSONParse(emitter,node)) return;
@@ -5383,6 +5467,23 @@ function emitRelation(emitter:Emitter, node:Node):void {
         visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
         emitter.insert(node.children[1].text === 'is' ? ') !== null)' : '))');
         emitter.skipTo(node.end);return;
+    }
+    if(emitter.options.nativeDataEventReferenceModule!==undefined&&emitter.references&&node.children.length===3
+        &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
+        &&dataEventName(emitter,node.lastChild.text)) {
+        const target=node.lastChild,definition=emitter.findDefInScope(target.text);
+        if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
+            throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: shadowed target requires separate Class authority');
+        let method=node.parent;while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
+        if(!method)throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: class initializer type operation held');
+        const operation=node.children[1].text;
+        let helper='__as3_data_event_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
+        emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,generatedModule(emitter.options.nativeComputedTypeTestModule),false);
+        emitter.nativeSourceHelpers.add(helper);
+        emitter.catchup(node.start);emitter.insert(helper+'(');
+        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
+        emitter.insert(',');emitter.skipTo(target.start);visitNode(emitter,target);
+        emitter.catchup(target.end);emitter.insert(')');emitter.skipTo(node.end);return;
     }
     if(emitter.options.nativeErrorEventSubtypeReferenceModule!==undefined&&emitter.references&&node.children.length===3
         &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
@@ -6685,7 +6786,7 @@ function qualifiedNativeStaticRead(emitter:Emitter,node:Node):{module:string;exp
 }
 
 function emitDot(emitter:Emitter, node:Node) {
-    if (emitErrorEventSubtypeText(emitter,node)) return;
+    if (emitDataEventData(emitter,node) || emitErrorEventSubtypeText(emitter,node)) return;
     if (emitGeneratedArraySortRead(emitter,node)) return;
     if (emitGeneratedArrayFieldRead(emitter,node)) return;
     if (emitLexicalApplicationDomain(emitter,node)) return;
@@ -6769,7 +6870,7 @@ function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
 }
 
 function emitArrayAccessor(emitter:Emitter, node:Node):void {
-    if (emitErrorEventSubtypeText(emitter,node)) return;
+    if (emitDataEventData(emitter,node) || emitErrorEventSubtypeText(emitter,node)) return;
 	if (emitGeneratedArrayFieldRead(emitter,node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
     if (emitDynamicPropertyRead(emitter,node)) return;
