@@ -87,6 +87,8 @@ export class NativeGeneratedClassTraits {
         const qualifiedAccessor=(member:{type?:TraitType;setterType?:TraitType;name:string;uri?:string}):boolean=>
             !!member.uri || member.type==='*'
             || typeof member.type==='object'&&interfaces.some(i=>i.tokenExport===(member.type as ReferenceType).referenceExport&&i.reflectedName===(member.type as ReferenceType).name)
+            || typeof member.type==='object'&&plan.nativeBindings.some(b=>['flash.display.Sprite','flash.display.DisplayObject'].indexOf(b.qname)>=0
+                &&b.referenceExport===(member.type as ReferenceType).referenceExport&&reflected(b.qname)===(member.type as ReferenceType).name)
             || member.type==='Array'|| member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='String'||member.type==='Number';
         this.binding = nativeGeneratedClassDeclaration(plan, owner);
         if (!this.binding) fail('reference-only source cannot publish a class: ' + owner);

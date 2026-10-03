@@ -1,0 +1,14 @@
+{
+  "compiler": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-number-accessor-review",
+  "commit": "6ff44aeb369b8ffc3308c507a28f6b515eb36018",
+  "results": [
+    {
+      "target": "ES5",
+      "message": "AS3_GENERATED_TRAITS_UNSUPPORTED: duplicate or incompatible public declaration: cases.Child:container"
+    },
+    {
+      "target": "ES2015",
+      "message": "AS3_GENERATED_TRAITS_UNSUPPORTED: duplicate or incompatible public declaration: cases.Child:container"
+    }
+  ]
+}

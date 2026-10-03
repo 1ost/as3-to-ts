@@ -525,7 +525,8 @@ export class NativeCallableClasses {
                 : parameters.length === 1 && parameters[0].findChild(K.NAME_TYPE_INIT).findChild(K.TYPE);
             const ref = type && this.generated.options.plan.references.find(r => r.owner === owner.qname && r.start === type.start && r.end === type.end);
             if (!ref || !(uri ? ref.kind==='intrinsic'&&['*','Object','int','uint','Number','Boolean','String','Function','Array'].indexOf(ref.identity)>=0||ref.kind==='declaration'||ref.kind==='private-declaration'||ref.kind==='interface'
-                : ref.kind==='interface'||ref.kind==='intrinsic'&&(ref.identity === 'Boolean'||ref.identity==='String'||ref.identity==='*'||ref.identity==='Array'||ref.identity==='Number')))
+                : ref.kind==='interface'||ref.kind==='native'&&['flash.display.Sprite','flash.display.DisplayObject'].indexOf(ref.identity)>=0
+                ||ref.kind==='intrinsic'&&(ref.identity === 'Boolean'||ref.identity==='String'||ref.identity==='*'||ref.identity==='Array'||ref.identity==='Number')))
                 this.fail('super accessor requires qualified signature');
             const identity = side + ':' + generatedMemberIdentity(key,uri);
             let capture = superMethodNames.get(identity);
