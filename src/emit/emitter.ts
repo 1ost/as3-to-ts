@@ -5315,6 +5315,20 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if(emitter.generated&&emitter.references&&node.children.length===3&&node.children[1].text==='as'
+        &&node.lastChild.kind===NodeKind.IDENTIFIER&&node.lastChild.text==='Array'
+        &&emitter.references.resolve('Array')==='Array'&&!emitter.references.sourceClass('Array')
+        &&!emitter.references.sourceInterface('Array')){
+        if(emitter.findDefInScope('Array')||typeOfBinding(node.lastChild,emitter.source,[])!=='builtin'
+            ||emitter.generated.options.plan.nativeBindings.some(binding=>binding.qname==='Array'))
+            throw new Error('AS3_ARRAY_AS_UNSUPPORTED: shadowed Array target requires Class operand authority');
+        const helper=propertyHelper(emitter,'as3As',generatedModule(emitter.options.nativeComputedTypeTestModule));
+        // AS3 as returns null on a mismatch. A TS assertion erases the test and
+        // can turn a following typed assignment into a throwing coercion.
+        emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+        visitNode(emitter,node.children[0]);emitter.catchup(getEffectiveNodeEnd(node.children[0]));
+        emitter.insert(',Array))');emitter.skipTo(node.end);return;
+    }
     if(node.children.length===3&&['is','as'].indexOf(node.children[1].text)>=0&&nativeRegExpReference(emitter,node.lastChild)){
         const token=nativeRegExpReference(emitter,node.lastChild),helper=propertyHelper(emitter,node.children[1].text==='is'?'as3Is':'as3As',generatedModule(emitter.options.nativeComputedTypeTestModule));
         emitter.catchup(node.start);emitter.insert('('+helper+'(');

@@ -99,3 +99,5 @@ tests/native-generated-font-metrics/** -text whitespace=cr-at-eol
 
 tests/native-generated-justifiers/** -text whitespace=cr-at-eol
 src/emit/native-reference-coercion.ts -text
+
+tests/native-generated-array-as/** -text -whitespace
