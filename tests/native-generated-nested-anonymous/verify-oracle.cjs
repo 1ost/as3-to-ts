@@ -1,0 +1,12 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const dir=path.join(__dirname,'oracle/evidence'),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const receipt=JSON.parse(fs.readFileSync(path.join(dir,'receipt.json')));
+assert.equal(receipt.status,'passed');assert.equal(receipt.capture.runs,2);assert.equal(receipt.capture.identical,true);
+assert.equal(receipt.capture.observationCount,9);
+for(const [file,sha]of Object.entries(receipt.artifacts))assert.equal(hash(fs.readFileSync(path.join(dir,file))),sha,file);
+const captures=[1,2].map(n=>JSON.parse(fs.readFileSync(path.join(dir,'run-'+n+'/capture.json'))));
+assert.deepEqual(captures[0],captures[1]);
+for(const file of ['cases/NestedClosure.as','NestedAnonymousProbe.as'])assert.equal(hash(fs.readFileSync(path.join(__dirname,'oracle/source',file))),receipt.artifacts['source/'+file]);
+const rows=captures[0].state.observations;assert.equal(rows.length,9);
+if(require.main===module)console.log(JSON.stringify({rows:rows.length,runs:2,runtime:'Harman AIR',scope:'Nested callback closure semantics only'}));
+module.exports=rows;
