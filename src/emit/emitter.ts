@@ -3238,6 +3238,18 @@ function emitType(emitter:Emitter, node:Node):void {
         emitter.insert(global.alias);
         return;
     }
+	// Source RegExp annotations must name the same nominal provider as their
+	// runtime coercions. Resolve the exact planned type span, not its spelling:
+	// an imported/source class named RegExp must retain its own identity.
+	if (emitter.generated && emitter.generated.options.plan.references.some(ref =>
+		ref.owner === emitter.generated.lexical.owner && ref.start === node.start && ref.end === node.end
+		&& ref.kind === 'native' && ref.identity === 'RegExp')) {
+		const input = nativeGeneratedDeclarationInputs(emitter.generated.options.plan, emitter.generated.options.plan.scope);
+		const provider = input.providers.RegExp;
+		emitter.insert(propertyHelper(emitter, provider.exportName,
+			xmlGlobalProviderModule(provider.module, emitter.generated.options.module)));
+		return;
+	}
 	let sourceClassType = !!node.qualifiedName;
 	if (emitter.options.nativeCallableMetadata) {
 		let declaration = node.parent;
@@ -4383,9 +4395,10 @@ function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
     if (!callee || callee.kind !== NodeKind.DOT || ['replace','match','split'].indexOf(callee.children[1].text)<0) return false;
     const method=callee.children[1].text, replacing=method==='replace', splitting=method==='split';
     const args = node.findChild(NodeKind.ARGUMENTS);
+    const nominal=args&&args.children.length&&isRegExpValue(emitter,args.children[0]);
     // Ordinary String delimiters retain their separate dispatch path. This
     // source-pattern provider admits literal RegExp delimiters without limits.
-    if(splitting&&(!args||!args.children[0]||args.children[0].kind!==NodeKind.LITERAL||!/^\/[\s\S]+\/[a-z]*$/.test(args.children[0].text)))return false;
+    if(splitting&&!nominal&&(!args||!args.children[0]||args.children[0].kind!==NodeKind.LITERAL||!/^\/[\s\S]+\/[a-z]*$/.test(args.children[0].text)))return false;
     const receiver = unwrapEncapsulatedExpression(callee.children[0]);
     const stringExpression = (input:Node):boolean => {
         const value=unwrapEncapsulatedExpression(input);
@@ -4400,9 +4413,17 @@ function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
     if (!stringExpression(receiver) || !replacing && receiver.kind !== NodeKind.IDENTIFIER) return false;
     if (!emitter.references || emitter.references.resolve('String') !== 'String')
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
-    if(splitting)nativePatternModule(emitter);else generatedModule(module);
+    if(splitting&&!nominal)nativePatternModule(emitter);else generatedModule(module);
     if (!args || args.children.length !== (replacing?2:1))
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: '+method+' requires exactly '+(replacing?'two':'one')+' authored arguments');
+    if(nominal){
+        const input=nativeGeneratedDeclarationInputs(emitter.generated.options.plan,emitter.generated.options.plan.scope);
+        const helper=propertyHelper(emitter,replacing?'sourceRegExpStringReplace':splitting?'sourceRegExpStringSplit':'sourceRegExpStringMatch',
+            xmlGlobalProviderModule(input.providers.RegExp.module,emitter.generated.options.module));
+        emitter.catchup(node.start);emitter.insert(helper+'(');
+        [callee.children[0],...args.children].forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+        emitter.insert(')');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+    }
     // The legacy regex token end excludes flags; its exact text includes them.
     const pattern = args.children[0], raw = pattern.text;
     const primitiveLiteral = (value:Node):boolean => value.kind===NodeKind.LITERAL
@@ -4576,11 +4597,11 @@ function generatedReceiver(emitter:Emitter,receiver:Node):NativeGeneratedClassTr
     if(!projection){projection=new NativeGeneratedClassTraits(plan,plan.scope,identity,emitter.generated.sources[identity]);emitter.generatedReceiverTraits.set(identity,projection);}
     return projection;
 }
-function regExpAccess(emitter:Emitter,node:Node):DictionaryAccess {
-    if(!emitter.generated||!emitter.references||!node||[NodeKind.DOT,NodeKind.ARRAY_ACCESSOR].indexOf(node.kind)<0||node.children.length!==2)return null;
-    const receiver=unwrapEncapsulatedExpression(node.children[0]),key=node.children[1];
-    if(receiver.kind!==NodeKind.IDENTIFIER)return null;
-    const binding=emitter.generated.options.plan.nativeBindings.find(b=>b.qname==='RegExp'&&!b.nativeInterface);if(!binding)return null;
+function isRegExpValue(emitter:Emitter,node:Node):boolean {
+    if(!emitter.generated||!emitter.references||!node)return false;
+    const receiver=unwrapEncapsulatedExpression(node);
+    if(receiver.kind!==NodeKind.IDENTIFIER)return false;
+    const binding=emitter.generated.options.plan.nativeBindings.find(b=>b.qname==='RegExp'&&!b.nativeInterface);if(!binding)return false;
     const definition=emitter.findDefInScope(receiver.text);
     let qualified=definition&&!definition.bound&&emitter.references.type(definition.as3Type)===binding.referenceExport;
     if(!definition||definition.bound){
@@ -4588,7 +4609,11 @@ function regExpAccess(emitter:Emitter,node:Node):DictionaryAccess {
         qualified=!!trait&&!!trait.type&&emitter.generated.options.plan.references.some(ref=>ref.owner===trait.owner
             &&ref.start===trait.type.start&&ref.end===trait.type.end&&ref.kind==='native'&&ref.identity==='RegExp');
     }
-    return qualified?{receiver:node.children[0],key,...(node.kind===NodeKind.DOT?{literalKey:key.text}:{})}:null;
+    return !!qualified;
+}
+function regExpAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    if(!node||[NodeKind.DOT,NodeKind.ARRAY_ACCESSOR].indexOf(node.kind)<0||node.children.length!==2)return null;
+    return isRegExpValue(emitter,node.children[0])?{receiver:node.children[0],key:node.children[1],...(node.kind===NodeKind.DOT?{literalKey:node.children[1].text}:{})}:null;
 }
 function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     const regexp=regExpAccess(emitter,node);if(regexp)return regexp;

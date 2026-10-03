@@ -384,6 +384,13 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 if(cls.findChild(K.CONTENT).children.some(member=>{
                     if([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0)return false;
                     const mods=member.findChild(K.MOD_LIST);
+                    // Authenticated named namespace traits are not package-internal.
+                    // Do not admit unknown/custom spellings or an explicit internal
+                    // visibility through this exclusion; later trait projection still
+                    // validates the namespace signature and source member authority.
+                    const custom=mods&&mods.children.filter(mod=>['public','private','protected','internal','static','override','final'].indexOf(mod.text)<0);
+                    if(custom&&custom.length===1&&!mods.children.some(mod=>mod.text==='internal')
+                        &&namespaces.some(ns=>ns.qname===resolve(qname,custom[0].text)))return false;
                     return !mods||!mods.children.some(mod=>['public','private','protected'].indexOf(mod.text)>=0);
                 }))fail('Class script retries with internal declarations in their package require qualification');
             });
