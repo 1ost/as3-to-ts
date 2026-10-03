@@ -1,0 +1,23 @@
+{
+  "commit": "4e9e4d350c51cd99241315cc325d2eff6db305c5",
+  "inputs": [
+    {
+      "file": "lib/emit/native-generated-traits.js",
+      "sha256": "def46b30c8d8737cb1348fcf11224ffa4d238028220e7aef4b143c467dac34ed"
+    },
+    {
+      "file": "lib/emit/native-callable-classes.js",
+      "sha256": "761d58a07170abd9ae3bb73d2cdcf9019550987a02114bca996fb8f763b01501"
+    }
+  ],
+  "rows": [
+    {
+      "target": "ES5",
+      "error": "AS3_GENERATED_TRAITS_UNSUPPORTED: inherited collision/partial override requires authority: cases.Horizontal:width"
+    },
+    {
+      "target": "ES2015",
+      "error": "AS3_GENERATED_TRAITS_UNSUPPORTED: inherited collision/partial override requires authority: cases.Horizontal:width"
+    }
+  ]
+}

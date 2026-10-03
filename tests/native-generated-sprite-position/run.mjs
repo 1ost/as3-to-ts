@@ -1,7 +1,7 @@
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';import path from 'node:path';import assert from 'node:assert/strict';import {createRequire} from 'node:module';import {fileURLToPath} from 'node:url';import {createHash} from 'node:crypto';
 import {buildGeneratedSpritePosition} from './build.mjs';
-const here=path.dirname(fileURLToPath(import.meta.url)),compiler=path.resolve(here,'../..'),engine=path.resolve(compiler,'../LayaAir-op2'),op2=path.resolve(compiler,'../op2-html5'),require=createRequire(import.meta.url);
+const here=path.dirname(fileURLToPath(import.meta.url)),compiler=path.resolve(here,'../..'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||path.join(compiler,'../LayaAir-op2')),op2=path.resolve(compiler,'../op2-html5'),require=createRequire(import.meta.url);
 const {build}=require(path.join(engine,'node_modules/esbuild')),{chromium}=require(require.resolve('playwright',{paths:[path.join(op2,'game-client-laya')]}));
 const {createLayaSourceAliasPlugin}=await import(path.join(op2,'game-client-laya/tests/support/laya-source-alias.mjs').replaceAll('\\','/').replace(/^([A-Za-z]):/,'file:///$1:'));
 execFileSync(process.execPath,[path.join(compiler,'node_modules/typescript/lib/tsc.js'),'--project',path.join(compiler,'tsconfig.json')],{cwd:compiler,stdio:'pipe'});

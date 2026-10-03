@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {execFileSync} from 'node:child_process';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const compiler=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),engine=path.resolve(compiler,'../LayaAir-op2');
+const compiler=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||path.join(compiler,'../LayaAir-op2'));
 const hash=value=>createHash('sha256').update(value).digest('hex');
 export function buildGeneratedSpritePosition(target='ES2015',{sourceMovie}={}){
  const api=require(path.join(compiler,'lib')),modern=require(path.join(engine,'node_modules/typescript'));
