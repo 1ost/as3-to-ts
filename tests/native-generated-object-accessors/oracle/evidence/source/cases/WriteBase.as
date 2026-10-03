@@ -1,0 +1,1 @@
+package cases {public class WriteBase {public var stored:Object;public var writes:int;public function set value(item:Object):void{writes++;stored=item;}public function throughBase(item:Object):void{value=item;}}}

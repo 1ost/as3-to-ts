@@ -1,0 +1,27 @@
+{
+  "artifacts": {
+    "evidence/compile.log": "17d3b02519b0dbbc858fcf3a8f3f8ac8a8a157561c0e9027b61fea0df1afbade",
+    "evidence/host/OracleHost.as": "fb7755d6714d4b9d18832c3dc432a6ac24509964f0d979f5b2271ed6627f1e75",
+    "evidence/oracle.swf": "1c787fc13a2ef8ae2401e027e14779a8a0950bed81c779268bfcd42c0ed35030",
+    "evidence/receipt.json": "35a5f1509225860c8a0c2f7bac0bc4e4efc5970544b02c12e88ae98d77329ea8",
+    "evidence/run-1/app/application.xml": "4fcfd0a1dcfbbb0b3c5ba0621700a42063060cbae708e34763dc2aa7793c0e71",
+    "evidence/run-1/app/oracle.swf": "1c787fc13a2ef8ae2401e027e14779a8a0950bed81c779268bfcd42c0ed35030",
+    "evidence/run-1/capture.json": "a527e6b433b1cd9d7c978b3dbb998cc885f92e9b384ad8bfee18caaf4e904d87",
+    "evidence/run-1/frame.png": "935e681fb3da266a88c82da51f034d6007b40f917284fd47c59c357e5cdcbeec",
+    "evidence/run-1/runtime.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/run-2/app/application.xml": "4fcfd0a1dcfbbb0b3c5ba0621700a42063060cbae708e34763dc2aa7793c0e71",
+    "evidence/run-2/app/oracle.swf": "1c787fc13a2ef8ae2401e027e14779a8a0950bed81c779268bfcd42c0ed35030",
+    "evidence/run-2/capture.json": "a527e6b433b1cd9d7c978b3dbb998cc885f92e9b384ad8bfee18caaf4e904d87",
+    "evidence/run-2/frame.png": "935e681fb3da266a88c82da51f034d6007b40f917284fd47c59c357e5cdcbeec",
+    "evidence/run-2/runtime.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/source/cases/PairBase.as": "9be7ae128493841fd8fc7d28f9baa7756ded003a079a365544e2244aa24e2dce",
+    "evidence/source/cases/PairChild.as": "03058df3fbc8f688b586cbb79f4a300124651222a0f446718816a6e5c387555b",
+    "evidence/source/cases/ReadBase.as": "f9ee43e65d569e70df45e76d3099943df3818426c318bce7995b2b22da415d0c",
+    "evidence/source/cases/ReadChild.as": "bc46b1da31857e8c3f3ceb4dc859d4d2195c13157778c781e740b16c4564bc6b",
+    "evidence/source/cases/ReadGrand.as": "fb00878433b75c1ac4d69543098cd80dd9269d6fea3367b1abc04c8c9a8b6b64",
+    "evidence/source/cases/WriteBase.as": "252b22b76f77733273459adaa0138e5f28043c22f5ec0c84c89e64f94f3cc6ae",
+    "evidence/source/cases/WriteChild.as": "29ebdcf24fe5203cfa492d280f322ea6e0ca910e3c9c60332004aac3c2af2f6d",
+    "evidence/source/ObjectAccessorProbe.as": "2cbac7bf455cfc46ee6f652c1f2b5cdf3e5619363af8d258fb3d4582d5695296",
+    "evidence/swf-inspect.json": "cdb3838dfe8fb128a16c94f52b94b466f093c22092f7af8d4434cb9f1a3e0d45"
+  }
+}

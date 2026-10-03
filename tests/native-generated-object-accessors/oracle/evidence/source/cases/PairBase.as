@@ -1,0 +1,1 @@
+package cases {public class PairBase {protected var stored:Object;public var writes:int;public function get value():Object{return stored;}public function set value(item:Object):void{writes++;stored=item;}public function throughBase(item:Object):Object{value=item;return value;}}}
