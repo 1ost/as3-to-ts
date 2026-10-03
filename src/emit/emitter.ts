@@ -4397,7 +4397,12 @@ function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
     if (!callee || callee.kind !== NodeKind.DOT || ['replace','match','split'].indexOf(callee.children[1].text)<0) return false;
     const method=callee.children[1].text, replacing=method==='replace', splitting=method==='split';
     const args = node.findChild(NodeKind.ARGUMENTS);
-    const nominal=args&&args.children.length&&isRegExpValue(emitter,args.children[0]);
+    const patternExpression=args&&args.children.length&&unwrapEncapsulatedExpression(args.children[0]);
+    const nativeRegExp=emitter.generated&&emitter.generated.options.plan.nativeBindings.some(b=>b.qname==='RegExp'&&!b.nativeInterface);
+    const patternCall=patternExpression&&(patternExpression.kind===NodeKind.NEW?patternExpression.children[0]:patternExpression);
+    const nominal=patternExpression&&(isRegExpValue(emitter,patternExpression)
+        ||nativeRegExp&&patternExpression.kind===NodeKind.LITERAL&&/^\/[\s\S]*\/[a-z]*$/.test(patternExpression.text)
+        ||patternCall.kind===NodeKind.CALL&&!!nativeRegExpReference(emitter,patternCall.children[0]));
     // Ordinary String delimiters retain their separate dispatch path. This
     // source-pattern provider admits literal RegExp delimiters without limits.
     if(splitting&&!nominal&&(!args||!args.children[0]||args.children[0].kind!==NodeKind.LITERAL||!/^\/[\s\S]+\/[a-z]*$/.test(args.children[0].text)))return false;
@@ -4412,7 +4417,18 @@ function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
         return value.kind===NodeKind.ADD&&value.children.length>=3&&value.children.length%2===1
             &&value.children.every((child,index)=>index%2?child.text==='+':stringExpression(child));
     };
-    if (!stringExpression(receiver) || !replacing && receiver.kind !== NodeKind.IDENTIFIER) return false;
+    if (!stringExpression(receiver) || !replacing && receiver.kind !== NodeKind.IDENTIFIER) {
+        if(!nominal)return false;
+        // Property values and call results can be Strings or user objects.
+        // Runtime dispatch preserves custom methods instead of coercing the
+        // receiver, and evaluates arguments before the final named lookup.
+        const helper=propertyHelper(emitter,'as3CallRegExpStringProperty',emitter.generated.propertyModule);
+        emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+        emitter.skipTo(getExpressionStart(callee.children[0]));visitNode(emitter,callee.children[0]);
+        emitter.catchup(getEffectiveNodeEnd(callee.children[0]));emitter.insert(','+JSON.stringify(method)+',()=>[');
+        args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+        emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+    }
     if (!emitter.references || emitter.references.resolve('String') !== 'String')
         throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
     if(splitting&&!nominal)nativePatternModule(emitter);else generatedModule(module);
