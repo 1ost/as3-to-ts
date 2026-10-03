@@ -32,7 +32,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false, nativeSpriteValues = false, nativeSpriteOwners = false, nativeLoaders = false, declarationIdentity?: string, nativeDisplayObjectContainer = false, nativeErrorEventSubtypes = false, nativeTextJustifiers = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false, nativeSpriteValues = false, nativeSpriteOwners = false, nativeLoaders = false, declarationIdentity?: string, nativeDisplayObjectContainer = false, nativeErrorEventSubtypes = false, nativeTextJustifiers = false, nativeTextField = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         if (declarationIdentity !== undefined && !generated) fail('declaration selection requires generated implementation');
@@ -196,6 +196,7 @@ export class NativeReferenceCoercion {
                     || (nativeDisplayObjectContainer && this.resolve(node.lastChild.text)==='flash.display.DisplayObjectContainer')
                     || (nativeMovieClip && this.resolve(node.lastChild.text)==='flash.display.MovieClip')
                     || (nativeTextFormat && this.resolve(node.lastChild.text)==='flash.text.TextFormat')
+                    || (nativeTextField && this.resolve(node.lastChild.text)==='flash.text.TextField')
                     || (nativeAccessibility && this.resolve(node.lastChild.text)==='flash.accessibility.AccessibilityImplementation')
                     || (nativeSpriteValues && nativeSpriteValueReferenceNames.indexOf(this.resolve(node.lastChild.text))>=0)
                     || (nativeLoaders && nativeLoaderReferenceNames.indexOf(this.resolve(node.lastChild.text))>=0)
