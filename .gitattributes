@@ -103,3 +103,7 @@ src/emit/native-reference-coercion.ts -text
 tests/native-generated-array-as/** -text -whitespace
 
 tests/native-generated-anonymous-object-return/run.cjs -text -whitespace
+
+tests/native-generated-class-comments/** -text -whitespace
+src/parse/scanner.ts -text whitespace=cr-at-eol
+src/parse/parse-declarations.ts -text whitespace=cr-at-eol

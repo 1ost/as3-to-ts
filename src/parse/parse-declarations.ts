@@ -87,14 +87,14 @@ function parsePackageContent(parser:AS3Parser):Node {
         } else if (startsWith(parser.tok.text, ASDOC_COMMENT)) {
             parser.currentAsDoc = createNode(NodeKind.AS_DOC, {
                 start: parser.tok.index,
-                end: parser.tok.index + parser.tok.index - 1,
+                end: parser.tok.end,
                 text: parser.tok.text
             });
             nextToken(parser);
         } else if (startsWith(parser.tok.text, MULTIPLE_LINES_COMMENT)) {
             parser.currentMultiLineComment = createNode(NodeKind.MULTI_LINE_COMMENT, {
                 start: parser.tok.index,
-                end: parser.tok.index + parser.tok.index - 1,
+                end: parser.tok.end,
                 text: parser.tok.text
             });
             nextToken(parser);

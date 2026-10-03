@@ -1,0 +1,69 @@
+{
+  "checks": [
+    {
+      "comment": "/** Code is linked into Game.swf. Only UI libraries are downloaded. */",
+      "expectedStart": 16,
+      "actual": [
+        {
+          "start": 85,
+          "end": 169,
+          "text": "/** Code is linked into Game.swf. Only UI libraries are downloaded. */"
+        }
+      ]
+    },
+    {
+      "comment": "/* plain */",
+      "expectedStart": 16,
+      "actual": [
+        {
+          "start": 26,
+          "end": 51,
+          "text": "/* plain */"
+        }
+      ]
+    },
+    {
+      "comment": "/**\n * Documentation\n */",
+      "expectedStart": 16,
+      "actual": [
+        {
+          "start": 39,
+          "end": 77,
+          "text": "/**\n * Documentation\n */"
+        }
+      ]
+    },
+    {
+      "comment": "/*\r\n Multi-line\r\n */",
+      "expectedStart": 16,
+      "actual": [
+        {
+          "start": 35,
+          "end": 69,
+          "text": "/*\r\n Multi-line\r\n */"
+        }
+      ]
+    },
+    {
+      "comment": "/**/",
+      "expectedStart": 16,
+      "actual": [
+        {
+          "start": 19,
+          "end": 37,
+          "text": "/**/"
+        }
+      ]
+    }
+  ],
+  "failures": [
+    {
+      "target": "ES5",
+      "error": "AS3_CALLABLE_CLASS_UNSUPPORTED: intermediate native syntax"
+    },
+    {
+      "target": "ES2015",
+      "error": "AS3_CALLABLE_CLASS_UNSUPPORTED: intermediate native syntax"
+    }
+  ]
+}

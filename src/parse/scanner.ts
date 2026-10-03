@@ -438,6 +438,7 @@ function scanHex(scanner: AS3Scanner): Token {
  * the current string is the first slash plus we know, that a * is following
  */
 function scanMultiLineComment(scanner: AS3Scanner): Token {
+    const start = scanner.index;
     let buffer = '/*';
     let currentCharacter = ' ';
     let previousCharacter = ' ';
@@ -450,7 +451,7 @@ function scanMultiLineComment(scanner: AS3Scanner): Token {
     }
     while (currentCharacter && (previousCharacter !== '*' || currentCharacter !== '/'));
 
-    return scanner.createToken(buffer, {skip: false});
+    return scanner.createToken(buffer, {index: start, skip: false});
 }
 
 

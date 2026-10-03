@@ -1254,7 +1254,8 @@ function emitPackage(emitter:Emitter, node:Node):void {
 
 	} else {
 		emitter.catchup(node.start);
-		emitter.skip(Keywords.PACKAGE.length + node.children[0].text.length + 4);
+		// The first content token already accounts for package whitespace and comments.
+		emitter.skipTo(content.start);
 
 		visitNodes(emitter, node.children);
 		emitter.catchup(node.end - 1);
