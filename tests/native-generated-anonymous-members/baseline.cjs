@@ -1,8 +1,7 @@
 const fs=require('fs'),path=require('path'),assert=require('assert/strict'),cp=require('child_process');
 const {compile,root,hash}=require('./compile.cjs');
-const commit=cp.execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
-assert.equal(commit,'577d2e105a1bb71d4cc77b0266c19c7fd6e077bd','Run against the unchanged provider baseline');
-assert.equal(cp.execFileSync('git',['diff','--name-only','HEAD','--','src'],{cwd:root,encoding:'utf8'}).trim(),'');
+const commit='577d2e105a1bb71d4cc77b0266c19c7fd6e077bd';
+assert.equal(cp.execFileSync('git',['diff','--name-only',commit,'--','src','utils','tsconfig.json','package.json','package-lock.json'],{cwd:root,encoding:'utf8'}).trim(),'');
 const cache=path.join(root,'.cache/native-generated-anonymous-members');fs.mkdirSync(cache,{recursive:true});const out=fs.mkdtempSync(path.join(cache,'baseline-'));
 const results=[];
 for(const target of ['ES5','ES2015']){
