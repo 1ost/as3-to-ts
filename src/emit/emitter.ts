@@ -2801,9 +2801,10 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
             emitter.classFactory.fields.push(lexical.provider+'.getAS3LexicalClassConstantInitializer('+emitter.classFactory.value+','+binaryTrait.access+')('+getter+'());');
             visitNodes(emitter,node.children);return;
         }
+        const deferredObject=emitter.generated&&emitter.generated.lexical.deferredObjectConstant(binaryTrait);
         const deferred=emitter.generated && declaration.kind===NodeKind.CONST_LIST
             && emitter.generated.deferredConstants[generatedMemberIdentity(node.findChild(NodeKind.NAME).text,generatedMemberUri(emitter.generated.options.plan,emitter.generated.projection.binding.identity,declaration))];
-        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred) {
+        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred && !deferredObject) {
             // Literal constants are installed before publication by the common
             // generated-class provider, not rewritten as later mutable stores.
             visitNodes(emitter,node.children);
@@ -2827,7 +2828,8 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 			emitter.catchup(getEffectiveNodeEnd(init));
 			const lexical = emitter.lexical && emitter.lexical.trait(node.findChild(NodeKind.NAME).text, true);
             if(generatedLexical){
-                if(generatedLexical.kind!=='constant'&&emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
+                if(deferredObject)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalObjectConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
+                else if(generatedLexical.kind!=='constant'&&emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
                     emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.as3SetLexicalMember('+emitter.classFactory.value+','+generatedLexical.access+','+emitter.output.slice(start)+');');
             } else emitter.classFactory.fields.push(deferred ? deferred+'('+emitter.output.slice(start)+');'
                 : emitter.classFactory.value + '[' + (namespaceMember ? emitter.namespaces.key(namespaceMember.uri,namespaceMember.name) : lexical ? lexical.key : JSON.stringify(node.findChild(NodeKind.NAME).text))
