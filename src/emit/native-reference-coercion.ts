@@ -33,7 +33,7 @@ export class NativeReferenceCoercion {
     private constantDeclarations = new Map<string, Node>();
     private scopes = new Map<number, Map<string, ReferenceLocal>>();
     private signatures = new Map<number, ReferenceSignature>();
-    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false, nativeSpriteValues = false, nativeSpriteOwners = false, nativeLoaders = false, declarationIdentity?: string, nativeDisplayObjectContainer = false, nativeErrorEventSubtypes = false, nativeTextJustifiers = false, nativeTextField = false, nativeDataEvent = false) {
+    constructor(source: string, readonly options: NativeReferenceCoercionOptions, private generated: boolean, nativeDate = false, stringLocals = false, nativeEvent = false, nativeXML: string[] = [], nativeDisplayObject = false, nativeByteArray = false, nativeMovieClip = false, nativeTextFormat = false, nativeInteractiveObject = false, nativeAccessibility = false, nativeSpriteValues = false, nativeSpriteOwners = false, nativeLoaders = false, declarationIdentity?: string, nativeDisplayObjectContainer = false, nativeErrorEventSubtypes = false, nativeTextJustifiers = false, nativeTextField = false, nativeDataEvent = false, nativeColorTransform = false) {
         if (!options || Object.keys(options).some(key => ['plan','module','coercionModule'].indexOf(key) < 0)) fail('exact plan/module/coercion configuration required');
         generatedModule(options.module); generatedModule(options.coercionModule);
         if (declarationIdentity !== undefined && !generated) fail('declaration selection requires generated implementation');
@@ -213,6 +213,12 @@ export class NativeReferenceCoercion {
             const justifierTest = nativeTextJustifiers && generated && node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && ['TextJustifier','SpaceJustifier','EastAsianJustifier'].some(name=>this.resolve(node.lastChild.text)==='flash.text.engine.'+name);
+            if(nativeColorTransform&&node.kind===K.CALL&&node.children[0].kind===K.IDENTIFIER
+                &&this.resolve(node.children[0].text)==='flash.geom.ColorTransform')
+                fail('ColorTransform construction/cast requires separate Class authority');
+            const colorTransformTest = nativeColorTransform && generated && node.kind===K.RELATION && node.children.length===3
+                && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
+                && this.resolve(node.lastChild.text)==='flash.geom.ColorTransform';
             const dataEventTest = nativeDataEvent && generated && node.kind===K.RELATION && node.children.length===3
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && this.resolve(node.lastChild.text)==='flash.events.DataEvent';
@@ -220,7 +226,7 @@ export class NativeReferenceCoercion {
                 && ['is','as'].indexOf(node.children[1].text)>=0 && node.lastChild.kind===K.IDENTIFIER
                 && ['flash.events.IOErrorEvent','flash.events.SecurityErrorEvent'].indexOf(this.resolve(node.lastChild.text))>=0;
             if (node.kind === K.RELATION && node.children.some(child => child.text === 'as' || child.text === 'is')
-                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeRegExpTest && !nativeDateTest && !nativeEventTest && !nativeProxyTest && !nativeXMLTest && !sourceAs && !sourceIs && !interfaceTest && !displayTest && !byteArrayTest && !errorEventSubtypeTest && !justifierTest && !dataEventTest)
+                && this.type(node.lastChild.qualifiedName || node.lastChild.text) && !nativeRegExpTest && !nativeDateTest && !nativeEventTest && !nativeProxyTest && !nativeXMLTest && !sourceAs && !sourceIs && !interfaceTest && !displayTest && !byteArrayTest && !errorEventSubtypeTest && !justifierTest && !dataEventTest && !colorTransformTest)
                 fail('reference type operation requires class-evaluation authority: '+this.resolve(node.lastChild.qualifiedName || node.lastChild.text)+' at offset '+node.start);
             if (node.kind === K.DOT) {
                 const qualified = (value: Node): string => value.kind === K.IDENTIFIER ? value.text
