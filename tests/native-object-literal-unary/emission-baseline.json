@@ -1,0 +1,15 @@
+{
+  "compiler": "d6c316a6de690d11dbad5a24ad3bbeca5c4e0fff",
+  "source": "package { public class Probe { public function value():Object { return {negative:-10,positive:+\"12\"}; } } }",
+  "output": "import { bound } from \"undefinedbound\";\nimport { as3CreateObjectLiteral as __as3_source_objectLiteral } from \"./AS3Class\";\nimport { classBound } from \"undefinedclassBound\";\n\n@classBound\nexport class Probe { @bound\npublic value():any { return (__as3_source_objectLiteral([[\"negative\",10],[\"positive\",\"12\"]])); } } ",
+  "inputs": [
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-delayed-params-review\\src\\emit\\emitter.ts",
+      "sha256": "1f16a1baa7164bc56690b7d913acfe3c1cfcf4afde3263c639388ea3966c1cc0"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-delayed-params-review\\src\\parse\\parse-expressions.ts",
+      "sha256": "cd54be48309f276a9cbdc8a6c71df436539678142180ae9f09d976bc9f91a847"
+    }
+  ]
+}

@@ -375,14 +375,14 @@ function parseUnaryExpression(parser:AS3Parser):Node {
         const operand = parseUnaryExpression(parser);
         result = createNode(NodeKind.PRE_DEC, {start: index, end: operand.end}, operand);
     } else if (tokIs(parser, Operators.MINUS)) {
-        nextToken(parser);
+        nextToken(parser, true);
         result = createNode(NodeKind.MINUS, {start: parser.tok.index, end: index}, parseUnaryExpression(parser));
     //
     // Having PLUS_AS2 emits wrong AST when a method is called "add"
     // } else if (tokIs(parser, Operators.PLUS) || tokIs(parser, Operators.PLUS_AS2)) {
     //
     } else if (tokIs(parser, Operators.PLUS)) {
-        nextToken(parser);
+        nextToken(parser, true);
         result = createNode(NodeKind.PLUS, {start: parser.tok.index, end: index}, parseUnaryExpression(parser));
     } else {
         return parseUnaryExpressionNotPlusMinus(parser);

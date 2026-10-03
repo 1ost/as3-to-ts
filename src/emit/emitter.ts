@@ -2820,8 +2820,8 @@ function emitObjectLiteral(emitter:Emitter, node:Node):void {
         // Keys are static source tokens, never host object-literal syntax (__proto__).
         const token=/^["'0-9]/.test(text)?text:JSON.stringify(text);
         emitter.insert('['+token.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029')+',');
-        const expression=value.children[0];emitter.skipTo(expression.start);visitNode(emitter,expression);
-        emitter.catchup(expression.end);emitter.insert(']');
+        const expression=value.children[0];emitter.skipTo(getExpressionStart(expression));visitNode(emitter,expression);
+        emitter.catchup(getEffectiveNodeEnd(expression));emitter.insert(']');
     });
     emitter.insert(']))');emitter.skipTo(node.end);
 }
