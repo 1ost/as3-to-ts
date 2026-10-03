@@ -593,8 +593,10 @@ export class NativeGeneratedLexical {
                 }
                 if(receiver.kind===K.DOT&&receiver.children[0].kind===K.IDENTIFIER) {
                     const root=receiver.children[0],rootBinding=emitter.findDefInScope(root.text);
-                    const owner=(!rootBinding||!Object.prototype.hasOwnProperty.call(rootBinding,'as3Type'))
-                        &&this.declarations.find(b=>b.identity===this.resolveTypeName(root.text));
+                    const resolveOwner=!rootBinding||!Object.prototype.hasOwnProperty.call(rootBinding,'as3Type');
+                    // Resolve once per search, retaining the original lazy/empty-list behavior.
+                    const ownerName=resolveOwner&&this.declarations.length?this.resolveTypeName(root.text):null;
+                    const owner=resolveOwner&&this.declarations.find(b=>b.identity===ownerName);
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                     if(owner&&this.classSource(owner.identity)&&!this.classSource(owner.identity).referenceOnly) {
                         // A class can reach its own instance through its private
@@ -651,8 +653,9 @@ export class NativeGeneratedLexical {
                 }
                 if(inputPackageEnabled(this.plan)) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
-                    const knownClass=receiver.kind===K.IDENTIFIER&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type'))
-                        ? this.declarations.filter(b=>b.identity===this.resolveTypeName(receiver.text)) : [];
+                    const resolveClass=receiver.kind===K.IDENTIFIER&&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type'));
+                    const className=resolveClass&&this.declarations.length?this.resolveTypeName(receiver.text):null;
+                    const knownClass=resolveClass?this.declarations.filter(b=>b.identity===className):[];
                     const identity=identities.length===1?identities[0]:knownClass.length===1?knownClass[0].identity:undefined;
                     const statics=!!identity&&knownClass.some(b=>b.identity===identity);
                     // A private spelling in this class does not capture an
