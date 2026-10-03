@@ -506,7 +506,12 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                     let specExport=exports.get(identity);
                     if(!specExport){
                         specExport='vector'+exports.size;exports.set(identity,specExport);
-                        vectorLines.push('export const '+specExport+'='+(contract?'as3VectorInterfaceSpec('+contract.tokenExport+')':elementClass?'as3VectorDeclarationSpec('+elementClass.tokenExport+')':elementPrivate?'as3VectorDeclarationSpec('+elementPrivate.tokenExport+')':elementNative?'as3VectorCanonicalSpec('+JSON.stringify(identity.replace(/\.([^.]*)$/,'::$1'))+',__vectorNative'+nativeNames.indexOf(identity)+')':'as3VectorPrimitiveSpec('+JSON.stringify(identity)+')')+';');
+                        // The runtime name cannot infer T from a string argument.
+                        // Preserve known scalar element types for conversion and
+                        // construction expressions passed directly to typed APIs.
+                        const primitiveType=identity==='String'?'string':identity==='Boolean'?'boolean':
+                            ['int','uint','Number'].indexOf(identity)>=0?'number':null;
+                        vectorLines.push('export const '+specExport+'='+(contract?'as3VectorInterfaceSpec('+contract.tokenExport+')':elementClass?'as3VectorDeclarationSpec('+elementClass.tokenExport+')':elementPrivate?'as3VectorDeclarationSpec('+elementPrivate.tokenExport+')':elementNative?'as3VectorCanonicalSpec('+JSON.stringify(identity.replace(/\.([^.]*)$/,'::$1'))+',__vectorNative'+nativeNames.indexOf(identity)+')':'as3VectorPrimitiveSpec'+(primitiveType?'<'+primitiveType+'>':'')+'('+JSON.stringify(identity)+')')+';');
                     }
                     vectors.push(Object.freeze({owner,start:node.start,end:node.end,identity:'Vector.<'+identity+'>',
                         name:'__AS3__.vec::Vector.<'+(elementPrivate?elementPrivate.declaration.reflectedName:privateContract?privateContract.declaration.reflectedName:identity.replace(/\.([^.]*)$/,'::$1'))+'>',specExport,...(elementClass||elementPrivate?{elementClass:identity}:{}),...(elementNative?{elementNative:identity}:{})}));
