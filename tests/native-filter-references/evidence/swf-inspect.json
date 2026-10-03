@@ -1,0 +1,25 @@
+{
+  "actual_uncompressed_length": 6663,
+  "compression": "zlib",
+  "declared_uncompressed_length": 6663,
+  "frame_count": 1,
+  "frame_rate": 24.0,
+  "length_matches_header": true,
+  "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\op2-html5\\game-client-laya\\tests\\filter-bindings-review\\oracle\\evidence\\oracle.swf",
+  "schema": "swf-header@1",
+  "sha256": "07578d250e9906e5a4f2e1eebd7d4a2615e03742670088ac524391ec14b25e70",
+  "signature": "CWS",
+  "stage": {
+    "height": 375.0,
+    "width": 500.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "stage_twips": {
+    "xmax": 10000,
+    "xmin": 0,
+    "ymax": 7500,
+    "ymin": 0
+  },
+  "swf_version": 51
+}
