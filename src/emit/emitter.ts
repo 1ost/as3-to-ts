@@ -1825,7 +1825,7 @@ function emitFunction(emitter:Emitter, node:Node):void {
    }
    emitter.catchup(body.end);
   });
-  emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');if(anonymous.ownerReceiver)emitter.insert(')(this)');emitter.skipTo(node.end);return;
+  emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');if(anonymous.ownerReceiver)emitter.insert(')('+emitter.generated.lexical.implicitReceiver(node.parent)+')');emitter.skipTo(node.end);return;
  }
 
 	const nested=emitter.generated&&emitter.generated.lexical.nestedFunctions.find(fn=>fn.start===node.start&&fn.end===node.end);

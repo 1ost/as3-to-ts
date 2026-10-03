@@ -33,8 +33,10 @@ anonymous Object returns (17), generated typed locals (47), and DataEvent (36).
 Run verify.cjs --check-current to authenticate retained results and input hashes.
 The baseline evidence remains independently verifiable with verify-baseline.cjs.
 
-Nested anonymous functions, explicit this.property access, super/arguments,
+Nested named functions, explicit this.property access, super/arguments,
 shadowing outer storage, const/Vector anonymous locals, and unqualified parameter
 types remain guarded. Native timer integration, maintained ModuleManager runtime,
 and full-client startup/account validation remain open. Font rendering is outside
 this work.
+
+Nested anonymous callbacks are now qualified separately by native-generated-nested-anonymous. Its retained report includes a fresh eleven-row replay of this suite. The older report here remains historical evidence at its original pins.

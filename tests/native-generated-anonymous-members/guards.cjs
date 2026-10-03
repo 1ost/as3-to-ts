@@ -8,7 +8,7 @@ module.exports=(dir,target,config)=>{
   ['dynamic-this-property','_pending=0;','this._pending=0;'],
   ['arguments-object','_pending=0;','_pending=arguments.length;'],
   ['super-call','_pending=0;','super.record("bad");'],
-  ['nested-lambda','_pending=0;','var nested:Function=function():void{};'],
+  ['nested-named-function','_pending=0;','function nested():void{};'],
   ['local-shadows-outer','var selected:Object=_values[name];','var name:Object=_values[name];'],
   ['vector-local','var selected:Object=_values[name];','var selected:Vector.<Object>=null;'],
   ['local-constant','var selected:Object=_values[name];','const selected:Object=_values[name];'],
