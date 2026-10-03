@@ -1290,7 +1290,34 @@ function resolveNamespaceAccess(emitter:Emitter, node:Node) {
     return {access, target};
 }
 
+function emitGeneratedClassNamespaceRead(emitter:Emitter, node:Node):boolean {
+    if (!emitter.generated || !emitter.generated.propertyModule) return false;
+    const access = emitter.namespaces.access(node);
+    const definition = access.receiver && access.receiver.kind === NodeKind.IDENTIFIER
+        && emitter.findDefInScope(access.receiver.text);
+    const receiverType = emitter.namespaces.receiverType(node) || definition && definition.type;
+    if (!emitter.namespaces.classValueReceiver(node, receiverType)) return false;
+    if (hasFunctionLocal(emitter, access.qualifier))
+        emitter.namespaces.fail('runtime namespace qualifier shadows a declaration: ' + access.qualifier);
+    if (emitter.references && emitter.references.resolve('Class') !== 'Class')
+        emitter.namespaces.fail('Class namespace read requires the intrinsic Class type');
+    const reference = outerEncapsulatedExpression(node), parent = reference.parent;
+    if (!access.uri || parent && (
+        parent.kind === NodeKind.ASSIGN && parent.children[0] === reference
+        || [NodeKind.DELETE, NodeKind.PRE_INC, NodeKind.PRE_DEC, NodeKind.POST_INC, NodeKind.POST_DEC].indexOf(parent.kind) >= 0
+        || [NodeKind.CALL, NodeKind.NEW].indexOf(parent.kind) >= 0 && parent.children[0] === reference))
+        emitter.namespaces.fail('Class namespace operation requires separate lowering; only explicit reads are qualified');
+    const helper = propertyHelper(emitter, 'as3GetClassNamespaceProperty', emitter.generated.propertyModule);
+    emitter.catchup(node.start); emitter.insert('(<any>' + helper + '(');
+    emitter.skipTo(access.receiver.start); visitNode(emitter, access.receiver);
+    emitter.catchup(getEffectiveNodeEnd(access.receiver));
+    emitter.insert(',' + JSON.stringify(access.uri) + ',' + JSON.stringify(access.name) + '))');
+    emitter.skipTo(node.end);
+    return true;
+}
+
 function emitNamespaceAccess(emitter:Emitter, node:Node):void {
+    if (emitGeneratedClassNamespaceRead(emitter, node)) return;
     const {access, target} = resolveNamespaceAccess(emitter, node);
     const reference = outerEncapsulatedExpression(node);
     if (reference.parent && reference.parent.kind === NodeKind.ASSIGN && reference.parent.children[0] === reference

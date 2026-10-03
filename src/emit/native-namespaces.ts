@@ -770,6 +770,16 @@ export class NativeNamespaces {
         return this.classType(node, receiverType);
     }
 
+    /** A runtime Class value has no statically known namespace member table. */
+    classValueReceiver(node: Node, receiverType: string): boolean {
+        if (!this.access(node).receiver || receiverType !== 'Class') return false;
+        // Return annotations may originate in another source file. Do not
+        // reinterpret any source/provider Class spelling as the intrinsic.
+        // Until annotation-origin resolution is available, hold that cohort.
+        return !Array.from(this.classes.values()).some(owners =>
+            owners.some(owner => owner.findChild(NodeKind.NAME).text === 'Class'));
+    }
+
     checkReceiver(node: Node, receiverType: string): void {
         const access = this.access(node);
         if (!access.receiver) return;
