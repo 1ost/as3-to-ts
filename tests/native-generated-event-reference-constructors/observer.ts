@@ -1,9 +1,9 @@
+import '@ENGINE@/tests/nativeCanonicalSpriteClass/init-imports';
 import {NativeSourceClassModule,createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
 import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
 import {Event} from '@FLASH@/utils/AS3CanonicalEventConstruction';
 import {MouseEvent} from '@FLASH@/utils/AS3GeneratedMouseEventConstruction';
 import {KeyboardEvent} from '@FLASH@/utils/AS3CanonicalInteractionEventReferences';
-import '@ENGINE@/tests/nativeCanonicalSpriteClass/init-imports';
 import {Laya} from '@ENGINE@/src/layaAir/Laya';
 import {Sprite} from '@FLASH@/display/Sprite';
 export async function run(module:NativeSourceClassModule){

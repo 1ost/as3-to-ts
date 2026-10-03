@@ -1,0 +1,14 @@
+{
+  "baseCommit": "45bfddd87742c7150b02a600e8735a7654d1f1af",
+  "engineCommit": "33f0bd9911fb8179fd8ad83792594d5afd886548",
+  "sha256": "1a832f5acbfc8af21bfc65afef0a5b979b6affabf2a8cfe575af2adaa940afd8",
+  "baselineCallableSha256": "4b3cb2841e49e5024d2dc5d7677640ae599bdc5314bc5d50da7c913df3b27592",
+  "helpers": {
+    "capture.cjs": "ace26b25564127d7645c0e5ab2895518eba5b6ec367158c473a67366b1b17dd8",
+    "compare.cjs": "a99ad890b8e19c66fbf62347f6ef681ed32dc878217f129c5e110e4e32827662",
+    "scaling.cjs": "57cdfb4d534065dce62b915d049a4a96d94b5c01d5621b8889d5796944b1a8f7",
+    "compare-scaling.cjs": "03295f8655a9faa0688876a6cfb1b80be934817cf3596089659c0ab01aff0387",
+    "verify.cjs": "ea916f405e14435bd97f4e0127944ce1d681f0261200c3d229f5ed02ee2b48a0"
+  },
+  "eventOrderFailureSha256": "91b17cd8acd2e78d1b4181cd3d2064a75278b7da393104580a89bc6550ffb35a"
+}

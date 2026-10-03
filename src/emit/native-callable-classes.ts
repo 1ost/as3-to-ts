@@ -1,5 +1,5 @@
 import {nativeSourceUnitAst} from './native-source-unit';
-import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
+import {NativeGeneratedReference, nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import {generatedProxyUri} from './native-generated-proxy';
 import {generatedMemberUri,generatedMemberIdentity} from './native-generated-namespaces';
 import {nativeGeneratedClassDeclaration, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource, nativeGeneratedDeclarationResolver, nativeGeneratedSourceUnit} from './native-generated-declarations';
@@ -51,6 +51,20 @@ export class NativeCallableClasses {
         };
         const sourceClassNames=Object.keys(options).map(classNameFor);
         const roots = new Map<string, Node>();
+        // Index on the first typed constructor parameter; vector-only and
+        // untyped constructors should not pay for a whole-plan reference scan.
+        let referencesByOwner: Map<string, NativeGeneratedReference[]>;
+        const constructorReference = (owner: string, start: number, end: number): NativeGeneratedReference => {
+            if (!referencesByOwner) {
+                referencesByOwner = new Map<string, NativeGeneratedReference[]>();
+                generated.options.plan.references.forEach(reference => {
+                    let references = referencesByOwner.get(reference.owner);
+                    if (!references) referencesByOwner.set(reference.owner, references = []);
+                    references.push(reference);
+                });
+            }
+            return (referencesByOwner.get(owner) || []).find(ref => ref.start === start && ref.end === end);
+        };
         Object.keys(options).forEach(qname => {
             if (typeof options[qname] !== 'string' || !lazy || lazy[qname] !== 'lazy') this.fail('source identity must be lazy: ' + qname);
             this.sourceTexts.set(qname, options[qname]);
@@ -210,7 +224,7 @@ export class NativeCallableClasses {
                     const vectorNode=value.findChild(K.VECTOR);
                     const vector=vectorNode&&generated&&generated.options.plan.vectors.find(v=>v.owner===qname&&v.start===vectorNode.start&&v.end===vectorNode.end);
                     if(vectorNode&&!vector)this.fail('vector constructor parameter coercion requires authenticated specialization');
-                    const sourceReference=generated&&type&&generated.options.plan.references.find(ref=>ref.owner===qname&&ref.start===type.start&&ref.end===type.end);
+                    const sourceReference=generated&&type&&constructorReference(qname,type.start,type.end);
                     const sourceDeclaration=sourceReference&&((sourceReference.kind==='declaration'||sourceReference.kind==='private-declaration')
                         ?{qname:sourceReference.identity,tokenExport:nativeGeneratedClassDeclaration(generated.options.plan,sourceReference.identity).tokenExport}
                         :sourceReference.kind==='interface'&&nativeGeneratedInterfaceBindings(generated.options.plan).find(binding=>binding.qname===sourceReference.identity));
