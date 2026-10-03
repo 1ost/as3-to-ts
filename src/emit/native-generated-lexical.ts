@@ -363,7 +363,7 @@ export class NativeGeneratedLexical {
         if(trait.visibility==='private'&&trait.type&&['int','Boolean'].indexOf(trait.type.text)>=0&&expression&&expression.kind===K.CALL)return undefined;
         if(trait.type&&['int','uint','Number','Boolean','String','*'].indexOf(trait.type.text)>=0)
             fail('static lexical primitive initializer requires qualification');
-        if(!expression||[K.ARRAY,K.CALL,K.NEW,K.DOT,K.IDENTIFIER].indexOf(expression.kind)<0
+        if(!expression||[K.ARRAY,K.OBJECT,K.CALL,K.NEW,K.DOT,K.IDENTIFIER].indexOf(expression.kind)<0
             ||expression.kind===K.IDENTIFIER&&['true','false','undefined','NaN','Infinity'].indexOf(expression.text)>=0)
             fail('static lexical literal storage requires qualification');
         return undefined;

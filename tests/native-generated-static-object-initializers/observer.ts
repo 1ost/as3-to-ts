@@ -1,0 +1,36 @@
+import { Laya } from "@ENGINE@/src/layaAir/Laya";
+import "@ENGINE@/src/layaAir/laya/ModuleDef";
+import "@ENGINE@/src/layaAir/laya/platform/BrowserAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/FileSystemAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/FontAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/MediaAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/StorageAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/TextInputAdapter";
+import "@ENGINE@/src/layaAir/laya/device/WebDeviceAdapter";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/RenderModuleData/WebModuleData/WebUnitRenderModuleDataFactory";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/WebGLDriver/RenderDevice/WebGLRenderDeviceFactory";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/WebGLDriver/2DRenderPass/WebGLRender2DProcess";
+import {createNativeSourceClassLoadingSession,NativeSourceClassModule} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+export async function run(module:NativeSourceClassModule){
+ await Laya.init(160,120);
+ const rows:any[]=[],checks:string[]=[],row=(id:string,value:unknown)=>rows.push({id,value});
+ const check=(id:string,pass:boolean)=>{if(!pass)throw Error(id);checks.push(id);};
+ const session=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:2});
+ const a=await session.load('a',new ApplicationDomain(ApplicationDomain.currentDomain));
+ const Subject=a.getDefinition('cases.StaticObjects') as any;
+ row('initial',Subject.snapshot());
+ const first=new Subject(),second=new Subject(),data=Subject.read(),empty=Subject.readEmpty();
+ row('same-allocation',[data===Subject.read(),empty===Subject.readEmpty(),first.instanceRead()===data,second.instanceRead()===data]);
+ row('empty-default',Subject.readKey()===undefined);
+ Subject.write(23);
+ row('mutation',[Subject.snapshot(),Subject.readKey(),data===Subject.read(),empty===Subject.readEmpty()]);
+ const b=await session.load('b',new ApplicationDomain(ApplicationDomain.currentDomain));
+ const Other=b.getDefinition('cases.StaticObjects') as any;
+ check('independent Classes',Subject!==Other);
+ check('independent objects',data!==Other.read()&&empty!==Other.readEmpty());
+ check('fresh sibling state',JSON.stringify(Other.snapshot())===JSON.stringify(rows[0].value)&&Other.readKey()===undefined);
+ Other.write(41);
+ check('independent writes',Subject.readKey()===23&&Other.readKey()===41);
+ session.retire();return {rows,checks};
+}
