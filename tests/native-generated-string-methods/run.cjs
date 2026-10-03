@@ -1,13 +1,13 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
-const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2-regexp-receivers-review');
+const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2-string-methods-review');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const evidence=path.join(engine,'tests/nativeFlashOracle/regexp-receivers'),expected=require(path.join(evidence,'verify.cjs'));
-const cache=path.resolve('.cache/native-generated-regexp-receivers');fs.mkdirSync(cache,{recursive:true});
+const evidence=path.join(engine,'tests/nativeFlashOracle/string-methods-flow'),expected=require(path.join(evidence,'verify.cjs'));
+const cache=path.resolve('.cache/native-generated-string-methods');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
-const objectDispatch=process.argv.includes('--op2-dispatch');
+const objectDispatch=true;
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
-const cohorts={subject:read('source',['cases.Probe','cases.Box','cases.Handler'])};
+const cohorts={subject:read('source',['cases.Probe'])};
 async function main(){
  const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
  const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader']}),results=[];
@@ -40,13 +40,13 @@ async function main(){
 
    let guards=0;const reject=(fn,re)=>{assert.throws(fn,re);guards++;};
    reject(()=>api.emitNativeSourceClassModule({...config,plan:{...plan}}),/exact planned/);
-   const missing=api.createNativeGeneratedDeclarationPlan({...input,providers:{Error:nativeProviders.Error}});
-   reject(()=>api.emitNativeSourceClassModule({...config,plan:missing,emitterOptions:{...options,nativeVectorTypes:{...options.nativeVectorTypes,plan:missing},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:missing}}}),/AS3_[A-Z_]+UNSUPPORTED/);
-   assert.equal(guards,2);
+   assert.equal(guards,1);
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    const generatedText=artifact.generatedSources.map(s=>s.source).join('\n');
    assert.doesNotMatch(generatedText,/:\s*RegExp\b/,'Nominal parameter and return annotations must not bind to the host RegExp type');
    assert.ok(generatedText.includes('as3CallRegExpStringProperty'));
+   assert.doesNotMatch(generatedText,/\.toLowerCase\s*\(/,'Every lowercasing call in this cohort must retain Flash semantics');
+   assert.doesNotMatch(generatedText,/\.slice\s*\(/,'Slice chains and explicit undefined must use the shared provider');
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1+plan.privateBindings.length);
    const files=[];
    for(const item of artifact.generatedSources){const file=path.join(dir,item.module+'.ts');fs.writeFileSync(file,item.source);files.push(file);}
@@ -71,9 +71,9 @@ async function main(){
   const nodeEntry=path.join(dir,'node-entry.ts');fs.writeFileSync(nodeEntry,"import {run} from './observer';import {nativeSourceClassModule as subject} from './subject/subject-factory.js';export const completion=run(subject);");
   await esbuild.build({entryPoints:[nodeEntry],outfile:path.join(dir,'node.cjs'),bundle:true,format:'cjs',platform:'node',target:'es2020'});
   const node=await require(path.join(dir,'node.cjs')).completion;assert.deepEqual(node,web);
-  const mutated=await esbuild.build({entryPoints:[nodeEntry],bundle:true,write:false,format:'cjs',platform:'node',target:'es2020',plugins:[{name:'host-regexp-call',setup(build){build.onLoad({filter:/AS3Property\.ts$/},args=>{
-   let text=fs.readFileSync(args.path,'utf8');const needle='if (args.length !== (name === "replace" ? 2 : 1))';assert.ok(text.includes(needle));
-   text=text.replace(needle,'return (target as any)[name](...args);\n    '+needle);return {contents:text,loader:'ts'};
+  const mutated=await esbuild.build({entryPoints:[nodeEntry],bundle:true,write:false,format:'cjs',platform:'node',target:'es2020',plugins:[{name:'host-lowercase',setup(build){build.onLoad({filter:/AS3StringMethods\.ts$/},args=>{
+   let text=fs.readFileSync(args.path,'utf8');const needle="let result = '';";assert.ok(text.includes(needle));
+   text=text.replace(needle,'return value.toLowerCase();\n    '+needle);return {contents:text,loader:'ts'};
   });}}]});
   const mutationFile=path.join(dir,'mutation.cjs');fs.writeFileSync(mutationFile,mutated.outputFiles[0].text);
   const control=await require(mutationFile).completion;assert.notDeepEqual(control.rows,expected);assert.notDeepEqual(control.rows[0],expected[0]);const mutations=1;

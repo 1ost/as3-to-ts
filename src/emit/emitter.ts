@@ -4140,6 +4140,7 @@ function emitCall(emitter:Emitter, node:Node):void {
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
     if (emitJSONParse(emitter,node)) return;
+	if (emitStringValueMethodCall(emitter, node)) return;
 	if (emitStringPatternCall(emitter, node)) return;
 	if (emitReflectionQuery(emitter, node)) return;
 	if (emitReflectionXML(emitter, node)) return;
@@ -4388,6 +4389,41 @@ function nativePatternModule(emitter:Emitter):string {
         ||module!==xmlGlobalProviderModule(input.patternProviderModule,emitter.generated.options.module))
         throw new Error('AS3_PATTERN_LOCAL_UNSUPPORTED: exact generated pattern provider and typed locals required');
     return generatedModule(module);
+}
+
+function isQualifiedStringMethodReceiver(emitter:Emitter,input:Node):boolean {
+    const value=unwrapEncapsulatedExpression(input);
+    if(!value)return false;
+    if(value.kind===NodeKind.LITERAL && /^["']/.test(value.text))return true;
+    if(value.kind===NodeKind.IDENTIFIER){
+        const binding=emitter.findDefInScope(value.text);
+        return !!binding&&!binding.bound&&binding.as3Type==='String';
+    }
+    // Addition becomes String once either source operand is a String, even
+    // when another operand needs source valueOf/toString conversion.
+    if(value.kind===NodeKind.ADD&&value.children.length>=3&&value.children.length%2===1)
+        return value.children.every((child,index)=>!index||index%2===0||child.text==='+')
+            &&value.children.some((child,index)=>index%2===0&&isQualifiedStringMethodReceiver(emitter,child));
+    const callee=value.kind===NodeKind.CALL&&value.children[0];
+    return !!callee&&callee.kind===NodeKind.DOT&&['slice','toLowerCase'].indexOf(callee.children[1].text)>=0
+        &&isQualifiedStringMethodReceiver(emitter,callee.children[0]);
+}
+
+function emitStringValueMethodCall(emitter:Emitter, node:Node):boolean {
+    if (!emitter.generated || emitter.options.nativeStringIntrinsicsModule === undefined || emitter.isNew) return false;
+    const callee=node.children[0];
+    if (!callee || callee.kind!==NodeKind.DOT || ['slice','toLowerCase'].indexOf(callee.children[1].text)<0) return false;
+    if(!isQualifiedStringMethodReceiver(emitter,callee.children[0]))return false;
+    if (!emitter.references || emitter.references.resolve('String') !== 'String')
+        throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
+    const args=node.findChild(NodeKind.ARGUMENTS);
+    if(!args)return false;
+    const helper=propertyHelper(emitter,'as3CallNamedProperty',emitter.generated.propertyModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+    emitter.skipTo(getExpressionStart(callee.children[0]));visitNode(emitter,callee.children[0]);
+    emitter.catchup(getEffectiveNodeEnd(callee.children[0]));emitter.insert(','+JSON.stringify(callee.children[1].text)+',()=>[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 
 function emitStringPatternCall(emitter:Emitter, node:Node):boolean {
@@ -4700,6 +4736,14 @@ function objectPropertyAccess(emitter:Emitter,node:Node):DictionaryAccess {
         ||[NodeKind.DOT,NodeKind.ARRAY_ACCESSOR].indexOf(node.kind)<0||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1],root=unwrapEncapsulatedExpression(receiver);
     if(!root||!key||node.kind===NodeKind.DOT&&key.kind!==NodeKind.LITERAL)return null;
+    const methodName=node.kind===NodeKind.DOT?key.text:reflectionStringLiteral(emitter,key);
+    const stringMethod=emitter.generated&&emitter.options.nativeStringIntrinsicsModule!==undefined
+        &&['slice','toLowerCase'].indexOf(methodName)>=0;
+    if(stringMethod&&isQualifiedStringMethodReceiver(emitter,root)) {
+        if(emitter.references.resolve('String')!=='String')
+            throw new Error('AS3_STRING_INTRINSIC_UNSUPPORTED: exact builtin String source binding required');
+        return node.kind===NodeKind.DOT?{receiver,key,literalKey:key.text}:{receiver,key};
+    }
     if(root.kind===NodeKind.IDENTIFIER){
         const definition=emitter.findDefInScope(root.text);
         // Event exposes these getters as AS3 Object, even though the shared
@@ -4722,6 +4766,10 @@ function objectPropertyAccess(emitter:Emitter,node:Node):DictionaryAccess {
             throw new Error('AS3_OBJECT_PROPERTY_UNSUPPORTED: intrinsic Object receiver requires one argument and source Object conversion provider');
         // Retain the conversion expression: Object(null/undefined) allocates a
         // fresh object, while primitive and genuine instance values keep identity.
+    }else if(stringMethod&&root.kind===NodeKind.CALL&&objectPropertyAccess(emitter,root.children[0])){
+        // A call through an Object/wildcard property has an untyped result.
+        // Preserve dynamic method dispatch on that result, including custom
+        // objects; it is not evidence that the result must be a String.
     }else if(!objectPropertyAccess(emitter,root))return null;
     return node.kind===NodeKind.DOT?{receiver,key,literalKey:key.text}:{receiver,key};
 }
