@@ -881,6 +881,7 @@ export class NativeCallableClasses {
                         &&!(this.containerReference&&reference.identity==='flash.display.DisplayObjectContainer')
                         &&!this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&binding.nativeInterface)
                         &&!(reference.identity==='flash.media.ID3Info'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity))
+                        &&!(reference.identity==='RegExp'&&this.generated.options.plan.nativeBindings.some(binding=>binding.qname==='RegExp'&&!binding.nativeInterface))
                         &&!(this.bitmapDataReference&&reference.identity==='flash.display.BitmapData')
                         &&!(this.pointReference&&reference.identity==='flash.geom.Point')
                         &&!(this.textFieldReference&&reference.identity==='flash.text.TextField')

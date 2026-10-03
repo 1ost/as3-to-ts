@@ -2829,9 +2829,10 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
             visitNodes(emitter,node.children);return;
         }
         const deferredObject=emitter.generated&&emitter.generated.lexical.deferredObjectConstant(binaryTrait);
+        const deferredRegExp=emitter.generated&&emitter.generated.lexical.deferredRegExpConstant(binaryTrait);
         const deferred=emitter.generated && declaration.kind===NodeKind.CONST_LIST
             && emitter.generated.deferredConstants[generatedMemberIdentity(node.findChild(NodeKind.NAME).text,generatedMemberUri(emitter.generated.options.plan,emitter.generated.projection.binding.identity,declaration))];
-        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred && !deferredObject) {
+        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred && !deferredObject && !deferredRegExp) {
             // Literal constants are installed before publication by the common
             // generated-class provider, not rewritten as later mutable stores.
             visitNodes(emitter,node.children);
@@ -2856,6 +2857,7 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 			const lexical = emitter.lexical && emitter.lexical.trait(node.findChild(NodeKind.NAME).text, true);
             if(generatedLexical){
                 if(deferredObject)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalObjectConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
+                else if(deferredRegExp)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalReferenceConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
                 else if(generatedLexical.kind!=='constant'&&emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
                     emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.as3SetLexicalMember('+emitter.classFactory.value+','+generatedLexical.access+','+emitter.output.slice(start)+');');
             } else emitter.classFactory.fields.push(deferred ? deferred+'('+emitter.output.slice(start)+');'
@@ -3363,7 +3365,28 @@ function emitDynamicConstruction(emitter:Emitter,node:Node):boolean {
     emitter.insert(']'+(scriptGlobal?','+scriptGlobal:'')+'))');emitter.skipTo(node.end);return true;
 }
 
+function nativeRegExpReference(emitter:Emitter,node:Node):string {
+    if(!emitter.generated||!emitter.references||!node||node.kind!==NodeKind.IDENTIFIER||node.text!=='RegExp'
+        ||emitter.references.resolve(node.text)!=='RegExp')return null;
+    const binding=emitter.generated.options.plan.nativeBindings.find(b=>b.qname==='RegExp'&&!b.nativeInterface);
+    if(!binding)return null;
+    const shadow=emitter.findDefInScope(node.text);
+    if(shadow&&(shadow.bound||Object.prototype.hasOwnProperty.call(shadow,'as3Type'))
+        ||typeOfBinding(node,emitter.source,[])==='lexical')return null;
+    return propertyHelper(emitter,binding.referenceExport,emitter.generated.options.module);
+}
+function emitRegExpConstruction(emitter:Emitter,node:Node,conversion:boolean):boolean {
+    const call=conversion?node:node.children[0],callee=call&&call.kind===NodeKind.CALL&&call.children[0];
+    const token=callee&&nativeRegExpReference(emitter,callee);if(!token)return false;
+    const args=call.findChild(NodeKind.ARGUMENTS);if(!args)return false;
+    if(conversion&&args.children.length!==1)throw new Error('AS3_REGEXP_LITERAL_UNSUPPORTED: direct Class call requires one source argument');
+    const helper=propertyHelper(emitter,conversion?'as3CallClass':'as3ConstructClass',generatedModule(emitter.options.nativeObjectCreationModule));
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'('+token+',[');
+    args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
 function emitNew(emitter:Emitter, node:Node):void {
+ if(emitRegExpConstruction(emitter,node,false))return;
  if(emitErrorEventSubtypeConstruction(emitter,node))return;
  if(emitLexicalSpriteConstruction(emitter,node))return;
  if(emitDynamicConstruction(emitter,node))return;
@@ -4076,6 +4099,14 @@ function emitBuiltinMathRound(emitter:Emitter,node:Node):boolean {
 }
 
 function emitCall(emitter:Emitter, node:Node):void {
+    if(emitRegExpConstruction(emitter,node,true))return;
+    const regexpAccess=regExpAccess(emitter,node.children[0]);
+    if(regexpAccess){
+        const args=node.findChild(NodeKind.ARGUMENTS),helper=propertyHelper(emitter,'as3CallProperty',emitter.generated.propertyModule);
+        emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitPropertyKey(emitter,regexpAccess);emitter.insert(',()=>[');
+        args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+        emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return;
+    }
     if(emitBuiltinMathRound(emitter,node))return;
     if(emitGeneratedVectorConstruction(emitter,node,true))return;
     if(emitGeneratedProxyNamespaceCall(emitter,node))return;
@@ -4545,7 +4576,22 @@ function generatedReceiver(emitter:Emitter,receiver:Node):NativeGeneratedClassTr
     if(!projection){projection=new NativeGeneratedClassTraits(plan,plan.scope,identity,emitter.generated.sources[identity]);emitter.generatedReceiverTraits.set(identity,projection);}
     return projection;
 }
+function regExpAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    if(!emitter.generated||!emitter.references||!node||[NodeKind.DOT,NodeKind.ARRAY_ACCESSOR].indexOf(node.kind)<0||node.children.length!==2)return null;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),key=node.children[1];
+    if(receiver.kind!==NodeKind.IDENTIFIER)return null;
+    const binding=emitter.generated.options.plan.nativeBindings.find(b=>b.qname==='RegExp'&&!b.nativeInterface);if(!binding)return null;
+    const definition=emitter.findDefInScope(receiver.text);
+    let qualified=definition&&!definition.bound&&emitter.references.type(definition.as3Type)===binding.referenceExport;
+    if(!definition||definition.bound){
+        const trait=emitter.generated.lexical.trait(receiver.text,true)||emitter.generated.lexical.trait(receiver.text,false);
+        qualified=!!trait&&!!trait.type&&emitter.generated.options.plan.references.some(ref=>ref.owner===trait.owner
+            &&ref.start===trait.type.start&&ref.end===trait.type.end&&ref.kind==='native'&&ref.identity==='RegExp');
+    }
+    return qualified?{receiver:node.children[0],key,...(node.kind===NodeKind.DOT?{literalKey:key.text}:{})}:null;
+}
 function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    const regexp=regExpAccess(emitter,node);if(regexp)return regexp;
     if(!node||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.kind)<0||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(!receiver||!key)return null;
@@ -5178,6 +5224,12 @@ function emitCatch(emitter:Emitter, node:Node):void {
 
 
 function emitRelation(emitter:Emitter, node:Node):void {
+    if(node.children.length===3&&['is','as'].indexOf(node.children[1].text)>=0&&nativeRegExpReference(emitter,node.lastChild)){
+        const token=nativeRegExpReference(emitter,node.lastChild),helper=propertyHelper(emitter,node.children[1].text==='is'?'as3Is':'as3As',generatedModule(emitter.options.nativeComputedTypeTestModule));
+        emitter.catchup(node.start);emitter.insert('('+helper+'(');
+        visitNode(emitter,node.children[0]);emitter.catchup(getEffectiveNodeEnd(node.children[0]));
+        emitter.insert(','+token+'))');emitter.skipTo(node.end);return;
+    }
     if(emitter.generated&&node.children.length===3&&node.children[1].text==='in'
         &&emitter.options.nativeObjectPropertyModule&&node.lastChild.kind===NodeKind.IDENTIFIER){
         const definition=emitter.findDefInScope(node.lastChild.text);
@@ -6171,6 +6223,8 @@ function hasFunctionLocal(emitter:Emitter, name:string):boolean {
 }
 
 export function emitIdent(emitter:Emitter, node:Node):void {
+    const regexp=nativeRegExpReference(emitter,node);
+    if(regexp){emitter.catchup(node.start);emitter.insert(regexp);emitter.skipTo(node.end);emitter.emitThisForNextIdent=true;return;}
     const global = emitter.nativeGlobals.resolve(node);
     if (global) {
         emitter.ensureImportIdentifier(global.name + ' as ' + global.alias, global.module, false);
@@ -6630,6 +6684,19 @@ function emitUnsupportedE4X(emitter:Emitter, node:Node):void {
 }
 
 function emitLiteral(emitter:Emitter, node:Node):void {
+	if(emitter.generated&&node.text&&node.text.charAt(0)==='/'){
+        const plan=emitter.generated.options.plan,binding=plan.nativeBindings.find(b=>b.qname==='RegExp'&&!b.nativeInterface);
+        if(binding){
+            const match=/^\/([\s\S]*)\/([a-z]*)$/.exec(node.text);
+            if(!match||emitter.source.slice(node.start,node.start+node.text.length)!==node.text)
+                throw new Error('AS3_REGEXP_LITERAL_UNSUPPORTED: exact source token required');
+            // Literals always denote the builtin, independently of local names.
+            const token=propertyHelper(emitter,binding.referenceExport,emitter.generated.options.module);
+            const construct=propertyHelper(emitter,'as3ConstructClass',generatedModule(emitter.options.nativeObjectCreationModule));
+            emitter.catchup(node.start);emitter.insert('(<any>'+construct+'('+token+',['+JSON.stringify(match[1])+','+JSON.stringify(match[2])+']))');
+            emitter.skipTo(Math.max(node.end,node.start+node.text.length));return;
+        }
+    }
 	emitter.catchup(node.start);
 	// ECMAScript treats raw U+2028/U+2029 as source line terminators even
 	// inside legacy string literals. AS3 permits those characters in strings,
