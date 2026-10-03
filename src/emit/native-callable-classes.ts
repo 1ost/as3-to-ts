@@ -708,7 +708,10 @@ export class NativeCallableClasses {
                     node.arguments.forEach((argument: any) => walk(argument,false,nestedFunction)); return;
                 }
                 const superProperty = (value: any): boolean => [S.PropertyAccessExpression,S.ElementAccessExpression].indexOf(value.kind)>=0 && value.expression.kind === S.SuperKeyword;
-                if (node.kind === S.BinaryExpression && superProperty(node.left) || superProperty(node)) {
+                // Binary reads (including comparisons and short-circuit operators)
+                // recurse into the getter; only assignment operators own the setter path.
+                if (node.kind === S.BinaryExpression && node.operatorToken.kind >= S.FirstAssignment
+                    && node.operatorToken.kind <= S.LastAssignment && superProperty(node.left) || superProperty(node)) {
                     if (constructor || nestedFunction || insideSuperArguments
                         || member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword))
                         this.fail('super accessor requires ordinary instance body');
