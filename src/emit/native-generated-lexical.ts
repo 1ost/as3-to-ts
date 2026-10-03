@@ -145,7 +145,10 @@ export class NativeGeneratedLexical {
                         fail('ambiguous lexical declaration: '+local);
                     }
                     const vector=node.findChild(K.VECTOR);
-                    if(vector&&(['private','protected'].indexOf(visibility)<0||member.kind!==K.VAR_LIST
+                    // Private method returns use the same authenticated Vector signature
+                    // lowering as public methods; they are not field storage.
+                    const privateVectorReturn=visibility==='private'&&member.kind===K.FUNCTION;
+                    if(vector&&(['private','protected'].indexOf(visibility)<0||member.kind!==K.VAR_LIST&&!privateVectorReturn
                         ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
                         fail('lexical vector storage authority');
                     const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':readonlyGetter?'accessor':'method',owner:name,node,

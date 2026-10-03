@@ -39,10 +39,10 @@ for(const body of [
  'protected const value:Vector.<IOrder>=null;',
  'internal var value:Vector.<IOrder>;',
  'protected var value:Vector.<Absent>;',
- 'public function make(v:*):Vector.<IOrder>{return new Vector.<IOrder>(v);}'
+ 'public function make(v:*):Vector.<IOrder>{return new Vector.<IOrder>(v,false,true);}'
 ]){
  const source='package queuecases {import org.emvc.interfaces.IOrder;import vectorcases.ProbeOrder;public class Guard {'+body+'}}';
- assert.throws(()=>{const p=api.createNativeGeneratedDeclarationPlan({scope:'protected-vector-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),sources:{...sources,'queuecases.Guard':{source,sourceSha256:hash(source)}}});return emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard'},nativeVectorTypes:{plan:p,module:'./guard'},nativeReferenceCoercion:{plan:p,module:'./guard',coercionModule:provider('AS3Type')}});},/AS3_.*UNSUPPORTED/);rejectionGuards++;
+ assert.throws(()=>{const p=api.createNativeGeneratedDeclarationPlan({scope:'protected-vector-guard',providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),vectorProviderModule:provider('AS3Vector'),sources:{...sources,'queuecases.Guard':{source,sourceSha256:hash(source)}}});return emit(parse('Guard.as',source),source,{...options,nativeGeneratedDeclarations:{plan:p,module:'./guard'},nativeVectorTypes:{plan:p,module:'./guard'},nativeReferenceCoercion:{plan:p,module:'./guard',coercionModule:provider('AS3Type')}});},/AS3_.*UNSUPPORTED/,body);rejectionGuards++;
 }
 const files=[path.join(run,'declarationDomain.ts'),...emitted.map(e=>e.file),...['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f))];
 const program=modern.createProgram(files,{target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts']});
