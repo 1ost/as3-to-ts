@@ -1,0 +1,22 @@
+{
+  "artifacts": {
+    "evidence/compile.log": "a921fca676ea13f6f11bd50bf91c72815bb1bd3ab5ddbe6f1544c485a4394682",
+    "evidence/host/OracleHost.as": "a223263d1eed36fb42c56c48dec4811a7eb75500219fb245ea6bb02d899d6bdb",
+    "evidence/oracle.swf": "1ce6b30dc8bccc72f5b270691be5bba04b0a769bff6dbc6532db77f17517dbe1",
+    "evidence/receipt.json": "64be5b1c41187cdd327e681cb23873d0f26a73523174ea936d3a66fef6e82cb3",
+    "evidence/run-1/app/application.xml": "23e24c933236f8eae824b6420c8d8b8f5b3ed7ac5ac558e820e7bef0ba908c82",
+    "evidence/run-1/app/oracle.swf": "1ce6b30dc8bccc72f5b270691be5bba04b0a769bff6dbc6532db77f17517dbe1",
+    "evidence/run-1/capture.json": "cf0a3180dd6509a419b4399880eae921db987b0b488d9962ca40c8a829c9b45f",
+    "evidence/run-1/frame.png": "935e681fb3da266a88c82da51f034d6007b40f917284fd47c59c357e5cdcbeec",
+    "evidence/run-1/runtime.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/run-2/app/application.xml": "23e24c933236f8eae824b6420c8d8b8f5b3ed7ac5ac558e820e7bef0ba908c82",
+    "evidence/run-2/app/oracle.swf": "1ce6b30dc8bccc72f5b270691be5bba04b0a769bff6dbc6532db77f17517dbe1",
+    "evidence/run-2/capture.json": "cf0a3180dd6509a419b4399880eae921db987b0b488d9962ca40c8a829c9b45f",
+    "evidence/run-2/frame.png": "935e681fb3da266a88c82da51f034d6007b40f917284fd47c59c357e5cdcbeec",
+    "evidence/run-2/runtime.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/source/AnonymousMembersProbe.as": "c72c329ab23738961679df11393b503430d40cbdb6110f2c9dbd84c8ec87c04b",
+    "evidence/source/cases/ClosureBase.as": "855a88cf3e565a62983988abe48029dc9906c026d359a13423387e55336b451f",
+    "evidence/source/cases/MemberClosure.as": "d4555126d4deb85d576c21f8cf20e516cada5916b42b40affb53679f39bb7bbc",
+    "evidence/swf-inspect.json": "f03a3cba839a7f01026f076b071c03fadfdb324efc1984923ea33c672279cd40"
+  }
+}
