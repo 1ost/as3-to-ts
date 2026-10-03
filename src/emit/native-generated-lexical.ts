@@ -681,6 +681,23 @@ export class NativeGeneratedLexical {
             if(!isStatic&&staticContext)fail('instance lexical access in static method');
             return {trait,receiver};
         };
+        if(node.kind===K.NEW&&node.children.length===1) {
+            const call=node.children[0];
+            if(call.kind!==K.CALL)return false;
+            const found=resolve(call.children[0]);
+            if(!found||!found.trait||found.trait.kind==='constant')return false;
+            const trait=found.trait,arguments_=call.findChild(K.ARGUMENTS);
+            const ref=trait.type&&this.plan.references.find(r=>r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
+            if(trait.kind!=='variable'||!ref||ref.kind!=='intrinsic'||ref.identity!=='Class'||!arguments_)
+                fail('lexical construction requires an authenticated Class variable');
+            emitter.catchup(node.start);emitter.insert('(<any>'+this.provider+'.as3ConstructLexicalClass(');
+            if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
+            else emitter.insert(trait.static?(trait.owner===this.owner?emitter.classFactory.value:trait.key):'this');
+            emitter.insert(','+trait.access+',()=>[');
+            arguments_.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});
+            const global=this.declarations.find(b=>b.identity===this.owner).scriptGlobalExport?this.scriptGlobal:null;
+            emitter.insert(']'+(global?','+global:'')+'))');emitter.skipTo(node.end);return true;
+        }
         let target=node,operation='get',right:Node,args:Node;
         if(node.kind===K.ASSIGN){target=node.children[0];operation='set';right=node.children[2];}
         else if(node.kind===K.CALL){target=node.children[0];operation='call';args=node.children[1];}

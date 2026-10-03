@@ -116,6 +116,19 @@ export class NativeCallableClasses {
                         && !!mods && ['public','static'].every(mod => mods.children.some(value => value.text === mod));
                 });
             };
+            const lexicalClassConstruction = (node:Node):boolean => {
+                if (!generated || !generated.lexical.provider || !node.parent || node.parent.kind!==K.NEW
+                    || node.children[0].kind!==K.IDENTIFIER || this.capturedType(node,node.children[0].text)!==undefined) return false;
+                return cls.findChild(K.CONTENT).children.some(member=> {
+                    const mods=member.findChild(K.MOD_LIST);
+                    if(member.kind!==K.VAR_LIST||!mods||!mods.children.some(mod=>['private','protected'].indexOf(mod.text)>=0))return false;
+                    return member.findChildren(K.NAME_TYPE_INIT).some(field=> {
+                        const type=field.findChild(K.TYPE);
+                        return field.findChild(K.NAME).text===node.children[0].text&&!!type
+                            &&generated.options.plan.references.some(ref=>ref.owner===qname&&ref.start===type.start&&ref.end===type.end&&ref.kind==='intrinsic'&&ref.identity==='Class');
+                    });
+                });
+            };
             const callScan = (node: Node): void => {
                 const receiver = node.children[0] && unwrapEncapsulatedExpression(node.children[0]);
                 if (node.kind === K.DOT && receiver && isClassAlias(node,receiver.text)
@@ -124,6 +137,7 @@ export class NativeCallableClasses {
                     this.fail('direct callable-constructor invocation/prototype manipulation');
                 if (node.kind === K.CALL && node.children[0] && isClassAlias(node,node.children[0].text)
                     && sourceClassNames.indexOf(node.children[0].text)<0
+                    && !lexicalClassConstruction(node)
                     && !(generated&&classValueModule&&node.parent&&node.parent.kind===K.NEW&&(this.isCapturedClass(node,node.children[0].text)||this.capturedType(node,node.children[0].text)===undefined&&generated.options.plan.embeddedBinary.some(b=>b.owner===qname&&b.field===node.children[0].text))))
                     this.fail('dynamic Class invocation requires exact constructor authority');
                 node.children.forEach(callScan);
