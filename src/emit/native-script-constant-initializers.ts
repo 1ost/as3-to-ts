@@ -1,3 +1,4 @@
+import {nativeUndefinedConstant} from './native-undefined-constant';
 import Node from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {nativeNumericProductConstant} from './native-numeric-product-constant';
@@ -38,6 +39,7 @@ export function nativeScriptConstantInitializers(declaration: Node, source: stri
         if(member.kind===K.CONST_LIST&&flags.length===2&&flags.indexOf('private')>=0&&flags.indexOf('static')>=0)
             member.findChildren(K.NAME_TYPE_INIT).forEach(field=>{
                 const type=field.findChild(K.TYPE),init=field.findChild(K.INIT),value=init&&text(init);
+                if(nativeUndefinedConstant(field,declaration,source))allowed.add(field);
                 if(type&&type.text==='int'&&value&&/^[+-]?(?:0|[1-9]\d*)$/.test(value)
                     &&Number(value)>=-2147483648&&Number(value)<=2147483647)allowed.add(field);
             });

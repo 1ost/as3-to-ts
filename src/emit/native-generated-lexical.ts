@@ -1,3 +1,4 @@
+import {nativeUndefinedConstant} from './native-undefined-constant';
 import {nativeGeneratedInterfaceBindings} from './native-generated-declarations';
 import {generatedMemberUri} from './native-generated-namespaces';
 import {NativeTypedLocals, NestedLocalFunction} from './native-typed-locals';
@@ -322,6 +323,8 @@ export class NativeGeneratedLexical {
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
         const value=init&&this.classSource(trait.owner).source.slice(init.start,end(init)).trim();
         const type=trait.type&&trait.type.text;
+        if(nativeUndefinedConstant(trait.node,nativeGeneratedDeclarationNode(this.plan,trait.owner),this.classSource(trait.owner).source)
+            &&nativeGeneratedDeclarationResolver(this.plan,trait.owner,this.classSource(trait.owner).source).resolve('undefined')==='undefined')return 'void 0';
         if(trait.visibility==='internal'&&trait.static&&type==='uint'&&value&&/^(?:0[xX][0-9a-fA-F]+|0|[1-9]\d*)$/.test(value)
             &&Number(value)<=4294967295)return String(Number(value));
         if(trait.kind==='constant'&&(trait.visibility==='protected'||trait.visibility==='private'&&trait.static&&(type==='String'||type==='int'))&&value
