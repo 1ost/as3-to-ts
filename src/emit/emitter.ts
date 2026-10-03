@@ -2830,9 +2830,10 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
         }
         const deferredObject=emitter.generated&&emitter.generated.lexical.deferredObjectConstant(binaryTrait);
         const deferredRegExp=emitter.generated&&emitter.generated.lexical.deferredRegExpConstant(binaryTrait);
+        const deferredString=emitter.generated&&emitter.generated.lexical.deferredStringConstant(binaryTrait);
         const deferred=emitter.generated && declaration.kind===NodeKind.CONST_LIST
             && emitter.generated.deferredConstants[generatedMemberIdentity(node.findChild(NodeKind.NAME).text,generatedMemberUri(emitter.generated.options.plan,emitter.generated.projection.binding.identity,declaration))];
-        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred && !deferredObject && !deferredRegExp) {
+        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred && !deferredObject && !deferredRegExp && !deferredString) {
             // Literal constants are installed before publication by the common
             // generated-class provider, not rewritten as later mutable stores.
             visitNodes(emitter,node.children);
@@ -2858,6 +2859,7 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
             if(generatedLexical){
                 if(deferredObject)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalObjectConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
                 else if(deferredRegExp)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalReferenceConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
+                else if(deferredString)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalStringConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
                 else if(generatedLexical.kind!=='constant'&&emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
                     emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.as3SetLexicalMember('+emitter.classFactory.value+','+generatedLexical.access+','+emitter.output.slice(start)+');');
             } else emitter.classFactory.fields.push(deferred ? deferred+'('+emitter.output.slice(start)+');'
