@@ -2,7 +2,7 @@ import Node from '../syntax/node';
 import K from '../syntax/nodeKind';
 import {nativeNumericProductConstant} from './native-numeric-product-constant';
 
-/** Static constants whose initialization cannot enter authored code or observe
+/** Static constants and qualified lexical slots whose initialization cannot enter authored code or observe
  * an unpublished source Class. Primitive values use the existing early slots;
  * flat Array literals are fresh deferred storage in each selected script unit.
  * This does not authorize failing/cyclic/general executable initializers.
@@ -15,16 +15,24 @@ export function nativeScriptConstantInitializers(declaration: Node, source: stri
     const fields:Node[]=[],allowed=new Set<Node>(),early=new Set<string>();
     declaration.findChild(K.CONTENT).children.forEach(member=>{
         const mods=member.findChild(K.MOD_LIST),flags=mods?mods.children.map(m=>m.text):[];
-        // Existing lexical lowering owns these String slots. Their literal
+        // Existing lexical lowering owns private/protected String slots. Their literal
         // values cannot invoke source code or observe a partial Class. Keep
         // mutable slots out of the early-constant dependency set below.
         const lexicalString=flags.length===2&&flags.indexOf('static')>=0
             &&(member.kind===K.CONST_LIST&&(flags.indexOf('private')>=0||flags.indexOf('protected')>=0)
-                ||member.kind===K.VAR_LIST&&flags.indexOf('protected')>=0);
+                ||member.kind===K.VAR_LIST&&(flags.indexOf('protected')>=0||flags.indexOf('private')>=0));
         if(lexicalString)member.findChildren(K.NAME_TYPE_INIT).forEach(field=>{
             const type=field.findChild(K.TYPE),init=field.findChild(K.INIT);
             if(type&&type.text==='String'&&init&&/^["']/.test(text(init))&&literal(text(init)))allowed.add(field);
         });
+        // Null reference slots cannot enter authored code or force a file-local
+        // helper Class to initialize. These ordinary scripts need no retry
+        // authority merely to install their private nullable storage.
+        if(member.kind===K.VAR_LIST&&flags.length===2&&flags.indexOf('private')>=0&&flags.indexOf('static')>=0)
+            member.findChildren(K.NAME_TYPE_INIT).forEach(field=>{
+                const type=field.findChild(K.TYPE),init=field.findChild(K.INIT);
+                if(type&&['int','uint','Number','Boolean','*'].indexOf(type.text)<0&&init&&text(init)==='null')allowed.add(field);
+            });
         // Private static int slots use the same captured early-literal storage
         // as private String constants. Keep executable/overflow forms held.
         if(member.kind===K.CONST_LIST&&flags.length===2&&flags.indexOf('private')>=0&&flags.indexOf('static')>=0)
