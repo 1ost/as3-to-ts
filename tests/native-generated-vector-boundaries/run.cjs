@@ -45,7 +45,6 @@ for(const body of [
  'public function Guard(v:Vector.<IOrder>=1) {}',
  'public function call():Vector.<IOrder>{return Vector.<IOrder>(null,null);}',
  'public function call():Vector.<IOrder>{return new Vector.<IOrder>(0,false,true);}',
- 'public function call(v:*):Vector.<IOrder>{return new Vector.<IOrder>(v);}',
  'public var queue:Vector.<Absent>;',
  'public var queue:Vector.<Vector.<IOrder>>;'
 ]){
@@ -97,5 +96,5 @@ try{for(const target of [ts.ScriptTarget.ES5,ts.ScriptTarget.ES2015]){
  for(const actual of [node,web]){assert.deepEqual(actual,wanted);}
  results.push({target,node,web});
 }}finally{await browser.close();}
-fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({nested,combined,privateFields,queueConstruction,emitted,results,providerGraph,observer:{files:[driverFile,...privateFields?[privateDriverFile]:[],...queueConstruction?[path.join(__dirname,'queue-runtime-driver.js')]:[]],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Vector reflection and general constructor argument coercion','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
+fs.writeFileSync(path.join(run,'report.json'),JSON.stringify({nested,combined,privateFields,queueConstruction,emitted,results,providerGraph,observer:{files:[driverFile,...privateFields?[privateDriverFile]:[],...queueConstruction?[path.join(__dirname,'queue-runtime-driver.js')]:[]],sha256:hash(observer)},typecheck:{files:program.getSourceFiles().length,diagnostics},rejectionGuards,comparisonNegativeControls:3,held:['Vector reflection and allocations above the existing materialization cap','Full EMVC and application integration']},null,2));console.log(JSON.stringify({run,sourceClasses:plan.bindings.length,airRows:wanted.length,rejectionGuards,targets:['ES5','ES2015'],runtimes:['Node','Chromium'],generatedTypeErrors:0,dependencyTypeErrors:diagnostics.length}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

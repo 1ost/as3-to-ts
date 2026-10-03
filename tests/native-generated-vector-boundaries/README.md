@@ -44,8 +44,9 @@ compares all 25 observations in the private queue packet alongside the original
 33, for eleven subjects and 58 rows. Empty construction, typed uint length and
 Boolean fixed parameters use as3VectorCreate with the exact domain specialization.
 Nonnegative decimal length literals within the provider allocation cap and
-Boolean literals use the same path. Arbitrary constructor argument coercion and
-side-effecting argument expressions remain held. The provider's existing
+Boolean literals use the same path. General constructor arguments and their evaluation order are now qualified by
+`native-generated-vector-construction`. AIR rejects nonnumeric length atoms
+without invoking coercion hooks; numeric lengths convert to uint. The provider's existing
 1,048,576-element allocation cap remains an explicit limitation.
 
 The complete emitted queue exercises constructor-time null storage, empty and

@@ -3432,13 +3432,9 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node,conversion=fa
  if(!spec||input.sources[owner].source!==emitter.source)fail('exact construction specialization required');
  const args=call.findChild(NodeKind.ARGUMENTS);
  if(!args||(conversion?args.children.length!==1:args.children.length>2))fail('Vector argument count requires qualification');
- if(!conversion)args.children.forEach((arg,index)=>{
-  const value=unwrapEncapsulatedExpression(arg),binding=value.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(value.text);
-  const typed=binding&&!binding.bound&&binding.as3Type===(index===0?'uint':'Boolean');
-  const literal=index===0?value.kind===NodeKind.LITERAL&&/^\d+$/.test(value.text)&&Number(value.text)<=1048576
-   :value.kind===NodeKind.IDENTIFIER&&/^(true|false)$/.test(value.text);
-  if(!typed&&!literal)fail('constructor requires uint length and Boolean fixed values; argument coercion held');
- });
+ // The engine validates the numeric length atom and performs uint conversion.
+ // Pass authored arguments unchanged so both expressions run before validation;
+ // in particular, an omitted length differs from explicitly supplied undefined.
  let helper=conversion?'__as3_convertVector':'__as3_createVector',specialization='__as3_vectorSpec_'+spec.specExport;
  // Each specialization needs a distinct binding even when a class constructs several types.
  while(emitter.source.indexOf(helper)>=0)helper+='_';while(emitter.source.indexOf(specialization)>=0)specialization+='_';
