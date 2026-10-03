@@ -1,0 +1,262 @@
+[
+  {
+    "value": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ],
+    "id": "early"
+  },
+  {
+    "value": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "id": "after"
+  },
+  {
+    "value": [
+      [
+        "first",
+        true,
+        false,
+        false
+      ],
+      [
+        "second",
+        true
+      ],
+      [
+        "third",
+        true,
+        true,
+        false
+      ]
+    ],
+    "id": "order"
+  },
+  {
+    "value": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "id": "read"
+  },
+  {
+    "value": [
+      true,
+      true,
+      false,
+      true
+    ],
+    "id": "inherited"
+  },
+  {
+    "value": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "id": "changed"
+  },
+  {
+    "value": [
+      false,
+      true,
+      false,
+      true
+    ],
+    "id": "child-after"
+  },
+  {
+    "value": [
+      true,
+      true,
+      false,
+      true
+    ],
+    "id": "child-mutation"
+  },
+  {
+    "value": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "id": "base-after"
+  },
+  {
+    "value": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ],
+    "id": "construction"
+  },
+  {
+    "value": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "id": "grand"
+  },
+  {
+    "value": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "id": "leaf"
+  },
+  {
+    "value": [
+      false,
+      true,
+      false,
+      true
+    ],
+    "id": "leaf-write"
+  },
+  {
+    "value": [
+      false,
+      true,
+      false,
+      true
+    ],
+    "id": "grand-after-leaf"
+  },
+  {
+    "value": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "id": "base-after-leaf"
+  },
+  {
+    "value": [
+      false,
+      true,
+      false,
+      false
+    ],
+    "id": "child-after-leaf"
+  },
+  {
+    "value": [
+      false,
+      true,
+      false
+    ],
+    "id": "sibling-after-leaf"
+  },
+  {
+    "value": [
+      true,
+      true,
+      false
+    ],
+    "id": "sibling-write"
+  },
+  {
+    "value": [
+      true,
+      true,
+      false,
+      true
+    ],
+    "id": "leaf-after-sibling"
+  },
+  {
+    "value": [
+      false,
+      true,
+      true,
+      false
+    ],
+    "id": "grand-write"
+  },
+  {
+    "value": [
+      false,
+      true,
+      true,
+      false
+    ],
+    "id": "leaf-instance"
+  },
+  {
+    "value": [
+      true,
+      true,
+      true,
+      false
+    ],
+    "id": "leaf-instance-write"
+  },
+  {
+    "value": [
+      true,
+      true,
+      true,
+      false
+    ],
+    "id": "grand-instance"
+  },
+  {
+    "value": [
+      false,
+      true,
+      true,
+      false
+    ],
+    "id": "grand-instance-write"
+  },
+  {
+    "value": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "id": "final-base"
+  },
+  {
+    "value": [
+      false,
+      true,
+      true,
+      false
+    ],
+    "id": "final-leaf"
+  }
+]

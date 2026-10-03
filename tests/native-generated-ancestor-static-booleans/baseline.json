@@ -1,0 +1,13 @@
+{
+  "compiler": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-display-accessor-review",
+  "commit": "3e14ebd829dbf0e8b2d86a327ebd2a6a22a0e75d",
+  "status": "baseline-rejected",
+  "message": "AS3_GENERATED_LEXICAL_UNSUPPORTED: inherited static lexical ownership",
+  "sources": {
+    "deep.Grand": "6a15b472871525c3ada902f4ab2cb6756396b4291253770767db1b8cb5281dd9",
+    "deeper.Leaf": "ff7943b5b2a7a971b57a4a139b2889f4fba51bd9f1bb156b9039c38d9282e7f6",
+    "staticflags.Child": "7ee47aa50abd0941d072a453ce7c996eb26802be43424bb4362ee0b8f5d955c1",
+    "staticflags.Flags": "a6b545b6ca5f24ebee12e5416390667d017488979d701be8b875041bdca233f5",
+    "staticflags.Sibling": "5b7ece6f47df0861f4969c9eb204578feb49e25b3509957aa90cf61b743dfd67"
+  }
+}

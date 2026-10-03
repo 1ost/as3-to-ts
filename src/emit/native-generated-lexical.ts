@@ -110,7 +110,15 @@ export class NativeGeneratedLexical {
                         const vector=node.findChild(K.VECTOR);
                         return vector&&plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end);
                     });
-                if(inherited&&isStatic&&(!constant&&!inheritedPrimitives&&!inheritedVectors||name!==this.declarations.find(b=>b.identity===owner).base))fail('inherited static lexical ownership');
+                const inheritedBooleans=inherited&&isStatic&&name!==this.declarations.find(b=>b.identity===owner).base
+                    &&visibility==='protected'&&member.kind===K.VAR_LIST
+                    &&member.findChildren(K.NAME_TYPE_INIT).every(node=>{
+                        const type=node.findChild(K.TYPE);
+                        return type&&type.text==='Boolean'&&plan.references.some(ref=>ref.owner===name&&ref.start===type.start&&ref.end===type.end
+                            &&ref.kind==='intrinsic'&&ref.identity==='Boolean');
+                    });
+                if(inherited&&isStatic&&(!constant&&!inheritedPrimitives&&!inheritedVectors
+                    ||name!==this.declarations.find(b=>b.identity===owner).base&&!inheritedBooleans))fail('inherited static lexical ownership');
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
                     fail('internal instance method requires required Object/int parameters and void return or one authenticated interface parameter and Boolean/void return');
@@ -454,13 +462,25 @@ export class NativeGeneratedLexical {
     publication(name:string,base:string,domain:string,intrinsic:string):string {
         const own=this.declarations.find(b=>b.identity===this.owner),parent=own.base&&this.declarations.find(b=>b.identity===own.base);
         const native=own.base&&this.plan.nativeBindings.find(b=>b.qname===own.base&&!!b.nativeBaseExport);
+        // Follow the already selected constructor generation, not a new source
+        // Class read: a retry or inherited script-domain selection can differ
+        // from the latest generation published for the same declaration token.
+        const staticOwner=(trait:Trait):string=>{
+            let current=parent,expression=base;
+            while(current&&current.identity!==trait.owner){
+                current=this.declarations.find(binding=>binding.identity===current.base);
+                expression=intrinsic+'.getPrototypeOf('+expression+')';
+            }
+            if(!current)fail('inherited static declaration is not a selected ancestor');
+            return expression;
+        };
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
             +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
             +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'&&!this.embeddedConstant(t)&&!this.deferredObjectConstant(t)&&!this.deferredRegExpConstant(t)&&!this.deferredStringConstant(t)?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
         return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?(nativeGeneratedDeclarationInputs(this.plan,this.plan.scope).inheritScriptClasses?this.provider+'.getAS3InheritedLexicalBase('+base+')':domain+'.'+parent.lexicalExport+'.get('+base+')'):native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
-            +this.traits.filter(t=>t.static&&t.owner!==this.owner).map(t=>'const '+t.key+'='+base+';\n').join('')
+            +this.traits.filter(t=>t.static&&t.owner!==this.owner).map(t=>'const '+t.key+'='+staticOwner(t)+';\n').join('')
             +this.traits.map(t=>'const '+t.access+'='+this.provider+'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(t.name)+','+JSON.stringify(t.visibility)+','+t.static+');').join('\n')
             +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
