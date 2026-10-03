@@ -1,0 +1,25 @@
+{
+  "actual_uncompressed_length": 4447,
+  "compression": "zlib",
+  "declared_uncompressed_length": 4447,
+  "frame_count": 1,
+  "frame_rate": 24.0,
+  "length_matches_header": true,
+  "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-anonymous-member-review\\tests\\native-generated-timer-callbacks\\oracle\\evidence\\oracle.swf",
+  "schema": "swf-header@1",
+  "sha256": "882e4005d5faa52c31a1f80f28fc0e8c753781cd55e5bfaf393bed8bb1411510",
+  "signature": "CWS",
+  "stage": {
+    "height": 375.0,
+    "width": 500.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "stage_twips": {
+    "xmax": 10000,
+    "xmin": 0,
+    "ymax": 7500,
+    "ymin": 0
+  },
+  "swf_version": 51
+}

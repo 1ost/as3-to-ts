@@ -107,3 +107,5 @@ tests/native-generated-anonymous-object-return/run.cjs -text -whitespace
 tests/native-generated-class-comments/** -text -whitespace
 src/parse/scanner.ts -text whitespace=cr-at-eol
 src/parse/parse-declarations.ts -text whitespace=cr-at-eol
+
+tests/native-generated-timer-callbacks/** -text -whitespace

@@ -1,0 +1,17 @@
+{
+  "sha256": "12625246069ffa1cbffe6448662eff7dc45ad8a74a706753313ade788fbb1fa1",
+  "inputs": [
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-anonymous-member-review\\tests\\native-generated-timer-callbacks\\compile.cjs",
+      "sha256": "f5358cb7cdcbce6da34e9f803f99f68e3d947a655da65a435b8e66909d16b813"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-anonymous-member-review\\tests\\native-generated-timer-callbacks\\run.cjs",
+      "sha256": "3c0bdbaeb42f51997611fa3da5519e8e01cfd8b10cc63f8c075662938fed8c3e"
+    },
+    {
+      "file": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-anonymous-member-review\\tests\\native-generated-timer-callbacks\\verify.cjs",
+      "sha256": "4cabc11ae034cf18a04a03e52c30bfea35888ea02fc2b9912215ef85f1b20da4"
+    }
+  ]
+}
