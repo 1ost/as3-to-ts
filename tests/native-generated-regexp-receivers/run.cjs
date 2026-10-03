@@ -5,6 +5,7 @@ const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const evidence=path.join(engine,'tests/nativeFlashOracle/regexp-receivers'),expected=require(path.join(evidence,'verify.cjs'));
 const cache=path.resolve('.cache/native-generated-regexp-receivers');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
+const objectDispatch=process.argv.includes('--op2-dispatch');
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
 const cohorts={subject:read('source',['cases.Probe','cases.Box','cases.Handler'])};
 async function main(){
@@ -26,7 +27,7 @@ async function main(){
    const input={providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),lexicalProviderModule:provider('AS3LexicalMembers'),scope:'regexp-receivers-'+cohort,sources,providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true};
    const plan=api.createNativeGeneratedDeclarationPlan(input);
    const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
-   const options={nativeStringIntrinsicsModule:provider('AS3StringIntrinsics'),customVisitors:[],definitionsByNamespace,nativeReflectionQueryModule:provider('AS3ReflectionQuery'),nativeReflectionXMLModule:provider('AS3ReflectionQuery'),nativeVectorTypes:{plan,module:'./__native_declarations'},nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},importModules:{'flash.utils.getQualifiedClassName':provider('getQualifiedClassName'),'flash.utils.getDefinitionByName':provider('DefinitionRegistry'),'flash.utils.describeType':provider('describeType'),Error:provider('AS3CanonicalErrorConstruction'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
+   const options={...(objectDispatch?{nativeObjectPropertyModule:provider('AS3Property')}:{}),nativeStringIntrinsicsModule:provider('AS3StringIntrinsics'),customVisitors:[],definitionsByNamespace,nativeReflectionQueryModule:provider('AS3ReflectionQuery'),nativeReflectionXMLModule:provider('AS3ReflectionQuery'),nativeVectorTypes:{plan,module:'./__native_declarations'},nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},importModules:{'flash.utils.getQualifiedClassName':provider('getQualifiedClassName'),'flash.utils.getDefinitionByName':provider('DefinitionRegistry'),'flash.utils.describeType':provider('describeType'),Error:provider('AS3CanonicalErrorConstruction'),'compiler.AS3Property':provider('AS3Property'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
     decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
     nativeClassTraitsModule:provider('AS3GeneratedClass'),nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
     nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
@@ -82,4 +83,10 @@ async function main(){
  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,cohorts,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts')))},null,2));
  console.log(JSON.stringify({out,status:'passed',observations:expected.length,targets:2}));
 }
-main().catch(error=>{console.error(error);process.exitCode=1;});
+main().catch(error=>{
+ if(objectDispatch){const held={qualified:false,mode:'op2-object-dispatch',message:String(error),runnerSha256:hash(fs.readFileSync(__filename)),files:[]};
+  for(const file of fs.readdirSync(out,{recursive:true})){const full=path.join(out,file);if(fs.statSync(full).isFile())held.files.push({file:full,sha256:hash(fs.readFileSync(full))});}
+  fs.writeFileSync(path.join(out,'held.json'),JSON.stringify(held,null,2)+'\n');console.error(JSON.stringify({out,status:'held',message:String(error)}));
+ }else console.error(error);
+ process.exitCode=1;
+});

@@ -18,3 +18,9 @@ order evaluates the receiver once and arguments before final method lookup.
 The suite covers the observed TabStopsProperty receiver forms, not complete
 application-class execution. Unknown pattern types and the pattern engine's
 existing grammar/Unicode differences remain separate qualification work.
+
+`--op2-dispatch` additionally enables OP2's generic Object property dispatch.
+This diagnostic currently fails at dynamic String `slice` lookup, a separate
+bridge intrinsic that the default fixture accesses through the existing host
+String method path. The failure is written to `held.json` and exits nonzero;
+it is not counted as a pass. Full OP2-configured receiver behavior remains open.
