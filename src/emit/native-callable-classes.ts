@@ -87,6 +87,9 @@ export class NativeCallableClasses {
             const importContent = pkg ? pkg.findChild(K.CONTENT) : cls.parent;
             const imports = importContent.findChildren(K.IMPORT).map(node => node.text);
             if (!selected && (namespace ? namespace + '.' : '') + name !== qname) this.fail('mismatched source identity: ' + qname);
+            // Metadata-backed declarations use their authenticated member/type
+            // validators. Alias discovery is only consumed by callScan below.
+            if (!metadata) {
             const classAliases = new Set<string>(sourceClassNames);
             const aliasScan = (node: Node): void => {
                 if (node.kind === K.NAME_TYPE_INIT && node.findChild(K.TYPE) && node.findChild(K.TYPE).text === 'Class')
@@ -142,7 +145,8 @@ export class NativeCallableClasses {
                     this.fail('dynamic Class invocation requires exact constructor authority');
                 node.children.forEach(callScan);
             };
-            if (!metadata) callScan(cls);
+            callScan(cls);
+            }
             if (cls.findChild(K.IMPLEMENTS_LIST) && !generated) this.fail('interface construction identity requires separate authority');
             let base: string = null;
             const ext = cls.findChild(K.EXTENDS);
