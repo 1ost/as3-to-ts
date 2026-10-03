@@ -8,7 +8,7 @@ import {nativeNumericProductConstant} from './native-numeric-product-constant';
  * This does not authorize failing/cyclic/general executable initializers.
  */
 export function nativeScriptConstantInitializers(declaration: Node, source: string,
-    uintConstants: {[name:string]:string}): Set<Node> {
+    uintConstants: {[name:string]:string},builtinConstants: {[name:string]:string} = Object.create(null)): Set<Node> {
     const end=(node:Node):number=>node.children.reduce((last,child)=>Math.max(last,end(child)),Math.max(node.start,node.end));
     const text=(node:Node):string=>source.slice(node.start,end(node)).trim();
     const literal=(value:string):boolean=>/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(value);
@@ -46,7 +46,7 @@ export function nativeScriptConstantInitializers(declaration: Node, source: stri
     fields.forEach(field=>{
         const type=field.findChild(K.TYPE),init=field.findChild(K.INIT),name=field.findChild(K.NAME).text;
         if(!type||!init||['int','uint','Number','Boolean','String'].indexOf(type.text)<0)return;
-        if(literal(text(init))||nativeNumericProductConstant(text(init),type.text)
+        if(Object.prototype.hasOwnProperty.call(builtinConstants,name)||literal(text(init))||nativeNumericProductConstant(text(init),type.text)
             ||type.text==='uint'&&Object.prototype.hasOwnProperty.call(uintConstants,name)){
             allowed.add(field);early.add(name);
         }

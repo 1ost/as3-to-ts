@@ -1,0 +1,31 @@
+import { Laya } from "@ENGINE@/src/layaAir/Laya";
+import "@ENGINE@/src/layaAir/laya/ModuleDef";
+import "@ENGINE@/src/layaAir/laya/platform/BrowserAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/FileSystemAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/FontAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/MediaAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/StorageAdapter";
+import "@ENGINE@/src/layaAir/laya/platform/TextInputAdapter";
+import "@ENGINE@/src/layaAir/laya/device/WebDeviceAdapter";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/RenderModuleData/WebModuleData/WebUnitRenderModuleDataFactory";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/WebGLDriver/RenderDevice/WebGLRenderDeviceFactory";
+import "@ENGINE@/src/layaAir/laya/RenderDriver/WebGLDriver/2DRenderPass/WebGLRender2DProcess";
+import {createNativeSourceClassLoadingSession,NativeSourceClassModule} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+export async function run(module:NativeSourceClassModule){
+ await Laya.init(160,120);
+ const session=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:2});
+ const domain=await session.load('a',new ApplicationDomain(ApplicationDomain.currentDomain));
+ const Bounds=domain.getDefinition('cases.Bounds') as any,Twips=domain.getDefinition('flashx.textLayout.utils.Twips') as any;
+ const rows:any[]=[],row=(id:string,value:unknown)=>rows.push({id,value});
+ row('bounds',Bounds.read());row('consumer',(domain.getDefinition('cases.Consumer') as any).read());row('twips-bounds',[Twips.MAX_VALUE,Twips.MIN_VALUE,Twips.ONE_TWIP,Twips.TWIPS_PER_PIXEL]);
+ const values=[0,0.025,-0.025,1.234,-1.234,107374182.4,-107374182.45];
+ values.forEach((n,i)=>{const values=[Twips.to(n),Twips.roundTo(n),Twips.ceil(n),Twips.floor(n),Twips.round(n),Twips.from(Twips.to(n))];row('twips-'+i,values);row('sign-'+i,values.map(value=>1/value===Number.NEGATIVE_INFINITY));});
+ const Rounding=domain.getDefinition('cases.Rounding') as any;
+ [-0,-0.1,-0.49,-0.5,-0.50001,-1.5,0.5,NaN,Infinity,-Infinity,4503599627370495.5,4503599627370497,9007199254740991,-9007199254740991].forEach((n,i)=>{const value=Rounding.round(n);row('round-'+i,[Number.isNaN(value),value===Infinity,value===-Infinity,Number.isFinite(value)?value:null,1/value===-Infinity]);});
+ const other=await session.load('b',new ApplicationDomain(ApplicationDomain.currentDomain));
+ const B=other.getDefinition('cases.Bounds') as any,T=other.getDefinition('flashx.textLayout.utils.Twips') as any;
+ if(B===Bounds||T===Twips)throw Error('domain Class identity');
+ if(JSON.stringify(B.read())!==JSON.stringify(Bounds.read())||T.MAX_VALUE!==Twips.MAX_VALUE||T.MIN_VALUE!==Twips.MIN_VALUE)throw Error('domain constant values');
+ session.retire();return {rows:JSON.parse(JSON.stringify(rows)),checks:['domain Class identity','domain constant values']};
+}

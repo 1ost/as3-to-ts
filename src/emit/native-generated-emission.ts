@@ -1,3 +1,4 @@
+import {nativeBuiltinNumericConstants} from './native-builtin-numeric-constants';
 import {nativeNumericProductConstant} from './native-numeric-product-constant';
 import {generatedMemberUri,generatedMemberIdentity} from './native-generated-namespaces';
 import {nativeUintOrConstants} from './native-uint-or-constants';
@@ -30,6 +31,7 @@ export class NativeGeneratedEmission {
     readonly sources: {[qname: string]: string} = Object.create(null);
     readonly classes: {[qname: string]: 'lazy' | 'ready'} = Object.create(null);
     readonly deferredConstants: {[name: string]: string} = Object.create(null);
+    readonly builtinNumericConstants:{[name:string]:string};
     readonly uintOrInitializers: {constants: {[name:string]:string}; variables: {[name:string]:string}};
     constructor(source: string, readonly options: NativeGeneratedEmissionOptions,
         readonly registrar: string, readonly helpers: NativeClassHelperModules,
@@ -53,12 +55,13 @@ export class NativeGeneratedEmission {
         }
         this.lexical = new NativeGeneratedLexical(options.plan,selected,source,typedLocals);
         this.uintOrInitializers=nativeUintOrConstants(this.lexical.ownClass,source);
+        this.builtinNumericConstants=nativeBuiltinNumericConstants(options.plan,selected,source);
         if(this.projection.binding.scriptGlobalExport) {
             // Only explicit Class-script units use the AIR-qualified provider
             // that retains failed globals and allocates a fresh retry identity.
             const classScript=input.classScriptSources&&input.classScriptSources.indexOf(owners[0])>=0;
             const members=this.lexical.ownClass.findChild(K.CONTENT).children;
-            const constantInitializers=nativeScriptConstantInitializers(this.lexical.ownClass,source,this.uintOrInitializers.constants);
+            const constantInitializers=nativeScriptConstantInitializers(this.lexical.ownClass,source,this.uintOrInitializers.constants,this.builtinNumericConstants);
             if(members.some(member=>member.kind===K.CLASS_INITIALIZER))
                 fail('script global with class-body initializer requires retry identity authority');
             const privateClass=options.plan.privateBindings.some(b=>b.identity===selected);
@@ -101,7 +104,7 @@ export class NativeGeneratedEmission {
                 this.deferredConstants[generatedMemberIdentity(trait.name,trait.uri)]=name;
                 return;
             }
-            if(!trait.uri&&this.uintOrInitializers.constants[trait.name]!==undefined)return;
+            if(!trait.uri&&(this.uintOrInitializers.constants[trait.name]!==undefined||this.builtinNumericConstants[trait.name]!==undefined))return;
             // Literals and AIR-qualified numeric products are early storage.
             // Other computed primitive constants still require source authority.
             if (!literal || !/^(?:null|true|false|[+-]?(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(literal) && !nativeNumericProductConstant(literal,trait.type))

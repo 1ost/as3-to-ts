@@ -2784,6 +2784,11 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
 		as3Type: getAS3DeclarationType(node)
 	});
 	emitter.catchup(node.start);
+    const builtin=emitter.generated&&emitter.generated.builtinNumericConstants[node.findChild(NodeKind.NAME).text];
+    if(builtin!==undefined&&node.parent.kind===NodeKind.CONST_LIST&&emitter.classFactory&&node.parent.parent===emitter.classFactory.node.findChild(NodeKind.CONTENT)){
+        const init=node.findChild(NodeKind.INIT);visitNodes(emitter,node.children.filter(child=>child!==init));
+        emitter.catchup(init.start);emitter.insert(builtin);emitter.skipTo(getEffectiveNodeEnd(init));return;
+    }
 	const declaration = node.parent;
 	const mods = declaration && declaration.findChild(NodeKind.MOD_LIST);
 	if (emitter.classFactory && declaration && declaration.parent === emitter.classFactory.node.findChild(NodeKind.CONTENT)
@@ -4028,7 +4033,25 @@ function emitGeneratedProxyNamespaceCall(emitter:Emitter,node:Node):boolean {
     args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
     emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
+function emitBuiltinMathRound(emitter:Emitter,node:Node):boolean {
+    const module=emitter.options.nativeCallableCoercionModule;
+    if(!module||!emitter.generated||emitter.isNew)return false;
+    const callee=node.children[0],args=node.findChild(NodeKind.ARGUMENTS);
+    if(!callee||callee.kind!==NodeKind.DOT||callee.children.length!==2)return false;
+    const receiver=callee.children[0],member=callee.children[1];
+    if(receiver.kind!==NodeKind.IDENTIFIER||receiver.text!=='Math'||member.text!=='round')return false;
+    if(emitter.generated.lexical.traits.concat(<any>emitter.generated.projection.instanceTraits,<any>emitter.generated.projection.staticTraits).some(trait=>trait.name==='Math'))return false;
+    const binding=typeOfBinding(receiver,emitter.source,Object.keys(emitter.options.nativeClassInitialization.classes));
+    if(binding==='lexical'||binding==='class'||emitter.findDefInScope('Math')||emitter.references&&emitter.references.resolve('Math')!=='Math')return false;
+    if(!args||args.children.length!==1)throw new Error('AS3_NUMERIC_CALL_UNSUPPORTED: Math.round requires exactly one source argument');
+    let helper='__as3_mathRound';while(emitter.source.indexOf(helper)>=0)helper+='_';
+    emitter.ensureImportIdentifier('as3MathRound as '+helper,module,false);emitter.nativeSourceHelpers.add(helper);
+    emitter.catchup(node.start);emitter.insert(helper+'(');emitter.skipTo(args.children[0].start);visitNode(emitter,args.children[0]);
+    emitter.catchup(args.children[0].end);emitter.insert(')');emitter.skipTo(node.end);return true;
+}
+
 function emitCall(emitter:Emitter, node:Node):void {
+    if(emitBuiltinMathRound(emitter,node))return;
     if(emitGeneratedVectorConstruction(emitter,node,true))return;
     if(emitGeneratedProxyNamespaceCall(emitter,node))return;
     if(emitGeneratedParentRemoval(emitter,node))return;
