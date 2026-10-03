@@ -82,14 +82,14 @@ export class NativeGeneratedClassTraits {
         // Source interfaces are admitted only through this authenticated plan's
         // exact token exports. Class references and other native facets remain held.
         const interfaces=nativeGeneratedInterfaceBindings(plan);
-        // Public source Number halves use the common coercion contract. Native
+        // Public source Object and Number halves use the common coercion contract. Native
         // Sprite/MovieClip overrides remain constrained below to qualified names.
         const qualifiedAccessor=(member:{type?:TraitType;setterType?:TraitType;name:string;uri?:string}):boolean=>
             !!member.uri || member.type==='*'
             || typeof member.type==='object'&&interfaces.some(i=>i.tokenExport===(member.type as ReferenceType).referenceExport&&i.reflectedName===(member.type as ReferenceType).name)
             || typeof member.type==='object'&&plan.nativeBindings.some(b=>['flash.display.Sprite','flash.display.DisplayObject'].indexOf(b.qname)>=0
                 &&b.referenceExport===(member.type as ReferenceType).referenceExport&&reflected(b.qname)===(member.type as ReferenceType).name)
-            || member.type==='Array'|| member.type==='Object'&&['target','currentTarget'].indexOf(member.name)>=0||member.type==='Boolean'||member.type==='String'||member.type==='Number';
+            || member.type==='Array'|| member.type==='Object'||member.type==='Boolean'||member.type==='String'||member.type==='Number';
         this.binding = nativeGeneratedClassDeclaration(plan, owner);
         if (!this.binding) fail('reference-only source cannot publish a class: ' + owner);
         const isClass = (identity: string): boolean => plan.bindings.some(item => item.qname === identity) || plan.privateBindings.some(item => item.identity === identity);
