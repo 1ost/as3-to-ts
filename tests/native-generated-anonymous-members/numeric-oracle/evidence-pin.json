@@ -1,0 +1,21 @@
+{
+  "artifacts": {
+    "evidence/compile.log": "8c93199c98e4be988873b2b58dd90a0e6b5c2e0fbb621fa7e3170ef19528fe8b",
+    "evidence/host/OracleHost.as": "7eafe2d28eec190363afe7108348a3571358e9f97da1d226724dcdcad24d8f04",
+    "evidence/oracle.swf": "1a603cdce2d9ab5308a14afd5b97c9ffe948a8842317318f645f9bf1735dcf99",
+    "evidence/receipt.json": "e59bdb100869eb48a40913e2312b3686792e5874fecdc985a43f2062414bc22a",
+    "evidence/run-1/app/application.xml": "b507d7b12a3f648f482094033504601f1610d5c65836b3b3a90b3df7ef69c923",
+    "evidence/run-1/app/oracle.swf": "1a603cdce2d9ab5308a14afd5b97c9ffe948a8842317318f645f9bf1735dcf99",
+    "evidence/run-1/capture.json": "f309907eb482949ac263e5001f16761d911d9ee4efa550889df57e11a005340d",
+    "evidence/run-1/frame.png": "935e681fb3da266a88c82da51f034d6007b40f917284fd47c59c357e5cdcbeec",
+    "evidence/run-1/runtime.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/run-2/app/application.xml": "b507d7b12a3f648f482094033504601f1610d5c65836b3b3a90b3df7ef69c923",
+    "evidence/run-2/app/oracle.swf": "1a603cdce2d9ab5308a14afd5b97c9ffe948a8842317318f645f9bf1735dcf99",
+    "evidence/run-2/capture.json": "f309907eb482949ac263e5001f16761d911d9ee4efa550889df57e11a005340d",
+    "evidence/run-2/frame.png": "935e681fb3da266a88c82da51f034d6007b40f917284fd47c59c357e5cdcbeec",
+    "evidence/run-2/runtime.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "evidence/source/cases/NumericClosure.as": "662371af74c310e9e6a6926a596f6941ae0c7f99bdb7a763c90a098c1967c43c",
+    "evidence/source/NumericClosureProbe.as": "21b53dd40ada8e109f0dbc1e8a96dac119e305e4258bf2681e7d55102ec7c660",
+    "evidence/swf-inspect.json": "4da42dd21ca0b563e22751745b8caab8beeef622ceed33a1611ed249d9842eaf"
+  }
+}

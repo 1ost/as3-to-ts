@@ -1,0 +1,13 @@
+'use strict';
+const fs=require('fs'),path=require('path'),assert=require('assert/strict'),crypto=require('crypto');
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex'),read=file=>fs.readFileSync(path.join(__dirname,file));
+const pin=JSON.parse(read('evidence-pin.json'));
+for(const [file,sha]of Object.entries(pin.artifacts))assert.equal(hash(read(file)),sha,file);
+const receipt=JSON.parse(read('evidence/receipt.json'));assert.equal(receipt.status,'passed');
+assert.equal(receipt.entry,'NumericClosureProbe');assert.equal(receipt.capture.status,'passed');assert.equal(receipt.capture.runs,2);assert.equal(receipt.capture.identical,true);
+for(const [file,sha]of Object.entries(receipt.artifacts))assert.equal(hash(read('evidence/'+file)),sha,file);
+const first=JSON.parse(read('evidence/run-1/capture.json'));assert.deepEqual(first,JSON.parse(read('evidence/run-2/capture.json')));
+assert.equal(first.runtime.playerType,'Desktop');assert.equal(first.runtime.version,'WIN 51,3,4,2');assert.equal(first.state.ready,true);assert.equal(first.state.failure,'');
+const rows=first.state.observations;assert.equal(rows.length,4);assert.equal(receipt.capture.observationCount,4);assert.equal(new Set(rows.map(r=>r.id)).size,4);
+if(require.main===module)console.log(JSON.stringify({status:'passed',originalRows:4,repeatedCaptures:2}));
+module.exports=rows;

@@ -101,3 +101,5 @@ tests/native-generated-justifiers/** -text whitespace=cr-at-eol
 src/emit/native-reference-coercion.ts -text
 
 tests/native-generated-array-as/** -text -whitespace
+
+tests/native-generated-anonymous-object-return/run.cjs -text -whitespace

@@ -27,7 +27,10 @@ export class NativeTypedLocals {
                 member.findChildren(K.NAME_TYPE_INIT).forEach(d=>this.memberNames.push(d.findChild(K.NAME).text));
             else if([K.FUNCTION,K.GET,K.SET].indexOf(member.kind)>=0)this.memberNames.push(member.findChild(K.NAME).text);
         });
-        owner.findChild(K.CONTENT).children.filter(node=>node.kind===K.FUNCTION||this.matchSourceSpans&&[K.GET,K.SET].indexOf(node.kind)>=0).forEach(node => {
+        const callables=owner.findChild(K.CONTENT).children.filter(node=>node.kind===K.FUNCTION||this.matchSourceSpans&&[K.GET,K.SET].indexOf(node.kind)>=0);
+        const collectAnonymous=(node:Node):void=>{if(node.kind===K.LAMBDA&&this.anonymous.some(fn=>fn.start===node.start&&fn.end===node.end))callables.push(node);node.children.forEach(collectAnonymous);};
+        owner.findChild(K.CONTENT).children.forEach(collectAnonymous);
+        callables.forEach(node => {
             const locals: Local[] = [], declared: Local[] = [], wildcards: string[] = [], parameters = node.findChild(K.PARAMETER_LIST).children.map(p => {
                 const value=p.findChild(K.NAME_TYPE_INIT);return value ? value.findChild(K.NAME).text : p.findChild(K.REST)&&p.findChild(K.REST).text;
             });
@@ -125,7 +128,7 @@ export class NativeTypedLocals {
             };
             if(body)catchWrites(body);
             const mods=node.findChild(K.MOD_LIST);
-            this.methods.push({node,name:node.findChild(K.NAME).text,static:!!mods&&mods.children.some(m=>m.text==='static'),locals,wildcards,outerCaptures:[]});
+            this.methods.push({node,name:node.kind===K.LAMBDA?this.anonymous.find(fn=>fn.start===node.start&&fn.end===node.end).name:node.findChild(K.NAME).text,static:!!mods&&mods.children.some(m=>m.text==='static'),locals,wildcards,outerCaptures:[]});
         });
     }
     private fail(reason: string): never {throw new Error('AS3_TYPED_LOCAL_UNSUPPORTED: '+reason);}
@@ -186,17 +189,22 @@ export class NativeTypedLocals {
     /** Prevent the older integer assignment pass from pre-coercing local RHS values. */
     owns(node: Node, emitter: any): boolean {
         node=unwrapEncapsulatedExpression(node);
-        let method: Node=node;while(method&&([K.FUNCTION,K.GET,K.SET].indexOf(method.kind)<0||this.nested.some(fn=>fn.start===method.start&&fn.end===method.end)))method=method.parent;
-        const plan=this.methods.find(m=>m.node===method || this.matchSourceSpans && !!method && m.node.start===method.start && m.node.end===method.end);if(!plan)return false;
         const name=node.kind===K.NAME_TYPE_INIT?node.findChild(K.NAME).text:node.kind===K.IDENTIFIER?node.text:null;
-        const local=plan.locals.find(l=>l.name===name);if(!local)return false;
+        let local:Local;
+        for(let method:Node=node;method;method=method.parent){
+            if([K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0||this.nested.some(fn=>fn.start===method.start&&fn.end===method.end))continue;
+            const plan=this.methods.find(m=>m.node===method||this.matchSourceSpans&&m.node.start===method.start&&m.node.end===method.end);
+            local=plan&&plan.locals.find(l=>l.name===name);
+            if(local||method.kind!==K.LAMBDA)break;
+        }
+        if(!local)return false;
         if(node.kind===K.NAME_TYPE_INIT)return true;
         const binding=emitter.findDefInScope(name);
         return !!binding&&!binding.bound&&binding.as3Type!=='*';
     }
     lower(source: string, methodName: string, isStatic: boolean, provider: string, coercionProvider: string, stringProvider: string, additionProvider: string, array: string, unique: (name:string)=>string, referenceToken?: (qname:string)=>string, kind=K.FUNCTION, classProvider?:string, vectorCoerce?:(identity:string,value:string)=>string, propertyProvider?:string, tweenCoerce?:(value:string)=>string, sourceStart?:number): string {
         const method=this.methods.find(m=>m.name===methodName&&m.static===isStatic&&m.node.kind===kind&&(sourceStart===undefined||m.node.start===sourceStart));
-        if(!method||!method.locals.length&&!method.outerCaptures.length&&!this.nested.some(fn=>fn.methodStart===method.node.start&&!!fn.returned))return source;
+        if(!method||!method.locals.length&&!method.outerCaptures.length&&!this.nested.some(fn=>fn.methodStart===method.node.start&&!!fn.returned)&&!this.anonymous.some(fn=>fn.methodStart===method.node.start))return source;
         const ts=require('typescript'),S=ts.SyntaxKind,file=ts.createSourceFile('TypedLocals.ts',source,ts.ScriptTarget.Latest,true);
         if(file.parseDiagnostics.length)this.fail('intermediate local syntax');
         const raw=(node:any):string=>source.slice(node.getStart(file),node.end);
@@ -218,6 +226,12 @@ export class NativeTypedLocals {
             :coercionProvider+'.as3Coerce'+(local.type==='int'?'Int':local.type==='uint'?'Uint':local.type)+'('+value+')';
         const write=(local:Local,value:string):string=>{const rhs=unique('typedRaw');return '(()=>{const '+rhs+': any='+value+';'+local.name+'='+coerce(local,rhs)+';return '+rhs+';})()';};
         const render=(node:any):string=>{
+            if(node.kind===S.FunctionExpression&&node.name){
+                const anonymous=this.anonymous.find(fn=>fn.methodStart===method.node.start&&fn.name===node.name.text);
+                if(anonymous){const body=node.body,outerBody=render(body);const lowered=this.lower(outerBody.slice(1,-1),anonymous.name,false,provider,coercionProvider,stringProvider,additionProvider,array,unique,referenceToken,K.LAMBDA,classProvider,vectorCoerce,propertyProvider,tweenCoerce,anonymous.start);
+                    return source.slice(node.getStart(file),body.getStart(file)+1)+lowered+'}';}
+            }
+
             if(node.kind===S.CallExpression&&this.logicalMarker&&node.expression.kind===S.Identifier&&node.expression.text===this.logicalMarker){
                 const local=node.arguments.length===2&&resolve(node.arguments[0]);
                 if(!local||local.type!=='Boolean'||local.parameter)this.fail('logical assignment marker requires Boolean local');

@@ -43,7 +43,7 @@ async function main(){
     ['function():Object {return value;}','function():Object {return;}','anonymous typed bare return held'],
     ['function():Object {return value;}','function():Number {return value;}','anonymous typed return held'],
     ['function():Object {return value;}','function(item:int):Object {return item;}','anonymous callable requires wildcard parameters'],
-    ['function():Object {return value;}','function():Object {try {return value;} catch(e:*) {return null;}}','nested anonymous callable body held'],
+    ['function():Object {return value;}','function():Object {return function():Object {return value;};}','nested anonymous callable body held'],
     ['function():Object {return this;}','function():Object {return this.marker;}','anonymous receiver property access held']
    ]){
     const source=sources['returncases.Functions'].source.replace(from,to);assert.notEqual(source,sources['returncases.Functions'].source);

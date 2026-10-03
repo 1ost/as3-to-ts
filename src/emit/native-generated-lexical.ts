@@ -33,7 +33,7 @@ export class NativeGeneratedLexical {
     readonly typedLocals: NativeTypedLocals;
     readonly nestedFunctions: NestedLocalFunction[] = [];
     readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
-    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[];returned?:string;typedSignature?:boolean}[] = [];
+    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[];returned?:string;typedSignature?:boolean;ownerReceiver?:string}[] = [];
     readonly resolveTypeName:(name:string)=>string;
     private readonly declarations: ReadonlyArray<NativeGeneratedClassDeclaration>;
     private classSource(identity: string): {source: string; sourceSha256: string; referenceOnly?: boolean} {
@@ -217,15 +217,15 @@ export class NativeGeneratedLexical {
                     forInTarget(n);
                     if(['Object','String','int'].indexOf(returnType)>=0&&n.kind===K.RETURN&&!n.children.length)fail('anonymous typed bare return held');
                     if(n.kind===K.DOT&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='this')fail('anonymous receiver property access held');
-                    if([K.LAMBDA,K.FUNCTION,K.TRY].indexOf(n.kind)>=0)fail('nested anonymous callable body held');
-                    if(n.kind===K.IDENTIFIER&&['super','arguments'].concat(memberNames).indexOf(n.text)>=0)fail('anonymous callable receiver/member lookup held');
+                    if([K.LAMBDA,K.FUNCTION].indexOf(n.kind)>=0)fail('nested anonymous callable body held');
+                    if(n.kind===K.IDENTIFIER&&['super','arguments'].indexOf(n.text)>=0)fail('anonymous callable receiver/member lookup held');
                     if([K.VAR_LIST,K.CONST_LIST].indexOf(n.kind)>=0)n.findChildren(K.NAME_TYPE_INIT).forEach(v=>{
                         if(outerNames.indexOf(v.findChild(K.NAME).text)>=0)fail('anonymous local shadows outer storage');
-                        const t=v.findChild(K.TYPE);if(n.kind===K.CONST_LIST||v.findChild(K.VECTOR)||t&&t.text!=='*')fail('anonymous typed local held');
+                        if(n.kind===K.CONST_LIST||v.findChild(K.VECTOR))fail('anonymous typed local held');
                     });
                     n.children.forEach(inspect);
                 };inspect(node.findChild(K.BLOCK));
-                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:method.start,name:fresh('anonymous'),parameters,returned:returnType,typedSignature:referenceParameters||returnType==='int'});
+                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:method.start,name:fresh('anonymous'),parameters,returned:returnType,typedSignature:referenceParameters||returnType==='int',ownerReceiver:modifiers(method).indexOf('static')<0?fresh('anonymousOwner'):undefined});
                 return;
             }
             if(node.kind===K.FUNCTION&&node.parent!==content){
@@ -484,7 +484,15 @@ export class NativeGeneratedLexical {
             +this.traits.map(t=>'const '+t.access+'='+this.provider+'.resolveAS3LexicalMember('+this.scope+','+JSON.stringify(t.name)+','+JSON.stringify(t.visibility)+','+t.static+');').join('\n')
             +'\n'+this.own.filter(t=>this.earlyStaticValue(t)!==undefined).map(t=>this.provider+'.as3SetLexicalMember('+name+','+t.access+','+this.earlyStaticValue(t)+');').join('\n');
     }
+    implicitReceiver(node:Node):string {
+        for(let current=node;current;current=current.parent){
+            if(current.kind===K.LAMBDA){const fn=this.anonymousFunctions.find(f=>f.start===current.start&&f.end===current.end);return fn&&fn.ownerReceiver||'this';}
+            if([K.FUNCTION,K.GET,K.SET].indexOf(current.kind)>=0)return 'this';
+        }
+        return 'this';
+    }
     emit(emitter:any,node:Node,visit:(emitter:any,node:Node)=>void):boolean {
+        const implicitReceiver=this.implicitReceiver(node);
         // Protected methods have lexical symbol storage, so a source super call
         // must use the selected parent scope rather than a public prototype key.
         const callee=node.kind===K.CALL&&node.children[0];
@@ -771,7 +779,7 @@ export class NativeGeneratedLexical {
                 fail('lexical construction requires an authenticated Class variable');
             emitter.catchup(node.start);emitter.insert('(<any>'+this.provider+'.as3ConstructLexicalClass(');
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
-            else emitter.insert(trait.static?(trait.owner===this.owner?emitter.classFactory.value:trait.key):'this');
+            else emitter.insert(trait.static?(trait.owner===this.owner?emitter.classFactory.value:trait.key):implicitReceiver);
             emitter.insert(','+trait.access+',()=>[');
             arguments_.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});
             const global=this.declarations.find(b=>b.identity===this.owner).scriptGlobalExport?this.scriptGlobal:null;
@@ -810,7 +818,7 @@ export class NativeGeneratedLexical {
             emitter.insert('(<any>((target:any)=>{const previous:number=<any>'+this.provider+'.as3GetLexicalMember(target,'+found.trait.access+');'
                 +'const next=previous'+delta+';'+this.provider+'.as3SetLexicalMember(target,'+found.trait.access+',next);return '+(prefix?'next':'previous')+';})(');
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
-            else emitter.insert('this');
+            else emitter.insert(implicitReceiver);
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         else if(node.kind===K.DELETE){if(resolve(node.children[0]))fail('lexical update/delete lowering required');return false;}
@@ -946,7 +954,7 @@ export class NativeGeneratedLexical {
             // conversion. The lexical write performs int/uint storage coercion.
             emitter.catchup(node.start);emitter.insert('(<any>(()=>{const '+receiver+':any=');
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
-            else emitter.insert('this');
+            else emitter.insert(implicitReceiver);
             emitter.insert(';const '+previous+':number='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+') as number;return '+this.provider+'.as3SetLexicalMember('+receiver+','+found.trait.access+','+previous+'-'+number+'(');
             emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
             emitter.insert('));})())');emitter.skipTo(node.end);return true;
@@ -965,7 +973,7 @@ export class NativeGeneratedLexical {
             // returning the unconverted expression result (null += 1 yields 1).
             emitter.catchup(node.start);emitter.insert('(<any>(()=>{const '+receiver+':any=');
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
-            else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):'this');
+            else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):implicitReceiver);
             emitter.insert(';const '+previous+':any='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+');const '+value+':any='+add+'('+previous+',');
             emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
             emitter.insert(');return '+this.provider+'.as3SetLexicalMember('+receiver+','+found.trait.access+','+value+');})())');
@@ -983,7 +991,7 @@ export class NativeGeneratedLexical {
         if(operation!=='set')emitter.insert('(<any>');
         emitter.insert(this.provider+'.'+(operation==='get'?'as3GetLexicalMember':operation==='set'?'as3SetLexicalMember':fieldCall?'as3CallLexicalFunction':'as3CallLexicalMember')+'(');
         if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
-        else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):'this');
+        else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):implicitReceiver);
         emitter.insert(','+found.trait.access);
         if(operation==='set'){emitter.insert(',');emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);}
         if(operation==='call'){

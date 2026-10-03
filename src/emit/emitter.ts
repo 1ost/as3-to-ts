@@ -1810,7 +1810,7 @@ function emitFunction(emitter:Emitter, node:Node):void {
   const module=generatedModule(emitter.options.importModules&&emitter.options.importModules['compiler.AS3Invocation']);
   let helper='__as3_registerAnonymous';while(emitter.source.indexOf(helper)>=0)helper+='_';
   emitter.ensureImportIdentifier('registerAS3Function as '+helper,module,false);emitter.nativeSourceHelpers.add(helper);
-  emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(function '+anonymous.name+'(this:any'+(anonymous.parameters.length?',':''));
+  emitter.catchup(node.start);if(anonymous.ownerReceiver)emitter.insert('(( '+anonymous.ownerReceiver+':any)=>');emitter.insert('(<any>'+helper+'(function '+anonymous.name+'(this:any'+(anonymous.parameters.length?',':''));
   const parameters=node.findChild(NodeKind.PARAMETER_LIST),body=node.findChild(NodeKind.BLOCK);
   emitter.withScope(getFunctionDeclarations(emitter,node),()=>{
    parameters.children.forEach((p,index)=>{if(index)emitter.insert(',');emitter.skipTo(p.start);visitNode(emitter,p);emitter.catchup(p.end);});
@@ -1824,7 +1824,7 @@ function emitFunction(emitter:Emitter, node:Node):void {
    }
    emitter.catchup(body.end);
   });
-  emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');emitter.skipTo(node.end);return;
+  emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');if(anonymous.ownerReceiver)emitter.insert(')(this)');emitter.skipTo(node.end);return;
  }
 
 	const nested=emitter.generated&&emitter.generated.lexical.nestedFunctions.find(fn=>fn.start===node.start&&fn.end===node.end);
@@ -6610,7 +6610,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	}
 	if (def && def.bound) {
 		const factory = emitter.classFactory;
-		emitter.insert((factory && def.bound === factory.node.findChild(NodeKind.NAME).text ? factory.value : def.bound) + '.');
+		emitter.insert((factory && def.bound === factory.node.findChild(NodeKind.NAME).text ? factory.value : def.bound==='this'&&emitter.generated?emitter.generated.lexical.implicitReceiver(node):def.bound) + '.');
 	}
 	if (staticRef){
 		emitter.ensureImportIdentifier(staticRef.className);

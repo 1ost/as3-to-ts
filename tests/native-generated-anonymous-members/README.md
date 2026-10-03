@@ -2,9 +2,8 @@
 
 The OP2 full factory emits 568 classes, then stops in maintained ModuleManager.
 Its delayed anonymous callback captures owner fields and a method parameter,
-contains typed locals and try/catch, and calls inherited event dispatch. The
-current shared compiler rejects anonymous receiver/member lookup before the
-remaining anonymous-body restrictions are reached.
+contains typed locals and try/catch, and calls inherited event dispatch. The baseline shared compiler rejected anonymous receiver/member lookup before
+the remaining anonymous-body restrictions were reached.
 
 This prerequisite fixture contains complete ClosureBase and MemberClosure AS3
 classes, observed after their callback-producing method returns. Seven original
@@ -21,8 +20,21 @@ input hashes. Reproduce on that baseline by building the compiler, then running
 baseline.cjs from its checkout root. The compiler helper reads these exact
 original source classes from the retained AIR receipt.
 
-Implementation and Node/browser parity remain pending. Do not remove the guards
-without lowering captured owner access separately from an anonymous function's
-dynamic this, preserving typed local/error semantics, and validating the original
-rows. Native timer integration, maintained ModuleManager runtime, full-client
-startup/account validation and all font rendering are outside this fixture.
+The compiler now captures the creating owner separately from dynamic callback
+this, lowers ordinary anonymous typed locals in their own scope, and preserves
+captured outer local writes and try/catch behavior. Four additional original AIR
+rows cover uint/int storage versus raw assignment results for overflow, fractions,
+undefined and string input. Both original captures agree for all eleven rows.
+
+run.cjs verifies these exact eleven observations under ES5/ES2015 in Node and
+CSP Chromium, with twelve rejection guards, two applied wrong-behavior controls,
+and zero type errors. report.json.gz additionally retains 100 regression rows:
+anonymous Object returns (17), generated typed locals (47), and DataEvent (36).
+Run verify.cjs --check-current to authenticate retained results and input hashes.
+The baseline evidence remains independently verifiable with verify-baseline.cjs.
+
+Nested anonymous functions, explicit this.property access, super/arguments,
+shadowing outer storage, const/Vector anonymous locals, and unqualified parameter
+types remain guarded. Native timer integration, maintained ModuleManager runtime,
+and full-client startup/account validation remain open. Font rendering is outside
+this work.
