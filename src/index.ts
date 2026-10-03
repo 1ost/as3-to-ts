@@ -13,4 +13,4 @@ export {createNativeDeclarationDomain, NativeDeclarationDomain, NativeDeclaratio
     NativeDeclarationBinding, NativeDeclarationReference} from './emit/native-declaration-plan';
 export {createNativeSourceAncestryPlan, NativeSourceAncestryInput, NativeSourceAncestryPlan,
     NativeSourceAncestryClass, NativeSourceAncestryMember} from './emit/native-source-ancestry';
-export {emitNativeSourceClassModule, NativeSourceClassModuleInput, NativeSourceClassModuleArtifact} from './emit/native-source-class-module';
+export {emitNativeSourceClassModule, NativeSourceClassModuleInput, NativeSourceClassModuleArtifact, NativeSourceEmissionDiagnostic, NativeSourceEmissionError} from './emit/native-source-class-module';

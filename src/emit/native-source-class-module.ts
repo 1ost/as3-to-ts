@@ -18,6 +18,17 @@ export interface NativeSourceClassModuleInput {
     tweenSourcePlans?:{[qname:string]:NativeTweenSourcePlans};
     /** Retained source movie header, supplied by the build's authenticated input. */
     sourceMovie?: {readonly width:number; readonly height:number; readonly sourceSha256:string};
+    /** Collect independent declaration failures, then throw without returning a partial module. */
+    collectSourceErrors?: boolean;
+}
+export interface NativeSourceEmissionDiagnostic {
+    readonly identity: string;
+    readonly sourceOwner: string;
+    readonly sourceSha256: string;
+    readonly message: string;
+}
+export interface NativeSourceEmissionError extends Error {
+    readonly sourceDiagnostics: ReadonlyArray<NativeSourceEmissionDiagnostic>;
 }
 export interface NativeSourceClassModuleArtifact {
     /** Native ESM JavaScript. All function bodies are compiled at build time. */
@@ -36,6 +47,8 @@ function specifier(value: string): string {
 
 /** Emit a complete cohort from its genuine source plan; arbitrary generated text is not input authority. */
 export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput): NativeSourceClassModuleArtifact {
+    if (input.collectSourceErrors !== undefined && typeof input.collectSourceErrors !== 'boolean')
+        fail('collectSourceErrors must be a boolean');
     let movie:{width:number;height:number;sourceSha256:string};
     if(input.sourceMovie!==undefined) {
         const record=input.sourceMovie;
@@ -89,23 +102,38 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
                 ||input.tweenSourcePlans[q].source!==planned.sources[q].source)fail('tween plan source not in class cohort');
         });
     }
+    const sourceDiagnostics: NativeSourceEmissionDiagnostic[] = [];
+    const emitDeclaration = (identity: string, sourceOwner: string, module: string, source: string, opts: EmitterOptions, parseIdentity: string = sourceOwner): void => {
+        try {
+            generated.push({module, source: emit(parse(parseIdentity + '.as', source), source, opts)});
+        } catch (error) {
+            if (!input.collectSourceErrors) throw error;
+            sourceDiagnostics.push(Object.freeze({identity, sourceOwner, sourceSha256:plan.sourceHashes[sourceOwner],
+                message:error instanceof Error ? error.message : String(error)}));
+        }
+    };
     classes.forEach((binding, i) => {
         const source = planned.sources[binding.sourceOwner].source;
         const opts = {...options, customVisitors: [], importModules: imports,
             ...(input.tweenSourcePlans?{nativeTweenSourcePlans:input.tweenSourcePlans[binding.sourceOwner]}:{}),
             nativeGeneratedDeclarations: {plan, module: declarations, declarationIdentity:binding.identity},
             nativeReferenceCoercion: {...options.nativeReferenceCoercion, plan, module: declarations}} as EmitterOptions;
-        generated.push({module: classModules[i], source: emit(parse(binding.sourceOwner + '.as', source), source, opts)});
+        emitDeclaration(binding.identity, binding.sourceOwner, classModules[i], source, opts);
     });
     // Interfaces retain their complete authored type declarations. Runtime
     // identity comes from the selected nominal header, never a JS constructor.
     interfaces.forEach((binding, i) => {
-        const source = nativeGeneratedSourceUnit(plan,binding.qname).source;
+        const unit = nativeGeneratedSourceUnit(plan,binding.qname), source = unit.source;
         const opts = {...options, customVisitors: [], importModules: imports} as EmitterOptions;
         Object.keys(opts).filter(key => key.indexOf('native') === 0).forEach(key => delete (opts as any)[key]);
         opts.nativeVectorTypes = {plan, module: declarations, declarationIdentity:binding.qname};
-        generated.push({module: interfaceModules[i], source: emit(parse(binding.qname + '.as', source), source, opts)});
+        emitDeclaration(binding.qname, unit.owner, interfaceModules[i], source, opts, binding.qname);
     });
+    if (sourceDiagnostics.length) {
+        const error = new Error('AS3_SOURCE_CLASS_MODULE_UNSUPPORTED: source emission held for ' + sourceDiagnostics.length + ' declarations') as NativeSourceEmissionError;
+        Object.defineProperty(error, 'sourceDiagnostics', {value:Object.freeze(sourceDiagnostics), enumerable:true});
+        throw error;
+    }
     const dependencies: {module: string; imports: ReadonlyArray<string>}[] = [];
     const bodies = generated.map(item => {
         // Check erased type imports as well as executable CommonJS dependencies.
