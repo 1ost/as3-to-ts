@@ -1081,22 +1081,26 @@ export class NativeGeneratedLexical {
         }
         if(operation==='set'&&node.children[1].text==='+=') {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
-            if(found.trait.kind!=='variable'||found.trait.visibility!=='private'||!ref||ref.kind!=='intrinsic'||['String','int'].indexOf(ref.identity)<0)
-                fail('lexical addition requires qualified private String or int variable');
+            if(found.trait.kind!=='variable'||!ref||ref.kind!=='intrinsic'
+                ||!(found.trait.visibility==='private'&&['String','int'].indexOf(ref.identity)>=0
+                    ||found.trait.visibility==='protected'&&!found.trait.static&&['Number','int','uint'].indexOf(ref.identity)>=0))
+                fail('lexical addition requires qualified private String/int or protected instance numeric variable');
             const module=emitter.options.nativeTypedLocalAdditionModule;
             if(typeof module!=='string'||!module.trim()||/[\x00-\x1f'"\\]/.test(module))fail('lexical addition provider required');
             const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
             const add=unique('__as3_lexical_add'),receiver=unique('__as3_lexical_target'),previous=unique('__as3_lexical_previous'),value=unique('__as3_lexical_value');
             emitter.ensureImportIdentifier('as3Add as '+add,module,false);emitter.nativeSourceHelpers.add(add);
-            // Retain receiver and old value before RHS effects. Addition performs
-            // AS3 primitive conversion; lexical storage coerces the field while
+            // Read the old value before RHS effects; repeat the receiver for storage.
+            // Addition performs AS3 primitive conversion; lexical storage coerces the field while
             // returning the unconverted expression result (null += 1 yields 1).
             emitter.catchup(node.start);emitter.insert('(<any>(()=>{const '+receiver+':any=');
+            const receiverStart=emitter.output.length;
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
             else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):implicitReceiver);
+            const writeReceiver=emitter.output.slice(receiverStart);
             emitter.insert(';const '+previous+':any='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+');const '+value+':any='+add+'('+previous+',');
             emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
-            emitter.insert(');return '+this.provider+'.as3SetLexicalMember('+receiver+','+found.trait.access+','+value+');})())');
+            emitter.insert(');return '+this.provider+'.as3SetLexicalMember('+writeReceiver+','+found.trait.access+','+value+');})())');
             emitter.skipTo(node.end);return true;
         }
         if(operation==='set'&&(node.children[1].text!=='='||found.trait.kind!=='variable'))fail('lexical assignment kind');

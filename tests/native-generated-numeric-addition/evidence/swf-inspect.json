@@ -1,0 +1,25 @@
+{
+  "actual_uncompressed_length": 5696,
+  "compression": "zlib",
+  "declared_uncompressed_length": 5696,
+  "frame_count": 1,
+  "frame_rate": 24.0,
+  "length_matches_header": true,
+  "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-numeric-addition-review\\tests\\native-generated-numeric-addition\\evidence\\oracle.swf",
+  "schema": "swf-header@1",
+  "sha256": "1345e1aa04410d0716eec538fbace40b2c33a857d451155f0af125a9aa60a4ac",
+  "signature": "CWS",
+  "stage": {
+    "height": 375.0,
+    "width": 500.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "stage_twips": {
+    "xmax": 10000,
+    "xmin": 0,
+    "ymax": 7500,
+    "ymin": 0
+  },
+  "swf_version": 51
+}

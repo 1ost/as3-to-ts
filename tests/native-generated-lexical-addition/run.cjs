@@ -67,7 +67,7 @@ async function main(){
   const node=await execute(code);assert.deepEqual(node.rows,expected);
   const page=await browser.newPage();await page.route('http://loaded-generated.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script></body>'}));
   await page.goto('http://loaded-generated.test/');await page.evaluate(()=>globalThis.completion);const web=await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.result)));await page.close();assert.deepEqual(web,node);
-  const mutation=code.replace(/as3SetLexicalProperty\(lexical,\s*writeTarget\(\),\s*property,\s*(value\d*)\)/,'as3SetLexicalProperty(lexical, readTarget, property, $1)');assert.ok(mutation!==code,'receiver mutation must apply');
+  const mutation=code.replace(/as3SetLexicalProperty\(lexical,\s*writeTarget\(\),\s*(property\d*),\s*(value\d*)\)/,'as3SetLexicalProperty(lexical, readTarget, $1, $2)');assert.ok(mutation!==code,'receiver mutation must apply');
   const changed=await execute(mutation);assert.notDeepEqual(changed.rows,expected);
   results.push({target,node,web,typechecks,artifacts,rejectionGuards,mutations:1,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
   console.log(JSON.stringify({target,observations:node.rows.length,typeErrors:0,rejectionGuards,domainChecks:node.domainChecks.length,authorityGuards:node.authorityGuards,mutations:1}));

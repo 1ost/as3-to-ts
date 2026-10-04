@@ -1,0 +1,86 @@
+[
+  {
+    "value": [
+      "3.75",
+      "3.75"
+    ],
+    "id": "fraction"
+  },
+  {
+    "value": [
+      "2147483648",
+      "-2147483648"
+    ],
+    "id": "int-overflow"
+  },
+  {
+    "value": [
+      "4294967296",
+      "0"
+    ],
+    "id": "uint-overflow"
+  },
+  {
+    "value": [
+      "3.752",
+      "3.752"
+    ],
+    "id": "string"
+  },
+  {
+    "value": [
+      "3.752",
+      "3.752"
+    ],
+    "id": "null"
+  },
+  {
+    "value": [
+      "NaN",
+      "NaN"
+    ],
+    "id": "undefined"
+  },
+  {
+    "value": [
+      "-1.75",
+      "-1"
+    ],
+    "id": "int-fraction"
+  },
+  {
+    "value": [
+      "-1.75",
+      "4294967295"
+    ],
+    "id": "uint-fraction"
+  },
+  {
+    "value": [
+      "8.5",
+      "8.5"
+    ],
+    "id": "inherited"
+  },
+  {
+    "value": [
+      "12",
+      "12"
+    ],
+    "id": "routed"
+  },
+  {
+    "value": [
+      "10",
+      "12"
+    ],
+    "id": "routed-storage"
+  },
+  {
+    "value": [
+      1009,
+      0
+    ],
+    "id": "null-receiver"
+  }
+]

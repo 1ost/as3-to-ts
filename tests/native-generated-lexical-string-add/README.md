@@ -16,3 +16,7 @@ are covered. Production uses existing common addition and lexical providers.
 The module loader here is test-only. Production factory and application startup
 remain separate integration requirements. Protected/internal/accessor compound
 writes and non-String targets remain outside this qualified lowering.
+
+Protected instance numeric additions now have separate AIR qualification in
+`../native-generated-numeric-addition`. Receiver paths are repeated for storage
+after RHS conversion, while preserving the original read value.
