@@ -1860,7 +1860,7 @@ function emitFunction(emitter:Emitter, node:Node):void {
    }
    emitter.catchup(body.end);
   });
-  emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+anonymous.parameters.length+'))');if(anonymous.ownerReceiver)emitter.insert(')('+emitter.generated.lexical.implicitReceiver(node.parent)+')');emitter.skipTo(node.end);return;
+  emitter.insert(','+emitter.generated.lexical.scriptGlobal+','+(anonymous.parameters.length-(anonymous.restParameter?1:0))+'))');if(anonymous.ownerReceiver)emitter.insert(')('+emitter.generated.lexical.implicitReceiver(node.parent)+')');emitter.skipTo(node.end);return;
  }
 
 	const nested=emitter.generated&&emitter.generated.lexical.nestedFunctions.find(fn=>fn.start===node.start&&fn.end===node.end);
@@ -2248,13 +2248,18 @@ function emitBlock(emitter:Emitter, node:Node):void {
 	if(anonymous&&anonymous.typedSignature){
 		if(!emitter.references)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: anonymous signature requires authenticated reference plan');
 		// AIR accepts extra arguments for a zero-parameter anonymous function.
-		if(anonymous.parameters.length){
+		const fixedCount=anonymous.parameters.length-(anonymous.restParameter?1:0);
+		if(fixedCount){
 			const count=propertyHelper(emitter,'as3CheckArgumentCount',emitter.references.options.coercionModule);
-			emitter.insert('\n'+count+'(arguments.length,'+anonymous.parameters.length+','+anonymous.parameters.length+');\n');
+			emitter.insert('\n'+count+'(arguments.length,'+fixedCount+(anonymous.restParameter?'':','+fixedCount)+');\n');
 		}
 		node.parent.findChild(NodeKind.PARAMETER_LIST).children.forEach(parameter=>{
 			const value=parameter.findChild(NodeKind.NAME_TYPE_INIT),type=value&&value.findChild(NodeKind.TYPE);
 			if(!type||type.text==='*')return;
+			if(emitter.generated.lexical.resolveTypeName(type.text)==='String'){
+				const name=value.findChild(NodeKind.NAME).text,parts=signatureBuiltinCoercionParts(emitter,'String');
+				emitter.insert(name+'='+parts[0]+name+parts[1]+';\n');return;
+			}
 			const reference=emitter.references.declaration(value);
 			if(!reference)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: anonymous parameter requires exact source reference');
 			const parts=referenceCoercionParts(emitter,reference);
