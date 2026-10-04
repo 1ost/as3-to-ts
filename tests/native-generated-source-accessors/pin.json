@@ -1,0 +1,13 @@
+{
+  "sha256": "5af5ba8606448f84a058d3a9474ca0aaae26d8bf160531665997fda233f549be",
+  "runs": {
+    "source": ".cache/native-generated-source-accessors/full-DwZUTf/report.json",
+    "object": ".cache/native-generated-object-accessors/full-gBNksI/report.json",
+    "number": ".cache/native-generated-number-accessors/full-KwPaHX/report.json"
+  },
+  "expectedRows": {
+    "source": 14,
+    "object": 28,
+    "number": 36
+  }
+}

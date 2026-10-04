@@ -1,0 +1,1 @@
+package cases { public class Base { public var stored:Data; public var writes:int=0; public function Base(){} public function get value():Data{return stored;} public function set value(item:Data):void{stored=item;writes++;} public function throughBase(item:Data):Data{value=item;return value;} } }

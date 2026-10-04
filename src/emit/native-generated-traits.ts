@@ -86,6 +86,11 @@ export class NativeGeneratedClassTraits {
         // Sprite/MovieClip overrides remain constrained below to qualified names.
         const qualifiedAccessor=(member:{type?:TraitType;setterType?:TraitType;name:string;uri?:string}):boolean=>
             !!member.uri || member.type==='*'
+            || typeof member.type==='object'&&plan.bindings.some(b=>{
+                const declaration=nativeGeneratedClassDeclaration(plan,b.qname);
+                return declaration && declaration.tokenExport===(member.type as ReferenceType).referenceExport
+                    && declaration.reflectedName===(member.type as ReferenceType).name;
+            })
             || typeof member.type==='object'&&interfaces.some(i=>i.tokenExport===(member.type as ReferenceType).referenceExport&&i.reflectedName===(member.type as ReferenceType).name)
             || typeof member.type==='object'&&plan.nativeBindings.some(b=>['flash.display.Sprite','flash.display.DisplayObject'].indexOf(b.qname)>=0
                 &&b.referenceExport===(member.type as ReferenceType).referenceExport&&reflected(b.qname)===(member.type as ReferenceType).name)
