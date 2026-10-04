@@ -404,6 +404,18 @@ export class NativeGeneratedLexical {
             &&nativeGeneratedDeclarationResolver(this.plan,trait.owner,this.classSource(trait.owner).source).resolve('undefined')==='undefined')return 'void 0';
         if(trait.visibility==='internal'&&trait.static&&type==='uint'&&value&&/^(?:0[xX][0-9a-fA-F]+|0|[1-9]\d*)$/.test(value)
             &&Number(value)<=4294967295)return String(Number(value));
+        // Literal numeric constants execute no source code. Preserve AS3's
+        // declared int/uint conversion and Number's signed zero, rather than
+        // treating all nonpublic constants as unqualified computed initializers.
+        if(trait.kind==='constant'&&trait.static&&(trait.visibility==='protected'||trait.visibility==='private')
+            &&['int','uint','Number'].indexOf(type)>=0&&value
+            &&/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/.test(value)) {
+            const negative=value[0]==='-',unsigned=/^[+-]/.test(value)?value.slice(1):value;
+            const numeric=Number(unsigned)*(negative?-1:1);
+            if(type==='int')return String(numeric|0);
+            if(type==='uint')return String(numeric>>>0);
+            return numeric===0&&1/numeric<0?'-0':numeric===Infinity?'(1 / 0)':numeric===-Infinity?'(-1 / 0)':String(numeric);
+        }
         if(trait.kind==='constant'&&(trait.visibility==='protected'||trait.visibility==='private'&&trait.static&&(type==='String'||type==='int'))&&value
             &&(type==='String'&&/^(?:"(?:[^"\\\r\n]|\\[^\r\n])*"|'(?:[^'\\\r\n]|\\[^\r\n])*')$/.test(value)
                 ||type==='int'&&(!trait.static||trait.visibility==='private')&&/^[+-]?(?:0|[1-9]\d*)$/.test(value)&&Number(value)>=-2147483648&&Number(value)<=2147483647))

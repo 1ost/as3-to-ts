@@ -6,7 +6,7 @@ Run `node tests/native-generated-protected-constants/run.cjs`, then repeat with
 The fixture authenticates and emits all three complete AS3 subjects from the
 engine's generated-protected-constants packet. A separate observer compares all
 21 AIR rows in Node and Chromium on ES5 and ES2015. Both the emitted subjects and
-the provider dependency graph must have zero type diagnostics. Sixteen negative
+the provider dependency graph must have zero type diagnostics. Fifteen negative
 guards and three altered comparisons preserve the current admission boundary.
 
 Protected instance String/int literals and protected static String literals enter
@@ -21,3 +21,6 @@ the source return coercion stays in the called body.
 Private constants, computed initializers, other types, shadowing, deeper inherited
 static ownership, inherited computed static lookup and full EMVC/application
 integration are separate requirements. Direct constant writes still reject.
+
+Protected/private static numeric literals have separate coverage in
+`../native-generated-numeric-constants`; their former rejection guard is removed.

@@ -1,0 +1,18 @@
+Loading configuration: C:\Users\admin\Desktop\AIRSDK\AIRSDK_51.3.4\frameworks\air-config.xml
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-numeric-constants-review\tests\native-generated-numeric-constants\evidence\source\numericconstants\Base.as:12
+Warning: Initializer value 4294967296 for type 'uint' must be between 0 and 4294967295 inclusive. An initial value of 0 will be used instead.
+  private static const WRAPPED:uint=4294967296;
+                                    ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-numeric-constants-review\tests\native-generated-numeric-constants\evidence\source\numericconstants\Base.as:13
+Warning: Initializer value -1 for type 'uint' must be between 0 and 4294967295 inclusive. An initial value of 4294967295 will be used instead.
+  private static const NEGATIVE:uint=-1;
+                                     ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-numeric-constants-review\tests\native-generated-numeric-constants\evidence\source\numericconstants\Base.as:14
+Warning: Initializer value 2147483648 for type 'int' must be between -2147483648 and 2147483647 inclusive. An initial value of -2147483648 will be used instead.
+  private static const SIGNED:int=2147483648;
+                                  ^
+
+2849 bytes written to C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-numeric-constants-review\tests\native-generated-numeric-constants\evidence\oracle.swf in 0.701 seconds

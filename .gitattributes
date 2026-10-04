@@ -112,3 +112,5 @@ tests/native-generated-timer-callbacks/** -text -whitespace
 src/emit/native-generated-declarations.ts text eol=lf
 
 tests/native-generated-dictionary-reference/** -text -whitespace
+
+tests/native-generated-numeric-constants/** -text -whitespace
