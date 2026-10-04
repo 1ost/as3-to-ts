@@ -1,0 +1,21 @@
+// Complete generated Reader; host code observes source-equivalent calls and field dispatch.
+const Reader=load('nativeClass').readNativeClass(load('Reader').Reader);
+const rows=[],observe=(id,fn)=>{try{rows.push({id,value:fn()});}catch(e){rows.push({id,value:{error:[e.name,e.errorID]}});}};
+const r=new Reader(),b=new api.TextBlock(),get=(o,k)=>api.as3GetProperty(o,k),set=(o,k,v)=>api.as3SetProperty(o,k,v);
+observe('defaults',()=>[get(r,'stored')===null,r.calls]);
+observe('constructor-identity',()=>get(new Reader(b),'stored')===b);
+observe('constructor-invalid',()=>new Reader({}));
+observe('select-identity',()=>[r.select(b)===b,r.calls]);
+observe('select-undefined',()=>[r.select(undefined)===null,r.calls]);
+observe('select-invalid',()=>{try{r.select({});}catch(e){return [e.name,e.errorID,r.calls];}return null;});
+observe('field-identity',()=>{set(r,'stored',b);return get(r,'stored')===b;});
+observe('field-invalid',()=>{try{set(r,'stored',{});}catch(e){return [e.name,e.errorID,get(r,'stored')===b];}return null;});
+observe('make',()=>{const v=r.make();return [api.getQualifiedClassName(v),v.content===null,v.baselineFontSize,v!==r.make()];});
+observe('make-configured',()=>{const v=r.makeConfigured();return [v.bidiLevel,v.applyNonLinearFontScaling,v.baselineFontSize];});
+observe('copy',()=>[r.copy(b)===b,r.copy(undefined)===null]);
+[b,null,undefined,{},0,'bad',api.TextBlock].forEach((v,i)=>observe('type-'+i,()=>[r.matches(v),r.cast(v)===v,r.cast(v)===null]));
+observe('once',()=>[r.castNext(b)===b,r.calls]);
+for(const fake of [Object.create(api.TextBlock.prototype),{constructor:api.TextBlock,name:'flash.text.engine::TextBlock'}])if(r.cast(fake)!==null||r.matches(fake))throw Error('forged TextBlock accepted');
+let traps=0;const proxy=new Proxy(b,{get(){traps++;throw Error('get trap');},getPrototypeOf(){traps++;throw Error('prototype trap');}});
+if(r.cast(proxy)!==null||r.matches(proxy)||traps)throw Error('proxy inspected');
+globalThis.result=rows;
