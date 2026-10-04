@@ -118,3 +118,5 @@ tests/native-generated-numeric-constants/** -text -whitespace
 tests/native-generated-private-getter/** -text -whitespace
 
 tests/native-generated-numeric-addition/** -text -whitespace
+
+tests/native-generated-numeric-subtraction/** -text -whitespace

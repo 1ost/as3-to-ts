@@ -1062,22 +1062,24 @@ export class NativeGeneratedLexical {
         }
         if(operation==='set'&&node.children[1].text==='-=') {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
-            if(found.trait.kind!=='variable'||found.trait.visibility!=='private'||found.trait.static
+            if(found.trait.kind!=='variable'||['private','protected'].indexOf(found.trait.visibility)<0||found.trait.static
                 ||!ref||ref.kind!=='intrinsic'||['Number','int','uint'].indexOf(ref.identity)<0)
-                fail('lexical subtraction requires qualified private numeric instance variable');
+                fail('lexical subtraction requires qualified private/protected numeric instance variable');
             const module=emitter.options.nativeCallableCoercionModule;
             if(typeof module!=='string'||!module.trim()||/[\x00-\x1f'"\\]/.test(module))fail('lexical subtraction coercion provider required');
             const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
-            const number=unique('__as3_lexical_number'),receiver=unique('__as3_lexical_target'),previous=unique('__as3_lexical_previous');
+            const number=unique('__as3_lexical_number'),receiver=unique('__as3_lexical_target'),previous=unique('__as3_lexical_previous'),value=unique('__as3_lexical_value');
             emitter.ensureImportIdentifier('as3CoerceNumber as '+number,module,false);emitter.nativeSourceHelpers.add(number);
-            // Capture the receiver and numeric field before RHS evaluation or
-            // conversion. The lexical write performs int/uint storage coercion.
+            // Read the numeric field before RHS evaluation/conversion. Repeat the
+            // receiver path for storage; lexical storage coerces int/uint values.
             emitter.catchup(node.start);emitter.insert('(<any>(()=>{const '+receiver+':any=');
+            const receiverStart=emitter.output.length;
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
             else emitter.insert(implicitReceiver);
-            emitter.insert(';const '+previous+':number='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+') as number;return '+this.provider+'.as3SetLexicalMember('+receiver+','+found.trait.access+','+previous+'-'+number+'(');
+            const writeReceiver=emitter.output.slice(receiverStart);
+            emitter.insert(';const '+previous+':number='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+') as number;const '+value+':number='+previous+'-'+number+'(');
             emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
-            emitter.insert('));})())');emitter.skipTo(node.end);return true;
+            emitter.insert(');return '+this.provider+'.as3SetLexicalMember('+writeReceiver+','+found.trait.access+','+value+');})())');emitter.skipTo(node.end);return true;
         }
         if(operation==='set'&&node.children[1].text==='+=') {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);

@@ -9,14 +9,17 @@ fractional values, int/uint wrapping, strings, Boolean, null/undefined, NaN,
 infinities, RHS writes, source valueOf side effects, RHS exceptions and null
 receivers. Old field values are read before RHS effects; storage coercion and
 assignment-result semantics match the original. ProgressBar's floor/wrap operation
-is included. Six rejection guards and three comparison controls pass.
+is included. Five rejection guards and three comparison controls pass.
 
 An exploratory computed-method receiver was rejected by the existing exact-source
 receiver resolver. That separate capability remains held and has a rejection test;
-this change does not relax it. Static/protected/wildcard/accessor operations and
+this change does not relax it. Static/wildcard/accessor operations and
 other compound operators remain held. This is not full ProgressBar qualification.
 
 Adjacent numeric-update (22 rows) and lexical-addition (25 observations) suites
 pass in both targets. Verify the original retained bytes with `verify.cjs`.
 `native-result.json.gz` retains the successful current native run and provider
 hashes; `native-result-pin.json` authenticates it.
+
+Protected instance numeric fields and receiver redirection during RHS evaluation
+are now separately qualified by `../native-generated-numeric-subtraction`.

@@ -1,0 +1,4 @@
+<application xmlns="http://ns.adobe.com/air/application/51.3">
+<id>org.laya.nativeoracle.capturee5e9e38f6bb86b4a</id><versionNumber>1.0.0</versionNumber><filename>NativeOracle</filename>
+<initialWindow><content>oracle.swf</content><visible>false</visible><systemChrome>none</systemChrome><width>320</width><height>240</height></initialWindow>
+</application>
