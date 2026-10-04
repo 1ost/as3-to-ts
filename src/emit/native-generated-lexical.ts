@@ -852,6 +852,44 @@ export class NativeGeneratedLexical {
             const global=this.declarations.find(b=>b.identity===this.owner).scriptGlobalExport?this.scriptGlobal:null;
             emitter.insert(']'+(global?','+global:'')+'))');emitter.skipTo(node.end);return true;
         }
+        // Keep source type authority for paths rooted in lexical storage. A
+        // private Array slot or an Object entry can be null/undefined; emitting
+        // the following read as JS loses the AS3 1009/1010 error distinction.
+        const storagePathType=(expression:Node):string=>{
+            expression=unwrapEncapsulatedExpression(expression);if(!expression)return null;
+            const field=expression.kind===K.IDENTIFIER||expression.kind===K.DOT
+                &&expression.children[0].kind===K.IDENTIFIER
+                &&['this',this.ownClass.findChild(K.NAME).text].indexOf(expression.children[0].text)>=0;
+            if(field){
+                const slot=resolve(expression),trait=slot&&slot.trait;
+                const ref=trait&&trait.type&&this.plan.references.find(r=>r.owner===trait.owner
+                    &&r.start===trait.type.start&&r.end===trait.type.end);
+                if(trait&&trait.kind==='variable'&&ref&&ref.kind==='intrinsic'
+                    &&['Array','Object'].indexOf(ref.identity)>=0)return ref.identity;
+            }
+            if([K.DOT,K.ARRAY_ACCESSOR].indexOf(expression.kind)<0||expression.children.length!==2)return null;
+            const type=storagePathType(expression.children[0]);
+            return type==='Object'||type==='*'||type==='Array'&&expression.kind===K.ARRAY_ACCESSOR?'*':null;
+        };
+        if([K.DOT,K.ARRAY_ACCESSOR].indexOf(node.kind)>=0&&node.children.length===2){
+            const type=storagePathType(node.children[0]),key=node.children[1];
+            if(type==='Object'||type==='*'||type==='Array'&&(node.kind===K.ARRAY_ACCESSOR||key.text==='length')){
+                let outer=node;while(outer.parent&&outer.parent.kind===K.ENCAPSULATED)outer=outer.parent;
+                const parent=outer.parent;
+                const operation=parent&&parent.children[0]===outer&&[K.ASSIGN,K.CALL,K.NEW,K.DELETE,K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC].indexOf(parent.kind)>=0;
+                // Writes, calls and updates have distinct evaluation contracts.
+                if(!operation){
+                    let helper='__as3_generated_storageRead';while(emitter.source.indexOf(helper)>=0)helper+='_';
+                    emitter.ensureImportIdentifier('as3GetProperty as '+helper,emitter.generated.propertyModule,false);
+                    emitter.nativeSourceHelpers.add(helper);
+                    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+                    visit(emitter,node.children[0]);emitter.catchup(node.children[0].end);emitter.insert(',');
+                    if(node.kind===K.DOT)emitter.insert(JSON.stringify(key.text));
+                    else {emitter.skipTo(expressionStart(key));visit(emitter,key);emitter.catchup(key.end);}
+                    emitter.insert('))');emitter.skipTo(node.end);return true;
+                }
+            }
+        }
         let target=node,operation='get',right:Node,args:Node;
         if(node.kind===K.ASSIGN){target=node.children[0];operation='set';right=node.children[2];}
         else if(node.kind===K.CALL){target=node.children[0];operation='call';args=node.children[1];}

@@ -1,0 +1,11 @@
+{
+  "sha256": "9694a075febaa4edfd5377820b26e03bf8da4b6a687a795d7dcbacdfcc39b23d",
+  "bytes": 12368285,
+  "files": 603,
+  "rows": 52,
+  "customEaseRows": 34,
+  "fieldRows": 18,
+  "adjacentRows": 105,
+  "engine": "bfa25854370b31fdef23fe6451828c87da157f40",
+  "compilerBase": "49433869673a3c605d091d4d63af32ff3c21323b"
+}
