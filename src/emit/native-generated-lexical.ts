@@ -574,18 +574,19 @@ export class NativeGeneratedLexical {
         const chainedReferences=(expression:Node):NativeGeneratedDeclarationPlan['references']=>{
             expression=unwrapEncapsulatedExpression(expression);
             if(!expression)return [];
-            let identity:string,memberName:string;
+            let identity:string,memberName:string,lexicalRoot=false;
             if(expression.kind===K.IDENTIFIER){
                 const binding=emitter.findDefInScope(expression.text);
-                if(!binding)return [];
-                if(!binding.bound)return this.plan.references.filter(r=>r.owner===this.owner&&r.sourceName===binding.as3Type
+                if(!binding&&!this.traits.some(t=>t.name===expression.text&&!t.static&&t.kind==='variable'
+                    &&(t.visibility==='protected'||t.visibility==='private'&&t.owner===this.owner)))return [];
+                if(binding&&!binding.bound)return this.plan.references.filter(r=>r.owner===this.owner&&r.sourceName===binding.as3Type
                     &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'||r.kind==='interface'));
                 // An unqualified inherited public getter is still a receiver
                 // expression. Resolve its declaration span, not its spelling.
                 let method=expression;
                 while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0)method=method.parent;
                 if(!method||method.parent.kind!==K.CONTENT||modifiers(method).indexOf('static')>=0)return [];
-                identity=this.owner;memberName=expression.text;
+                identity=this.owner;memberName=expression.text;lexicalRoot=true;
             }else{
                 if(expression.kind!==K.DOT||expression.children[1].kind!==K.LITERAL)return [];
                 memberName=expression.children[1].text;
@@ -594,12 +595,24 @@ export class NativeGeneratedLexical {
                     let method=expression;
                     while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0)method=method.parent;
                     if(!method||method.parent.kind!==K.CONTENT||modifiers(method).indexOf('static')>=0)return [];
-                    identity=this.owner;
+                    identity=this.owner;lexicalRoot=true;
                 }else{
                     const refs=chainedReferences(root),identities=Array.from(new Set(refs.map(r=>r.identity)));
                     if(identities.length!==1)return [];
                     identity=identities[0];
                 }
+            }
+            if(lexicalRoot) {
+                // Only storage on this instance (or its unqualified equivalent)
+                // can use the caller's private/protected declaration authority.
+                // Foreign roots still follow public declarations only. Preserve
+                // the original expression: ordinary lexical emission owns the
+                // actual read and each following getter executes once.
+                const field=this.traits.find(t=>t.name===memberName&&!t.static&&t.kind==='variable'
+                    &&(t.visibility==='protected'||t.visibility==='private'&&t.owner===this.owner));
+                if(field&&field.type)return this.plan.references.filter(r=>r.owner===field.owner
+                    &&r.start===field.type.start&&r.end===field.type.end
+                    &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'||r.kind==='interface'));
             }
             const getter=interfaceMember(identity,memberName,'get');
             if(getter)return this.plan.references.filter(r=>r.owner===getter.owner&&r.identity===getter.returnType
