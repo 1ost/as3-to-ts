@@ -1,0 +1,102 @@
+[
+  {
+    "value": [
+      true,
+      "<r><menuButton><label textKey=\"hi\" url=\"\" text=\"translation:hi\"/></menuButton><x aKey=\"one\" a=\"translation:one\"><y bKey=\"two\" b=\"translation:two\"/></x></r>",
+      4
+    ],
+    "id": "rewrite-0"
+  },
+  {
+    "value": [
+      "value",
+      "value"
+    ],
+    "id": "write-0"
+  },
+  {
+    "value": "<r extra=\"value\"><menuButton><label textKey=\"hi\" url=\"\" text=\"translation:hi\"/></menuButton><x aKey=\"one\" a=\"translation:one\"><y bKey=\"two\" b=\"translation:two\"/></x><outer><inner label=\"nested\"/></outer></r>",
+    "id": "nested-0"
+  },
+  {
+    "value": 0,
+    "id": "null-loop-0"
+  },
+  {
+    "value": [
+      "null",
+      "urn:test::r",
+      "urn:p::r"
+    ],
+    "id": "names-0"
+  },
+  {
+    "value": [
+      true,
+      "<r/>",
+      0
+    ],
+    "id": "rewrite-1"
+  },
+  {
+    "value": [
+      "value",
+      "value"
+    ],
+    "id": "write-1"
+  },
+  {
+    "value": "<r extra=\"value\"><outer><inner label=\"nested\"/></outer></r>",
+    "id": "nested-1"
+  },
+  {
+    "value": 0,
+    "id": "null-loop-1"
+  },
+  {
+    "value": [
+      "null",
+      "urn:test::r",
+      "urn:p::r"
+    ],
+    "id": "names-1"
+  },
+  {
+    "value": [
+      true,
+      "<r>before<x labelKey=\"hello\" label=\"translation:hello\"/>after<!--comment--></r>",
+      4
+    ],
+    "id": "rewrite-2"
+  },
+  {
+    "value": [
+      "value",
+      "value"
+    ],
+    "id": "write-2"
+  },
+  {
+    "value": "<r extra=\"value\">before<x labelKey=\"hello\" label=\"translation:hello\"/>after<!--comment--><outer><inner label=\"nested\"/></outer></r>",
+    "id": "nested-2"
+  },
+  {
+    "value": 0,
+    "id": "null-loop-2"
+  },
+  {
+    "value": [
+      "null",
+      "urn:test::r",
+      "urn:p::r"
+    ],
+    "id": "names-2"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009
+    ],
+    "id": "null-receiver"
+  }
+]

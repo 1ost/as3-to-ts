@@ -27,6 +27,9 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
         value=unwrapEncapsulatedExpression(value);
         if(!value||!e.generated||!e.references)return null;
         if(childSelection(value))return 'XMLList';
+        if(value.kind===K.CALL&&value.children[0].kind===K.DOT
+            &&['descendants','attributes'].indexOf(value.children[0].children[1].text)>=0
+            &&value.findChild(K.ARGUMENTS).children.length===0&&type(value.children[0].children[0]))return 'XMLList';
         if(value.kind===K.DOT&&value.children[1].kind===K.LITERAL
             &&/^@?[A-Za-z_$][A-Za-z0-9_$]*$/.test(value.children[1].text)&&type(value.children[0]))return 'XMLList';
         let identity:string=null;
@@ -126,10 +129,10 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
             &&/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(iterable.children[1].text)
             &&xmlMethodNames.indexOf(iterable.children[1].text)<0&&type(iterable.children[0])
             ?{receiver:iterable.children[0],name:iterable.children[1].text}:null;
-        const child=childSelection(iterable)||dotChild;
-        const selected=child?{receiver:child.receiver,names:null}:children&&type(children)==='XML'?{receiver:children,names:null}:selection(iterable);
+        const child=childSelection(iterable)||dotChild,list=type(iterable)==='XMLList';
+        const selected=child?{receiver:child.receiver,names:null}:list?{receiver:iterable,names:null}:children&&type(children)==='XML'?{receiver:children,names:null}:selection(iterable);
         if(!selected)return false;
-        const target=n.children[0],inline=child&&target.kind===K.VAR&&target.children.length===1
+        const target=n.children[0],inline=(child||list)&&target.kind===K.VAR&&target.children.length===1
             &&target.children[0].kind===K.NAME_TYPE_INIT&&!target.children[0].findChild(K.INIT)?target.children[0]:null;
         const targetName=inline?inline.findChild(K.NAME).text:target.text;
         if(inline){
@@ -145,7 +148,7 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
         e.declareInScope({name:temporary});
         e.catchup(n.start);e.insert('{');
         if(e.pendingStatementLabel){e.insert(e.pendingStatementLabel+': ');e.pendingStatementLabel=null;}
-        e.insert('for(var '+temporary+' of '+helper(child?'as3XMLChildNamed':selected.names?'as3XMLDescendantsNamed':'as3XMLChildren')+'(');
+        e.insert('for(var '+temporary+' of '+helper(child?'as3XMLChildNamed':list?'as3XMLListValues':selected.names?'as3XMLDescendantsNamed':'as3XMLChildren')+'(');
         e.skipTo(selected.receiver.start);visit(e,selected.receiver);e.catchup(selected.receiver.end);
         // ES5 for-of lowering indexes arrays; a native XMLList is iterable but
         // does not expose numeric JS properties. Preserve its selected node list.
@@ -188,6 +191,34 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
             e.insert(')');e.skipTo(n.end);return true;
         }
     }
+    if(n.kind===K.ASSIGN&&n.children.length===3){
+        const target=unwrapEncapsulatedExpression(n.children[0]),operator=n.children[1],right=n.children[2];
+        const literal=target.kind===K.DOT?attribute(target):null;
+        const dynamic=target.kind===K.ARRAY_ACCESSOR&&target.children.length===2
+            &&target.children[0].kind===K.DOT&&target.children[0].children[1].text==='@'
+            &&type(target.children[0].children[0]);
+        if(literal||dynamic){
+            if(operator.text!=='=')fail('XML compound attribute assignment requires separate qualification');
+            const receiver=literal?literal.receiver:target.children[0].children[0];
+            e.catchup(n.start);e.insert('(<any>'+helper('as3XMLSetAttribute')+'(');
+            e.skipTo(receiver.start);visit(e,receiver);e.catchup(receiver.end);e.insert(', ');
+            if(literal)e.insert(JSON.stringify(literal.name));
+            else {const key=target.children[1];e.skipTo(key.start);visit(e,key);e.catchup(key.end);}
+            e.insert(', ');e.skipTo(right.start);visit(e,right);e.catchup(right.end);
+            e.insert('))');e.skipTo(n.end);return true;
+        }
+    }
+    const stringArgs=n.kind===K.CALL&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='String'
+        &&n.findChild(K.ARGUMENTS).children;
+    const convertedName=stringArgs&&stringArgs.length===1&&call(stringArgs[0],'name');
+    if(convertedName&&type(convertedName)==='XML'&&e.references.resolve('String')==='String'
+        &&!e.references.sourceClass('String')&&!e.references.sourceInterface('String')&&!e.findDefInScope('String')
+        &&typeOfBinding(n.children[0],e.source,[])==='builtin'){
+        emit(n,convertedName,'as3XMLNameStringCoerce');return true;
+    }
+    const descendants=call(n,'descendants'),attributes=call(n,'attributes');
+    if(descendants&&type(descendants)){emit(n,descendants,'as3XMLDescendants');return true;}
+    if(attributes&&type(attributes)){emit(n,attributes,'as3XMLAttributes');return true;}
     const selectedAttribute=attribute(n);
     if(selectedAttribute){
         const outer=outerEncapsulatedExpression(n);
