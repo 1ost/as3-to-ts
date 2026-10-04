@@ -34,7 +34,7 @@ for(const body of [
  'private static var value:Number=1e999;',
  'private static var value:Number=01;',
  'private static var value:Number=(1);',
- 'private static var value:uint=1;',
+ 'private static var value:uint=1+2;',
  'private static var value:Boolean=Boolean(1);',
  'private static var value:String=String(1);',
  'private static var value:String="a"+"b";',

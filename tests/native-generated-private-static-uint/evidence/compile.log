@@ -1,0 +1,18 @@
+Loading configuration: C:\Users\admin\Desktop\AIRSDK\AIRSDK_51.3.4\frameworks\air-config.xml
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-private-uint-review\tests\native-generated-private-static-uint\evidence\source\retrycases\Retry.as:9
+Warning: Initializer value -1 for type 'uint' must be between 0 and 4294967295 inclusive. An initial value of 4294967295 will be used instead.
+  private static var negative:uint=-1;
+                                   ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-private-uint-review\tests\native-generated-private-static-uint\evidence\source\retrycases\Retry.as:10
+Warning: Initializer value 1.75 is not valid for type 'uint'. An initial value of 1 will be used instead.
+  private static var fraction:uint=1.75;
+                                   ^
+
+C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-private-uint-review\tests\native-generated-private-static-uint\evidence\source\retrycases\Retry.as:11
+Warning: Initializer value 4294967296 for type 'uint' must be between 0 and 4294967295 inclusive. An initial value of 0 will be used instead.
+  private static var wrap:uint=4294967296;
+                               ^
+
+4261 bytes written to C:\Users\admin\Desktop\GITHUB REPO\as3-to-ts-op2-private-uint-review\tests\native-generated-private-static-uint\evidence\oracle.swf in 1.165 seconds

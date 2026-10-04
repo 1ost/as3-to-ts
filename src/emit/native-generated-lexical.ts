@@ -424,6 +424,10 @@ export class NativeGeneratedLexical {
             &&/^(?:"(?:[^"\\]|\\[\s\S])*"|'(?:[^'\\]|\\[\s\S])*')$/.test(value))
             return value.replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
         if(trait.visibility==='private'&&trait.type){
+            // AIR publishes finite literal uint slots before cinit, after ToUint32.
+            // Each Class retry receives fresh slots with these converted values.
+            if(trait.type.text==='uint'&&/^(?:0[xX][0-9a-fA-F]+|[+-]?(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/.test(value)
+                &&isFinite(Number(value)))return String(Number(value)>>>0);
             if(trait.type.text==='Boolean'&&/^(true|false)$/.test(value))return value;
             // Retain literal spelling (especially -0); reject legacy octal,
             // nonfinite literals and executable expressions until qualified.
@@ -827,9 +831,9 @@ export class NativeGeneratedLexical {
                 emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
                 emitter.insert('))');emitter.skipTo(node.end);return true;
             }
-            if(!found.trait||found.trait.kind!=='variable'||found.trait.static||['private','protected','internal'].indexOf(found.trait.visibility)<0
+            if(!found.trait||found.trait.kind!=='variable'||found.trait.static&&!(found.trait.visibility==='private'&&found.trait.type&&found.trait.type.text==='uint')||['private','protected','internal'].indexOf(found.trait.visibility)<0
                 ||!found.trait.type||['int','uint','Number'].indexOf(found.trait.type.text)<0)
-                fail('lexical numeric update requires qualified instance numeric variable');
+                fail('lexical numeric update requires qualified numeric variable');
             const delta=node.kind===K.PRE_INC||node.kind===K.POST_INC?'+1':'-1';
             const prefix=node.kind===K.PRE_INC||node.kind===K.PRE_DEC;
             // Storage conversion happens in the provider; the prefix expression
@@ -838,7 +842,7 @@ export class NativeGeneratedLexical {
             emitter.insert('(<any>((target:any)=>{const previous:number=<any>'+this.provider+'.as3GetLexicalMember(target,'+found.trait.access+');'
                 +'const next=previous'+delta+';'+this.provider+'.as3SetLexicalMember(target,'+found.trait.access+',next);return '+(prefix?'next':'previous')+';})(');
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
-            else emitter.insert(implicitReceiver);
+            else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):implicitReceiver);
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         else if(node.kind===K.DELETE){if(resolve(node.children[0]))fail('lexical update/delete lowering required');return false;}
