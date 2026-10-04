@@ -789,7 +789,9 @@ export class NativeGeneratedLexical {
             } else isStatic=staticContext||!this.traits.some(t=>t.name===name&&!t.static);
             const trait=this.traits.find(t=>t.name===name&&t.static===isStatic);
             if(!trait)fail('lexical static/instance ownership');
-            if(!isStatic&&staticContext)fail('instance lexical access in static method');
+            // A static method may use an authenticated explicit instance.
+            // Its lexical this and unqualified instance access remain invalid.
+            if(!isStatic&&staticContext&&(!receiver||receiver.text==='this'))fail('instance lexical access in static method');
             return {trait,receiver};
         };
         if(node.kind===K.NEW&&node.children.length===1) {
