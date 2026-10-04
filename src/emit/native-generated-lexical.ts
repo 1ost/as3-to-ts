@@ -556,6 +556,21 @@ export class NativeGeneratedLexical {
         // Follow only authenticated public source storage/getter declarations.
         // Keep the expression intact for emission so getters run exactly once;
         // type discovery must never evaluate or duplicate a source receiver.
+        const interfaceGetter=(identity:string,name:string)=>{
+            const bindings=nativeGeneratedInterfaceBindings(this.plan);
+            if(!bindings.some(binding=>binding.qname===identity))return undefined;
+            const owners=new Set<string>();
+            const visit=(owner:string):void=>{
+                if(owners.has(owner))return;
+                const binding=bindings.find(value=>value.qname===owner);
+                // Native interface inheritance keeps its separate qualification.
+                if(!binding)return;
+                owners.add(owner);binding.bases.forEach(visit);
+            };
+            visit(identity);
+            return this.plan.interfaceContracts.members.find(member=>owners.has(member.owner)
+                &&member.name===name&&member.kind==='get');
+        };
         const chainedReferences=(expression:Node):NativeGeneratedDeclarationPlan['references']=>{
             expression=unwrapEncapsulatedExpression(expression);
             if(!expression)return [];
@@ -564,7 +579,7 @@ export class NativeGeneratedLexical {
                 const binding=emitter.findDefInScope(expression.text);
                 if(!binding)return [];
                 if(!binding.bound)return this.plan.references.filter(r=>r.owner===this.owner&&r.sourceName===binding.as3Type
-                    &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'));
+                    &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'||r.kind==='interface'));
                 // An unqualified inherited public getter is still a receiver
                 // expression. Resolve its declaration span, not its spelling.
                 let method=expression;
@@ -586,6 +601,9 @@ export class NativeGeneratedLexical {
                     identity=identities[0];
                 }
             }
+            const getter=interfaceGetter(identity,memberName);
+            if(getter)return this.plan.references.filter(r=>r.owner===getter.owner&&r.identity===getter.returnType
+                &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='interface'));
             for(let current=identity;current;){
                 const declaration=this.declarations.find(b=>b.identity===current);
                 if(!declaration||!this.classSource(current)||this.classSource(current).referenceOnly)return [];
@@ -595,13 +613,13 @@ export class NativeGeneratedLexical {
                         ?member:member.kind===K.VAR_LIST?member.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===memberName):null;
                     const type=value&&value.findChild(K.TYPE);
                     if(type)return this.plan.references.filter(r=>r.owner===current&&r.start===type.start&&r.end===type.end
-                        &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'));
+                        &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'||r.kind==='interface'));
                 }
                 current=declaration.base;
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -688,6 +706,15 @@ export class NativeGeneratedLexical {
                 }
                 if(!references.length)references=chainedReferences(receiver).slice();
                 const identities=Array.from(new Set(references.map(r=>r.identity)));
+                if(identities.length===1&&references.every(r=>r.kind==='interface')&&interfaceGetter(identities[0],name)) {
+                    if(!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
+                        ||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
+                        fail('interface getter requires exact reference and property providers');
+                    // A public interface getter cannot select a private or
+                    // protected namesake in the caller. Keep its whole receiver
+                    // expression so each getter executes once in source order.
+                    return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:true};
+                }
                 if(lexicalName&&identities.length===1&&identities[0]==='flash.display.MovieClip'
                     &&references.every(r=>r.kind==='native')) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
@@ -851,6 +878,7 @@ export class NativeGeneratedLexical {
             const call=node.children[0];
             if(call.kind!==K.CALL)return false;
             const found=resolve(call.children[0]);
+            if(found&&found.interfaceRead)fail('interface getter construction requires separate authority');
             if(!found||!found.trait||found.trait.kind==='constant')return false;
             const trait=found.trait,arguments_=call.findChild(K.ARGUMENTS);
             const ref=trait.type&&this.plan.references.find(r=>r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
@@ -1010,6 +1038,7 @@ export class NativeGeneratedLexical {
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(found.publicName) {
+            if(found.interfaceRead&&operation!=='get')fail('interface getter currently requires a property read');
             if(found.dynamicRead&&operation!=='get')fail('chained dynamic receiver currently requires a property read');
             if(operation==='set'&&found.publicNumericUpdate&&['+=','-='].indexOf(node.children[1].text)>=0) {
                 const addition=node.children[1].text==='+=',unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
