@@ -1,0 +1,68 @@
+[
+  {
+    "value": [
+      "private-state",
+      "<state name=\"a\">one</state>\n<state name=\"b\">two</state>",
+      2,
+      "x",
+      [
+        "a",
+        "b"
+      ]
+    ],
+    "id": "sample-0"
+  },
+  {
+    "value": "",
+    "id": "missing-0"
+  },
+  {
+    "value": "local",
+    "id": "shadow-0"
+  },
+  {
+    "value": [
+      "private-state",
+      "three",
+      1,
+      "y",
+      [
+        "c"
+      ]
+    ],
+    "id": "sample-1"
+  },
+  {
+    "value": "",
+    "id": "missing-1"
+  },
+  {
+    "value": "local",
+    "id": "shadow-1"
+  },
+  {
+    "value": [
+      "private-state",
+      "",
+      0,
+      "",
+      []
+    ],
+    "id": "sample-2"
+  },
+  {
+    "value": "",
+    "id": "missing-2"
+  },
+  {
+    "value": "local",
+    "id": "shadow-2"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009
+    ],
+    "id": "null"
+  }
+]

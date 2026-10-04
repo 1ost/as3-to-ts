@@ -5,6 +5,12 @@ import {generatedModule} from './native-generated-emission';
 import {nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationNode} from './native-generated-declarations';
 import {typeOfBinding} from './native-typeof';
 
+const xmlMethodNames=['addNamespace','appendChild','attribute','attributes','child','childIndex','children','comments','contains','copy',
+            'descendants','elements','hasComplexContent','hasOwnProperty','hasSimpleContent','inScopeNamespaces',
+            'insertChildAfter','insertChildBefore','length','localName','name','namespace','namespaceDeclarations',
+            'nodeKind','normalize','parent','prependChild','processingInstructions','propertyIsEnumerable',
+            'removeNamespace','replace','setChildren','setLocalName','setName','setNamespace','text','toString',
+            'toXMLString','valueOf'];
 function fail(detail:string):never {throw new Error('AS3_XML_UNSUPPORTED: '+detail);}
 /** Provider paths in a plan are relative to its declaration-domain module. */
 export function xmlGlobalProviderModule(module:string,domain:string):string {
@@ -26,8 +32,19 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
         let identity:string=null;
         if(value.kind===K.IDENTIFIER){
             const binding=e.findDefInScope(value.text);
-            if(!binding||binding.bound||!binding.as3Type)return null;
-            identity=e.references.resolve(binding.as3Type);
+            if(!binding||!binding.as3Type)return null;
+            if(binding.bound) {
+                // Resolve the selected source field's annotation, not a private
+                // spelling on the XML value. Preserve normal lexical reads when
+                // emitting the receiver; parameter/local shadowing stays above it.
+                const lexical=e.generated.lexical;
+                const field=lexical.traits.find((t:any)=>t.name===value.text
+                    &&t.static===(binding.bound!=='this')&&(t.kind==='variable'||t.kind==='constant'));
+                const ref=field&&field.type&&e.generated.options.plan.references.find((r:any)=>r.owner===field.owner
+                    &&r.start===field.type.start&&r.end===field.type.end&&r.kind==='native');
+                if(!ref)return null;
+                identity=ref.identity;
+            }else identity=e.references.resolve(binding.as3Type);
         }else if(value.kind===K.CALL&&value.children[0].kind===K.DOT){
             const receiver=unwrapEncapsulatedExpression(value.children[0].children[0]),member=value.children[0].children[1];
             if(receiver.kind!==K.IDENTIFIER||member.kind!==K.LITERAL)return null;
@@ -105,7 +122,11 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     };
     if(n.kind===K.FOREACH){
         const iterable=n.children[1].children[0],children=call(iterable,'children');
-        const child=childSelection(iterable);
+        const dotChild=iterable.kind===K.DOT&&iterable.children[1].kind===K.LITERAL
+            &&/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(iterable.children[1].text)
+            &&xmlMethodNames.indexOf(iterable.children[1].text)<0&&type(iterable.children[0])
+            ?{receiver:iterable.children[0],name:iterable.children[1].text}:null;
+        const child=childSelection(iterable)||dotChild;
         const selected=child?{receiver:child.receiver,names:null}:children&&type(children)==='XML'?{receiver:children,names:null}:selection(iterable);
         if(!selected)return false;
         const target=n.children[0],inline=child&&target.kind===K.VAR&&target.children.length===1
@@ -176,12 +197,7 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
     }
     if(n.kind===K.DOT&&n.children[1].kind===K.LITERAL&&/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(n.children[1].text)
         &&type(n.children[0])){
-        if(['addNamespace','appendChild','attribute','attributes','child','childIndex','children','comments','contains','copy',
-            'descendants','elements','hasComplexContent','hasOwnProperty','hasSimpleContent','inScopeNamespaces',
-            'insertChildAfter','insertChildBefore','length','localName','name','namespace','namespaceDeclarations',
-            'nodeKind','normalize','parent','prependChild','processingInstructions','propertyIsEnumerable',
-            'removeNamespace','replace','setChildren','setLocalName','setName','setNamespace','text','toString',
-            'toXMLString','valueOf'].indexOf(n.children[1].text)>=0)
+        if(xmlMethodNames.indexOf(n.children[1].text)>=0)
             fail('XML method-name child selection requires separate qualification');
         const outer=outerEncapsulatedExpression(n),parent=outer.parent;
         if(parent&&parent.children[0]===outer&&[K.ASSIGN,K.DELETE,K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC,K.CALL,K.NEW].indexOf(parent.kind)>=0)
