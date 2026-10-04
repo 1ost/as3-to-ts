@@ -619,7 +619,7 @@ export class NativeGeneratedLexical {
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;textBlockMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -740,6 +740,21 @@ export class NativeGeneratedLexical {
                     &&references.every(r=>r.kind==='native')&&['compress','uncompress','deflate','inflate'].indexOf(name)>=0) {
                     if(!emitter.options.nativeByteArrayReferenceModule)fail('native ByteArray method requires exact provider');
                     return {trait:null,receiver,nativeMethod:name};
+                }
+                if(identities.length===1&&identities[0]==='flash.text.engine.TextBlock'
+                    &&references.every(r=>r.kind==='native')
+                    &&['findNextAtomBoundary','findPreviousAtomBoundary','findNextWordBoundary','findPreviousWordBoundary',
+                        'getTextLineAtCharIndex','createTextLine','recreateTextLine','releaseLineCreationData','releaseLines','dump'].indexOf(name)>=0) {
+                    // Public native methods cannot select a private/protected
+                    // namesake in the caller. Canonical dispatch owns the bound
+                    // closure, source arity, receiver checks and call ordering.
+                    // The emitter authenticates the exact TextBlock module;
+                    // require the same reference plan and property provider here.
+                    if(!emitter.options.nativeTextBlockReferenceModule
+                        ||!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
+                        ||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
+                        fail('TextBlock methods require exact reference and property providers');
+                    return {trait:null,receiver,publicName:name,publicMethod:true,textBlockMethod:true};
                 }
                 if(identities.length===1&&identities[0]==='flash.text.TextLineMetrics'
                     &&references.every(r=>r.kind==='native')&&['x','width','height','ascent','descent','leading'].indexOf(name)>=0) {
@@ -905,6 +920,7 @@ export class NativeGeneratedLexical {
             if(call.kind!==K.CALL)return false;
             const found=resolve(call.children[0]);
             if(found&&(found.interfaceRead||found.interfaceCall||found.namespaceUri))fail('interface getter or namespace method construction requires separate authority');
+            if(found&&found.textBlockMethod)fail('TextBlock method construction requires separate authority');
             if(!found||!found.trait||found.trait.kind==='constant')return false;
             const trait=found.trait,arguments_=call.findChild(K.ARGUMENTS);
             const ref=trait.type&&this.plan.references.find(r=>r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
