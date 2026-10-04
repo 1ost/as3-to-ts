@@ -31,7 +31,7 @@ for(const type of ['ContentElement','TextElement','GroupElement','GraphicElement
 for(const binding of [undefined,{...nativeProviders[qname],nativeVector:undefined},{...nativeProviders[qname],exportName:'Sprite'}]){
  assert.throws(()=>api.createNativeGeneratedDeclarationPlan({scope:'native-vector-guard',providerModule:provider('AS3GeneratedClass'),vectorProviderModule:provider('AS3Vector'),sources,providers:Object.fromEntries(Object.entries(nativeProviders).filter(([name])=>name!==qname).concat(binding?[[qname,binding]]:[]))}),/AS3_GENERATED_DECLARATIONS_UNSUPPORTED/);rejectionGuards++;
 }
-for(const body of ['public function make('+type+':*):Vector.<'+type+'>{return new Vector.<'+type+'>();}','public function make(v:*):Vector.<'+type+'>{return new Vector.<'+type+'>(v);}','public var v:Vector.<Vector.<'+type+'>>;']){
+for(const body of ['public function make('+type+':*):Vector.<'+type+'>{return new Vector.<'+type+'>();}','public function make(v:*):Vector.<'+type+'>{return new Vector.<'+type+'>(v,false,0);}','public var v:Vector.<Vector.<'+type+'>>;']){
  const source='package contentvectors {import flash.text.engine.'+type+';public class Guard {'+body+'}}';
  assert.throws(()=>{const p=api.createNativeGeneratedDeclarationPlan({scope:'native-vector-guard',providerModule:provider('AS3GeneratedClass'),vectorProviderModule:provider('AS3Vector'),sources:{'contentvectors.Guard':{source,sourceSha256:hash(source)}},providers:nativeProviders});return emit(parse('Guard.as',source),source,{...options,nativeVectorTypes:{plan:p,module:'./guard'},nativeGeneratedDeclarations:{plan:p,module:'./guard'},nativeReferenceCoercion:{plan:p,module:'./guard',coercionModule:provider('AS3Type')}});},/AS3_.*UNSUPPORTED/);rejectionGuards++;
 }

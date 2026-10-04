@@ -24,3 +24,8 @@ native subclasses while preserving each vector specialization's identity.
 The observer supplies native content instances to the generated consumer. This
 qualifies collection/reference behavior, not generated native constructors,
 property dispatch, reflection, TextLine composition or application startup.
+
+The wildcard-length rejection was superseded by the qualified generated Vector
+constructor path (35 AIR observations in native-generated-vector-construction).
+The current runner instead rejects three constructor arguments, preserving the
+two-argument boundary. The historical retained packet remains unchanged.
