@@ -1034,8 +1034,10 @@ export class NativeGeneratedLexical {
                 emitter.insert(',[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});
                 emitter.insert(']))');emitter.skipTo(node.end);return true;
             }
-            if(operation==='call'||operation==='set'&&(found.publicMethod||node.children[1].text!=='='))fail('foreign public lexical collision operation');
-            const member=operation==='set'?'as3SetProperty':'as3GetProperty';
+            if(operation==='set'&&(found.publicMethod||node.children[1].text!=='='))fail('foreign public lexical collision operation');
+            // A source dot call retains its receiver, then evaluates arguments
+            // before looking up the Function-valued public field or accessor.
+            const member=operation==='call'?'as3CallNamedProperty':operation==='set'?'as3SetProperty':'as3GetProperty';
             let helper='__as3_generated_foreign_'+member;while(emitter.source.indexOf(helper)>=0)helper+='_';
             emitter.ensureImportIdentifier(member+' as '+helper,emitter.generated.propertyModule,false);
             emitter.nativeSourceHelpers.add(helper);
@@ -1043,6 +1045,7 @@ export class NativeGeneratedLexical {
             emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
             emitter.insert(','+JSON.stringify(found.publicName));
             if(operation==='set'){emitter.insert(',');emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);}
+            if(operation==='call'){emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');}
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(operation==='set'&&node.children[1].text==='-=') {

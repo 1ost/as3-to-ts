@@ -1,0 +1,10 @@
+{
+  "sha256": "b20550837e8f259b361586464b44db54ccce8ca3f9e619542cebac9057b3e767",
+  "bytes": 3873854,
+  "files": 528,
+  "AIRRows": 17,
+  "adjacentRows": 64,
+  "engine": "8ae9f5b793d1c56a00a45daf527c68c2f4b70d3f",
+  "compilerBase": "5d5a67d5aecc6c5aa39481a3214afa3c268fb6bf",
+  "wholeClientQualified": false
+}
