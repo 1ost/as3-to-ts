@@ -38,7 +38,6 @@ rejected(holder,'gettercases.Holder',false);
 for(const changed of [
  holder.replace('internal function get hasDataDescriptor():Boolean','internal function get hasDataDescriptor():uint'),
  holder.replace('internal function get hasDataDescriptor():Boolean','internal static function get hasDataDescriptor():Boolean'),
- holder.replace('internal function get hasDataDescriptor():Boolean','private function get hasDataDescriptor():Boolean'),
  holder.replace('internal function get hasDataDescriptor():Boolean','protected function get hasDataDescriptor():uint'),
  holder.replace('return hasDataDescriptor;', 'return hasDataDescriptor=true;'),
  holder.replace('return hasDataDescriptor;', 'return hasDataDescriptor();'),
@@ -57,7 +56,7 @@ rejected(holder.replace('internal function get', 'override internal function get
 rejected(holder.replace('internal function get', 'customNS function get'));
 rejected(sources['gettercases.Child'].source.replace('return true;', 'return super.hasDataDescriptor;'),'gettercases.Child');
 rejected(sources['gettercases.Child'].source.replace('():Boolean', '():uint'),'gettercases.Child');
-assert.equal(rejectionGuards,22);
+assert.equal(rejectionGuards,21);
 fs.writeFileSync(path.join(run,'declarationDomain.ts'),plan.moduleSource);const emitted=[];
 for(const binding of [...plan.bindings,...plan.interfaces]){const source=sources[binding.qname].source,file=path.join(run,fileFor(binding.qname)+'.ts');fs.mkdirSync(path.dirname(file),{recursive:true});
  const opts={...options};

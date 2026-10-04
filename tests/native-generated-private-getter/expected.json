@@ -1,0 +1,82 @@
+[
+  {
+    "value": [
+      false,
+      false,
+      false,
+      2,
+      1
+    ],
+    "id": "initial"
+  },
+  {
+    "value": [
+      true,
+      true,
+      false,
+      4,
+      2
+    ],
+    "id": "changed"
+  },
+  {
+    "value": [
+      true,
+      true,
+      true,
+      7,
+      7
+    ],
+    "id": "same"
+  },
+  {
+    "value": [
+      false,
+      false,
+      false,
+      2,
+      1
+    ],
+    "id": "child-base"
+  },
+  {
+    "value": [
+      true,
+      true,
+      false,
+      4,
+      2
+    ],
+    "id": "child-base-changed"
+  },
+  {
+    "value": [
+      false,
+      false,
+      false,
+      2,
+      1
+    ],
+    "id": "child-private"
+  },
+  {
+    "value": [
+      true,
+      true,
+      false,
+      4,
+      2
+    ],
+    "id": "child-private-changed"
+  },
+  {
+    "value": [
+      true,
+      true,
+      true,
+      7,
+      7
+    ],
+    "id": "child-base-preserved"
+  }
+]

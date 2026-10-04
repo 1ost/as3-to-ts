@@ -18,7 +18,7 @@ ancestor on the original receiver. Source return coercion remains in each body.
 Protected getters stay absent from public property access and reflection.
 
 Sixteen rejection guards cover forged plans, invalid overrides, final ancestors,
-private/static/non-Boolean getters, parameters, root super, writes, updates,
+private ancestor mismatch, static/non-Boolean getters, parameters, root super, writes, updates,
 calls, deletion and setter halves. Two applied factory mutations independently
 turn super into recursive virtual dispatch and remove the child's negation;
 both are detected in both runtimes. Report: `full-cWqIk8`.
@@ -31,3 +31,7 @@ former protected-Boolean exclusion now checks protected uint instead.
 
 This fixture qualifies source compilation and dispatch, not full OP2 startup
 or supplied-account game flows. Other protected accessor shapes remain held.
+
+Private instance Boolean getters are now separately qualified by
+`../native-generated-private-getter`. The private-ancestor mutation here still
+rejects because a child protected override cannot override a private member.

@@ -122,7 +122,7 @@ export class NativeGeneratedLexical {
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
                     fail('internal instance method requires required Object/int parameters and void return or one authenticated interface parameter and Boolean/void return');
-                const readonlyGetter=(visibility==='internal'||visibility==='protected')&&!isStatic&&member.kind===K.GET
+                const readonlyGetter=(visibility==='internal'||visibility==='protected'||visibility==='private')&&!isStatic&&member.kind===K.GET
                     &&member.findChild(K.TYPE)&&member.findChild(K.TYPE).text==='Boolean'
                     &&member.findChild(K.PARAMETER_LIST).children.length===0;
                 if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant&&!readonlyGetter)fail('lexical constant/accessor lowering required');
