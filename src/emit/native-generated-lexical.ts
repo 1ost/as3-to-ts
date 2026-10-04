@@ -619,7 +619,7 @@ export class NativeGeneratedLexical {
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -826,6 +826,24 @@ export class NativeGeneratedLexical {
                 }
                 if(publicIdentity&&publicIdentity!==this.owner&&this.declarations.some(b=>b.identity===publicIdentity)) {
                     const identity=publicIdentity;
+                    // An opened source namespace on a typed foreign receiver
+                    // must resolve before this caller's private/protected
+                    // namesake. Reuse ordinary namespace lowering so URI,
+                    // ambiguity, member and operation checks remain enforced.
+                    if(lexicalName&&emitter.namespaces.lowerOpenedAccess(value,identity)) {
+                        const access=emitter.namespaces.access(value);
+                        for(let scope=emitter.scope;scope&&scope!==emitter.rootScope;scope=scope.parent)
+                            if(!scope.className&&scope.declarations.some((declaration:{name:string;bound?:string})=>declaration.name===access.qualifier&&!declaration.bound))
+                                fail('runtime namespace qualifier shadows source declaration');
+                        emitter.namespaces.checkReceiver(value,identity);
+                        const member=emitter.namespaces.accessMember(value,identity);
+                        if(!member||member.static||member.declaration.kind!==K.FUNCTION||!access.uri)
+                            fail('foreign namespace namesake requires an instance method');
+                        if(!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
+                            ||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
+                            fail('namespace method requires exact reference and property providers');
+                        return {trait:null,receiver,publicName:name,publicMethod:true,namespaceUri:access.uri};
+                    }
                     if(!this.foreignPublicMembers.has(identity)) {
                         const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                         this.foreignPublicMembers.set(identity,new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,this.classSource(identity).source).instanceTraits
@@ -878,7 +896,7 @@ export class NativeGeneratedLexical {
             const call=node.children[0];
             if(call.kind!==K.CALL)return false;
             const found=resolve(call.children[0]);
-            if(found&&found.interfaceRead)fail('interface getter construction requires separate authority');
+            if(found&&(found.interfaceRead||found.namespaceUri))fail('interface getter or namespace method construction requires separate authority');
             if(!found||!found.trait||found.trait.kind==='constant')return false;
             const trait=found.trait,arguments_=call.findChild(K.ARGUMENTS);
             const ref=trait.type&&this.plan.references.find(r=>r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
@@ -1035,6 +1053,20 @@ export class NativeGeneratedLexical {
             emitter.insert(','+this.scope+','+token+','+JSON.stringify(found.internalName));
             if(operation==='set'){emitter.insert(',');emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);}
             if(operation==='call'){emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');}
+            emitter.insert('))');emitter.skipTo(node.end);return true;
+        }
+        if(found.namespaceUri) {
+            if(operation!=='get'&&operation!=='call')fail('namespace method requires a read or call');
+            const member=operation==='call'?'as3CallNamespaceProperty':'as3GetNamespaceProperty';
+            let helper='__as3_generated_namespace_'+member;while(emitter.source.indexOf(helper)>=0)helper+='_';
+            emitter.ensureImportIdentifier(member+' as '+helper,emitter.generated.propertyModule,false);
+            emitter.nativeSourceHelpers.add(helper);
+            emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
+            emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
+            emitter.insert(','+JSON.stringify(found.namespaceUri)+','+JSON.stringify(found.publicName));
+            if(operation==='call'){
+                emitter.insert(',()=>[');args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});emitter.insert(']');
+            }
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(found.publicName) {

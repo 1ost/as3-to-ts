@@ -1,0 +1,36 @@
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+import {createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {as3GetProperty as get,as3SetProperty as set,as3GetNamespaceProperty,as3CallNamespaceProperty} from '@FLASH@/utils/AS3Property';
+import {as3CallValue} from '@FLASH@/utils/AS3Invocation';
+import {as3ConstructClass} from '@FLASH@/utils/AS3Class';
+export async function run(module){
+ const domain=new ApplicationDomain(ApplicationDomain.currentDomain),session=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:1});await session.load('namespace-namesake',domain);
+ const make=name=>as3ConstructClass(domain.getDefinition('nsname.'+name),[]),r=make('Reader'),t=make('Target'),c=make('Child'),i=make('Inherited'),h=make('Holder');
+ const call=(name,...args)=>as3CallValue(get(r,name),()=>args),invoke=(f,...args)=>as3CallValue(f,()=>args);
+ const rows=[],observe=(id,fn)=>{try{rows.push({id,value:fn()});}catch(e){rows.push({id,value:[e.name,e.errorID]});}};
+ set(h,'target',t);
+ observe('plain',()=>[call('plain',t),get(t,'calls'),get(t,'last'),get(r,'ownReads')]);
+ observe('explicit',()=>[call('explicit',t,3),get(t,'calls'),get(t,'last'),get(r,'ownReads')]);
+ observe('inherited',()=>[call('inherited',i),get(i,'calls'),get(i,'last'),get(r,'ownReads')]);
+ observe('override',()=>[call('plain',c),get(c,'calls'),get(c,'last'),get(r,'ownReads')]);
+ observe('chained',()=>[call('chained',h),get(h,'reads'),get(t,'calls'),get(t,'last'),get(r,'ownReads')]);
+ observe('own',()=>[call('own'),get(r,'ownReads')]);
+ const f=call('closure',t);
+ observe('closure-identity',()=>f===call('closure',t));
+ observe('closure-call',()=>[invoke(f,4),get(t,'calls'),get(t,'last'),get(r,'ownReads')]);
+ observe('order',()=>[call('order',h,c),get(h,'reads'),get(t,'calls'),get(t,'last'),get(c,'calls'),get(h,'target')===c,get(r,'ownReads')]);
+ observe('bound-after-replace',()=>[invoke(f,5),get(t,'calls'),get(t,'last'),get(c,'calls')]);
+ observe('null-direct',()=>call('plain',null));
+ observe('null-closure',()=>call('closure',null));
+ observe('null-root',()=>call('chained',null));
+ set(h,'target',null);observe('null-item',()=>call('chained',h));
+ observe('null-order',()=>call('order',h,c));
+ observe('null-order-effects',()=>[get(h,'target')===c,get(h,'reads'),get(t,'calls'),get(c,'calls'),get(r,'ownReads')]);
+ let hostGuards=0;
+ const reject=(fn,id)=>{let caught=false;try{fn();}catch(e){caught=true;if(id!==undefined&&e.errorID!==id)throw e;}if(!caught)throw new Error('Missing namespace guard');hostGuards++;};
+ reject(()=>as3GetNamespaceProperty(t,'urn:op2:wrong','act'),1069);
+ reject(()=>as3GetNamespaceProperty(t,'','act'));
+ reject(()=>as3CallNamespaceProperty(t,'','act',()=>[]));
+ reject(()=>as3GetNamespaceProperty(t,'urn:op2:namespace-namesake','missing'),1069);
+ return {rows,hostGuards};
+}
