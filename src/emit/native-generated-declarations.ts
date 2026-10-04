@@ -638,7 +638,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
     bindings.forEach((binding,index) => {
         const helpers=privateBindings.filter(p=>p.declaration.sourceOwner===binding.qname);
         if((!helpers.length&&!privateInterfaces.some(p=>p.declaration.sourceOwner===binding.qname))||!binding.scriptGlobalExport)return;
-        if(data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0)fail('multi-declaration Class script retry requires qualification');
+        if(data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0
+            &&(helpers.length!==1||binding.base||helpers.some(helper=>!!helper.base)||privateInterfaces.some(item=>item.declaration.sourceOwner===binding.qname)))
+            fail('multi-declaration Class script retry with additional helpers, ancestry or private interfaces requires qualification');
         lines.push('let __sourceUnit'+index+':<T>(selected:number,factory:(global:object)=>T)=>T;',
             'export function bindSourceUnit'+index+'(run:typeof __sourceUnit'+index+'):void {if(__sourceUnit'+index+')throw new TypeError("Source unit already bound");__sourceUnit'+index+'=run;}');
         helpers.forEach((helper,slot)=>lines.push('export const publishPrivateScript'+privateBindings.indexOf(helper)+'=<T>(factory:(global:object)=>T):T=>__sourceUnit'+index+'('+(slot+1)+',factory);'));

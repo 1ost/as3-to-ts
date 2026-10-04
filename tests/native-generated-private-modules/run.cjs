@@ -43,14 +43,15 @@ async function main(){
    let guards=0;const reject=(fn,re)=>{assert.throws(fn,re);guards++;};
    reject(()=>api.emitNativeSourceClassModule({...config,plan:{...plan}}),/exact planned/);
    if(cohort==='subject')reject(()=>api.emitNativeSourceClassModule({...config,emitterOptions:{...options,nativeEnumeration:undefined}}),/explicit common enumeration/);
-   reject(()=>api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:[cohort==='subject'?'localcases.First':'lifetime.Unit']}),/multi-declaration Class script retry/);
+   if(cohort==='subject')reject(()=>api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:['localcases.First']}),/multi-declaration Class script retry/);
+   else assert.ok(api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:['lifetime.Unit']}));
    if(cohort==='subject') {
    const original=sources['localcases.First'].source,source=original.replace('count:int=0','count:int=initCount()');assert.notEqual(source,original);
    const changed=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'localcases.First':{source,sourceSha256:hash(source)}}});
    reject(()=>api.emitNativeSourceClassModule({...config,plan:changed,emitterOptions:{...options,nativeVectorTypes:{...options.nativeVectorTypes,plan:changed},nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:changed}}}),/static initializer requires retry/);
    }
    reject(()=>api.emitNativeSourceClassModule({...config,externalModules:externalModules.filter(m=>m!==provider('AS3ScriptGlobal'))}),/unbound TypeScript dependency|script provider must be explicit/);
-   assert.equal(guards,cohort==='subject'?5:3);
+   assert.equal(guards,cohort==='subject'?5:2);
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1+plan.privateBindings.length);
    const files=[];

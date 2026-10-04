@@ -41,6 +41,8 @@ export class NativeTypedLocals {
                 if(value&&node.kind===K.LAMBDA&&this.matchSourceSpans
                     &&nativeSourceTypeIdentity(value.findChild(K.TYPE),qname,imports)==='String')
                     locals.push({name:value.findChild(K.NAME).text,type:'String',parameter:true});
+                if(value&&this.matchSourceSpans&&nativeSourceTypeIdentity(value.findChild(K.TYPE),qname,imports)==='Function')
+                    locals.push({name:value.findChild(K.NAME).text,type:'Function',parameter:true});
                 if(value&&value.findChild(K.VECTOR)){
                     const reference=referenceFor&&referenceFor(value.findChild(K.VECTOR));
                     if(!reference)this.fail('Vector parameter requires specialization authority');
@@ -187,7 +189,7 @@ export class NativeTypedLocals {
         const plan=this.methods.find(m=>!!method&&m.node.start===method.start&&m.node.end===method.end);
         const binding=emitter.findDefInScope(node.text);
         return !!plan&&!!binding&&!binding.bound&&binding.as3Type===type
-            &&plan.locals.some(l=>l.name===node.text&&l.type===type&&(!l.parameter||type==='String'&&plan.node.kind===K.LAMBDA));
+            &&plan.locals.some(l=>l.name===node.text&&l.type===type&&(!l.parameter||type==='Function'||type==='String'&&plan.node.kind===K.LAMBDA));
     }
     /** Prevent the older integer assignment pass from pre-coercing local RHS values. */
     owns(node: Node, emitter: any): boolean {

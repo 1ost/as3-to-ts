@@ -207,6 +207,14 @@ export function emitNativeSourceClassModule(input: NativeSourceClassModuleInput)
             const declaration={sourceId:unit.binding.qname,sourceSha256:planned.sources[unit.binding.qname].sourceSha256,bindings:records};
             const readers=members.map((b,index)=>'()=>'+providerName(helper)+'.readNativeClass(load('+JSON.stringify(classModules[classes.indexOf(b)])+')['+JSON.stringify(records[index].name)+'],"value")');
             unit.interfaces.forEach(binding=>readers.push('()=>headers['+JSON.stringify(binding.tokenExport)+']'));
+            if(planned.classScriptSources&&planned.classScriptSources.indexOf(unit.binding.qname)>=0) {
+                const handles=members.map((b,index)=>'load('+JSON.stringify(classModules[classes.indexOf(b)])+')['+JSON.stringify(records[index].name)+']');
+                return '  {let activeGlobal;headers.bindSourceUnit'+unit.index+'((selected,factory)=>{if(!activeGlobal)throw new Error("Source Class factory outside source unit");return factory(activeGlobal);});\n'
+                    +'    '+(planned.inheritScriptClasses?'if(!'+providerName(planned.scriptGlobalProviderModule)+'.selectAS3ScriptDomainClass(domain,'+JSON.stringify(unit.binding.qname.replace(/\.([^.]*)$/,'::$1'))+'))':'')+providerName(helper)+'.bindNativeClassSourceUnit(['+handles.join(',')+'],factories=>{\n'
+                    +'      '+providerName(planned.scriptGlobalProviderModule)+'.instantiateAS3SourceClassUnit(domain,'+JSON.stringify(declaration)+',context=>{\n'
+                    +'        activeGlobal=context.global;try{return '+JSON.stringify(records)+'.map((record,index)=>{const value=factories[index]();context.publishClass(index,value);return {...record,value};});}finally{activeGlobal=undefined;}\n'
+                    +'      });\n    });\n  }';
+            }
             return '  {let activeGlobal;headers.bindSourceUnit'+unit.index+'((selected,factory)=>{\n'
                 +'    if(activeGlobal)return factory(activeGlobal);\n    let result;\n'
                 +'    '+providerName(planned.scriptGlobalProviderModule)+'.instantiateAS3ScriptUnit(domain,'+JSON.stringify(declaration)+',context=>{\n'
