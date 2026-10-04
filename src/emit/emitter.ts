@@ -4380,6 +4380,19 @@ function emitCall(emitter:Emitter, node:Node):void {
 			const type:Node = node.findChild(NodeKind.IDENTIFIER);
 			const args:Node = node.findChild(NodeKind.ARGUMENTS);
 			const rtype:string = emitter.getTypeRemap(type.text) || type.text;
+			if (emitter.generated && emitter.references && emitter.references.sourceClass(type.text)) {
+				if (!args || args.children.length !== 1)
+					throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: source Class cast requires exactly one argument');
+				const parts = referenceCoercionParts(emitter,{exported:emitter.references.type(type.text)});
+				// Resolve the Class before evaluating the operand, then perform the
+				// nominal coercion before any enclosing call evaluates its arguments.
+				// A TypeScript assertion alone erases the AVM2 cast at runtime.
+				emitter.catchup(node.start);emitter.insert('(');visitNode(emitter,type);
+				emitter.catchup(type.end);emitter.insert(',' + parts[0]);
+				const value=args.children[0];emitter.skipTo(getExpressionStart(value));visitNode(emitter,value);
+				emitter.catchup(getEffectiveNodeEnd(value));emitter.insert(parts[1] + ')');
+				emitter.skipTo(getEffectiveNodeEnd(node));return;
+			}
 			emitter.catchup(node.start);
 			if (rtype === "string" || rtype === "number") {
 				emitter.catchup(node.start);

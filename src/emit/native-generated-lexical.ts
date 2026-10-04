@@ -770,8 +770,23 @@ export class NativeGeneratedLexical {
                     }
                     if(inaccessible)fail('internal declaration belongs to another package');
                 }
-                if(identities.length===1&&identities[0]!==this.owner&&this.declarations.some(b=>b.identity===identities[0])) {
-                    const identity=identities[0];
+                // A one-argument source Class cast establishes the public
+                // receiver type without evaluating it. Keep the original cast
+                // expression so coercion and receiver effects still precede
+                // call arguments. This is not private/protected authority.
+                let publicIdentity=identities.length===1?identities[0]:undefined;
+                if(!publicIdentity&&receiver.kind===K.CALL
+                    &&receiver.children[0].kind===K.IDENTIFIER
+                    &&receiver.findChild(K.ARGUMENTS)&&receiver.findChild(K.ARGUMENTS).children.length===1
+                    &&emitter.options.nativeReferenceCoercion&&emitter.options.nativeReferenceCoercion.plan===this.plan) {
+                    const target=receiver.children[0],targetBinding=emitter.findDefInScope(target.text);
+                    if(!targetBinding||!targetBinding.bound&&!Object.prototype.hasOwnProperty.call(targetBinding,'as3Type')) {
+                        const identity=this.resolveTypeName(target.text),source=this.classSource(identity);
+                        if(this.declarations.some(b=>b.identity===identity)&&source&&!source.referenceOnly)publicIdentity=identity;
+                    }
+                }
+                if(publicIdentity&&publicIdentity!==this.owner&&this.declarations.some(b=>b.identity===publicIdentity)) {
+                    const identity=publicIdentity;
                     if(!this.foreignPublicMembers.has(identity)) {
                         const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                         this.foreignPublicMembers.set(identity,new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,this.classSource(identity).source).instanceTraits

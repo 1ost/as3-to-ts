@@ -1,0 +1,1 @@
+package cases { public class Window { public var value:int=7; private var _amount:int=3; public function addToStage(after:int):String {return "window:"+after+":"+value;} public function get amount():int{return _amount;} public function set amount(v:int):void{_amount=v;} } }
