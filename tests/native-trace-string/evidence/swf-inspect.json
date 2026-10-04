@@ -1,0 +1,25 @@
+{
+  "actual_uncompressed_length": 4471,
+  "compression": "zlib",
+  "declared_uncompressed_length": 4471,
+  "frame_count": 1,
+  "frame_rate": 24.0,
+  "length_matches_header": true,
+  "path": "C:\\Users\\admin\\Desktop\\GITHUB REPO\\as3-to-ts-op2-trace-string-review\\tests\\native-trace-string\\evidence\\oracle.swf",
+  "schema": "swf-header@1",
+  "sha256": "87a7663997957ab6fd6ea39721564673e0dbff3940e9c5d46c7f314397d1aea8",
+  "signature": "CWS",
+  "stage": {
+    "height": 375.0,
+    "width": 500.0,
+    "x": 0.0,
+    "y": 0.0
+  },
+  "stage_twips": {
+    "xmax": 10000,
+    "xmin": 0,
+    "ymax": 7500,
+    "ymin": 0
+  },
+  "swf_version": 51
+}

@@ -4429,8 +4429,20 @@ function emitNativeTrace(emitter:Emitter, node:Node):boolean {
         return value.kind === NodeKind.ADD && value.children.length >= 3 && value.children.length % 2 === 1
             && value.children.every((child,index) => index % 2 ? child.text === '+' : stringExpression(child));
     };
+    // A literal String prefix in an all-plus chain guarantees a String result, even
+    // with dynamic operands. Require source addition lowering: JavaScript's
+    // object conversion hints are not Flash's. Nullable String annotations
+    // alone do not establish this stronger guarantee.
+    const literalStringResult = (value:Node):boolean => {
+        if (value.kind === NodeKind.ENCAPSULATED && value.children.length === 1) return literalStringResult(value.children[0]);
+        if (value.kind === NodeKind.LITERAL && /^["']/.test(value.text)) return true;
+        return value.kind === NodeKind.ADD && value.children.length >= 3 && value.children.length % 2 === 1
+            && value.children.every((child,index) => index % 2 === 0 || child.text === '+')
+            && literalStringResult(value.children[0]);
+    };
     const args = node.findChild(NodeKind.ARGUMENTS);
-    if (emitter.isNew || !args || args.children.length !== 1 || !stringExpression(args.children[0]))
+    if (emitter.isNew || !args || args.children.length !== 1
+        || !(stringExpression(args.children[0]) || (emitter.typedLocalPlan && literalStringResult(args.children[0]))))
         throw new Error('AS3_GLOBAL_MODULE_UNSUPPORTED: trace requires a direct single String expression');
     emitter.ensureImportIdentifier('trace as ' + binding.alias,binding.module,false);
     emitter.nativeSourceHelpers.add(binding.alias);

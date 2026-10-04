@@ -1,0 +1,22 @@
+{
+  "rows": [
+    {
+      "value": [
+        "toString",
+        "valueOf",
+        "toString",
+        "a",
+        "b"
+      ],
+      "id": "coercion-order"
+    },
+    {
+      "value": [
+        "Error",
+        "trace interrupted"
+      ],
+      "id": "interrupted"
+    }
+  ],
+  "output": "Collection menu artwork: missing.png\nscalar:null:null\nnumbers:334\nnested:3\ninner:null5\nscalar:undefined:text\nnumbers:334\nnested:3\ninner:undefined5\nscalar:8:last\nnumbers:334\nnested:3\ninner:85\nleft:seven\nmiddle:8:seven\norder:ab\n"
+}

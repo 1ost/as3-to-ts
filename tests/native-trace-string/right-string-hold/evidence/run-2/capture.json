@@ -1,0 +1,1 @@
+{"state":{"observations":[{"value":["toString","toString","valueOf","toString","a","b"],"id":"coercion-order"},{"value":["Error","trace interrupted"],"id":"interrupted"}],"ready":true,"failure":""},"runtime":{"version":"WIN 51,3,4,2","screenDPI":96,"playerType":"Desktop","os":"Windows 11 Server"}}
