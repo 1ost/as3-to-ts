@@ -1,0 +1,31 @@
+import {ApplicationDomain} from '@FLASH@/system/ApplicationDomain';
+import {createNativeSourceClassLoadingSession} from '@FLASH@/utils/NativeSourceClassLoadingSession';
+import {as3GetProperty as get,as3SetProperty as set} from '@FLASH@/utils/AS3Property';
+import {as3CallValue} from '@FLASH@/utils/AS3Invocation';
+import {as3ConstructClass} from '@FLASH@/utils/AS3Class';
+export async function run(module){
+ const domain=new ApplicationDomain(ApplicationDomain.currentDomain),session=createNativeSourceClassLoadingSession({resolve:()=>module,maxModules:1});await session.load('chained-interface-call',domain);
+ const make=name=>as3ConstructClass(domain.getDefinition('chaincall.'+name),[]),r=make('Caller'),s=make('SubCaller'),c=make('Context'),d=make('Context'),h=make('Holder'),i=make('InheritedHolder'),t=make('Target');
+ const call=(target,name,...args)=>as3CallValue(get(target,name),()=>args);
+ const rows=[],observe=(id,fn)=>{try{rows.push({id,value:fn()});}catch(e){rows.push({id,value:[e.name,e.errorID]});}};
+ call(r,'configure',c);call(s,'configure',c);set(h,'context',c);set(i,'context',c);set(c,'next',d);
+ observe('self-default',()=>[call(r,'self',t),get(r,'reads'),get(c,'calls'),get(c,'last'),get(t,'calls'),get(r,'ownReads')]);
+ observe('self-disabled',()=>[call(r,'disabled',t),get(r,'reads'),get(c,'calls'),get(c,'last'),get(t,'calls')]);
+ observe('chain',()=>[call(r,'chain',h,t),get(h,'reads'),get(c,'calls'),get(t,'calls')]);
+ observe('inherited-holder',()=>[call(r,'inherited',i,t),get(i,'reads'),get(c,'calls'),get(t,'calls')]);
+ observe('nested',()=>[call(r,'nested',h,t),get(h,'reads'),get(c,'nestedReads'),get(d,'calls'),get(t,'calls')]);
+ observe('direct',()=>[call(r,'direct',c,t),get(c,'calls'),get(t,'calls')]);
+ observe('inherited-self',()=>[call(s,'inheritedSelf',t),get(s,'reads'),get(c,'calls'),get(t,'calls')]);
+ observe('own',()=>[call(r,'own'),get(r,'ownReads')]);
+ observe('order',()=>[call(r,'order',h,d,t),get(h,'reads'),get(c,'calls'),get(d,'calls'),get(t,'calls'),get(h,'context')===d,get(r,'effects')]);
+ observe('null-root',()=>call(r,'chain',null,t));
+ set(h,'context',null);observe('null-context',()=>call(r,'chain',h,t));
+ observe('null-order',()=>call(r,'order',h,d,t));
+ observe('null-order-effects',()=>[get(h,'context')===d,get(h,'reads'),get(r,'effects'),get(c,'calls'),get(d,'calls'),get(t,'calls')]);
+ set(h,'context',c);set(c,'next',null);observe('null-nested',()=>call(r,'nested',h,t));
+ call(r,'configure',null);observe('null-self',()=>call(r,'self',t));
+ observe('null-direct',()=>call(r,'direct',null,t));
+ observe('argument-null-precedence',()=>call(r,'chain',h,null));
+ observe('final-counts',()=>[get(h,'reads'),get(r,'reads'),get(c,'calls'),get(d,'calls'),get(t,'calls'),get(r,'ownReads')]);
+ return {rows};
+}

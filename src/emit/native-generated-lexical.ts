@@ -556,7 +556,7 @@ export class NativeGeneratedLexical {
         // Follow only authenticated public source storage/getter declarations.
         // Keep the expression intact for emission so getters run exactly once;
         // type discovery must never evaluate or duplicate a source receiver.
-        const interfaceGetter=(identity:string,name:string)=>{
+        const interfaceMember=(identity:string,name:string,kind:'get'|'method')=>{
             const bindings=nativeGeneratedInterfaceBindings(this.plan);
             if(!bindings.some(binding=>binding.qname===identity))return undefined;
             const owners=new Set<string>();
@@ -569,7 +569,7 @@ export class NativeGeneratedLexical {
             };
             visit(identity);
             return this.plan.interfaceContracts.members.find(member=>owners.has(member.owner)
-                &&member.name===name&&member.kind==='get');
+                &&member.name===name&&member.kind===kind);
         };
         const chainedReferences=(expression:Node):NativeGeneratedDeclarationPlan['references']=>{
             expression=unwrapEncapsulatedExpression(expression);
@@ -601,7 +601,7 @@ export class NativeGeneratedLexical {
                     identity=identities[0];
                 }
             }
-            const getter=interfaceGetter(identity,memberName);
+            const getter=interfaceMember(identity,memberName,'get');
             if(getter)return this.plan.references.filter(r=>r.owner===getter.owner&&r.identity===getter.returnType
                 &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='interface'));
             for(let current=identity;current;){
@@ -619,7 +619,7 @@ export class NativeGeneratedLexical {
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -706,7 +706,7 @@ export class NativeGeneratedLexical {
                 }
                 if(!references.length)references=chainedReferences(receiver).slice();
                 const identities=Array.from(new Set(references.map(r=>r.identity)));
-                if(identities.length===1&&references.every(r=>r.kind==='interface')&&interfaceGetter(identities[0],name)) {
+                if(identities.length===1&&references.every(r=>r.kind==='interface')&&interfaceMember(identities[0],name,'get')) {
                     if(!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
                         ||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
                         fail('interface getter requires exact reference and property providers');
@@ -714,6 +714,14 @@ export class NativeGeneratedLexical {
                     // protected namesake in the caller. Keep its whole receiver
                     // expression so each getter executes once in source order.
                     return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:true};
+                }
+                if(identities.length===1&&references.every(r=>r.kind==='interface')&&interfaceMember(identities[0],name,'method')) {
+                    if(!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
+                        ||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
+                        fail('interface method requires exact reference and property providers');
+                    // Preserve the whole typed receiver and evaluate every
+                    // argument before method dispatch, including null failures.
+                    return {trait:null,receiver,publicName:name,publicMethod:true,interfaceCall:true};
                 }
                 if(lexicalName&&identities.length===1&&identities[0]==='flash.display.MovieClip'
                     &&references.every(r=>r.kind==='native')) {
@@ -784,7 +792,7 @@ export class NativeGeneratedLexical {
                         if(this.foreignPublicMembers.get(cacheKey).some(member=>member.name===name))return null;
                     }
                     let inaccessible=false;
-                    for(let current=identity;current;current=this.declarations.find(b=>b.identity===current).base){
+                    for(let current=identity;current&&this.declarations.some(b=>b.identity===current);current=this.declarations.find(b=>b.identity===current).base){
                         if(!this.classSource(current)||this.classSource(current).referenceOnly)break;
                         const content=this.internalContent(current);
                         const field=content.children.filter(Boolean).find(m=>[K.VAR_LIST,K.CONST_LIST,K.GET,K.FUNCTION].indexOf(m.kind)>=0
@@ -896,7 +904,7 @@ export class NativeGeneratedLexical {
             const call=node.children[0];
             if(call.kind!==K.CALL)return false;
             const found=resolve(call.children[0]);
-            if(found&&(found.interfaceRead||found.namespaceUri))fail('interface getter or namespace method construction requires separate authority');
+            if(found&&(found.interfaceRead||found.interfaceCall||found.namespaceUri))fail('interface getter or namespace method construction requires separate authority');
             if(!found||!found.trait||found.trait.kind==='constant')return false;
             const trait=found.trait,arguments_=call.findChild(K.ARGUMENTS);
             const ref=trait.type&&this.plan.references.find(r=>r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
@@ -1070,6 +1078,7 @@ export class NativeGeneratedLexical {
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(found.publicName) {
+            if(found.interfaceCall&&operation!=='call')fail('interface method currently requires a call');
             if(found.interfaceRead&&operation!=='get')fail('interface getter currently requires a property read');
             if(found.dynamicRead&&operation!=='get')fail('chained dynamic receiver currently requires a property read');
             if(operation==='set'&&found.publicNumericUpdate&&['+=','-='].indexOf(node.children[1].text)>=0) {
