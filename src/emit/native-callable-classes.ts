@@ -912,6 +912,7 @@ export class NativeCallableClasses {
                         &&!(this.tabStopReference&&reference.identity==='flash.text.engine.TabStop')
                         &&!(this.fontMetricsReference&&reference.identity==='flash.text.engine.FontMetrics')
                         &&!(this.textBlockReference&&reference.identity==='flash.text.engine.TextBlock')
+                        &&!(this.textLineReference&&reference.identity==='flash.text.engine.TextLine')
                         &&!(this.textJustifierReference&&['TextJustifier','SpaceJustifier','EastAsianJustifier'].some(name=>reference.identity==='flash.text.engine.'+name))
                         &&!(this.contentElementReferences&&['ContentElement','TextElement','GroupElement','GraphicElement'].some(type=>reference.identity==='flash.text.engine.'+type))
                         &&!(this.dateReference&&reference.identity==='Date')
