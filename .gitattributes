@@ -109,3 +109,4 @@ src/parse/scanner.ts -text whitespace=cr-at-eol
 src/parse/parse-declarations.ts -text whitespace=cr-at-eol
 
 tests/native-generated-timer-callbacks/** -text -whitespace
+src/emit/native-generated-declarations.ts text eol=lf

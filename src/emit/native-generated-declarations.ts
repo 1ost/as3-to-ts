@@ -410,6 +410,10 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                 seen.add(parent.qname);
                 retryingParent=retryingParent||data.classScriptSources.indexOf(parent.qname)>=0;
                 if(!parent.base){stableParent=true;break;}
+                // Retryable source generations preserve the canonical native
+                // EventDispatcher entry and per-instance listener storage.
+                if(parent.base==='flash.events.EventDispatcher'&&providers[parent.base]
+                    &&providers[parent.base].nativeBase==='EventDispatcher'){stableParent=true;break;}
                 if(parent.base==='flash.display.Sprite'&&providers[parent.base]
                     &&providers[parent.base].nativeBase==='Sprite'&&!retryingParent){stableParent=true;break;}
                 parent=bindings.find(value=>value.qname===parent.base);

@@ -1,0 +1,11 @@
+{
+  "sha256": "3720ea96b91747ba5f9f16b6c3a018769c44545772d25d10ad3a00ed2f4eae81",
+  "bytes": 16459420,
+  "files": 1414,
+  "rows": 19,
+  "adjacentDistinctRows": 46,
+  "adjacentExecutions": 65,
+  "compilerBase": "9b13f39d7bb815b33059617f794fed9393c0644c",
+  "engineRuntimeBase": "bfa25854370b31fdef23fe6451828c87da157f40",
+  "wholeClientQualified": false
+}
