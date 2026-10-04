@@ -547,32 +547,40 @@ export class NativeGeneratedLexical {
         const chainedReferences=(expression:Node):NativeGeneratedDeclarationPlan['references']=>{
             expression=unwrapEncapsulatedExpression(expression);
             if(!expression)return [];
+            let identity:string,memberName:string;
             if(expression.kind===K.IDENTIFIER){
                 const binding=emitter.findDefInScope(expression.text);
-                if(!binding||binding.bound)return [];
-                return this.plan.references.filter(r=>r.owner===this.owner&&r.sourceName===binding.as3Type
-                    &&(r.kind==='declaration'||r.kind==='private-declaration'));
-            }
-            if(expression.kind!==K.DOT||expression.children[1].kind!==K.LITERAL)return [];
-            const root=unwrapEncapsulatedExpression(expression.children[0]);
-            let identity:string;
-            if(root.kind===K.IDENTIFIER&&root.text==='this'){
+                if(!binding)return [];
+                if(!binding.bound)return this.plan.references.filter(r=>r.owner===this.owner&&r.sourceName===binding.as3Type
+                    &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'));
+                // An unqualified inherited public getter is still a receiver
+                // expression. Resolve its declaration span, not its spelling.
                 let method=expression;
                 while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0)method=method.parent;
                 if(!method||method.parent.kind!==K.CONTENT||modifiers(method).indexOf('static')>=0)return [];
-                identity=this.owner;
+                identity=this.owner;memberName=expression.text;
             }else{
-                const refs=chainedReferences(root),identities=Array.from(new Set(refs.map(r=>r.identity)));
-                if(identities.length!==1)return [];
-                identity=identities[0];
+                if(expression.kind!==K.DOT||expression.children[1].kind!==K.LITERAL)return [];
+                memberName=expression.children[1].text;
+                const root=unwrapEncapsulatedExpression(expression.children[0]);
+                if(root.kind===K.IDENTIFIER&&root.text==='this'){
+                    let method=expression;
+                    while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0)method=method.parent;
+                    if(!method||method.parent.kind!==K.CONTENT||modifiers(method).indexOf('static')>=0)return [];
+                    identity=this.owner;
+                }else{
+                    const refs=chainedReferences(root),identities=Array.from(new Set(refs.map(r=>r.identity)));
+                    if(identities.length!==1)return [];
+                    identity=identities[0];
+                }
             }
             for(let current=identity;current;){
                 const declaration=this.declarations.find(b=>b.identity===current);
                 if(!declaration||!this.classSource(current)||this.classSource(current).referenceOnly)return [];
                 for(const member of this.internalContent(current).children){
                     if(modifiers(member).indexOf('public')<0||modifiers(member).indexOf('static')>=0)continue;
-                    const value=member.kind===K.GET&&member.findChild(K.NAME).text===expression.children[1].text
-                        ?member:member.kind===K.VAR_LIST?member.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===expression.children[1].text):null;
+                    const value=member.kind===K.GET&&member.findChild(K.NAME).text===memberName
+                        ?member:member.kind===K.VAR_LIST?member.findChildren(K.NAME_TYPE_INIT).find(v=>v.findChild(K.NAME).text===memberName):null;
                     const type=value&&value.findChild(K.TYPE);
                     if(type)return this.plan.references.filter(r=>r.owner===current&&r.start===type.start&&r.end===type.end
                         &&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='native'));
@@ -666,8 +674,21 @@ export class NativeGeneratedLexical {
                     // receiver type. Keep the complete expression for ordinary
                     // property dispatch: evaluate it once, before call arguments.
                 }
-                if(receiver.kind===K.DOT&&!references.length)references=chainedReferences(receiver).slice();
+                if(!references.length)references=chainedReferences(receiver).slice();
                 const identities=Array.from(new Set(references.map(r=>r.identity)));
+                if(lexicalName&&identities.length===1&&identities[0]==='flash.display.MovieClip'
+                    &&references.every(r=>r.kind==='native')) {
+                    const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
+                    const movie=input.providers&&input.providers['flash.display.MovieClip'];
+                    if(!movie||movie.exportName!=='MovieClip'||movie.nativeBase!=='MovieClip'
+                        ||emitter.options.nativeMovieClipReferenceModule!==movie.module
+                        ||!emitter.options.importModules||emitter.options.importModules['flash.display.MovieClip']!==movie.module
+                        ||!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan)
+                        fail('dynamic MovieClip read requires authenticated native base/reference plan');
+                    // MovieClip dynamic children do not select namesake private
+                    // or protected capabilities belonging to the caller.
+                    return {trait:null,receiver,publicName:name,publicMethod:false,dynamicRead:true};
+                }
                 if(identities.length===1&&identities[0]==='flash.utils.ByteArray'
                     &&references.every(r=>r.kind==='native')&&['compress','uncompress','deflate','inflate'].indexOf(name)>=0) {
                     if(!emitter.options.nativeByteArrayReferenceModule)fail('native ByteArray method requires exact provider');

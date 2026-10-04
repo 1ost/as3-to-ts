@@ -1,0 +1,63 @@
+[
+  {
+    "value": [
+      true,
+      1,
+      "own"
+    ],
+    "id": "implicit"
+  },
+  {
+    "value": [
+      true,
+      2
+    ],
+    "id": "explicit"
+  },
+  {
+    "value": [
+      true,
+      2
+    ],
+    "id": "local"
+  },
+  {
+    "value": [
+      "changed",
+      3,
+      "own"
+    ],
+    "id": "changed"
+  },
+  {
+    "value": [
+      true,
+      4
+    ],
+    "id": "missing"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009,
+      5
+    ],
+    "id": "null"
+  },
+  {
+    "value": [
+      "TypeError",
+      1009,
+      6
+    ],
+    "id": "null-explicit"
+  },
+  {
+    "value": [
+      "changed",
+      7,
+      "own"
+    ],
+    "id": "restored"
+  }
+]

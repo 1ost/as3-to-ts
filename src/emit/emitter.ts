@@ -4811,6 +4811,19 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!node||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.kind)<0||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(!receiver||!key)return null;
+    if(node.kind===NodeKind.ARRAY_ACCESSOR&&receiver.kind===NodeKind.IDENTIFIER&&emitter.generated&&emitter.references){
+        const definition=emitter.findDefInScope(receiver.text),plan=emitter.generated.options.plan;
+        const movie=plan.nativeBindings.find(b=>b.qname==='flash.display.MovieClip');
+        if(movie&&definition&&!definition.bound&&emitter.references.type(definition.as3Type)===movie.referenceExport){
+            const input=nativeGeneratedDeclarationInputs(plan,plan.scope),provider=input.providers['flash.display.MovieClip'];
+            if(provider.nativeBase!=='MovieClip'||emitter.options.nativeMovieClipReferenceModule!==provider.module
+                ||!emitter.options.importModules||emitter.options.importModules['flash.display.MovieClip']!==provider.module)
+                throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: MovieClip requires authenticated native base/reference plan');
+            // The canonical dynamic property store is distinct from raw JS own
+            // properties. Computed source reads/writes must use that same store.
+            return {receiver,key};
+        }
+    }
     const interfaceMethod=sourceInterfaceAccessorAccess(emitter,node,'method');
     if(interfaceMethod)return interfaceMethod;
     if(isInterfaceCast(emitter,receiver)){
