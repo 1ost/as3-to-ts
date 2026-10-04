@@ -897,6 +897,14 @@ export class NativeGeneratedLexical {
                 // Array members even when the declaring class has a namesake.
                 if(receiver.kind===K.IDENTIFIER&&binding&&!binding.bound&&binding.as3Type==='Array'
                     &&this.resolveTypeName('Array')==='Array')return null;
+                if(receiver.kind===K.DOT&&identities.length===1&&identities[0]===this.owner
+                    &&references.every(r=>r.kind==='declaration'||r.kind==='private-declaration')) {
+                    // The declaring class can address its own private field on
+                    // an exactly typed instance path. Keep that path intact so
+                    // compound storage can re-evaluate it after RHS effects.
+                    const field=this.own.find(t=>t.name===name&&!t.static&&t.kind==='variable'&&t.visibility==='private');
+                    if(field)return {trait:field,receiver};
+                }
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
                 // Dynamic receivers use runtime namespace lookup, even when
                 // this class declares an internal/private namesake.
@@ -1184,8 +1192,8 @@ export class NativeGeneratedLexical {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
             if(found.trait.kind!=='variable'||!ref||ref.kind!=='intrinsic'
                 ||!(found.trait.visibility==='private'&&['String','int'].indexOf(ref.identity)>=0
-                    ||found.trait.visibility==='protected'&&!found.trait.static&&['Number','int','uint'].indexOf(ref.identity)>=0))
-                fail('lexical addition requires qualified private String/int or protected instance numeric variable');
+                    ||['private','protected'].indexOf(found.trait.visibility)>=0&&!found.trait.static&&['Number','int','uint'].indexOf(ref.identity)>=0))
+                fail('lexical addition requires qualified private String/int or instance numeric variable');
             const module=emitter.options.nativeTypedLocalAdditionModule;
             if(typeof module!=='string'||!module.trim()||/[\x00-\x1f'"\\]/.test(module))fail('lexical addition provider required');
             const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
