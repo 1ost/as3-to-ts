@@ -865,7 +865,7 @@ export class NativeCallableClasses {
                     const deferred=this.generated.deferredConstants[generatedMemberIdentity(key,namespaced?namespaced.uri:undefined)];
                     const constantType=constant.type==='Array'?'{name:"Array",reference:'+intrinsic+'.array}'
                         : typeof constant.type==='string'?JSON.stringify(constant.type)
-                        : '{name:'+JSON.stringify(constant.type.name)+',reference:'+domainImport+'.'+constant.type.referenceExport+'}';
+                        : '{name:'+JSON.stringify(constant.type.name)+(constant.type.vectorExport?',vector:':',reference:')+domainImport+'.'+(constant.type.vectorExport||constant.type.referenceExport)+'}';
                     const uintOr=namespaced?undefined:this.generated.uintOrInitializers.constants[key];
                     definitions.push(deferred ? 'const '+deferred+'='+provider+'.declareAS3GeneratedStaticConstant('+destination+','+encoded+','+constantType+');'
                         : provider + '.defineAS3GeneratedStaticConstant(' + destination + ',' + encoded + ','

@@ -81,7 +81,9 @@ export class NativeGeneratedEmission {
         this.projection.staticTraits.filter(trait => trait.kind === 'constant').forEach(trait => {
             const referenceDeferred = ['int','uint','Number','Boolean','String'].indexOf(trait.type as string) < 0;
             const referenceExport=typeof trait.type==='string'?null:trait.type.referenceExport;
-            if (referenceDeferred && trait.type !== 'Array' && trait.type !== 'Object'
+            const vectorExport=typeof trait.type==='string'?null:trait.type.vectorExport;
+            const vectorConstant=!!vectorExport&&options.plan.vectors.some(v=>v.owner===selected&&v.specExport===vectorExport);
+            if (referenceDeferred && !vectorConstant && trait.type !== 'Array' && trait.type !== 'Object'
                 && (!referenceExport || !options.plan.bindings.some(binding=>binding.tokenExport===referenceExport)))
                 fail('static constant type requires initialization authority');
             const members = this.lexical.ownClass.findChild(K.CONTENT).children;

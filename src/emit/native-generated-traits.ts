@@ -230,7 +230,7 @@ export class NativeGeneratedClassTraits {
                 if (member.kind === K.VAR_LIST || member.kind === K.CONST_LIST) {
                     if (common.override || common.final) fail('storage override/final modifier');
                     member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
-                        if(field.findChild(K.VECTOR)&&(isStatic||member.kind===K.CONST_LIST))fail('Vector static/constant storage requires separate authority');
+                        if(field.findChild(K.VECTOR)&&!isStatic&&member.kind===K.CONST_LIST)fail('Vector static/constant storage requires separate authority');
                         const fieldType = type(binding.identity,storageType(field));
                         let constantLiteral: string;
                         if (member.kind === K.CONST_LIST && !isStatic) {

@@ -171,7 +171,7 @@ export class NativeGeneratedLexical {
                     // Private method returns use the same authenticated Vector signature
                     // lowering as public methods; they are not field storage.
                     const privateVectorReturn=visibility==='private'&&member.kind===K.FUNCTION;
-                    if(vector&&(['private','protected'].indexOf(visibility)<0||member.kind!==K.VAR_LIST&&!privateVectorReturn
+                    if(vector&&(['private','protected'].indexOf(visibility)<0||member.kind!==K.VAR_LIST&&!privateVectorReturn&&!(visibility==='private'&&isStatic&&constant)
                         ||!plan.vectors.some(v=>v.owner===name&&v.start===vector.start&&v.end===vector.end)))
                         fail('lexical vector storage authority');
                     const trait:Trait={name:local,visibility,static:isStatic,kind:member.kind===K.VAR_LIST?'variable':constant?'constant':readonlyGetter?'accessor':'method',owner:name,node,
@@ -357,6 +357,11 @@ export class NativeGeneratedLexical {
         return trait&&trait.kind==='constant'&&trait.visibility==='private'&&trait.static
             &&this.plan.embeddedBinary.find(b=>b.owner===trait.owner&&b.field===trait.name&&b.start===trait.node.start&&b.end===trait.node.end);
     }
+    deferredVectorConstant(trait:Trait):boolean {
+        return !!trait&&trait.kind==='constant'&&trait.visibility==='private'&&trait.static
+            &&!!trait.type&&trait.type.kind===K.VECTOR&&!!trait.node.findChild(K.INIT)
+            &&this.plan.vectors.some(v=>v.owner===trait.owner&&v.start===trait.type.start&&v.end===trait.type.end);
+    }
     deferredObjectConstant(trait:Trait):boolean {
         if(!trait||trait.kind!=='constant'||trait.visibility!=='private'||!trait.static||!trait.type||!trait.node.findChild(K.INIT))return false;
         return this.plan.references.some(ref=>ref.owner===trait.owner&&ref.start===trait.type.start&&ref.end===trait.type.end&&ref.kind==='intrinsic'&&ref.identity==='Object');
@@ -415,7 +420,7 @@ export class NativeGeneratedLexical {
         return undefined;
     }
     constantValue(trait:Trait):string {
-        if(this.embeddedConstant(trait)||this.deferredObjectConstant(trait)||this.deferredRegExpConstant(trait)||this.deferredStringConstant(trait))return 'null';
+        if(this.embeddedConstant(trait)||this.deferredVectorConstant(trait)||this.deferredObjectConstant(trait)||this.deferredRegExpConstant(trait)||this.deferredStringConstant(trait))return 'null';
         const init=trait.node.findChild(K.INIT);
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
         const value=init&&this.classSource(trait.owner).source.slice(init.start,end(init)).trim();
@@ -551,7 +556,7 @@ export class NativeGeneratedLexical {
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
             +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
-            +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'&&!this.embeddedConstant(t)&&!this.deferredObjectConstant(t)&&!this.deferredRegExpConstant(t)&&!this.deferredStringConstant(t)?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
+            +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'&&!this.embeddedConstant(t)&&!this.deferredVectorConstant(t)&&!this.deferredObjectConstant(t)&&!this.deferredRegExpConstant(t)&&!this.deferredStringConstant(t)?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
         return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?(nativeGeneratedDeclarationInputs(this.plan,this.plan.scope).inheritScriptClasses?this.provider+'.getAS3InheritedLexicalBase('+base+')':domain+'.'+parent.lexicalExport+'.get('+base+')'):native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
             +this.traits.filter(t=>t.static&&t.owner!==this.owner).map(t=>'const '+t.key+'='+staticOwner(t)+';\n').join('')
