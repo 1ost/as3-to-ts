@@ -202,6 +202,7 @@ export interface EmitterOptions {
     nativeContentElementReferenceModule?: string;
     /** Canonical TextBlock references and construction; public dispatch remains separate. */
     nativeTextBlockReferenceModule?: string;
+    nativeCapabilitiesReferenceModule?: string;
     nativeContextMenuClipboardItemsReferenceModule?: string;
     /** Qualified nominal FTE ElementFormat reference and return conversion. */
     nativeElementFormatReferenceModule?: string;
@@ -680,6 +681,16 @@ export default class Emitter {
                 ||xmlGlobalProviderModule(provider.module,reference.module)!==module
                 ||!this.options.importModules||this.options.importModules['flash.text.engine.TextBlock']!==module)
                 throw new Error('AS3_TEXT_BLOCK_REFERENCE_UNSUPPORTED: exact native TextBlock provider binding required');
+        }
+        if (this.options.nativeCapabilitiesReferenceModule !== undefined) {
+            const module=generatedModule(this.options.nativeCapabilitiesReferenceModule),reference=this.options.nativeReferenceCoercion;
+            if(!this.generated||!reference)throw new Error('AS3_CAPABILITIES_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
+            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
+            const provider=inputs.providers&&inputs.providers['flash.system.Capabilities'];
+            if(!provider||provider.exportName!=='Capabilities'||provider.nativeBase||provider.nativeInterface
+                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
+                ||!this.options.importModules||this.options.importModules['flash.system.Capabilities']!==module)
+                throw new Error('AS3_CAPABILITIES_REFERENCE_UNSUPPORTED: exact native Capabilities provider binding required');
         }
         if (this.options.nativeContextMenuClipboardItemsReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeContextMenuClipboardItemsReferenceModule),reference=this.options.nativeReferenceCoercion;
@@ -4074,6 +4085,26 @@ function emitDataEventCast(emitter:Emitter,node:Node):boolean {
     emitter.insert(propertyHelper(emitter,name,emitter.options.nativeDataEventReferenceModule)+'))');
     emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
+function emitCapabilitiesStaticRead(emitter:Emitter,node:Node):boolean {
+    const module=emitter.options.nativeCapabilitiesReferenceModule;
+    if(!emitter.references||node.children.length!==2)return false;
+    const receiver=unwrapEncapsulatedExpression(node.children[0]),key=node.children[1];
+    if(receiver.kind!==NodeKind.IDENTIFIER||emitter.references.resolve(receiver.text)!=='flash.system.Capabilities')return false;
+    const definition=emitter.findDefInScope(receiver.text);
+    if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type'))||typeOfBinding(receiver,emitter.source,[])==='lexical')return false;
+    if(!emitter.references.options.plan.nativeBindings.some(binding=>binding.qname==='flash.system.Capabilities'))return false;
+    if(!module)throw new Error('AS3_CAPABILITIES_REFERENCE_UNSUPPORTED: explicit canonical Capabilities module required');
+    const expression=outerEncapsulatedExpression(node),operation=expression.parent;
+    if(operation&&operation.children[0]===expression&&[NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE,NodeKind.CALL,NodeKind.NEW].indexOf(operation.kind)>=0)
+        throw new Error('AS3_CAPABILITIES_REFERENCE_UNSUPPORTED: only direct literal static reads are qualified');
+    let name:string;
+    if(node.kind===NodeKind.DOT&&key.kind===NodeKind.LITERAL)name=key.text;
+    else if(node.kind===NodeKind.ARRAY_ACCESSOR&&key.kind===NodeKind.LITERAL&&/^(["'])[A-Za-z_$][A-Za-z0-9_$]*\1$/.test(key.text))name=key.text.slice(1,-1);
+    else throw new Error('AS3_CAPABILITIES_REFERENCE_UNSUPPORTED: static key requires a literal identifier');
+    const helper=propertyHelper(emitter,'readAS3CapabilitiesStatic',module);
+    emitter.catchup(node.start);emitter.insert(helper+'('+JSON.stringify(name)+')');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+
 function emitDataEventData(emitter:Emitter,node:Node):boolean {
     if(!emitter.options.nativeDataEventReferenceModule||node.children.length!==2)return false;
     const receiver=unwrapEncapsulatedExpression(node.children[0]),key=node.children[1];
@@ -7134,7 +7165,7 @@ function qualifiedNativeStaticRead(emitter:Emitter,node:Node):{module:string;exp
 }
 
 function emitDot(emitter:Emitter, node:Node) {
-    if (emitDataEventData(emitter,node) || emitErrorEventSubtypeText(emitter,node)) return;
+    if (emitCapabilitiesStaticRead(emitter,node) || emitDataEventData(emitter,node) || emitErrorEventSubtypeText(emitter,node)) return;
     if (emitGeneratedArraySortRead(emitter,node)) return;
     if (emitGeneratedArrayFieldRead(emitter,node)) return;
     if (emitLexicalApplicationDomain(emitter,node)) return;
@@ -7220,7 +7251,7 @@ function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
 }
 
 function emitArrayAccessor(emitter:Emitter, node:Node):void {
-    if (emitDataEventData(emitter,node) || emitErrorEventSubtypeText(emitter,node)) return;
+    if (emitCapabilitiesStaticRead(emitter,node) || emitDataEventData(emitter,node) || emitErrorEventSubtypeText(emitter,node)) return;
 	if (emitGeneratedArrayFieldRead(emitter,node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;
     if (emitDynamicPropertyRead(emitter,node)) return;

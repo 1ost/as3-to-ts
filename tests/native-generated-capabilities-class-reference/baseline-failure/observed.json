@@ -1,0 +1,18 @@
+[
+  {
+    "method": "read",
+    "value": [
+      false,
+      "string",
+      "string",
+      true
+    ]
+  },
+  {
+    "method": "identity",
+    "error": {
+      "name": "TypeError",
+      "message": "AS3_CLASS_UNSUPPORTED: native class lacks exact source metadata"
+    }
+  }
+]
