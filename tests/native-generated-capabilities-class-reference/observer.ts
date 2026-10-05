@@ -19,7 +19,7 @@ export async function run(module){
  checks.push({name:'forged-instance-rejected',passed:![{},Object.create(Capabilities.prototype),Capabilities].some(value=>isAS3DeclaredInstance(value,CapabilitiesDeclaration))});
  let held=false;try{as3ConstructClass(Capabilities);}catch(error){held=error.message.includes('lacks a proven constructor context');}
  checks.push({name:'construction-not-admitted',passed:held});
- let unsupported=0;for(const key of ['hasAccessibility','touchscreenType']){try{readAS3CapabilitiesStatic(key);}catch(error){if(error.name==='UnsupportedFlashFeatureError')unsupported++;}}
+ let unsupported=0;for(const key of ['hasPrinting','touchscreenType']){try{readAS3CapabilitiesStatic(key);}catch(error){if(error.name==='UnsupportedFlashFeatureError')unsupported++;}}
  checks.push({name:'known-unimplemented-members-remain-held',passed:unsupported===2});
  checks.push({name:'native-runtime-identity-preserved',passed:readAS3CapabilitiesStatic('version')==='LAYA 3,4,0,0'&&readAS3CapabilitiesStatic('playerType')==='Browser'});
  session.retire();other.retire();checks.push({name:'retained-source-class-reference',passed:call('accept',Capabilities)===true});
