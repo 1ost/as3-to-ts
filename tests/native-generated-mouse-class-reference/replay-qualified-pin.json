@@ -1,0 +1,9 @@
+{
+  "sha256": "f31a5819a9a1aa54402d6bf4f8c3855c2488bdde34db43cfcfb816d30767b26a",
+  "bytes": 747401,
+  "compilerEvidence": "0341631cb7b6898174b13fbb5dd7707b352dd10484cdf5035e46dfb4430113ff",
+  "pins": {
+    "compiler": "8bb8557c0bd4887bba554336f5ef0cf1cd1d6b4e",
+    "engine": "eceebdf5d3f45963061eb0266e6cf5d183655667"
+  }
+}

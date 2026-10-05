@@ -14,6 +14,17 @@ current-input checks require the original pre-fix engine bytes. Complete
 CursorManager runtime, production provider admission and real H5 validation
 remain open.
 
+The complete maintained CursorManager also emits with the applied provider:
+29,592 characters, no syntax errors, SHA-256
+`aeb380382ad16c43a7e33994e8fd5b5e7aa9de45305fd8ba706754afb701aa69`.
+This replay preserves all 1,356 source units and the same 96 class scripts and
+native TLF derivation. `replay-qualified.json.gz` records the exact plan and
+declaration against engine `eceebdf5d3f45963061eb0266e6cf5d183655667` and
+compiler `8bb8557c0bd4887bba554336f5ef0cf1cd1d6b4e`. Verify using
+`node tests/native-generated-mouse-class-reference/verify-replay.cjs --applied
+--check-current`. This is focused emission, not full CursorManager type/runtime
+qualification or a rerun of the complete factory.
+
 ## Retained provider prerequisite
 
 `baseline.cjs` authenticates the unchanged AIR Mouse Reader and emits real ES5
