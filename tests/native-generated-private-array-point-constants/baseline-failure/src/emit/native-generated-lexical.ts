@@ -374,11 +374,6 @@ export class NativeGeneratedLexical {
         if(!trait||trait.kind!=='constant'||trait.visibility!=='private'||!trait.static||!trait.type||!trait.node.findChild(K.INIT))return false;
         return this.plan.references.some(ref=>ref.owner===trait.owner&&ref.start===trait.type.start&&ref.end===trait.type.end&&ref.kind==='intrinsic'&&ref.identity==='Object');
     }
-    deferredArrayPointConstant(trait:Trait):boolean {
-        if(!trait||trait.kind!=='constant'||trait.visibility!=='private'||!trait.static||!trait.type||!trait.node.findChild(K.INIT))return false;
-        return this.plan.references.some(ref=>ref.owner===trait.owner&&ref.start===trait.type.start&&ref.end===trait.type.end
-            &&(ref.kind==='intrinsic'&&ref.identity==='Array'||ref.kind==='native'&&ref.identity==='flash.geom.Point'));
-    }
     deferredRegExpConstant(trait:Trait):boolean {
         if(!trait||trait.kind!=='constant'||trait.visibility!=='private'||!trait.static||!trait.type||!trait.node.findChild(K.INIT))return false;
         return this.plan.references.some(ref=>ref.owner===trait.owner&&ref.start===trait.type.start&&ref.end===trait.type.end
@@ -446,7 +441,7 @@ export class NativeGeneratedLexical {
     }
     constantValue(trait:Trait):string {
         if(this.deferredBooleanConstant(trait))return 'false';
-        if(this.embeddedConstant(trait)||this.deferredVectorConstant(trait)||this.deferredObjectConstant(trait)||this.deferredArrayPointConstant(trait)||this.deferredRegExpConstant(trait)||this.deferredStringConstant(trait))return 'null';
+        if(this.embeddedConstant(trait)||this.deferredVectorConstant(trait)||this.deferredObjectConstant(trait)||this.deferredRegExpConstant(trait)||this.deferredStringConstant(trait))return 'null';
         const init=trait.node.findChild(K.INIT);
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
         const value=init&&this.classSource(trait.owner).source.slice(init.start,end(init)).trim();
@@ -593,7 +588,7 @@ export class NativeGeneratedLexical {
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
             +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
-            +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'&&!this.embeddedConstant(t)&&!this.deferredVectorConstant(t)&&!this.deferredObjectConstant(t)&&!this.deferredArrayPointConstant(t)&&!this.deferredRegExpConstant(t)&&!this.deferredStringConstant(t)&&!this.deferredBooleanConstant(t)?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
+            +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'&&!this.embeddedConstant(t)&&!this.deferredVectorConstant(t)&&!this.deferredObjectConstant(t)&&!this.deferredRegExpConstant(t)&&!this.deferredStringConstant(t)&&!this.deferredBooleanConstant(t)?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
         return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?(nativeGeneratedDeclarationInputs(this.plan,this.plan.scope).inheritScriptClasses?this.provider+'.getAS3InheritedLexicalBase('+base+')':domain+'.'+parent.lexicalExport+'.get('+base+')'):native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
             +this.traits.filter(t=>t.static&&t.owner!==this.owner).map(t=>'const '+t.key+'='+staticOwner(t)+';\n').join('')

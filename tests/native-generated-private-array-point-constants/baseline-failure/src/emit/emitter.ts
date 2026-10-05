@@ -2993,14 +2993,11 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
         const deferredVector=emitter.generated&&emitter.generated.lexical.deferredVectorConstant(binaryTrait);
         const deferredObject=emitter.generated&&emitter.generated.lexical.deferredObjectConstant(binaryTrait);
         const deferredRegExp=emitter.generated&&emitter.generated.lexical.deferredRegExpConstant(binaryTrait);
-        const deferredArrayPoint=emitter.generated&&emitter.generated.lexical.deferredArrayPointConstant(binaryTrait);
-        if(deferredArrayPoint&&binaryTrait.type.text!=='Array'&&!emitter.options.nativePointReferenceModule)
-            throw new Error('AS3_GENERATED_LEXICAL_UNSUPPORTED: Point constant requires exact native reference provider');
         const deferredString=emitter.generated&&emitter.generated.lexical.deferredStringConstant(binaryTrait);
         const deferredBoolean=emitter.generated&&emitter.generated.lexical.deferredBooleanConstant(binaryTrait);
         const deferred=emitter.generated && declaration.kind===NodeKind.CONST_LIST
             && emitter.generated.deferredConstants[generatedMemberIdentity(node.findChild(NodeKind.NAME).text,generatedMemberUri(emitter.generated.options.plan,emitter.generated.projection.binding.identity,declaration))];
-        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred && !deferredVector && !deferredObject && !deferredRegExp && !deferredArrayPoint && !deferredString && !deferredBoolean) {
+        if (emitter.generated && declaration.kind === NodeKind.CONST_LIST && !deferred && !deferredVector && !deferredObject && !deferredRegExp && !deferredString && !deferredBoolean) {
             // Literal constants are installed before publication by the common
             // generated-class provider, not rewritten as later mutable stores.
             visitNodes(emitter,node.children);
@@ -3026,7 +3023,7 @@ function emitNameTypeInit(emitter:Emitter, node:Node):void {
             if(generatedLexical){
                 if(deferredVector)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalVectorConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
                 else if(deferredObject)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalObjectConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
-                else if(deferredRegExp||deferredArrayPoint)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalReferenceConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
+                else if(deferredRegExp)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalReferenceConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
                 else if(deferredBoolean)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalBooleanConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
                 else if(deferredString)emitter.classFactory.fields.push(emitter.generated.lexical.provider+'.getAS3LexicalStringConstantInitializer('+emitter.classFactory.value+','+generatedLexical.access+')('+emitter.output.slice(start)+');');
                 else if(generatedLexical.kind!=='constant'&&emitter.generated.lexical.earlyStaticValue(generatedLexical)===undefined)
