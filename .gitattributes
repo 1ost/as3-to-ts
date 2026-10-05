@@ -120,3 +120,6 @@ tests/native-generated-private-getter/** -text -whitespace
 tests/native-generated-numeric-addition/** -text -whitespace
 
 tests/native-generated-numeric-subtraction/** -text -whitespace
+
+# Retained namespace Boolean initialization qualification.
+src/emit/native-generated-emission.ts text eol=lf

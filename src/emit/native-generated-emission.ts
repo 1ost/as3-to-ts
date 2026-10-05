@@ -78,13 +78,13 @@ export class NativeGeneratedEmission {
         if (this.lexical.own.some(t => (t.static ? this.projection.staticTraits : this.projection.instanceTraits).some(p => !p.uri && p.name === t.name)))
             fail('public/lexical same-name lookup requires namespace authority');
         this.projection.staticTraits.filter(trait => trait.kind === 'constant').forEach(trait => {
-            const deferred = ['int','uint','Number','Boolean','String'].indexOf(trait.type as string) < 0;
+            const referenceDeferred = ['int','uint','Number','Boolean','String'].indexOf(trait.type as string) < 0;
             const referenceExport=typeof trait.type==='string'?null:trait.type.referenceExport;
-            if (deferred && trait.type !== 'Array' && trait.type !== 'Object'
+            if (referenceDeferred && trait.type !== 'Array' && trait.type !== 'Object'
                 && (!referenceExport || !options.plan.bindings.some(binding=>binding.tokenExport===referenceExport)))
                 fail('static constant type requires initialization authority');
             const members = this.lexical.ownClass.findChild(K.CONTENT).children;
-            let literal: string;
+            let literal: string, initializer: Node;
             members.filter(member => member.kind === K.CONST_LIST).forEach(member => {
                 const mods = member.findChild(K.MOD_LIST);
                 if (!mods || !mods.children.some(mod => mod.text === 'static')) return;
@@ -92,10 +92,19 @@ export class NativeGeneratedEmission {
                 member.findChildren(K.NAME_TYPE_INIT).forEach(field => {
                     if (field.findChild(K.NAME).text !== trait.name) return;
                     const init = field.findChild(K.INIT);
-                    if (init) literal = source.slice(init.start,initializerEnd(init)).trim();
+                    if (init) { literal = source.slice(init.start,initializerEnd(init)).trim(); initializer = init.children[0]; }
                 });
             });
-            if (deferred) {
+            // Computed namespace Boolean constants publish a false slot before
+            // cinit and use the same one-shot initializer capability as reference
+            // constants. Calls and indexed reads cannot be early literal values.
+            // Keep pure constant folding and other expression families held.
+            const dynamic = (node: Node): boolean => !!node && (node.kind === K.CALL || node.kind === K.ARRAY_ACCESSOR
+                || node.children.some(dynamic));
+            const booleanDeferred = !!trait.uri && trait.type === 'Boolean'
+                && !!input.classScriptSources && input.classScriptSources.indexOf(owners[0]) >= 0
+                && !!initializer && [K.CALL,K.AND,K.EQUALITY,K.RELATION].indexOf(initializer.kind) >= 0 && dynamic(initializer);
+            if (referenceDeferred || booleanDeferred) {
                 if (!literal) fail('reference static constant requires explicit initializer');
                 if (members.some(member=>member.kind===K.CLASS_INITIALIZER))
                     fail('reference constants with class-body statements require interleaving authority');
