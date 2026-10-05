@@ -6,7 +6,7 @@ import {NativeTweenPlans,NativeTweenSourcePlans,tweenOptionNames} from './native
 import {nativeLoaderReferenceNames,nativeSpriteOwnerReferenceNames,nativeSpriteValueReferenceNames} from './native-reference-coercion';
 import {emitNativeXML, xmlGlobalProviderModule} from './native-xml';
 import {NativeClassMetadataOptions} from './native-class-metadata';
-import {nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationNode} from './native-generated-declarations';
+import {nativeGeneratedDeclarationInputs, nativeGeneratedDeclarationNode, nativeGeneratedDeclarationSource} from './native-generated-declarations';
 import {nativeSourceTypeIdentity} from './native-source-type';
 import {insideTypeOf, sourceIdentifier, typeOfBinding} from './native-typeof';
 import NodeKind, {nodeKindName} from '../syntax/nodeKind';
@@ -3445,7 +3445,9 @@ function emitVector(emitter:Emitter, node:Node):void {
         const input=nativeGeneratedDeclarationInputs(options.plan,options.plan.scope);
         if(input.vectorProviderModule){
             const owners=Object.keys(input.sources).filter(owner=>input.sources[owner].source===emitter.source);
-            const vector=owners.length===1&&options.plan.vectors.find(v=>v.owner===owners[0]&&v.start===node.start&&v.end===node.end);
+            const owner=emitter.generated?emitter.generated.projection.binding.identity:owners.length===1?owners[0]:undefined;
+            const vector=owner&&options.plan.vectors.find(v=>v.owner===owner&&v.start===node.start&&v.end===node.end);
+            if(vector)nativeGeneratedDeclarationSource(options.plan,options.plan.scope,owner,emitter.source);
             if(!vector)throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: exact source specialization required');
             if(emitter.isNew)throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: construction requires separate qualification');
             let alias='__as3_Vector';while(emitter.source.indexOf(alias)>=0)alias+='_';
@@ -3591,8 +3593,9 @@ function emitGeneratedVectorLiteral(emitter:Emitter,node:Node):boolean {
  if(!input.vectorProviderModule||!emitter.generated)fail('literal requires generated class and Vector provider authority');
  const owner=emitter.generated.projection.binding.identity,vector=literal.findChild(NodeKind.VECTOR),values=literal.findChild(NodeKind.ARRAY);
  const spec=vector&&options.plan.vectors.find(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end);
- if(!spec||spec.identity!=='Vector.<Class>'||input.sources[owner].source!==emitter.source||!values)
+ if(!spec||spec.identity!=='Vector.<Class>'||!values)
   fail('exact Class literal specialization required');
+ nativeGeneratedDeclarationSource(options.plan,options.plan.scope,owner,emitter.source);
  let helper='__as3_literalVector',specialization='__as3_vectorSpec_'+spec.specExport,value='__as3_literalResult';
  while(emitter.source.indexOf(helper)>=0)helper+='_';while(emitter.source.indexOf(specialization)>=0)specialization+='_';while(emitter.source.indexOf(value)>=0)value+='_';
  emitter.ensureImportIdentifier('as3VectorCreate as '+helper,vectorProviderModule(input.vectorProviderModule,options.module),false);
@@ -3615,7 +3618,8 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node,conversion=fa
  if(!emitter.generated)fail('construction requires generated class authority');
  const owner=emitter.generated.projection.binding.identity;
  const spec=options.plan.vectors.find(v=>v.owner===owner&&v.start===vector.start&&v.end===vector.end);
- if(!spec||input.sources[owner].source!==emitter.source)fail('exact construction specialization required');
+ if(!spec)fail('exact construction specialization required');
+ nativeGeneratedDeclarationSource(options.plan,options.plan.scope,owner,emitter.source);
  const args=call.findChild(NodeKind.ARGUMENTS);
  if(!args||(conversion?args.children.length!==1:args.children.length>2))fail('Vector argument count requires qualification');
  // The engine validates the numeric length atom and performs uint conversion.
