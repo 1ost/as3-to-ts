@@ -117,13 +117,13 @@ export class NativeGeneratedLexical {
                         return type&&type.text==='Boolean'&&plan.references.some(ref=>ref.owner===name&&ref.start===type.start&&ref.end===type.end
                             &&ref.kind==='intrinsic'&&ref.identity==='Boolean');
                     });
-                // Protected int, Array and source-reference fields retain the declaring
+                // Protected int and source-reference fields retain the declaring
                 // constructor's storage at every selected inheritance depth.
                 const inheritedStorage=inherited&&isStatic&&visibility==='protected'&&member.kind===K.VAR_LIST
                     &&member.findChildren(K.NAME_TYPE_INIT).every(node=>{
                         const type=node.findChild(K.TYPE);
                         return type&&plan.references.some(ref=>ref.owner===name&&ref.start===type.start&&ref.end===type.end
-                            &&(ref.kind==='intrinsic'&&['int','Array'].indexOf(ref.identity)>=0
+                            &&(ref.kind==='intrinsic'&&ref.identity==='int'
                                 ||ref.kind==='declaration'||ref.kind==='private-declaration'));
                     });
                 if(inherited&&isStatic&&(!constant&&!inheritedPrimitives&&!inheritedVectors&&!inheritedStorage
