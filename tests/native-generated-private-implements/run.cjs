@@ -43,7 +43,7 @@ async function main(){
    reject(()=>api.emitNativeSourceClassModule({...config,plan:{...plan}}),/exact planned/);
    reject(()=>api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:['implementations.First']}),/multi-declaration Class script retry/);
    reject(()=>api.emitNativeSourceClassModule({...config,externalModules:externalModules.filter(m=>m!==provider('AS3ScriptGlobal'))}),/unbound TypeScript dependency|script provider must be explicit/);
-   reject(()=>api.emitNativeSourceClassModule({...config,emitterOptions:{...options,nativeDynamicPropertyWritesModule:undefined}}),/source interface writes require provider/);
+   reject(()=>api.emitNativeSourceClassModule({...config,emitterOptions:{...options,nativeDynamicPropertyWritesModule:undefined}}),/interface setter requires exact property provider/);
    const original=sources['implementations.First'].source;
    for(const [from,to,error] of [
     ['public function get value():int','public function get value():Number',/incompatible interface signature/],

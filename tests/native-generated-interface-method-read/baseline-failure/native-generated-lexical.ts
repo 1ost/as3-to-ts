@@ -1117,9 +1117,7 @@ export class NativeGeneratedLexical {
             emitter.insert('))');emitter.skipTo(node.end);return true;
         }
         if(found.publicName) {
-            // Interface method reads use the same authenticated public property bridge
-            // as class method reads; it preserves bound closure identity.
-            if(found.interfaceCall&&operation!=='call'&&operation!=='get')fail('interface method requires a read or call');
+            if(found.interfaceCall&&operation!=='call')fail('interface method currently requires a call');
             if(found.interfaceRead||found.interfaceWrite) {
                 if(operation==='get') {
                     if(!found.interfaceRead)fail('interface accessor has no getter');
