@@ -16,7 +16,7 @@ bodies and return annotations are unchanged.
 
 Ten guards require a nonempty unique planned Class selection and explicit
 script domain/provider, preserve old unselected initializer holds, and reject
-class-body initializers and unqualified multi-level ancestry. An applied mutation
+unselected class-body initializers and unqualified multi-level ancestry. An applied mutation
 switches back to the old generic script provider; the retained-closure check must
 then fail on both targets. Anonymous Object returns and typed local Function
 call/apply have independent AIR/factory comparisons in sibling test directories.

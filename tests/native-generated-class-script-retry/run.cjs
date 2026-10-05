@@ -51,7 +51,7 @@ async function main(){
    const parentSource='package retrycases {public class Parent extends MissingRoot {}}',childSource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry extends Parent {');
    assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Parent':{source:parentSource,sourceSha256:hash(parentSource)},'retrycases.Retry':{source:childSource,sourceSha256:hash(childSource)}}}),/non-retrying source root parent|base requires a planned source declaration/);rejectionGuards++;
    const bodySource=sources['retrycases.Retry'].source.replace('class Retry {','class Retry { initial=[];');
-   const bodyPlan=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'retrycases.Retry':{source:bodySource,sourceSha256:hash(bodySource)}}});
+   const bodyPlan=api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:['retrycases.Trace'],sources:{...sources,'retrycases.Retry':{source:bodySource,sourceSha256:hash(bodySource)}}});
    assert.throws(()=>emitPlan(bodyPlan),/script global with class-body initializer requires retry identity authority/);rejectionGuards++;
    const artifact=api.emitNativeSourceClassModule(config);assert.deepEqual(artifact,api.emitNativeSourceClassModule(config));artifacts[cohort]=artifact;
    assert.equal(artifact.generatedSources.length,Object.keys(sources).length+1);

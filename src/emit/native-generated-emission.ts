@@ -56,13 +56,14 @@ export class NativeGeneratedEmission {
         this.lexical = new NativeGeneratedLexical(options.plan,selected,source,typedLocals);
         this.uintOrInitializers=nativeUintOrConstants(this.lexical.ownClass,source);
         this.builtinNumericConstants=nativeBuiltinNumericConstants(options.plan,selected,source);
+        const classBodyScript=!!input.classScriptSources&&input.classScriptSources.indexOf(selected)>=0;
         if(this.projection.binding.scriptGlobalExport) {
             // Only explicit Class-script units use the AIR-qualified provider
             // that retains failed globals and allocates a fresh retry identity.
             const classScript=input.classScriptSources&&input.classScriptSources.indexOf(owners[0])>=0;
             const members=this.lexical.ownClass.findChild(K.CONTENT).children;
             const constantInitializers=nativeScriptConstantInitializers(this.lexical.ownClass,source,this.uintOrInitializers.constants,this.builtinNumericConstants);
-            if(members.some(member=>member.kind===K.CLASS_INITIALIZER))
+            if(!classBodyScript&&members.some(member=>member.kind===K.CLASS_INITIALIZER))
                 fail('script global with class-body initializer requires retry identity authority');
             const privateClass=options.plan.privateBindings.some(b=>b.identity===selected);
             const primitiveHelperInitializer=(value:Node):boolean=>{
@@ -106,7 +107,11 @@ export class NativeGeneratedEmission {
                 && !!initializer && [K.CALL,K.AND,K.EQUALITY,K.RELATION].indexOf(initializer.kind) >= 0 && dynamic(initializer);
             if (referenceDeferred || booleanDeferred) {
                 if (!literal) fail('reference static constant requires explicit initializer');
-                if (members.some(member=>member.kind===K.CLASS_INITIALIZER))
+                // AIR evaluates the static field initializers first, including
+                // reference constants, then the class-body statements. The
+                // existing factory queues retain these two ordered phases;
+                // the selected Class script owns fresh identities on retry.
+                if (!classBodyScript&&members.some(member=>member.kind===K.CLASS_INITIALIZER))
                     fail('reference constants with class-body statements require interleaving authority');
                 let name='__as3_initializeStaticConstant_'+Object.keys(this.deferredConstants).length;
                 while(source.indexOf(name)>=0)name+='_';
