@@ -2,12 +2,12 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2-blendmode-class-review');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const evidence=path.resolve('../LayaAir-op2-shape-return-review/tests/nativeFlashOracle/sprite-returns'),expected=require(path.join(evidence,'verify.cjs'));
-const cache=path.resolve('.cache/native-generated-sprite-returns');fs.mkdirSync(cache,{recursive:true});
+const evidence=path.resolve('../LayaAir-op2-shape-return-review/tests/nativeFlashOracle/shape-return'),expected=require(path.join(evidence,'verify.cjs'));
+const cache=path.resolve('.cache/native-generated-shape-return');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
 const compilerInputs=['src','lib','utils'].flatMap(dir=>fs.readdirSync(path.resolve(dir),{recursive:true}).map(f=>path.resolve(dir,f)).filter(f=>fs.statSync(f).isFile()).map(file=>({file,sha256:hash(fs.readFileSync(file))})));
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
-const cohorts={subject:read('source',['cases.SpriteReturns'])};
+const cohorts={subject:read('source',['cases.ShapeReturns'])};
 async function main(){
  const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
  const browser=await chromium.launch({headless:true}),results=[];
@@ -22,12 +22,12 @@ async function main(){
   const helpers=Object.fromEntries(['bound','classBound','nativeClass','callableClass'].map(n=>[n,modulePath(path.resolve('utils',n+'.ts'))]));
   const sourceError=modulePath(path.join(engine,'src/layaAir/flash/errors/AS3SourceError.ts'));
   const modules=['AS3GeneratedClass','AS3ScriptGlobal','AS3Type','AS3Class','AS3Invocation','AS3LexicalMembers','AS3Property','AS3MethodBinding','AS3Coercion','AS3String','AS3Addition','AS3ArrayCreation','NativeSourceClassLoadingSession'];
-  const spriteModule=modulePath(path.join(engine,'src/layaAir/flash/display/Sprite.ts'));
+  const spriteModule=modulePath(path.join(engine,'src/layaAir/flash/display/Shape.ts'));
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider),spriteModule,provider('AS3CanonicalDisplayReference')];
-   const input={scope:'sprite-returns-'+cohort,sources,providers:{'flash.display.Sprite':{module:spriteModule,exportName:'Sprite'},'flash.display.DisplayObject':{module:provider('AS3CanonicalDisplayReference'),exportName:'DisplayObject'}},providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true};
+   const input={scope:'shape-return-'+cohort,sources,providers:{'flash.display.Shape':{module:spriteModule,exportName:'Shape'},'flash.display.DisplayObject':{module:provider('AS3CanonicalDisplayReference'),exportName:'DisplayObject'}},providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true};
    const plan=api.createNativeGeneratedDeclarationPlan(input);
    const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
-   const options={customVisitors:[],definitionsByNamespace,nativeDisplayObjectReferenceModule:provider('AS3CanonicalDisplayReference'),importModules:{'flash.display.Sprite':spriteModule,'flash.display.DisplayObject':provider('AS3CanonicalDisplayReference'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
+   const options={customVisitors:[],definitionsByNamespace,nativeDisplayObjectReferenceModule:provider('AS3CanonicalDisplayReference'),importModules:{'flash.display.Shape':spriteModule,'flash.display.DisplayObject':provider('AS3CanonicalDisplayReference'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
     decoratorModules:{bound:helpers.bound,classBound:helpers.classBound},nativeClassHelperModules:{nativeClass:helpers.nativeClass,callableClass:helpers.callableClass},
     nativeClassTraitsModule:provider('AS3GeneratedClass'),nativeLexicalMembersModule:provider('AS3LexicalMembers'),nativeGeneratedPropertyModule:provider('AS3Property'),
     nativeCallableMethodBindingModule:provider('AS3MethodBinding'),nativeCallableCoercionModule:provider('AS3Coercion'),nativeCallableStringModule:provider('AS3String'),
@@ -57,27 +57,27 @@ async function main(){
   const entry=path.join(dir,'entry.ts');fs.writeFileSync(entry,"import {run} from './observer';import {nativeSourceClassModule as subject} from './subject/subject-factory.js';globalThis.completion=run(subject).then(value=>{globalThis.result=value;},error=>{globalThis.result={failure:{name:error.name,errorID:error.errorID,message:error.message}};});");
   let mutationMatches=0;const build=(mutate=false)=>esbuild.build({entryPoints:[entry],bundle:true,write:false,format:'iife',platform:'browser',target:'es2020',metafile:true,loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},plugins:mutate?[{name:'remove-return-coercion',setup(b){b.onLoad({filter:/subject-factory\.js$/},args=>{
    let contents=fs.readFileSync(args.path,'utf8');
-   const re=/__as3_callable_generatedProperty\.coerceAS3PropertyValue\(value, \{ name: "flash\.display::Sprite", reference: __as3_callable_declarationDomain\.native\d+ \}\)/g;
+   const re=/__as3_callable_generatedProperty\.coerceAS3PropertyValue\(value, \{ name: "flash\.display::Shape", reference: __as3_callable_declarationDomain\.native\d+ \}\)/g;
    assert.ok([...contents.matchAll(re)].length>=3);mutationMatches=[...contents.matchAll(re)].length;
    contents=contents.replace(re,'value');return {contents,loader:'js'};
   });}}]:[]});
   const built=await build();
   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(dir,'bundle.js'),code);
   const vm=require('node:vm');const execute=async code=>{const context=vm.createContext({console,setTimeout,clearTimeout,AbortController,AbortSignal,DOMException,performance});context.window=context;context.document={};new vm.Script(code).runInContext(context);await context.completion;return JSON.parse(JSON.stringify(context.result));};
-  const node=await execute(code);assert.deepEqual(node.rows,expected);assert.equal(node.checks.length,4);
+  const node=await execute(code);assert.deepEqual(node.rows,expected);assert.equal(node.checks.length,6);
   const executeWeb=async body=>{const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));try{
    await page.route('http://loaded-generated.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script></body>'}));
    await page.goto('http://loaded-generated.test/');await page.evaluate(()=>globalThis.completion);const result=await page.evaluate(()=>JSON.parse(JSON.stringify(globalThis.result)));assert.deepEqual(errors,[]);return result;
   }finally{await page.close();}};
   const web=await executeWeb(code);assert.deepEqual(web,node);
   const mutated=await build(true),mutantCode=mutated.outputFiles[0].text;fs.writeFileSync(path.join(dir,'mutant-remove-return-coercion.js'),mutantCode);
-  const control=await execute(mutantCode),browserControl=await executeWeb(mutantCode);assert.deepEqual(control,browserControl);assert.equal(control.failure.message,'forged Sprite rejected');
+  const control=await execute(mutantCode),browserControl=await executeWeb(mutantCode);assert.deepEqual(control,browserControl);assert.equal(control.failure.message,'forged Shape rejected');
   const negatives=['remove-return-coercion'],controls=[{mutation:'remove-return-coercion',applied:mutationMatches,control,browserControl}];
   results.push({target,node,web,typechecks,artifacts,negatives,controls,compilerGuards:4,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
   console.log(JSON.stringify({target,observations:node.rows.length,guards:node.checks.length,typeErrors:0}));
  }}finally{await browser.close();}
  for(const result of results)for(const item of [...result.inputs,...result.typechecks.flatMap(check=>check.inputs)])assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,cohorts,compilerInputs,guardsSha256:hash(fs.readFileSync(path.join(__dirname,'guards.cjs'))),runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),held:['Document Sprite adapter','Full startup and game account flow']},null,2));
- console.log(JSON.stringify({out,status:'passed',observations:16,targets:2,realms:2}));
+ console.log(JSON.stringify({out,status:'passed',observations:20,targets:2,realms:2}));
 }
 main().catch(error=>{fs.writeFileSync(path.join(out,'failure.json'),JSON.stringify({message:error.message,stack:String(error.stack),compilerInputs,cohorts,runnerSha256:hash(fs.readFileSync(__filename))},null,2));console.error(error);console.log(JSON.stringify({out,status:'held'}));process.exitCode=1;});

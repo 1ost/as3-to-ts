@@ -919,8 +919,8 @@ export class NativeCallableClasses {
                         &&!(this.contentElementReferences&&['ContentElement','TextElement','GroupElement','GraphicElement'].some(type=>reference.identity==='flash.text.engine.'+type))
                         &&!(this.dateReference&&reference.identity==='Date')
                         // Canonical display allocation proof also authenticates Sprite
-                        // and Shape returns; other native display families remain separately held.
-                        &&!(this.displayReference&&['flash.display.DisplayObject','flash.display.Sprite','flash.display.Shape'].indexOf(reference.identity)>=0)&&!(['flash.events.Event','flash.events.MouseEvent','flash.utils.Proxy'].indexOf(reference.identity)>=0
+                        // returns; other native display families remain separately held.
+                        &&!(this.displayReference&&(reference.identity==='flash.display.DisplayObject'||reference.identity==='flash.display.Sprite'))&&!(['flash.events.Event','flash.events.MouseEvent','flash.utils.Proxy'].indexOf(reference.identity)>=0
                         &&this.generated.options.plan.nativeBindings.some(binding=>binding.qname===reference.identity&&!!binding.nativeBaseExport)))
                         this.fail('generated native return type requires separate qualification');
                     const sourceBody=sourceMethod.findChild(K.BLOCK);
