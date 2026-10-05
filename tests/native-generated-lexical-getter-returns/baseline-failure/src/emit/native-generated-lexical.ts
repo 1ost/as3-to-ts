@@ -71,19 +71,6 @@ export class NativeGeneratedLexical {
         return this.plan.references.some(r=>r.owner===owner&&r.start===type.start&&r.end===type.end
             &&(r.kind==='interface'||r.kind==='native'&&this.plan.nativeBindings.some(b=>b.qname===r.identity&&b.nativeInterface)));
     }
-    private readonlyGetterType(owner:string,member:Node) {
-        if(member.kind!==K.GET||modifiers(member).indexOf('static')>=0
-            ||member.findChild(K.PARAMETER_LIST).children.length!==0)return null;
-        const type=member.findChild(K.TYPE),mods=modifiers(member);
-        const reference=type&&this.plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
-        if(!reference)return null;
-        if(reference.kind==='intrinsic'&&reference.identity==='Boolean')return reference;
-        // Number/Object and source-class returns have been observed for private
-        // and protected instance getters. Keep package-internal forms bounded.
-        if(mods.indexOf('private')<0&&mods.indexOf('protected')<0)return null;
-        return reference.kind==='intrinsic'&&['Number','Object'].indexOf(reference.identity)>=0
-            ||reference.kind==='declaration'?reference:null;
-    }
     private readonly foreignPublicMembers = new Map<string, ReadonlyArray<{readonly name:string;readonly kind:string;readonly type?:string|{readonly name:string};readonly access?:string}>>();
     constructor(readonly plan: NativeGeneratedDeclarationPlan, readonly owner: string, source: string, typedLocals = false) {
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope);
@@ -144,7 +131,9 @@ export class NativeGeneratedLexical {
                 const internalMethod=visibility==='internal'&&this.internalMethod(name,member);
                 if(visibility==='internal'&&member.kind===K.FUNCTION&&!internalMethod)
                     fail('internal instance method requires required Object/int parameters and void return or one authenticated interface parameter and Boolean/void return');
-                const readonlyGetter=!!this.readonlyGetterType(name,member);
+                const readonlyGetter=(visibility==='internal'||visibility==='protected'||visibility==='private')&&!isStatic&&member.kind===K.GET
+                    &&member.findChild(K.TYPE)&&member.findChild(K.TYPE).text==='Boolean'
+                    &&member.findChild(K.PARAMETER_LIST).children.length===0;
                 if(member.kind!==K.VAR_LIST&&member.kind!==K.FUNCTION&&!constant&&!readonlyGetter)fail('lexical constant/accessor lowering required');
                 const declarations=member.kind===K.VAR_LIST||constant?member.findChildren(K.NAME_TYPE_INIT):[member];
                 declarations.forEach(node=>{
@@ -152,10 +141,7 @@ export class NativeGeneratedLexical {
                     const previous=this.traits.find(t=>t.name===local&&t.static===isStatic);
                     if(previous) {
                         if(inherited&&previous.visibility===visibility&&previous.kind==='accessor'&&readonlyGetter) {
-                            const returned=this.readonlyGetterType(previous.owner,previous.node),ancestor=this.readonlyGetterType(name,member);
-                            if(modifiers(previous.node).indexOf('override')<0||mods.indexOf('final')>=0
-                                ||!returned||!ancestor||returned.kind!==ancestor.kind||returned.identity!==ancestor.identity)
-                                fail('readonly getter override requires matching return type, nonfinal source ancestor and override');
+                            if(modifiers(previous.node).indexOf('override')<0||mods.indexOf('final')>=0)fail('readonly getter override requires nonfinal source ancestor and override');
                             overridden.add(previous);return;
                         }
                         if(inherited&&previous.visibility===visibility&&(visibility==='protected'||visibility==='internal'&&internalMethod)&&previous.kind==='method'&&member.kind===K.FUNCTION) {
@@ -679,7 +665,7 @@ export class NativeGeneratedLexical {
                         if(selected)break;
                         ancestor=this.declarations.find(b=>b.identity===ancestor).base;
                     }
-                    if(!selected||!this.readonlyGetterType(ancestor,selected))fail('protected super getter requires qualified source ancestor');
+                    if(!selected||!selected.findChild(K.TYPE)||selected.findChild(K.TYPE).text!=='Boolean')fail('protected super getter requires source Boolean ancestor');
                     return {trait:Object.assign({},getter,{access:this.provider+'.resolveAS3LexicalMember('
                         +this.scope+','+JSON.stringify(name)+',"protected",false,true)'}),receiver:null};
                 }
