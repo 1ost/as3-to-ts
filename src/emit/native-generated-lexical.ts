@@ -914,7 +914,14 @@ export class NativeGeneratedLexical {
                 // receiver type without evaluating it. Keep the original cast
                 // expression so coercion and receiver effects still precede
                 // call arguments. This is not private/protected authority.
-                let publicIdentity=identities.length===1?identities[0]:undefined;
+                let publicIdentity=identities.length===1?identities[0]:undefined,staticNamespaceReceiver=false;
+                if(!publicIdentity&&lexicalName&&receiver.kind===K.IDENTIFIER
+                    &&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type'))) {
+                    const identity=this.resolveTypeName(receiver.text),source=this.classSource(identity);
+                    if(this.declarations.some(b=>b.identity===identity)&&source&&!source.referenceOnly) {
+                        publicIdentity=identity;staticNamespaceReceiver=true;
+                    }
+                }
                 if(!publicIdentity&&receiver.kind===K.CALL
                     &&receiver.children[0].kind===K.IDENTIFIER
                     &&receiver.findChild(K.ARGUMENTS)&&receiver.findChild(K.ARGUMENTS).children.length===1
@@ -938,13 +945,14 @@ export class NativeGeneratedLexical {
                                 fail('runtime namespace qualifier shadows source declaration');
                         emitter.namespaces.checkReceiver(value,identity);
                         const member=emitter.namespaces.accessMember(value,identity);
-                        if(!member||member.static||member.declaration.kind!==K.FUNCTION||!access.uri)
-                            fail('foreign namespace namesake requires an instance method');
+                        if(!member||member.static!==staticNamespaceReceiver||member.declaration.kind!==K.FUNCTION||!access.uri)
+                            fail('foreign namespace namesake requires a method matching its receiver');
                         if(!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
                             ||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
                             fail('namespace method requires exact reference and property providers');
                         return {trait:null,receiver,publicName:name,publicMethod:true,namespaceUri:access.uri};
                     }
+                    if(staticNamespaceReceiver)fail('static lexical namesake requires an opened source namespace method');
                     if(!this.foreignPublicMembers.has(identity)) {
                         const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
                         this.foreignPublicMembers.set(identity,new NativeGeneratedClassTraits(this.plan,this.plan.scope,identity,this.classSource(identity).source).instanceTraits
