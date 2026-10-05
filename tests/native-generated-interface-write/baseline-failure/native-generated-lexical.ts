@@ -556,7 +556,7 @@ export class NativeGeneratedLexical {
         // Follow only authenticated public source storage/getter declarations.
         // Keep the expression intact for emission so getters run exactly once;
         // type discovery must never evaluate or duplicate a source receiver.
-        const interfaceMember=(identity:string,name:string,kind:'get'|'set'|'method')=>{
+        const interfaceMember=(identity:string,name:string,kind:'get'|'method')=>{
             const bindings=nativeGeneratedInterfaceBindings(this.plan);
             if(!bindings.some(binding=>binding.qname===identity))return undefined;
             const owners=new Set<string>();
@@ -632,7 +632,7 @@ export class NativeGeneratedLexical {
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;textBlockMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceWrite?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;textBlockMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -719,16 +719,14 @@ export class NativeGeneratedLexical {
                 }
                 if(!references.length)references=chainedReferences(receiver).slice();
                 const identities=Array.from(new Set(references.map(r=>r.identity)));
-                if(identities.length===1&&references.every(r=>r.kind==='interface')) {
-                    const getter=interfaceMember(identities[0],name,'get'),setter=interfaceMember(identities[0],name,'set');
-                    if(getter||setter) {
-                        if(!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan)
-                            fail('interface accessor requires exact reference provider');
-                        // Keep inherited public accessor authority separate from
-                        // private/protected namesakes. Retain the whole receiver
-                        // so assignment captures it once, before RHS evaluation.
-                        return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:!!getter,interfaceWrite:!!setter};
-                    }
+                if(identities.length===1&&references.every(r=>r.kind==='interface')&&interfaceMember(identities[0],name,'get')) {
+                    if(!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
+                        ||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
+                        fail('interface getter requires exact reference and property providers');
+                    // A public interface getter cannot select a private or
+                    // protected namesake in the caller. Keep its whole receiver
+                    // expression so each getter executes once in source order.
+                    return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:true};
                 }
                 if(identities.length===1&&references.every(r=>r.kind==='interface')&&interfaceMember(identities[0],name,'method')) {
                     if(!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
@@ -942,7 +940,7 @@ export class NativeGeneratedLexical {
             const call=node.children[0];
             if(call.kind!==K.CALL)return false;
             const found=resolve(call.children[0]);
-            if(found&&(found.interfaceRead||found.interfaceWrite||found.interfaceCall||found.namespaceUri))fail('interface getter or namespace method construction requires separate authority');
+            if(found&&(found.interfaceRead||found.interfaceCall||found.namespaceUri))fail('interface getter or namespace method construction requires separate authority');
             if(found&&found.textBlockMethod)fail('TextBlock method construction requires separate authority');
             if(!found||!found.trait||found.trait.kind==='constant')return false;
             const trait=found.trait,arguments_=call.findChild(K.ARGUMENTS);
@@ -1118,17 +1116,7 @@ export class NativeGeneratedLexical {
         }
         if(found.publicName) {
             if(found.interfaceCall&&operation!=='call')fail('interface method currently requires a call');
-            if(found.interfaceRead||found.interfaceWrite) {
-                if(operation==='get') {
-                    if(!found.interfaceRead)fail('interface accessor has no getter');
-                    if(emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
-                        fail('interface getter requires exact property provider');
-                }else if(operation==='set'&&node.children[1].text==='=') {
-                    if(!found.interfaceWrite)fail('interface accessor has no setter');
-                    if(emitter.options.nativeDynamicPropertyWritesModule!==emitter.generated.propertyModule)
-                        fail('interface setter requires exact property provider');
-                }else fail('interface accessor requires qualified read or assignment');
-            }
+            if(found.interfaceRead&&operation!=='get')fail('interface getter currently requires a property read');
             if(found.dynamicRead&&operation!=='get')fail('chained dynamic receiver currently requires a property read');
             if(operation==='set'&&found.publicNumericUpdate&&['+=','-='].indexOf(node.children[1].text)>=0) {
                 const addition=node.children[1].text==='+=',unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
