@@ -381,6 +381,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
             const pkg=name.slice(0,name.lastIndexOf('.'));
             classes.forEach((cls,qname)=>{
                 if(qname.slice(0,qname.lastIndexOf('.'))!==pkg)return;
+                // Interface signatures are implicitly public, not package-internal
+                // class traits. Their contracts are validated separately below.
+                if(cls.kind===K.INTERFACE)return;
                 if(cls.findChild(K.CONTENT).children.some(member=>{
                     if([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0)return false;
                     const mods=member.findChild(K.MOD_LIST);
