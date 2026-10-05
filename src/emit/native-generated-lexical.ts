@@ -393,6 +393,18 @@ export class NativeGeneratedLexical {
         if(callee.kind===K.IDENTIFIER&&callee.text==='String')return false;
         return true;
     }
+    deferredBooleanConstant(trait:Trait):boolean {
+        if(!trait||trait.kind!=='constant'||trait.visibility!=='private'||!trait.static||!trait.type)return false;
+        const init=trait.node.findChild(K.INIT);
+        if(!init||!this.plan.references.some(ref=>ref.owner===trait.owner&&ref.start===trait.type.start&&ref.end===trait.type.end
+            &&ref.kind==='intrinsic'&&ref.identity==='Boolean'))return false;
+        const expression=unwrapEncapsulatedExpression(init.children[0]);
+        // Only effectful calls have cinit authority here. Literal/conversion and
+        // folded Boolean expressions need separate early-slot evidence.
+        if(expression.kind!==K.CALL)return false;
+        const callee=expression.children[0];
+        return !(callee.kind===K.IDENTIFIER&&callee.text==='Boolean');
+    }
     private earlyStringConstant(trait:Trait):string|undefined {
         if(!trait||!trait.type||trait.type.text!=='String')return undefined;
         if(!this.plan.references.some(ref=>ref.owner===trait.owner&&ref.start===trait.type.start&&ref.end===trait.type.end
@@ -427,6 +439,7 @@ export class NativeGeneratedLexical {
         return undefined;
     }
     constantValue(trait:Trait):string {
+        if(this.deferredBooleanConstant(trait))return 'false';
         if(this.embeddedConstant(trait)||this.deferredVectorConstant(trait)||this.deferredObjectConstant(trait)||this.deferredRegExpConstant(trait)||this.deferredStringConstant(trait))return 'null';
         const init=trait.node.findChild(K.INIT);
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
@@ -487,6 +500,12 @@ export class NativeGeneratedLexical {
                 &&isFinite(Number(value)))return value;
         }
         const expression=unwrapEncapsulatedExpression(init.children[0]);
+        if(trait.visibility==='private'&&trait.type&&trait.type.text==='Boolean'&&expression.kind===K.IDENTIFIER){
+            const source=this.traits.find(t=>t.owner===trait.owner&&t.static&&t.name===expression.text);
+            // An exact same-owner computed constant is read at this variable's
+            // authored cinit position, including false reads before publication.
+            if(this.deferredBooleanConstant(source))return undefined;
+        }
         if(trait.visibility==='private'&&trait.type&&trait.type.text==='Boolean'
             &&expression&&expression.kind===K.RELATION&&expression.children.length===3
             &&['<','>','<=','>='].indexOf(expression.children[1].text)>=0){
@@ -563,7 +582,7 @@ export class NativeGeneratedLexical {
         const traits=this.own.map(t=>'{name:'+JSON.stringify(t.name)+',visibility:'+JSON.stringify(t.visibility)+',static:'+t.static+',kind:'+JSON.stringify(t.kind)
             +(this.earlyInstanceValue(t)!==undefined?',initialValue:'+this.earlyInstanceValue(t):'')
             +(t.kind==='accessor'?',key:'+t.key+',getter:true,setter:false':'')
-            +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'&&!this.embeddedConstant(t)&&!this.deferredVectorConstant(t)&&!this.deferredObjectConstant(t)&&!this.deferredRegExpConstant(t)&&!this.deferredStringConstant(t)?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
+            +(t.kind!=='method'?',type:'+this.typeExpression(t.type,t.owner,domain,intrinsic+'.array')+(t.kind==='constant'&&!this.embeddedConstant(t)&&!this.deferredVectorConstant(t)&&!this.deferredObjectConstant(t)&&!this.deferredRegExpConstant(t)&&!this.deferredStringConstant(t)&&!this.deferredBooleanConstant(t)?',value:'+this.constantValue(t):''):',key:'+t.key+',parameterCount:'+t.parameterCount)+'}');
         return 'const '+this.scope+'='+this.provider+'.registerAS3LexicalMembers('+name+','+(parent?(nativeGeneratedDeclarationInputs(this.plan,this.plan.scope).inheritScriptClasses?this.provider+'.getAS3InheritedLexicalBase('+base+')':domain+'.'+parent.lexicalExport+'.get('+base+')'):native?domain+'.'+native.nativeBaseExport+'.lexicalScope':'null')+',['+traits.join(',')+']);\n'
             +domain+'.'+own.lexicalExport+'.set('+name+','+this.scope+');\n'
             +this.traits.filter(t=>t.static&&t.owner!==this.owner).map(t=>'const '+t.key+'='+staticOwner(t)+';\n').join('')
