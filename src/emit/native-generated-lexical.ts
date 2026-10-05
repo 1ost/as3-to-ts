@@ -33,7 +33,7 @@ export class NativeGeneratedLexical {
     readonly typedLocals: NativeTypedLocals;
     readonly nestedFunctions: NestedLocalFunction[] = [];
     readonly finallyMarkers: {start:number;end:number;name:string}[] = [];
-    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[];restParameter?:boolean;returned?:string;typedSignature?:boolean;ownerReceiver?:string}[] = [];
+    readonly anonymousFunctions: {start:number;end:number;methodStart:number;name:string;parameters:string[];restParameter?:boolean;returned?:string;typedSignature?:boolean;staticInitializer?:boolean;ownerReceiver?:string}[] = [];
     readonly resolveTypeName:(name:string)=>string;
     private readonly declarations: ReadonlyArray<NativeGeneratedClassDeclaration>;
     private classSource(identity: string): {source: string; sourceSha256: string; referenceOnly?: boolean} {
@@ -220,7 +220,8 @@ export class NativeGeneratedLexical {
             if(node.kind===K.LAMBDA){
                 if(node.findChild(K.VECTOR))fail('anonymous Vector return held');
                 let method=node.parent;while(method&&method.parent!==content)method=method.parent;
-                if(!typedLocals||!method||method.kind!==K.FUNCTION||!this.declarations.find(b=>b.identity===owner).scriptGlobalExport)
+                const staticInitializer=!!method&&[K.VAR_LIST,K.CONST_LIST].indexOf(method.kind)>=0&&modifiers(method).indexOf('static')>=0;
+                if(!typedLocals||!method||method.kind!==K.FUNCTION&&!staticInitializer||!this.declarations.find(b=>b.identity===owner).scriptGlobalExport)
                     fail('anonymous source callable requires source script global');
                 for(let p=node.parent;p&&p!==method;p=p.parent)if([K.FUNCTION,K.CATCH].indexOf(p.kind)>=0)fail('nested anonymous callable scope held');
                 // Required String arguments use common storage coercion; rest is
@@ -252,6 +253,12 @@ export class NativeGeneratedLexical {
                     forInTarget(n);
                     if(['Object','String','int'].indexOf(returnType)>=0&&n.kind===K.RETURN&&!n.children.length)fail('anonymous typed bare return held');
                     if(n.kind===K.DOT&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='this')fail('anonymous receiver property access held');
+                    // Initializer callbacks have no enclosing method-local lowering pass.
+                    // Keep local storage and nested closures held until that pass is qualified.
+                    if(staticInitializer&&[K.VAR_LIST,K.CONST_LIST,K.LAMBDA,K.TRY].indexOf(n.kind)>=0)fail('static initializer callable local scope requires separate authority');
+                    if(staticInitializer&&[K.ASSIGN,K.PRE_INC,K.PRE_DEC,K.POST_INC,K.POST_DEC].indexOf(n.kind)>=0
+                        &&n.children.some(c=>c.kind===K.IDENTIFIER&&parameters.indexOf(c.text)>=0))fail('static initializer callable parameter writes require separate authority');
+                    if(staticInitializer&&n.kind===K.IDENTIFIER&&n.text===owner.split('.').pop()&&n.parent.kind!==K.RETURN)fail('static initializer own-Class expression requires separate authority');
                     if(n.kind===K.LAMBDA){check(n);return;}
                     if(n.kind===K.FUNCTION)fail('nested anonymous callable body held');
                     if(n.kind===K.IDENTIFIER&&['super','arguments'].indexOf(n.text)>=0)fail('anonymous callable receiver/member lookup held');
@@ -261,7 +268,7 @@ export class NativeGeneratedLexical {
                     });
                     n.children.forEach(inspect);
                 };inspect(node.findChild(K.BLOCK));
-                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:enclosing.start,name:fresh('anonymous'),parameters,restParameter,returned:returnType,typedSignature:referenceParameters||stringParameters||returnType==='int',ownerReceiver:modifiers(method).indexOf('static')<0?fresh('anonymousOwner'):undefined});
+                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:enclosing.start,name:fresh('anonymous'),parameters,restParameter,staticInitializer,returned:returnType,typedSignature:referenceParameters||stringParameters||returnType==='int',ownerReceiver:modifiers(method).indexOf('static')<0?fresh('anonymousOwner'):undefined});
                 return;
             }
             if(node.kind===K.FUNCTION&&node.parent!==content){

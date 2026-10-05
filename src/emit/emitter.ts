@@ -6964,7 +6964,13 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 			&& receiver.parent.kind === NodeKind.ARRAY_ACCESSOR && receiver.parent.children[0] === receiver)
 			throw new Error('AS3_CLASS_INITIALIZER_UNSUPPORTED: indexed lazy-class receivers require key-order and publication authority');
 		if (node.text === own && node.kind !== NodeKind.EXTENDS) {
-			emitter.insert(emitter.classFactory.value);
+			// AIR lowers the own-Class value in a static initializer callback to
+			// the callback receiver (including escaped callbacks after failed cinit).
+			let callback = node.parent;
+			while (callback && callback.kind !== NodeKind.LAMBDA && callback.kind !== NodeKind.FUNCTION) callback = callback.parent;
+			const initializerCallback = callback && emitter.generated && emitter.generated.lexical.anonymousFunctions
+				.some(f => f.staticInitializer && f.start === callback.start && f.end === callback.end);
+			emitter.insert(initializerCallback ? 'this' : emitter.classFactory.value);
 			emitter.skipTo(node.end);
 			return;
 		}

@@ -1,0 +1,9 @@
+const assert=require('assert/strict'),api=require('../../lib'),fs=require('fs'),Module=require('module');
+const {nativeGeneratedDeclarationInputs}=require('../../lib/emit/native-generated-declarations');const {sources,hash}=require('./compile.cjs');
+module.exports=config=>{
+ const input=nativeGeneratedDeclarationInputs(config.plan,config.plan.scope),guards=[];
+ const emit=plan=>api.emitNativeSourceClassModule({...config,plan,emitterOptions:{...config.emitterOptions,nativeVectorTypes:{...config.emitterOptions.nativeVectorTypes,plan},nativeReferenceCoercion:{...config.emitterOptions.nativeReferenceCoercion,plan}}});
+ for(const change of ['var local:int=0;return "";','param1="x";return param1;','return this.missing;','return arguments[0];','return Holder.marker;','var nested:Function=function():*{return null;};return "";']){const source=sources['initfunctions.Holder'].source.replace('return "";',change);assert.notEqual(source,sources['initfunctions.Holder'].source);assert.throws(()=>emit(api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'initfunctions.Holder':{source,sourceSha256:hash(source)}}})),/AS3_.*UNSUPPORTED/);guards.push('unsupported initializer callback scope');}
+ const file=require.resolve('../../lib/emit/native-generated-lexical'),original=fs.readFileSync(file,'utf8'),changed=original.replace('method.kind !== nodeKind_1.default.FUNCTION && !staticInitializer','method.kind !== nodeKind_1.default.FUNCTION');assert.notEqual(changed,original);const m=new Module(file,module);m.filename=file;m.paths=module.paths;m._compile(changed,file);const live=require(file),saved=live.NativeGeneratedLexical;try{live.NativeGeneratedLexical=m.exports.NativeGeneratedLexical;assert.throws(()=>emit(config.plan),/anonymous source callable requires source script global/);guards.push('mutation: original initializer callback guard');}finally{live.NativeGeneratedLexical=saved;}
+ return guards;
+};
