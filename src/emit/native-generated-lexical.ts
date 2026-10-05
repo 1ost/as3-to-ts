@@ -708,7 +708,7 @@ export class NativeGeneratedLexical {
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;textBlockMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceWrite?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;textBlockMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceClassGetter?:boolean;interfaceWrite?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -808,7 +808,7 @@ export class NativeGeneratedLexical {
                         if(compound&&numeric&&(emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule
                             ||emitter.options.nativeDynamicPropertyWritesModule!==emitter.generated.propertyModule))
                             fail('interface compound assignment requires exact read and write property providers');
-                        return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:!!getter,interfaceWrite:!!setter,
+                        return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:!!getter,interfaceClassGetter:!!getter&&getter.returnType==='Class',interfaceWrite:!!setter,
                             publicNumericUpdate:compound&&numeric};
                     }
                 }
@@ -1032,6 +1032,26 @@ export class NativeGeneratedLexical {
             const call=node.children[0];
             if(call.kind!==K.CALL)return false;
             const found=resolve(call.children[0]);
+            if(found&&found.interfaceClassGetter){
+                const arguments_=call.findChild(K.ARGUMENTS),module=emitter.options.nativeObjectCreationModule;
+                if(!arguments_||!module||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
+                    fail('interface Class getter construction requires exact property and Class providers');
+                const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
+                const get=unique('__as3_interface_constructor_get'),construct=unique('__as3_interface_construct_class');
+                emitter.ensureImportIdentifier('as3GetProperty as '+get,emitter.generated.propertyModule,false);
+                emitter.ensureImportIdentifier('as3ConstructClass as '+construct,module,false);
+                emitter.nativeSourceHelpers.add(get);emitter.nativeSourceHelpers.add(construct);
+                const global=this.declarations.find(b=>b.identity===this.owner).scriptGlobalExport?this.scriptGlobal:null;
+                // constructprop captures the receiver before argument evaluation,
+                // then invokes its getter. Arguments may replace the selected Class;
+                // a throwing receiver precedes arguments, a null receiver does not.
+                emitter.catchup(node.start);
+                emitter.insert('(<any>((target:any,args:any[])=>'+construct+'('+get+'(target,'+JSON.stringify(found.publicName)+'),args'+(global?','+global:'')+'))(');
+                emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
+                emitter.insert(',[');
+                arguments_.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(expressionStart(arg));visit(emitter,arg);emitter.catchup(arg.end);});
+                emitter.insert(']))');emitter.skipTo(node.end);return true;
+            }
             if(found&&(found.interfaceRead||found.interfaceWrite||found.interfaceCall||found.namespaceUri))fail('interface getter or namespace method construction requires separate authority');
             if(found&&found.textBlockMethod)fail('TextBlock method construction requires separate authority');
             if(!found||!found.trait||found.trait.kind==='constant')return false;
