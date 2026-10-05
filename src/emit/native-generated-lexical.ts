@@ -113,7 +113,7 @@ export class NativeGeneratedLexical {
                     if(inherited&&this.packageOf(name)!==this.packageOf(owner))return;
                 }
                 const isStatic=mods.indexOf('static')>=0;
-                const constant=member.kind===K.CONST_LIST&&(visibility==='protected'||visibility==='private'&&isStatic||visibility==='internal'&&isStatic);
+                const constant=member.kind===K.CONST_LIST&&(visibility==='protected'||visibility==='private'||visibility==='internal'&&isStatic);
                 if(isStatic && member.kind!==K.VAR_LIST&&!constant&&(visibility!=='private'||member.kind!==K.FUNCTION))fail('static lexical initialization lowering required');
                 if(inherited&&visibility==='internal'&&isStatic)return;
                 const inheritedPrimitives=visibility==='protected'&&member.kind===K.VAR_LIST
@@ -323,7 +323,8 @@ export class NativeGeneratedLexical {
                     // explicit this/Class accesses retain their field capability.
                     if(!typedLocals||!type||type.text==='*'||node.kind!==K.VAR_LIST
                         ||!method||method.parent!==content
-                        ||collisions.some(t=>t.owner!==owner||t.visibility!=='private'||t.kind!=='variable'))
+                        ||collisions.some(t=>t.owner!==owner||t.visibility!=='private'||t.kind!=='variable'
+                            &&!(t.kind==='constant'&&!t.static&&t.type&&t.type.text==='int')))
                         fail('local/lexical declaration-order lookup required');
                 }
             });
@@ -445,6 +446,10 @@ export class NativeGeneratedLexical {
         const end=(node:Node):number=>node.children.reduce((value,child)=>Math.max(value,end(child)),node.end);
         const value=init&&this.classSource(trait.owner).source.slice(init.start,end(init)).trim();
         const type=trait.type&&trait.type.text;
+        if(trait.visibility==='private'&&!trait.static) {
+            const ref=trait.type&&this.plan.references.find(r=>r.owner===trait.owner&&r.start===trait.type.start&&r.end===trait.type.end);
+            if(!ref||ref.kind!=='intrinsic'||ref.identity!=='int')fail('private instance int literal constant required');
+        }
         if(trait.visibility==='private'&&trait.static&&type==='String'){
             const folded=this.earlyStringConstant(trait);if(folded!==undefined)return folded;
         }
@@ -455,7 +460,8 @@ export class NativeGeneratedLexical {
         // Literal numeric constants execute no source code. Preserve AS3's
         // declared int/uint conversion and Number's signed zero, rather than
         // treating all nonpublic constants as unqualified computed initializers.
-        if(trait.kind==='constant'&&trait.static&&(trait.visibility==='protected'||trait.visibility==='private')
+        if(trait.kind==='constant'&&(trait.static&&(trait.visibility==='protected'||trait.visibility==='private')
+            ||!trait.static&&trait.visibility==='private'&&type==='int')
             &&['int','uint','Number'].indexOf(type)>=0&&value
             &&/^[+-]?(?:0[xX][0-9a-fA-F]+|(?:(?:0|[1-9]\d*)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)$/.test(value)) {
             const negative=value[0]==='-',unsigned=/^[+-]/.test(value)?value.slice(1):value;
@@ -994,7 +1000,8 @@ export class NativeGeneratedLexical {
                     // The declaring class can address its own private field on
                     // an exactly typed instance path. Keep that path intact so
                     // compound storage can re-evaluate it after RHS effects.
-                    const field=this.own.find(t=>t.name===name&&!t.static&&t.kind==='variable'&&t.visibility==='private');
+                    const field=this.own.find(t=>t.name===name&&!t.static&&t.visibility==='private'
+                        &&(t.kind==='variable'||t.kind==='constant'&&t.type&&t.type.text==='int'));
                     if(field)return {trait:field,receiver};
                 }
                 if(receiver.kind!==K.IDENTIFIER)fail('lexical receiver requires exact source type');
@@ -1336,6 +1343,14 @@ export class NativeGeneratedLexical {
             emitter.insert(';const '+previous+':any='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+');const '+value+':any='+add+'('+previous+',');
             emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
             emitter.insert(');return '+this.provider+'.as3SetLexicalMember('+writeReceiver+','+found.trait.access+','+value+');})())');
+            emitter.skipTo(node.end);return true;
+        }
+        // AIR folds private instance int literals at the read site, including
+        // the entire explicit receiver expression. A getter receiver is not
+        // evaluated, and null does not throw; computed multinames still dispatch.
+        if(operation==='get'&&found.trait.kind==='constant'&&found.trait.visibility==='private'
+            &&!found.trait.static&&found.trait.type&&found.trait.type.text==='int') {
+            emitter.catchup(node.start);emitter.insert('(<any>'+this.constantValue(found.trait)+')');
             emitter.skipTo(node.end);return true;
         }
         if(operation==='set'&&(node.children[1].text!=='='||found.trait.kind!=='variable'))fail('lexical assignment kind');
