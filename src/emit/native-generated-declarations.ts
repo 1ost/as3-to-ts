@@ -374,6 +374,8 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if(!binding||!binding.scriptGlobalExport)fail('Class script selection requires a planned class with script global');
         const dispatcherBase=binding.base==='flash.events.EventDispatcher'
             &&providers[binding.base]&&providers[binding.base].nativeBase==='EventDispatcher';
+        const accessibilityBase=binding.base==='flash.accessibility.AccessibilityImplementation'
+            &&providers[binding.base]&&providers[binding.base].nativeBase==='AccessibilityImplementation';
         // Root and direct EventDispatcher generations retain their package
         // capability, internal closures and independent lexical/native storage
         // across failures. Other ancestry with internal declarations remains held.
@@ -401,6 +403,9 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if(binding.base){
             // Direct EventDispatcher generations retain the canonical native
             // constructor entry and independent event storage across retries.
+            // Direct AccessibilityImplementation generations retain independent
+            // stub/errno storage and source overrides across retries. Its source
+            // descendants and package-internal retry declarations remain held.
             // Other direct native bases still require their own qualification.
             // Source-only ancestry resolves each parent before publishing the
             // child. Failed parent generations remain retryable; a successfully
@@ -421,7 +426,7 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
                     &&providers[parent.base].nativeBase==='Sprite'&&!retryingParent){stableParent=true;break;}
                 parent=bindings.find(value=>value.qname===parent.base);
             }
-            if(!dispatcherBase&&!stableParent)
+            if(!dispatcherBase&&!accessibilityBase&&!stableParent)
                 fail('derived Class script requires a non-retrying source root parent');
         }
     });
