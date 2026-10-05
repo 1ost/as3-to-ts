@@ -448,6 +448,29 @@ export class NativeCallableClasses {
                 const args=unique('superCallArguments');
                 return '((...'+args+': any[]): any => '+intrinsic+'.apply('+capture+', this, '+args+'))';
             }
+            if (!uri && !method && ancestor==='flash.events.EventDispatcher' && this.generated
+                && this.generated.options.plan.nativeBindings.some(binding=>binding.qname===ancestor&&!!binding.nativeBaseExport)) {
+                const signature=key==='addEventListener'?['String','Function','Boolean','int','Boolean']
+                    :key==='removeEventListener'?['String','Function','Boolean']:undefined;
+                if(!signature||supplied===undefined||supplied<2||supplied>signature.length)
+                    this.fail('native dispatcher super method or arity requires authority');
+                let capture=superMethodNames.get(key);
+                if(!capture){
+                    capture=unique('superMethod'+superMethods.length);
+                    let prototype=baseName+'.prototype';
+                    for(let index=0;index<depth;index++)prototype=intrinsic+'.getPrototypeOf('+prototype+')';
+                    superMethods.push('const '+capture+' = '+intrinsic+'.getOwnPropertyDescriptor('+prototype+', '+JSON.stringify(key)+')!.value;');
+                    superMethodNames.set(key,capture);
+                }
+                // Evaluate all authored arguments once before converting the
+                // native signature from the last argument back to the first,
+                // as observed for AIR callsuper. Keep omitted defaults
+                // owned by the captured native method.
+                const args=unique('superCallArguments');
+                return '((...'+args+': any[]): any => {'+signature.slice(0,supplied).map((type,index)=>
+                    args+'['+index+'] = '+generatedProperty+'.coerceAS3PropertyValue('+args+'['+index+'], '+JSON.stringify(type)+');').reverse().join('')
+                    +'return '+intrinsic+'.apply('+capture+', this, '+args+');})';
+            }
             if (!method) this.fail('super method is absent from complete source ancestry');
             if (key === owner.name) this.fail('super constructor is not an instance method');
             const mods = method.findChild(K.MOD_LIST);

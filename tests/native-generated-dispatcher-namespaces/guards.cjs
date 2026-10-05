@@ -19,7 +19,7 @@ module.exports=config=>{
  const fs=require('fs'),path=require('path'),{evidence}=require('./compile.cjs');
  const original=fs.readFileSync(path.join(evidence,'../source/cases/NamespaceBase.as'),'utf8');
  const held=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'cases.NamespaceBase':{source:original,sourceSha256:hash(original)}}});
- expect('native super remains held',()=>emit(held),/super method is absent from complete source ancestry/);
+ assert.equal(typeof emit(held).moduleSource,'string');guards.push('qualified native listener super calls');
  const update=sources['cases.NamespaceOpened'].source.replace('this.alpha::amount = 3','++this.value');
  const inherited=api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'cases.NamespaceOpened':{source:update,sourceSha256:hash(update)}}});
  expect('inherited namespace integer update remains held',()=>emit(inherited),/namespace update requires an own instance integer member/);
