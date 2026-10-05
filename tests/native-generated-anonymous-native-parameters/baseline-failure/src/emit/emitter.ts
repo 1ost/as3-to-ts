@@ -2361,10 +2361,6 @@ function emitBlock(emitter:Emitter, node:Node):void {
 				const name=value.findChild(NodeKind.NAME).text,parts=signatureBuiltinCoercionParts(emitter,'String');
 				emitter.insert(name+'='+parts[0]+name+parts[1]+';\n');return;
 			}
-			const identity=emitter.generated.lexical.resolveTypeName(type.text);
-			if(identity==='flash.display.DisplayObject'&&emitter.options.nativeDisplayObjectReferenceModule===undefined
-				||identity==='flash.geom.Rectangle'&&emitter.options.nativeRectangleReferenceModule===undefined)
-				throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: anonymous native parameter requires explicit provider qualification');
 			const reference=emitter.references.declaration(value);
 			if(!reference)throw new Error('AS3_REFERENCE_COERCION_UNSUPPORTED: anonymous parameter requires exact source reference');
 			const parts=referenceCoercionParts(emitter,reference);

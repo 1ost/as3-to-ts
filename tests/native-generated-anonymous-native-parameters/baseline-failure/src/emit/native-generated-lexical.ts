@@ -226,7 +226,7 @@ export class NativeGeneratedLexical {
                 for(let p=node.parent;p&&p!==method;p=p.parent)if([K.FUNCTION,K.CATCH].indexOf(p.kind)>=0)fail('nested anonymous callable scope held');
                 // Required String arguments use common storage coercion; rest is
                 // excluded from both the fixed arity and registered Function.length.
-                let referenceParameters=false,nativeParameters=false,stringParameters=false,restParameter=false;
+                let referenceParameters=false,stringParameters=false,restParameter=false;
                 const parameters=node.findChild(K.PARAMETER_LIST).children.map(p=>{
                     const rest=p.findChild(K.REST);
                     if(rest){restParameter=true;return rest.text;}
@@ -235,18 +235,14 @@ export class NativeGeneratedLexical {
                     if(type&&this.resolveTypeName(type.text)==='String')stringParameters=true;
                     else if(type&&type.text!=='*'){
                         const ref=plan.references.find(r=>r.owner===owner&&r.start===type.start&&r.end===type.end);
-                        if(ref&&ref.kind==='native'&&['flash.display.DisplayObject','flash.geom.Rectangle'].indexOf(ref.identity)>=0)nativeParameters=true;
-                        else {
-                            if(!ref||['declaration','private-declaration'].indexOf(ref.kind)<0)fail('anonymous callable requires wildcard parameters or required source Class references');
-                            referenceParameters=true;
-                        }
+                        if(!ref||['declaration','private-declaration'].indexOf(ref.kind)<0)fail('anonymous callable requires wildcard parameters or required source Class references');
+                        referenceParameters=true;
                     }
                     return value.findChild(K.NAME).text;
                 });
                 const returned=node.findChild(K.TYPE),returnType=returned&&this.resolveTypeName(returned.text);
                 if(returned&&['*','void','Object','String','int','Boolean'].indexOf(returnType)<0)fail('anonymous typed return held');
                 if(referenceParameters&&['int','Boolean'].indexOf(returnType)<0)fail('anonymous source Class parameters require int or Boolean return');
-                if(nativeParameters&&(returnType!=='void'||restParameter||staticInitializer))fail('anonymous native parameters require a fixed void callback');
                 // Each anonymous callable owns its locals, while capture lookup
                 // includes every enclosing callable up to the source method.
                 const outerNames:string[]=[];
@@ -272,7 +268,7 @@ export class NativeGeneratedLexical {
                     });
                     n.children.forEach(inspect);
                 };inspect(node.findChild(K.BLOCK));
-                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:enclosing.start,name:fresh('anonymous'),parameters,restParameter,staticInitializer,returned:returnType,typedSignature:referenceParameters||nativeParameters||stringParameters||returnType==='int'||returnType==='Boolean',ownerReceiver:modifiers(method).indexOf('static')<0?fresh('anonymousOwner'):undefined});
+                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:enclosing.start,name:fresh('anonymous'),parameters,restParameter,staticInitializer,returned:returnType,typedSignature:referenceParameters||stringParameters||returnType==='int'||returnType==='Boolean',ownerReceiver:modifiers(method).indexOf('static')<0?fresh('anonymousOwner'):undefined});
                 return;
             }
             if(node.kind===K.FUNCTION&&node.parent!==content){
