@@ -475,28 +475,6 @@ export class NativeGeneratedLexical {
                 &&isFinite(Number(value)))return value;
         }
         const expression=unwrapEncapsulatedExpression(init.children[0]);
-        if(trait.visibility==='private'&&trait.type&&trait.type.text==='Boolean'
-            &&expression&&expression.kind===K.RELATION&&expression.children.length===3
-            &&['<','>','<=','>='].indexOf(expression.children[1].text)>=0){
-            const left=unwrapEncapsulatedExpression(expression.children[0]);
-            const right=unwrapEncapsulatedExpression(expression.children[2]);
-            // Calls execute during cinit, after default Boolean slot publication.
-            if(left.kind===K.CALL||right.kind===K.CALL)return undefined;
-            // AIR folds literal comparisons into the trait value. Publishing a
-            // default false here would change reads/mutations by earlier cinit
-            // statements, even if the eventual comparison result were correct.
-            const literal=(node:Node):number|string|undefined=>{
-                const text=this.classSource(trait.owner).source.slice(node.start,end(node)).trim();
-                if(/^[+-]?(?:0|[1-9]\d*)(?:\.\d*)?(?:[eE][+-]?\d+)?$/.test(text)&&isFinite(Number(text)))return Number(text);
-                if(/^(?:"[^"\\\r\n]*"|'[^'\\\r\n]*')$/.test(text))return text.slice(1,-1);
-                return undefined;
-            };
-            const a=literal(left),b=literal(right),op=expression.children[1].text;
-            // Mixed literals, escaped strings and other constant expressions
-            // retain the existing guard until their early values are qualified.
-            if(a!==undefined&&b!==undefined&&typeof a===typeof b)
-                return String(op==='<'?a<b:op==='>'?a>b:op==='<='?a<=b:a>=b);
-        }
         if(trait.visibility==='protected'&&trait.type&&trait.type.text==='Boolean'){
             if(/^(true|false)$/.test(value))return value;
             // Computed values execute in cinit after default storage publication;
