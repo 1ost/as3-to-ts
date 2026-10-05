@@ -177,8 +177,6 @@ export interface EmitterOptions {
     nativeMouseEventReferenceModule?: string;
     /** Canonical ErrorEvent reference provider for generated constructor parameters. */
     nativeErrorEventReferenceModule?: string;
-    /** Authenticated native KeyboardEvent references for generated is/as operations. */
-    nativeKeyboardEventReferenceModule?: string;
     nativeURLRequestReferenceModule?: string;
     /** Canonical DataEvent is/as/casts, typed returns and data reads. */
     nativeColorTransformReferenceModule?: string;
@@ -624,16 +622,6 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules['flash.net.URLRequest']!==module)
                 throw new Error('AS3_URLREQUEST_REFERENCE_UNSUPPORTED: exact native URLRequest provider binding required');
         }
-        if (this.options.nativeKeyboardEventReferenceModule !== undefined) {
-            const module=generatedModule(this.options.nativeKeyboardEventReferenceModule),reference=this.options.nativeReferenceCoercion;
-            if(!this.generated||!reference)throw new Error('AS3_KEYBOARDEVENT_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
-            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
-            const provider=inputs.providers&&inputs.providers['flash.events.KeyboardEvent'];
-            if(!provider||provider.exportName!=='KeyboardEvent'||provider.nativeBase||provider.nativeInterface
-                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
-                ||!this.options.importModules||this.options.importModules['flash.events.KeyboardEvent']!==module)
-                throw new Error('AS3_KEYBOARDEVENT_REFERENCE_UNSUPPORTED: exact native KeyboardEvent provider binding required');
-        }
         if (this.options.nativeErrorEventReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeErrorEventReferenceModule),reference=this.options.nativeReferenceCoercion;
             if(!this.generated||!reference)throw new Error('AS3_ERROREVENT_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
@@ -872,7 +860,7 @@ export default class Emitter {
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
                 this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
                 this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : [],
-                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.generated ? this.generated.projection.binding.identity : undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeErrorEventSubtypeReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDataEventReferenceModule!==undefined,this.options.nativeColorTransformReferenceModule!==undefined,this.options.nativeDictionaryReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeTextBlockReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeMouseEventReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeURLRequestReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeKeyboardEventReferenceModule!==undefined);
+                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.generated ? this.generated.projection.binding.identity : undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeErrorEventSubtypeReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDataEventReferenceModule!==undefined,this.options.nativeColorTransformReferenceModule!==undefined,this.options.nativeDictionaryReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeTextBlockReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeMouseEventReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeURLRequestReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -5791,23 +5779,6 @@ function emitRelation(emitter:Emitter, node:Node):void {
         if(!method)throw new Error('AS3_URLREQUEST_REFERENCE_UNSUPPORTED: class initializer type operation held');
         const operation=node.children[1].text;
         let helper='__as3_url_request_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
-        emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,generatedModule(emitter.options.nativeComputedTypeTestModule),false);
-        emitter.nativeSourceHelpers.add(helper);
-        emitter.catchup(node.start);emitter.insert(helper+'(');
-        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
-        emitter.insert(',');emitter.skipTo(target.start);visitNode(emitter,target);
-        emitter.catchup(target.end);emitter.insert(')');emitter.skipTo(node.end);return;
-    }
-    if(emitter.options.nativeKeyboardEventReferenceModule!==undefined&&emitter.references&&node.children.length===3
-        &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
-        &&emitter.references.resolve(node.lastChild.text)==='flash.events.KeyboardEvent') {
-        const target=node.lastChild,definition=emitter.findDefInScope(target.text);
-        if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
-            throw new Error('AS3_KEYBOARDEVENT_REFERENCE_UNSUPPORTED: shadowed target requires separate Class authority');
-        let method=node.parent;while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
-        if(!method)throw new Error('AS3_KEYBOARDEVENT_REFERENCE_UNSUPPORTED: class initializer type operation held');
-        const operation=node.children[1].text;
-        let helper='__as3_keyboard_event_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
         emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,generatedModule(emitter.options.nativeComputedTypeTestModule),false);
         emitter.nativeSourceHelpers.add(helper);
         emitter.catchup(node.start);emitter.insert(helper+'(');
