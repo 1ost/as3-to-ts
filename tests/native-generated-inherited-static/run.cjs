@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2-inherited-static-review');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const evidence=path.join(engine,'tests/nativeFlashOracle/inherited-static');
+const evidence=path.join(path.resolve(process.env.AIR_EVIDENCE_REPOSITORY||engine),'tests/nativeFlashOracle/inherited-static');
 const original=require(path.join(evidence,'verify.cjs'));
 const expected=original.map(row=>row.id.startsWith('metadata-')?{...row,value:row.value.replace(/>\s+</g,'><')}:row);
 const receipt=JSON.parse(fs.readFileSync(path.join(evidence,'evidence/receipt.json')));

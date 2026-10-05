@@ -1040,7 +1040,7 @@ export class NativeGeneratedLexical {
                 emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);
                 emitter.insert('))');emitter.skipTo(node.end);return true;
             }
-            if(!found.trait||found.trait.kind!=='variable'||found.trait.static&&!(found.trait.type&&(found.trait.visibility==='private'&&found.trait.type.text==='uint'||found.trait.visibility==='protected'&&found.trait.type.text==='int'))||['private','protected','internal'].indexOf(found.trait.visibility)<0
+            if(!found.trait||found.trait.kind!=='variable'||found.trait.static&&!(found.trait.visibility==='private'&&found.trait.type&&found.trait.type.text==='uint')||['private','protected','internal'].indexOf(found.trait.visibility)<0
                 ||!found.trait.type||['int','uint','Number'].indexOf(found.trait.type.text)<0)
                 fail('lexical numeric update requires qualified numeric variable');
             const delta=node.kind===K.PRE_INC||node.kind===K.POST_INC?'+1':'-1';
@@ -1206,8 +1206,7 @@ export class NativeGeneratedLexical {
         }
         if(operation==='set'&&node.children[1].text==='-=') {
             const ref=found.trait.type&&this.plan.references.find(r=>r.owner===found.trait.owner&&r.start===found.trait.type.start&&r.end===found.trait.type.end);
-            if(found.trait.kind!=='variable'||['private','protected'].indexOf(found.trait.visibility)<0
-                ||found.trait.static&&!(found.trait.visibility==='protected'&&ref&&ref.kind==='intrinsic'&&ref.identity==='int')
+            if(found.trait.kind!=='variable'||['private','protected'].indexOf(found.trait.visibility)<0||found.trait.static
                 ||!ref||ref.kind!=='intrinsic'||['Number','int','uint'].indexOf(ref.identity)<0)
                 fail('lexical subtraction requires qualified private/protected numeric instance variable');
             const module=emitter.options.nativeCallableCoercionModule;
@@ -1220,7 +1219,7 @@ export class NativeGeneratedLexical {
             emitter.catchup(node.start);emitter.insert('(<any>(()=>{const '+receiver+':any=');
             const receiverStart=emitter.output.length;
             if(found.receiver){emitter.skipTo(found.receiver.start);visit(emitter,found.receiver);emitter.catchup(found.receiver.end);}
-            else emitter.insert(found.trait.static?(found.trait.owner===this.owner?emitter.classFactory.value:found.trait.key):implicitReceiver);
+            else emitter.insert(implicitReceiver);
             const writeReceiver=emitter.output.slice(receiverStart);
             emitter.insert(';const '+previous+':number='+this.provider+'.as3GetLexicalMember('+receiver+','+found.trait.access+') as number;const '+value+':number='+previous+'-'+number+'(');
             emitter.skipTo(expressionStart(right));visit(emitter,right);emitter.catchup(right.end);
