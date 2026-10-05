@@ -652,8 +652,26 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         if((!helpers.length&&!privateInterfaces.some(p=>p.declaration.sourceOwner===binding.qname))||!binding.scriptGlobalExport)return;
         // A single native MouseEvent helper preserves its constructor entry and
         // independent event storage across source-unit failures and retries.
+        // An inherited public Class with one root file-private helper retains
+        // its source unit across owner/helper failures when every ancestor is
+        // an ordinary source Class. Native or retrying ancestors, inherited
+        // helpers and ancestor source units still need combined qualification.
+        let stableSourceAncestry=!!binding.base;
+        let sourceParent=bindings.find(parent=>parent.qname===binding.base);
+        const sourceAncestors=new Set<string>([binding.qname]);
+        while(stableSourceAncestry){
+            if(!sourceParent||!sourceParent.scriptGlobalExport||sourceAncestors.has(sourceParent.qname)
+                ||data.classScriptSources&&data.classScriptSources.indexOf(sourceParent.qname)>=0
+                ||privateBindings.some(helper=>helper.declaration.sourceOwner===sourceParent.qname)
+                ||privateInterfaces.some(helper=>helper.declaration.sourceOwner===sourceParent.qname)){
+                stableSourceAncestry=false;break;
+            }
+            sourceAncestors.add(sourceParent.qname);
+            if(!sourceParent.base)break;
+            sourceParent=bindings.find(parent=>parent.qname===sourceParent.base);
+        }
         if(data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0
-            &&(helpers.length!==1||binding.base||helpers.some(helper=>!!helper.base&&!(helper.base==='flash.events.MouseEvent'&&providers[helper.base]&&providers[helper.base].nativeBase==='MouseEvent'))||privateInterfaces.some(item=>item.declaration.sourceOwner===binding.qname)))
+            &&(helpers.length!==1||binding.base&&(!stableSourceAncestry||helpers.some(helper=>!!helper.base))||helpers.some(helper=>!!helper.base&&!(helper.base==='flash.events.MouseEvent'&&providers[helper.base]&&providers[helper.base].nativeBase==='MouseEvent'))||privateInterfaces.some(item=>item.declaration.sourceOwner===binding.qname)))
             fail('multi-declaration Class script retry with additional helpers, ancestry or private interfaces requires qualification');
         lines.push('let __sourceUnit'+index+':<T>(selected:number,factory:(global:object)=>T)=>T;',
             'export function bindSourceUnit'+index+'(run:typeof __sourceUnit'+index+'):void {if(__sourceUnit'+index+')throw new TypeError("Source unit already bound");__sourceUnit'+index+'=run;}');
