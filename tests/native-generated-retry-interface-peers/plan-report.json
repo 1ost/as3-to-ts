@@ -1,0 +1,58 @@
+{
+  "status": "passed",
+  "checks": [
+    "implicit-public-interface-getter-setter-method",
+    "default var value:Number;",
+    "default const value:Number=1;",
+    "default function read():Number {return 1;}",
+    "default function get value():Number {return 1;}",
+    "default function set value(v:Number):void {}",
+    "static var value:Number;",
+    "static const value:Number=1;",
+    "static function read():Number {return 1;}",
+    "static function get value():Number {return 1;}",
+    "static function set value(v:Number):void {}",
+    "internal var value:Number;",
+    "internal const value:Number=1;",
+    "internal function read():Number {return 1;}",
+    "internal function get value():Number {return 1;}",
+    "internal function set value(v:Number):void {}",
+    "internal-on-cases.Root",
+    "internal-on-cases.Retry",
+    "interface-cannot-be-class-script",
+    "missing-interface-implementation",
+    "public-interface-implementation"
+  ],
+  "mutation": "restored-interface-misclassification-rejected",
+  "compilerSha256": "35874eb3309aaa72275d48f05875d06c3d42b6e88923f4c60b4752fed2381621",
+  "runnerSha256": "34e1a094203f51e4f91e9f39b234d69c70645b48acd1c40d36ea675c82269bff",
+  "input": {
+    "scope": "retry-interface-peers",
+    "sources": {
+      "cases.Root": {
+        "source": "package cases { public class Root {} }",
+        "sourceSha256": "ebd86a39d07d326841a7482a9406d69d2fbd0ab74b06484836479fee1fa78327"
+      },
+      "cases.Retry": {
+        "source": "package cases { public class Retry extends Root {} }",
+        "sourceSha256": "52e2c33001e250dcea601beb2505a05aa0e5a157fd629ef48af083e68db2ad15"
+      },
+      "cases.IPeer": {
+        "source": "package cases { public interface IPeer { function get value():Number; function set value(v:Number):void; function read():Number; } }",
+        "sourceSha256": "927750254c09b01fe804b2f77e36cccec62ff32d222dba662bf016d663c576a5"
+      }
+    },
+    "providerModule": "./AS3GeneratedClass",
+    "interfaceProviderModule": "./AS3Type",
+    "lexicalProviderModule": "./AS3LexicalMembers",
+    "scriptGlobalProviderModule": "./AS3ScriptGlobal",
+    "scriptDomainProvider": {
+      "module": "./domain",
+      "exportName": "scriptDomain"
+    },
+    "inheritScriptClasses": true,
+    "classScriptSources": [
+      "cases.Retry"
+    ]
+  }
+}
