@@ -277,6 +277,10 @@ export class NativeNamespaces {
     private candidates(node: Node, name: string): string[] {
         if (name.indexOf('.') >= 0) return [name];
         const owner = this.ancestor(node, NodeKind.PACKAGE);
+        // Generated private declarations are emitted from a selected class AST.
+        // Its retained parents still identify the authenticated source unit.
+        let unit = this.root;
+        while (unit.parent) unit = unit.parent;
         // A compilation unit may contain a second top-level class after the
         // package block.  Its imports live on the root CONTENT node rather
         // than under a PACKAGE, but they still govern that class's namespace
@@ -284,11 +288,11 @@ export class NativeNamespaces {
         // imports preferred and use the enclosing CONTENT imports only for
         // declarations outside a package.
         const content = owner ? owner.findChild(NodeKind.CONTENT)
-            : this.root.findChildren(NodeKind.CONTENT)[0];
+            : unit.findChildren(NodeKind.CONTENT)[0];
         // Top-level declarations after a package block share the compilation
         // unit's imports in AS3. Keep their local imports too, while avoiding
         // duplicate entries when a unit has both forms.
-        const packageNode = this.root.findChild(NodeKind.PACKAGE);
+        const packageNode = unit.findChild(NodeKind.PACKAGE);
         const packageContent = packageNode ? packageNode.findChild(NodeKind.CONTENT) : null;
         const imports = (packageContent ? packageContent.findChildren(NodeKind.IMPORT) : [])
             .concat(content ? content.findChildren(NodeKind.IMPORT) : [])
@@ -406,7 +410,7 @@ export class NativeNamespaces {
                         || mods && mods.children.some(mod => mod.text === 'static'))
                         this.fail('open namespace this requires an instance member receiver');
                 }
-                if (scope.findChildren(NodeKind.USE).length)
+                if (scope !== owner.findChild(NodeKind.CONTENT) && scope.findChildren(NodeKind.USE).length)
                     this.fail('function-local open namespaces require separate resolution');
             }
             for (const cls of this.hierarchy(owner)) {
@@ -494,7 +498,7 @@ export class NativeNamespaces {
             // ancestry error before a namespace member is proven.
         }
         for (let scope = node.parent; scope && scope !== owner; scope = scope.parent) {
-            if (scope.findChildren(NodeKind.USE).length)
+            if (scope !== owner.findChild(NodeKind.CONTENT) && scope.findChildren(NodeKind.USE).length)
                 this.fail('function-local open namespaces require separate resolution');
         }
         const candidates: NamespaceMember[] = [];

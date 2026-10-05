@@ -836,6 +836,8 @@ export class NativeCallableClasses {
         };
         const accessorTypes = new Set<string>();
         cls.members.forEach((member: any) => {
+            // A class-level use-namespace directive leaves an empty TS member.
+            if (member.kind === S.SemicolonClassElement) return;
             const isStatic = member.modifiers && member.modifiers.some((mod: any) => mod.kind === S.StaticKeyword);
             const destination = isStatic ? name : name + '.prototype';
             if (member.kind === S.Constructor) { ctor = member; return; }
