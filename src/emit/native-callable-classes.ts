@@ -913,6 +913,7 @@ export class NativeCallableClasses {
                         &&!(this.fontMetricsReference&&reference.identity==='flash.text.engine.FontMetrics')
                         &&!(this.textBlockReference&&reference.identity==='flash.text.engine.TextBlock')
                         &&!(this.textLineReference&&reference.identity==='flash.text.engine.TextLine')
+                        &&!(this.rectangleReference&&reference.identity==='flash.geom.Rectangle')
                         &&!(this.textJustifierReference&&['TextJustifier','SpaceJustifier','EastAsianJustifier'].some(name=>reference.identity==='flash.text.engine.'+name))
                         &&!(this.contentElementReferences&&['ContentElement','TextElement','GroupElement','GraphicElement'].some(type=>reference.identity==='flash.text.engine.'+type))
                         &&!(this.dateReference&&reference.identity==='Date')
