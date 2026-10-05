@@ -838,7 +838,7 @@ export default class Emitter {
                 !!(this.options.nativeGlobalModules && this.options.nativeGlobalModules.Date),
                 this.options.nativeStringLocalCoercionModule !== undefined,!!(this.generated && this.generated.nativeBase && this.generated.nativeBase.qname==='flash.events.Event'),
                 this.options.nativeXMLModule ? ['XML','XMLList'].filter(name => this.options.nativeGlobalModules && this.options.nativeGlobalModules[name]) : [],
-                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.generated ? this.generated.projection.binding.identity : undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeErrorEventSubtypeReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDataEventReferenceModule!==undefined,this.options.nativeColorTransformReferenceModule!==undefined,this.options.nativeDictionaryReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeTextBlockReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeMouseEventReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined);
+                this.options.nativeDisplayObjectReferenceModule!==undefined,this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.generated ? this.generated.projection.binding.identity : undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeErrorEventSubtypeReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDataEventReferenceModule!==undefined,this.options.nativeColorTransformReferenceModule!==undefined,this.options.nativeDictionaryReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeTextBlockReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeMouseEventReferenceModule!==undefined);
             generatedModule(this.options.nativeClassHelperModules && this.options.nativeClassHelperModules.nativeClass);
             ast = this.references.root;
         }
@@ -5649,23 +5649,6 @@ function emitRelation(emitter:Emitter, node:Node):void {
         if(!method)throw new Error('AS3_DATAEVENT_REFERENCE_UNSUPPORTED: class initializer type operation held');
         const operation=node.children[1].text;
         let helper='__as3_data_event_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
-        emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,generatedModule(emitter.options.nativeComputedTypeTestModule),false);
-        emitter.nativeSourceHelpers.add(helper);
-        emitter.catchup(node.start);emitter.insert(helper+'(');
-        visitNode(emitter,node.children[0]);emitter.catchup(node.children[0].end);
-        emitter.insert(',');emitter.skipTo(target.start);visitNode(emitter,target);
-        emitter.catchup(target.end);emitter.insert(')');emitter.skipTo(node.end);return;
-    }
-    if(emitter.options.nativeErrorEventReferenceModule!==undefined&&emitter.references&&node.children.length===3
-        &&['is','as'].indexOf(node.children[1].text)>=0&&node.lastChild.kind===NodeKind.IDENTIFIER
-        &&emitter.references.resolve(node.lastChild.text)==='flash.events.ErrorEvent') {
-        const target=node.lastChild,definition=emitter.findDefInScope(target.text);
-        if(definition&&(definition.bound||Object.prototype.hasOwnProperty.call(definition,'as3Type')))
-            throw new Error('AS3_ERROREVENT_REFERENCE_UNSUPPORTED: shadowed target requires separate Class authority');
-        let method=node.parent;while(method&&[NodeKind.FUNCTION,NodeKind.GET,NodeKind.SET].indexOf(method.kind)<0)method=method.parent;
-        if(!method)throw new Error('AS3_ERROREVENT_REFERENCE_UNSUPPORTED: class initializer type operation held');
-        const operation=node.children[1].text;
-        let helper='__as3_error_event_base_'+operation;while(emitter.source.indexOf(helper)>=0)helper+='_';
         emitter.ensureImportIdentifier((operation==='is'?'as3Is':'as3As')+' as '+helper,generatedModule(emitter.options.nativeComputedTypeTestModule),false);
         emitter.nativeSourceHelpers.add(helper);
         emitter.catchup(node.start);emitter.insert(helper+'(');
