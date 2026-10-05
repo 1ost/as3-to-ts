@@ -690,6 +690,27 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         Object.keys(ancestry.classes).forEach(qname=>ancestry.classes[qname].members.forEach(member=>{
             if(namespaces.some(binding=>binding.uri===member.uri))keys.set(JSON.stringify([member.uri,member.name]),{uri:member.uri,name:member.name});
         }));
+        // Ancestry contains public package identities only. Private helpers can
+        // introduce their own namespace members; resolve their modifiers in the
+        // authenticated file scope without promoting helpers to public QNames.
+        privateBindings.forEach(binding=>{
+            const owner=nativeSourceUnitNode(units.get(binding.declaration.sourceOwner),binding.declaration);
+            owner.findChild(K.CONTENT).children.forEach(member=>{
+                if([K.FUNCTION,K.GET,K.SET,K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)<0
+                    && !(member.kind===K.TYPE&&member.text==='function'))return;
+                const mods=member.findChild(K.MOD_LIST),qualifiers=mods&&mods.children.filter(mod=>
+                    ['public','private','protected','internal','static','override','final','native','dynamic'].indexOf(mod.text)<0);
+                if(!qualifiers||!qualifiers.length)return;
+                if(qualifiers.length!==1)fail('multiple private member namespace modifiers: '+binding.identity);
+                const qname=resolve(binding.identity,qualifiers[0].text),namespace=namespaces.find(value=>value.qname===qname);
+                if(!namespace)fail('private member requires a planned source namespace: '+binding.identity+':'+qualifiers[0].text);
+                const names=member.kind===K.VAR_LIST||member.kind===K.CONST_LIST
+                    ?member.findChildren(K.NAME_TYPE_INIT).map(value=>value.findChild(K.NAME)):[member.findChild(K.NAME)];
+                if(names.length!==1||!names[0])fail('multiple private namespace fields: '+binding.identity);
+                const key={uri:namespace.uri,name:names[0].text};
+                keys.set(JSON.stringify([key.uri,key.name]),key);
+            });
+        });
         namespaceKeys=Object.freeze(Array.from(keys.keys()).sort().map((identity,index)=>{
             const exported='namespaceKey'+index;
             // Inferred unique symbols type-check on the consumer compiler while
