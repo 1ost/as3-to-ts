@@ -826,18 +826,6 @@ export class NativeGeneratedLexical {
                     // argument before method dispatch, including null failures.
                     return {trait:null,receiver,publicName:name,publicMethod:true,interfaceCall:true};
                 }
-                if(identities.length===1&&identities[0]==='flash.display.DisplayObjectContainer'
-                    &&references.every(r=>r.kind==='native')&&['addEventListener','removeEventListener'].indexOf(name)>=0) {
-                    // Native public listener methods are independent of the caller's
-                    // private namesakes. Common property dispatch retains bound
-                    // closures and evaluates call arguments before null failures.
-                    if(!emitter.options.nativeDisplayObjectContainerReferenceModule
-                        ||!emitter.options.nativeReferenceCoercion||emitter.options.nativeReferenceCoercion.plan!==this.plan
-                        ||emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule)
-                        fail('container listener methods require exact reference and property providers');
-                    if(operation!=='get'&&operation!=='call')fail('container listener method requires read or call');
-                    return {trait:null,receiver,publicName:name,publicMethod:true};
-                }
                 if(lexicalName&&identities.length===1&&identities[0]==='flash.display.MovieClip'
                     &&references.every(r=>r.kind==='native')) {
                     const input=nativeGeneratedDeclarationInputs(this.plan,this.plan.scope);
