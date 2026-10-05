@@ -4018,6 +4018,48 @@ function emitDataEventConstruction(emitter:Emitter,node:Node):boolean {
     args.children.forEach((arg,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
     emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
+/** Canonical native cast authority, excluding lexical functions with the same name. */
+function movieClipCastTarget(emitter:Emitter,node:Node):boolean {
+    if (!emitter.references || emitter.options.nativeMovieClipReferenceModule === undefined
+        || !node || node.kind !== NodeKind.CALL) return false;
+    const target = node.children[0];
+    if (!target || target.kind !== NodeKind.IDENTIFIER
+        || emitter.references.resolve(target.text) !== 'flash.display.MovieClip') return false;
+    const definition = emitter.findDefInScope(target.text);
+    return !(definition && (definition.bound || Object.prototype.hasOwnProperty.call(definition, 'as3Type')))
+        && typeOfBinding(target, emitter.source, []) !== 'lexical';
+}
+function emitMovieClipCast(emitter:Emitter,node:Node):boolean {
+    if (emitter.isNew || !movieClipCastTarget(emitter,node)) return false;
+    const args = node.findChild(NodeKind.ARGUMENTS);
+    if (!args || args.children.length !== 1)
+        throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: MovieClip cast requires exactly one argument');
+    const helper = propertyHelper(emitter,'as3CoerceReference',emitter.references.options.coercionModule);
+    const argument = args.children[0];
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitter.skipTo(getExpressionStart(argument));
+    visitNode(emitter,argument);emitter.catchup(getEffectiveNodeEnd(argument));
+    emitter.insert(','+propertyHelper(emitter,'MovieClip',emitter.options.nativeMovieClipReferenceModule)+'))');
+    emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
+function emitMovieClipCastCall(emitter:Emitter,node:Node):boolean {
+    const callee = node.children[0];
+    if (emitter.isNew || !callee || callee.kind !== NodeKind.DOT || callee.children.length !== 2
+        || !movieClipCastTarget(emitter,unwrapEncapsulatedExpression(callee.children[0]))) return false;
+    const receiver = callee.children[0], member = callee.children[1], args = node.findChild(NodeKind.ARGUMENTS);
+    const invocation = emitter.options.importModules && emitter.options.importModules['compiler.AS3Invocation'];
+    if (!args || member.kind !== NodeKind.LITERAL || !invocation || !emitter.options.nativeSourceErrorModule)
+        throw new Error('AS3_DISPLAY_REFERENCE_UNSUPPORTED: native cast dot call requires invocation and source errors');
+    const call = propertyHelper(emitter,'as3CallValue',invocation);
+    const nullError = propertyHelper(emitter,'createAS3PropertyError',emitter.options.nativeSourceErrorModule);
+    // Native instance dispatch does not require a generated source-property table.
+    // Coerce first; evaluate arguments before receiver lookup, including null errors.
+    emitter.catchup(node.start);
+    emitter.insert('(<any>(function(target:any,values:any[]){if(target===null)throw '+nullError+'("TypeError",1009);return '+call+'(target['+JSON.stringify(member.text)+'],()=>values,target);})(');
+    emitter.skipTo(receiver.start);visitNode(emitter,receiver);emitter.catchup(getEffectiveNodeEnd(receiver));
+    emitter.insert(',[');
+    args.children.forEach((argument,index)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(argument));visitNode(emitter,argument);emitter.catchup(getEffectiveNodeEnd(argument));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
+}
 function emitDataEventCast(emitter:Emitter,node:Node):boolean {
     const callee=unwrapEncapsulatedExpression(node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);
     if(!dataEventTarget(emitter,callee))return false;
@@ -4336,6 +4378,7 @@ function emitCall(emitter:Emitter, node:Node):void {
         });
         emitter.insert(')');emitter.skipTo(getEffectiveNodeEnd(node));return;
     }
+    if (emitMovieClipCastCall(emitter,node) || emitMovieClipCast(emitter,node)) return;
     if (emitDataEventCast(emitter,node) || emitErrorEventSubtypeCast(emitter,node) || emitInterfaceCoercionCall(emitter,node) || emitInterfaceReceiverCall(emitter,node)) return;
     if (emitSourceErrorConstruction(emitter,node)) return;
     if (emitNativeTrace(emitter,node)) return;
@@ -7118,8 +7161,10 @@ function emitDot(emitter:Emitter, node:Node) {
 	const receiver = node.children[0];
     const receiverDefinition = receiver && receiver.kind === NodeKind.IDENTIFIER
         ? emitter.findDefInScope(receiver.text) : null;
-    const receiverType = receiverDefinition && receiverDefinition.type
+    let receiverType = receiverDefinition && receiverDefinition.type
         || emitter.namespaces.receiverType(node);
+    if (!receiverType && movieClipCastTarget(emitter, unwrapEncapsulatedExpression(receiver)))
+        receiverType = 'flash.display.MovieClip';
     if (emitter.namespaces.lowerOpenedAccess(node, receiverType)) {
 		emitNamespaceAccess(emitter, node);
 		return;

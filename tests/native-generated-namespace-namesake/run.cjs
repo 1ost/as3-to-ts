@@ -13,7 +13,7 @@ const out=fs.mkdtempSync(path.join(cache,'run-'));
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const file=folder+'/'+q.replaceAll('.','/')+'.as',bytes=frozen(file);assert.equal(hash(bytes),receipt.artifacts[file.replace(/^evidence\//,'')]);const source=bytes.toString('utf8');return [q,{source,sourceSha256:hash(source)}];}));
 const cohorts={parent:read('evidence/source',['nsname.open','nsname.Target','nsname.Child','nsname.Inherited','nsname.Holder','nsname.Reader'])};
 async function main(){
- const {chromium}=require(require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
+ const {chromium}=require(require.resolve('playwright',{paths:[path.resolve(process.env.OP2_BROWSER_REPOSITORY||'../op2-html5/game-client-laya'),engine]}));
  const browser=await chromium.launch({headless:true}),results=[];
  try{for(const target of ['ES5','ES2015']){
   const dir=path.join(out,target);fs.mkdirSync(dir);
