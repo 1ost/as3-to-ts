@@ -28,6 +28,10 @@ export function generatedProxyNamespace(plan:NativeGeneratedDeclarationPlan,owne
             }
             return cache.get(owner);
         }
+        // Other qualified native roots have no source unit to traverse and
+        // cannot contribute flash_proxy hooks. In particular, ordinary source
+        // namespaces on EventDispatcher descendants are not Proxy namespaces.
+        if(plan.nativeBindings.some(b=>b.qname===binding.base&&!!b.nativeBaseExport))return undefined;
         binding=nativeGeneratedClassDeclaration(plan,binding.base);
     }
     return undefined;

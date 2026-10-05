@@ -13,7 +13,13 @@ export function generatedNamespaceAncestry(plan:NativeGeneratedDeclarationPlan):
     if(!result){
         const input=nativeGeneratedDeclarationInputs(plan,plan.scope),namespaceUris:{[qname:string]:string}={};
         plan.namespaces.forEach(binding=>namespaceUris[binding.qname]=binding.uri);
-        result=createNativeSourceAncestryPlan({sources:input.sources,namespaceUris});
+        // The qualified native EventDispatcher entry has a sealed public
+        // instance surface and no custom namespace traits (retained AIR
+        // reflection in dispatcher-namespaces). A reference-only provider or
+        // a same-named source class does not establish this native boundary.
+        const dispatcher=plan.nativeBindings.some(binding=>binding.qname==='flash.events.EventDispatcher'&&!!binding.nativeBaseExport);
+        result=createNativeSourceAncestryPlan({sources:input.sources,namespaceUris,
+            providerClasses:dispatcher?{'flash.events.EventDispatcher':{dynamic:false,members:[]}}:{}});
         ancestryCache.set(plan,result);
     }
     return result;
