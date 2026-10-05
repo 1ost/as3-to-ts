@@ -931,7 +931,6 @@ export class NativeCallableClasses {
                         &&!(this.bitmapDataReference&&reference.identity==='flash.display.BitmapData')
                         &&!(this.bitmapFilterReference&&['flash.filters.BitmapFilter','flash.filters.ColorMatrixFilter'].indexOf(reference.identity)>=0)
                         &&!(this.dataEventReference&&reference.identity==='flash.events.DataEvent')
-                        &&!(this.errorEventReference&&reference.identity==='flash.events.ErrorEvent')
                         &&!(this.pointReference&&reference.identity==='flash.geom.Point')
                         &&!(this.textFieldReference&&reference.identity==='flash.text.TextField')
                         &&!(this.simpleButtonReference&&reference.identity==='flash.display.SimpleButton')
