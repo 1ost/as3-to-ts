@@ -241,8 +241,8 @@ export class NativeGeneratedLexical {
                     return value.findChild(K.NAME).text;
                 });
                 const returned=node.findChild(K.TYPE),returnType=returned&&this.resolveTypeName(returned.text);
-                if(returned&&['*','void','Object','String','int'].indexOf(returnType)<0)fail('anonymous typed return held');
-                if(referenceParameters&&returnType!=='int')fail('anonymous source Class parameters require int return');
+                if(returned&&['*','void','Object','String','int','Boolean'].indexOf(returnType)<0)fail('anonymous typed return held');
+                if(referenceParameters&&['int','Boolean'].indexOf(returnType)<0)fail('anonymous source Class parameters require int or Boolean return');
                 // Each anonymous callable owns its locals, while capture lookup
                 // includes every enclosing callable up to the source method.
                 const outerNames:string[]=[];
@@ -251,7 +251,7 @@ export class NativeGeneratedLexical {
                 for(let scope=enclosing;scope;){outer(scope);if(scope===method)break;scope=scope.parent;while(scope&&scope!==method&&scope.kind!==K.LAMBDA)scope=scope.parent;}
                 const inspect=(n:Node):void=>{
                     forInTarget(n);
-                    if(['Object','String','int'].indexOf(returnType)>=0&&n.kind===K.RETURN&&!n.children.length)fail('anonymous typed bare return held');
+                    if(['Object','String','int','Boolean'].indexOf(returnType)>=0&&n.kind===K.RETURN&&!n.children.length)fail('anonymous typed bare return held');
                     if(n.kind===K.DOT&&n.children[0].kind===K.IDENTIFIER&&n.children[0].text==='this')fail('anonymous receiver property access held');
                     // Initializer callbacks have no enclosing method-local lowering pass.
                     // Keep local storage and nested closures held until that pass is qualified.
@@ -268,7 +268,7 @@ export class NativeGeneratedLexical {
                     });
                     n.children.forEach(inspect);
                 };inspect(node.findChild(K.BLOCK));
-                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:enclosing.start,name:fresh('anonymous'),parameters,restParameter,staticInitializer,returned:returnType,typedSignature:referenceParameters||stringParameters||returnType==='int',ownerReceiver:modifiers(method).indexOf('static')<0?fresh('anonymousOwner'):undefined});
+                this.anonymousFunctions.push({start:node.start,end:node.end,methodStart:enclosing.start,name:fresh('anonymous'),parameters,restParameter,staticInitializer,returned:returnType,typedSignature:referenceParameters||stringParameters||returnType==='int'||returnType==='Boolean',ownerReceiver:modifiers(method).indexOf('static')<0?fresh('anonymousOwner'):undefined});
                 return;
             }
             if(node.kind===K.FUNCTION&&node.parent!==content){

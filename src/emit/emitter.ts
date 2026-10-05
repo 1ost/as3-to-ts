@@ -1941,6 +1941,9 @@ function emitFunction(emitter:Emitter, node:Node):void {
     // AIR coerces an implicit undefined completion to null for Object and String returns.
     emitter.catchup(body.end-1);emitter.insert('\nreturn null;\n');
    }
+   if(anonymous.returned==='Boolean'){
+    emitter.catchup(body.end-1);emitter.insert('\nreturn false;\n');
+   }
    if(anonymous.returned==='int'){
     emitter.catchup(body.end-1);emitter.insert('\nreturn 0;\n');
    }
@@ -6530,7 +6533,7 @@ function emitReferenceReturn(emitter:Emitter, node:Node):void {
     let owner=node.parent;
     while(owner&&[NodeKind.FUNCTION,NodeKind.LAMBDA,NodeKind.GET,NodeKind.SET].indexOf(owner.kind)<0)owner=owner.parent;
     const anonymous=owner&&emitter.generated&&emitter.generated.lexical.anonymousFunctions.find(fn=>fn.start===owner.start&&fn.end===owner.end);
-    if(anonymous&&['Object','String','int'].indexOf(anonymous.returned)>=0){
+    if(anonymous&&['Object','String','int','Boolean'].indexOf(anonymous.returned)>=0){
         const expression=node.children[0],parts=signatureBuiltinCoercionParts(emitter,anonymous.returned);
         emitter.catchup(getExpressionStart(expression));emitter.insert(parts[0]);
         visitNode(emitter,expression);emitter.catchup(getEffectiveNodeEnd(expression));emitter.insert(parts[1]);return;
