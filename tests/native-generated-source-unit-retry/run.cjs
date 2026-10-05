@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const evidence=path.join(engine,'tests/nativeFlashOracle/source-unit-initializer-retry'),air=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(path.resolve(process.env.AIR_EVIDENCE_REPOSITORY||engine),'tests/nativeFlashOracle/source-unit-initializer-retry'),air=require(path.join(evidence,'verify.cjs'));
 const expected=air;
 const compilerInputs=fs.readdirSync(path.resolve('src'),{recursive:true}).filter(f=>f.endsWith('.ts')).map(f=>{const file=path.resolve('src',f);return {file,sha256:hash(fs.readFileSync(file))};});
 const cache=path.resolve('.cache/native-generated-source-unit-retry');fs.mkdirSync(cache,{recursive:true});
