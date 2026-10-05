@@ -2,13 +2,21 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const api=require('../../lib'),engine=path.resolve(process.env.LAYA_ENGINE_REPOSITORY||'../LayaAir-op2');
 const ts=require(path.join(engine,'node_modules/typescript')),esbuild=require(path.join(engine,'node_modules/esbuild'));
 const hash=v=>crypto.createHash('sha256').update(v).digest('hex');
-const evidence=path.join(path.resolve(process.env.AIR_EVIDENCE_REPOSITORY||engine),'tests/nativeFlashOracle/source-unit-derived-retry'),air=require(path.join(evidence,'verify.cjs'));
+const evidence=path.join(path.resolve(process.env.AIR_EVIDENCE_REPOSITORY||engine),'tests/nativeFlashOracle/source-unit-ancestor-retry'),air=require(path.join(evidence,'verify.cjs'));
 const expected=air;
+const priorArchive=fs.readFileSync(path.resolve('tests/native-generated-source-unit-derived-retry/runtime.json.gz'));
+assert.equal(hash(priorArchive),'b1faeab423b2787af56539456962f6c97e1995662eb5e2de66a216f708335a07');
+const priorPacket=JSON.parse(require('node:zlib').gunzipSync(priorArchive));
+const plannerPath=path.resolve('lib/emit/native-generated-declarations.js'),priorPlanner=priorPacket.files.find(f=>path.resolve(f.file)===plannerPath);
+const plannerBytes=Buffer.from(priorPlanner.base64,'base64');assert.equal(hash(plannerBytes),priorPlanner.sha256);
+const Module=require('node:module'),baselineModule=new Module(plannerPath,module);baselineModule.filename=plannerPath;baselineModule.paths=Module._nodeModulePaths(path.dirname(plannerPath));baselineModule._compile(plannerBytes.toString(),plannerPath);
+const baseline={archiveSha256:hash(priorArchive),plannerSha256:priorPlanner.sha256,plannerBase64:priorPlanner.base64,rejected:[]};
+
 const compilerInputs=['src','lib','utils'].flatMap(dir=>fs.readdirSync(path.resolve(dir),{recursive:true}).filter(f=>/\.(ts|js)$/.test(f)).map(f=>{const file=path.resolve(dir,f);return {file,sha256:hash(fs.readFileSync(file))};}));
-const cache=path.resolve('.cache/native-generated-source-unit-derived-retry');fs.mkdirSync(cache,{recursive:true});
+const cache=path.resolve('.cache/native-generated-source-unit-ancestor-retry');fs.mkdirSync(cache,{recursive:true});
 const out=fs.mkdtempSync(path.join(cache,'run-'));
 const read=(folder,names)=>Object.fromEntries(names.map(q=>{const source=fs.readFileSync(path.join(evidence,folder,q.replaceAll('.','/')+'.as'),'utf8');return [q,{source,sourceSha256:hash(source)}];}));
-const cohorts={parent:read('source',['unitretry.Base','unitretry.Middle','unitretry.IRoot','unitretry.ILeaf','unitretry.Trace','unitretry.OwnerRetry','unitretry.HelperRetry','unitretry.LateOwnerRetry','unitretry.LateHelperRetry'])};
+const cohorts={parent:read('source',['unitretry.Bridge','unitretry.Base','unitretry.Middle','unitretry.IRoot','unitretry.ILeaf','unitretry.Trace','unitretry.OwnerRetry','unitretry.HelperRetry','unitretry.LateOwnerRetry','unitretry.LateHelperRetry'])};
 async function main(){
  const {chromium}=require(process.env.PLAYWRIGHT_MODULE||require.resolve('playwright',{paths:[path.resolve('../op2-html5/game-client-laya'),engine]}));
  const browser=await chromium.launch({headless:true}),results=[];
@@ -26,8 +34,9 @@ async function main(){
   const externalModules=[...Object.values(helpers),sourceError,...modules.map(provider)];
    const nativeProviders={};
    const trace=modulePath(path.join(engine,'src/layaAir/flash/debug/trace.ts'));externalModules.push(trace,...Object.values(nativeProviders).map(p=>p.module));
-   const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,...(process.argv.includes('--internal')?{lexicalProviderModule:provider('AS3LexicalMembers')}:{ }),classScriptSources:Object.keys(sources).filter(q=>!['unitretry.Base','unitretry.Middle','unitretry.IRoot','unitretry.ILeaf'].includes(q))};
+   const input={scope:'class-script-retry-'+cohort,sources,providers:nativeProviders,vectorProviderModule:provider('AS3Vector'),patternProviderModule:provider('AS3StringIntrinsics'),providerModule:provider('AS3GeneratedClass'),interfaceProviderModule:provider('AS3Type'),scriptGlobalProviderModule:provider('AS3ScriptGlobal'),scriptDomainProvider:{module:'./cohortDomain',exportName:'scriptDomain'},inheritScriptClasses:true,...(process.argv.includes('--internal')?{lexicalProviderModule:provider('AS3LexicalMembers')}:{ }),classScriptSources:Object.keys(sources).filter(q=>!['unitretry.Bridge','unitretry.IRoot','unitretry.ILeaf'].includes(q))};
 
+   try{baselineModule.exports.createNativeGeneratedDeclarationPlan(input);assert.fail('Previous planner unexpectedly admitted retry ancestry');}catch(error){assert.match(String(error),/multi-declaration Class script retry .*requires qualification/);baseline.rejected.push({target,error:String(error),sources:Object.fromEntries(Object.entries(sources).map(([q,s])=>[q,s.sourceSha256]))});}
    let plan;try{plan=api.createNativeGeneratedDeclarationPlan(input);}catch(error){fs.writeFileSync(path.join(out,'held.json'),JSON.stringify({input,error:String(error),compilerInputs},null,2));throw error;}
    const definitionsByNamespace={};for(const q of Object.keys(sources)){const parts=q.split('.'),n=parts.pop();(definitionsByNamespace[parts.join('.')]??=[]).push(n);}
    const options={customVisitors:[],definitionsByNamespace,nativeGlobalModules:{trace},nativeVectorTypes:{plan,module:'./__native_declarations'},nativeStringIntrinsicsModule:provider('AS3StringIntrinsics'),nativeStringLocalCoercionModule:provider('AS3String'),nativeEnumeration:{dictionaryModule:provider('Dictionary'),coercionModule:provider('AS3Coercion'),stringModule:provider('AS3String')},importModules:{...Object.fromEntries(Object.entries(nativeProviders).map(([q,p])=>[q,p.module])),'flash.utils.describeType':provider('describeType'),'compiler.AS3Class':provider('AS3Class'),'compiler.AS3Invocation':provider('AS3Invocation')},
@@ -47,9 +56,6 @@ async function main(){
    assert.throws(()=>emitPlan(oldPlan),/script global with static initializer requires retry identity authority/);rejectionGuards++;
    for(const source of [sources['unitretry.OwnerRetry'].source+'\nclass Extra {}',sources['unitretry.OwnerRetry'].source.replace('class LocalHelper {','class LocalHelper extends Trace {'),sources['unitretry.OwnerRetry'].source+'\ninterface Extra {}']){
     assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'unitretry.OwnerRetry':{source,sourceSha256:hash(source)}}}),/multi-declaration Class script retry .*requires qualification/);rejectionGuards++;
-   }
-   for(const q of ['unitretry.Base','unitretry.Middle']){
-    assert.doesNotThrow(()=>api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:[...input.classScriptSources,q]}));
    }
    for(const [q,source]of [
     ['unitretry.Base',sources['unitretry.Base'].source+'\nclass ParentHelper {}'],
@@ -77,7 +83,7 @@ async function main(){
   const built=await build();
   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(dir,'bundle.js'),code);
   const vm=require('node:vm');const execute=async code=>{const context=vm.createContext({console,setTimeout,clearTimeout,AbortController,AbortSignal,DOMException,performance});context.window=context;context.document={};new vm.Script(code).runInContext(context);await context.completion;return JSON.parse(JSON.stringify(context.result));};
-  const node=await execute(code);assert.deepEqual(node.rows,expected);
+  const node=await execute(code);fs.writeFileSync(path.join(dir,'node.json'),JSON.stringify(node,null,2));assert.deepEqual(node.rows,expected);
   const executeWeb=async code=>{const page=await browser.newPage();try{
    await page.route('http://loaded-generated.test/**',route=>route.request().url().endsWith('/bundle.js')?route.fulfill({contentType:'text/javascript',body:code}):route.fulfill({contentType:'text/html',headers:{'Content-Security-Policy':"script-src 'self'"},body:'<!doctype html><body><script src="/bundle.js"></script></body>'}));
    await page.goto('http://loaded-generated.test/');return await page.evaluate(async()=>{try{await globalThis.completion;return {value:JSON.parse(JSON.stringify(globalThis.result))};}catch(error){return {error:String(error)};}});
@@ -88,6 +94,7 @@ async function main(){
    {name:'forget-early-helper-lookup',file:helperFile,from:'unit.helperLookups.set(index,value)',to:'void 0'},
    {name:'discard-failed-source-global',file:engineFile,from:'classScript && factoryThrew && !invalidPublication',to:'classScript && !sourceClasses && factoryThrew && !invalidPublication'},
    {name:'corrupt-derived-constructor-argument',file:factoryFile,from:'as3Add(n, 1)',to:'as3Add(n, 9)'},
+   {name:'erase-parent-retry',file:factoryFile,from:'instantiateAS3ClassScriptUnit(cohortDomain_1.scriptDomain, { "sourceId": "unitretry.Base"',to:'instantiateAS3ScriptUnit(cohortDomain_1.scriptDomain, { "sourceId": "unitretry.Base"'},
    {name:'erase-Function-parameter-intrinsic',file:factoryFile,from:'AS3Property_1.as3CallNamedProperty(fn,',to:'(function(f){return f.call(null);})(fn,'}
   ],mutations=[];
   for(const control of controls){
@@ -97,6 +104,7 @@ async function main(){
    let outcome;try{outcome={value:await execute(changedCode)};}catch(error){outcome={error:String(error)};}
    const webChanged=await executeWeb(changedCode);assert.deepEqual(webChanged,outcome);
    if(control.name==='discard-failed-source-global')assert.match(outcome.error,/failed source function creation context/);
+   else if(control.name==='erase-parent-retry')assert.ok(outcome.error||JSON.stringify(outcome.value.rows)!==JSON.stringify(expected));
    else{assert.equal(outcome.error,undefined);assert.notDeepEqual(outcome.value.rows,expected);}
    mutations.push({name:control.name,node:outcome,web:webChanged,bundleSha256:hash(changedCode)});
   }
@@ -105,7 +113,7 @@ async function main(){
  }}finally{await browser.close();}
  for(const item of compilerInputs)assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  for(const result of results)for(const item of [...result.inputs,...result.typechecks.flatMap(check=>check.inputs)])assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
- fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,cohorts,compilerInputs,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),receiptSha256:hash(fs.readFileSync(path.join(evidence,'evidence/receipt.json'))),held:['Retrying or native ancestors with file-private helpers','Inherited private helpers in derived units','CustomEase integration','Full startup and game account flow']},null,2));
+ fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({results,cohorts,baseline,compilerInputs,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),receiptSha256:hash(fs.readFileSync(path.join(evidence,'evidence-qualified/receipt.json'))),held:['Native ancestors with file-private helpers','Inherited private helpers in derived units','CustomEase integration','Full startup and game account flow']},null,2));
  console.log(JSON.stringify({out,status:'passed',observations:expected.length,targets:2,realms:2}));
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

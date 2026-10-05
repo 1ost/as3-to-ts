@@ -1,3 +1,11 @@
+## Retrying ancestors now separately qualified
+
+The adjacent source-unit-ancestor-retry fixture extends this boundary using
+74 AIR rows. This runner now admits the two ancestor selections formerly rejected;
+it retains nine rejection guards and adds two positive planning checks. The
+original runtime archive remains historical. Current adjacent evidence is retained
+by native-generated-source-unit-ancestor-retry/verify.cjs.
+
 # Inherited public Class and file-private source-unit retry
 
 The maintained TextFlow source combines an inherited public Class with one root
