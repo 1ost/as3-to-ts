@@ -56,15 +56,15 @@ for(const name of names.map(name=>name.split('.').pop())){
  const browser=await chromium.launch({headless:true}),results=[];
  try{for(const target of ['ES5','ES2015']){
   const module=api.emitNativeSourceClassModule({...base,target});
-  fs.writeFileSync(path.join(run,'module.js'),module.moduleSource);
+  fs.writeFileSync(path.join(run,'module-'+target+'.js'),module.moduleSource);
   const generated=[];for(const item of module.generatedSources){const file=path.join(run,item.module+'.ts');fs.writeFileSync(file,item.source);generated.push(file);}
   const defs=['glsl.d.ts','spine.d.ts'].map(f=>path.join(engine,'src/layaAir/tslibs',f));
   const typeOptions={target:modern.ScriptTarget.ES2020,module:modern.ModuleKind.CommonJS,strict:true,strictNullChecks:false,useUnknownInCatchVariables:false,experimentalDecorators:true,noEmit:true,skipLibCheck:true,lib:['lib.es2020.d.ts','lib.dom.d.ts','lib.dom.iterable.d.ts']};
   const diagnostics=modern.getPreEmitDiagnostics(modern.createProgram([...generated,path.join(run,'cohortDomain.ts'),...defs],typeOptions));
   const types=diagnostics.map(d=>({file:d.file?.fileName,code:d.code,message:modern.flattenDiagnosticMessageText(d.messageText,'\n')}));
   fs.writeFileSync(path.join(run,'types-'+target+'.json'),JSON.stringify(types,null,2));assert.deepEqual(types,[]);
-  const driver=fs.readFileSync(path.join(__dirname,'driver.ts'),'utf8').replaceAll('ENGINE',modulePath(engine));fs.writeFileSync(path.join(run,'driver.ts'),driver);
-  const built=await esbuild.build({entryPoints:[path.join(run,'driver.ts')],bundle:true,write:false,platform:'browser',format:'iife',target:'es2020',metafile:true,loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},logLevel:'warning'});
+  const driver=fs.readFileSync(path.join(__dirname,'driver.ts'),'utf8').replaceAll('ENGINE',modulePath(engine)).replace('./module.js','./module-'+target+'.js');fs.writeFileSync(path.join(run,'driver-'+target+'.ts'),driver);
+  const built=await esbuild.build({entryPoints:[path.join(run,'driver-'+target+'.ts')],bundle:true,write:false,platform:'browser',format:'iife',target:'es2020',metafile:true,loader:{'.glsl':'text','.vs':'text','.fs':'text','.wgsl':'text'},logLevel:'warning'});
   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(run,'bundle-'+target+'.js'),code);
   const vm=require('node:vm'),context=vm.createContext({console,performance,setTimeout,clearTimeout,AbortController});new vm.Script(code).runInContext(context);await context.done;
   const node=JSON.parse(JSON.stringify(context.result));
