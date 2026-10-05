@@ -1,0 +1,244 @@
+{
+  "schema": 1,
+  "kind": "readiness-diagnostic-only",
+  "providerPromotion": false,
+  "compilerImplementation": "89d3a1b6d3f85683900d330b2d0b82d85bf83d5b",
+  "engineCommit": "7d0e97587611013bea23e8a7bf36e377763f18a7",
+  "replay": {
+    "file": "tests/native-generated-urlrequest-type-tests/original-replay/report.json.gz",
+    "sha256": "1ee27c548ae95a9e1d779cde7d0634d47e7f980e469be5cce08a0e333f2650ef"
+  },
+  "toolSha256": "6070beb1c4efc749f4db01b3e76c7ac97f6e3fe4a412622c87c9d0bc9059b166",
+  "files": [
+    {
+      "repository": "engine",
+      "file": "src/layaAir/flash/system/Capabilities.ts",
+      "sha256": "f9dcf5009e84b97d73c9f3219016a8ff366255524c952d7a1af1c27e45cd0595"
+    },
+    {
+      "repository": "engine",
+      "file": "src/layaAir/flash/accessibility/AccessibilityImplementation.ts",
+      "sha256": "0d5e59835391fef8e413e6107ce1662089748e9354ff6aaa26565b85f895b4d2"
+    },
+    {
+      "repository": "engine",
+      "file": "src/layaAir/flash/accessibility/AccessibilityProperties.ts",
+      "sha256": "f393796bf1e8efd766cbcf426cd563bc02432549c735d6a4c84d71aec060c751"
+    },
+    {
+      "repository": "engine",
+      "file": "src/layaAir/flash/display/InteractiveObject.ts",
+      "sha256": "1784b67dc3f27d2cbfaefb9c4d67b16934b85924e9a3dfb5491a699b7bff3b90"
+    },
+    {
+      "repository": "compiler",
+      "file": "src/emit/native-generated-lexical.ts",
+      "sha256": "1ff5ed5aa58961d19a1de81187734da2eb330856a8d94fda4eb73c6a16b0f840"
+    },
+    {
+      "repository": "compiler",
+      "file": "src/emit/native-class-initializers.ts",
+      "sha256": "6d231c347c5eb887f51ceb1a38bd6c3791c61043b316431e23b533bc6e11cfac"
+    },
+    {
+      "repository": "compiler",
+      "file": "src/emit/emitter.ts",
+      "sha256": "82bf45f800bf72b85b23e11c3a65d23bf3bd795de91614c063de3e38bad02347"
+    }
+  ],
+  "sourceCount": 1356,
+  "classScriptCount": 95,
+  "references": [
+    {
+      "owner": "flashx.textLayout.compose.StandardFlowComposer",
+      "line": 4,
+      "text": "import flash.system.Capabilities;",
+      "sourceSha256": "ae7347e68c1db88b88134552558ed74e3ecdfb892741f7afbe162321f3859f68"
+    },
+    {
+      "owner": "flashx.textLayout.compose.StandardFlowComposer",
+      "line": 128,
+      "text": "if(textFlow.configuration.enableAccessibility && Capabilities.hasAccessibility)",
+      "sourceSha256": "ae7347e68c1db88b88134552558ed74e3ecdfb892741f7afbe162321f3859f68"
+    },
+    {
+      "owner": "flashx.textLayout.elements.Configuration",
+      "line": 5,
+      "text": "import flash.system.Capabilities;",
+      "sourceSha256": "f6d9b4df8c3014f5f799bfba8ecc60ef435466362e1c999ad48a7c2bef630410"
+    },
+    {
+      "owner": "flashx.textLayout.elements.Configuration",
+      "line": 25,
+      "text": "tlf_internal static const hasTouchScreen:Boolean = playerEnablesArgoFeatures && Capabilities[\"touchScreenType\"] != \"none\";",
+      "sourceSha256": "f6d9b4df8c3014f5f799bfba8ecc60ef435466362e1c999ad48a7c2bef630410"
+    },
+    {
+      "owner": "flashx.textLayout.elements.Configuration",
+      "line": 78,
+      "text": "var _loc3_:Array = Capabilities.version.split(\" \")[1].split(\",\");",
+      "sourceSha256": "f6d9b4df8c3014f5f799bfba8ecc60ef435466362e1c999ad48a7c2bef630410"
+    },
+    {
+      "owner": "flashx.textLayout.elements.InlineGraphicElement",
+      "line": 15,
+      "text": "import flash.system.Capabilities;",
+      "sourceSha256": "a9a5f546e4a84879555910a589294d3ae215578deb9a104a4a96c9fb8b0480ba"
+    },
+    {
+      "owner": "flashx.textLayout.elements.InlineGraphicElement",
+      "line": 54,
+      "text": "private static var isMac:Boolean = Capabilities.os.search(\"Mac OS\") > -1;",
+      "sourceSha256": "a9a5f546e4a84879555910a589294d3ae215578deb9a104a4a96c9fb8b0480ba"
+    }
+  ],
+  "featureGateReferences": [
+    {
+      "owner": "flashx.textLayout.compose.BaseCompose",
+      "line": 402,
+      "text": "this._releaseLineCreationData = param1.configuration.releaseLineCreationData && Configuration.playerEnablesArgoFeatures;",
+      "sourceSha256": "f76bd5b3c906218b063165a1c0f0730c15a3586578295ef3bd42e424834643fb"
+    },
+    {
+      "owner": "flashx.textLayout.compose.BaseCompose",
+      "line": 783,
+      "text": "if(Configuration.playerEnablesArgoFeatures)",
+      "sourceSha256": "f76bd5b3c906218b063165a1c0f0730c15a3586578295ef3bd42e424834643fb"
+    },
+    {
+      "owner": "flashx.textLayout.container.ContainerController",
+      "line": 374,
+      "text": "if(Boolean(this._container) && Configuration.playerEnablesSpicyFeatures)",
+      "sourceSha256": "43cf2f742c9c0899d35c514dbb94adcfcbca822974382d73a12f3d58d6eb9e7c"
+    },
+    {
+      "owner": "flashx.textLayout.container.ContainerController",
+      "line": 1129,
+      "text": "if(Boolean(this._container) && Configuration.playerEnablesSpicyFeatures)",
+      "sourceSha256": "43cf2f742c9c0899d35c514dbb94adcfcbca822974382d73a12f3d58d6eb9e7c"
+    },
+    {
+      "owner": "flashx.textLayout.container.ContainerController",
+      "line": 1750,
+      "text": "if(Configuration.playerEnablesSpicyFeatures && Configuration.hasTouchScreen)",
+      "sourceSha256": "43cf2f742c9c0899d35c514dbb94adcfcbca822974382d73a12f3d58d6eb9e7c"
+    },
+    {
+      "owner": "flashx.textLayout.container.ContainerController",
+      "line": 1775,
+      "text": "if(Configuration.playerEnablesSpicyFeatures && Configuration.hasTouchScreen)",
+      "sourceSha256": "43cf2f742c9c0899d35c514dbb94adcfcbca822974382d73a12f3d58d6eb9e7c"
+    },
+    {
+      "owner": "flashx.textLayout.elements.Configuration",
+      "line": 21,
+      "text": "tlf_internal static const playerEnablesArgoFeatures:Boolean = versionIsAtLeast(10,1);",
+      "sourceSha256": "f6d9b4df8c3014f5f799bfba8ecc60ef435466362e1c999ad48a7c2bef630410"
+    },
+    {
+      "owner": "flashx.textLayout.elements.Configuration",
+      "line": 23,
+      "text": "tlf_internal static const playerEnablesSpicyFeatures:Boolean = versionIsAtLeast(10,2) && new Sprite().hasOwnProperty(\"needsSoftKeyboard\");",
+      "sourceSha256": "f6d9b4df8c3014f5f799bfba8ecc60ef435466362e1c999ad48a7c2bef630410"
+    },
+    {
+      "owner": "flashx.textLayout.elements.Configuration",
+      "line": 25,
+      "text": "tlf_internal static const hasTouchScreen:Boolean = playerEnablesArgoFeatures && Capabilities[\"touchScreenType\"] != \"none\";",
+      "sourceSha256": "f6d9b4df8c3014f5f799bfba8ecc60ef435466362e1c999ad48a7c2bef630410"
+    },
+    {
+      "owner": "flashx.textLayout.elements.ParagraphElement",
+      "line": 499,
+      "text": "if(Configuration.playerEnablesArgoFeatures)",
+      "sourceSha256": "9aeb0b7c5a86f9ca2cc4cd6074533b83b7e4c736c2104cd1181113dec1d4fe23"
+    },
+    {
+      "owner": "flashx.textLayout.elements.ParagraphElement",
+      "line": 537,
+      "text": "else if(GlobalSettings.enableDefaultTabStops && !Configuration.playerEnablesArgoFeatures)",
+      "sourceSha256": "9aeb0b7c5a86f9ca2cc4cd6074533b83b7e4c736c2104cd1181113dec1d4fe23"
+    }
+  ],
+  "nativeHostDiagnostics": [
+    {
+      "host": "no-navigator",
+      "os": "Unknown",
+      "isMac": false,
+      "version": "LAYA 3,4,0,0",
+      "atLeast10_1": false,
+      "atLeast10_2": false,
+      "hasAccessibilityPresent": false,
+      "touchScreenTypePresent": false
+    },
+    {
+      "host": "windows",
+      "os": "Windows",
+      "isMac": false,
+      "version": "LAYA 3,4,0,0",
+      "atLeast10_1": false,
+      "atLeast10_2": false,
+      "hasAccessibilityPresent": false,
+      "touchScreenTypePresent": false
+    },
+    {
+      "host": "mac",
+      "os": "Mac OS",
+      "isMac": true,
+      "version": "LAYA 3,4,0,0",
+      "atLeast10_1": false,
+      "atLeast10_2": false,
+      "hasAccessibilityPresent": false,
+      "touchScreenTypePresent": false
+    },
+    {
+      "host": "android",
+      "os": "Android",
+      "isMac": false,
+      "version": "LAYA 3,4,0,0",
+      "atLeast10_1": false,
+      "atLeast10_2": false,
+      "hasAccessibilityPresent": false,
+      "touchScreenTypePresent": false
+    },
+    {
+      "host": "ios",
+      "os": "iOS",
+      "isMac": false,
+      "version": "LAYA 3,4,0,0",
+      "atLeast10_1": false,
+      "atLeast10_2": false,
+      "hasAccessibilityPresent": false,
+      "touchScreenTypePresent": false
+    },
+    {
+      "host": "linux",
+      "os": "Linux",
+      "isMac": false,
+      "version": "LAYA 3,4,0,0",
+      "atLeast10_1": false,
+      "atLeast10_2": false,
+      "hasAccessibilityPresent": false,
+      "touchScreenTypePresent": false
+    }
+  ],
+  "diagnostics": {
+    "baseline": {
+      "status": "held",
+      "phase": "emission",
+      "message": "AS3_CLASS_INITIALIZER_UNSUPPORTED: unresolved class-value identity: Capabilities"
+    },
+    "unqualifiedProvider": {
+      "status": "held",
+      "phase": "emission",
+      "message": "AS3_GENERATED_LEXICAL_UNSUPPORTED: static lexical primitive initializer requires qualification"
+    }
+  },
+  "qualification": {
+    "AIR": "not-run",
+    "browser": "not-run",
+    "generatedTypeCheck": "not-run",
+    "fullFactory": "not-run",
+    "realH5": "not-run"
+  }
+}
