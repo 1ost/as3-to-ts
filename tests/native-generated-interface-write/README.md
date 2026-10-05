@@ -1,3 +1,7 @@
+Current compiler qualification: numeric += and -= are covered by
+native-generated-interface-compound. The live rejection case now uses *=;
+the original archive remains historical evidence for its pinned compiler.
+
 # Source interface assignments during lexical lowering
 
 Run `npm run tsc`, then `node tests/native-generated-interface-write/run.cjs`.

@@ -51,7 +51,7 @@ async function main(){
     reject(()=>api.emitNativeSourceClassModule({...config,emitterOptions:{...options,nativeReferenceCoercion:{...options.nativeReferenceCoercion,plan:{...plan}}}}),/exact|plan/);
     reject(()=>api.emitNativeSourceClassModule({...config,plan:{...plan}}),/exact planned/);
     emitChanged('ifacewrite.IBase','function set value(n:int):void;','',/interface accessor has no setter/);
-    emitChanged('ifacewrite.Reader','return receiver.value=rhs;','return receiver.value+=rhs;',/interface accessor requires qualified read or assignment/);
+    emitChanged('ifacewrite.Reader','return receiver.value=rhs;','return receiver.value*=rhs;',/interface accessor requires qualified read or assignment/);
     emitChanged('ifacewrite.Reader','return receiver.value=rhs;','return receiver.value();',/interface accessor requires qualified read or assignment/);
     emitChanged('ifacewrite.Reader','return receiver.sink=rhs;','return receiver.sink;',/interface accessor has no getter/);
     assert.equal(rejectionGuards,9);
@@ -102,7 +102,7 @@ async function main(){
  if(process.argv.includes('--baseline')){console.log(JSON.stringify({out,status:'baseline-held',targets:2,runtimeComparisons:0}));return;}
  for(const item of compilerInputs)assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
  for(const result of results)for(const item of [...result.inputs,...result.typechecks.flatMap(check=>check.inputs)])assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
- fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({receiptSha256:hash(frozen('evidence/receipt.json')),results,cohorts,compilerInputs,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),comparison:{generatedSourceRows:28,commonEngineRows:0},held:['Compound interface assignments, calls and computed keys outside this fixture','Complete BaseCompose and full source integration','Full startup and game account flow']},null,2));
+ fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({receiptSha256:hash(frozen('evidence/receipt.json')),results,cohorts,compilerInputs,runnerSha256:hash(fs.readFileSync(__filename)),observerSha256:hash(fs.readFileSync(path.join(__dirname,'observer.ts'))),comparison:{generatedSourceRows:28,commonEngineRows:0},held:['Other compound interface assignments, calls and computed keys outside this fixture','Complete BaseCompose and full source integration','Full startup and game account flow']},null,2));
  console.log(JSON.stringify({out,status:'passed',observations:expected.length,targets:2,realms:2}));
 }
 main().catch(error=>{fs.writeFileSync(path.join(out,'failure.json'),JSON.stringify({message:error.message,stack:String(error.stack),cohorts,compilerInputs,runnerSha256:hash(fs.readFileSync(__filename))},null,2));console.error(error);console.log(JSON.stringify({out,status:'held'}));process.exitCode=1;});

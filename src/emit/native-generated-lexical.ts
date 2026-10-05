@@ -767,7 +767,7 @@ export class NativeGeneratedLexical {
                             &&member.findChild(K.NAME).text===receiver.children[1].text
                             &&member.findChild(K.PARAMETER_LIST).children.length===0);
                         const type=getter&&getter.findChild(K.TYPE);
-                        if(type)references=this.plan.references.filter(r=>r.owner===owner.identity&&(r.kind==='declaration'||r.kind==='private-declaration')
+                        if(type)references=this.plan.references.filter(r=>r.owner===owner.identity&&(r.kind==='declaration'||r.kind==='private-declaration'||r.kind==='interface')
                             &&r.start===type.start&&r.end===type.end);
                     }
                     // The source getter's declared result establishes the public
@@ -784,7 +784,13 @@ export class NativeGeneratedLexical {
                         // Keep inherited public accessor authority separate from
                         // private/protected namesakes. Retain the whole receiver
                         // so assignment captures it once, before RHS evaluation.
-                        return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:!!getter,interfaceWrite:!!setter};
+                        const compound=node.kind===K.ASSIGN&&['+=','-='].indexOf(node.children[1].text)>=0;
+                        const numeric=!!getter&&!!setter&&['int','uint','Number'].indexOf(getter.returnType)>=0;
+                        if(compound&&numeric&&(emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule
+                            ||emitter.options.nativeDynamicPropertyWritesModule!==emitter.generated.propertyModule))
+                            fail('interface compound assignment requires exact read and write property providers');
+                        return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:!!getter,interfaceWrite:!!setter,
+                            publicNumericUpdate:compound&&numeric};
                     }
                 }
                 if(identities.length===1&&references.every(r=>r.kind==='interface')&&interfaceMember(identities[0],name,'method')) {
@@ -1186,7 +1192,8 @@ export class NativeGeneratedLexical {
                     if(!found.interfaceWrite)fail('interface accessor has no setter');
                     if(emitter.options.nativeDynamicPropertyWritesModule!==emitter.generated.propertyModule)
                         fail('interface setter requires exact property provider');
-                }else fail('interface accessor requires qualified read or assignment');
+                }else if(!(operation==='set'&&found.publicNumericUpdate&&['+=','-='].indexOf(node.children[1].text)>=0))
+                    fail('interface accessor requires qualified read or assignment');
             }
             if(found.dynamicRead&&operation!=='get')fail('chained dynamic receiver currently requires a property read');
             if(operation==='set'&&found.publicNumericUpdate&&['+=','-='].indexOf(node.children[1].text)>=0) {
