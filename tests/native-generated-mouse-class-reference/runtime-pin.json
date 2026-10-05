@@ -1,0 +1,21 @@
+{
+  "engine": {
+    "repository": "https://github.com/1ost/LayaAir.git",
+    "branch": "port/op2-mouse-class-reference",
+    "commit": "eceebdf5d3f45963061eb0266e6cf5d183655667"
+  },
+  "compilerImplementation": "81e6a68b85dc990d6e80423051048e226db5cc86",
+  "compilerChanged": false,
+  "qualification": {
+    "sha256": "0341631cb7b6898174b13fbb5dd7707b352dd10484cdf5035e46dfb4430113ff",
+    "bytes": 14871606,
+    "files": 1770,
+    "candidate": false
+  },
+  "engineQualification": {
+    "sha256": "1a3751b2c370142ee48e5fcc6f87d3a6e10307aa3c002f729001f31ff10f007c",
+    "bytes": 11255742,
+    "files": 1570
+  },
+  "productionProviderPromoted": false
+}
