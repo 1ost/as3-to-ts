@@ -202,8 +202,6 @@ export interface EmitterOptions {
     /** Canonical TextBlock references and construction; public dispatch remains separate. */
     nativeTextBlockReferenceModule?: string;
     nativeContextMenuClipboardItemsReferenceModule?: string;
-    /** Qualified nominal FTE ElementFormat reference and return conversion. */
-    nativeElementFormatReferenceModule?: string;
     nativeDisplayObjectReferenceModule?: string;
     nativeMovieClipReferenceModule?: string;
     nativeTextFormatReferenceModule?: string;
@@ -680,20 +678,6 @@ export default class Emitter {
                 ||!this.options.importModules||this.options.importModules['flash.ui.ContextMenuClipboardItems']!==module)
                 throw new Error('AS3_CONTEXT_MENU_CLIPBOARD_REFERENCE_UNSUPPORTED: exact native ContextMenuClipboardItems provider binding required');
         }
-        if (this.options.nativeElementFormatReferenceModule !== undefined) {
-            const module=generatedModule(this.options.nativeElementFormatReferenceModule),reference=this.options.nativeReferenceCoercion;
-            if(!this.generated||!reference)throw new Error('AS3_ELEMENT_FORMAT_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
-            const inputs=nativeGeneratedDeclarationInputs(reference.plan,reference.plan.scope);
-            const provider=inputs.providers&&inputs.providers['flash.text.engine.ElementFormat'];
-            if(!provider||provider.exportName!=='ElementFormat'||provider.nativeBase||provider.nativeInterface
-                ||xmlGlobalProviderModule(provider.module,reference.module)!==module
-                ||!this.options.importModules||this.options.importModules['flash.text.engine.ElementFormat']!==module)
-                throw new Error('AS3_ELEMENT_FORMAT_REFERENCE_UNSUPPORTED: exact native ElementFormat provider binding required');
-            if(!this.options.nativeGeneratedPropertyModule
-                ||this.options.nativeDynamicPropertyReadsModule!==this.options.nativeGeneratedPropertyModule
-                ||this.options.nativeDynamicPropertyWritesModule!==this.options.nativeGeneratedPropertyModule)
-                throw new Error('AS3_ELEMENT_FORMAT_REFERENCE_UNSUPPORTED: common property read/write providers required');
-        }
         if (this.options.nativeTabStopReferenceModule !== undefined) {
             const module=generatedModule(this.options.nativeTabStopReferenceModule),reference=this.options.nativeReferenceCoercion;
             if(!this.generated||!reference)throw new Error('AS3_TABSTOP_REFERENCE_UNSUPPORTED: generated declaration/reference plan required');
@@ -1079,7 +1063,7 @@ export default class Emitter {
 			throw new Error('AS3_LOGICAL_ASSIGNMENT_UNSUPPORTED: receiver capture scope was not emitted');
 		return new NativeCallableClasses(this.source, this.options.nativeCallableClasses,
 			this.options.nativeClassInitialization && this.options.nativeClassInitialization.classes,
-			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeFontMetricsReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeSoundLoaderContextReferenceModule!==undefined,this.options.nativeBitmapDataReferenceModule!==undefined,this.options.nativeDataEventReferenceModule!==undefined,this.options.nativeBitmapFilterReferenceModule!==undefined,this.options.nativeTimerReferenceModule!==undefined,this.options.nativeTextBlockReferenceModule!==undefined,this.options.nativeContextMenuClipboardItemsReferenceModule!==undefined,this.options.nativeElementFormatReferenceModule!==undefined)
+			this.options.nativeCallableMethodBindingModule, this.options.nativeCallableCoercionModule, this.options.nativeCallableMetadata, this.nativeSourceHelpers, this.options.nativeCallableStringModule, this.lexical, this.options.nativeTypedLocalAdditionModule, this.generated, this.options.nativeTypedLocalReferenceModule, this.options.nativeObjectCreationModule, this.options.nativeSourceErrorModule, this.options.nativeDisplayObjectReferenceModule!==undefined, !!(this.options.nativeGlobalModules&&this.options.nativeGlobalModules.Date), this.options.nativeByteArrayReferenceModule!==undefined,this.options.nativeMovieClipReferenceModule!==undefined,this.options.nativeTextFormatReferenceModule!==undefined,this.options.nativeInteractiveObjectReferenceModule!==undefined,this.options.nativeAccessibilityReferenceModule!==undefined,this.options.nativeSpriteValueReferenceModule!==undefined,this.options.nativeSpriteOwnerReferenceModule!==undefined,this.options.nativeLoaderReferenceModule!==undefined,this.options.nativeXMLModule!==undefined,this.options.nativePointReferenceModule!==undefined,this.options.nativeTextFieldReferenceModule!==undefined,this.options.nativeDisplayObjectContainerReferenceModule!==undefined,this.options.nativeSimpleButtonReferenceModule!==undefined,this.options.nativeTabStopReferenceModule!==undefined,this.options.nativeContentElementReferenceModule!==undefined,this.options.nativeRectangleReferenceModule!==undefined,this.options.nativeMatrixReferenceModule!==undefined,this.options.nativeTextLineReferenceModule!==undefined,this.options.nativeErrorEventReferenceModule!==undefined,this.options.nativeFontMetricsReferenceModule!==undefined,this.options.nativeTextJustifierReferenceModule!==undefined,this.options.nativeSoundLoaderContextReferenceModule!==undefined,this.options.nativeBitmapDataReferenceModule!==undefined,this.options.nativeDataEventReferenceModule!==undefined,this.options.nativeBitmapFilterReferenceModule!==undefined,this.options.nativeTimerReferenceModule!==undefined,this.options.nativeTextBlockReferenceModule!==undefined,this.options.nativeContextMenuClipboardItemsReferenceModule!==undefined)
 			.lower(this.headOutput + this.namespaces.keyDeclarations(this.generated&&this.generated.options.plan.namespaceKeys?(uri,name,key)=>{
                 const binding=this.generated.options.plan.namespaceKeys.find(k=>k.uri===uri&&k.name===name);
                 if(!binding){if(uri===generatedProxyUri)return 'const '+key+'=globalThis.Symbol.for('+JSON.stringify('as3.namespace.member@1:'+JSON.stringify([uri,name]))+');\n';this.namespaces.fail('generated namespace key is absent from source plan');}
@@ -4888,17 +4872,6 @@ function dynamicAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!node||[NodeKind.ARRAY_ACCESSOR,NodeKind.DOT].indexOf(node.kind)<0||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
     if(!receiver||!key)return null;
-    // The exact qualified native token owns dispatch as well as coercion. Raw
-    // JavaScript member access leaks host null errors and unbound methods.
-    if(emitter.options.nativeElementFormatReferenceModule!==undefined&&emitter.generated&&emitter.references){
-        const root=unwrapEncapsulatedExpression(receiver);
-        const definition=root.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(root.text);
-        const binding=emitter.generated.options.plan.nativeBindings.find(b=>b.qname==='flash.text.engine.ElementFormat');
-        if(binding&&definition&&!definition.bound&&typeof definition.as3Type==='string'
-            &&emitter.references.type(definition.as3Type)===binding.referenceExport)
-            return {receiver,key,lexical:true,...(node.kind===NodeKind.DOT?{literalKey:key.text}:{})};
-    }
-
     if(node.kind===NodeKind.ARRAY_ACCESSOR&&receiver.kind===NodeKind.IDENTIFIER&&emitter.generated&&emitter.references){
         const definition=emitter.findDefInScope(receiver.text),plan=emitter.generated.options.plan;
         const movie=plan.nativeBindings.find(b=>b.qname==='flash.display.MovieClip');
