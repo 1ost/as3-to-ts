@@ -31,3 +31,8 @@ retains exact sources, generated artifacts, executed mutations and dependency
 hashes. Native-provider interfaces, interface casts and computed receivers are
 not newly qualified by this change. Full-client and real H5 validation remain
 separate work.
+
+The subsequent interface-computed-call qualification admits direct calls. The
+current read runner retains six guards; the historical packet above retains
+its original seven. Current read regression evidence is retained in the call
+qualification packet.

@@ -4464,6 +4464,7 @@ function emitCall(emitter:Emitter, node:Node):void {
 	if (emitArraySortOn(emitter, node)) return;
 	if (emitTweenMigrationCall(emitter, node)) return;
 	if (emitDictionaryPropertyCall(emitter, node)) return;
+    if (emitComputedInterfaceCall(emitter, node)) return;
     if (emitInterfaceMethodCall(emitter, node)) return;
     if (emitInternalDynamicCall(emitter, node)) return;
     if (emitObjectPropertyCall(emitter, node)) return;
@@ -5226,7 +5227,8 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
 /** Computed interface reads retain the caller's lexical namespace set. The
  * interface authenticates the receiver type, not the set of runtime keys:
  * implementation-only members and inherited getters are valid AS3 reads.
- * Keep this out of dynamicAccess so it cannot grant writes/calls/updates. */
+ * Keep this out of dynamicAccess so it cannot grant writes/updates.
+ * Calls opt in separately through emitComputedInterfaceCall. */
 function sourceInterfaceComputedReadAccess(emitter:Emitter,node:Node):DictionaryAccess {
     if(!emitter.generated||!emitter.references||!node||node.kind!==NodeKind.ARRAY_ACCESSOR||node.children.length!==2)return null;
     const receiver=node.children[0],key=node.children[1];
@@ -5306,6 +5308,22 @@ function emitInternalDynamicCall(emitter:Emitter,node:Node):boolean {
     emitter.insert(',()=>[');
     args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
     emitter.insert(']))');emitter.skipTo(node.end);return true;
+}
+
+/** Source interface bracket calls resolve the lexical member before arguments.
+ * Keep the argument thunk so null, missing members and getter/key failures
+ * suppress arguments, while a non-callable value still evaluates them. */
+function emitComputedInterfaceCall(emitter:Emitter,node:Node):boolean {
+    const access=sourceInterfaceComputedReadAccess(emitter,node.children[0]),args=node.findChild(NodeKind.ARGUMENTS);
+    if(!access||!args)return false;
+    if(emitter.isNew)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: computed interface call is not a constructor');
+    if(emitter.options.nativeDynamicPropertyReadsModule===undefined)
+        throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: computed interface calls require read provider');
+    const helper=dynamicHelper(emitter,access,'Call',emitter.options.nativeDynamicPropertyReadsModule);
+    emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');emitDynamicKey(emitter,access);
+    emitter.insert(',()=>[');
+    args.children.forEach((arg:Node,index:number)=>{if(index)emitter.insert(',');emitter.skipTo(getExpressionStart(arg));visitNode(emitter,arg);emitter.catchup(getEffectiveNodeEnd(arg));});
+    emitter.insert(']))');emitter.skipTo(getEffectiveNodeEnd(node));return true;
 }
 
 function emitInterfaceMethodCall(emitter:Emitter,node:Node):boolean {
