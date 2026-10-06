@@ -1,0 +1,863 @@
+import {NativeEmbeddedBinaryInput, NativeEmbeddedBinaryBinding, planNativeEmbeddedBinary} from './native-embedded-binary';
+import Node from '../syntax/node';
+import {NativeGeneratedPrivateDeclarationBinding, NativeGeneratedPrivateInterfaceBinding, planNativePrivateDeclarations, privateDeclarationIdentity} from './native-generated-private-declarations';
+import {NativeSourceUnit, readNativeSourceUnit, nativeSourceUnitAst, nativeSourceUnitNode, NativeSourceUnitDeclaration, nativeSourceUnitResolver, nativeSourceIntrinsicNames} from './native-source-unit';
+import K from '../syntax/nodeKind';
+import parse = require('../parse');
+import {NativePatternLocal, nativePatternLocals} from './native-pattern-locals';
+import {NativeGeneratedInterfaceContracts,projectNativeGeneratedInterfaceContracts} from './native-generated-interface-contracts';
+import {nativeGeneratedInterfaceBoundary} from './native-generated-interface-boundaries';
+import {NativeSourceNamespaceBinding, planNativeSourceNamespaces} from './native-source-namespaces';
+import {createNativeSourceAncestryPlan} from './native-source-ancestry';
+
+export interface NativeGeneratedAuthoredSymbol {
+    /** Exact source= literal in the maintained Embed metadata. */
+    readonly source: string;
+    readonly linkage: string;
+    /** SWF identity from the authenticated asset conversion input. */
+    readonly sourceSha256: string;
+}
+export interface NativeGeneratedDeclarationInput {
+    embeddedBinaryProviderModule?: string;
+    scope: string;
+    providerModule: string;
+    /** Explicit common AS3Type provider; required for source interface tokens. */
+    interfaceProviderModule?: string;
+    /** Explicit common Vector provider for generated specialization identities. */
+    vectorProviderModule?: string;
+    /** Optional explicit script-global provider for generated lexical calls. */
+    scriptGlobalProviderModule?: string;
+    /** Explicit cohort-owned AS3ScriptDomain, allocated by the native loader/bootstrap. */
+    scriptDomainProvider?: {module: string; exportName: string};
+    /** Resolve inherited source Class/type identity before allocating local declarations. */
+    inheritScriptClasses?: true;
+    /** Explicit provider for sealed package-internal lexical membership. */
+    lexicalProviderModule?: string;
+    /** Common String intrinsics for proven nonescaping RegExp literal locals. */
+    patternProviderModule?: string;
+    /** Explicit GreenSock migration storage provider; never a source Class token. */
+    tweenHandleProviderModule?: string;
+    /** Explicit class subset; omission selects all planned source classes. */
+    scriptGlobalSources?: ReadonlyArray<string>;
+    /** Explicit single-Class script units whose failed initializer globals are retained. */
+    classScriptSources?: ReadonlyArray<string>;
+    sources: {[qname: string]: {source: string; sourceSha256: string; referenceOnly?: boolean; authoredSymbol?: NativeGeneratedAuthoredSymbol; embeddedBinary?: {[field:string]:NativeEmbeddedBinaryInput}}};
+    providers?: {[qname: string]: {module: string; exportName: string; nativeBase?: 'Event' | 'MouseEvent' | 'Error' | 'EventDispatcher' | 'Sprite' | 'MovieClip' | 'Proxy' | 'AccessibilityImplementation'; nativeInterface?: true; nativeVector?: true}};
+}
+export interface NativeGeneratedDeclarationBinding {
+    readonly qname: string;
+    readonly base: string | null;
+    readonly tokenExport: string;
+    readonly publishExport: string;
+    readonly lexicalExport: string;
+    readonly scriptGlobalExport?: string;
+    readonly interfaces: ReadonlyArray<string>;
+}
+export interface NativeGeneratedInterfaceBinding {
+    readonly qname: string;
+    readonly bases: ReadonlyArray<string>;
+    readonly tokenExport: string;
+}
+export interface NativeGeneratedReference {
+    readonly owner: string;
+    readonly start: number;
+    readonly end: number;
+    readonly sourceName: string;
+    readonly kind: 'intrinsic' | 'declaration' | 'interface' | 'native' | 'pattern-local' | 'tween-handle-local' | 'private-declaration' | 'unresolved';
+    readonly identity: string;
+}
+export interface NativeGeneratedDeclarationPlan {
+    readonly scope: string;
+    readonly moduleSource: string;
+    readonly embeddedBinary: ReadonlyArray<NativeEmbeddedBinaryBinding>;
+    readonly bindings: ReadonlyArray<NativeGeneratedDeclarationBinding>;
+    readonly interfaces: ReadonlyArray<NativeGeneratedInterfaceBinding>;
+    readonly privateBindings: ReadonlyArray<NativeGeneratedPrivateDeclarationBinding>;
+    readonly privateInterfaces: ReadonlyArray<NativeGeneratedPrivateInterfaceBinding>;
+    /** Source-authenticated URI identities; no runtime Namespace/Class publication. */
+    readonly namespaces: ReadonlyArray<NativeSourceNamespaceBinding>;
+    /** Shared computed keys keep inherited TypeScript members nominally identical. */
+    readonly namespaceKeys?: ReadonlyArray<{readonly uri:string;readonly name:string;readonly exported:string}>;
+    readonly interfaceContracts: NativeGeneratedInterfaceContracts;
+    readonly references: ReadonlyArray<NativeGeneratedReference>;
+    readonly patternLocals: ReadonlyArray<NativePatternLocal>;
+    readonly vectors: ReadonlyArray<{readonly owner:string;readonly start:number;readonly end:number;readonly identity:string;readonly name:string;readonly specExport:string;readonly elementClass?:string;readonly elementNative?:string}>;
+    readonly sourceHashes: {[qname: string]: string};
+    readonly nativeBindings: ReadonlyArray<{readonly qname: string; readonly referenceExport: string; readonly nativeInterface?: true; readonly eventBaseExport?: string; readonly nativeBaseExport?: string; readonly declarationExport?: string}>;
+}
+interface Context {input: NativeGeneratedDeclarationInput; plan: NativeGeneratedDeclarationPlan; units: Map<string, NativeSourceUnit>;}
+const contexts = new WeakMap<object, Context>();
+const builtins = nativeSourceIntrinsicNames;
+function fail(reason: string): never {throw new Error('AS3_GENERATED_DECLARATIONS_UNSUPPORTED: ' + reason);}
+function moduleName(value: string): string {
+    if (typeof value !== 'string' || !value.trim() || /[\x00\r\n]/.test(value)) fail('module specifier');
+    return value;
+}
+function qname(value: string): void {
+    if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(value)) fail('source QName');
+}
+function copy(value: any, active: object[] = []): any {
+    if (value === null || ['string', 'boolean', 'number', 'undefined'].indexOf(typeof value) >= 0) return value;
+    if (typeof value !== 'object' || Object.getPrototypeOf(value) !== Object.prototype
+        && Object.getPrototypeOf(value) !== null && !Array.isArray(value)) fail('plain configuration required');
+    if (active.indexOf(value) >= 0) fail('cyclic configuration');
+    const result: any = Array.isArray(value) ? [] : Object.create(null);
+    Object.keys(value).forEach(key => {
+        const property = Object.getOwnPropertyDescriptor(value, key);
+        if (!property || !('value' in property)) fail('configuration getters are not authority');
+        Object.defineProperty(result, key, {value: copy(property.value, active.concat([value])), enumerable: true});
+    });
+    return Object.freeze(result);
+}
+function normalize(node: Node): void {
+    node.children = node.children.filter(Boolean);
+    node.children.forEach(child => {child.parent = node; normalize(child);});
+}
+function table(value: any): boolean {return value && typeof value === 'object' && !Array.isArray(value);}
+function fields(value: any, allowed: string[]): void {
+    if (Object.keys(value).some(key => allowed.indexOf(key) < 0)) fail('unknown configuration field');
+}
+function hash(source: string): string {return require('crypto').createHash('sha256').update(source).digest('hex');}
+
+function validateAuthoredSymbol(symbol: NativeGeneratedAuthoredSymbol, metadata: string, owner: string): void {
+    if (!table(symbol)) fail('authored symbol record required: ' + owner);
+    fields(symbol, ['source', 'linkage', 'sourceSha256']);
+    if (typeof symbol.source !== 'string' || !symbol.source.trim()
+        || typeof symbol.linkage !== 'string' || !symbol.linkage.trim()
+        || typeof symbol.sourceSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(symbol.sourceSha256))
+        fail('authored symbol source, linkage and SWF hash required: ' + owner);
+    const envelope = /^\[\s*Embed\s*\(([\s\S]*)\)\s*\]$/.exec(metadata);
+    if (!envelope) fail('unsupported Embed metadata: ' + owner);
+    let rest = envelope[1];
+    const attributes: {[name: string]: string} = Object.create(null);
+    while (rest.trim()) {
+        // Metadata is retained as text by the AS3 parser. Admit literal source
+        // and symbol attributes only; never evaluate expressions or escapes.
+        const attribute = /^\s*(source|symbol)\s*=\s*(?:"([^"\\\r\n]*)"|'([^'\\\r\n]*)')\s*(,|$)/.exec(rest);
+        if (!attribute || Object.prototype.hasOwnProperty.call(attributes, attribute[1]))
+            fail('unsupported or duplicate Embed attribute: ' + owner);
+        attributes[attribute[1]] = attribute[2] === undefined ? attribute[3] : attribute[2];
+        rest = rest.slice(attribute[0].length);
+        if (attribute[4] === ',' && !rest.trim()) fail('trailing Embed attribute separator: ' + owner);
+    }
+    if (Object.keys(attributes).length !== 2 || attributes.source !== symbol.source || attributes.symbol !== symbol.linkage)
+        fail('authored symbol differs from maintained Embed metadata: ' + owner);
+}
+
+/**
+ * Plan declaration identities without loading their implementations. This does
+ * not approve constructor/static initialization, reflection or trait emission.
+ * Native bindings retain exact provider constructors; the registrar must still
+ * authenticate their runtime source identity before using them as trait types.
+ */
+export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDeclarationInput): NativeGeneratedDeclarationPlan {
+    const data: NativeGeneratedDeclarationInput = copy(input);
+    if (!data || typeof data.scope !== 'string' || !data.scope.trim()) fail('source scope required');
+    fields(data, ['embeddedBinaryProviderModule', 'scope', 'providerModule', 'interfaceProviderModule', 'vectorProviderModule', 'scriptGlobalProviderModule', 'scriptDomainProvider', 'inheritScriptClasses', 'scriptGlobalSources', 'classScriptSources', 'lexicalProviderModule', 'patternProviderModule', 'tweenHandleProviderModule', 'sources', 'providers']);
+    moduleName(data.providerModule);
+    if(data.embeddedBinaryProviderModule!==undefined)moduleName(data.embeddedBinaryProviderModule);
+    if (data.patternProviderModule !== undefined) moduleName(data.patternProviderModule);
+    if (data.tweenHandleProviderModule !== undefined) moduleName(data.tweenHandleProviderModule);
+    if (data.interfaceProviderModule !== undefined) moduleName(data.interfaceProviderModule);
+    if (data.lexicalProviderModule !== undefined) moduleName(data.lexicalProviderModule);
+    if (data.vectorProviderModule !== undefined) moduleName(data.vectorProviderModule);
+    if (data.scriptGlobalProviderModule !== undefined) moduleName(data.scriptGlobalProviderModule);
+    if (data.scriptDomainProvider !== undefined) {
+        if (!data.scriptGlobalProviderModule || !table(data.scriptDomainProvider)) fail('script domain requires explicit global provider');
+        fields(data.scriptDomainProvider, ['module', 'exportName']);
+        moduleName(data.scriptDomainProvider.module);
+        if (typeof data.scriptDomainProvider.exportName !== 'string' || !/^[A-Za-z_$][\w$]*$/.test(data.scriptDomainProvider.exportName)) fail('script domain export identifier');
+    }
+    if (data.inheritScriptClasses !== undefined && (data.inheritScriptClasses !== true || !data.scriptDomainProvider
+        || !data.scriptGlobalProviderModule))
+        fail('inherited Classes require explicit script cohort');
+    if(data.scriptGlobalSources!==undefined&&(!data.scriptGlobalProviderModule||!Array.isArray(data.scriptGlobalSources)
+        ||new Set(data.scriptGlobalSources).size!==data.scriptGlobalSources.length))fail('script global source selection requires unique names and provider');
+    if(data.classScriptSources!==undefined&&(!data.scriptGlobalProviderModule||!data.scriptDomainProvider||data.lexicalProviderModule&&!data.inheritScriptClasses
+        ||!Array.isArray(data.classScriptSources)||!data.classScriptSources.length
+        ||new Set(data.classScriptSources).size!==data.classScriptSources.length))
+        fail('Class script selection requires unique names, explicit script domain and inherited internal membership');
+    if (!table(data.sources) || !Object.keys(data.sources).length) fail('nonempty exact source table required');
+    if (data.providers !== undefined && !table(data.providers)) fail('provider table required');
+    const providers = data.providers || {}, sourceNames = Object.keys(data.sources).sort(), nativeNames = Object.keys(providers).sort();
+    const roots = new Map<string, Node>(), classes = new Map<string, Node>(), units = new Map<string, NativeSourceUnit>();
+    const sourceHashes: {[qname: string]: string} = Object.create(null);
+    nativeNames.forEach(name => {
+        qname(name);
+        if (sourceNames.indexOf(name) >= 0 || builtins.indexOf(name) >= 0) fail('source/provider or builtin collision: ' + name);
+        const provider = providers[name];
+        if (!table(provider)) fail('provider binding required');
+        fields(provider, ['module', 'exportName','nativeBase','nativeInterface','nativeVector']);
+        if (provider.nativeVector !== undefined && (provider.nativeVector !== true || !((name === 'flash.display.MovieClip' && provider.exportName === 'MovieClip')
+            || (name === 'flash.text.TextField' && provider.exportName === 'TextField')
+            || (name === 'flash.display.SimpleButton' && provider.exportName === 'SimpleButton')
+            || (name === 'flash.text.engine.TabStop' && provider.exportName === 'TabStop')
+            || (['ContentElement','TextElement','GroupElement','GraphicElement'].some(type=>name === 'flash.text.engine.' + type && provider.exportName === type)))
+            || (provider.nativeBase !== undefined && !(name === 'flash.display.MovieClip' && provider.nativeBase === 'MovieClip'))
+            || provider.nativeInterface !== undefined))
+            fail('native Vector requires the qualified MovieClip, TextField, SimpleButton, TabStop or content-family provider');
+        if (provider.nativeInterface !== undefined && (provider.nativeInterface !== true || provider.nativeBase !== undefined || !data.interfaceProviderModule))
+            fail('native interface requires explicit interface provider and cannot be a native Class base');
+        if(provider.nativeBase !== undefined && !((provider.nativeBase === 'Event' && name === 'flash.events.Event' && provider.exportName === 'Event')
+            || (provider.nativeBase === 'MouseEvent' && name === 'flash.events.MouseEvent' && provider.exportName === 'MouseEvent')
+            || (provider.nativeBase === 'Error' && name === 'Error' && provider.exportName === 'Error')
+            || (provider.nativeBase === 'EventDispatcher' && name === 'flash.events.EventDispatcher' && provider.exportName === 'EventDispatcher')
+            || (provider.nativeBase === 'Sprite' && name === 'flash.display.Sprite' && provider.exportName === 'Sprite')
+            || (provider.nativeBase === 'MovieClip' && name === 'flash.display.MovieClip' && provider.exportName === 'MovieClip')
+            || (provider.nativeBase === 'Proxy' && name === 'flash.utils.Proxy' && provider.exportName === 'Proxy')
+            || (provider.nativeBase === 'AccessibilityImplementation' && name === 'flash.accessibility.AccessibilityImplementation' && provider.exportName === 'AccessibilityImplementation')))
+            fail('native base requires the exact supported Event, MouseEvent, Error, EventDispatcher, Sprite, MovieClip, Proxy or AccessibilityImplementation provider');
+        moduleName(provider.module);
+        if (!/^[A-Za-z_$][\w$]*$/.test(provider.exportName)) fail('provider export name');
+    });
+    sourceNames.forEach(name => {
+        qname(name);
+        const record = data.sources[name];
+        if (!table(record) || typeof record.source !== 'string' || hash(record.source) !== record.sourceSha256)
+            fail('exact source bytes/hash required: ' + name);
+        fields(record, ['source', 'sourceSha256', 'referenceOnly', 'authoredSymbol', 'embeddedBinary']);
+        if (record.referenceOnly !== undefined && typeof record.referenceOnly !== 'boolean') fail('referenceOnly must be boolean');
+        let unit: NativeSourceUnit;
+        try {unit = readNativeSourceUnit(name, record.source, record.sourceSha256);}
+        catch (error) {fail(error.message.replace(/^AS3_SOURCE_UNIT_UNSUPPORTED: /, ''));}
+        const ast = nativeSourceUnitAst(unit), root = ast.root, cls = ast.declarations[0] && ast.declarations[0].node;
+        // An embedded display Class needs its authored allocation/child binding
+        // before source fields and super entry. Plain native-base allocation
+        // cannot silently replace that symbol with an empty MovieClip.
+        const embedded = ast.declarations.map(declaration => {
+            const metadata = declaration.node.findChild(K.META_LIST);
+            return {node: declaration.node, items: metadata ? metadata.children.filter(item => /^\[\s*Embed\b/.test(item.text || '')) : []};
+        }).filter(declaration => declaration.items.length);
+        if (record.authoredSymbol !== undefined) {
+            if (record.referenceOnly || embedded.length !== 1 || embedded[0].node !== cls || embedded[0].items.length !== 1 || cls.kind !== K.CLASS)
+                fail('authored symbol requires one implemented public Embed Class: ' + name);
+            validateAuthoredSymbol(record.authoredSymbol, embedded[0].items[0].text, name);
+        } else if (!record.referenceOnly && embedded.length)
+            fail('Embed Class requires authenticated authored symbol construction: ' + name);
+        // Private declarations retain this source unit. Implementation admission
+        // remains gated separately from header/type planning.
+        if (record.referenceOnly && unit.declarations.length !== 1) fail('reference-only source cannot supply private Class implementations');
+        if (record.referenceOnly && unit.namespaces.length) fail('reference-only source cannot supply namespace definitions');
+        units.set(name, unit);
+        roots.set(name, root); if (cls) classes.set(name, cls); sourceHashes[name] = record.sourceSha256;
+    });
+    const namespaces = planNativeSourceNamespaces(units), names = Array.from(classes.keys());
+    namespaces.forEach(binding => {
+        if (nativeNames.indexOf(binding.qname) >= 0 || builtins.indexOf(binding.qname) >= 0)
+            fail('namespace/provider or builtin collision: ' + binding.qname);
+    });
+    const known = (name: string): boolean => names.indexOf(name) >= 0 || nativeNames.indexOf(name) >= 0
+        || namespaces.some(binding => binding.qname === name);
+    const privatePlan = planNativePrivateDeclarations(units, known);
+    const privateBindings = privatePlan.bindings, privateInterfaces = privatePlan.interfaces;
+    const resolvers = new Map<string, (spelling: string) => string>();
+    const resolve = (owner: string, spelling: string): string => {
+        if (!resolvers.has(owner)) {
+            const helper = privateBindings.find(binding => binding.identity === owner) || privateInterfaces.find(binding => binding.identity === owner);
+            const unit = units.get(helper ? helper.declaration.sourceOwner : owner);
+            resolvers.set(owner, plannedUnitResolver(unit, known, true, helper && helper.declaration));
+        }
+        return resolvers.get(owner)(spelling);
+    };
+    if (data.tweenHandleProviderModule && (classes.has('com.greensock.TweenMax') || providers['com.greensock.TweenMax']))
+        fail('TweenMax migration cannot also declare or bind its source Class');
+    const bindings: NativeGeneratedDeclarationBinding[] = [], references: NativeGeneratedReference[] = [];
+    // Internal contract view includes private keys; the public plan table below does not.
+    const interfaces: NativeGeneratedInterfaceBinding[] = privateInterfaces.map(binding =>
+        Object.freeze({qname: binding.identity, bases: binding.bases, tokenExport: binding.tokenExport}));
+    if (privateInterfaces.length && !data.interfaceProviderModule) fail('explicit source interface provider required for file-private interfaces');
+    names.forEach(owner => {
+        const node = classes.get(owner);
+        if (node.kind !== K.INTERFACE) return;
+        if (!data.interfaceProviderModule) fail('explicit source interface provider required: ' + owner);
+        if (data.sources[owner].referenceOnly) fail('interface cannot be reference-only: ' + owner);
+        const bases = node.findChildren(K.EXTENDS).map(base => resolve(owner, base.qualifiedName || base.text));
+        if (new Set(bases).size !== bases.length) fail('duplicate interface base: ' + owner);
+        bases.forEach(base => {
+            if(providers[base]&&providers[base].nativeInterface&&nativeGeneratedInterfaceBoundary(base))return;
+            if (!classes.has(base) || classes.get(base).kind !== K.INTERFACE || data.sources[base].referenceOnly)
+                fail('interface base requires exact source interface: ' + owner + ':' + base);
+        });
+        interfaces.push(Object.freeze({qname: owner, bases: Object.freeze(bases), tokenExport: 'interface' + interfaces.length}));
+    });
+    privateInterfaces.forEach(binding => binding.bases.forEach(base => {
+        if (!interfaces.some(item => item.qname === base)
+            && !(providers[base] && providers[base].nativeInterface && nativeGeneratedInterfaceBoundary(base)))
+            fail('file-private interface base requires exact source interface: ' + binding.identity + ':' + base);
+    }));
+    privateBindings.forEach(binding => binding.interfaces.forEach(name => {
+        if (!interfaces.some(item => item.qname === name))
+            fail('file-private implements requires exact source interface: ' + binding.identity + ':' + name);
+    }));
+    names.forEach(owner => {
+        const cls = classes.get(owner);
+        if (cls.kind === K.INTERFACE) return;
+        if (!data.sources[owner].referenceOnly) {
+            const implemented = cls.findChild(K.IMPLEMENTS_LIST);
+            const declaredInterfaces = implemented ? implemented.children.map(node => resolve(owner,node.qualifiedName || node.text)) : [];
+            if (new Set(declaredInterfaces).size !== declaredInterfaces.length) fail('duplicate implements declaration: ' + owner);
+            declaredInterfaces.forEach(name => {
+                if (!interfaces.some(binding => binding.qname === name)
+                    && !(providers[name] && providers[name].nativeInterface && nativeGeneratedInterfaceBoundary(name)))
+                    fail('interface declaration authority required: ' + owner + ':' + name);
+            });
+            const baseNode = cls.findChild(K.EXTENDS), base = baseNode ? resolve(owner, baseNode.qualifiedName || baseNode.text) : 'Object';
+            if (base !== 'Object' && (!classes.has(base) || data.sources[base].referenceOnly || classes.get(base).kind !== K.CLASS) && !(providers[base] && (providers[base].nativeBase === 'Event' || providers[base].nativeBase === 'MouseEvent' || providers[base].nativeBase === 'Error' || providers[base].nativeBase === 'EventDispatcher' || providers[base].nativeBase === 'Sprite' || providers[base].nativeBase === 'MovieClip' || providers[base].nativeBase === 'Proxy' || providers[base].nativeBase === 'AccessibilityImplementation')))
+                fail('base requires a planned source declaration: ' + owner + ':' + base);
+            bindings.push(Object.freeze({qname: owner, base: base === 'Object' ? null : base,
+                tokenExport: 'type' + bindings.length, publishExport: 'publish' + bindings.length, lexicalExport: 'lexical' + bindings.length,
+                ...(data.scriptGlobalProviderModule&&(!data.scriptGlobalSources||data.scriptGlobalSources.indexOf(owner)>=0) ? {scriptGlobalExport:'publishScript'+bindings.length} : {}),
+                interfaces: Object.freeze(declaredInterfaces)}));
+        }
+    });
+    const authoredNames = sourceNames.filter(name => data.sources[name].authoredSymbol !== undefined);
+    authoredNames.forEach(owner => {
+        let current = owner;
+        const seen = new Set<string>();
+        while (classes.has(current)) {
+            if (seen.has(current)) fail('cyclic authored source ancestry: ' + owner);
+            seen.add(current);
+            const binding = bindings.find(value => value.qname === current);
+            current = binding && binding.base;
+        }
+        if (current !== 'flash.display.MovieClip' || !providers[current] || providers[current].nativeBase !== 'MovieClip')
+            fail('authored symbol requires the generated MovieClip construction provider: ' + owner);
+    });
+    const patternLocals: NativePatternLocal[] = [];
+    if(data.patternProviderModule) names.forEach(owner => {
+        if(!data.sources[owner].referenceOnly && !providers.RegExp && !classes.has('RegExp'))
+            patternLocals.push(...nativePatternLocals(classes.get(owner),owner,data.sources[owner].source,name=>resolve(owner,name)));
+    });
+    names.forEach(owner => {
+        const walk = (node: Node): void => {
+            // Legacy interface method signatures have a TYPE-kind wrapper named
+            // 'function'; only its actual return/parameter children are types.
+            if (node.kind === K.TYPE && node.text !== 'function') {
+                const spelling = node.qualifiedName || node.text || '*', identity = resolve(owner, spelling);
+                let tweenLocal = false;
+                if (data.tweenHandleProviderModule && identity === 'com.greensock.TweenMax'
+                    && !providers[identity] && !classes.has(identity) && node.parent && node.parent.kind === K.NAME_TYPE_INIT
+                    && node.parent.parent && [K.VAR_LIST,K.VAR].indexOf(node.parent.parent.kind) >= 0) {
+                    let member = node.parent.parent;
+                    while (member && [K.FUNCTION,K.GET,K.SET].indexOf(member.kind) < 0) member = member.parent;
+                    tweenLocal = !!member && member.parent === classes.get(owner).findChild(K.CONTENT)
+                        && member.findChild(K.NAME).text !== classes.get(owner).findChild(K.NAME).text;
+                }
+                const kind: NativeGeneratedReference['kind'] = builtins.indexOf(identity) >= 0 ? 'intrinsic' : bindings.some(binding => binding.qname === identity)
+                    ? 'declaration' : interfaces.some(binding => binding.qname === identity) ? 'interface'
+                    : nativeNames.indexOf(identity) >= 0 ? 'native'
+                    : patternLocals.some(p=>p.owner===owner&&p.typeStart===node.start&&p.typeEnd===node.end) ? 'pattern-local'
+                    : privateBindings.some(binding => binding.identity === identity) ? 'private-declaration'
+                    : tweenLocal ? 'tween-handle-local' : 'unresolved';
+                references.push(Object.freeze({owner, start: node.start, end: node.end, sourceName: spelling, kind, identity}));
+            }
+            node.children.forEach(walk);
+        };
+        walk(classes.get(owner));
+    });
+    privatePlan.references.forEach(reference => {
+        const identity = typeof reference.identity === 'string' ? reference.identity : privateDeclarationIdentity(reference.identity);
+        const kind: NativeGeneratedReference['kind'] = builtins.indexOf(identity) >= 0 ? 'intrinsic'
+            : privateBindings.some(binding => binding.identity === identity) ? 'private-declaration'
+            : bindings.some(binding => binding.qname === identity) ? 'declaration'
+            : interfaces.some(binding => binding.qname === identity) ? 'interface'
+            : nativeNames.indexOf(identity) >= 0 ? 'native' : 'unresolved';
+        references.push(Object.freeze({owner: reference.owner, start: reference.start, end: reference.end,
+            sourceName: reference.spelling, kind, identity}));
+    });
+    if(data.scriptGlobalSources&&data.scriptGlobalSources.some(name=>!bindings.some(binding=>binding.qname===name)))
+        fail('script global source must be a planned class');
+    if(data.inheritScriptClasses && bindings.some(binding=>!binding.scriptGlobalExport))
+        fail('inherited Class selection requires all class script globals');
+    if(data.classScriptSources)data.classScriptSources.forEach(name=>{
+        const binding=bindings.find(value=>value.qname===name);
+        if(!binding||!binding.scriptGlobalExport)fail('Class script selection requires a planned class with script global');
+        const dispatcherBase=binding.base==='flash.events.EventDispatcher'
+            &&providers[binding.base]&&providers[binding.base].nativeBase==='EventDispatcher';
+        const accessibilityBase=binding.base==='flash.accessibility.AccessibilityImplementation'
+            &&providers[binding.base]&&providers[binding.base].nativeBase==='AccessibilityImplementation';
+        // Root and direct EventDispatcher generations retain their package
+        // capability, internal closures and independent lexical/native storage
+        // across failures. Other ancestry with internal declarations remains held.
+        if(data.lexicalProviderModule&&binding.base&&!dispatcherBase){
+            const pkg=name.slice(0,name.lastIndexOf('.'));
+            classes.forEach((cls,qname)=>{
+                if(qname.slice(0,qname.lastIndexOf('.'))!==pkg)return;
+                // Interface signatures are implicitly public, not package-internal
+                // class traits. Their contracts are validated separately below.
+                if(cls.kind===K.INTERFACE)return;
+                if(cls.findChild(K.CONTENT).children.some(member=>{
+                    if([K.VAR_LIST,K.CONST_LIST,K.FUNCTION,K.GET,K.SET].indexOf(member.kind)<0)return false;
+                    const mods=member.findChild(K.MOD_LIST);
+                    // Authenticated named namespace traits are not package-internal.
+                    // Do not admit unknown/custom spellings or an explicit internal
+                    // visibility through this exclusion; later trait projection still
+                    // validates the namespace signature and source member authority.
+                    const custom=mods&&mods.children.filter(mod=>['public','private','protected','internal','static','override','final'].indexOf(mod.text)<0);
+                    if(custom&&custom.length===1&&!mods.children.some(mod=>mod.text==='internal')
+                        &&namespaces.some(ns=>ns.qname===resolve(qname,custom[0].text)))return false;
+                    return !mods||!mods.children.some(mod=>['public','private','protected'].indexOf(mod.text)>=0);
+                }))fail('Class script retries with internal declarations in their package require qualification');
+            });
+        }
+        if(binding.base){
+            // Direct EventDispatcher generations retain the canonical native
+            // constructor entry and independent event storage across retries.
+            // Direct AccessibilityImplementation generations retain independent
+            // stub/errno storage and source overrides across retries. Its source
+            // descendants and package-internal retry declarations remain held.
+            // Other direct native bases still require their own qualification.
+            // Source-only ancestry resolves each parent before publishing the
+            // child. Failed parent generations remain retryable; a successfully
+            // published parent is retained when a later child initializer fails.
+            // Native Sprite ancestry retains its separate stable-parent contract.
+            let parent=bindings.find(value=>value.qname===binding.base);
+            const seen=new Set<string>([name]);
+            let stableParent=false,retryingParent=false;
+            while(parent&&parent.scriptGlobalExport&&!seen.has(parent.qname)){
+                seen.add(parent.qname);
+                retryingParent=retryingParent||data.classScriptSources.indexOf(parent.qname)>=0;
+                if(!parent.base){stableParent=true;break;}
+                // Retryable source generations preserve the canonical native
+                // EventDispatcher entry and per-instance listener storage.
+                if(parent.base==='flash.events.EventDispatcher'&&providers[parent.base]
+                    &&providers[parent.base].nativeBase==='EventDispatcher'){stableParent=true;break;}
+                if(parent.base==='flash.display.Sprite'&&providers[parent.base]
+                    &&providers[parent.base].nativeBase==='Sprite'&&!retryingParent){stableParent=true;break;}
+                parent=bindings.find(value=>value.qname===parent.base);
+            }
+            if(!dispatcherBase&&!accessibilityBase&&!stableParent)
+                fail('derived Class script requires a non-retrying source root parent');
+        }
+    });
+    const embeddedBinary:NativeEmbeddedBinaryBinding[]=[];
+    for(const owner of sourceNames){
+        const record=data.sources[owner];
+        if(record.referenceOnly){if(record.embeddedBinary)fail('reference-only binary Embed implementation');continue;}
+        const cls=classes.get(owner);
+        if(!cls||cls.kind!==K.CLASS){if(record.embeddedBinary)fail('binary Embed requires a source Class');continue;}
+        for(const item of planNativeEmbeddedBinary(owner,cls,record.embeddedBinary)){
+            const ref=references.find(r=>r.owner===owner&&r.start>=item.start&&r.end<=item.end&&r.sourceName==='Class');
+            if(!ref||ref.kind!=='intrinsic'||ref.identity!=='Class')fail('embedded field requires intrinsic Class type');
+            if(!data.embeddedBinaryProviderModule||!data.scriptDomainProvider)fail('binary Embed requires explicit provider and script domain');
+            const same=embeddedBinary.find(b=>b.symbol===item.symbol);
+            if(same&&(same.className!==item.className||same.sourceSha256!==item.sourceSha256||same.definitionSha256!==item.definitionSha256))fail('conflicting binary symbol binding');
+            if(embeddedBinary.some(b=>b.symbol!==item.symbol&&b.className===item.className))fail('binary Class name collision');
+            embeddedBinary.push(Object.freeze({...item,getterExport:same?same.getterExport:'embeddedBinary'+embeddedBinary.length}));
+        }
+    }
+    const lines = ['// Compiler-only declaration identities; no source class implementation imports.',
+        'import {declareAS3ReferenceType} from ' + JSON.stringify(data.providerModule) + ';'];
+    if (authoredNames.length) lines.push('import {requireGeneratedFlashMovieClipSymbol as __requireAuthoredSymbol} from '
+        + JSON.stringify(providers['flash.display.MovieClip'].module) + ';');
+    if (references.some(ref => ref.kind === 'tween-handle-local')) lines.push(
+        'import {coerceFlashTweenMaxHandle as __tweenHandleCoerce} from ' + JSON.stringify(data.tweenHandleProviderModule) + ';',
+        'export const coerceTweenMaxHandle=__tweenHandleCoerce;');
+    if(data.scriptGlobalProviderModule) {
+        lines.push('import {instantiateAS3ScriptUnit'+(data.classScriptSources?',instantiateAS3ClassScriptUnit':'')+(data.inheritScriptClasses?',selectAS3ScriptDomainClass,selectAS3ScriptDomainType':'')+(data.scriptDomainProvider?'':',createAS3ScriptDomain')+'} from '+JSON.stringify(data.scriptGlobalProviderModule)+';');
+        lines.push(data.scriptDomainProvider
+            ? 'import {'+data.scriptDomainProvider.exportName+' as __scriptDomain} from '+JSON.stringify(data.scriptDomainProvider.module)+';'
+            : 'const __scriptDomain=createAS3ScriptDomain();');
+    }
+    if(embeddedBinary.length){
+        lines.push('import {resolveAS3EmbeddedByteArrayClass as __resolveEmbeddedBinary} from '+JSON.stringify(data.embeddedBinaryProviderModule)+';');
+        const seen=new Set<string>();
+        for(const item of embeddedBinary)if(!seen.has(item.symbol)){
+            seen.add(item.symbol);
+            lines.push('const __'+item.getterExport+'Bytes=new Uint8Array('+JSON.stringify(item.payload)+');');
+            lines.push('export const '+item.getterExport+'=()=>__resolveEmbeddedBinary(__scriptDomain,'+JSON.stringify(item.symbol)+','+JSON.stringify(item.className)+',__'+item.getterExport+'Bytes);');
+        }
+    }
+    if (interfaces.length || bindings.some(binding=>binding.interfaces.length>0)) lines.push('import {defineAS3Interface,registerAS3Class'+(data.inheritScriptClasses?',isAS3Interface':'')+'} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
+    if (nativeNames.some(name => providers[name].nativeInterface))
+        lines.push('import {isAS3Interface as __isNativeInterface} from ' + JSON.stringify(data.interfaceProviderModule) + ';');
+    const emittedInterfaces = new Set<string>(), activeInterfaces = new Set<string>();
+    const addInterface = (binding: NativeGeneratedInterfaceBinding): void => {
+        if (emittedInterfaces.has(binding.qname)) return;
+        if (activeInterfaces.has(binding.qname)) fail('cyclic source interface inheritance: ' + binding.qname);
+        activeInterfaces.add(binding.qname);
+        const parents = binding.bases.map(name => interfaces.find(value => value.qname === name)).filter(Boolean);
+        parents.forEach(addInterface);
+        const helper = privateInterfaces.find(item => item.identity === binding.qname);
+        const name = JSON.stringify(helper ? helper.declaration.reflectedName : binding.qname.replace(/\.([^.]*)$/, '::$1'));
+        const tokens=binding.bases.map(base=>{
+            const source=interfaces.find(value=>value.qname===base);
+            return source?source.tokenExport:'native'+nativeNames.indexOf(base);
+        });
+        const create = 'defineAS3Interface<unknown>('+name+',['+tokens.join(',')+'])';
+        lines.push('export const ' + binding.tokenExport + '=' + (data.inheritScriptClasses && !helper
+            ? '(()=>{const selected=selectAS3ScriptDomainType(__scriptDomain,'+name+');if(selected){if(!isAS3Interface(selected.declaration))throw new TypeError("Inherited definition is not an interface");return selected.declaration;}return '+create+';})()'
+            : create) + ';');
+        activeInterfaces.delete(binding.qname); emittedInterfaces.add(binding.qname);
+    };
+    const vectors:Array<NativeGeneratedDeclarationPlan['vectors'][number]>=[];
+    const vectorLines:string[]=[];
+    if(data.vectorProviderModule){
+        lines.push('import {as3VectorInterfaceSpec,as3VectorPrimitiveSpec,as3VectorDeclarationSpec,as3VectorCanonicalSpec} from '+JSON.stringify(data.vectorProviderModule)+';');
+        const exports=new Map<string,string>();
+        names.concat(privateBindings.map(binding => binding.identity), privateInterfaces.map(binding => binding.identity)).forEach(owner=>{
+            const walk=(node:Node):void=>{
+                if(node.kind===K.VECTOR){
+                    const construction=node.parent&&node.parent.kind===K.CALL&&node.parent.children[0]===node
+                        &&node.parent.parent&&node.parent.parent.kind===K.NEW;
+                    const literal=node.parent&&node.parent.kind===K.SHORT_VECTOR&&node.parent.parent&&node.parent.parent.kind===K.NEW;
+                    const conversion=node.parent&&node.parent.kind===K.CALL&&node.parent.children[0]===node;
+                    if(!construction&&!literal&&!conversion&&(!node.parent||[K.NAME_TYPE_INIT,K.FUNCTION,K.GET,K.TYPE].indexOf(node.parent.kind)<0))
+                        fail('Vector expression conversion requires separate qualification');
+                    const element=node.findChild(K.TYPE);
+                    if(!element||node.children.length!==1)fail('nested Vector specialization publication requires qualification');
+                    const identity=resolve(owner,element.qualifiedName||element.text);
+                    if(literal&&(identity!=='Class'||classes.has(identity)||providers[identity]))fail('Vector literal requires intrinsic Class element');
+                    const contract=interfaces.find(i=>i.qname===identity);
+                    const privateContract=privateInterfaces.find(i=>i.identity===identity);
+                    const elementClass=bindings.find(b=>b.qname===identity);
+                    const elementPrivate=privateBindings.find(b=>b.identity===identity);
+                    const elementNative=providers[identity]&&providers[identity].nativeVector;
+                    if(!contract&&!elementClass&&!elementPrivate&&!elementNative&&['*','int','uint','Number','Boolean','String','Object','Function','Class'].indexOf(identity)<0)
+                        fail('Vector element publication requires interface, planned source class or qualified primitive: '+identity);
+                    let specExport=exports.get(identity);
+                    if(!specExport){
+                        specExport='vector'+exports.size;exports.set(identity,specExport);
+                        // The runtime name cannot infer T from a string argument.
+                        // Preserve known scalar element types for conversion and
+                        // construction expressions passed directly to typed APIs.
+                        const primitiveType=identity==='String'?'string':identity==='Boolean'?'boolean':
+                            ['int','uint','Number'].indexOf(identity)>=0?'number':null;
+                        vectorLines.push('export const '+specExport+'='+(contract?'as3VectorInterfaceSpec('+contract.tokenExport+')':elementClass?'as3VectorDeclarationSpec('+elementClass.tokenExport+')':elementPrivate?'as3VectorDeclarationSpec('+elementPrivate.tokenExport+')':elementNative?'as3VectorCanonicalSpec('+JSON.stringify(identity.replace(/\.([^.]*)$/,'::$1'))+',__vectorNative'+nativeNames.indexOf(identity)+')':'as3VectorPrimitiveSpec'+(primitiveType?'<'+primitiveType+'>':'')+'('+JSON.stringify(identity)+')')+';');
+                    }
+                    vectors.push(Object.freeze({owner,start:node.start,end:node.end,identity:'Vector.<'+identity+'>',
+                        name:'__AS3__.vec::Vector.<'+(elementPrivate?elementPrivate.declaration.reflectedName:privateContract?privateContract.declaration.reflectedName:identity.replace(/\.([^.]*)$/,'::$1'))+'>',specExport,...(elementClass||elementPrivate?{elementClass:identity}:{}),...(elementNative?{elementNative:identity}:{})}));
+                }
+                node.children.forEach(walk);
+            };
+            const helper = privateBindings.find(binding => binding.identity === owner) || privateInterfaces.find(binding => binding.identity === owner);
+            walk(helper ? nativeSourceUnitNode(units.get(helper.declaration.sourceOwner), helper.declaration) : classes.get(owner));
+        });
+    }
+    const nativeBindings: Array<NativeGeneratedDeclarationPlan['nativeBindings'][number]> = nativeNames.map((name, index) => {
+        const provider = providers[name], referenceExport = 'native' + index;
+        if(provider.nativeVector)lines.push('import {'+provider.exportName+' as __vectorNative'+index+'} from '+JSON.stringify(provider.module)+';');
+        if (provider.nativeInterface) {
+            lines.push('import {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';',
+                'if(!__isNativeInterface(' + referenceExport + ')||' + referenceExport + '.name!==' + JSON.stringify(name.replace(/\.([^.]*)$/, '::$1'))
+                    + ')throw new TypeError("AS3_GENERATED_DECLARATIONS_UNSUPPORTED: native interface token");',
+                'export {' + referenceExport + '};');
+            return Object.freeze({qname:name,referenceExport,nativeInterface:true as true});
+        }
+        lines.push('export {' + provider.exportName + ' as ' + referenceExport + '} from ' + JSON.stringify(provider.module) + ';');
+        if(provider.nativeBase) {
+            if(provider.nativeBase==='Sprite'||provider.nativeBase==='MovieClip') {
+                const base=provider.nativeBase;
+                lines.push('import {requireGeneratedFlash'+base+'Surface as __require'+base+'Surface} from '+JSON.stringify(provider.module)+';',
+                    '__require'+base+'Surface();');
+            }
+            const declarationExport='nativeType'+index,nativeBaseExport='nativeEntry'+index;
+            lines.push('import {'+provider.nativeBase+'Declaration as '+declarationExport+'} from '+JSON.stringify(provider.module)+';');
+            lines.push('export {'+declarationExport+'};');
+            lines.push('export {'+provider.nativeBase+'ConstructorEntry as '+nativeBaseExport+'} from '+JSON.stringify(provider.module)+';');
+            return Object.freeze({qname:name,referenceExport,declarationExport,nativeBaseExport,
+                ...(provider.nativeBase==='Event'?{eventBaseExport:nativeBaseExport}:{})});
+        }
+        return Object.freeze({qname: name, referenceExport});
+    });
+    // Validate native tokens before source interfaces use them as parents.
+    interfaces.forEach(addInterface);
+    // Leave compact cohorts byte-stable. Switch well below the observed
+    // compiler flow limit so ancestry/interface expressions retain headroom.
+    const boundedSelectionFlow=!!data.inheritScriptClasses&&bindings.length>=512;
+    if(boundedSelectionFlow) lines.push('function __selectGeneratedValue<T>(selection:unknown,inherited:()=>T,local:()=>T):T{return selection?inherited():local();}');
+    const emitted = new Set<string>(), active = new Set<string>();
+    const add = (binding: NativeGeneratedDeclarationBinding): void => {
+        if (emitted.has(binding.qname)) return;
+        if (active.has(binding.qname)) fail('cyclic source inheritance: ' + binding.qname);
+        active.add(binding.qname);
+        const parent = binding.base && bindings.find(value => value.qname === binding.base);
+        const nativeParent = binding.base && nativeBindings.find(value => value.qname === binding.base);
+        if (parent) add(parent);
+        const authority = '__authority_' + binding.tokenExport;
+        const name = binding.qname.replace(/\.([^.]*)$/, '::$1');
+        const selection = '__inherited_' + binding.tokenExport;
+        if(data.inheritScriptClasses) lines.push('const '+selection+'=selectAS3ScriptDomainClass(__scriptDomain,'+JSON.stringify(name)+');');
+        // Keep each inherited/local choice in its own flow-analysis container.
+        // Thousands of top-level conditional initializers exceed TypeScript's
+        // module control-flow limit and lose contextual types in other exports.
+        const createAuthority='declareAS3ReferenceType<unknown>(' + JSON.stringify(name)
+            + (parent ? ',' + parent.tokenExport : nativeParent ? ',' + nativeParent.declarationExport : '') + ')';
+        lines.push('const ' + authority + '='+(boundedSelectionFlow?'__selectGeneratedValue('+selection+',()=>null,()=>'+createAuthority+')':(data.inheritScriptClasses?selection+'?null:':'')+createAuthority)+';');
+        lines.push('export const ' + binding.tokenExport + '='+(boundedSelectionFlow?'__selectGeneratedValue('+selection+',()=>'+selection+'.declaration,()=>'+authority+'.type)':(data.inheritScriptClasses?selection+'?'+selection+'.declaration:':'')+authority+'.type')+';');
+        const authoredSymbol = data.sources[binding.qname].authoredSymbol;
+        if (authoredSymbol) {
+            const tokens = binding.interfaces.map(name => {const source=interfaces.find(value => value.qname === name);return source?source.tokenExport:'native'+nativeNames.indexOf(name);});
+            lines.push('export const ' + binding.publishExport + '=(constructor:Function)=>{'
+                + (data.inheritScriptClasses ? 'if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");' : '')
+                + 'const generation=' + authority + '.publishGeneration(constructor);'
+                + '__requireAuthoredSymbol(constructor,' + JSON.stringify({sourceSha256: authoredSymbol.sourceSha256, linkage: authoredSymbol.linkage}) + ');'
+                + (tokens.length ? 'registerAS3Class(constructor,['+tokens.join(',')+']);' : '')
+                + 'return generation;};');
+        } else if(binding.interfaces.length) {
+            const tokens=binding.interfaces.map(name=>{const source=interfaces.find(value=>value.qname===name);return source?source.tokenExport:'native'+nativeNames.indexOf(name);});
+            lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{'+(data.inheritScriptClasses?'if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");':'')+'const generation='+authority+'.publishGeneration(constructor);'
+                +'registerAS3Class(constructor,['+tokens.join(',')+']);return generation;};');
+        } else lines.push('export const ' + binding.publishExport + '=' + (data.inheritScriptClasses
+            ? '(constructor:Function)=>{if(!'+authority+')throw new TypeError("Inherited Class cannot publish a child generation");return '+authority+'.publishGeneration(constructor);}'
+            : authority + '.publishGeneration') + ';');
+        // Opaque common-engine scopes indexed by exact native generation. These
+        // compiler exports never become properties of the source Class value.
+        lines.push('export const ' + binding.lexicalExport + '=new WeakMap<Function,any>();');
+        if(binding.scriptGlobalExport && (privateBindings.some(p => p.declaration.sourceOwner === binding.qname) || privateInterfaces.some(p => p.declaration.sourceOwner === binding.qname))) {
+            lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>'+(data.inheritScriptClasses?selection+'?'+selection+'.resolve() as T:':'')+'__sourceUnit'+bindings.indexOf(binding)+'(0,factory);');
+        } else if(binding.scriptGlobalExport) {
+            const split=binding.qname.lastIndexOf('.'),local=binding.qname.slice(split+1),uri=split<0?'':binding.qname.slice(0,split);
+            const declaration={sourceId:binding.qname,sourceSha256:sourceHashes[binding.qname],bindings:[{name:local,uri,kind:'constant',type:name}]};
+            const instantiate=data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0?'instantiateAS3ClassScriptUnit':'instantiateAS3ScriptUnit';
+            lines.push('export const '+binding.scriptGlobalExport+'=<T>(factory:(global:object)=>T):T=>'+(data.inheritScriptClasses?selection+'?'+selection+'.resolve() as T:':'')+instantiate+'(__scriptDomain,'+JSON.stringify(declaration)
+                +',context=>[{name:'+JSON.stringify(local)+',uri:'+JSON.stringify(uri)+',value:factory(context.global)}])'
+                +'.export('+JSON.stringify(local)+','+JSON.stringify(uri)+') as T;');
+        }
+        active.delete(binding.qname); emitted.add(binding.qname);
+    };
+    bindings.forEach(add);
+    const privateActive = new Set<string>(), privateDone = new Set<string>();
+    const addPrivate = (binding: NativeGeneratedPrivateDeclarationBinding): void => {
+        if (privateDone.has(binding.identity)) return;
+        if (privateActive.has(binding.identity)) fail('cyclic file-private source inheritance: ' + binding.identity);
+        privateActive.add(binding.identity);
+        let baseToken: string;
+        if (binding.base) {
+            if (typeof binding.base !== 'string') {
+                const parent = privateBindings.find(item => item.declaration === binding.base);
+                if (!parent) fail('file-private base is outside its planned source file');
+                addPrivate(parent); baseToken = parent.tokenExport;
+            } else {
+                const parent = bindings.find(item => item.qname === binding.base);
+                const nativeParent = binding.base === 'flash.events.MouseEvent' && nativeBindings.find(item => item.qname === binding.base && !!item.nativeBaseExport);
+                if (!parent && !nativeParent) fail('file-private base requires a planned source Class: ' + binding.identity);
+                baseToken = parent ? parent.tokenExport : nativeParent.declarationExport;
+            }
+        }
+        const authority = '__authority_' + binding.tokenExport;
+        lines.push('const '+authority+'=declareAS3ReferenceType<unknown>('+JSON.stringify(binding.declaration.reflectedName)+(baseToken?','+baseToken:'')+');',
+            'export const '+binding.tokenExport+'='+authority+'.type;');
+        if (binding.interfaces.length) {
+            const tokens = binding.interfaces.map(name => interfaces.find(item => item.qname === name).tokenExport);
+            lines.push('export const '+binding.publishExport+'=(constructor:Function)=>{const generation='+authority+'.publishGeneration(constructor);'
+                +'registerAS3Class(constructor,['+tokens.join(',')+']);return generation;};');
+        } else lines.push('export const '+binding.publishExport+'='+authority+'.publishGeneration;');
+        lines.push('export const '+binding.lexicalExport+'=new WeakMap<Function,any>();');
+        privateActive.delete(binding.identity); privateDone.add(binding.identity);
+    };
+    privateBindings.forEach(addPrivate);
+    bindings.forEach((binding,index) => {
+        const helpers=privateBindings.filter(p=>p.declaration.sourceOwner===binding.qname);
+        if((!helpers.length&&!privateInterfaces.some(p=>p.declaration.sourceOwner===binding.qname))||!binding.scriptGlobalExport)return;
+        // A single native MouseEvent helper preserves its constructor entry and
+        // independent event storage across source-unit failures and retries.
+        // An inherited public Class with one root file-private helper retains
+        // its source unit across owner/helper failures when every ancestor is
+        // a source Class. An ancestor failure precedes descendant publication;
+        // successful ancestors survive later owner/helper failures. Native
+        // ancestry, inherited helpers and ancestor units with private declarations
+        // still need combined qualification.
+        let sourceOnlyAncestry=!!binding.base;
+        let sourceParent=bindings.find(parent=>parent.qname===binding.base);
+        const sourceAncestors=new Set<string>([binding.qname]);
+        while(sourceOnlyAncestry){
+            if(!sourceParent||!sourceParent.scriptGlobalExport||sourceAncestors.has(sourceParent.qname)
+                ||privateBindings.some(helper=>helper.declaration.sourceOwner===sourceParent.qname)
+                ||privateInterfaces.some(helper=>helper.declaration.sourceOwner===sourceParent.qname)){
+                sourceOnlyAncestry=false;break;
+            }
+            sourceAncestors.add(sourceParent.qname);
+            if(!sourceParent.base)break;
+            sourceParent=bindings.find(parent=>parent.qname===sourceParent.base);
+        }
+        if(data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0
+            &&(helpers.length!==1||binding.base&&(!sourceOnlyAncestry||helpers.some(helper=>!!helper.base))||helpers.some(helper=>!!helper.base&&!(helper.base==='flash.events.MouseEvent'&&providers[helper.base]&&providers[helper.base].nativeBase==='MouseEvent'))||privateInterfaces.some(item=>item.declaration.sourceOwner===binding.qname)))
+            fail('multi-declaration Class script retry with additional helpers, ancestry or private interfaces requires qualification');
+        lines.push('let __sourceUnit'+index+':<T>(selected:number,factory:(global:object)=>T)=>T;',
+            'export function bindSourceUnit'+index+'(run:typeof __sourceUnit'+index+'):void {if(__sourceUnit'+index+')throw new TypeError("Source unit already bound");__sourceUnit'+index+'=run;}');
+        helpers.forEach((helper,slot)=>lines.push('export const publishPrivateScript'+privateBindings.indexOf(helper)+'=<T>(factory:(global:object)=>T):T=>__sourceUnit'+index+'('+(slot+1)+',factory);'));
+    });
+    lines.push(...vectorLines);
+    if(data.lexicalProviderModule){
+        const membership=data.inheritScriptClasses?'bindAS3InternalPackage':'declareAS3InternalPackage';
+        lines.push('import {'+membership+'} from '+JSON.stringify(data.lexicalProviderModule)+';');
+        const packages=new Map<string,string[]>();
+        bindings.forEach(binding=>{const split=binding.qname.lastIndexOf('.'),pkg=split<0?'':binding.qname.slice(0,split);
+            if(!packages.has(pkg))packages.set(pkg,[]);packages.get(pkg).push(binding.tokenExport);});
+        packages.forEach((tokens,pkg)=>{
+            if(data.inheritScriptClasses&&!pkg)fail('inherited internal membership requires named source packages');
+            lines.push(membership+'(['+tokens.join(',')+']);');
+        });
+    }
+    const contractNodes = new Map(classes);
+    privateInterfaces.forEach(binding => contractNodes.set(binding.identity, nativeSourceUnitNode(units.get(binding.declaration.sourceOwner), binding.declaration)));
+    const contractClasses = bindings.concat(privateBindings.map(binding => {
+        contractNodes.set(binding.identity, nativeSourceUnitNode(units.get(binding.declaration.sourceOwner), binding.declaration));
+        return {...binding, qname: binding.identity, base: typeof binding.base === 'string' || binding.base === null
+            ? binding.base as string | null : privateDeclarationIdentity(binding.base)};
+    }));
+    const interfaceContracts=projectNativeGeneratedInterfaceContracts(contractNodes,contractClasses,interfaces,resolve,
+        name=>builtins.indexOf(name)>=0||contractClasses.some(b=>b.qname===name)||interfaces.some(b=>b.qname===name)||nativeNames.indexOf(name)>=0,
+        name=>providers[name]&&providers[name].nativeInterface?nativeGeneratedInterfaceBoundary(name):undefined,
+        name=>name==='flash.events.EventDispatcher'&&providers[name]&&providers[name].nativeBase==='EventDispatcher'
+            ?nativeGeneratedInterfaceBoundary('flash.events.IEventDispatcher'):undefined);
+    let namespaceKeys:ReadonlyArray<{uri:string;name:string;exported:string}>;
+    if(namespaces.length){
+        const namespaceUris:{[qname:string]:string}={};namespaces.forEach(binding=>namespaceUris[binding.qname]=binding.uri);
+        const ancestry=createNativeSourceAncestryPlan({sources:data.sources,namespaceUris}),keys=new Map<string,{uri:string;name:string}>();
+        Object.keys(ancestry.classes).forEach(qname=>ancestry.classes[qname].members.forEach(member=>{
+            if(namespaces.some(binding=>binding.uri===member.uri))keys.set(JSON.stringify([member.uri,member.name]),{uri:member.uri,name:member.name});
+        }));
+        // Ancestry contains public package identities only. Private helpers can
+        // introduce their own namespace members; resolve their modifiers in the
+        // authenticated file scope without promoting helpers to public QNames.
+        privateBindings.forEach(binding=>{
+            const owner=nativeSourceUnitNode(units.get(binding.declaration.sourceOwner),binding.declaration);
+            owner.findChild(K.CONTENT).children.forEach(member=>{
+                if([K.FUNCTION,K.GET,K.SET,K.VAR_LIST,K.CONST_LIST].indexOf(member.kind)<0
+                    && !(member.kind===K.TYPE&&member.text==='function'))return;
+                const mods=member.findChild(K.MOD_LIST),qualifiers=mods&&mods.children.filter(mod=>
+                    ['public','private','protected','internal','static','override','final','native','dynamic'].indexOf(mod.text)<0);
+                if(!qualifiers||!qualifiers.length)return;
+                if(qualifiers.length!==1)fail('multiple private member namespace modifiers: '+binding.identity);
+                const qname=resolve(binding.identity,qualifiers[0].text),namespace=namespaces.find(value=>value.qname===qname);
+                if(!namespace)fail('private member requires a planned source namespace: '+binding.identity+':'+qualifiers[0].text);
+                const names=member.kind===K.VAR_LIST||member.kind===K.CONST_LIST
+                    ?member.findChildren(K.NAME_TYPE_INIT).map(value=>value.findChild(K.NAME)):[member.findChild(K.NAME)];
+                if(names.length!==1||!names[0])fail('multiple private namespace fields: '+binding.identity);
+                const key={uri:namespace.uri,name:names[0].text};
+                keys.set(JSON.stringify([key.uri,key.name]),key);
+            });
+        });
+        namespaceKeys=Object.freeze(Array.from(keys.keys()).sort().map((identity,index)=>{
+            const exported='namespaceKey'+index;
+            // Inferred unique symbols type-check on the consumer compiler while
+            // remaining parseable by the compiler's TypeScript 2.5 factory pass.
+            lines.push('export const '+exported+' = Symbol.for('+JSON.stringify('as3.namespace.member@1:'+identity)+');');
+            return Object.freeze({...keys.get(identity),exported});
+        }));
+    }
+    const plan: NativeGeneratedDeclarationPlan = Object.freeze({scope: data.scope, moduleSource: lines.join('\n') + '\n',
+        embeddedBinary:Object.freeze(embeddedBinary), sourceHashes: Object.freeze(sourceHashes), privateBindings, privateInterfaces, bindings: Object.freeze(bindings),
+        interfaces: Object.freeze(interfaces.filter(binding => !privateInterfaces.some(item => item.identity === binding.qname))), references: Object.freeze(references),vectors:Object.freeze(vectors),
+        nativeBindings: Object.freeze(nativeBindings),patternLocals:Object.freeze(patternLocals),interfaceContracts,namespaces,...(namespaceKeys?{namespaceKeys}:{})});
+    contexts.set(plan, {input: data, plan, units});
+    return plan;
+}
+
+/** Shared source-file capability; private descriptors are never public QNames. */
+export function nativeGeneratedSourceUnit(plan: NativeGeneratedDeclarationPlan, owner: string): NativeSourceUnit {
+    const context = contexts.get(plan), helper = context && (plan.privateBindings.find(binding => binding.identity === owner) || plan.privateInterfaces.find(binding => binding.identity === owner));
+    const unit = context && context.units.get(helper ? helper.declaration.sourceOwner : owner);
+    if (!unit) fail('exact planned source-unit capability required');
+    return unit;
+}
+
+/** Detached AST for a planned declaration, preserving its original file scope. */
+export function nativeGeneratedDeclarationNode(plan: NativeGeneratedDeclarationPlan, owner: string): Node {
+    const ast = nativeSourceUnitAst(nativeGeneratedSourceUnit(plan, owner));
+    const helper = plan.privateBindings.find(binding => binding.identity === owner) || plan.privateInterfaces.find(binding => binding.identity === owner);
+    const selected = ast.declarations.find(item => helper ? item.declaration === helper.declaration : item.declaration.packageQName === owner);
+    if (!selected) fail('planned declaration owner required');
+    return selected.node;
+}
+
+/** Internal class view shared by public and file-private implementation consumers.
+ * identity is an opaque compiler key, never a public loading/registry name. */
+export interface NativeGeneratedClassDeclaration {
+    readonly identity: string;
+    readonly sourceOwner: string;
+    readonly reflectedName: string;
+    readonly base: string | null;
+    readonly tokenExport: string;
+    readonly publishExport: string;
+    readonly lexicalExport: string;
+    readonly scriptGlobalExport?: string;
+    readonly interfaces: ReadonlyArray<string>;
+}
+export function nativeGeneratedClassDeclaration(plan: NativeGeneratedDeclarationPlan, identity: string): NativeGeneratedClassDeclaration {
+    nativeGeneratedSourceUnit(plan, identity);
+    const binding = plan.bindings.find(item => item.qname === identity);
+    if (binding) return Object.freeze({identity, sourceOwner: identity, reflectedName: identity.replace(/\.([^.]*)$/, '::$1'),
+        base: binding.base, tokenExport: binding.tokenExport, publishExport: binding.publishExport,
+        lexicalExport: binding.lexicalExport, scriptGlobalExport: binding.scriptGlobalExport, interfaces: binding.interfaces});
+    const helper = plan.privateBindings.find(item => item.identity === identity);
+    if (!helper) fail('reference-only source cannot publish a class: ' + identity);
+    return Object.freeze({identity, sourceOwner: helper.declaration.sourceOwner, reflectedName: helper.declaration.reflectedName,
+        base: helper.base === null ? null : typeof helper.base === 'string' ? helper.base : privateDeclarationIdentity(helper.base),
+        tokenExport: helper.tokenExport, publishExport: helper.publishExport, lexicalExport: helper.lexicalExport,
+        ...(plan.bindings.some(b=>b.qname===helper.declaration.sourceOwner&&!!b.scriptGlobalExport)?{scriptGlobalExport:'publishPrivateScript'+plan.privateBindings.indexOf(helper)}:{}),
+        interfaces: helper.interfaces});
+}
+
+/** Exact compiler capability plus source-byte check; serialization grants no authority. */
+export function nativeGeneratedDeclarationSource(plan: NativeGeneratedDeclarationPlan, scope: string, owner: string, source: string):
+    {readonly source: string; readonly sourceSha256: string; readonly referenceOnly?: boolean} {
+    const context = plan && contexts.get(plan), helper = context && (plan.privateBindings.find(binding => binding.identity === owner) || plan.privateInterfaces.find(binding => binding.identity === owner));
+    const record = context && context.input.sources[helper ? helper.declaration.sourceOwner : owner];
+    if (!context || scope !== plan.scope || !record || record.source !== source) fail('exact planned scope/source capability required');
+    return record;
+}
+
+/** Internal consumers get the frozen source snapshot only through the live plan. */
+export function nativeGeneratedDeclarationInputs(plan: NativeGeneratedDeclarationPlan, scope: string): NativeGeneratedDeclarationInput {
+    const context = plan && contexts.get(plan);
+    if (!context || context.input.scope !== scope) fail('exact planned scope capability required');
+    return context.input;
+}
+
+function plannedUnitResolver(unit: NativeSourceUnit, known: (name: string) => boolean, privateNames = false, consumer?: NativeSourceUnitDeclaration): (spelling: string) => string {
+    const resolve = nativeSourceUnitResolver(unit, consumer || unit.declarations[0], known);
+    return (spelling: string): string => {
+        try {
+            const identity = resolve(spelling);
+            if (typeof identity === 'string') return identity;
+            if (privateNames) return privateDeclarationIdentity(identity);
+            return fail('private source binding requires emission integration');
+        } catch (error) {fail(error.message.replace(/^AS3_SOURCE_UNIT_UNSUPPORTED: /, '').replace(/^AS3_GENERATED_DECLARATIONS_UNSUPPORTED: /, ''));}
+    };
+}
+
+/** Resolve one authenticated implementation declaration in its complete source file. */
+export function nativeGeneratedDeclarationResolver(plan: NativeGeneratedDeclarationPlan, owner: string, source: string):
+    {root: Node; owner: string; resolve: (name: string) => string} {
+    nativeGeneratedDeclarationSource(plan, plan && plan.scope, owner, source);
+    const input = nativeGeneratedDeclarationInputs(plan, plan.scope), unit = nativeGeneratedSourceUnit(plan, owner);
+    const helper = plan.privateBindings.find(binding => binding.identity === owner) || plan.privateInterfaces.find(binding => binding.identity === owner);
+    const descriptor = helper ? helper.declaration : unit.declarations[0];
+    const known = Object.keys(input.sources).concat(Object.keys(input.providers || {}));
+    return {root: nativeSourceUnitAst(unit).root, owner,
+        resolve: plannedUnitResolver(unit, name => known.indexOf(name) >= 0, true, descriptor)};
+}
+
+/** A consumer resolves existing identities; it never adds tokens or publishers. */
+export function nativeGeneratedConsumerResolver(plan: NativeGeneratedDeclarationPlan, source: string):
+    {root: Node; owner: string; resolve: (name: string) => string} {
+    const input = nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
+    const root = parse('ReferenceConsumer.as', source); normalize(root);
+    const pkg = root.findChild(K.PACKAGE), content = pkg && pkg.findChild(K.CONTENT);
+    const classes = content && content.findChildren(K.CLASS);
+    if (!classes || classes.length !== 1) fail('one reference consumer class required');
+    let count = 0;
+    const walk = (node: Node): void => {if (node.kind === K.CLASS || node.kind === K.INTERFACE) count++; node.children.forEach(walk);};
+    walk(root);
+    if (count !== 1) fail('additional consumer declarations require source authority');
+    const namespace = pkg.findChild(K.NAME).text;
+    const owner = (namespace ? namespace + '.' : '') + classes[0].findChild(K.NAME).text;
+    if (input.sources[owner]) nativeGeneratedDeclarationSource(plan, input.scope, owner, source);
+    const known = Object.keys(input.sources).concat(Object.keys(input.providers || {}));
+    const unit = input.sources[owner] ? nativeGeneratedSourceUnit(plan, owner) : readNativeSourceUnit(owner, source, hash(source));
+    return {root, owner, resolve: plannedUnitResolver(unit, name => known.indexOf(name) >= 0)};
+}
+
+/** Internal interface view. Private keys are never registry QNames. */
+const interfaceViews = new WeakMap<NativeGeneratedDeclarationPlan, ReadonlyArray<NativeGeneratedInterfaceBinding & {readonly reflectedName:string}>>();
+export function nativeGeneratedInterfaceBindings(plan: NativeGeneratedDeclarationPlan): ReadonlyArray<NativeGeneratedInterfaceBinding & {readonly reflectedName:string}> {
+    nativeGeneratedDeclarationInputs(plan, plan && plan.scope);
+    if (interfaceViews.has(plan)) return interfaceViews.get(plan);
+    const view = Object.freeze(plan.interfaces.map(binding => Object.freeze({...binding, reflectedName:binding.qname.replace(/\.([^.]*)$/, '::$1')}))
+        .concat(plan.privateInterfaces.map(binding => Object.freeze({qname:binding.identity, bases:binding.bases,
+            tokenExport:binding.tokenExport, reflectedName:binding.declaration.reflectedName}))));
+    interfaceViews.set(plan,view);return view;
+}

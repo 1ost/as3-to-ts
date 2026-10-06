@@ -656,23 +656,32 @@ export function createNativeGeneratedDeclarationPlan(input: NativeGeneratedDecla
         // its source unit across owner/helper failures when every ancestor is
         // a source Class. An ancestor failure precedes descendant publication;
         // successful ancestors survive later owner/helper failures. Native
-        // ancestry, inherited helpers and ancestor units with private declarations
-        // still need combined qualification.
-        let sourceOnlyAncestry=!!binding.base;
-        let sourceParent=bindings.find(parent=>parent.qname===binding.base);
-        const sourceAncestors=new Set<string>([binding.qname]);
-        while(sourceOnlyAncestry){
-            if(!sourceParent||!sourceParent.scriptGlobalExport||sourceAncestors.has(sourceParent.qname)
-                ||privateBindings.some(helper=>helper.declaration.sourceOwner===sourceParent.qname)
-                ||privateInterfaces.some(helper=>helper.declaration.sourceOwner===sourceParent.qname)){
-                sourceOnlyAncestry=false;break;
+        // ancestry and ancestor units with private declarations remain held;
+        // root owners with source-derived helpers are qualified below.
+        const sourceAncestry=(base:string):boolean=>{
+            let parent=bindings.find(value=>value.qname===base);
+            const seen=new Set<string>([binding.qname]);
+            while(parent&&parent.scriptGlobalExport&&!seen.has(parent.qname)){
+                if(privateBindings.some(helper=>helper.declaration.sourceOwner===parent.qname)
+                    ||privateInterfaces.some(helper=>helper.declaration.sourceOwner===parent.qname))return false;
+                seen.add(parent.qname);
+                if(!parent.base)return true;
+                parent=bindings.find(value=>value.qname===parent.base);
             }
-            sourceAncestors.add(sourceParent.qname);
-            if(!sourceParent.base)break;
-            sourceParent=bindings.find(parent=>parent.qname===sourceParent.base);
-        }
+            return false;
+        };
+        const sourceOnlyAncestry=!!binding.base&&sourceAncestry(binding.base);
+        // Root owners may retry an ordered set of root or source-derived helpers.
+        // Each external source ancestor publishes independently: failed parents
+        // retry, while successful parents survive a later helper/unit failure.
+        const rootSourceHelpers=!binding.base&&helpers.length>0&&helpers.every(helper=>!helper.base
+            ||typeof helper.base==='string'&&sourceAncestry(helper.base));
+        const inheritedOwnerRootHelper=sourceOnlyAncestry&&helpers.length===1&&!helpers[0].base;
+        const rootOwnerMouseHelper=!binding.base&&helpers.length===1&&helpers[0].base==='flash.events.MouseEvent'
+            &&providers['flash.events.MouseEvent']&&providers['flash.events.MouseEvent'].nativeBase==='MouseEvent';
         if(data.classScriptSources&&data.classScriptSources.indexOf(binding.qname)>=0
-            &&(helpers.length!==1||binding.base&&(!sourceOnlyAncestry||helpers.some(helper=>!!helper.base))||helpers.some(helper=>!!helper.base&&!(helper.base==='flash.events.MouseEvent'&&providers[helper.base]&&providers[helper.base].nativeBase==='MouseEvent'))||privateInterfaces.some(item=>item.declaration.sourceOwner===binding.qname)))
+            &&(!(rootSourceHelpers||inheritedOwnerRootHelper||rootOwnerMouseHelper)
+                ||privateInterfaces.some(item=>item.declaration.sourceOwner===binding.qname)))
             fail('multi-declaration Class script retry with additional helpers, ancestry or private interfaces requires qualification');
         lines.push('let __sourceUnit'+index+':<T>(selected:number,factory:(global:object)=>T)=>T;',
             'export function bindSourceUnit'+index+'(run:typeof __sourceUnit'+index+'):void {if(__sourceUnit'+index+')throw new TypeError("Source unit already bound");__sourceUnit'+index+'=run;}');

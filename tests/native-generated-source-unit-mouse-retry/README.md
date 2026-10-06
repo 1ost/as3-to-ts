@@ -1,3 +1,10 @@
+## Source-derived helper planner boundary updated
+
+The multiple-helper retry fixture qualifies source-derived private helpers for
+root public owners. This runner now admits that planning case and retains eight
+rejection guards plus one positive planning check. Its historical archive is
+unchanged; current regression results are retained in the new fixture archive.
+
 # Same-source-unit MouseEvent helper retries
 
 The declaration planner now admits one file-private helper extending the authenticated native MouseEvent provider alongside a root public Class selected for retryable source-unit initialization. Other helper ancestry, extra helpers, public ancestry and private interfaces retain their guards. This addresses the structural prerequisite demonstrated by ContainerController and its PsuedoMouseEvent helper; it does not by itself qualify ContainerController execution.

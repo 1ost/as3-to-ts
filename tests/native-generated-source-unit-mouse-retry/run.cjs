@@ -45,9 +45,12 @@ async function main(){
    }
    const oldPlan=api.createNativeGeneratedDeclarationPlan({...input,classScriptSources:undefined});
    assert.throws(()=>emitPlan(oldPlan),/script global with static initializer requires retry identity authority/);rejectionGuards++;
-   for(const source of [sources['unitretry.OwnerRetry'].source+'\nclass Extra {}',sources['unitretry.OwnerRetry'].source.replace('class LocalHelper extends MouseEvent {','class LocalHelper extends Trace {'),sources['unitretry.OwnerRetry'].source+'\ninterface Extra {}']){
+   for(const source of [sources['unitretry.OwnerRetry'].source+'\nclass Extra {}',sources['unitretry.OwnerRetry'].source+'\ninterface Extra {}']){
     assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'unitretry.OwnerRetry':{source,sourceSha256:hash(source)}}}),/multi-declaration Class script retry .*requires qualification/);rejectionGuards++;
    }
+   // Source-derived helpers now have separate multi-helper retry authority.
+   const sourceHelper=sources['unitretry.OwnerRetry'].source.replace('class LocalHelper extends MouseEvent {','class LocalHelper extends Trace {');
+   assert.doesNotThrow(()=>api.createNativeGeneratedDeclarationPlan({...input,sources:{...sources,'unitretry.OwnerRetry':{source:sourceHelper,sourceSha256:hash(sourceHelper)}}}));
    for(const patch of [{nativeBase:undefined},{exportName:'Event'}]){
     assert.throws(()=>api.createNativeGeneratedDeclarationPlan({...input,providers:{...nativeProviders,'flash.events.MouseEvent':{...nativeProviders['flash.events.MouseEvent'],...patch}}}),/AS3_.*UNSUPPORTED/);rejectionGuards++;
    }
@@ -95,7 +98,7 @@ async function main(){
    else{assert.equal(outcome.error,undefined);assert.notDeepEqual(outcome.value.rows,expected);}
    mutations.push({name:control.name,node:outcome,web:webChanged,bundleSha256:hash(changedCode)});
   }
-  results.push({target,node,web,typechecks,artifacts,rejectionGuards,mutations,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
+  results.push({target,node,web,typechecks,artifacts,rejectionGuards,positivePlanningChecks:1,mutations,inputs:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file))}))});
   console.log(JSON.stringify({target,observations:node.rows.length,typeErrors:0,rejectionGuards,domainChecks:node.domainChecks.length,mutations:mutations.length}));
  }}finally{await browser.close();}
  for(const item of compilerInputs)assert.equal(hash(fs.readFileSync(item.file)),item.sha256,item.file);
