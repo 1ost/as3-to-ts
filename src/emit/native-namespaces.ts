@@ -16,6 +16,7 @@ export interface NamespaceMember {
     static: boolean;
     declaration: Node;
     fieldType?: string;
+    returnType?: string;
 }
 
 export interface NamespaceAccess {
@@ -87,6 +88,14 @@ export class NativeNamespaces {
             if (names.length !== 1) this.fail('multiple namespace fields in one declaration');
             const member: NamespaceMember = { uri: this.resolve(node, qualifier[0].text), name: names[0].text,
                 owner, static: mods.children.some(mod => mod.text === 'static'), declaration: node };
+            const field = [NodeKind.VAR_LIST, NodeKind.CONST_LIST].indexOf(node.kind) >= 0
+                ? node.findChild(NodeKind.NAME_TYPE_INIT) : null;
+            if (field) {
+                member.fieldType = this.namespaceDeclaredType(owner, field.findChild(NodeKind.TYPE));
+                if (member.fieldType) this.fieldReceiverNames.add(member.name);
+            } else if (node.kind === NodeKind.FUNCTION) {
+                member.returnType = this.namespaceDeclaredType(owner, node.findChild(NodeKind.TYPE));
+            }
             if (overridden) {
                 if ([NodeKind.FUNCTION, NodeKind.GET, NodeKind.SET].indexOf(node.kind) < 0)
                     this.fail('namespace field overrides require separate lowering');
@@ -176,7 +185,7 @@ export class NativeNamespaces {
                 const declaration = createNode(member.kind, {}, createNode(NodeKind.MOD_LIST, {}, ...modifiers),
                     createNode(NodeKind.NAME, {text:member.name}));
                 this.members.set(declaration.findChild(NodeKind.NAME), {uri:member.uri, name:member.name,
-                    owner, static:member.static, declaration, fieldType:member.fieldType});
+                    owner, static:member.static, declaration, fieldType:member.fieldType, returnType:member.returnType});
             });
         });
     }
@@ -586,7 +595,13 @@ export class NativeNamespaces {
         if (!owner) return null;
         const ownerName = owner.findChild(NodeKind.NAME).text;
         let fieldName: string = null;
-        if (receiver.kind === NodeKind.IDENTIFIER) {
+        if (receiver.kind === NodeKind.NAMESPACE_ACCESS) {
+            return this.namespaceReceiverType(receiver, false);
+        } else if (receiver.kind === NodeKind.CALL && receiver.children.length >= 2
+            && receiver.children[0].kind === NodeKind.NAMESPACE_ACCESS
+            && receiver.findChild(NodeKind.ARGUMENTS)) {
+            return this.namespaceReceiverType(receiver.children[0], true);
+        } else if (receiver.kind === NodeKind.IDENTIFIER) {
             if (receiver.text === 'this' || receiver.text === ownerName) return ownerName;
             // Locals also anchor ordinary getter chains before an opened
             // namespace selector (value.paragraph.namespaceMethod()).
@@ -618,6 +633,10 @@ export class NativeNamespaces {
             const target = this.classType(node, receiver.children[0].text);
             if (target) return receiver.children[0].text;
             const name = receiver.children[0].text;
+            if (this.localVariableType(node, name) === null) {
+                const member = this.openedIdentifier(receiver.children[0], false);
+                if (member && member.returnType) return member.returnType;
+            }
             if (namespaceChain && this.localVariableType(node, name) === null) {
                 // A direct own instance method is also source type authority.
                 // Parameters/local functions/variables and namespace members
@@ -686,6 +705,24 @@ export class NativeNamespaces {
             if (typed) return typed.type;
         }
         return null;
+    }
+
+    /** Preserve declaration identity before a consumer's imports can reinterpret it. */
+    private namespaceDeclaredType(owner: Node, type: Node): string {
+        if (!type) return null;
+        const name = type.qualifiedName || type.text;
+        const cls = this.classType(owner, name);
+        return cls ? cls.qualifiedName || this.packageName(cls) + cls.findChild(NodeKind.NAME).text : name;
+    }
+
+    /** A lowered namespace selector keeps its exact URI and source member type. */
+    private namespaceReceiverType(selector: Node, call: boolean): string {
+        const access = this.access(selector);
+        const cls = access.receiver && this.receiverClass(selector, this.receiverType(selector, true));
+        const member = access.implicitMember || cls && this.findMember(cls, access.uri, access.name,
+            this.isClassReceiver(selector, cls));
+        if (!member) return null;
+        return call ? member.returnType : member.fieldType;
     }
 
     private localVariableType(node: Node, name: string): string {

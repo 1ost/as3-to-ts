@@ -25,6 +25,8 @@ export interface NativeSourceAncestryMember {
     override: boolean;
     /** Exact declaring-unit type of a namespace field, separate from ordinary names. */
     fieldType?: string;
+    /** Exact declaring-unit result of a namespace method. */
+    returnType?: string;
 }
 
 export interface NativeSourceAncestryType {
@@ -224,8 +226,10 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
                 const field = [K.VAR_LIST, K.CONST_LIST].indexOf(member.kind) >= 0
                     ? member.findChild(K.NAME_TYPE_INIT) : null;
                 const fieldType = field && field.findChild(K.TYPE);
+                const returnType = member.kind === K.FUNCTION ? member.findChild(K.TYPE) : null;
                 metadata.members.push({name:names[0].text, uri,
-                    ...(fieldType ? {fieldType:nativeSourceTypeIdentity(fieldType, identity, importsForType)} : {}), static:!!memberMods.children.some(mod => mod.text === 'static'),
+                    ...(fieldType ? {fieldType:nativeSourceTypeIdentity(fieldType, identity, importsForType)} : {}),
+                    ...(returnType ? {returnType:nativeSourceTypeIdentity(returnType, identity, importsForType)} : {}), static:!!memberMods.children.some(mod => mod.text === 'static'),
                     kind:member.kind, override:!!memberMods.children.some(mod => mod.text === 'override')});
             });
             const unitContent = packageNode(root).findChild(K.CONTENT);
