@@ -723,7 +723,7 @@ export class NativeGeneratedLexical {
             }
             return [];
         };
-        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;textBlockMethod?:boolean;publicName?:string;publicMethod?:boolean;publicCompoundUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceClassGetter?:boolean;interfaceWrite?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
+        const resolve=(value:Node):{trait:Trait;receiver:Node;nativeMethod?:string;timerMethod?:boolean;textBlockMethod?:boolean;publicName?:string;publicMethod?:boolean;publicNumericUpdate?:boolean;dynamicRead?:boolean;interfaceRead?:boolean;interfaceClassGetter?:boolean;interfaceWrite?:boolean;interfaceCall?:boolean;namespaceUri?:string;internalOwner?:string;internalName?:string;internalMethod?:boolean}|null=>{
             value=unwrapEncapsulatedExpression(value);if(!value)return null;
             let name:string,receiver:Node;
             if(value.kind===K.IDENTIFIER)name=value.text;
@@ -824,7 +824,7 @@ export class NativeGeneratedLexical {
                             ||emitter.options.nativeDynamicPropertyWritesModule!==emitter.generated.propertyModule))
                             fail('interface compound assignment requires exact read and write property providers');
                         return {trait:null,receiver,publicName:name,publicMethod:false,interfaceRead:!!getter,interfaceClassGetter:!!getter&&getter.returnType==='Class',interfaceWrite:!!setter,
-                            publicCompoundUpdate:compound&&numeric};
+                            publicNumericUpdate:compound&&numeric};
                     }
                 }
                 if(identities.length===1&&references.every(r=>r.kind==='interface')&&interfaceMember(identities[0],name,'method')) {
@@ -1005,15 +1005,9 @@ export class NativeGeneratedLexical {
                             .filter(member=>!member.uri&&(member.kind==='variable'||member.kind==='accessor'||member.kind==='method')));
                     }
                     const member=this.foreignPublicMembers.get(identity).find(member=>member.name===name);
-                    if(member){
-                        if(member.type==='*'&&node.kind===K.ASSIGN&&['+=','-='].indexOf(node.children[1].text)>=0
-                            &&(emitter.options.nativeDynamicPropertyReadsModule!==emitter.generated.propertyModule
-                                ||emitter.options.nativeDynamicPropertyWritesModule!==emitter.generated.propertyModule))
-                            fail('wildcard compound assignment requires exact read and write property providers');
-                        return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method',
-                            publicCompoundUpdate:typeof member.type==='string'&&['int','uint','Number','*'].indexOf(member.type)>=0
-                                &&(member.kind==='variable'||member.kind==='accessor'&&member.access==='readwrite')};
-                    }
+                    if(member)return {trait:null,receiver,publicName:name,publicMethod:member.kind==='method',
+                        publicNumericUpdate:typeof member.type==='string'&&['int','uint','Number'].indexOf(member.type)>=0
+                            &&(member.kind==='variable'||member.kind==='accessor'&&member.access==='readwrite')};
                     if(receiver.kind===K.DOT&&modifiers(nativeGeneratedDeclarationNode(this.plan,identity)).indexOf('dynamic')>=0)
                         return {trait:null,receiver,publicName:name,publicMethod:false,dynamicRead:true};
                 }
@@ -1144,7 +1138,7 @@ export class NativeGeneratedLexical {
         else if(node.kind===K.CALL){target=node.children[0];operation='call';args=node.children[1];}
         else if([K.PRE_INC,K.POST_INC,K.PRE_DEC,K.POST_DEC].indexOf(node.kind)>=0) {
             const found=resolve(node.children[0]);if(!found)return false;
-            if(found.publicName&&found.publicCompoundUpdate) {
+            if(found.publicName&&found.publicNumericUpdate) {
                 const unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
                 const get=unique('__as3_public_update_get'),set=unique('__as3_public_update_set');
                 emitter.ensureImportIdentifier('as3GetProperty as '+get,emitter.generated.propertyModule,false);
@@ -1273,11 +1267,11 @@ export class NativeGeneratedLexical {
                     if(!found.interfaceWrite)fail('interface accessor has no setter');
                     if(emitter.options.nativeDynamicPropertyWritesModule!==emitter.generated.propertyModule)
                         fail('interface setter requires exact property provider');
-                }else if(!(operation==='set'&&found.publicCompoundUpdate&&['+=','-='].indexOf(node.children[1].text)>=0))
+                }else if(!(operation==='set'&&found.publicNumericUpdate&&['+=','-='].indexOf(node.children[1].text)>=0))
                     fail('interface accessor requires qualified read or assignment');
             }
             if(found.dynamicRead&&operation!=='get')fail('chained dynamic receiver currently requires a property read');
-            if(operation==='set'&&found.publicCompoundUpdate&&['+=','-='].indexOf(node.children[1].text)>=0) {
+            if(operation==='set'&&found.publicNumericUpdate&&['+=','-='].indexOf(node.children[1].text)>=0) {
                 const addition=node.children[1].text==='+=',unique=(name:string)=>{while(emitter.source.indexOf(name)>=0)name+='_';return name;};
                 const helper=unique('__as3_public_compound_add'),get=unique('__as3_public_compound_get'),set=unique('__as3_public_compound_set'),number=unique('__as3_public_compound_number');
                 if(addition){emitter.ensureImportIdentifier('as3AddAssignProperty as '+helper,emitter.generated.propertyModule,false);emitter.nativeSourceHelpers.add(helper);}
@@ -1291,7 +1285,7 @@ export class NativeGeneratedLexical {
                 }
                 emitter.catchup(node.start);
                 if(addition)emitter.insert('(<any>'+helper+'(');
-                else emitter.insert('(<any>((readTarget:any,key:string,rhs:()=>any,writeTarget:()=>any)=>{const previous:any='+get+'(readTarget,key);const operand:any=rhs();const value='+number+'(previous)-'+number+'(operand);return '+set+'(writeTarget(),key,value);})(');
+                else emitter.insert('(<any>((readTarget:any,key:string,rhs:()=>any,writeTarget:()=>any)=>{const previous:number=<any>'+get+'(readTarget,key);const value=previous-'+number+'(rhs());return '+set+'(writeTarget(),key,value);})(');
                 emitter.skipTo(found.receiver.start);const start=emitter.output.length;
                 visit(emitter,found.receiver);emitter.catchup(found.receiver.end);const receiver=emitter.output.slice(start);
                 emitter.insert(','+JSON.stringify(found.publicName)+',()=>(');

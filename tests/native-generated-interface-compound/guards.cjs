@@ -23,7 +23,7 @@ module.exports=config=>{
   assert.notEqual(source,sources[owner].source);stringSources[owner]={source,sourceSha256:hash(source)};
  }
  assert.throws(()=>emit(api.createNativeGeneratedDeclarationPlan({...input,sources:stringSources})),/interface accessor requires qualified read or assignment/);guards.push('nonnumeric interface compound held');
- const file=require.resolve('../../lib/emit/native-generated-lexical'),source=fs.readFileSync(file,'utf8'),mutant=source.replace('publicNumericUpdate: compound && numeric','publicNumericUpdate: false');assert.notEqual(mutant,source);
+ const file=require.resolve('../../lib/emit/native-generated-lexical'),source=fs.readFileSync(file,'utf8'),mutant=source.replace('publicCompoundUpdate: compound && numeric','publicCompoundUpdate: false');assert.notEqual(mutant,source);
  const m=new Module(file,module);m.filename=file;m.paths=Module._nodeModulePaths(path.dirname(file));m._compile(mutant,file);const live=require(file),saved=live.NativeGeneratedLexical;
  try{live.NativeGeneratedLexical=m.exports.NativeGeneratedLexical;assert.throws(()=>emit(config.plan),/interface accessor requires qualified read or assignment/);guards.push('mutation: numeric interface admission removed');}finally{live.NativeGeneratedLexical=saved;}
  const before="r.owner === owner.identity && (r.kind === 'declaration' || r.kind === 'private-declaration' || r.kind === 'interface')";
