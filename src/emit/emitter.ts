@@ -1593,7 +1593,9 @@ function emitImport(emitter:Emitter, node:Node, inline:boolean = false):void {
 	split.pop();
 	let ns = split.join(".");*/
 	ClassList.addImportToLast(node.text.concat());
-    if(emitter.generated&&emitter.generated.options.plan.namespaces.some(binding=>binding.qname===node.text)){
+    const namespacePlan = emitter.generated ? emitter.generated.options.plan
+        : emitter.selectedInterface ? emitter.options.nativeVectorTypes.plan : undefined;
+    if(namespacePlan&&namespacePlan.namespaces.some(binding=>binding.qname===node.text)){
         // Namespace selectors become canonical Symbol keys. Their imported
         // declaration is lexical authority, not a JavaScript Class dependency.
         if(!inline)emitter.catchup(node.start);
