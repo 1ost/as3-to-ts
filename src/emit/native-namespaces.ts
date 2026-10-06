@@ -393,6 +393,19 @@ export class NativeNamespaces {
         return { uri, name, receiver, implicitMember, qualifier };
     }
 
+    /** Package and file-local declarations have distinct lexical use directives.
+     * Selected class ASTs retain their source-unit parents, including the root
+     * CONTENT that governs helpers following the package block. */
+    private lexicalOpenedNamespaces(node: Node, owner: Node): Node[] {
+        const pkg = this.ancestor(node, NodeKind.PACKAGE);
+        let unit = this.root;
+        while (unit.parent) unit = unit.parent;
+        const content = pkg ? pkg.findChild(NodeKind.CONTENT)
+            : unit.findChildren(NodeKind.CONTENT)[0];
+        return (content ? content.findChildren(NodeKind.USE) : [])
+            .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+    }
+
     /** Resolve only a direct instance receiver with a complete lexical namespace set.
      * Preserve the original span/children so existing selector coercion and write
      * guards handle the operation; no text replacement or public-name aliasing. */
@@ -404,9 +417,7 @@ export class NativeNamespaces {
             if (!owner) return;
             const name = node.children[1].text;
             if (!Array.from(this.members.values()).some(member => member.name === name && !member.static)) return;
-            const pkg = this.ancestor(node, NodeKind.PACKAGE);
-            const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
-                .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+            const opened = this.lexicalOpenedNamespaces(node, owner);
             const candidates: {member: NamespaceMember; qualifier: string}[] = [];
             opened.forEach(directive => {
                 const uri = this.resolve(directive, directive.text), member = this.findMember(owner, uri, name, false);
@@ -462,9 +473,7 @@ export class NativeNamespaces {
         if (!owner || !receiverClass) return false;
         const name = node.children[1].text;
         const staticReceiver = this.isClassReceiver(node, receiverClass);
-        const pkg = this.ancestor(node, NodeKind.PACKAGE);
-        const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
-            .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+        const opened = this.lexicalOpenedNamespaces(node, owner);
         try {
             this.hierarchy(owner).slice(1).forEach(base => {
                 const content = base.findChild(NodeKind.CONTENT);
@@ -497,9 +506,7 @@ export class NativeNamespaces {
         if (node.parent && node.parent.kind === NodeKind.DOT && node.parent.children[1] === node) return null;
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (!owner) return null;
-        const pkg = this.ancestor(node, NodeKind.PACKAGE);
-        const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
-            .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+        const opened = this.lexicalOpenedNamespaces(node, owner);
         try {
             this.hierarchy(owner).slice(1).forEach(base => {
                 const content = base.findChild(NodeKind.CONTENT);
@@ -861,9 +868,7 @@ export class NativeNamespaces {
     checkDot(node: Node, receiverType?: string): void {
         const owner = this.ancestor(node, NodeKind.CLASS);
         if (!owner) return;
-        const pkg = this.ancestor(node, NodeKind.PACKAGE);
-        const opened = (pkg ? pkg.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE) : [])
-            .concat(owner.findChild(NodeKind.CONTENT).findChildren(NodeKind.USE));
+        const opened = this.lexicalOpenedNamespaces(node, owner);
         // This guard concerns implicit resolution through an opened namespace.
         // Unrelated provider members (for example Proxy.setProperty) cannot make
         // ordinary public dots require namespace ancestry when none is opened.
