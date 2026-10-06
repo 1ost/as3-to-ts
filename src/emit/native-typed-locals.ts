@@ -191,6 +191,18 @@ export class NativeTypedLocals {
         return !!plan&&!!binding&&!binding.bound&&binding.as3Type===type
             &&plan.locals.some(l=>l.name===node.text&&l.type===type&&(!l.parameter||type==='Function'||type==='String'&&plan.node.kind===K.LAMBDA));
     }
+    /** Authenticate a predeclared reference local before choosing native value enumeration. */
+    referenceEnumerationTarget(node:Node,emitter:any):boolean {
+        if(!this.matchSourceSpans||node.kind!==K.NAME)return false;
+        let method:Node=node;
+        while(method&&[K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(method.kind)<0) {
+            if(method.kind===K.CATCH&&method.findChild(K.NAME).text===node.text)return false;
+            method=method.parent;
+        }
+        const plan=this.methods.find(m=>!!method&&m.node.start===method.start&&m.node.end===method.end);
+        const binding=emitter.findDefInScope(node.text);
+        return !!plan&&!!binding&&!binding.bound&&plan.locals.some(l=>l.name===node.text&&!!l.reference&&!l.parameter);
+    }
     /** Prevent the older integer assignment pass from pre-coercing local RHS values. */
     owns(node: Node, emitter: any): boolean {
         node=unwrapEncapsulatedExpression(node);

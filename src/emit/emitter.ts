@@ -2141,7 +2141,8 @@ function emitForEach(emitter:Emitter, node:Node):void {
     const inlineTarget=varNode.kind===NodeKind.VAR&&varNode.findChild(NodeKind.NAME_TYPE_INIT);
     const targetName=inlineTarget?inlineTarget.findChild(NodeKind.NAME).text:varNode.text;
     const localTarget=varNode.kind===NodeKind.NAME&&emitter.findDefInScope(varNode.text);
-    if(emitter.generated&&(inlineTarget||localTarget&&!localTarget.bound&&['*','Number','int','uint','Boolean','String','Object','Array','Class'].indexOf(localTarget.as3Type)>=0)){
+    const referenceTarget=emitter.typedLocalPlan&&emitter.typedLocalPlan.referenceEnumerationTarget(varNode,emitter);
+    if(emitter.generated&&(inlineTarget||referenceTarget||localTarget&&!localTarget.bound&&['*','Number','int','uint','Boolean','String','Object','Array','Class'].indexOf(localTarget.as3Type)>=0)){
         if(inlineTarget&&inlineTarget.findChild(NodeKind.INIT))throw new Error('AS3_ENUMERATION_UNSUPPORTED: inline iterator initializer');
         // The legacy parser represents a member target as a NAME plus a malformed
         // IN span. Require the original simple-target separator before lowering.
