@@ -1491,7 +1491,11 @@ function emitNamespaceAccess(emitter:Emitter, node:Node):void {
         emitter.catchup(getEffectiveNodeEnd(access.receiver));
     } else {
         const member = access.implicitMember;
-        emitter.insert(member.static ? member.owner.findChild(NodeKind.NAME).text : 'this');
+        // Generated ancestors may not be imported by this source unit (or
+        // its selected file-private helper). Use the authenticated module and
+        // initialization route already shared by opened namespace identifiers.
+        emitter.insert(emitter.generated ? implicitNamespaceReceiver(emitter, member)
+            : member.static ? member.owner.findChild(NodeKind.NAME).text : 'this');
     }
     emitter.insert('[' + emitter.namespaces.key(access.uri, access.name) + ']');
     emitter.skipTo(node.end);
@@ -6873,7 +6877,7 @@ function hasFunctionLocal(emitter:Emitter, name:string):boolean {
     return false;
 }
 
-function openedNamespaceReceiver(emitter:Emitter, member:NamespaceMember):string {
+function implicitNamespaceReceiver(emitter:Emitter, member:NamespaceMember):string {
     if (!member.static) return 'this';
     // Own declarations keep the local constructor during publication. An
     // inherited static trait instead belongs to its declaring class, including
@@ -6957,7 +6961,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	const openedNamespaceMember = emitter.namespaces.openedIdentifier(node, hasFunctionLocal(emitter, node.text));
 	if (openedNamespaceMember) {
 		emitter.catchup(node.start);
-		const receiver = openedNamespaceReceiver(emitter, openedNamespaceMember);
+		const receiver = implicitNamespaceReceiver(emitter, openedNamespaceMember);
 		emitter.insert(receiver + '[' + emitter.namespaces.key(openedNamespaceMember.uri, openedNamespaceMember.name) + ']');
 		emitter.skipTo(node.end);
 		emitter.emitThisForNextIdent = true;
