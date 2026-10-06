@@ -250,6 +250,13 @@ export function emitNativeXML(e:any,n:Node,visit:(e:any,n:Node)=>void):boolean {
             fail('XML child mutation or invocation requires separate qualification');
         emit(n,n.children[0],'as3XMLChildNamed',JSON.stringify(n.children[1].text));return true;
     }
+    const typeofOperand=n.kind===K.TYPEOF&&unwrapEncapsulatedExpression(n.children[0]);
+    const wildcardBinding=typeofOperand&&typeofOperand.kind===K.IDENTIFIER&&e.findDefInScope(typeofOperand.text);
+    // Wildcard storage retains the source value's runtime category, including XML.
+    // Lexical lookup excludes fields and respects captured/parameter shadowing.
+    if(e.generated&&e.references&&wildcardBinding&&!wildcardBinding.bound&&wildcardBinding.as3Type==='*'){
+        emit(n,n.children[0],'as3TypeOf');return true;
+    }
     const indexedOperand=n.kind===K.TYPEOF&&unwrapEncapsulatedExpression(n.children[0]);
     if(n.kind===K.TYPEOF&&(attribute(n.children[0])||childSelection(n.children[0])
         ||indexedOperand.kind===K.ARRAY_ACCESSOR&&type(indexedOperand)==='XML')){emit(n,n.children[0],'as3TypeOf');return true;}
