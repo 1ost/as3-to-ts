@@ -3670,13 +3670,21 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node,conversion=fa
    fail('native element construction requires the exact provider binding');
  }
  emitter.catchup(node.start);
+ // Declaration tokens deliberately erase source instance types to avoid runtime
+ // class imports in the domain module. The exact authenticated specialization
+ // still proves this expression's element type, just as it proves annotations.
+ // Project that type without changing class initialization or Vector coercion.
+ emitter.insert('(<');emitter.skipTo(vector.start);
+ const wasNew=emitter.isNew;emitter.isNew=false;
+ try{emitVector(emitter,vector);}finally{emitter.isNew=wasNew;}
+ emitter.insert('>');
  if(spec.elementClass){
   const element=vector.findChild(NodeKind.TYPE),name=element.text,shadow=emitter.findDefInScope(name);
   if(shadow&&(shadow.bound||Object.prototype.hasOwnProperty.call(shadow,'as3Type')))fail('shadowed class element construction');
   if(!/^[A-Za-z_$][\w$]*$/.test(name)||emitter.references.resolve(name)!==spec.elementClass)
    fail('class element construction requires an exact imported identifier');
   const own=emitter.classFactory&&emitter.currentClassName===name;
-  if(own)emitter.insert('('+emitter.classFactory.value+',');
+  if(own)emitter.insert('(void '+emitter.classFactory.value+',');
   else {
    emitter.ensureImportIdentifier(name);
    const read=propertyHelper(emitter,'readNativeClass',generatedModule(emitter.options.nativeClassHelperModules&&emitter.options.nativeClassHelperModules.nativeClass));
@@ -3685,7 +3693,7 @@ function emitGeneratedVectorConstruction(emitter:Emitter,node:Node,conversion=fa
  }
  emitter.insert(helper+'('+specialization);
  args.children.forEach(arg=>{emitter.insert(',');emitter.skipTo(arg.start);visitNode(emitter,arg);emitter.catchup(arg.end);});
- emitter.insert(spec.elementClass?'))':')');emitter.skipTo(node.end);return true;
+ emitter.insert((spec.elementClass?'))':')')+')');emitter.skipTo(node.end);return true;
 }
 
 function emitBuiltinEmptyStringConstruction(emitter:Emitter, node:Node):boolean {
