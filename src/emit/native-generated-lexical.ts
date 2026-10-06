@@ -960,7 +960,7 @@ export class NativeGeneratedLexical {
                 // receiver type without evaluating it. Keep the original cast
                 // expression so coercion and receiver effects still precede
                 // call arguments. This is not private/protected authority.
-                let publicIdentity=identities.length===1?identities[0]:undefined,staticNamespaceReceiver=false;
+                let publicIdentity=identities.length===1?identities[0]:undefined,staticNamespaceReceiver=false,sourceCastReceiver=false;
                 if(!publicIdentity&&lexicalName&&receiver.kind===K.IDENTIFIER
                     &&(!binding||!Object.prototype.hasOwnProperty.call(binding,'as3Type'))) {
                     const identity=this.resolveTypeName(receiver.text),source=this.classSource(identity);
@@ -975,10 +975,11 @@ export class NativeGeneratedLexical {
                     const target=receiver.children[0],targetBinding=emitter.findDefInScope(target.text);
                     if(!targetBinding||!targetBinding.bound&&!Object.prototype.hasOwnProperty.call(targetBinding,'as3Type')) {
                         const identity=this.resolveTypeName(target.text),source=this.classSource(identity);
-                        if(this.declarations.some(b=>b.identity===identity)&&source&&!source.referenceOnly)publicIdentity=identity;
+                        if(this.declarations.some(b=>b.identity===identity)&&source&&!source.referenceOnly){publicIdentity=identity;sourceCastReceiver=true;}
                     }
                 }
-                if(publicIdentity&&publicIdentity!==this.owner&&this.declarations.some(b=>b.identity===publicIdentity)) {
+                // Own-Class cast receivers also need canonical public dispatch for null errors and argument order.
+                if(publicIdentity&&(publicIdentity!==this.owner||sourceCastReceiver)&&this.declarations.some(b=>b.identity===publicIdentity)) {
                     const identity=publicIdentity;
                     // An opened source namespace on a typed foreign receiver
                     // must resolve before this caller's private/protected

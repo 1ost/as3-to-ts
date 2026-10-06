@@ -4572,7 +4572,8 @@ function emitCall(emitter:Emitter, node:Node):void {
 				// Resolve the Class before evaluating the operand, then perform the
 				// nominal coercion before any enclosing call evaluates its arguments.
 				// A TypeScript assertion alone erases the AVM2 cast at runtime.
-				emitter.catchup(node.start);emitter.insert('(');visitNode(emitter,type);
+				// Explicitly discard the evaluated Class, including a pure own-Class value.
+				emitter.catchup(node.start);emitter.insert('(void ');visitNode(emitter,type);
 				emitter.catchup(type.end);emitter.insert(',' + parts[0]);
 				const value=args.children[0];emitter.skipTo(getExpressionStart(value));visitNode(emitter,value);
 				emitter.catchup(getEffectiveNodeEnd(value));emitter.insert(parts[1] + ')');
