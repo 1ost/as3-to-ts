@@ -17,7 +17,7 @@ import {CustomVisitor} from "../custom-visitors"
 import {VERBOSE_MASK, AS3_UTIL, INTERFACE_METHOD, INTERFACE_INF, WARNINGS, FOR_IN_KEY, FOR_IN_OBJ, INDENT} from '../config';
 import ClassList, {ClassKind, ClassMember, ClassMemberKind, ClassRecord, ModifierKind, MODIFIERS} from "./classlist";
 import {ReportFlags} from '../reports/report-flags';
-import {NativeNamespaces} from './native-namespaces';
+import {NativeNamespaces, NamespaceMember} from './native-namespaces';
 import {logicalAssignmentType} from './logical-assignment';
 import {NativeClassInitializers, NativeClassInitializationOptions} from './native-class-initializers';
 import {NativeCallableClasses, NativeCallableClassOptions} from './native-callable-classes';
@@ -6873,6 +6873,31 @@ function hasFunctionLocal(emitter:Emitter, name:string):boolean {
     return false;
 }
 
+function openedNamespaceReceiver(emitter:Emitter, member:NamespaceMember):string {
+    if (!member.static) return 'this';
+    // Own declarations keep the local constructor during publication. An
+    // inherited static trait instead belongs to its declaring class, including
+    // when that class is an unimported ancestor in another package.
+    const identity = member.owner.qualifiedName;
+    if (!emitter.generated || !identity) return emitter.currentClassName;
+    const plan = emitter.generated.options.plan;
+    const declaration = nativeGeneratedDeclarationNode(plan, identity);
+    const identities = plan.bindings.map(binding => binding.qname)
+        .concat(plan.privateBindings.map(binding => binding.identity));
+    const index = identities.indexOf(identity);
+    const module = emitter.options.importModules && emitter.options.importModules[identity];
+    if (index < 0 || !module) emitter.namespaces.fail('declaring static owner requires exact generated module: ' + identity);
+    let alias = '__as3_namespace_static_owner_' + index;
+    while (emitter.source.indexOf(alias) >= 0) alias += '_';
+    emitter.ensureImportIdentifier(declaration.findChild(NodeKind.NAME).text + ' as ' + alias, module, false);
+    const initialization = emitter.classInitializers.resolveQualified(identity);
+    if (initialization === 'ready') return alias;
+    if (initialization !== 'lazy') emitter.namespaces.fail('declaring static owner requires class initialization: ' + identity);
+    const read = emitter.classInitializers.readName;
+    emitter.ensureImportIdentifier('readNativeClass as ' + read, emitter.generated.helpers.nativeClass, false);
+    return '(' + read + '(' + alias + ', "read"))';
+}
+
 export function emitIdent(emitter:Emitter, node:Node):void {
     const regexp=nativeRegExpReference(emitter,node);
     if(regexp){emitter.catchup(node.start);emitter.insert(regexp);emitter.skipTo(node.end);emitter.emitThisForNextIdent=true;return;}
@@ -6932,7 +6957,7 @@ export function emitIdent(emitter:Emitter, node:Node):void {
 	const openedNamespaceMember = emitter.namespaces.openedIdentifier(node, hasFunctionLocal(emitter, node.text));
 	if (openedNamespaceMember) {
 		emitter.catchup(node.start);
-		const receiver = openedNamespaceMember.static ? emitter.currentClassName : 'this';
+		const receiver = openedNamespaceReceiver(emitter, openedNamespaceMember);
 		emitter.insert(receiver + '[' + emitter.namespaces.key(openedNamespaceMember.uri, openedNamespaceMember.name) + ']');
 		emitter.skipTo(node.end);
 		emitter.emitThisForNextIdent = true;
