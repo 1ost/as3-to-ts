@@ -15,6 +15,7 @@ export interface NamespaceMember {
     owner: Node;
     static: boolean;
     declaration: Node;
+    fieldType?: string;
 }
 
 export interface NamespaceAccess {
@@ -28,6 +29,7 @@ export interface NamespaceAccess {
 /** Compile-time identities only: no AVM interpreter or application runtime. */
 export class NativeNamespaces {
     private members = new Map<Node, NamespaceMember>();
+    private fieldReceiverNames = new Set<string>();
     private keys = new Map<string, string>();
     private declarations = new Map<string, Node>();
     private classes = new Map<string, Node[]>();
@@ -167,13 +169,14 @@ export class NativeNamespaces {
             if (metadata.namespaceComplete) this.completeDynamicClasses.add(owner);
             this.typedMembers.set(owner, (metadata.types || []).slice());
             metadata.members.forEach(member => {
+                if (member.fieldType) this.fieldReceiverNames.add(member.name);
                 const modifiers: Node[] = [createNode(NodeKind.MODIFIER, {text:member.uri})];
                 if (member.static) modifiers.push(createNode(NodeKind.MODIFIER, {text:'static'}));
                 if (member.override) modifiers.push(createNode(NodeKind.MODIFIER, {text:'override'}));
                 const declaration = createNode(member.kind, {}, createNode(NodeKind.MOD_LIST, {}, ...modifiers),
                     createNode(NodeKind.NAME, {text:member.name}));
                 this.members.set(declaration.findChild(NodeKind.NAME), {uri:member.uri, name:member.name,
-                    owner, static:member.static, declaration});
+                    owner, static:member.static, declaration, fieldType:member.fieldType});
             });
         });
     }
@@ -588,6 +591,13 @@ export class NativeNamespaces {
             if (namespaceChain) {
                 const local = this.localVariableType(node, receiver.text);
                 if (local !== null) return local;
+            }
+            // Keep inherited namespace field types attached to their exact URI
+            // and declaring class. A consumer import or same-named namespace
+            // field cannot supply that type; function locals take precedence.
+            if (this.fieldReceiverNames.has(receiver.text)) {
+                const field = this.openedIdentifier(receiver, this.localVariableType(node, receiver.text) !== null);
+                if (field && field.fieldType) return field.fieldType;
             }
             if (this.classType(node, receiver.text)) return receiver.text;
             fieldName = receiver.text;
