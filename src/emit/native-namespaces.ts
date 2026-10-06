@@ -34,7 +34,7 @@ export class NativeNamespaces {
     private declarations = new Map<string, Node>();
     private classes = new Map<string, Node[]>();
     private completeDynamicClasses = new Set<Node>();
-    private typedMembers = new Map<Node, {name:string; type:string; static:boolean}[]>();
+    private typedMembers = new Map<Node, {name:string; type:string; static:boolean; namespaceUri?:string}[]>();
     private openedAccesses = new Map<Node, NamespaceAccess>();
     private configured: {[qname: string]: string};
 
@@ -588,10 +588,10 @@ export class NativeNamespaces {
         let fieldName: string = null;
         if (receiver.kind === NodeKind.IDENTIFIER) {
             if (receiver.text === 'this' || receiver.text === ownerName) return ownerName;
-            if (namespaceChain) {
-                const local = this.localVariableType(node, receiver.text);
-                if (local !== null) return local;
-            }
+            // Locals also anchor ordinary getter chains before an opened
+            // namespace selector (value.paragraph.namespaceMethod()).
+            const local = this.localVariableType(node, receiver.text);
+            if (local !== null) return local;
             // Keep inherited namespace field types attached to their exact URI
             // and declaring class. A consumer import or same-named namespace
             // field cannot supply that type; function locals take precedence.
@@ -647,19 +647,19 @@ export class NativeNamespaces {
             if (method && base) return this.methodReturnType(base, method.text, namespaceChain);
             return null;
         } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
-            && receiver.children[1].kind === NodeKind.LITERAL
-            && namespaceChain) {
-            const baseType = this.receiverType(receiver, true);
-            const base = this.classType(node, baseType);
-            if (base) return this.memberReturnType(base, receiver.children[1].text);
-            return null;
-        } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
+            && !namespaceChain
             && receiver.children[0].kind === NodeKind.IDENTIFIER
             && (receiver.children[0].text === 'this' || receiver.children[0].text === ownerName)
             && receiver.children[1].kind === NodeKind.LITERAL) {
             // Resolve one source-backed field hop for ordinary receiver dots
             // such as this._flowComposer.updateLengths().
             fieldName = receiver.children[1].text;
+        } else if (receiver.kind === NodeKind.DOT && receiver.children.length === 2
+            && receiver.children[1].kind === NodeKind.LITERAL) {
+            const baseType = this.receiverType(receiver, namespaceChain);
+            const base = this.classType(node, baseType);
+            if (base) return this.memberReturnType(base, receiver.children[1].text, namespaceChain);
+            return null;
         } else return null;
         let classes: Node[];
         try { classes = this.hierarchy(owner); } catch (_) { return null; }
@@ -746,10 +746,16 @@ export class NativeNamespaces {
         return null;
     }
 
-    private memberReturnType(owner: Node, name: string): string {
-        for (const cls of this.hierarchy(owner)) {
+    private memberReturnType(owner: Node, name: string, requireAncestry: boolean): string {
+        let classes: Node[];
+        try { classes = this.hierarchy(owner); } catch (error) {
+            if (requireAncestry) throw error;
+            return null;
+        }
+        for (const cls of classes) {
             const content = cls.findChild(NodeKind.CONTENT);
             if (content) for (const declaration of content.children) {
+                if (this.memberDeclaration(declaration)) continue;
                 if ([NodeKind.GET, NodeKind.SET].indexOf(declaration.kind) >= 0) {
                     const declarationName = declaration.findChild(NodeKind.NAME), type = declaration.findChild(NodeKind.TYPE);
                     if (declarationName && type && declarationName.text === name)
@@ -763,7 +769,7 @@ export class NativeNamespaces {
                     }
                 }
             }
-            const typed = (this.typedMembers.get(cls) || []).find(value => value && value.name === name);
+            const typed = (this.typedMembers.get(cls) || []).find(value => value && !value.namespaceUri && value.name === name);
             if (typed) return typed.type;
         }
         return null;

@@ -28,6 +28,8 @@ export interface NativeSourceAncestryMember {
 }
 
 export interface NativeSourceAncestryType {
+    /** Namespace-qualified declarations cannot type an ordinary getter hop. */
+    namespaceUri?: string;
     name: string;
     type: string;
     static: boolean;
@@ -210,7 +212,9 @@ export function createNativeSourceAncestryPlan(input: NativeSourceAncestryInput)
                     || member.kind === K.TYPE && member.text === 'function') {
                     const name = member.findChild(K.NAME), type = member.findChild(K.TYPE);
                     if (name && type) metadata.types.push({name:name.text,
-                        type:nativeSourceTypeIdentity(type, identity, importsForType), static:isStatic});
+                        type:nativeSourceTypeIdentity(type, identity, importsForType), static:isStatic,
+                        ...(qualifier && qualifier.length === 1
+                            ? {namespaceUri:resolveNamespace(root, qualifier[0].text, declarations, configured)} : {})});
                 }
                 if (!qualifier || !qualifier.length) return;
                 if (qualifier.length !== 1) return fail('multiple namespace modifiers: ' + identity);
