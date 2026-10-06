@@ -7354,6 +7354,21 @@ function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
 	return true;
 }
 
+/** Numeric result proof for Vector indices; names come from source scope, not JS values. */
+function numericVectorIndexExpression(emitter:Emitter,node:Node):boolean {
+    node=unwrapEncapsulatedExpression(node);
+    if(node.kind===NodeKind.IDENTIFIER){
+        const def=emitter.findDefInScope(node.text);
+        return !!def&&!def.bound&&typeof def.as3Type==='string'&&['Number','int','uint'].indexOf(emitter.references.resolve(def.as3Type))>=0;
+    }
+    if(node.kind===NodeKind.LITERAL)
+        return /^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/.test(emitter.source.slice(node.start,node.end).trim());
+    if([NodeKind.MINUS,NodeKind.PLUS].indexOf(node.kind)>=0&&node.children.length===1)
+        return numericVectorIndexExpression(emitter,node.children[0]);
+    return [NodeKind.ADD,NodeKind.MULTIPLICATION].indexOf(node.kind)>=0
+        &&node.children.length>=3&&node.children.length%2===1
+        &&node.children.every((child,index)=>index%2?['+','-','*','/','%'].indexOf(child.text)>=0:numericVectorIndexExpression(emitter,child));
+}
 function vectorIndexAccess(emitter:Emitter,node:Node):{receiver:Node;key:Node;numeric:boolean} {
     node=unwrapEncapsulatedExpression(node);
     if(!emitter.generated||!emitter.typedLocalPlan||node.kind!==NodeKind.ARRAY_ACCESSOR)return null;
@@ -7368,7 +7383,7 @@ function vectorIndexAccess(emitter:Emitter,node:Node):{receiver:Node;key:Node;nu
     const k=unwrapEncapsulatedExpression(key),def=k.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(k.text);
     const type=def&&!def.bound&&def.as3Type&&emitter.references.resolve(def.as3Type);
     const literal=emitter.source.slice(k.start,k.end).trim();
-    if(['Number','int','uint'].indexOf(type)>=0||k.kind===NodeKind.LITERAL&&/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/.test(literal))
+    if(numericVectorIndexExpression(emitter,key))
         return {receiver,key,numeric:true};
     if(['*','String','Object'].indexOf(type)>=0||k.kind===NodeKind.LITERAL&&/^['"]/.test(literal))return {receiver,key,numeric:false};
     throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: indexed expression type requires qualification');
@@ -7392,7 +7407,7 @@ function emitVectorIndex(emitter:Emitter,node:Node,value?:Node):boolean {
     const helper=vectorIndexHelper(emitter,access.numeric,!!value);
     emitter.catchup(value?node.parent.start:node.start);emitter.insert('(<any>'+helper+'(');
     emitter.skipTo(access.receiver.start);visitNode(emitter,access.receiver);emitter.catchup(getEffectiveNodeEnd(access.receiver));
-    emitter.insert(', ');emitter.skipTo(access.key.start);visitNode(emitter,access.key);emitter.catchup(getEffectiveNodeEnd(access.key));
+    emitter.insert(', ');emitter.skipTo(getExpressionStart(access.key));visitNode(emitter,access.key);emitter.catchup(getEffectiveNodeEnd(access.key));
     if(value){emitter.insert(', ');emitter.skipTo(getExpressionStart(value));visitNode(emitter,value);emitter.catchup(getEffectiveNodeEnd(value));}
     emitter.insert('))');emitter.skipTo(value?getEffectiveNodeEnd(node.parent):node.end);return true;
 }
