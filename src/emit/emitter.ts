@@ -6739,6 +6739,7 @@ function emitAssign(emitter: Emitter, node: Node): void {
         emitter.insert(', ' + reference.name + ' = ' + parts[0] + temporary + parts[1] + ', ' + temporary + ')');
         return;
     }
+    if (operator.text === '=' && emitVectorIndex(emitter, left, right)) return;
     if (operator.text === '=' && emitDictionaryPropertyAssignment(emitter, left, right)) return;
     if (operator.text === '=' && emitDynamicPropertyAssignment(emitter, left, right)) return;
     if (operator.text === '=' && emitObjectPropertyAssignment(emitter, node)) return;
@@ -7353,7 +7354,51 @@ function emitArraySortConstant(emitter:Emitter, node:Node):boolean {
 	return true;
 }
 
+function vectorIndexAccess(emitter:Emitter,node:Node):{receiver:Node;key:Node;numeric:boolean} {
+    node=unwrapEncapsulatedExpression(node);
+    if(!emitter.generated||!emitter.typedLocalPlan||node.kind!==NodeKind.ARRAY_ACCESSOR)return null;
+    const receiver=node.children[0],key=node.children[1];
+    const identity=emitter.typedLocalPlan.vectorStorage(receiver,emitter);
+    if(!identity)return null;
+    const options=emitter.options.nativeVectorTypes||emitter.options.nativeGeneratedDeclarations;
+    const owner=emitter.generated.projection.binding.identity;
+    if(!options||!options.plan.vectors.some(v=>v.owner===owner&&v.identity===identity))
+        throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: indexed storage requires specialization authority');
+    nativeGeneratedDeclarationSource(options.plan,options.plan.scope,owner,emitter.source);
+    const k=unwrapEncapsulatedExpression(key),def=k.kind===NodeKind.IDENTIFIER&&emitter.findDefInScope(k.text);
+    const type=def&&!def.bound&&def.as3Type&&emitter.references.resolve(def.as3Type);
+    const literal=emitter.source.slice(k.start,k.end).trim();
+    if(['Number','int','uint'].indexOf(type)>=0||k.kind===NodeKind.LITERAL&&/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/.test(literal))
+        return {receiver,key,numeric:true};
+    if(['*','String','Object'].indexOf(type)>=0||k.kind===NodeKind.LITERAL&&/^['"]/.test(literal))return {receiver,key,numeric:false};
+    throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: indexed expression type requires qualification');
+}
+function vectorIndexHelper(emitter:Emitter,numeric:boolean,write:boolean):string {
+    if(!numeric)return propertyHelper(emitter,write?'as3SetProperty':'as3GetProperty',generatedModule(emitter.options.nativeGeneratedPropertyModule));
+    const options=emitter.options.nativeVectorTypes||emitter.options.nativeGeneratedDeclarations;
+    const input=nativeGeneratedDeclarationInputs(options.plan,options.plan.scope);
+    if(!input.vectorProviderModule)throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: numeric index provider required');
+    const exported=write?'as3VectorSetIndex':'as3VectorGetIndex';
+    let helper='__as3_'+exported;while(emitter.source.indexOf(helper)>=0)helper+='_';
+    emitter.ensureImportIdentifier(exported+' as '+helper,vectorProviderModule(input.vectorProviderModule,options.module),false);
+    emitter.nativeSourceHelpers.add(helper);return helper;
+}
+function emitVectorIndex(emitter:Emitter,node:Node,value?:Node):boolean {
+    const access=vectorIndexAccess(emitter,node);if(!access)return false;
+    if(!value){const outer=outerEncapsulatedExpression(node),parent=outer.parent;
+        if(parent&&parent.children[0]===outer&&[NodeKind.ASSIGN,NodeKind.PRE_INC,NodeKind.PRE_DEC,NodeKind.POST_INC,NodeKind.POST_DEC,NodeKind.DELETE].indexOf(parent.kind)>=0)
+            throw new Error('AS3_VECTOR_EMISSION_UNSUPPORTED: indexed compound/update/delete requires qualification');
+    }
+    const helper=vectorIndexHelper(emitter,access.numeric,!!value);
+    emitter.catchup(value?node.parent.start:node.start);emitter.insert('(<any>'+helper+'(');
+    emitter.skipTo(access.receiver.start);visitNode(emitter,access.receiver);emitter.catchup(getEffectiveNodeEnd(access.receiver));
+    emitter.insert(', ');emitter.skipTo(access.key.start);visitNode(emitter,access.key);emitter.catchup(getEffectiveNodeEnd(access.key));
+    if(value){emitter.insert(', ');emitter.skipTo(getExpressionStart(value));visitNode(emitter,value);emitter.catchup(getEffectiveNodeEnd(value));}
+    emitter.insert('))');emitter.skipTo(value?getEffectiveNodeEnd(node.parent):node.end);return true;
+}
+
 function emitArrayAccessor(emitter:Emitter, node:Node):void {
+    if (emitVectorIndex(emitter,node)) return;
     if (emitCapabilitiesStaticRead(emitter,node) || emitDataEventData(emitter,node) || emitErrorEventSubtypeText(emitter,node)) return;
 	if (emitGeneratedArrayFieldRead(emitter,node)) return;
 	if (emitDictionaryProperty(emitter, node, 'as3GetProperty')) return;

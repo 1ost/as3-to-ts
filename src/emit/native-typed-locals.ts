@@ -191,6 +191,25 @@ export class NativeTypedLocals {
         return !!plan&&!!binding&&!binding.bound&&binding.as3Type===type
             &&plan.locals.some(l=>l.name===node.text&&l.type===type&&(!l.parameter||type==='Function'||type==='String'&&plan.node.kind===K.LAMBDA));
     }
+    /** Resolve Vector storage from the authenticated local/parameter plan, including captures. */
+    vectorStorage(node:Node,emitter:any):string {
+        node=unwrapEncapsulatedExpression(node);
+        if(!this.matchSourceSpans||node.kind!==K.IDENTIFIER)return null;
+        const binding=emitter.findDefInScope(node.text);
+        if(!binding||binding.bound)return null;
+        for(let scope:Node=node;scope;scope=scope.parent){
+            if(scope.kind===K.CATCH&&scope.findChild(K.NAME).text===node.text)return null;
+            if([K.FUNCTION,K.GET,K.SET,K.LAMBDA].indexOf(scope.kind)<0)continue;
+            const plan=this.methods.find(m=>m.node.start===scope.start&&m.node.end===scope.end);
+            if(!plan)return null;
+            const local=plan.locals.find(l=>l.name===node.text);
+            if(local)return local.reference&&local.reference.indexOf('Vector.<')===0?local.reference:null;
+            if(plan.wildcards.indexOf(node.text)>=0)return null;
+            const params=scope.findChild(K.PARAMETER_LIST);
+            if(params&&params.children.some(p=>{const d=p.findChild(K.NAME_TYPE_INIT);return d&&d.findChild(K.NAME).text===node.text;}))return null;
+        }
+        return null;
+    }
     /** Authenticate a predeclared reference local before choosing native value enumeration. */
     referenceEnumerationTarget(node:Node,emitter:any):boolean {
         if(!this.matchSourceSpans||node.kind!==K.NAME)return false;
