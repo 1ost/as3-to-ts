@@ -5204,8 +5204,10 @@ function emitDynamicKey(emitter:Emitter,access:DictionaryAccess):void {
 }
 function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     const module=emitter.options.nativeDynamicPropertyReadsModule;
-    const found=dynamicAccess(emitter,node)||sourceInterfaceAccessorAccess(emitter,node,'get');if(!found)return false;
+    const computedInterface=sourceInterfaceComputedReadAccess(emitter,node);
+    const found=computedInterface||dynamicAccess(emitter,node)||sourceInterfaceAccessorAccess(emitter,node,'get');if(!found)return false;
     if(module===undefined){
+        if(computedInterface)throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: source interface computed reads require provider');
         if(isInterfaceCast(emitter,found.receiver))generatedModule(module);
         if(generatedReceiver(emitter,found.receiver))throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: generated property reads require provider');
         return false;
@@ -5219,6 +5221,23 @@ function emitDynamicPropertyRead(emitter:Emitter,node:Node):boolean {
     emitter.catchup(node.start);emitter.insert('(<any>'+helper+'(');
     emitDynamicKey(emitter,found);emitter.insert('))');emitter.skipTo(node.end);
     return true;
+}
+
+/** Computed interface reads retain the caller's lexical namespace set. The
+ * interface authenticates the receiver type, not the set of runtime keys:
+ * implementation-only members and inherited getters are valid AS3 reads.
+ * Keep this out of dynamicAccess so it cannot grant writes/calls/updates. */
+function sourceInterfaceComputedReadAccess(emitter:Emitter,node:Node):DictionaryAccess {
+    if(!emitter.generated||!emitter.references||!node||node.kind!==NodeKind.ARRAY_ACCESSOR||node.children.length!==2)return null;
+    const receiver=node.children[0],key=node.children[1];
+    if(receiver.kind!==NodeKind.IDENTIFIER)return null;
+    const definition=emitter.findDefInScope(receiver.text);
+    if(!definition||definition.bound||typeof definition.as3Type!=='string')return null;
+    const token=emitter.references.sourceInterface(definition.as3Type),plan=emitter.generated.options.plan;
+    if(!nativeGeneratedInterfaceBindings(plan).some(binding=>binding.tokenExport===token))return null;
+    if(!nativeGeneratedDeclarationInputs(plan,plan.scope).lexicalProviderModule)
+        throw new Error('AS3_DYNAMIC_PROPERTY_UNSUPPORTED: source interface computed reads require lexical provider');
+    return {receiver,key,lexical:true};
 }
 
 /** Authenticated interface members preserve null errors and canonical dispatch. */
