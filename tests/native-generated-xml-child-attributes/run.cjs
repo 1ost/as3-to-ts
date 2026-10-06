@@ -45,8 +45,7 @@ async function main(){
    ['xmlcases.Reader',reader.replace('Number(node.asset.@loadTimeoutMS)','node.asset = node')],
    ['xmlcases.Reader',reader.replace('Number(node.asset.@loadTimeoutMS)','delete node.asset')],
    ['xmlcases.Reader',reader.replace('Number(node.asset.@loadTimeoutMS)','node.asset++')],
-   ['xmlcases.Reader',reader.replace('Number(node.asset.@loadTimeoutMS)','node.asset()')],
-   ['xmlcases.Reader',reader.replace('Number(node.asset.@loadTimeoutMS)','node.asset.@loadTimeoutMS = "12"')]
+   ['xmlcases.Reader',reader.replace('Number(node.asset.@loadTimeoutMS)','node.asset()')]
   ]){
    assert.notEqual(changed,sources[q].source);
    const changedSources={...sources,[q]:{source:changed,sourceSha256:hash(changed)}};
@@ -68,7 +67,7 @@ async function main(){
   const code=built.outputFiles[0].text;fs.writeFileSync(path.join(dir,'bundle.js'),code);
   const context=require('node:vm').createContext({console,setTimeout,clearTimeout,performance,AbortController});context.window=context;context.document={};require('node:vm').runInContext(code,context);await context.completion;const node=JSON.parse(JSON.stringify(context.result));assert.deepEqual(node.rows,expected);
   const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(String(e)));await page.addScriptTag({content:code});await page.evaluate(()=>globalThis.completion);const web=await page.evaluate(()=>globalThis.result);await page.close();assert.deepEqual(errors,[]);assert.deepEqual(web,node);
-  assert.equal(guards,12);assert.equal(web.guards,4);
+  assert.equal(guards,11);assert.equal(web.guards,4);
   results.push({target,node,web,artifact,diagnostics,errors,guards,providerGraph:Object.keys(built.metafile.inputs).map(file=>({file,sha256:hash(fs.readFileSync(file,'utf8').replace(/\r\n/g,'\n'))}))});
   console.log(JSON.stringify({target,rows:web.rows.length,errors:errors.length}));
  }}finally{await browser.close();}

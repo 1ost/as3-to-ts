@@ -21,3 +21,8 @@ Four runtime checks reject forged XML and XMLList values from the XML field and
 preserve its prior value. Method-name child selection, arbitrary receiver calls,
 QName, mutations and general XMLList scalar calls remain unqualified. The fixture
 does not establish collection asset loading or whole-game startup.
+
+The current runner retires the attribute-assignment rejection, which was already
+qualified by the shared XML mutation path before literal-index work. It now has
+11 compile guards; the historical packet retains its original 12-guard result.
+Current regression evidence is retained by native-generated-xml-list-index.
